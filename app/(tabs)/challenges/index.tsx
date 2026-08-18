@@ -28,6 +28,7 @@ import { isBucksChallenge } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
+import { asCopyTone, copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -153,6 +154,7 @@ export default function ChallengesScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const tone = asCopyTone(profile?.motivation_tone);
   const discoverQuery = useDiscoverChallenges();
   const joinedQuery = useMyLobbyChallenges();
   const mine = useMyChallengeProgress();
@@ -274,7 +276,7 @@ export default function ChallengesScreen() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
-      <AppHeader title="Lobby" subtitle="Find a challenge. Buy in. Prove the work." />
+      <AppHeader title="Lobby" subtitle={copy('lobby.subtitle')} />
 
       <TextInput
         value={query}
@@ -349,11 +351,11 @@ export default function ChallengesScreen() {
       ) : null}
 
       {showLoading ? (
-        <MascotState kind="loading" title="Opening the lobby" body="Looking for open competitions." />
+        <MascotState kind="loading" title={copy('lobby.loading', tone)} />
       ) : showError ? (
         <MascotState
           kind="error"
-          title="Lobby is unreachable"
+          title={copy('lobby.unreachable')}
           body={discoverQuery.error?.message ?? joinedQuery.error?.message ?? 'Couldn’t load challenges.'}
           actionLabel="Retry"
           onAction={() => {
@@ -364,12 +366,7 @@ export default function ChallengesScreen() {
       ) : noData ? (
         <MascotState
           kind="empty"
-          title="Lobby’s quiet"
-          body={
-            user
-              ? 'Be the first. Create a challenge and others can jump in.'
-              : 'Open challenges will show up here. Pull to refresh if you just seeded one.'
-          }
+          title={copy('lobby.empty', tone)}
           actionLabel={user ? 'Create a Challenge' : undefined}
           onAction={user ? () => router.push('/challenges/create') : undefined}
         />

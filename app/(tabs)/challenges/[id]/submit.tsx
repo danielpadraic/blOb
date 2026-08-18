@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
+import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
 import { useSubmitWorkout, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { requiredProofTypes } from '@/lib/challenges';
@@ -16,6 +17,7 @@ import { isImageProof, isVideoProof, proofMeta } from '@/lib/constants';
 import { THEME } from '@/lib/theme';
 import type { ProofType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
+import { copy } from '@/lib/copy';
 
 type ProofDraft = Partial<Record<ProofType, { uri?: string; mimeType?: string | null }>>;
 
@@ -53,6 +55,8 @@ export default function SubmitWorkoutScreen() {
 
   const [drafts, setDrafts] = useState<ProofDraft>({});
   const [error, setError] = useState<string | null>(null);
+  const [captureType, setCaptureType] = useState<ProofType | null>(null);
+  const [skippedAuto, setSkippedAuto] = useState(false);
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredProofTypes(challenge);
@@ -110,7 +114,7 @@ export default function SubmitWorkoutScreen() {
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState
           kind="error"
-          title="Join first"
+          title={copy('challenge.joinFirst')}
           body="Join this challenge before logging."
           actionLabel="Back"
           onAction={() => router.back()}
@@ -129,7 +133,7 @@ export default function SubmitWorkoutScreen() {
         <Stack.Screen options={{ title: 'Eliminated' }} />
         <MascotState
           kind="empty"
-          title="You have been eliminated"
+          title={copy('challenge.eliminated')}
           body="New logs are not accepted."
           actionLabel="Back to challenge"
           onAction={() => router.back()}
@@ -144,7 +148,7 @@ export default function SubmitWorkoutScreen() {
         <Stack.Screen options={{ title: 'Not started' }} />
         <MascotState
           kind="empty"
-          title="This challenge hasn’t started yet."
+          title={copy('challenge.notStarted')}
           body={loggingOpensHelper(challenge)}
           actionLabel="Back to challenge"
           onAction={() => router.back()}
@@ -159,7 +163,7 @@ export default function SubmitWorkoutScreen() {
         <Stack.Screen options={{ title: 'Logging closed' }} />
         <MascotState
           kind="empty"
-          title="Logging is closed"
+          title={copy('challenge.logClosed')}
           body="This challenge has ended. New logs are not accepted."
           actionLabel="Back to challenge"
           onAction={() => router.back()}
@@ -169,12 +173,37 @@ export default function SubmitWorkoutScreen() {
   }
 
   const missing = proofSteps.filter((type) => !drafts[type]?.uri?.trim());
-  const firstCameraIndex = proofSteps.findIndex(
+  const firstCameraType = proofSteps.find(
     (type) => (isImageProof(type) || isVideoProof(type)) && !drafts[type]?.uri?.trim(),
   );
+  const activeCapture =
+    captureType ?? (!skippedAuto && filledCount === 0 ? firstCameraType ?? null : null);
+
+  if (activeCapture) {
+    return (
+      <Screen padded={false} edges={TAB_ROOT_EDGES}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ProofUploader
+          type={activeCapture}
+          fill
+          autoOpen
+          locked={busy}
+          onPicked={(uri, mimeType) => {
+            onPicked(activeCapture, uri, mimeType);
+            setCaptureType(null);
+            setSkippedAuto(true);
+          }}
+          onCancel={() => {
+            setCaptureType(null);
+            setSkippedAuto(true);
+          }}
+        />
+      </Screen>
+    );
+  }
 
   return (
-    <Screen padded={false} edges={['left', 'right', 'bottom']}>
+    <Screen padded={false} edges={TAB_ROOT_EDGES}>
       <Stack.Screen options={{ title: 'Log workout' }} />
       <ScrollView
         className="flex-1"
@@ -186,7 +215,7 @@ export default function SubmitWorkoutScreen() {
         </AppText>
 
         <View className="mt-5 gap-6">
-          {proofSteps.map((type, index) => (
+          {proofSteps.map((type) => (
             <View key={type}>
               <AppText className="mb-2 text-[15px] font-bold text-charcoal">
                 {proofMeta(type).label}
@@ -197,7 +226,7 @@ export default function SubmitWorkoutScreen() {
                   uri={drafts[type]?.uri}
                   compact
                   locked={busy}
-                  autoOpen={index === firstCameraIndex && filledCount === 0}
+                  onRequestOpen={() => setCaptureType(type)}
                   onPicked={(uri, mimeType) => onPicked(type, uri, mimeType)}
                 />
               ) : (

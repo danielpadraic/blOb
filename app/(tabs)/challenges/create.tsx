@@ -9,6 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
 export default function CreateChallengeScreen() {
@@ -23,7 +24,7 @@ export default function CreateChallengeScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View className="flex-1 px-1 pt-4">
           <View className="mb-4 flex-row items-start justify-between">
-            <AppText className="text-[13px] font-semibold text-muted">New Challenge</AppText>
+            <AppText className="text-[13px] font-semibold text-muted">{copy('create.screenTitle')}</AppText>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close"
@@ -35,11 +36,11 @@ export default function CreateChallengeScreen() {
           </View>
           <MascotState
             kind="error"
-            title="Sign in to create"
-            body="Challenges are published under your account."
+            title={copy('create.signIn')}
+            body={copy('create.signInBody')}
           />
           <View className="mt-4">
-            <Button title="Back to Lobby" variant="outline" onPress={() => router.back()} />
+            <Button title={copy('create.backLobby')} variant="outline" onPress={() => router.back()} />
           </View>
         </View>
       </Screen>

@@ -1,8 +1,9 @@
 import { File as ExpoFile } from 'expo-file-system';
 import { Platform } from 'react-native';
 
-import { supabase } from '@/lib/supabase';
 import { STORAGE_BUCKETS } from '@/lib/constants';
+import { copy } from '@/lib/copy';
+import { supabase } from '@/lib/supabase';
 import type { ProofType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -293,12 +294,12 @@ export async function uploadStoryMedia(input: {
 }): Promise<string> {
   const contentType = coerceImageContentType(input.mimeType ?? input.blob?.type, input.uri);
   if (!contentType.startsWith('image/') && !contentType.startsWith('video/')) {
-    throw new Error('Stories need a photo or a short video.');
+    throw new Error(copy('wave.needMedia'));
   }
   return uploadPostMedia({
     uri: input.uri,
     userId: input.userId,
-    fileStem: `stories/${Date.now()}`,
+    fileStem: `stories/${Date.now()}`, // Storage prefix stays `stories/`. User-facing name is Wave.
     mimeType: contentType,
     blob: input.blob,
   });

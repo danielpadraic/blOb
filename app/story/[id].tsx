@@ -8,6 +8,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useStory, useStoryChallengePreviews, useStoryGroups } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
 import { personDisplayName, type FeedChallengePreview, type StoryGroup } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
@@ -59,7 +60,7 @@ export default function StoryViewerScreen() {
       userId: fallback.user_id,
       name:
         fallback.user_id === user?.id
-          ? 'Your story'
+          ? copy('wave.yours')
           : personDisplayName(fallback.user_id === profile?.id ? profile : null) || 'Blob',
       avatar: fallback.user_id === profile?.id ? profile.avatar_url : null,
       isOwn: fallback.user_id === user?.id,
@@ -90,10 +91,10 @@ export default function StoryViewerScreen() {
         className="flex-1 items-center justify-center px-8"
         style={{ backgroundColor: '#101312', paddingTop: insets.top }}>
         <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
-          This story is gone
+          {copy('wave.gone')}
         </AppText>
         <AppText className="mt-2 text-center text-[14px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
-          It may have expired, or the link is no longer valid.
+          {copy('wave.goneBody')}
         </AppText>
         <Pressable onPress={close} className="mt-6 rounded-full px-4 py-2" style={{ backgroundColor: THEME.accent }}>
           <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>

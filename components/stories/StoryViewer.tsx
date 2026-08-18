@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StoryRing } from '@/components/stories/StoryRing';
 import { AppText } from '@/components/ui/AppText';
 import { useViewStory } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
 import { challengeDetailHref } from '@/lib/routes';
 import { storyTimeLeft, type FeedChallengePreview, type StoryGroup } from '@/lib/social';
 import { THEME } from '@/lib/theme';
@@ -166,7 +167,7 @@ export function StoryViewer({
                 {storyTimeLeft(story.expires_at)}
               </AppText>
             </View>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close story">
+            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={copy('wave.close')}>
               <AppText className="text-[22px] font-bold" style={{ color: '#fff' }}>
                 ×
               </AppText>
@@ -190,7 +191,7 @@ export function StoryViewer({
               />
             )}
             <Pressable
-              accessibilityLabel="Previous story"
+              accessibilityLabel={copy('wave.prev')}
               className="absolute bottom-0 left-0 top-0"
               style={{ width: '32%' }}
               delayLongPress={160}
@@ -203,7 +204,7 @@ export function StoryViewer({
               onPress={goPrev}
             />
             <Pressable
-              accessibilityLabel="Next story"
+              accessibilityLabel={copy('wave.next')}
               className="absolute bottom-0 right-0 top-0"
               style={{ width: '68%' }}
               delayLongPress={160}

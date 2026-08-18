@@ -29,6 +29,7 @@ import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '
 import { THEME } from '@/lib/theme';
 import type { PublicProfile, WalletCurrency } from '@/lib/types';
 import { formatUsd } from '@/utils/format';
+import { copy } from '@/lib/copy';
 
 const CURRENCY_OPTIONS = [
   { value: 'coins', label: 'Coins' },
@@ -168,7 +169,7 @@ export default function CreateCalloutScreen() {
               <PeopleList
                 title="Search"
                 people={results}
-                empty="No blobs match that name."
+                empty={copy('friends.noneMatch')}
                 onPick={(person) => {
                   setOpponent(person);
                   setQuery('');
@@ -335,7 +336,7 @@ const COIN_ACKS = [
 const BUCKS_ACKS = [
   {
     id: 'amount',
-    title: 'This is real money, 1:1 with USD',
+    title: copy('money.realUsd'),
     body: (amount: string) => `${amount} each. 1 Blob Buck equals ${formatUsd(1)}.`,
   },
   {

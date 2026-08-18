@@ -71,6 +71,7 @@ create table public.profiles (
   credits numeric(12,2) default 50.00, -- alias of coins; kept for older readers
   coins numeric(12,2) not null default 50.00,
   bucks numeric(12,2) not null default 0,
+  is_official boolean not null default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   constraint username_format check (username ~ '^[a-z0-9_]{3,24}$'),
@@ -88,6 +89,7 @@ comment on column public.profiles.gender is 'PRIVATE. male or female. Read via g
 comment on column public.profiles.body_fat_pct is 'PRIVATE estimated body fat %. Read via get_my_profile().';
 comment on column public.profiles.body_metrics_completed_at is 'When set, Official Fitness Challenges may be joined. After this, current_weight is stored in kg.';
 comment on column public.profiles.fitness_profile is 'PRIVATE jsonb training background for matching. Read via get_my_profile().';
+comment on column public.profiles.is_official is 'Server-enforced official account. Client display only. Do not grant powers from username.';
 
 create trigger profiles_set_updated_at
   before update on public.profiles
@@ -105,11 +107,28 @@ set search_path = public
 as $$
 declare
   base_username text;
+  v_official boolean;
 begin
-  base_username := 'blob_' || substr(replace(new.id::text, '-', ''), 1, 10);
+  v_official := lower(coalesce(new.email, '')) = 'danielpadraic@gmail.com';
+  base_username := case
+    when v_official then 'blob'
+    else 'blob_' || substr(replace(new.id::text, '-', ''), 1, 10)
+  end;
 
-  insert into public.profiles (id, username)
-  values (new.id, lower(base_username))
+  if v_official then
+    update public.profiles
+    set username = 'blob_' || substr(replace(id::text, '-', ''), 1, 10)
+    where lower(username) = 'blob'
+      and id <> new.id;
+  end if;
+
+  insert into public.profiles (id, username, display_name, is_official)
+  values (
+    new.id,
+    lower(base_username),
+    case when v_official then 'Bob LeBlob' else null end,
+    v_official
+  )
   on conflict (id) do nothing;
 
   return new;
@@ -149,7 +168,8 @@ select
   end as weight_unit,
   case
     when p.id = auth.uid() or p.show_fitness_stats_publicly then p.typical_weekly_workout_frequency
-  end as typical_weekly_workout_frequency
+  end as typical_weekly_workout_frequency,
+  p.is_official
 from public.profiles p;
 
 comment on view public.profiles_public is 'Redacted profile projection for feeds, challenge cards, and public profiles.';
@@ -596,6 +616,7 @@ declare
   v_first uuid;
   v_second uuid;
   v_balance numeric(12,2);
+  v_official boolean;
   v_note text;
   v_transfer public.coin_transfers%rowtype;
 begin
@@ -620,9 +641,6 @@ begin
   if v_amount < 0.01 then
     raise exception 'Send at least 0.01 Coins' using errcode = 'P0001';
   end if;
-  if v_amount > 10000 then
-    raise exception 'Keep a transfer at 10,000 Coins or less' using errcode = 'P0001';
-  end if;
 
   v_note := nullif(btrim(coalesce(p_note, '')), '');
   if v_note is not null and char_length(v_note) > 280 then
@@ -640,20 +658,46 @@ begin
   perform 1 from public.profiles where id = v_first for update;
   perform 1 from public.profiles where id = v_second for update;
 
-  select coins into v_balance from public.profiles where id = v_sender;
+  select coins, coalesce(is_official, false)
+    into v_balance, v_official
+  from public.profiles
+  where id = v_sender;
+
   if v_balance is null then
     raise exception 'Finish setting up your profile before you send Coins' using errcode = 'P0001';
   end if;
-  if v_balance < v_amount then
-    raise exception 'Insufficient coins' using errcode = 'P0001';
+
+  if not v_official then
+    if v_amount > 10000 then
+      raise exception 'Keep a transfer at 10,000 Coins or less' using errcode = 'P0001';
+    end if;
+    if v_balance < v_amount then
+      raise exception 'Insufficient coins' using errcode = 'P0001';
+    end if;
+    perform public.wallet_debit(v_sender, 'coins', v_amount);
   end if;
 
-  perform public.wallet_debit(v_sender, 'coins', v_amount);
   perform public.wallet_credit(p_to_user_id, 'coins', v_amount);
 
   insert into public.coin_transfers (sender_id, recipient_id, amount, currency, note)
   values (v_sender, p_to_user_id, v_amount, 'coins', v_note)
   returning * into v_transfer;
+
+  if v_official then
+    insert into public.wallet_ledger (
+      user_id, currency, amount, entry_type, reason, metadata, ref_type, ref_id
+    )
+    values (
+      p_to_user_id,
+      'coins',
+      v_amount,
+      'credit',
+      'official_send',
+      jsonb_build_object('sender_id', v_sender, 'transfer_id', v_transfer.id),
+      'coin_transfer',
+      v_transfer.id::text
+    );
+  end if;
 
   return v_transfer;
 end;
@@ -2370,7 +2414,7 @@ grant select (
   id, username, display_name, avatar_url, bio,
   height_cm, current_weight, goal_weight, weight_unit,
   typical_weekly_workout_frequency, primary_activities, skill_tags,
-  show_fitness_stats_publicly, created_at, updated_at
+  show_fitness_stats_publicly, created_at, updated_at, is_official
 ) on public.profiles to anon, authenticated;
 
 grant insert, update on public.profiles to authenticated;

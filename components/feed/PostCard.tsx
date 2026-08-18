@@ -7,6 +7,7 @@ import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
+import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { Avatar } from '@/components/ui/Avatar';
@@ -20,6 +21,7 @@ import { asQuoteSnapshot } from '@/lib/quotePost';
 import { challengeDetailHref } from '@/lib/routes';
 import { audienceLabel, asPostAudience } from '@/lib/postAudience';
 import { supabase } from '@/lib/supabase';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -71,9 +73,12 @@ export function PostCard({
           <View className="flex-row items-start gap-2">
             <View className="min-w-0 flex-1">
               <ProfileLink username={post.author?.username} userId={post.author_id}>
-                <AppText className="text-[14px] font-extrabold leading-5 text-charcoal" numberOfLines={1}>
-                  {name}
-                </AppText>
+                <View className="flex-row items-center gap-1">
+                  <AppText className="text-[14px] font-extrabold leading-5 text-charcoal" numberOfLines={1}>
+                    {name}
+                  </AppText>
+                  <OfficialMark profile={post.author} compact />
+                </View>
               </ProfileLink>
               <AppText className="text-[11px] leading-4 text-muted" numberOfLines={1}>
                 @{handle} · {formatFeedTime(post.created_at)} · {audienceLabel(audience)}
@@ -197,7 +202,7 @@ function ProofFlagButton({ postId }: { postId: string }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={done ? 'Flagged' : 'Flag proof'}
+      accessibilityLabel={done ? copy('proof.flagged') : copy('proof.flag')}
       disabled={busy || done}
       hitSlop={8}
       onPress={() => void onFlag()}

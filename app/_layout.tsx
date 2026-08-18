@@ -89,6 +89,7 @@ function RootNavigator() {
         <Stack.Screen name="invite/[token]" />
         <Stack.Protected guard={path === 'app'}>
           <Stack.Screen name="(tabs)" />
+          {/* Route group `story` stays so `/story/[id]` links keep working. User-facing name is Wave. */}
           <Stack.Screen name="story" options={{ headerShown: false, animation: 'fade' }} />
         </Stack.Protected>
         <Stack.Screen name="+not-found" />

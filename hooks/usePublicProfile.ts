@@ -254,6 +254,7 @@ function redactPublicProfile(row: PublicProfile): PublicProfile {
     ...row,
     skill_tags: row.skill_tags ?? [],
     show_fitness_stats_publicly: false,
+    is_official: Boolean(row.is_official),
     height_cm: null,
     current_weight: null,
     goal_weight: null,

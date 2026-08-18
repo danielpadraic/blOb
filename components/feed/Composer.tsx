@@ -15,6 +15,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useFriends } from '@/hooks/useSocial';
+import { asCopyTone, copy } from '@/lib/copy';
 import {
   DEFAULT_POST_AUDIENCE,
   POST_AUDIENCE_OPTIONS,
@@ -47,7 +48,7 @@ type ComposerProps = {
 };
 
 export function Composer({
-  placeholder = 'What’s the play today?',
+  placeholder,
   submitting,
   autoFocus,
   quote,
@@ -55,6 +56,7 @@ export function Composer({
 }: ComposerProps) {
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const resolvedPlaceholder = placeholder ?? copy('home.composer', asCopyTone(profile?.motivation_tone));
   const router = useRouter();
   const friends = useFriends();
   const [content, setContent] = useState('');
@@ -180,7 +182,7 @@ export function Composer({
           <Input
             value={content}
             onChangeText={setContent}
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             multiline
             autoFocus={autoFocus}
             blurOnSubmit={false}

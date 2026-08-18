@@ -20,6 +20,7 @@ export function inviteHref(token: string) {
 
 export const CAPTURE_HREF = '/capture' as const;
 
+/** Query `mode` stays `story` | `reel` | `post` so capture URLs stay stable. User-facing names are Wave / Round / post. */
 export function captureHref(mode: 'story' | 'reel' | 'post' = 'story', media?: 'photo' | 'video') {
   const resolved = mode === 'post' ? (media === 'video' ? 'video' : 'photo') : 'video';
   return {
@@ -32,6 +33,7 @@ export const STORY_CREATE_HREF = captureHref('story');
 export const CAPTURE_STORY_HREF = captureHref('story');
 export const CAPTURE_REEL_HREF = captureHref('reel');
 
+/** Viewer route stays `/story/[id]` so existing links keep working. User-facing name is Wave. */
 export function storyHref(id: string) {
   return {
     pathname: '/story/[id]' as const,

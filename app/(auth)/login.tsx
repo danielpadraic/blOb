@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 import { loginSchema, type LoginValues } from '@/utils/validators';
 
@@ -39,10 +40,8 @@ export default function LoginScreen() {
     <Screen scroll>
       <View className="items-center pt-6">
         <BlobMascot variant="logo" size={220} motion="float" />
-        <AppText className="mt-6 text-3xl font-bold text-charcoal">Welcome back</AppText>
-        <AppText className="mt-2 text-center text-muted">
-          High-stakes fitness, kept honest. Sign in to your blob.
-        </AppText>
+        <AppText className="mt-6 text-3xl font-bold text-charcoal">{copy('auth.welcome')}</AppText>
+        <AppText className="mt-2 text-center text-muted">{copy('auth.subtitle')}</AppText>
       </View>
 
       <View className="mt-8">
@@ -85,13 +84,13 @@ export default function LoginScreen() {
         {formError ? (
           <AppText className="text-sm text-coral-dark">{formError}</AppText>
         ) : null}
-        <Button title="Sign in" onPress={onSubmit} loading={isSubmitting} size="lg" />
+        <Button title={copy('auth.signIn')} onPress={onSubmit} loading={isSubmitting} size="lg" />
       </View>
 
       <View className="mt-6 flex-row justify-center gap-1">
-        <AppText className="text-muted">New here?</AppText>
+        <AppText className="text-muted">{copy('auth.newHere')}</AppText>
         <Link href="/(auth)/register">
-          <AppText className="font-semibold text-coral">Create an account</AppText>
+          <AppText className="font-semibold text-coral">{copy('auth.createAccount')}</AppText>
         </Link>
       </View>
     </Screen>

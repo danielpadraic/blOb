@@ -1,12 +1,12 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
-import { Button } from '@/components/ui/Button';
+import { captureKindForProof } from '@/components/capture/types';
 import { AppText } from '@/components/ui/AppText';
-import { isVideoProof, proofMeta } from '@/lib/constants';
+import { proofMeta } from '@/lib/constants';
 import {
   cameraIsAvailable,
   ensureCapturePermissions,
@@ -22,8 +22,10 @@ type ProofUploaderProps = {
   locked?: boolean;
   compact?: boolean;
   autoOpen?: boolean;
+  fill?: boolean;
   onPicked: (uri: string, mimeType?: string | null) => void;
-  onClear?: () => void;
+  onCancel?: () => void;
+  onRequestOpen?: () => void;
 };
 
 export function ProofUploader({
@@ -32,14 +34,19 @@ export function ProofUploader({
   locked = false,
   compact = false,
   autoOpen = false,
+  fill = false,
   onPicked,
+  onCancel,
+  onRequestOpen,
 }: ProofUploaderProps) {
   const meta = proofMeta(type);
-  const isVideo = isVideoProof(type);
-  const [open, setOpen] = useState(false);
+  const capture = captureKindForProof(type);
+  const video = capture === 'video';
+  const [open, setOpen] = useState(autoOpen && !uri && !locked);
   const [blocked, setBlocked] = useState(false);
+  const [blockedReason, setBlockedReason] = useState<string | undefined>();
   const [webFallback, setWebFallback] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [libraryDenied, setLibraryDenied] = useState(false);
 
   useEffect(() => {
     if (autoOpen && !uri && !locked) {
@@ -50,38 +57,38 @@ export function ProofUploader({
   }, [autoOpen]);
 
   async function startCamera() {
-    if (locked || busy) {
+    if (locked) {
       return;
     }
-    setBusy(true);
-    try {
-      const permission = await ensureCapturePermissions(isVideo ? 'video' : 'photo');
-      if (!permission.ok) {
-        setBlocked(true);
-      } else {
-        setBlocked(false);
-        const available = await cameraIsAvailable();
-        setWebFallback(!available);
-      }
-      setOpen(true);
-    } finally {
-      setBusy(false);
+    if (onRequestOpen) {
+      onRequestOpen();
+      return;
     }
+    const permission = await ensureCapturePermissions(capture);
+    if (!permission.ok) {
+      setBlocked(true);
+      setBlockedReason(permission.kind === 'microphone' ? 'Microphone is off.' : 'Camera is off.');
+    } else {
+      setBlocked(false);
+      setBlockedReason(undefined);
+      const available = await cameraIsAvailable();
+      setWebFallback(!available);
+    }
+    setOpen(true);
   }
 
   async function openLibrary() {
     const permission = await ensureLibraryPermission();
     if (!permission.ok) {
-      Alert.alert('Photo library is off.', 'Turn it on in Settings.', [
-        { text: 'Open Settings', onPress: () => void openAppSettings() },
-      ]);
+      setLibraryDenied(true);
       return;
     }
+    setLibraryDenied(false);
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: isVideo ? ['videos'] : ['images'],
+      mediaTypes: video ? ['videos'] : ['images'],
       allowsEditing: false,
       quality: 0.8,
-      videoMaxDuration: isVideo ? 30 : undefined,
+      videoMaxDuration: video ? 30 : undefined,
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
@@ -91,91 +98,109 @@ export function ProofUploader({
     }
   }
 
+  function closeCamera() {
+    setOpen(false);
+    onCancel?.();
+  }
+
   const emptyHeight = compact ? 'h-[120px] items-center justify-center px-6' : 'h-[220px] items-center justify-center px-6';
   const previewHeight = compact ? 148 : 280;
 
   if (open && !locked) {
     return (
-      <View style={{ height: Math.max(previewHeight, 320), borderRadius: THEME.radius, overflow: 'hidden' }}>
+      <View
+        className={fill ? 'flex-1' : undefined}
+        style={
+          fill
+            ? { flex: 1 }
+            : { height: Math.max(previewHeight, 320), borderRadius: THEME.radius, overflow: 'hidden' }
+        }>
         <InAppCamera
-          capture={isVideo ? 'video' : 'photo'}
-          maxDuration={isVideo ? 30 : 15}
+          capture={capture}
+          maxDuration={video ? 30 : 15}
           blocked={blocked}
+          blockedReason={blockedReason}
           webFallback={webFallback}
+          chromeInset={fill}
           onCaptured={(media) => {
             onPicked(media.uri, media.mimeType);
             setOpen(false);
           }}
           onOpenGallery={() => void openLibrary()}
-          onCancel={() => setOpen(false)}
+          onCancel={closeCamera}
           onUnavailable={() => setWebFallback(true)}
         />
+        {libraryDenied ? (
+          <View
+            className="absolute left-4 right-4 flex-row items-center justify-between rounded-2xl px-3 py-2"
+            style={{ bottom: fill ? 96 : 24, backgroundColor: 'rgba(16,19,18,0.88)' }}>
+            <AppText className="mr-3 flex-1 text-[12px] font-semibold" style={{ color: '#fff' }}>
+              Photo library is off.
+            </AppText>
+            {Platform.OS !== 'web' ? (
+              <Pressable onPress={() => void openAppSettings()}>
+                <AppText className="text-[12px] font-bold" style={{ color: THEME.accentBright }}>
+                  Open Settings
+                </AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     );
   }
 
   return (
-    <View className="gap-3">
-      <View
-        className="overflow-hidden"
-        style={{
-          borderRadius: THEME.radius,
-          borderWidth: 1.5,
-          borderStyle: uri ? 'solid' : 'dashed',
-          borderColor: uri ? THEME.accent : THEME.border,
-          backgroundColor: THEME.surface,
-        }}>
-        {uri && isVideo ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Retake video"
-            disabled={locked}
-            onPress={() => void startCamera()}
-            className={emptyHeight}
-            style={{ minHeight: previewHeight }}>
-            <AppText className="text-center text-base font-semibold text-charcoal">
-              Video attached
-            </AppText>
-            <AppText className="mt-2 text-center text-sm leading-6 text-muted">
-              {meta.helper}
-            </AppText>
-          </Pressable>
-        ) : uri ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Retake photo"
-            disabled={locked}
-            onPress={() => void startCamera()}>
-            <Image
-              source={{ uri }}
-              style={{ height: previewHeight, width: '100%' }}
-              contentFit="contain"
-            />
-          </Pressable>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isVideo ? 'Record video' : 'Take photo'}
-            disabled={locked}
-            onPress={() => void startCamera()}
-            className={emptyHeight}>
-            <AppText className="text-center text-base font-semibold text-charcoal">
-              {meta.label}
-            </AppText>
-            <AppText className="mt-2 text-center text-sm leading-6 text-muted">
-              {meta.helper}
-            </AppText>
-          </Pressable>
-        )}
-      </View>
-
-      {locked ? null : (
-        <Button
-          title={uri ? (isVideo ? 'Re-record' : 'Retake') : isVideo ? 'Record' : 'Take photo'}
-          size="md"
-          loading={busy}
+    <View
+      className="overflow-hidden"
+      style={{
+        borderRadius: THEME.radius,
+        borderWidth: 1.5,
+        borderStyle: uri ? 'solid' : 'dashed',
+        borderColor: uri ? THEME.accent : THEME.border,
+        backgroundColor: THEME.surface,
+      }}>
+      {uri && video ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retake video"
+          disabled={locked}
           onPress={() => void startCamera()}
-        />
+          className={emptyHeight}
+          style={{ minHeight: previewHeight }}>
+          <AppText className="text-center text-base font-semibold text-charcoal">
+            Video attached
+          </AppText>
+          <AppText className="mt-2 text-center text-sm leading-6 text-muted">
+            {meta.helper}
+          </AppText>
+        </Pressable>
+      ) : uri ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retake photo"
+          disabled={locked}
+          onPress={() => void startCamera()}>
+          <Image
+            source={{ uri }}
+            style={{ height: previewHeight, width: '100%' }}
+            contentFit="contain"
+          />
+        </Pressable>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={video ? 'Record video' : 'Take photo'}
+          disabled={locked}
+          onPress={() => void startCamera()}
+          className={emptyHeight}>
+          <AppText className="text-center text-base font-semibold text-charcoal">
+            {meta.label}
+          </AppText>
+          <AppText className="mt-2 text-center text-sm leading-6 text-muted">
+            {meta.helper}
+          </AppText>
+        </Pressable>
       )}
     </View>
   );

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 import { registerSchema, type RegisterValues } from '@/utils/validators';
 
@@ -46,7 +47,7 @@ export default function RegisterScreen() {
         <BlobMascot size={180} motion="float" />
         <AppText className="mt-6 text-3xl font-bold text-charcoal">Join the lobby</AppText>
         <AppText className="mt-2 text-center text-muted">
-          Create your blob. Next, we’ll set your name, training, and a starting wallet of 50 coins.
+          Next, we’ll set your name, training, and a starting wallet of 50 Coins.
         </AppText>
       </View>
 
@@ -82,7 +83,7 @@ export default function RegisterScreen() {
               onChangeText={onChange}
               onBlur={onBlur}
               error={errors.password?.message}
-              hint="At least 8 characters"
+              hint={copy('account.passwordHint')}
             />
           )}
         />
@@ -104,13 +105,13 @@ export default function RegisterScreen() {
           <AppText className="text-sm text-coral-dark">{formError}</AppText>
         ) : null}
         {info ? <AppText className="text-sm text-mint-dark">{info}</AppText> : null}
-        <Button title="Create account" onPress={onSubmit} loading={isSubmitting} size="lg" />
+        <Button title={copy('auth.createAccount')} onPress={onSubmit} loading={isSubmitting} size="lg" />
       </View>
 
       <View className="mt-6 flex-row justify-center gap-1">
         <AppText className="text-muted">Already competing?</AppText>
         <Link href="/(auth)/login">
-          <AppText className="font-semibold text-coral">Sign in</AppText>
+          <AppText className="font-semibold text-coral">{copy('auth.signIn')}</AppText>
         </Link>
       </View>
     </Screen>

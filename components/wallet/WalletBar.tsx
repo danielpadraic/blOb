@@ -7,6 +7,8 @@ import { AppText } from '@/components/ui/AppText';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { supabase } from '@/lib/supabase';
+import { copy } from '@/lib/copy';
+import { isOfficialAccount } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import { formatBucks, formatCoins } from '@/utils/format';
 
@@ -14,6 +16,7 @@ export function WalletBar() {
   const { profile } = useMyProfile();
   const wallet = useWalletOptional();
   const queryClient = useQueryClient();
+  const official = isOfficialAccount(profile);
   const coins = Number(profile?.coins ?? profile?.credits ?? 0);
   const lastShown = Number(profile?.last_shown_coin_balance ?? coins);
   const [displayCoins, setDisplayCoins] = useState(coins);
@@ -21,7 +24,7 @@ export function WalletBar() {
   const shownAt = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!profile) {
+    if (!profile || official) {
       return;
     }
     if (shownAt.current === coins) {
@@ -42,16 +45,19 @@ export function WalletBar() {
     if (coins > lastShown && !animating.current) {
       void countUp(lastShown, coins);
     }
-  }, [coins, lastShown, profile?.id]);
+  }, [coins, lastShown, official, profile?.id]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
+      if (official) {
+        return;
+      }
       if (state === 'active' && coins > lastShown && !animating.current) {
         void countUp(lastShown, coins);
       }
     });
     return () => sub.remove();
-  }, [coins, lastShown]);
+  }, [coins, lastShown, official]);
 
   async function countUp(from: number, to: number) {
     animating.current = true;
@@ -98,7 +104,7 @@ export function WalletBar() {
       <View className="flex-row items-center">
         <CurrencyMark currency="coins" size={18} />
         <AppText className="ml-1.5 text-[12px] font-extrabold text-charcoal">
-          {formatCoins(displayCoins).replace(' Coins', '')}
+          {official ? copy('official.infinity') : formatCoins(displayCoins).replace(' Coins', '')}
         </AppText>
       </View>
       <AppText className="mx-1.5 text-[12px] font-extrabold text-muted">·</AppText>

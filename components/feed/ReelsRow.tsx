@@ -5,8 +5,11 @@ import { useRouter, type Href } from 'expo-router';
 import { AppText } from '@/components/ui/AppText';
 import { useChallenges } from '@/hooks/useChallenge';
 import { useReels } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
 import { CAPTURE_REEL_HREF, challengeDetailHref } from '@/lib/routes';
 import { themeShadow } from '@/lib/theme';
+
+/** Row component name stays ReelsRow; user-facing title is Rounds. Capture URL stays mode=reel. */
 
 type MomentVariant = 'teal' | 'dark' | 'soft';
 
@@ -26,13 +29,6 @@ const GRADIENTS: Record<MomentVariant, readonly [string, string]> = {
   soft: ['#DFF6F2', '#7DDDCF'],
 };
 
-const COMING_SOON: MomentItem = {
-  id: 'reels-soon',
-  handle: '@blob',
-  title: 'Reels coming soon',
-  variant: 'soft',
-};
-
 export function ReelsRow() {
   const router = useRouter();
   const reels = useReels(8);
@@ -40,7 +36,7 @@ export function ReelsRow() {
   const liveReels = (reels.data ?? []).slice(0, 8).map((reel, index) => ({
     id: reel.id,
     handle: '@blob',
-    title: reel.caption?.trim() || 'Reel',
+    title: reel.caption?.trim() || copy('round.fallback'),
     variant: VARIANTS[index % VARIANTS.length],
     href: reel.challenge_id ? challengeDetailHref(reel.challenge_id, 'feed') : undefined,
   }));
@@ -54,15 +50,15 @@ export function ReelsRow() {
   const createCard: MomentItem = {
     id: 'new-reel',
     handle: 'You',
-    title: 'New Reel',
+    title: copy('round.new'),
     variant: 'teal',
     href: CAPTURE_REEL_HREF,
   };
-  const cards = [createCard, ...(liveReels.length > 0 ? liveReels : [COMING_SOON, ...liveChallenges].slice(0, 3))];
+  const cards = [createCard, ...(liveReels.length > 0 ? liveReels : liveChallenges.slice(0, 3))];
 
   return (
     <View className="gap-2" style={{ marginHorizontal: -16 }}>
-      <AppText className="px-4 text-[13px] font-bold text-muted">Reels</AppText>
+      <AppText className="px-4 text-[13px] font-bold text-muted">{copy('round.title')}</AppText>
       <ScrollView
         horizontal
         nestedScrollEnabled

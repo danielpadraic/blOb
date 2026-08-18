@@ -85,6 +85,7 @@ import {
   type ChallengeEndMode,
 } from '@/lib/challengeSchedule';
 import { THEME } from '@/lib/theme';
+import { copy } from '@/lib/copy';
 import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
 import { getErrorMessage } from '@/utils/errors';
@@ -1316,7 +1317,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             status={savedFlash ? 'Saved' : null}
             trailing={
               <View className="flex-row items-center gap-1">
-                <AppText className="mr-1 text-[13px] font-semibold text-muted">Advanced</AppText>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.replace('/challenges/create')}
+                  className="h-7 items-center justify-center px-1">
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                    {copy('create.simple')}
+                  </AppText>
+                </Pressable>
+                <AppText className="mr-1 text-[13px] font-semibold text-muted">{copy('create.advanced')}</AppText>
                 {tutorialOn && bobTipOpen ? null : (
                   <Pressable
                     accessibilityRole="button"

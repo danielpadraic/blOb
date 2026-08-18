@@ -49,6 +49,7 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     fitness_profile: profile.fitness_profile ?? null,
     timezone: profile.timezone ?? null,
     motivation_tone: asCopyTone(profile.motivation_tone),
+    is_official: Boolean(profile.is_official),
   };
 }
 

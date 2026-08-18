@@ -13,6 +13,8 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
+import { useCopyTone } from '@/hooks/useCopy';
+import { copy } from '@/lib/copy';
 import {
   calcBmi,
   formatBmi,
@@ -31,6 +33,7 @@ const PHYSICAL_DISCLAIMER =
 export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { profile, isLoading, error, refetch } = useMyProfile();
+  const tone = useCopyTone();
   const wallet = useWalletOptional();
   const router = useRouter();
 
@@ -38,7 +41,7 @@ export default function ProfileScreen() {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
         <AppHeader title="You" />
-        <MascotState kind="loading" title="Loading profile" />
+        <MascotState kind="loading" title={copy('profile.loading', tone)} />
       </Screen>
     );
   }
@@ -49,7 +52,7 @@ export default function ProfileScreen() {
         <AppHeader title="You" />
         <MascotState
           kind="error"
-          title="Couldn’t load your profile"
+          title={copy('profile.error')}
           body={error instanceof Error ? error.message : 'Try again in a moment.'}
           actionLabel="Retry"
           onAction={() => void refetch()}

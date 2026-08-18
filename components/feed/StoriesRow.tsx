@@ -3,9 +3,10 @@ import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { THEME } from '@/lib/theme';
 import { useCoinRecipientSuggestions } from '@/hooks/useCoins';
 import { useMyProfile } from '@/hooks/useProfile';
+import { copy } from '@/lib/copy';
+import { THEME } from '@/lib/theme';
 
 type StoryItem = {
   id: string;
@@ -30,7 +31,7 @@ export function StoriesRow() {
 
   const mine: StoryItem = {
     id: 'me',
-    name: 'Your story',
+    name: copy('wave.yours'),
     isOwn: true,
     avatar: profile?.avatar_url,
   };
@@ -46,7 +47,7 @@ export function StoriesRow() {
       : PLACEHOLDER_STORIES;
 
   function onPress() {
-    Alert.alert('Stories coming soon', 'Tap again later — this row is just a preview.');
+    Alert.alert(copy('wave.empty'), 'Tap again later — this row is just a preview.');
   }
 
   return (
@@ -102,7 +103,7 @@ function StoryBubble({
               <Avatar uri={item.avatar} name={item.name} size={50} />
             ) : (
               <AppText className="text-[15px] font-extrabold" style={{ color: '#fff' }}>
-                YS
+                YW
               </AppText>
             )}
           </View>
@@ -127,7 +128,7 @@ function StoryBubble({
         ) : null}
       </View>
       <AppText className="mt-1.5 text-center text-[10px] text-muted" numberOfLines={1}>
-        {item.isOwn ? 'Your story' : item.name}
+        {item.isOwn ? copy('wave.yours') : item.name}
       </AppText>
     </Pressable>
   );

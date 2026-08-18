@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
 export type QuickActionId =
@@ -50,8 +51,8 @@ export function QuickActionSheet({
     { id: 'callout', glyph: '⚔️', label: 'Call someone out' },
     { id: 'join', glyph: '🤝', label: 'Join a Challenge' },
     { id: 'post', glyph: '✍️', label: 'New Post' },
-    { id: 'story', glyph: '📷', label: 'Story' },
-    { id: 'reel', glyph: '🎬', label: 'Reel' },
+    { id: 'story', glyph: '📷', label: copy('wave.noun') },
+    { id: 'reel', glyph: '🎬', label: copy('round.noun') },
     { id: 'coins', glyph: '🪙', label: 'Send Coins or Bucks' },
   ];
 

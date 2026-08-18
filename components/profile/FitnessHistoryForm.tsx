@@ -217,7 +217,7 @@ export function FitnessHistoryForm({ profile, onSkip, afterSave }: FitnessHistor
         </View>
       </Question>
 
-      <Question label="Aims">
+      <Question label={copy('training.aims')}>
         <ChipRow>
           {GOAL_OPTIONS.map((option) => {
             const selected = goals.includes(option.value);

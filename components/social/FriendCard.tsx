@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 
+import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -30,9 +31,12 @@ export function FriendCard({ friend, messaging, onMessage }: FriendCardProps) {
         </ProfileLink>
         <View className="ml-3 min-w-0 flex-1">
           <ProfileLink username={profile?.username} userId={profile?.id}>
-            <AppText className="text-[16px] font-bold text-charcoal" numberOfLines={1}>
-              {name}
-            </AppText>
+            <View className="flex-row items-center gap-1">
+              <AppText className="text-[16px] font-bold text-charcoal" numberOfLines={1}>
+                {name}
+              </AppText>
+              <OfficialMark profile={profile} compact />
+            </View>
           </ProfileLink>
           {profile?.username ? (
             <AppText className="text-[13px] text-muted" numberOfLines={1}>

@@ -1,6 +1,7 @@
 import { addHours } from 'date-fns';
 
 import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
+import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
 import type {
@@ -272,9 +273,9 @@ export function feedEventAction(event: Pick<FeedEvent, 'event_type'>): string {
     case 'challenge_won':
       return 'won a challenge';
     case 'story_posted':
-      return 'posted a story';
+      return copy('wave.posted');
     case 'reel_posted':
-      return 'posted a reel';
+      return copy('round.posted');
     case 'friend_accepted':
       return 'made a new friend';
     case 'reaction_added':
@@ -338,7 +339,7 @@ export function groupStories(input: {
       const profile = input.profiles.get(input.userId);
       groups.push({
         userId: input.userId,
-        name: 'Your story',
+        name: copy('wave.yours'),
         avatar: profile?.avatar_url ?? null,
         isOwn: true,
         stories: mine,

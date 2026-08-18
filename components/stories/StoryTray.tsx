@@ -4,9 +4,10 @@ import { useRouter } from 'expo-router';
 import { StoryRing } from '@/components/stories/StoryRing';
 import { AppText } from '@/components/ui/AppText';
 import { useStoryGroups } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
 import { STORY_CREATE_HREF, storyHref } from '@/lib/routes';
-import { THEME } from '@/lib/theme';
 import type { StoryGroup } from '@/lib/social';
+import { THEME } from '@/lib/theme';
 
 export function StoryTray() {
   const router = useRouter();
@@ -42,7 +43,7 @@ export function StoryTray() {
         })}
       </ScrollView>
       {groups.every((group) => group.stories.length === 0) ? (
-        <AppText className="px-4 pt-1 text-[12px] text-muted">Share a 24-hour story. Tap Your story to start.</AppText>
+        <AppText className="px-4 pt-1 text-[12px] text-muted">{copy('wave.hint')}</AppText>
       ) : null}
     </View>
   );
@@ -80,7 +81,7 @@ function StoryBubble({
             onPress={onAdd}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Add to your story"
+            accessibilityLabel={copy('wave.add')}
             className="absolute items-center justify-center"
             style={{
               right: -1,
@@ -99,7 +100,7 @@ function StoryBubble({
         ) : null}
       </View>
       <AppText className="mt-1.5 text-center text-[10px] text-muted" numberOfLines={1}>
-        {group.isOwn ? 'Your story' : group.name}
+        {group.isOwn ? copy('wave.yours') : group.name}
       </AppText>
     </View>
   );

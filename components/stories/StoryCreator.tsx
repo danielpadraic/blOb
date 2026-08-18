@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreateFeedEvent, useCreateStory, useStoryChallengeOptions } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { uploadStoryMedia } from '@/utils/upload';
@@ -62,7 +63,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
     if (!permission.granted) {
       Alert.alert(
         'Photo access needed',
-        'Turn on library access in Settings so you can pick a photo or short video for your story.',
+        copy('wave.library'),
       );
       return;
     }
@@ -91,7 +92,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
       return;
     }
     if (!user?.id) {
-      Alert.alert('Sign in first', 'You need to be signed in to post a story.');
+      Alert.alert('Sign in first', copy('wave.signIn'));
       return;
     }
     setError(null);
@@ -123,7 +124,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
           metadata: { media_type: story.media_type },
         });
       } catch {
-        // The story is live even if the feed card does not land.
+        // The Wave is live even if the feed card does not land.
       }
       onPosted?.(story.id);
       close();
@@ -144,7 +145,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
       showsVerticalScrollIndicator={false}>
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
-          <AppText className="text-[22px] font-bold text-charcoal">New story</AppText>
+          <AppText className="text-[22px] font-bold text-charcoal">{copy('wave.new')}</AppText>
           <AppText className="mt-1 text-[14px] text-muted">
             A photo or 15-second clip. It disappears in 24 hours.
           </AppText>
@@ -206,7 +207,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
           {challengeOptions.length > 0 ? (
             <View className="gap-2">
               <AppText className="text-sm font-semibold text-charcoal">Link to a Challenge</AppText>
-              <AppText className="text-[13px] text-muted">Optional. Shows a chip on your story.</AppText>
+              <AppText className="text-[13px] text-muted">{copy('wave.chip')}</AppText>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {challengeOptions.map((challenge) => {
                   const active = challenge.id === challengeId;
@@ -248,7 +249,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
               <View className="flex-row items-center gap-2">
                 <ActivityIndicator color={THEME.accent} />
                 <AppText className="text-[13px] text-muted">
-                  {progress < 88 ? 'Uploading…' : 'Posting your story…'}
+                  {progress < 88 ? 'Uploading…' : copy('wave.posting')}
                 </AppText>
               </View>
             </View>
@@ -260,7 +261,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
             </AppText>
           ) : null}
 
-          <Button title="Share story" loading={posting} disabled={!draft} onPress={() => void publish()} />
+          <Button title={copy('wave.share')} loading={posting} disabled={!draft} onPress={() => void publish()} />
         </>
       ) : (
         <AppText className="text-center text-[13px] text-muted">

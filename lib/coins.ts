@@ -19,10 +19,14 @@ export function transferAmountError(
   amount: number,
   walletCredits: number,
   currency?: string | null,
+  options?: { unlimited?: boolean },
 ): string | null {
   const noun = currencyNoun(currency);
   if (amount < MIN_TRANSFER) {
     return `Send at least 0.01 ${noun}.`;
+  }
+  if (options?.unlimited) {
+    return null;
   }
   if (amount > MAX_TRANSFER) {
     return `Keep a transfer at 10,000 ${noun} or less.`;

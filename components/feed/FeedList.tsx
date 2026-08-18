@@ -6,6 +6,8 @@ import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
+import { useCopyTone } from '@/hooks/useCopy';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
@@ -59,13 +61,13 @@ export function FeedList({
   onComment,
 }: FeedListProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const tone = useCopyTone();
 
   if (error) {
     return (
       <MascotState
         kind="error"
-        title="Feed took a tumble"
-        body={error}
+        title={copy('home.error', tone)}
         actionLabel="Try again"
         onAction={onRetry}
       />
@@ -99,8 +101,7 @@ export function FeedList({
       {isLoading ? (
         <MascotState
           kind="loading"
-          title="Warming up the feed"
-          body="Your blob is gathering the latest check-ins."
+          title={copy('home.loading', tone)}
           compact={embedded}
         />
       ) : visiblePosts.length === 0 ? (

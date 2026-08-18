@@ -33,6 +33,7 @@ import {
   POST_AUDIENCE_OPTIONS,
   type PostAudience,
 } from '@/lib/postAudience';
+import { copy } from '@/lib/copy';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
@@ -55,9 +56,10 @@ export function CaptureStudio({
 }: CaptureStudioProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const [challengeId, setChallengeId] = useState<string | null>(null);
   const createStory = useCreateStory();
   const createReel = useCreateReel();
-  const createPost = useCreatePost();
+  const createPost = useCreatePost(challengeId);
   const createFeedEvent = useCreateFeedEvent();
   const challenges = useStoryChallengeOptions();
   const friends = useFriends();
@@ -69,7 +71,6 @@ export function CaptureStudio({
   const [step, setStep] = useState<'camera' | 'preview'>('camera');
   const [draft, setDraft] = useState<CapturedMedia | null>(null);
   const [caption, setCaption] = useState('');
-  const [challengeId, setChallengeId] = useState<string | null>(null);
   const [audience, setAudience] = useState<PostAudience>(DEFAULT_POST_AUDIENCE);
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
   const [denied, setDenied] = useState<Extract<MediaPermissionResult, { ok: false }> | null>(null);
@@ -182,7 +183,7 @@ export function CaptureStudio({
         : uploadPostMedia({
             uri: draft.uri,
             userId: user.id,
-            fileStem: `${mode === 'reel' ? 'reels' : 'posts'}/${Date.now()}`,
+            fileStem: `${mode === 'reel' ? 'reels' : 'posts'}/${Date.now()}`, // Round storage prefix stays `reels/`.
             mimeType: draft.mimeType,
             blob: draft.blob,
           }));
@@ -202,7 +203,7 @@ export function CaptureStudio({
             challenge_id: reel.challenge_id,
           });
         } catch {
-          // Reel is live even if the feed card does not land.
+          // Round is live even if the feed card does not land.
         }
       } else if (mode === 'post') {
         await createPost.mutateAsync({
@@ -227,7 +228,7 @@ export function CaptureStudio({
             metadata: { media_type: story.media_type },
           });
         } catch {
-          // Story is live even if the feed card does not land.
+          // Wave is live even if the feed card does not land.
         }
       }
       setProgress(100);
@@ -250,12 +251,13 @@ export function CaptureStudio({
           blocked={Boolean(denied && denied.kind !== 'library')}
           blockedReason={
             denied?.kind === 'microphone'
-              ? 'Microphone is off. Turn it on in Settings.'
+              ? 'Microphone is off.'
               : denied && denied.kind !== 'library'
-                ? 'Camera is off. Turn it on in Settings.'
+                ? 'Camera is off.'
                 : undefined
           }
           webFallback={webFallback}
+          chromeInset
           onCaptured={(next) => {
             setDraft(next);
             setStep('preview');
@@ -269,7 +271,7 @@ export function CaptureStudio({
             className="absolute bottom-24 left-4 right-4 flex-row items-center justify-between rounded-2xl px-3 py-2"
             style={{ backgroundColor: 'rgba(16,19,18,0.88)' }}>
             <AppText className="mr-3 flex-1 text-[12px] font-semibold" style={{ color: '#fff' }}>
-              Photo library is off. Turn it on in Settings.
+              Photo library is off.
             </AppText>
             {Platform.OS !== 'web' ? (
               <Pressable onPress={() => void openAppSettings()}>
@@ -292,7 +294,7 @@ export function CaptureStudio({
       showsVerticalScrollIndicator={false}>
       <View className="flex-row items-start justify-between">
         <AppText className="text-[22px] font-bold text-charcoal">
-          {mode === 'reel' ? 'New Reel' : mode === 'post' ? 'New post' : 'New story'}
+          {mode === 'reel' ? copy('round.new') : mode === 'post' ? 'New post' : copy('wave.new')}
         </AppText>
         <Pressable
           onPress={close}
@@ -339,7 +341,7 @@ export function CaptureStudio({
         hint={caption.length > 0 ? `${caption.length}/${mode === 'post' ? 280 : 140}` : undefined}
       />
 
-      {mode !== 'post' && challengeOptions.length > 0 ? (
+      {challengeOptions.length > 0 ? (
         <View className="gap-2">
           <AppText className="text-sm font-semibold text-charcoal">Challenge tag</AppText>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -429,7 +431,7 @@ export function CaptureStudio({
         </AppText>
       ) : null}
       <Button
-        title={mode === 'reel' ? 'Share Reel' : mode === 'post' ? 'Post' : 'Share story'}
+        title={mode === 'reel' ? copy('round.share') : mode === 'post' ? 'Post' : copy('wave.share')}
         loading={posting}
         onPress={() => void publish()}
       />

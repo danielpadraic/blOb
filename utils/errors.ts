@@ -23,9 +23,6 @@ export function isMissingRelationError(error: unknown): boolean {
 }
 
 function extractRawMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
   if (typeof error === 'object' && error !== null) {
     const record = error as Record<string, unknown>;
     const parts = [record.code, record.message, record.details, record.hint]
@@ -34,7 +31,79 @@ function extractRawMessage(error: unknown): string {
       return parts.join(' ');
     }
   }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
   return '';
+}
+
+function extractAuthCode(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return '';
+  }
+  const record = error as Record<string, unknown>;
+  if (typeof record.code === 'string') {
+    return record.code.toLowerCase();
+  }
+  const nested = record.error;
+  if (nested && typeof nested === 'object' && typeof (nested as { code?: unknown }).code === 'string') {
+    return String((nested as { code: string }).code).toLowerCase();
+  }
+  return '';
+}
+
+function passwordReasons(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return '';
+  }
+  const record = error as Record<string, unknown>;
+  const weak = record.weak_password;
+  if (weak && typeof weak === 'object') {
+    const reasons = (weak as { reasons?: unknown }).reasons;
+    if (Array.isArray(reasons)) {
+      return reasons.map((item) => String(item).toLowerCase()).join(' ');
+    }
+  }
+  return '';
+}
+
+/** Auth password-update errors for the Account field. Never includes the new password. */
+export function getPasswordUpdateMessage(error: unknown): string {
+  const code = extractAuthCode(error);
+  const message = `${extractRawMessage(error)} ${passwordReasons(error)}`.toLowerCase();
+
+  if (
+    code === 'weak_password' ||
+    message.includes('weak_password') ||
+    message.includes('character of each') ||
+    (message.includes('password') &&
+      (message.includes('lowercase') ||
+        message.includes('uppercase') ||
+        message.includes('symbol')) &&
+      message.includes('character'))
+  ) {
+    return copy('error.passwordWeak');
+  }
+  if (
+    message.includes('same as') ||
+    message.includes('same password') ||
+    message.includes('different from the old') ||
+    message.includes('should be different') ||
+    (message.includes('password') && message.includes('identical'))
+  ) {
+    return copy('error.passwordSame');
+  }
+  if (
+    code === 'session_not_found' ||
+    code === 'unauthenticated' ||
+    message.includes('not authenticated') ||
+    message.includes('auth session missing') ||
+    message.includes('session missing') ||
+    (message.includes('session') && (message.includes('expired') || message.includes('invalid')))
+  ) {
+    return copy('error.passwordSession');
+  }
+  return copy('error.passwordUpdate');
 }
 
 function humanize(raw: string): string {
@@ -52,10 +121,18 @@ function humanize(raw: string): string {
   if (message.includes('already registered') || message.includes('user already')) {
     return 'That email is already in use. Try signing in instead.';
   }
-  if (message.includes('password')) {
-    if (message.includes('weak') || message.includes('least')) {
-      return 'Use at least 8 characters for your password.';
-    }
+  if (
+    message.includes('weak_password') ||
+    (message.includes('password') &&
+      (message.includes('weak') ||
+        message.includes('character of each') ||
+        message.includes('uppercase') ||
+        message.includes('lowercase') && message.includes('symbol')))
+  ) {
+    return copy('error.passwordWeak');
+  }
+  if (message.includes('password') && message.includes('least')) {
+    return copy('error.passwordWeak');
   }
   if (message.includes('invalid recipient') || message.includes('isn’t on the map') || message.includes('isnt on the map')) {
     return 'That person isn’t a valid recipient.';

@@ -93,10 +93,12 @@ export default function TabLayout() {
       return;
     }
     if (id === 'story') {
+      // Action id stays `story`; capture URL stays mode=story. User-facing name is Wave.
       go(CAPTURE_STORY_HREF);
       return;
     }
     if (id === 'reel') {
+      // Action id stays `reel`; capture URL stays mode=reel. User-facing name is Round.
       go(CAPTURE_REEL_HREF);
       return;
     }

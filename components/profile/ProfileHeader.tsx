@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 
+import { OfficialMark } from '@/components/profile/OfficialMark';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { AppText } from '@/components/ui/AppText';
@@ -21,6 +22,9 @@ export function ProfileHeader({ profile }: ProfileHeaderProps) {
             {name}
           </AppText>
           <AppText className="text-sm text-muted">@{profile.username}</AppText>
+          <View className="mt-1">
+            <OfficialMark profile={profile} />
+          </View>
         </View>
       </View>
       {profile.bio ? (

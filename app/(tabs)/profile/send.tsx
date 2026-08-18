@@ -18,7 +18,9 @@ import {
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
 import { normalizeCoinAmount, transferAmountError } from '@/lib/coins';
+import { copy } from '@/lib/copy';
 import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '@/lib/currency';
+import { isOfficialAccount } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile, WalletCurrency } from '@/lib/types';
 import { formatUsd } from '@/utils/format';
@@ -51,9 +53,10 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
   const search = useCoinRecipientSearch(query);
   const wallet = walletBalance(profile, currency);
   const amount = normalizeCoinAmount(amountDraft);
+  const officialCoins = isOfficialAccount(profile) && currency === 'coins';
   const amountLabel =
     currency === 'bucks' ? formatWalletWithUsd(amount, 'bucks') : formatWallet(amount, 'coins');
-  const amountIssue = transferAmountError(amount, wallet, currency);
+  const amountIssue = transferAmountError(amount, wallet, currency, { unlimited: officialCoins });
   const recipientName = recipient ? personName(recipient) : '';
   const noun = currencyNoun(currency);
   const acks = currency === 'bucks' ? BUCKS_ACKS : COIN_ACKS;
@@ -176,7 +179,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
             <PeopleList
               title="Search results"
               people={results}
-              empty="No blobs match that name."
+              empty={copy('friends.noneMatch')}
               onPick={pickRecipient}
             />
           ) : (
@@ -208,9 +211,13 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
             placeholder="0.00"
             keyboardType="decimal-pad"
             autoFocus
-            hint={`You have ${formatWallet(wallet, currency)}${
-              currency === 'bucks' ? ` · 1 Buck = ${formatUsd(1)}` : ''
-            }`}
+            hint={
+              officialCoins
+                ? copy('official.badge')
+                : `You have ${formatWallet(wallet, currency)}${
+                    currency === 'bucks' ? ` · 1 Buck = ${formatUsd(1)}` : ''
+                  }`
+            }
             error={amountDraft.trim() && amountIssue ? amountIssue : undefined}
           />
           <Button
@@ -256,7 +263,9 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
           <AppText className="mt-5 mb-3 text-muted">
             {currency === 'bucks'
               ? `Check all three. ${amountLabel} leaves immediately. This cannot be reversed.`
-              : `Check all three. ${noun} leave your wallet the moment you confirm. There is no undo.`}
+              : officialCoins
+                ? copy('official.sendConfirm')
+                : `Check all three. ${noun} leave your wallet the moment you confirm. There is no undo.`}
           </AppText>
 
           <View className="gap-3">
@@ -349,18 +358,18 @@ export default function SendFundsScreen() {
 const COIN_ACKS = [
   {
     id: 'amount',
-    title: 'The exact amount leaves now',
+    title: copy('money.leavesNow'),
     body: (amount: string, name: string) =>
       `${amount} will be deducted from your wallet and credited to ${name} the moment you confirm.`,
   },
   {
     id: 'immediate',
-    title: 'This happens immediately',
+    title: copy('money.immediate'),
     body: () => 'There is no hold, delay, or pending state. Coins move as soon as you confirm.',
   },
   {
     id: 'irreversible',
-    title: 'This cannot be reversed',
+    title: copy('money.irreversible'),
     body: () => 'Peer Coin sends cannot be undone. Double-check the recipient and amount.',
   },
 ] as const;
@@ -368,7 +377,7 @@ const COIN_ACKS = [
 const BUCKS_ACKS = [
   {
     id: 'amount',
-    title: 'This is real money, 1:1 with USD',
+    title: copy('money.realUsd'),
     body: (amount: string, name: string) =>
       `${amount} will go to ${name}. 1 Blob Buck equals ${formatUsd(1)}.`,
   },
@@ -379,7 +388,7 @@ const BUCKS_ACKS = [
   },
   {
     id: 'irreversible',
-    title: 'This cannot be reversed',
+    title: copy('money.irreversible'),
     body: () => 'Peer Bucks sends cannot be undone. Double-check the recipient and amount.',
   },
 ] as const;

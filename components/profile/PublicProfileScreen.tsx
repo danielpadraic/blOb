@@ -4,6 +4,7 @@ import { Alert, Image, Pressable, View } from 'react-native';
 
 import { FeedList } from '@/components/feed/FeedList';
 import { ProfileChallengeRow } from '@/components/profile/ProfileChallengeRow';
+import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
@@ -15,6 +16,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { useCopyTone } from '@/hooks/useCopy';
 import {
   useCreateComment,
   useAuthorFeed,
@@ -28,10 +30,11 @@ import {
   useGetOrCreateConversation,
   useSendFriendRequest,
 } from '@/hooks/useSocial';
-import { isCreatorAccount } from '@/lib/creator';
 import { conversationHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
+import { isOfficialAccount } from '@/lib/official';
 import { THEME } from '@/lib/theme';
+import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 import { mediaKind } from '@/utils/media';
 
@@ -60,6 +63,7 @@ export default function PublicProfileScreen() {
   const handle = Array.isArray(params.username) ? params.username[0] : params.username;
   const router = useRouter();
   const { user } = useAuth();
+  const tone = useCopyTone();
   const bundle = usePublicProfile(handle);
   const [tab, setTab] = useState<ProfileTab>('posts');
 
@@ -87,7 +91,7 @@ export default function PublicProfileScreen() {
     return (
       <Screen>
         <Stack.Screen options={headerOptions} />
-        <MascotState kind="loading" title="Loading profile" compact />
+        <MascotState kind="loading" title={copy('profile.loading', tone)} compact />
       </Screen>
     );
   }
@@ -98,7 +102,7 @@ export default function PublicProfileScreen() {
         <Stack.Screen options={headerOptions} />
         <MascotState
           kind="error"
-          title="Couldn’t load that profile"
+          title={copy('profile.notFound')}
           body={bundle.error instanceof Error ? bundle.error.message : 'Try another username.'}
           actionLabel="Retry"
           onAction={() => void bundle.refetch()}
@@ -110,6 +114,7 @@ export default function PublicProfileScreen() {
 
   const name = profile.display_name ?? profile.username;
   const isSelf = Boolean(user?.id && user.id === profile.id);
+  const official = isOfficialAccount(profile);
   const publicPosts = posts.data ?? [];
   const photos = publicPosts.flatMap((post) =>
     (post.media_urls ?? []).filter((url) => mediaKind(url) === 'image'),
@@ -127,7 +132,7 @@ export default function PublicProfileScreen() {
   const relation = friendship.data;
 
   function friendAction() {
-    if (!profile || isSelf) {
+    if (!profile || isSelf || official) {
       return;
     }
     if (relation?.status === 'accepted') {
@@ -147,8 +152,9 @@ export default function PublicProfileScreen() {
     });
   }
 
-  const friendTitle =
-    relation?.status === 'accepted'
+  const friendTitle = official
+    ? copy('official.friends')
+    : relation?.status === 'accepted'
       ? 'Friends'
       : relation?.incoming
         ? 'Accept'
@@ -161,7 +167,7 @@ export default function PublicProfileScreen() {
       <Stack.Screen
         options={{
           ...headerOptions,
-          headerRight: isSelf
+          headerRight: isSelf || official
             ? undefined
             : () => (
                 <Pressable
@@ -190,6 +196,9 @@ export default function PublicProfileScreen() {
               {name}
             </AppText>
             <AppText className="text-[13px] text-muted">@{profile.username}</AppText>
+            <View className="mt-1">
+              <OfficialMark profile={profile} />
+            </View>
             <View className="mt-2 flex-row gap-3">
               <Count label="Friends" value={friendCount} />
               <Count label="Posts" value={publicPosts.length} />
@@ -204,13 +213,15 @@ export default function PublicProfileScreen() {
                 <Button
                   title={friendTitle}
                   size="sm"
-                  variant={relation?.status === 'accepted' || relation?.status === 'pending' ? 'outline' : 'primary'}
-                  loading={sendRequest.isPending || acceptRequest.isPending}
+                  variant={
+                    official || relation?.status === 'accepted' || relation?.status === 'pending'
+                      ? 'outline'
+                      : 'primary'
+                  }
+                  disabled={official}
+                  loading={!official && (sendRequest.isPending || acceptRequest.isPending)}
                   onPress={friendAction}
                 />
-                {isCreatorAccount() ? (
-                  <Button title="Follow" size="sm" variant="outline" disabled />
-                ) : null}
                 <Button
                   title="Message"
                   size="sm"
@@ -263,7 +274,7 @@ export default function PublicProfileScreen() {
 
         {tab === 'friends' ? (
           friendCount === 0 ? (
-            <AppText className="py-4 text-center text-[14px] text-muted">No friends yet.</AppText>
+            <AppText className="py-4 text-center text-[14px] text-muted">{copy('friends.empty', tone)}</AppText>
           ) : (
             <View className="flex-row flex-wrap" style={{ marginHorizontal: -4 }}>
               {(friendsQuery.data ?? []).map((row) => {

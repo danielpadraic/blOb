@@ -11,6 +11,7 @@ import { useInviteToChallenge } from '@/hooks/useNotifications';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
+import { copy } from '@/lib/copy';
 
 type InviteToChallengeModalProps = {
   visible: boolean;
@@ -88,7 +89,7 @@ export function InviteToChallengeModal({
           ) : null}
           <View className="mt-3">
             {query.trim().length >= 2 ? (
-              <PeopleList people={results} empty="No blobs match that name." onPick={pick} />
+              <PeopleList people={results} empty={copy('friends.noneMatch')} onPick={pick} />
             ) : (
               <PeopleList
                 people={suggestions.data?.following ?? []}

@@ -3,6 +3,7 @@ import { addDays } from 'date-fns';
 import { defaultChallengeStart } from '@/lib/challengeSchedule';
 import type { ChallengeCategory, ProofType } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
+import { copy } from '@/lib/copy';
 import type { CreateChallengeValues } from '@/utils/validators';
 
 export type SimpleCurrency = 'coins' | 'bucks';
@@ -199,26 +200,26 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
 
 export function validateSimpleDraft(draft: SimpleChallengeDraft): string | null {
   if (draft.currency === 'bucks' && Math.floor(draft.host_budget) < 1) {
-    return 'Set a host prize.';
+    return copy('create.setHostPrize');
   }
   if (!draft.title.trim() || draft.title.trim().length < 3) {
-    return 'Give it a title.';
+    return copy('create.needTitle');
   }
   if (!draft.starts_at) {
-    return 'Pick a start.';
+    return copy('create.needStart');
   }
   const start = new Date(draft.starts_at);
   if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) {
-    return 'Start has to be in the future.';
+    return copy('create.startFuture');
   }
   if (durationDaysOf(draft) < 1) {
-    return 'Duration has to be at least 1 day.';
+    return copy('create.needDuration');
   }
   if (!draft.task.trim()) {
-    return 'Add a task.';
+    return copy('create.needTask');
   }
   if (draft.frequency === 'custom' && requiredCheckinsOf(draft) < 1) {
-    return 'Set how many check-ins.';
+    return copy('create.needCheckins');
   }
   return null;
 }

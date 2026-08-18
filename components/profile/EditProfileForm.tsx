@@ -496,7 +496,7 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
               </ChipRow>
             </Card>
             <Card className="gap-4">
-              <AppText className="text-base font-semibold text-charcoal">Aims</AppText>
+              <AppText className="text-base font-semibold text-charcoal">{copy('training.aims')}</AppText>
               <ChipRow>
                 {GOAL_OPTIONS.map((option) => {
                   const selected = goals.includes(option.value);

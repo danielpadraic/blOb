@@ -11,6 +11,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
+import { useCopyTone } from '@/hooks/useCopy';
 import {
   useCreateComment,
   useCreatePost,
@@ -18,9 +19,11 @@ import {
   useToggleReaction,
 } from '@/hooks/useFeed';
 import { useActiveStories } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
 
 export default function FeedScreen() {
   const { user } = useAuth();
+  const tone = useCopyTone();
   const feed = useFeed();
   const stories = useActiveStories();
   const createPost = useCreatePost();
@@ -40,8 +43,7 @@ export default function FeedScreen() {
         <FeedHeader />
         <MascotState
           kind="error"
-          title="Feed took a tumble"
-          body={feed.error instanceof Error ? feed.error.message : 'Try again in a moment.'}
+          title={copy('home.error', tone)}
           actionLabel="Try again"
           onAction={() => void feed.refetch()}
         />
@@ -56,9 +58,9 @@ export default function FeedScreen() {
         isLoading={feed.isLoading}
         isRefreshing={refreshing}
         currentUserId={user?.id}
-        emptyTitle="The arena is quiet"
-        emptyBody="Join a challenge, find a friend, or host one — that’s how the feed fills up."
-        composerPlaceholder="Share a check-in…"
+        emptyTitle={copy('home.empty', tone)}
+        emptyBody=""
+        composerPlaceholder={copy('home.composer', tone)}
         composing={createPost.isPending}
         commenting={createComment.isPending}
         headerTop={

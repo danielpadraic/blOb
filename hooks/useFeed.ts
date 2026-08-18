@@ -236,7 +236,7 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url')
+    .select('id, username, display_name, avatar_url, is_official')
     .in('id', [...ids]);
   if (error || !data) {
     return posts;
@@ -508,6 +508,7 @@ function asPublicProfile(
     username?: string | null;
     display_name?: string | null;
     avatar_url?: string | null;
+    is_official?: boolean | null;
   } | null,
 ): PublicProfile | undefined {
   if (!profile) {
@@ -522,6 +523,7 @@ function asPublicProfile(
     skill_tags: [],
     primary_activities: [],
     show_fitness_stats_publicly: false,
+    is_official: Boolean(profile.is_official),
     created_at: new Date().toISOString(),
     height_cm: null,
     current_weight: null,

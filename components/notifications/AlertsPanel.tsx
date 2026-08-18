@@ -11,8 +11,10 @@ import {
 } from '@/hooks/useNotifications';
 import { notificationGlyph, notificationHref } from '@/lib/notifications';
 import { THEME } from '@/lib/theme';
+import { copy } from '@/lib/copy';
 import type { AppNotification } from '@/lib/types';
 import { formatFeedTime } from '@/utils/format';
+import { useCopyTone } from '@/hooks/useCopy';
 
 type AlertsPanelProps = {
   compact?: boolean;
@@ -55,6 +57,7 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const router = useRouter();
   const list = useNotifications();
   const markRead = useMarkNotificationsRead();
+  const tone = useCopyTone();
   const items = list.data ?? [];
   const unreadCount = items.filter((item) => !item.read_at).length;
   const rows = useMemo(() => groupByDay(items), [items]);
@@ -90,18 +93,18 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
       </View>
 
       {list.isLoading ? (
-        <MascotState compact={compact} kind="loading" title="Checking your inbox" />
+        <MascotState compact={compact} kind="loading" title={copy('alerts.loading')} />
       ) : list.error ? (
         <MascotState
           compact={compact}
           kind="error"
-          title="Couldn’t load notifications"
+          title={copy('alerts.error')}
           body={list.error instanceof Error ? list.error.message : 'Try again in a moment.'}
           actionLabel="Retry"
           onAction={() => void list.refetch()}
         />
       ) : items.length === 0 ? (
-        <MascotState compact={compact} kind="empty" title="You’re all caught up." />
+        <MascotState compact={compact} kind="empty" title={copy('alerts.empty', tone)} />
       ) : (
         <FlatList
           data={rows}

@@ -32,6 +32,7 @@ import {
   type SimpleVisibility,
 } from '@/lib/simpleChallenge';
 import { formatWallet, walletBalance } from '@/lib/currency';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -114,7 +115,7 @@ export function SimpleCreateForm() {
       return;
     }
     if (!user) {
-      setError('Sign in to create.');
+      setError(copy('create.signIn'));
       return;
     }
     try {
@@ -128,32 +129,32 @@ export function SimpleCreateForm() {
   return (
     <Screen scroll padded edges={TAB_ROOT_EDGES}>
       <View className="gap-5 pt-3">
-        <AppText className="text-[22px] font-extrabold text-charcoal">New Challenge</AppText>
+        <AppText className="text-[22px] font-extrabold text-charcoal">{copy('create.screenTitle')}</AppText>
 
         <View className="gap-2">
-          <SectionLabel>Currency</SectionLabel>
+          <SectionLabel>{copy('create.currency')}</SectionLabel>
           <SegmentedControl
-            accessibilityLabel="Currency"
+            accessibilityLabel={copy('create.currency')}
             value={draft.currency}
             options={[
-              { value: 'coins' as SimpleCurrency, label: 'Coins' },
-              { value: 'bucks' as SimpleCurrency, label: 'Bucks' },
+              { value: 'coins' as SimpleCurrency, label: copy('create.coins') },
+              { value: 'bucks' as SimpleCurrency, label: copy('create.bucks') },
             ]}
             onChange={(value) =>
               patch({
                 currency: value,
                 buy_in: value === 'bucks' ? 0 : draft.buy_in,
-                host_budget: value === 'coins' ? 0 : draft.host_budget || 10,
+                host_budget: value === 'coins' ? 0 : Math.max(draft.host_budget, 1),
               })
             }
           />
           {draft.currency === 'bucks' ? (
             <View className="gap-2">
-              <AppText className="text-sm text-muted">You fund the prize.</AppText>
+              <AppText className="text-sm text-muted">{copy('create.youFundPrize')}</AppText>
               <View className="flex-row items-center justify-between">
-                <AppText className="text-sm font-semibold text-charcoal">Host prize</AppText>
+                <AppText className="text-sm font-semibold text-charcoal">{copy('create.hostPrize')}</AppText>
                 <Stepper
-                  accessibilityLabel="Host prize"
+                  accessibilityLabel={copy('create.hostPrize')}
                   value={draft.host_budget}
                   min={1}
                   max={10_000}
@@ -161,11 +162,22 @@ export function SimpleCreateForm() {
                 />
               </View>
             </View>
-          ) : null}
+          ) : (
+            <View className="flex-row items-center justify-between">
+              <AppText className="text-sm font-semibold text-charcoal">{copy('create.buyIn')}</AppText>
+              <Stepper
+                accessibilityLabel={copy('create.buyIn')}
+                value={draft.buy_in}
+                min={0}
+                max={10_000}
+                onChange={(buy_in) => patch({ buy_in })}
+              />
+            </View>
+          )}
         </View>
 
         <View className="gap-2">
-          <SectionLabel>Type</SectionLabel>
+          <SectionLabel>{copy('create.type')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_TYPES.map((item) => (
               <IconChip
@@ -185,23 +197,24 @@ export function SimpleCreateForm() {
         </View>
 
         <Input
-          label="Title"
-          placeholder="Morning miles"
+          label={copy('create.titleLabel')}
+          placeholder={copy('create.titlePlaceholder')}
           value={draft.title}
           onChangeText={(title) => patch({ title })}
           maxLength={80}
         />
 
         <Input
-          label="Description"
-          placeholder="Optional"
+          label={copy('create.descriptionLabel')}
+          placeholder={copy('create.descriptionPlaceholder')}
           value={draft.description}
           onChangeText={(description) => patch({ description })}
           maxLength={120}
+          numberOfLines={1}
         />
 
         <View className="gap-2">
-          <SectionLabel>Start</SectionLabel>
+          <SectionLabel>{copy('create.start')}</SectionLabel>
           <DateTimeField
             value={draft.starts_at}
             minimumDate={new Date()}
@@ -210,7 +223,7 @@ export function SimpleCreateForm() {
         </View>
 
         <View className="gap-2">
-          <SectionLabel>Duration</SectionLabel>
+          <SectionLabel>{copy('create.duration')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_DURATION_CHIPS.map((item) => (
               <IconChip
@@ -229,9 +242,9 @@ export function SimpleCreateForm() {
           </View>
           {draft.duration_preset === 'custom' ? (
             <View className="flex-row items-center justify-between">
-              <AppText className="text-sm font-semibold text-charcoal">Days</AppText>
+              <AppText className="text-sm font-semibold text-charcoal">{copy('create.days')}</AppText>
               <Stepper
-                accessibilityLabel="Duration days"
+                accessibilityLabel={copy('create.days')}
                 value={draft.duration_days}
                 min={1}
                 max={365}
@@ -241,33 +254,16 @@ export function SimpleCreateForm() {
           ) : null}
         </View>
 
-        {draft.currency === 'coins' ? (
-          <View className="gap-2">
-            <SectionLabel>Buy-in</SectionLabel>
-            <View className="flex-row items-center justify-between">
-              <AppText className="text-sm font-semibold text-charcoal">Coins</AppText>
-              <Stepper
-                accessibilityLabel="Buy-in"
-                value={draft.buy_in}
-                min={0}
-                max={10_000}
-                step={5}
-                onChange={(buy_in) => patch({ buy_in })}
-              />
-            </View>
-          </View>
-        ) : null}
-
         <Input
-          label="Task"
-          placeholder="Run 1 mile"
+          label={copy('create.taskLabel')}
+          placeholder={copy('create.taskPlaceholder')}
           value={draft.task}
           onChangeText={(task) => patch({ task })}
           maxLength={80}
         />
 
         <View className="gap-2">
-          <SectionLabel>Frequency</SectionLabel>
+          <SectionLabel>{copy('create.frequency')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_FREQUENCY_CHIPS.map((item) => (
               <IconChip
@@ -281,9 +277,9 @@ export function SimpleCreateForm() {
           </View>
           {draft.frequency === 'custom' ? (
             <View className="flex-row items-center justify-between">
-              <AppText className="text-sm font-semibold text-charcoal">Check-ins</AppText>
+              <AppText className="text-sm font-semibold text-charcoal">{copy('create.checkins')}</AppText>
               <Stepper
-                accessibilityLabel="Custom check-ins"
+                accessibilityLabel={copy('create.checkins')}
                 value={draft.custom_checkins}
                 min={1}
                 max={100}
@@ -292,13 +288,13 @@ export function SimpleCreateForm() {
             </View>
           ) : (
             <AppText className="text-[12px] text-muted">
-              {checkins} check-in{checkins === 1 ? '' : 's'} · {days} day{days === 1 ? '' : 's'}
+              {checkins} · {days}
             </AppText>
           )}
         </View>
 
         <View className="gap-2">
-          <SectionLabel>Proof</SectionLabel>
+          <SectionLabel>{copy('create.proof')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_PROOF_CHIPS.map((item) => (
               <IconChip
@@ -313,18 +309,28 @@ export function SimpleCreateForm() {
         </View>
 
         <View className="gap-2">
-          <SectionLabel>Visibility</SectionLabel>
+          <SectionLabel>{copy('create.visibility')}</SectionLabel>
           <SegmentedControl
-            accessibilityLabel="Visibility"
+            accessibilityLabel={copy('create.visibility')}
             value={draft.visibility}
             options={[
-              { value: 'public' as SimpleVisibility, label: 'Public' },
-              { value: 'friends' as SimpleVisibility, label: 'Friends' },
-              { value: 'invite' as SimpleVisibility, label: 'Invite' },
+              { value: 'public' as SimpleVisibility, label: copy('create.public') },
+              { value: 'friends' as SimpleVisibility, label: copy('create.friends') },
+              { value: 'invite' as SimpleVisibility, label: copy('create.invite') },
             ]}
             onChange={(visibility) => patch({ visibility })}
           />
         </View>
+
+        {needed > 0 ? (
+          <View className="gap-1">
+            {draft.currency === 'bucks' ? (
+              <AppText className="text-[13px] text-muted">{copy('money.realUsd')}</AppText>
+            ) : null}
+            <AppText className="text-[13px] text-muted">{copy('money.leavesNow')}</AppText>
+            <AppText className="text-[13px] text-muted">{copy('money.irreversible')}</AppText>
+          </View>
+        ) : null}
 
         {error ? (
           <AppText className="text-sm text-coral-dark">{error}</AppText>
@@ -332,13 +338,13 @@ export function SimpleCreateForm() {
           <AppText className="text-sm text-coral-dark">{costHint}</AppText>
         ) : null}
 
-        <Button title="Create" loading={create.isPending} onPress={() => void onCreate()} />
+        <Button title={copy('create.submit')} loading={create.isPending} onPress={() => void onCreate()} />
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/challenges/create?mode=advanced')}
           className="items-center py-2">
           <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
-            Advanced
+            {copy('create.advanced')}
           </AppText>
         </Pressable>
       </View>

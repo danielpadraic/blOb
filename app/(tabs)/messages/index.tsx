@@ -10,6 +10,7 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversations } from '@/hooks/useSocial';
 import { conversationHref } from '@/lib/routes';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
 export default function MessagesScreen() {
@@ -52,11 +53,11 @@ export default function MessagesScreen() {
       </View>
 
       {conversations.isLoading ? (
-        <MascotState kind="loading" title="Opening your inbox" compact />
+        <MascotState kind="loading" title={copy('messages.loading')} compact />
       ) : conversations.error ? (
         <MascotState
           kind="error"
-          title="Couldn’t load messages"
+          title={copy('messages.error')}
           body={conversations.error instanceof Error ? conversations.error.message : 'Try again in a moment.'}
           actionLabel="Retry"
           onAction={() => void conversations.refetch()}

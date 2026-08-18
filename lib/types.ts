@@ -204,6 +204,7 @@ export interface Profile {
   last_shown_coin_balance?: number | null;
   timezone?: string | null;
   motivation_tone?: 'gentle' | 'neutral' | 'honest' | null;
+  is_official?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -217,6 +218,7 @@ export interface PublicProfile {
   skill_tags: string[];
   primary_activities: string[];
   show_fitness_stats_publicly: boolean;
+  is_official?: boolean;
   created_at: string;
   height_cm: number | null;
   current_weight: number | null;

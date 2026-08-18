@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { THEME } from '@/lib/theme';
 
 export default function StoryStackLayout() {
+  // Routes stay `/story/*` so existing links keep working. User-facing name is Wave.
   return (
     <Stack
       screenOptions={{

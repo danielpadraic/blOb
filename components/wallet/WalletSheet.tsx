@@ -9,13 +9,11 @@ import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
-import { formatUsd } from '@/utils/format';
-
-const BUCK_PACKS = [5, 10, 25, 50] as const;
 
 const EARN_WAYS = [
-  { icon: GLYPH.check, title: 'Finish challenges', body: 'Prize pools pay Coins or Bucks.' },
+  { icon: GLYPH.check, title: copy('wallet.finishChallenges'), body: copy('wallet.finishChallengesBody') },
   { icon: GLYPH.star, title: 'Unlock badges', body: 'Milestones grant bonus Coins.' },
   { icon: GLYPH.streak, title: 'Log your days', body: 'Proofs stack toward streak badges.' },
   { icon: GLYPH.flag, title: 'Host a challenge', body: 'Create one and earn the Host title.' },
@@ -54,37 +52,9 @@ export function WalletSheet() {
           <ScrollView showsVerticalScrollIndicator={false}>
             <WalletBalances profile={profile} />
 
-            <AppText className="mt-5 text-[12px] font-bold uppercase tracking-widest text-charcoal">
-              Top up Bucks
+            <AppText className="mt-5 text-[13px] leading-5 text-muted">
+              {copy('money.realUsd')}
             </AppText>
-            <AppText className="mt-1 text-[13px] leading-5 text-muted">
-              1 Blob Buck = {formatUsd(1)}. Real money. Checkout is next — official challenges and
-              call-outs can still pay Bucks today.
-            </AppText>
-            <View className="mt-3 flex-row flex-wrap gap-2">
-              {BUCK_PACKS.map((amount) => (
-                <View
-                  key={amount}
-                  className="items-center px-3 py-2.5"
-                  style={{
-                    minWidth: 72,
-                    backgroundColor: '#E7F6EC',
-                    borderColor: '#7BC49A',
-                    borderWidth: 1,
-                    borderRadius: THEME.radius,
-                  }}>
-                  <AppText className="text-[15px] font-bold" style={{ color: '#1B7A4A' }}>
-                    ${amount}
-                  </AppText>
-                  <AppText className="text-[10px] font-semibold" style={{ color: '#1B7A4A' }}>
-                    {amount} Bucks
-                  </AppText>
-                </View>
-              ))}
-            </View>
-            <View className="mt-3">
-              <Button title="Purchase coming soon" variant="outline" disabled onPress={() => undefined} />
-            </View>
 
             <AppText className="mt-6 text-[12px] font-bold uppercase tracking-widest text-charcoal">
               Earn more Coins

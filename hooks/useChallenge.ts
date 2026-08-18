@@ -500,9 +500,12 @@ export function useCreateChallenge() {
         host_funded: values.host_funded === true || values.currency === 'bucks',
       });
       const currentWallet = walletBalance(profile, lane.currency);
-      if (contribution > 0 && currentWallet < contribution) {
+      const creatorBuyIn =
+        values.creator_participating === true ? Math.max(Number(lane.buy_in_amount) || 0, 0) : 0;
+      const needed = contribution + creatorBuyIn;
+      if (needed > 0 && currentWallet < needed) {
         throw new Error(
-          `You need ${formatWallet(contribution, lane.currency)} to fund this pool. You have ${formatWallet(currentWallet, lane.currency)}.`,
+          `You need ${formatWallet(needed, lane.currency)} to fund this pool. You have ${formatWallet(currentWallet, lane.currency)}.`,
         );
       }
 

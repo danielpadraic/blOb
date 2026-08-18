@@ -11,6 +11,7 @@ import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
 import { formatWallet, formatWalletWithUsd, isBucksChallenge } from '@/lib/currency';
 import { formatUsd } from '@/utils/format';
+import { copy } from '@/lib/copy';
 
 type JoinConfirmModalProps = {
   visible: boolean;
@@ -94,7 +95,7 @@ function acknowledgments(challenge: Challenge) {
       ? [
           {
             id: 'irreversible',
-            title: 'This cannot be reversed',
+            title: copy('money.irreversible'),
             body: isFree
               ? 'The prize is still real money. Results and payouts cannot be undone.'
               : `${buyIn} is deducted immediately. There is no refund.`,

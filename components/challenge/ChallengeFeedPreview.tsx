@@ -4,6 +4,8 @@ import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { MascotState } from '@/components/mascot/MascotState';
+import { useCopyTone } from '@/hooks/useCopy';
+import { copy } from '@/lib/copy';
 import type { PostWithMeta } from '@/lib/types';
 import { formatFeedTime } from '@/utils/format';
 
@@ -20,6 +22,7 @@ export function ChallengeFeedPreview({
   error,
   onRetry,
 }: ChallengeFeedPreviewProps) {
+  const tone = useCopyTone();
   if (isLoading) {
     return (
       <MascotState
@@ -34,7 +37,7 @@ export function ChallengeFeedPreview({
     return (
       <MascotState
         kind="error"
-        title="Feed didn’t load"
+        title={copy('home.error', tone)}
         body={error}
         actionLabel="Try again"
         onAction={onRetry}

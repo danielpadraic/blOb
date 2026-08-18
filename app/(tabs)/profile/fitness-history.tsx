@@ -5,10 +5,13 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useCopyTone } from '@/hooks/useCopy';
+import { copy } from '@/lib/copy';
 
 export default function FitnessHistoryScreen() {
   const router = useRouter();
   const { profile, isLoading, error, refetch } = useMyProfile();
+  const tone = useCopyTone();
 
   function skip() {
     if (router.canGoBack()) {
@@ -21,7 +24,7 @@ export default function FitnessHistoryScreen() {
   if (isLoading) {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
-        <MascotState kind="loading" title="Finding your blob" />
+        <MascotState kind="loading" title={copy('profile.loading', tone)} />
       </Screen>
     );
   }
@@ -31,7 +34,7 @@ export default function FitnessHistoryScreen() {
       <Screen edges={TAB_ROOT_EDGES}>
         <MascotState
           kind="error"
-          title="Couldn’t load fitness history"
+          title={copy('profile.error')}
           body={error instanceof Error ? error.message : 'Try again in a moment.'}
           actionLabel="Retry"
           onAction={() => void refetch()}

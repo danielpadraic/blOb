@@ -9,6 +9,7 @@ export default function CaptureScreen() {
   const params = useLocalSearchParams<{ mode?: string; media?: string }>();
   const rawMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const rawMedia = Array.isArray(params.media) ? params.media[0] : params.media;
+  // Query `mode` stays `story` | `reel` | `post`. User-facing names are Wave / Round / post.
   const initialMode: CaptureMode =
     rawMode === 'reel' || rawMode === 'post' ? rawMode : 'story';
   const requestedMedia = rawMedia === 'video' || rawMedia === 'photo' ? rawMedia : undefined;

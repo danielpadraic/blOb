@@ -5,18 +5,18 @@ import { CameraView, type CameraType } from 'expo-camera';
 import { lastCameraFacing, rememberCameraFacing } from '@/components/capture/cameraFacing';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { THEME } from '@/lib/theme';
+import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
 import { openAppSettings } from '@/lib/mediaPermissions';
-import type { CapturedMedia } from '@/components/capture/types';
-
-export type CameraCaptureKind = 'photo' | 'video' | 'mixed';
+import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
 
 type InAppCameraProps = {
-  capture: CameraCaptureKind;
+  capture: CaptureMedia;
   maxDuration: number;
   blocked?: boolean;
   blockedReason?: string;
   webFallback?: boolean;
+  /** Keep shutter/gallery/flip in the gap above the floating tab bar. */
+  chromeInset?: boolean;
   onCaptured: (media: CapturedMedia) => void;
   onOpenGallery: () => void;
   onCancel: () => void;
@@ -29,13 +29,14 @@ export function InAppCamera({
   blocked = false,
   blockedReason,
   webFallback = false,
+  chromeInset = true,
   onCaptured,
   onOpenGallery,
   onCancel,
   onUnavailable,
 }: InAppCameraProps) {
   const cameraRef = useRef<CameraView>(null);
-  const [facing, setFacing] = useState<CameraType>(lastCameraFacing);
+  const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing());
   const [ready, setReady] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -43,8 +44,9 @@ export function InAppCamera({
   const recordingRef = useRef(false);
   const holdRef = useRef(false);
   const skipPressRef = useRef(false);
-  const videoMode = capture === 'video' || capture === 'mixed';
+  const video = capture === 'video';
   const live = !blocked && !webFallback;
+  const bottomPad = chromeInset ? TAB_BAR_PEEK : 20;
 
   useEffect(() => {
     if (!recording) {
@@ -79,7 +81,7 @@ export function InAppCamera({
   }
 
   async function startRecording() {
-    if (!live || !ready || !cameraRef.current || recordingRef.current) {
+    if (!live || !ready || !video || !cameraRef.current || recordingRef.current) {
       return;
     }
     if (Platform.OS === 'web') {
@@ -119,7 +121,7 @@ export function InAppCamera({
       skipPressRef.current = false;
       return;
     }
-    if (capture === 'video') {
+    if (video) {
       if (recordingRef.current) {
         stopRecording();
         return;
@@ -131,7 +133,7 @@ export function InAppCamera({
   }
 
   function onShutterLongPress() {
-    if (!videoMode) {
+    if (!video) {
       return;
     }
     skipPressRef.current = true;
@@ -147,12 +149,14 @@ export function InAppCamera({
     }
   }
 
-  const shutterLabel =
-    capture === 'video' || recording
-      ? recording
-        ? 'Stop recording'
-        : 'Start recording'
-      : 'Take photo';
+  const shutterLabel = video
+    ? recording
+      ? 'Stop recording'
+      : 'Start recording'
+    : 'Take photo';
+  const deniedLine = webFallback
+    ? 'Camera isn’t available.'
+    : blockedReason ?? 'Camera is off.';
 
   return (
     <View className="flex-1 overflow-hidden" style={{ backgroundColor: THEME.primary }}>
@@ -161,7 +165,7 @@ export function InAppCamera({
           ref={cameraRef}
           style={{ flex: 1 }}
           facing={facing}
-          mode={capture === 'photo' ? 'picture' : 'video'}
+          mode={video ? 'video' : 'picture'}
           mute={false}
           onCameraReady={() => setReady(true)}
           onMountError={() => onUnavailable()}
@@ -169,9 +173,7 @@ export function InAppCamera({
       ) : (
         <View className="flex-1 items-center justify-center px-6">
           <AppText className="text-center text-[14px] font-semibold" style={{ color: '#fff' }}>
-            {webFallback
-              ? 'Use gallery'
-              : blockedReason ?? 'Camera is off. Turn it on in Settings.'}
+            {deniedLine}
           </AppText>
           {webFallback ? null : (
             <Pressable
@@ -198,21 +200,27 @@ export function InAppCamera({
             Close
           </AppText>
         </Pressable>
-        {recording ? (
-          <View className="rounded-full px-3 py-1.5" style={{ backgroundColor: THEME.danger }}>
-            <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
-              {elapsed}s / {maxDuration}s
+        {video ? (
+          recording ? (
+            <View className="rounded-full px-3 py-1.5" style={{ backgroundColor: THEME.danger }}>
+              <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
+                {elapsed}s / {maxDuration}s
+              </AppText>
+            </View>
+          ) : (
+            <AppText className="text-[12px] font-semibold" style={{ color: '#fff' }}>
+              {maxDuration}s
             </AppText>
-          </View>
+          )
         ) : (
-          <AppText className="text-[12px] font-semibold" style={{ color: '#fff' }}>
-            {capture === 'video' ? `Up to ${maxDuration}s` : capture === 'mixed' ? 'Tap photo · hold video' : 'Photo'}
-          </AppText>
+          <View />
         )}
         <View style={{ width: 64 }} />
       </View>
 
-      <View className="absolute bottom-5 left-6 right-6 flex-row items-center justify-between">
+      <View
+        className="absolute left-6 right-6 flex-row items-center justify-between"
+        style={{ bottom: bottomPad }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open gallery"

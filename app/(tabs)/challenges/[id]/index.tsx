@@ -77,6 +77,7 @@ import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWallet, isBucksChallenge, isSponsoredBucks, walletBalance } from '@/lib/currency';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { THEME } from '@/lib/theme';
+import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 import {
   challengeTimingLabel,
@@ -276,7 +277,7 @@ export default function ChallengeDetailScreen() {
       <Screen>
         <MascotState
           kind="error"
-          title="Challenge not found"
+          title={copy('challenge.notFound')}
           body={challengeQuery.error?.message ?? 'This blob wandered off.'}
           actionLabel="Retry"
           onAction={() => void challengeQuery.refetch()}
@@ -865,7 +866,7 @@ export default function ChallengeDetailScreen() {
                 <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                   Last man standing
                 </AppText>
-                <AppText className="text-xl font-bold text-charcoal">You have been eliminated</AppText>
+                <AppText className="text-xl font-bold text-charcoal">{copy('challenge.eliminated')}</AppText>
                 <AppText className="text-sm leading-5 text-muted">
                   You missed the requirement and are out. You can still watch the feed, but you
                   cannot log or win the prize pool.
@@ -922,7 +923,7 @@ export default function ChallengeDetailScreen() {
                 <View
                   className="rounded-blob px-4 py-3"
                   style={{ backgroundColor: THEME.border }}>
-                  <AppText className="font-semibold text-charcoal">Logging is closed</AppText>
+                  <AppText className="font-semibold text-charcoal">{copy('challenge.logClosed')}</AppText>
                   <AppText className="mt-1 text-sm leading-5 text-muted">
                     {challenge.status === 'settled'
                       ? 'This challenge is settled. Your result is in the receipt above.'

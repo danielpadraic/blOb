@@ -6,12 +6,15 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useCopyTone } from '@/hooks/useCopy';
 import { hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
 import { FITNESS_HISTORY_HREF } from '@/lib/routes';
+import { copy } from '@/lib/copy';
 
 export default function BodyMetricsScreen() {
   const router = useRouter();
   const { profile, isLoading, error, refetch } = useMyProfile();
+  const tone = useCopyTone();
 
   function goNext() {
     if (!hasCompletedFitnessHistory(profile)) {
@@ -41,7 +44,7 @@ export default function BodyMetricsScreen() {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
         <BodyFatFramePreload />
-        <MascotState kind="loading" title="Finding your blob" />
+        <MascotState kind="loading" title={copy('profile.loading', tone)} />
       </Screen>
     );
   }
@@ -52,7 +55,7 @@ export default function BodyMetricsScreen() {
         <BodyFatFramePreload />
         <MascotState
           kind="error"
-          title="Couldn’t load body metrics"
+          title={copy('profile.error')}
           body={error instanceof Error ? error.message : 'Try again in a moment.'}
           actionLabel="Retry"
           onAction={() => void refetch()}

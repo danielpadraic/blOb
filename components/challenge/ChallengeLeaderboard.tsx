@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import type { Challenge, ChallengeParticipantWithProfile } from '@/lib/types';
 import { isLiveCompetitorStatus } from '@/lib/challenges';
 import { formatWallet } from '@/lib/currency';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { utcDateStamp } from '@/utils/dates';
 
@@ -53,8 +54,6 @@ export function ChallengeLeaderboard({
   const remainingCount = remaining.length;
   const pot = Number(challenge.prize_pool) || 0;
   const share = remainingCount > 0 ? pot / remainingCount : 0;
-  const periodLabel =
-    challenge.frequency === 'daily' || !challenge.frequency ? 'today' : 'this period';
 
   return (
     <Card className="gap-3">
@@ -62,12 +61,12 @@ export function ChallengeLeaderboard({
         Board
       </AppText>
       <View className="flex-row gap-2">
-        <Stat label="Remaining" value={String(remainingCount)} />
-        <Stat label={`Done ${periodLabel}`} value={String(completed.length)} />
-        <Stat label="Dropped" value={String(dropped.length)} />
+        <Stat label={copy('board.remaining')} value={String(remainingCount)} />
+        <Stat label={copy('board.donePeriod')} value={String(completed.length)} />
+        <Stat label={copy('board.dropped')} value={String(dropped.length)} />
       </View>
       <AppText className="text-sm font-semibold text-charcoal">
-        Live share {formatWallet(share, challenge.currency)}
+        {copy('board.liveShare', 'neutral', { amount: formatWallet(share, challenge.currency) })}
       </AppText>
       {remaining.length === 0 && dropped.length === 0 ? (
         <AppText className="text-sm text-muted">No one on the board yet.</AppText>

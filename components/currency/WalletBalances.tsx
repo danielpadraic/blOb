@@ -2,15 +2,18 @@ import { View } from 'react-native';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
+import { copy } from '@/lib/copy';
+import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { formatBucks, formatCoins, formatUsd } from '@/utils/format';
 
 type WalletBalancesProps = {
-  profile: Pick<Profile, 'coins' | 'bucks' | 'credits'>;
+  profile: Pick<Profile, 'coins' | 'bucks' | 'credits' | 'is_official'>;
 };
 
 export function WalletBalances({ profile }: WalletBalancesProps) {
+  const official = isOfficialAccount(profile);
   const coins = Number(profile.coins ?? profile.credits ?? 0);
   const bucks = Number(profile.bucks ?? 0);
 
@@ -30,7 +33,7 @@ export function WalletBalances({ profile }: WalletBalancesProps) {
           <AppText className="ml-1.5 text-[11px] font-semibold text-muted">Coins</AppText>
         </View>
         <AppText className="text-[15px] font-extrabold text-charcoal">
-          {formatCoins(coins).replace(' Coins', '')}
+          {official ? copy('official.badge') : formatCoins(coins).replace(' Coins', '')}
         </AppText>
       </View>
 

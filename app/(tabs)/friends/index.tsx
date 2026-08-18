@@ -31,6 +31,9 @@ import {
   useRejectFriendRequest,
   useSendFriendRequest,
 } from '@/hooks/useSocial';
+import { useCopyTone } from '@/hooks/useCopy';
+import { copy } from '@/lib/copy';
+import { isOfficialAccount } from '@/lib/official';
 import { conversationHref, MESSAGES_HREF } from '@/lib/routes';
 import {
   detectPeopleSearch,
@@ -130,7 +133,7 @@ export default function FriendsScreen() {
   }
 
   function onSearchPrimary(profile: PublicProfile, relation: PeopleRelation) {
-    if (relation === 'friends') {
+    if (isOfficialAccount(profile) || relation === 'friends') {
       router.push({ pathname: '/friends/u/[username]', params: { username: profile.username } });
       return;
     }
@@ -259,8 +262,9 @@ function FriendsPane({
   onFind: () => void;
   onMessage: (friend: NonNullable<ReturnType<typeof useFriends>['data']>[number]) => void;
 }) {
+  const tone = useCopyTone();
   if (loading) {
-    return <MascotState kind="loading" title="Gathering your people" compact />;
+    return <MascotState kind="loading" title={copy('friends.loading', tone)} compact />;
   }
   if (error) {
     return (
@@ -278,8 +282,7 @@ function FriendsPane({
     return (
       <MascotState
         kind="empty"
-        title="No friends yet"
-        body="Go compete with someone — a challenge is the fastest way to make a friend here."
+        title={copy('friends.empty', tone)}
         actionLabel="Find people"
         onAction={onFind}
         compact
@@ -336,6 +339,7 @@ function RequestsPane({
   onDecline: (userId: string) => void;
   onCancel: (userId: string) => void;
 }) {
+  const tone = useCopyTone();
   if (loading) {
     return <MascotState kind="loading" title="Checking requests" compact />;
   }
@@ -355,7 +359,7 @@ function RequestsPane({
     return (
       <MascotState
         kind="empty"
-        title="You’re all caught up"
+        title={copy('alerts.empty', tone)}
         body="No pending requests. Find someone in the Lobby and send a request after you compete."
         actionLabel="Find people"
         onAction={onFind}
@@ -441,6 +445,7 @@ function SearchPane({
 }) {
   const parsed = detectPeopleSearch(query);
   const term = query.trim();
+  const tone = useCopyTone();
   const hint =
     parsed?.kind === 'email'
       ? 'Exact email match only — we never search partial emails.'
@@ -454,7 +459,7 @@ function SearchPane({
         ref={inputRef}
         value={query}
         onChangeText={onChangeQuery}
-        placeholder="Name, @username, email, or phone"
+        placeholder={copy('friends.searchPlaceholder')}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="default"
@@ -476,12 +481,7 @@ function SearchPane({
       {parsed && !loading && results.length === 0 ? (
         <MascotState
           kind="empty"
-          title="No blobs match that"
-          body={
-            parsed.kind === 'name'
-              ? 'Try a username, display name, or the full email or phone.'
-              : 'Email and phone only match exactly. Check the spelling, or search by name instead.'
-          }
+          title={copy('friends.noneMatch', tone)}
           compact
         />
       ) : null}
