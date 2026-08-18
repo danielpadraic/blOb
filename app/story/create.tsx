@@ -1,14 +1,7 @@
-import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Redirect } from 'expo-router';
 
-import { StoryCreator } from '@/components/stories/StoryCreator';
-import { THEME } from '@/lib/theme';
+import { CAPTURE_STORY_HREF } from '@/lib/routes';
 
 export default function CreateStoryScreen() {
-  const insets = useSafeAreaInsets();
-  return (
-    <View className="flex-1 px-4" style={{ backgroundColor: THEME.background, paddingTop: insets.top + 8 }}>
-      <StoryCreator />
-    </View>
-  );
+  return <Redirect href={CAPTURE_STORY_HREF} />;
 }

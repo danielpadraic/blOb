@@ -15,7 +15,15 @@ import { THEME } from '@/lib/theme';
 
 export const TAB_ROOT_EDGES: Edge[] = ['left', 'right'];
 
-const TAB_CHROME_ROOTS = new Set(['feed', 'challenges', 'friends', 'notifications', 'profile', 'messages']);
+const TAB_CHROME_ROOTS = new Set([
+  'feed',
+  'challenges',
+  'friends',
+  'notifications',
+  'profile',
+  'messages',
+  'capture',
+]);
 
 export function isInsideTabChrome(segments: string[]): boolean {
   const parts = segments.filter((segment) => !segment.startsWith('('));
@@ -28,7 +36,7 @@ export function isMainTabRoute(segments: string[]): boolean {
     return false;
   }
   const [root, nested] = parts;
-  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages') {
+  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages' || root === 'capture') {
     return false;
   }
   return !nested || nested === 'index';

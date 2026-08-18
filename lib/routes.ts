@@ -18,7 +18,18 @@ export function inviteHref(token: string) {
   };
 }
 
-export const STORY_CREATE_HREF = '/story/create' as const;
+export const CAPTURE_HREF = '/capture' as const;
+
+export function captureHref(mode?: 'story' | 'reel' | 'post' | 'choose') {
+  return {
+    pathname: '/capture' as const,
+    params: mode && mode !== 'choose' ? { mode } : {},
+  };
+}
+
+export const STORY_CREATE_HREF = captureHref('story');
+export const CAPTURE_STORY_HREF = captureHref('story');
+export const CAPTURE_REEL_HREF = captureHref('reel');
 
 export function storyHref(id: string) {
   return {

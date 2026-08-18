@@ -11,6 +11,12 @@ import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
+import {
+  ensureCapturePermissions,
+  ensureLibraryPermission,
+  openAppSettings,
+  permissionCopy,
+} from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
 import type { ComposeInput } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -61,10 +67,44 @@ export function Composer({
     });
   }
 
-  async function pickMedia(mediaTypes: Array<'images' | 'videos'>) {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Photo access needed', 'Turn on library access in Settings to attach media.');
+  async function pickMedia(mediaTypes: Array<'images' | 'videos'>, source: 'camera' | 'library') {
+    const video = mediaTypes.includes('videos');
+    if (source === 'camera') {
+      const permission = await ensureCapturePermissions(video ? 'video' : 'photo');
+      if (!permission.ok) {
+        const copy = permissionCopy(permission.kind);
+        Alert.alert(copy.title, copy.body, [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => void openAppSettings() },
+        ]);
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes,
+        quality: 0.8,
+        allowsEditing: false,
+        videoMaxDuration: video ? 60 : undefined,
+      });
+      if (result.canceled || !result.assets[0]?.uri) {
+        return;
+      }
+      const asset = result.assets[0];
+      addAttachment({
+        uri: asset.uri,
+        kind: video ? 'video' : 'photo',
+        mimeType: asset.mimeType ?? asset.file?.type,
+        name: asset.fileName ?? asset.file?.name,
+        blob: asset.file ?? null,
+      });
+      return;
+    }
+    const permission = await ensureLibraryPermission();
+    if (!permission.ok) {
+      const copy = permissionCopy(permission.kind);
+      Alert.alert(copy.title, copy.body, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => void openAppSettings() },
+      ]);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -81,11 +121,19 @@ export function Composer({
     const asset = result.assets[0];
     addAttachment({
       uri: asset.uri,
-      kind: mediaTypes.includes('videos') ? 'video' : 'photo',
+      kind: video ? 'video' : 'photo',
       mimeType: asset.mimeType ?? asset.file?.type,
       name: asset.fileName ?? asset.file?.name,
       blob: asset.file ?? null,
     });
+  }
+
+  function askMedia(kind: 'images' | 'videos') {
+    Alert.alert(kind === 'videos' ? 'Add a video' : 'Add a photo', 'Camera or library — your call.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Camera', onPress: () => void pickMedia([kind], 'camera') },
+      { text: 'Library', onPress: () => void pickMedia([kind], 'library') },
+    ]);
   }
 
   async function pickFile() {
@@ -220,9 +268,9 @@ export function Composer({
       <View
         className="mt-2 flex-row items-center"
         style={{ borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 8 }}>
-        <AttachButton glyph="📷" label="Photo" onPress={() => void pickMedia(['images'])} />
+        <AttachButton glyph="📷" label="Photo" onPress={() => askMedia('images')} />
         <View style={{ width: 1, height: 16, backgroundColor: THEME.border }} />
-        <AttachButton glyph="🎥" label="Video" onPress={() => void pickMedia(['videos'])} />
+        <AttachButton glyph="🎥" label="Video" onPress={() => askMedia('videos')} />
         <View style={{ width: 1, height: 16, backgroundColor: THEME.border }} />
         <AttachButton glyph="📎" label="Other" onPress={onOther} />
       </View>

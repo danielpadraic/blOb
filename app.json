@@ -13,8 +13,9 @@
       "bundleIdentifier": "app.blob.mobile",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "blOb needs photo access for stories, proofs, and your avatar.",
-        "NSCameraUsageDescription": "blOb needs camera access for stories and workout proofs."
+        "NSCameraUsageDescription": "Take a check-in photo or Story for your Challenge.",
+        "NSMicrophoneUsageDescription": "Record a short Story or Reel with sound for your Challenge.",
+        "NSPhotoLibraryUsageDescription": "Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins."
       }
     },
     "android": {
@@ -26,8 +27,10 @@
       "package": "app.blob.mobile",
       "permissions": [
         "CAMERA",
+        "RECORD_AUDIO",
         "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO"
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_VISUAL_USER_SELECTED"
       ]
     },
     "web": {
@@ -50,8 +53,18 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "blOb needs photo access for stories, proofs, and your avatar.",
-          "cameraPermission": "blOb needs camera access for stories and workout proofs."
+          "photosPermission": "Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins.",
+          "cameraPermission": "Take a check-in photo or Story for your Challenge.",
+          "microphonePermission": "Record a short Story or Reel with sound for your Challenge."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Take a check-in photo or Story for your Challenge.",
+          "microphonePermission": "Record a short Story or Reel with sound for your Challenge.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": false
         }
       ],
       "expo-apple-authentication",

@@ -10,7 +10,7 @@ import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { useWalletOptional } from '@/hooks/useWallet';
-import { STORY_CREATE_HREF, LOBBY_HREF } from '@/lib/routes';
+import { CAPTURE_HREF, LOBBY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 export default function TabLayout() {
@@ -74,7 +74,7 @@ export default function TabLayout() {
       return;
     }
     if (id === 'story') {
-      go(STORY_CREATE_HREF);
+      go(CAPTURE_HREF);
       return;
     }
     if (id === 'coins') {
@@ -118,6 +118,7 @@ export default function TabLayout() {
           <Tabs.Screen name="friends" options={{ title: 'Friends' }} listeners={{ tabPress: closeOverlays }} />
           <Tabs.Screen name="notifications" options={{ href: null, title: 'Alerts' }} />
           <Tabs.Screen name="messages" options={{ href: null, title: 'Messages' }} />
+          <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />
           <Tabs.Screen
             name="profile"
             options={{

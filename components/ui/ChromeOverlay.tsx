@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 type ChromeOverlayProps = {
   visible: boolean;
@@ -21,32 +21,51 @@ export function ChromeOverlay({
     return null;
   }
 
+  const justifyContent = align === 'center' ? 'center' : align === 'start' ? 'flex-start' : 'flex-end';
+
   return (
-    <View
-      pointerEvents="box-none"
-      style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
-        zIndex: 40,
-        elevation: 40,
-      }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss"
-        onPress={onClose}
-        disabled={!onClose}
-        style={{
-          flex: 1,
-          justifyContent: align === 'center' ? 'center' : align === 'start' ? 'flex-start' : 'flex-end',
-          backgroundColor: dim ? 'rgba(16, 19, 18, 0.55)' : 'transparent',
-        }}>
-        <Pressable onPress={(event) => event.stopPropagation()} style={{ width: '100%', maxHeight: '100%' }}>
+    <View pointerEvents="box-none" style={styles.host}>
+      <View
+        accessibilityRole="none"
+        accessibilityLabel={onClose ? 'Dismiss' : undefined}
+        accessible={Boolean(onClose)}
+        style={[styles.backdrop, { backgroundColor: dim ? 'rgba(16, 19, 18, 0.55)' : 'transparent' }]}
+        onStartShouldSetResponder={() => Boolean(onClose)}
+        onResponderRelease={() => onClose?.()}
+        {...(Platform.OS === 'web' && onClose ? ({ onClick: onClose } as object) : null)}
+      />
+      <View pointerEvents="box-none" style={[styles.slot, { justifyContent }]}>
+        <View pointerEvents="auto" style={styles.sheet}>
           {children}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  host: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 40,
+    elevation: 40,
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  slot: {
+    flex: 1,
+    maxHeight: '100%',
+  },
+  sheet: {
+    width: '100%',
+    maxHeight: '100%',
+  },
+});

@@ -6,6 +6,12 @@ import { Alert, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { isVideoProof, proofMeta } from '@/lib/constants';
+import {
+  ensureCapturePermissions,
+  ensureLibraryPermission,
+  openAppSettings,
+  permissionCopy,
+} from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
 import type { ProofType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -38,14 +44,13 @@ export function ProofUploader({
     setBusy(source);
     try {
       if (source === 'camera') {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert(
-            'Camera access needed',
-            isVideo
-              ? 'Turn on camera access in Settings to record this proof.'
-              : 'Turn on camera access in Settings to take this proof.',
-          );
+        const permission = await ensureCapturePermissions(isVideo ? 'video' : 'photo');
+        if (!permission.ok) {
+          const copy = permissionCopy(permission.kind);
+          Alert.alert(copy.title, copy.body, [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => void openAppSettings() },
+          ]);
           return;
         }
         const result = await ImagePicker.launchCameraAsync({
@@ -61,14 +66,13 @@ export function ProofUploader({
         return;
       }
 
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert(
-          'Photo access needed',
-          isVideo
-            ? 'Turn on photo access in Settings to attach this video.'
-            : 'Turn on photo access in Settings to attach this proof.',
-        );
+      const permission = await ensureLibraryPermission();
+      if (!permission.ok) {
+        const copy = permissionCopy(permission.kind);
+        Alert.alert(copy.title, copy.body, [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => void openAppSettings() },
+        ]);
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({

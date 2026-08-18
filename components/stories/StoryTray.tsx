@@ -61,19 +61,20 @@ function StoryBubble({
 }) {
   const showAdd = group.isOwn;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={group.name}
-      className="w-[54px] items-center">
+    <View className="w-[54px] items-center">
       <View className="relative">
-        <StoryRing
-          uri={group.avatar}
-          name={group.name}
-          size={54}
-          seen={seen}
-          showAdd={showAdd && group.stories.length === 0}
-        />
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={group.name}>
+          <StoryRing
+            uri={group.avatar}
+            name={group.name}
+            size={54}
+            seen={seen}
+            showAdd={showAdd && group.stories.length === 0}
+          />
+        </Pressable>
         {showAdd && group.stories.length > 0 ? (
           <Pressable
             onPress={onAdd}
@@ -100,6 +101,6 @@ function StoryBubble({
       <AppText className="mt-1.5 text-center text-[10px] text-muted" numberOfLines={1}>
         {group.isOwn ? 'Your story' : group.name}
       </AppText>
-    </Pressable>
+    </View>
   );
 }
