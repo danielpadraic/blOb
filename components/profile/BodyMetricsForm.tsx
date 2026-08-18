@@ -18,7 +18,6 @@ import {
   BODY_FAT_DEFAULT,
   BODY_FAT_MAX,
   BODY_FAT_MIN,
-  bodyFatSnapPercent,
   calcBmi,
   clampBodyFat,
   displayHeightParts,
@@ -170,7 +169,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
   }
 
   function applyExact() {
-    const next = bodyFatSnapPercent(Number(exactDraft));
+    const next = clampBodyFat(Number(exactDraft));
     setValue('body_fat_pct', next, { shouldDirty: true });
     setExactOpen(false);
   }
@@ -206,7 +205,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
         height_cm: heightCm,
         current_weight: weightKg,
         weight_unit: weightUnitFromSystem(values.units),
-        body_fat_pct: clampBodyFat(bodyFatSnapPercent(values.body_fat_pct)),
+        body_fat_pct: clampBodyFat(values.body_fat_pct),
         body_metrics_completed_at: new Date().toISOString(),
       });
       setSaved(true);
@@ -345,7 +344,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
             render={({ field: { value, onChange } }) => (
               <BodyFatSlider
                 value={value}
-                onChange={(next) => onChange(bodyFatSnapPercent(next))}
+                onChange={(next) => onChange(clampBodyFat(next))}
               />
             )}
           />

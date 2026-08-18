@@ -4,31 +4,61 @@ import { cmToFeetInches, feetInchesToCm, kgToLb, lbToKg, prettyNumber } from '@/
 export type BodyGender = 'male' | 'female';
 export type BodyUnitSystem = 'imperial' | 'metric';
 
-export const BODY_FAT_MIN = 5;
-export const BODY_FAT_MAX = 45;
+export const BODY_FAT_MIN = 1;
+export const BODY_FAT_MAX = 50;
 export const BODY_FAT_DEFAULT = 20;
-export const BODY_FAT_FRAME_COUNT = 10;
+
+export type BodyFatBucket =
+  | 'lt5'
+  | '5-10'
+  | '11-15'
+  | '16-20'
+  | '21-25'
+  | '26-30'
+  | '31-35'
+  | '36-40'
+  | '41plus';
 
 export function clampBodyFat(value: number): number {
   if (!Number.isFinite(value)) {
     return BODY_FAT_DEFAULT;
   }
-  return Math.min(BODY_FAT_MAX, Math.max(BODY_FAT_MIN, Math.round(value * 10) / 10));
+  return Math.min(BODY_FAT_MAX, Math.max(BODY_FAT_MIN, Math.round(value)));
 }
 
-/** Map 5–45% onto the nearest of 10 representative frames. */
-export function bodyFatFrameIndex(percent: number): number {
-  const pct = clampBodyFat(percent);
-  const scaled = ((pct - BODY_FAT_MIN) / (BODY_FAT_MAX - BODY_FAT_MIN)) * (BODY_FAT_FRAME_COUNT - 1);
-  return Math.max(0, Math.min(BODY_FAT_FRAME_COUNT - 1, Math.round(scaled)));
-}
-
-/** Snap a body-fat % onto the representative frame’s percent. */
+/** Whole-percent snap for the slider and exact-% field. Image uses `bodyFatBucket`. */
 export function bodyFatSnapPercent(percent: number): number {
-  const index = bodyFatFrameIndex(percent);
-  return clampBodyFat(
-    BODY_FAT_MIN + (index / Math.max(BODY_FAT_FRAME_COUNT - 1, 1)) * (BODY_FAT_MAX - BODY_FAT_MIN),
-  );
+  return clampBodyFat(percent);
+}
+
+/** Map a body-fat % onto the nearest 5% visual bucket. */
+export function bodyFatBucket(percent: number): BodyFatBucket {
+  const pct = clampBodyFat(percent);
+  if (pct < 5) {
+    return 'lt5';
+  }
+  if (pct <= 10) {
+    return '5-10';
+  }
+  if (pct <= 15) {
+    return '11-15';
+  }
+  if (pct <= 20) {
+    return '16-20';
+  }
+  if (pct <= 25) {
+    return '21-25';
+  }
+  if (pct <= 30) {
+    return '26-30';
+  }
+  if (pct <= 35) {
+    return '31-35';
+  }
+  if (pct <= 40) {
+    return '36-40';
+  }
+  return '41plus';
 }
 
 export function calcBmi(heightCm: number, weightKg: number): number | null {

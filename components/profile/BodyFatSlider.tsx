@@ -23,7 +23,7 @@ export function BodyFatSlider({ value, onChange }: BodyFatSliderProps) {
     const track = width.value || 1;
     const next =
       BODY_FAT_MIN + (Math.min(Math.max(x, 0), track) / track) * (BODY_FAT_MAX - BODY_FAT_MIN);
-    onChangeRef.current(clampBodyFat(next));
+    onChangeRef.current(Math.round(clampBodyFat(next)));
   }
 
   const gesture = useMemo(
