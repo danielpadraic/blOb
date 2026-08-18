@@ -9,8 +9,8 @@ import {
 import { useSegments } from 'expo-router';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
-import { isMainTabRoute } from '@/components/wallet/TabChrome';
-import { TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
+import { isInsideTabChrome } from '@/components/wallet/TabChrome';
+import { THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
 
 const DEFAULT_EDGES: Edge[] = ['top', 'left', 'right'];
@@ -33,14 +33,16 @@ export function Screen({
   ...props
 }: ScreenProps) {
   const segments = useSegments();
-  const floatingTabBar = isMainTabRoute(segments as string[]);
-  const tabPad = floatingTabBar ? TAB_BAR_CONTENT_INSET : undefined;
-  const resolvedEdges: readonly Edge[] =
-    floatingTabBar || edges.includes('bottom') ? edges : [...edges, 'bottom'];
+  const insideChrome = isInsideTabChrome(segments as string[]);
+  const resolvedEdges: readonly Edge[] = insideChrome
+    ? edges.filter((edge) => edge !== 'top' && edge !== 'bottom')
+    : edges.includes('bottom')
+      ? edges
+      : [...edges, 'bottom'];
   const body = (
     <View
       className={cn('flex-1', padded && 'px-4', className)}
-      style={[SCREEN_BACKGROUND, tabPad ? { paddingBottom: tabPad } : null]}
+      style={SCREEN_BACKGROUND}
       {...props}>
       {children}
     </View>
@@ -56,7 +58,7 @@ export function Screen({
             className="flex-1"
             style={SCREEN_BACKGROUND}
             contentContainerClassName={cn('grow', padded && 'px-4')}
-            contentContainerStyle={{ paddingBottom: tabPad ?? 24 }}
+            contentContainerStyle={{ paddingBottom: 24 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             {children}

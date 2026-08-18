@@ -123,6 +123,35 @@ export function personDisplayName(profile?: Pick<PublicProfile, 'display_name' |
   return profile.display_name?.trim() || profile.username;
 }
 
+export type PeopleSearchKind = 'name' | 'email' | 'phone';
+
+export type PeopleSearchQuery = {
+  kind: PeopleSearchKind;
+  term: string;
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_CHARS_RE = /^[+0-9().\-\s]+$/;
+
+export function detectPeopleSearch(query: string): PeopleSearchQuery | null {
+  const term = query.trim();
+  if (!term) {
+    return null;
+  }
+  if (EMAIL_RE.test(term)) {
+    return { kind: 'email', term: term.toLowerCase() };
+  }
+  const digits = term.replace(/\D/g, '');
+  if (digits.length >= 10 && PHONE_CHARS_RE.test(term)) {
+    return { kind: 'phone', term: digits };
+  }
+  const name = term.replace(/^@/, '').replace(/[%_,()]/g, '');
+  if (name.length < 2) {
+    return null;
+  }
+  return { kind: 'name', term: name };
+}
+
 export function peopleRelation(input: {
   userId?: string | null;
   targetId: string;
@@ -400,18 +429,42 @@ export async function fetchFollowing(userId: string): Promise<FollowEdge[]> {
 }
 
 export async function searchPeople(query: string, currentUserId: string): Promise<PublicProfile[]> {
-  const term = query.trim().replace(/[%_,()]/g, '');
-  if (term.length < 2) {
+  const parsed = detectPeopleSearch(query);
+  if (!parsed) {
+    return [];
+  }
+
+  const rpc = await supabase.rpc('search_people', { p_query: query.trim() });
+  if (!rpc.error) {
+    return ((rpc.data ?? []) as PublicProfile[]).filter((row) => row.id !== currentUserId);
+  }
+  if (!isMissingSearchRpc(rpc.error)) {
+    throwIfError(rpc.error);
+  }
+
+  // Fallback if the RPC isn't migrated yet: name/username only. Never partial-match email or phone.
+  if (parsed.kind !== 'name') {
     return [];
   }
   const { data, error } = await supabase
     .from('profiles')
     .select(PUBLIC_PROFILE_COLUMNS)
-    .or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
+    .or(`username.ilike.%${parsed.term}%,display_name.ilike.%${parsed.term}%`)
     .neq('id', currentUserId)
     .limit(16);
   throwIfError(error);
   return (data ?? []) as PublicProfile[];
+}
+
+function isMissingSearchRpc(error: unknown): boolean {
+  if (isMissingRelationError(error)) {
+    return true;
+  }
+  const raw =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '').toLowerCase()
+      : String(error ?? '').toLowerCase();
+  return raw.includes('search_people') || raw.includes('pgrst202') || raw.includes('could not find the function');
 }
 
 export async function fetchFriendRequests(userId: string): Promise<FriendRequestLists> {

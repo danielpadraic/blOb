@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { isUnlimitedChallenge } from '@/lib/challenges';
 import type { Challenge } from '@/lib/types';
@@ -60,16 +61,15 @@ export function SettleConfirmModal({
   const finishers = Math.max(Number(completerCount) || 0, 0);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      <Pressable className="flex-1 justify-end bg-charcoal/70" onPress={close}>
-        <Pressable
-          className="px-5 pb-10 pt-6"
-          style={{
-            backgroundColor: THEME.background,
-            borderTopLeftRadius: THEME.radiusLg,
-            borderTopRightRadius: THEME.radiusLg,
-          }}
-          onPress={(event) => event.stopPropagation()}>
+    <ChromeOverlay visible={visible} onClose={close}>
+      <Pressable
+        className="px-5 pb-10 pt-6"
+        style={{
+          backgroundColor: THEME.background,
+          borderTopLeftRadius: THEME.radiusLg,
+          borderTopRightRadius: THEME.radiusLg,
+        }}
+        onPress={(event) => event.stopPropagation()}>
           <AppText className="text-2xl font-bold text-charcoal">
             {judging ? 'Lock results?' : 'Distribute prizes?'}
           </AppText>
@@ -131,8 +131,7 @@ export function SettleConfirmModal({
             />
             <Button title="Not now" variant="ghost" onPress={close} disabled={loading} />
           </View>
-        </Pressable>
       </Pressable>
-    </Modal>
+    </ChromeOverlay>
   );
 }

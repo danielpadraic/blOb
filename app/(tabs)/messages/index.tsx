@@ -1,11 +1,12 @@
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ConversationListItem } from '@/components/messages/ConversationListItem';
 import { EmptyConversations } from '@/components/messages/EmptyConversations';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
+import { Screen } from '@/components/ui/Screen';
+import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversations } from '@/hooks/useSocial';
 import { conversationHref } from '@/lib/routes';
@@ -13,7 +14,6 @@ import { THEME } from '@/lib/theme';
 
 export default function MessagesScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const conversations = useConversations();
   const rows = (conversations.data ?? []).filter((row) => !row.is_group);
@@ -29,7 +29,7 @@ export default function MessagesScreen() {
   }
 
   return (
-    <View className="flex-1" style={{ backgroundColor: THEME.background, paddingTop: insets.top + 8 }}>
+    <Screen padded={false} edges={TAB_ROOT_EDGES} className="pt-1">
       <View className="mb-3 flex-row items-start px-4">
         <View className="min-w-0 flex-1 pr-3">
           <AppText className="text-[22px] font-extrabold text-charcoal">Messages</AppText>
@@ -87,6 +87,6 @@ export default function MessagesScreen() {
           ))}
         </ScrollView>
       )}
-    </View>
+    </Screen>
   );
 }

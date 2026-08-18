@@ -18,6 +18,7 @@ import {
   BODY_FAT_DEFAULT,
   BODY_FAT_MAX,
   BODY_FAT_MIN,
+  bodyFatSnapPercent,
   calcBmi,
   clampBodyFat,
   displayHeightParts,
@@ -28,7 +29,6 @@ import {
   profileWeightKg,
   unitSystemFromWeightUnit,
   weightUnitFromSystem,
-  type BodyGender,
   type BodyUnitSystem,
 } from '@/lib/bodyMetrics';
 import { THEME } from '@/lib/theme';
@@ -43,7 +43,7 @@ const GENDER_OPTIONS = [
 
 const schema = z
   .object({
-    gender: z.enum(['male', 'female']),
+    gender: z.enum(['male', 'female'], { message: 'Pick a gender' }),
     units: z.enum(['imperial', 'metric']),
     height_cm: z.string().optional(),
     height_ft: z.string().optional(),
@@ -115,19 +115,33 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
   const heightIn = watch('height_in');
   const weightWatch = watch('weight');
 
+  const liveHeightCm = useMemo(
+    () =>
+      inputHeightToCm({
+        system: units,
+        cm: Number(heightCmWatch),
+        feet: Number(heightFt),
+        inches: Number(heightIn),
+      }),
+    [heightCmWatch, heightFt, heightIn, units],
+  );
+  const liveWeightKg = useMemo(
+    () => inputWeightToKg(Number(weightWatch), units),
+    [units, weightWatch],
+  );
+  const metricsReady =
+    (gender === 'male' || gender === 'female') &&
+    liveHeightCm != null &&
+    liveHeightCm >= 100 &&
+    Number.isFinite(liveWeightKg) &&
+    liveWeightKg >= 30;
+
   const liveBmi = useMemo(() => {
-    const heightCm = inputHeightToCm({
-      system: units,
-      cm: Number(heightCmWatch),
-      feet: Number(heightFt),
-      inches: Number(heightIn),
-    });
-    const weightKg = inputWeightToKg(Number(weightWatch), units);
-    if (!heightCm || !Number.isFinite(weightKg) || weightKg <= 0) {
+    if (!liveHeightCm || !Number.isFinite(liveWeightKg) || liveWeightKg <= 0) {
       return null;
     }
-    return calcBmi(heightCm, weightKg);
-  }, [heightCmWatch, heightFt, heightIn, units, weightWatch]);
+    return calcBmi(liveHeightCm, liveWeightKg);
+  }, [liveHeightCm, liveWeightKg]);
 
   useEffect(() => {
     setExactDraft(String(Math.round(bodyFat)));
@@ -156,7 +170,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
   }
 
   function applyExact() {
-    const next = clampBodyFat(Number(exactDraft));
+    const next = bodyFatSnapPercent(Number(exactDraft));
     setValue('body_fat_pct', next, { shouldDirty: true });
     setExactOpen(false);
   }
@@ -192,7 +206,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
         height_cm: heightCm,
         current_weight: weightKg,
         weight_unit: weightUnitFromSystem(values.units),
-        body_fat_pct: clampBodyFat(values.body_fat_pct),
+        body_fat_pct: clampBodyFat(bodyFatSnapPercent(values.body_fat_pct)),
         body_metrics_completed_at: new Date().toISOString(),
       });
       setSaved(true);
@@ -229,43 +243,13 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
         name="gender"
         render={({ field: { value, onChange } }) => (
           <SegmentedControl
-            value={value}
+            value={value ?? null}
             options={GENDER_OPTIONS}
             onChange={onChange}
             accessibilityLabel="Gender"
           />
         )}
       />
-
-      <MorphingBlob gender={gender} bodyFatPct={bodyFat} />
-
-      <Controller
-        control={control}
-        name="body_fat_pct"
-        render={({ field: { value, onChange } }) => <BodyFatSlider value={value} onChange={onChange} />}
-      />
-
-      {exactOpen ? (
-        <View className="flex-row items-end gap-2">
-          <View className="flex-1">
-            <Input
-              label="Exact body fat %"
-              keyboardType="decimal-pad"
-              inputMode="decimal"
-              value={exactDraft}
-              onChangeText={setExactDraft}
-              placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
-            />
-          </View>
-          <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
-        </View>
-      ) : (
-        <Pressable onPress={() => setExactOpen(true)} accessibilityRole="button">
-          <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-            Enter exact %
-          </AppText>
-        </Pressable>
-      )}
 
       <UnitToggle value={units} onChange={switchUnits} />
 
@@ -352,6 +336,50 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
         </AppText>
       </Card>
 
+      {metricsReady && (gender === 'male' || gender === 'female') ? (
+        <>
+          <MorphingBlob gender={gender} bodyFatPct={bodyFat} />
+          <Controller
+            control={control}
+            name="body_fat_pct"
+            render={({ field: { value, onChange } }) => (
+              <BodyFatSlider
+                value={value}
+                onChange={(next) => onChange(bodyFatSnapPercent(next))}
+              />
+            )}
+          />
+          {exactOpen ? (
+            <View className="flex-row items-end gap-2">
+              <View className="flex-1">
+                <Input
+                  label="Exact body fat %"
+                  keyboardType="decimal-pad"
+                  inputMode="decimal"
+                  value={exactDraft}
+                  onChangeText={setExactDraft}
+                  placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
+                />
+              </View>
+              <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
+            </View>
+          ) : (
+            <Pressable onPress={() => setExactOpen(true)} accessibilityRole="button">
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                Enter exact %
+              </AppText>
+            </Pressable>
+          )}
+        </>
+      ) : (
+        <Card>
+          <AppText className="text-[15px] font-extrabold text-charcoal">Your blob appears next</AppText>
+          <AppText className="mt-1 text-[13px] leading-5 text-muted">
+            Pick gender, height, and weight. Then you can slide body fat — playful, private, not a score.
+          </AppText>
+        </Card>
+      )}
+
       {errors.gender ? (
         <AppText className="text-[13px]" style={{ color: THEME.danger }}>
           {errors.gender.message}
@@ -379,10 +407,10 @@ function buildDefaults(profile?: Profile | null): FormValues {
   const heightCm = profile?.height_cm ?? 0;
   const parts = heightCm > 0 ? displayHeightParts(heightCm, units) : { cm: '', feet: '', inches: '' };
   const kg = profileWeightKg(profile ?? {});
-  const gender: BodyGender =
-    profile?.gender === 'male' || profile?.gender === 'female' ? profile.gender : 'female';
+  const gender =
+    profile?.gender === 'male' || profile?.gender === 'female' ? profile.gender : undefined;
   return {
-    gender,
+    gender: gender as FormValues['gender'],
     units,
     height_cm: parts.cm,
     height_ft: parts.feet,

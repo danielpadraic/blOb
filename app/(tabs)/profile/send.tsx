@@ -1,15 +1,13 @@
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { WalletBalances } from '@/components/currency/WalletBalances';
-import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import {
@@ -18,13 +16,14 @@ import {
   useTransferCoins,
 } from '@/hooks/useCoins';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useWallet } from '@/hooks/useWallet';
 import { normalizeCoinAmount, transferAmountError } from '@/lib/coins';
 import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile, WalletCurrency } from '@/lib/types';
 import { formatUsd } from '@/utils/format';
 
-type Step = 'pick' | 'amount' | 'confirm' | 'success';
+type Step = 'pick' | 'amount' | 'confirm';
 
 const CURRENCY_OPTIONS = [
   { value: 'coins', label: 'Coins' },
@@ -35,8 +34,7 @@ function personName(profile: PublicProfile): string {
   return profile.display_name?.trim() || profile.username;
 }
 
-export default function SendFundsScreen() {
-  const router = useRouter();
+export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
   const { profile } = useMyProfile();
   const transfer = useTransferCoins();
   const suggestions = useCoinRecipientSuggestions();
@@ -46,6 +44,7 @@ export default function SendFundsScreen() {
   const [query, setQuery] = useState('');
   const [recipient, setRecipient] = useState<PublicProfile | null>(null);
   const [amountDraft, setAmountDraft] = useState('');
+  const [note, setNote] = useState('');
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -84,33 +83,40 @@ export default function SendFundsScreen() {
     }
     setError(null);
     try {
-      await transfer.mutateAsync({ recipientId: recipient.id, amount, currency });
-      setStep('success');
+      await transfer.mutateAsync({
+        recipientId: recipient.id,
+        amount,
+        currency,
+        note: currency === 'coins' ? note : null,
+      });
+      onClose();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : `Couldn’t send those ${noun}.`);
     }
   }
 
-  if (step === 'success' && recipient) {
-    return (
-      <Screen>
-        <MascotState
-          kind="success"
-          title={`${noun} sent`}
-          body={`${amountLabel} went to ${recipientName}. They’re in their wallet now.`}
-          actionLabel="Done"
-          onAction={() => router.back()}
-        />
-      </Screen>
-    );
-  }
-
   return (
-    <Screen scroll>
-      <AppText className="mb-1 text-[22px] font-bold text-charcoal">Send</AppText>
-      <AppText className="mb-4 text-muted">
-        Choose Coins or Bucks, then pick a recipient. Transfers are final.
-      </AppText>
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="px-5 pb-6 pt-4"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}>
+      <View className="mb-3 flex-row items-start">
+        <View className="min-w-0 flex-1 pr-3">
+          <AppText className="mb-1 text-[22px] font-bold text-charcoal">Send</AppText>
+          <AppText className="mb-1 text-muted">
+            Choose Coins or Bucks, then pick a recipient. Transfers are final.
+          </AppText>
+        </View>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close send"
+          className="h-8 w-8 items-center justify-center rounded-full"
+          style={{ backgroundColor: THEME.surface, borderWidth: 1, borderColor: THEME.border }}>
+          <AppText className="text-[18px] font-semibold text-muted">×</AppText>
+        </Pressable>
+      </View>
 
       {profile ? <WalletBalances profile={profile} /> : null}
 
@@ -235,6 +241,18 @@ export default function SendFundsScreen() {
             </AppText>
           </Card>
 
+          {currency === 'coins' ? (
+            <View className="mt-4">
+              <Input
+                label="Note (optional)"
+                value={note}
+                onChangeText={setNote}
+                placeholder="What’s this for?"
+                autoCorrect
+              />
+            </View>
+          ) : null}
+
           <AppText className="mt-5 mb-3 text-muted">
             {currency === 'bucks'
               ? `Check all three. ${amountLabel} leaves immediately. This cannot be reversed.`
@@ -308,8 +326,24 @@ export default function SendFundsScreen() {
           </View>
         </View>
       ) : null}
-    </Screen>
+    </ScrollView>
   );
+}
+
+export default function SendFundsScreen() {
+  const router = useRouter();
+  const { openSend } = useWallet();
+
+  useEffect(() => {
+    openSend();
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/profile');
+  }, [openSend, router]);
+
+  return null;
 }
 
 const COIN_ACKS = [

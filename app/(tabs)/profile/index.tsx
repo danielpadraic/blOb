@@ -80,7 +80,7 @@ export default function ProfileScreen() {
         <Pressable accessibilityRole="button" onPress={wallet?.openWallet}>
           <WalletBalances profile={profile} />
         </Pressable>
-        <Button title="Send Coins or Bucks" variant="outline" onPress={() => router.push('/profile/send')} />
+        <Button title="Send Coins or Bucks" variant="outline" onPress={() => wallet?.openSend()} />
 
         {hasCompletedBodyMetrics(profile) ? (
           <Button

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { requiredProofTypes, isPointsChallenge, isUnlimitedChallenge, lastManStandingRequirement, prizeStructureSummary } from '@/lib/challenges';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -137,16 +138,15 @@ export function JoinConfirmModal({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      <Pressable className="flex-1 justify-end bg-charcoal/70" onPress={close}>
-        <Pressable
-          className="max-h-[92%] px-5 pb-10 pt-6"
-          style={{
-            backgroundColor: THEME.background,
-            borderTopLeftRadius: THEME.radiusLg,
-            borderTopRightRadius: THEME.radiusLg,
-          }}
-          onPress={(event) => event.stopPropagation()}>
+    <ChromeOverlay visible={visible} onClose={close}>
+      <Pressable
+        className="max-h-[92%] px-5 pb-10 pt-6"
+        style={{
+          backgroundColor: THEME.background,
+          borderTopLeftRadius: THEME.radiusLg,
+          borderTopRightRadius: THEME.radiusLg,
+        }}
+        onPress={(event) => event.stopPropagation()}>
           <AppText className="text-2xl font-bold text-charcoal">
             {isFree ? 'Join this challenge?' : `Join for ${buyIn}?`}
           </AppText>
@@ -216,8 +216,7 @@ export function JoinConfirmModal({
             />
             <Button title="Not now" variant="ghost" onPress={close} disabled={loading} />
           </View>
-        </Pressable>
       </Pressable>
-    </Modal>
+    </ChromeOverlay>
   );
 }

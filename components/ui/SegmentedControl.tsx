@@ -9,7 +9,7 @@ type SegmentOption<T extends string> = {
 };
 
 type SegmentedControlProps<T extends string> = {
-  value: T;
+  value: T | null;
   options: readonly SegmentOption<T>[];
   onChange: (value: T) => void;
   accessibilityLabel?: string;

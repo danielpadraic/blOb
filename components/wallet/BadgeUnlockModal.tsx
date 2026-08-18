@@ -1,7 +1,8 @@
-import { Modal, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Button } from '@/components/ui/Button';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useWallet } from '@/hooks/useWallet';
@@ -23,15 +24,15 @@ export function BadgeUnlockModal() {
   const reward = Number(current.coin_reward ?? current.definition?.coin_reward ?? 0);
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={dismissUnlock}>
-      <Pressable className="flex-1 items-center justify-center bg-charcoal/70 px-6" onPress={dismissUnlock}>
-        <Pressable
-          className="w-full items-center px-5 py-6"
-          style={{
-            backgroundColor: THEME.background,
-            borderRadius: THEME.radiusLg,
-          }}
-          onPress={(event) => event.stopPropagation()}>
+    <ChromeOverlay visible onClose={dismissUnlock} align="center">
+      <Pressable
+        className="w-full items-center px-5 py-6"
+        style={{
+          marginHorizontal: 24,
+          backgroundColor: THEME.background,
+          borderRadius: THEME.radiusLg,
+        }}
+        onPress={(event) => event.stopPropagation()}>
           <BlobMascot size={120} motion="float" />
           <AppText className="mt-3 text-[13px] font-semibold uppercase tracking-widest text-muted">
             You earned this
@@ -56,8 +57,7 @@ export function BadgeUnlockModal() {
           <View className="mt-5 w-full">
             <Button title={unlocks.length > 1 ? 'Next' : 'Nice'} onPress={dismissUnlock} />
           </View>
-        </Pressable>
       </Pressable>
-    </Modal>
+    </ChromeOverlay>
   );
 }

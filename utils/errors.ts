@@ -55,6 +55,9 @@ function humanize(raw: string): string {
       return 'Use at least 8 characters for your password.';
     }
   }
+  if (message.includes('invalid recipient') || message.includes('isn’t on the map') || message.includes('isnt on the map')) {
+    return 'That person isn’t a valid recipient.';
+  }
   if (message.includes('insufficient bucks')) {
     return 'Insufficient Bucks';
   }
@@ -62,10 +65,13 @@ function humanize(raw: string): string {
     return 'Insufficient Coins';
   }
   if (
-    (message.includes('transfer_funds') || message.includes('transfer_coins') || message.includes('create_callout')) &&
+    (message.includes('transfer_funds') ||
+      message.includes('transfer_coins') ||
+      message.includes('send_coins') ||
+      message.includes('create_callout')) &&
     (message.includes('does not exist') || message.includes('could not find'))
   ) {
-    return 'Wallet transfers aren’t set up on the server yet. Run the dual-currency SQL.';
+    return 'Wallet transfers aren’t set up on the server yet. Run the send-coins SQL.';
   }
   if (message.includes('send to yourself') || message.includes('can’t send to yourself') || message.includes('cannot send')) {
     if (message.includes('yourself')) {

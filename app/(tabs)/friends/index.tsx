@@ -34,6 +34,7 @@ import {
 } from '@/hooks/useSocial';
 import { conversationHref, MESSAGES_HREF } from '@/lib/routes';
 import {
+  detectPeopleSearch,
   otherFriendshipUserId,
   peopleRelation,
   type PeopleRelation,
@@ -89,7 +90,8 @@ export default function FriendsScreen() {
     return { friendIds, incomingIds, outgoingIds, followingIds };
   }, [friends, incoming, outgoing, followingQuery.data, user?.id]);
 
-  const results = query.trim().length >= 2 ? (searchQuery.data ?? []) : [];
+  const parsedSearch = detectPeopleSearch(query);
+  const results = parsedSearch ? (searchQuery.data ?? []) : [];
   const busyId =
     followUser.variables ??
     sendRequest.variables ??
@@ -231,7 +233,7 @@ export default function FriendsScreen() {
         <SearchPane
           query={query}
           inputRef={searchRef}
-          loading={searchQuery.isFetching && query.trim().length >= 2}
+          loading={searchQuery.isFetching && Boolean(parsedSearch)}
           results={results}
           userId={user?.id}
           graph={graph}
@@ -447,7 +449,14 @@ function SearchPane({
   onChangeQuery: (value: string) => void;
   onPrimary: (profile: PublicProfile, relation: PeopleRelation) => void;
 }) {
+  const parsed = detectPeopleSearch(query);
   const term = query.trim();
+  const hint =
+    parsed?.kind === 'email'
+      ? 'Exact email match only — we never search partial emails.'
+      : parsed?.kind === 'phone'
+        ? 'Exact phone match only — we never search partial numbers.'
+        : null;
 
   return (
     <View className="flex-1 pt-4">
@@ -455,28 +464,42 @@ function SearchPane({
         ref={inputRef}
         value={query}
         onChangeText={onChangeQuery}
-        placeholder="Search by name or @username"
+        placeholder="Name, @username, email, or phone"
         autoCapitalize="none"
         autoCorrect={false}
+        keyboardType="default"
         returnKeyType="search"
       />
-      {loading ? <ActivityIndicator className="mt-4" color={THEME.accent} /> : null}
-      {term.length > 0 && term.length < 2 ? (
-        <AppText className="mt-3 text-[13px] text-muted">Type two characters to search.</AppText>
+      {hint ? (
+        <AppText className="mt-2 text-[12px] text-muted">{hint}</AppText>
       ) : null}
-      {term.length >= 2 && !loading && results.length === 0 ? (
+      {loading ? <ActivityIndicator className="mt-4" color={THEME.accent} /> : null}
+      {term.length > 0 && !parsed ? (
+        <AppText className="mt-3 text-[13px] text-muted">
+          {term.includes('@')
+            ? 'Enter the full email for an exact match.'
+            : /^\+?[\d().\-\s]+$/.test(term)
+              ? 'Enter the full phone number for an exact match.'
+              : 'Type two characters to search.'}
+        </AppText>
+      ) : null}
+      {parsed && !loading && results.length === 0 ? (
         <MascotState
           kind="empty"
           title="No blobs match that"
-          body="Try a username, or invite someone from a challenge instead."
+          body={
+            parsed.kind === 'name'
+              ? 'Try a username, display name, or the full email or phone.'
+              : 'Email and phone only match exactly. Check the spelling, or search by name instead.'
+          }
           compact
         />
       ) : null}
-      {term.length < 2 && !loading ? (
+      {!term && !loading ? (
         <MascotState
           kind="empty"
           title="Find your people"
-          body="Search for a blob, follow them, then add them as a friend when you’re ready to compete."
+          body="Search by name or @username, or paste a full email or phone number."
           compact
         />
       ) : null}

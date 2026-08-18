@@ -1,5 +1,6 @@
-import { Modal, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
 
@@ -21,16 +22,14 @@ export function PostOverflowMenu({
   onDelete,
 }: PostOverflowMenuProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable className="flex-1 justify-end bg-charcoal/70" onPress={onClose}>
-        <Pressable
-          className="px-4 pb-10 pt-3"
-          style={{
-            backgroundColor: THEME.background,
-            borderTopLeftRadius: THEME.radiusLg,
-            borderTopRightRadius: THEME.radiusLg,
-          }}
-          onPress={(event) => event.stopPropagation()}>
+    <ChromeOverlay visible={visible} onClose={onClose}>
+      <View
+        className="px-4 pb-6 pt-3"
+        style={{
+          backgroundColor: THEME.background,
+          borderTopLeftRadius: THEME.radiusLg,
+          borderTopRightRadius: THEME.radiusLg,
+        }}>
           <View
             className="mb-4 self-center rounded-full"
             style={{ width: 36, height: 4, backgroundColor: THEME.border }}
@@ -43,9 +42,8 @@ export function PostOverflowMenu({
             ) : null}
             <MenuRow label="Cancel" muted onPress={onClose} />
           </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      </View>
+    </ChromeOverlay>
   );
 }
 

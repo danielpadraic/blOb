@@ -33,6 +33,30 @@ export function transferAmountError(
   return null;
 }
 
+export async function sendCoins(
+  toUserId: string,
+  amount: number,
+  note?: string | null,
+): Promise<CoinTransfer> {
+  const { data, error } = await supabase.rpc('send_coins', {
+    p_to_user_id: toUserId,
+    p_amount: amount,
+    p_note: note?.trim() ? note.trim() : null,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error('The transfer finished but we couldn’t load the receipt.');
+  }
+  return {
+    ...(row as CoinTransfer),
+    amount: Number((row as CoinTransfer).amount),
+    currency: asWalletCurrency((row as CoinTransfer).currency ?? 'coins'),
+  };
+}
+
 export async function transferFunds(
   recipientId: string,
   amount: number,

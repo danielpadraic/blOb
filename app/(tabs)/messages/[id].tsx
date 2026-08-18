@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageBubble } from '@/components/messages/MessageBubble';
 import { MessageInput } from '@/components/messages/MessageInput';
@@ -16,7 +15,6 @@ import type { Message } from '@/types/social';
 
 export default function ConversationScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const conversationId = Array.isArray(id) ? id[0] : id;
@@ -78,7 +76,7 @@ export default function ConversationScreen() {
       className="flex-1"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ backgroundColor: THEME.background }}>
-    <View className="flex-1" style={{ backgroundColor: THEME.background, paddingTop: insets.top + 6 }}>
+    <View className="flex-1" style={{ backgroundColor: THEME.background }}>
       <View
         className="flex-row items-center px-4 pb-3"
         style={{ borderBottomWidth: 1, borderBottomColor: THEME.border }}>
@@ -140,7 +138,7 @@ export default function ConversationScreen() {
         />
       )}
 
-      <View style={{ paddingBottom: Math.max(insets.bottom, 8) }}>
+      <View style={{ paddingBottom: 8 }}>
         <MessageInput onSend={onSend} />
       </View>
     </View>

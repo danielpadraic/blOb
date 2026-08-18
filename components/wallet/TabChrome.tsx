@@ -1,5 +1,6 @@
+import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
-import { useSegments } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
@@ -7,11 +8,19 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { WalletBar } from '@/components/wallet/WalletBar';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
+import { useConversations } from '@/hooks/useSocial';
+import { useWalletOptional } from '@/hooks/useWallet';
+import { MESSAGES_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 export const TAB_ROOT_EDGES: Edge[] = ['left', 'right'];
 
-const MAIN_TABS = new Set(['feed', 'challenges', 'friends', 'notifications', 'profile']);
+const TAB_CHROME_ROOTS = new Set(['feed', 'challenges', 'friends', 'notifications', 'profile', 'messages']);
+
+export function isInsideTabChrome(segments: string[]): boolean {
+  const parts = segments.filter((segment) => !segment.startsWith('('));
+  return TAB_CHROME_ROOTS.has(parts[0] ?? '');
+}
 
 export function isMainTabRoute(segments: string[]): boolean {
   const parts = segments.filter((segment) => !segment.startsWith('('));
@@ -19,7 +28,7 @@ export function isMainTabRoute(segments: string[]): boolean {
     return false;
   }
   const [root, nested] = parts;
-  if (!MAIN_TABS.has(root)) {
+  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages') {
     return false;
   }
   return !nested || nested === 'index';
@@ -41,70 +50,103 @@ type TabChromeHeaderProps = {
 };
 
 export function TabChromeHeader({ alertsOpen = false, onToggleAlerts }: TabChromeHeaderProps) {
-  const segments = useSegments();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const wallet = useWalletOptional();
   const unread = useUnreadNotificationCount();
-  const visible = isMainTabRoute(segments);
+  const conversations = useConversations();
   const unreadCount = unread.data ?? 0;
+  const unreadMessages = (conversations.data ?? []).filter((row) => row.unread).length;
 
   return (
     <View
-      pointerEvents={visible ? 'auto' : 'none'}
       style={{
         zIndex: 50,
         elevation: 50,
         backgroundColor: THEME.background,
-        paddingTop: visible ? insets.top : 0,
-        maxHeight: visible ? undefined : 0,
-        overflow: 'hidden',
-        borderBottomWidth: visible ? 1 : 0,
+        paddingTop: insets.top,
+        borderBottomWidth: 1,
         borderBottomColor: THEME.border,
       }}>
       <View className="flex-row items-center px-4 pb-2.5 pt-2">
         <BlobMascot variant="logo" size={56} />
         <View className="flex-1" />
         <WalletBar />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: alertsOpen }}
-          accessibilityLabel={
+        <HeaderIcon
+          label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
+          onPress={() => {
+            wallet?.closeAll();
+            router.push(MESSAGES_HREF);
+          }}>
+          <Glyph name={GLYPH.reply} color={THEME.textPrimary} size={20} />
+          {unreadMessages > 0 ? <UnreadDot count={unreadMessages} /> : null}
+        </HeaderIcon>
+        <HeaderIcon
+          label={
             alertsOpen
               ? 'Close alerts'
               : unreadCount > 0
                 ? `Alerts, ${unreadCount} unread`
                 : 'Alerts'
           }
-          onPress={onToggleAlerts}
-          hitSlop={8}
-          className="ml-2 h-9 w-9 items-center justify-center"
-          style={{
-            borderRadius: 12,
-            backgroundColor: alertsOpen ? THEME.surface : THEME.surface,
-            borderWidth: 1,
-            borderColor: alertsOpen ? THEME.accent : THEME.border,
-          }}>
+          active={alertsOpen}
+          onPress={onToggleAlerts}>
           <Glyph name={GLYPH.bell} color={alertsOpen ? THEME.accent : THEME.textPrimary} size={20} />
-          {unreadCount > 0 ? (
-            <View
-              className="absolute items-center justify-center"
-              style={{
-                top: -2,
-                right: -2,
-                minWidth: 16,
-                height: 16,
-                paddingHorizontal: 3,
-                borderRadius: 999,
-                backgroundColor: THEME.accent,
-                borderWidth: 2,
-                borderColor: THEME.background,
-              }}>
-              <AppText className="text-[8px] font-extrabold" style={{ color: '#fff' }}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </AppText>
-            </View>
-          ) : null}
-        </Pressable>
+          {unreadCount > 0 ? <UnreadDot count={unreadCount} /> : null}
+        </HeaderIcon>
       </View>
+    </View>
+  );
+}
+
+function HeaderIcon({
+  label,
+  active,
+  onPress,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onPress?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ expanded: Boolean(active) }}
+      onPress={onPress}
+      hitSlop={8}
+      className="ml-2 h-9 w-9 items-center justify-center"
+      style={{
+        borderRadius: 12,
+        backgroundColor: THEME.surface,
+        borderWidth: 1,
+        borderColor: active ? THEME.accent : THEME.border,
+      }}>
+      {children}
+    </Pressable>
+  );
+}
+
+function UnreadDot({ count }: { count: number }) {
+  return (
+    <View
+      className="absolute items-center justify-center"
+      style={{
+        top: -2,
+        right: -2,
+        minWidth: 16,
+        height: 16,
+        paddingHorizontal: 3,
+        borderRadius: 999,
+        backgroundColor: THEME.accent,
+        borderWidth: 2,
+        borderColor: THEME.background,
+      }}>
+      <AppText className="text-[8px] font-extrabold" style={{ color: '#fff' }}>
+        {count > 99 ? '99+' : count}
+      </AppText>
     </View>
   );
 }

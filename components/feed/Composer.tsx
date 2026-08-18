@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Modal, Pressable, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -227,16 +227,13 @@ export function Composer({
         <AttachButton glyph="📎" label="Other" onPress={onOther} />
       </View>
 
-      <Modal visible={linkOpen} transparent animationType="fade" onRequestClose={() => setLinkOpen(false)}>
-        <Pressable className="flex-1 justify-end bg-charcoal/70" onPress={() => setLinkOpen(false)}>
-          <Pressable
-            className="px-4 pb-10 pt-3"
-            style={{
-              backgroundColor: THEME.surface,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-            }}
-            onPress={(event) => event.stopPropagation()}>
+      {linkOpen ? (
+        <View
+          className="mt-3 px-1 pb-1 pt-3"
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: THEME.border,
+          }}>
             <AppText className="mb-3 text-[16px] font-bold text-charcoal">Paste a link</AppText>
             <Input
               value={linkDraft}
@@ -255,9 +252,8 @@ export function Composer({
                 <Button title="Add link" size="sm" onPress={addLink} disabled={!linkDraft.trim()} />
               </View>
             </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        </View>
+      ) : null}
     </Card>
   );
 }

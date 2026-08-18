@@ -1,12 +1,12 @@
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { WalletBalances } from '@/components/currency/WalletBalances';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
 import { THEME } from '@/lib/theme';
@@ -23,32 +23,29 @@ const EARN_WAYS = [
 ] as const;
 
 export function WalletSheet() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { profile } = useMyProfile();
-  const { sheetOpen, closeWallet } = useWallet();
+  const { sheetOpen, closeWallet, openSend } = useWallet();
 
-  if (!profile) {
+  if (!profile || !sheetOpen) {
     return null;
   }
 
-  function go(path: '/challenges' | '/challenges/create' | '/profile/send' | '/feed') {
+  function go(path: '/challenges' | '/challenges/create' | '/feed') {
     closeWallet();
     setTimeout(() => router.push(path), 60);
   }
 
   return (
-    <Modal visible={sheetOpen} transparent animationType="fade" onRequestClose={closeWallet}>
-      <Pressable className="flex-1 justify-end bg-charcoal/70" onPress={closeWallet}>
-        <Pressable
-          className="max-h-[88%] px-5 pt-4"
-          style={{
-            backgroundColor: THEME.background,
-            borderTopLeftRadius: THEME.radiusLg,
-            borderTopRightRadius: THEME.radiusLg,
-            paddingBottom: Math.max(insets.bottom, 16) + 8,
-          }}
-          onPress={(event) => event.stopPropagation()}>
+    <ChromeOverlay visible onClose={closeWallet}>
+      <View
+        className="max-h-[88%] px-5 pt-4"
+        style={{
+          backgroundColor: THEME.background,
+          borderTopLeftRadius: THEME.radiusLg,
+          borderTopRightRadius: THEME.radiusLg,
+          paddingBottom: 16,
+        }}>
           <View className="mb-3 items-center">
             <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
             <AppText className="mt-3 text-lg font-bold text-charcoal">Wallet</AppText>
@@ -110,12 +107,18 @@ export function WalletSheet() {
 
             <View className="mt-4 gap-2">
               <Button title="Browse challenges" onPress={() => go('/challenges')} />
-              <Button title="Send Coins or Bucks" variant="outline" onPress={() => go('/profile/send')} />
+              <Button
+                title="Send Coins or Bucks"
+                variant="outline"
+                onPress={() => {
+                  closeWallet();
+                  openSend();
+                }}
+              />
               <Button title="Close" variant="ghost" onPress={closeWallet} />
             </View>
           </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      </View>
+    </ChromeOverlay>
   );
 }

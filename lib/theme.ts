@@ -30,8 +30,17 @@ export const THEME = {
   },
 } as const;
 
+/** Height of the floating pill tab bar (not including bottom inset). */
+export const TAB_BAR_HEIGHT = 70;
+export const TAB_BAR_GUTTER = 10;
+
 /** Space so tab-root screens clear the floating pill bar (70px bar + inset + gap). */
 export const TAB_BAR_CONTENT_INSET = 128;
+
+/** Offset overlays so they sit above the floating tab bar. */
+export function tabBarLift(bottomInset: number): number {
+  return TAB_BAR_HEIGHT + Math.max(bottomInset, TAB_BAR_GUTTER) + 12;
+}
 
 export function themeShadow(kind: 'card' | 'bar' = 'card'): ViewStyle {
   if (kind === 'bar') {

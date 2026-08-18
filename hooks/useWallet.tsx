@@ -12,8 +12,12 @@ export type BadgeUnlock = NewBadge & {
 
 type WalletContextValue = {
   sheetOpen: boolean;
+  sendOpen: boolean;
   openWallet: () => void;
   closeWallet: () => void;
+  openSend: () => void;
+  closeSend: () => void;
+  closeAll: () => void;
   unlocks: BadgeUnlock[];
   dismissUnlock: () => void;
 };
@@ -24,6 +28,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { profile } = useMyProfile();
   const catalog = useBadgeCatalog();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
   const [queue, setQueue] = useState<BadgeUnlock[]>([]);
 
   const byKey = useMemo(() => {
@@ -47,19 +52,34 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const openWallet = useCallback(() => {
     if (profile) {
+      setSendOpen(false);
       setSheetOpen(true);
     }
   }, [profile]);
 
+  const openSend = useCallback(() => {
+    setSheetOpen(false);
+    setSendOpen(true);
+  }, []);
+
+  const closeAll = useCallback(() => {
+    setSheetOpen(false);
+    setSendOpen(false);
+  }, []);
+
   const value = useMemo<WalletContextValue>(
     () => ({
       sheetOpen,
+      sendOpen,
       openWallet,
       closeWallet: () => setSheetOpen(false),
+      openSend,
+      closeSend: () => setSendOpen(false),
+      closeAll,
       unlocks: queue,
       dismissUnlock: () => setQueue((current) => current.slice(1)),
     }),
-    [openWallet, queue, sheetOpen],
+    [closeAll, openSend, openWallet, queue, sendOpen, sheetOpen],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

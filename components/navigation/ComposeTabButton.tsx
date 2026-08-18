@@ -13,52 +13,53 @@ type ComposeTabButtonProps = {
 
 export function ComposeTabButton({ onOpen, style }: ComposeTabButtonProps) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Quick actions"
-      onPress={onOpen}
-      style={style}
-      className="items-center justify-start">
-      <View
-        className="items-center justify-center"
-        style={{
-          marginTop: -18,
-          padding: 5,
-          borderRadius: 24,
-          backgroundColor: THEME.accentBright,
-          ...(Platform.OS === 'web'
-            ? { boxShadow: '0 8px 16px rgba(16, 19, 18, 0.22)' }
-            : {
-                boxShadow: [
-                  {
-                    color: 'rgba(16, 19, 18, 0.22)',
-                    offsetX: 0,
-                    offsetY: 8,
-                    blurRadius: 16,
-                  },
-                ],
-              }),
-        }}>
+    <View style={[style, { alignItems: 'center', justifyContent: 'flex-start', overflow: 'visible' }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Quick actions"
+        onPress={onOpen}
+        className="items-center justify-start">
         <View
           className="items-center justify-center"
           style={{
-            width: 52,
-            height: 52,
-            borderRadius: 19,
-            backgroundColor: THEME.primary,
+            marginTop: -18,
+            padding: 5,
+            borderRadius: 24,
+            backgroundColor: THEME.accentBright,
+            ...(Platform.OS === 'web'
+              ? { boxShadow: '0 8px 16px rgba(16, 19, 18, 0.22)' }
+              : {
+                  boxShadow: [
+                    {
+                      color: 'rgba(16, 19, 18, 0.22)',
+                      offsetX: 0,
+                      offsetY: 8,
+                      blurRadius: 16,
+                    },
+                  ],
+                }),
           }}>
-          <AppText
-            className="font-bold"
+          <View
+            className="items-center justify-center"
             style={{
-              color: THEME.primaryForeground,
-              fontSize: 28,
-              lineHeight: 30,
-              marginTop: -2,
+              width: 52,
+              height: 52,
+              borderRadius: 19,
+              backgroundColor: THEME.primary,
             }}>
-            +
-          </AppText>
+            <AppText
+              className="font-bold"
+              style={{
+                color: THEME.primaryForeground,
+                fontSize: 28,
+                lineHeight: 30,
+                marginTop: -2,
+              }}>
+              +
+            </AppText>
+          </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
 }

@@ -5,6 +5,7 @@ import { reportBadgeActivity } from '@/lib/badgeActivity';
 import {
   fetchCoinRecipientSuggestions,
   searchCoinRecipients,
+  sendCoins,
   transferFunds,
 } from '@/lib/coins';
 import type { CoinTransfer, PublicProfile, WalletCurrency } from '@/lib/types';
@@ -17,8 +18,13 @@ export function useTransferCoins() {
       recipientId: string;
       amount: number;
       currency?: WalletCurrency;
+      note?: string | null;
     }): Promise<CoinTransfer> => {
-      return transferFunds(input.recipientId, input.amount, input.currency ?? 'coins');
+      const currency = input.currency ?? 'coins';
+      if (currency === 'coins') {
+        return sendCoins(input.recipientId, input.amount, input.note);
+      }
+      return transferFunds(input.recipientId, input.amount, currency);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['profile'] });

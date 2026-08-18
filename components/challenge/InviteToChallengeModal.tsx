@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useCoinRecipientSearch, useCoinRecipientSuggestions } from '@/hooks/useCoins';
@@ -29,7 +29,6 @@ export function InviteToChallengeModal({
   challengeTitle,
   onClose,
 }: InviteToChallengeModalProps) {
-  const insets = useSafeAreaInsets();
   const invite = useInviteToChallenge(challengeId);
   const suggestions = useCoinRecipientSuggestions();
   const [query, setQuery] = useState('');
@@ -59,17 +58,16 @@ export function InviteToChallengeModal({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      <Pressable className="flex-1 justify-end bg-charcoal/70" onPress={close}>
-        <Pressable
-          className="max-h-[88%] px-5 pt-4"
-          style={{
-            backgroundColor: THEME.background,
-            borderTopLeftRadius: THEME.radiusLg,
-            borderTopRightRadius: THEME.radiusLg,
-            paddingBottom: Math.max(insets.bottom, 16) + 8,
-          }}
-          onPress={(event) => event.stopPropagation()}>
+    <ChromeOverlay visible={visible} onClose={close}>
+      <Pressable
+        className="max-h-[88%] px-5 pt-4"
+        style={{
+          backgroundColor: THEME.background,
+          borderTopLeftRadius: THEME.radiusLg,
+          borderTopRightRadius: THEME.radiusLg,
+          paddingBottom: 16,
+        }}
+        onPress={(event) => event.stopPropagation()}>
           <View className="mb-3 items-center">
             <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
           </View>
@@ -102,9 +100,8 @@ export function InviteToChallengeModal({
           <View className="mt-4">
             <Button title="Close" variant="ghost" onPress={close} disabled={invite.isPending} />
           </View>
-        </Pressable>
       </Pressable>
-    </Modal>
+    </ChromeOverlay>
   );
 }
 

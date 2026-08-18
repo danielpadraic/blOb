@@ -1295,7 +1295,7 @@ export function CreateWizard() {
         options={{
           title: 'Create a Challenge',
           headerShown: false,
-          presentation: 'transparentModal',
+          presentation: 'containedTransparentModal',
           animation: 'fade',
           contentStyle: { backgroundColor: 'transparent' },
         }}

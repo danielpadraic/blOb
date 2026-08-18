@@ -387,6 +387,7 @@ export interface CoinTransfer {
   recipient_id: string;
   amount: number;
   currency?: WalletCurrency | string | null;
+  note?: string | null;
   created_at: string;
 }
 
@@ -902,6 +903,10 @@ export type Database = {
         Args: { p_recipient_id: string; p_amount: number };
         Returns: CoinTransfer;
       };
+      send_coins: {
+        Args: { p_to_user_id: string; p_amount: number; p_note?: string | null };
+        Returns: CoinTransfer;
+      };
       transfer_funds: {
         Args: { p_recipient_id: string; p_amount: number; p_currency?: string };
         Returns: CoinTransfer;
@@ -969,6 +974,10 @@ export type Database = {
         Returns: {
           newly_awarded: { key: string; title: string; coin_reward: number }[];
         };
+      };
+      search_people: {
+        Args: { p_query: string };
+        Returns: PublicProfile[];
       };
     };
     Enums: Record<string, never>;

@@ -9,7 +9,7 @@ export const unstable_settings = {
 const CREATE_MODAL = {
   title: 'Create a Challenge',
   headerShown: false,
-  presentation: 'transparentModal' as const,
+  presentation: 'containedTransparentModal' as const,
   animation: 'fade' as const,
   contentStyle: { backgroundColor: 'transparent' },
 };

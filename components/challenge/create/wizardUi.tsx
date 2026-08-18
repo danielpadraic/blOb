@@ -8,7 +8,6 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
@@ -90,7 +89,6 @@ export function WizardModalShell({
   onClose: () => void;
   bob?: BobGuideState | null;
 }) {
-  const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const cardWidth = Math.min(width - 24, 560);
   const bobSize = width < 400 ? BOB_SIZE_NARROW : BOB_SIZE;
@@ -121,8 +119,8 @@ export function WizardModalShell({
             className="flex-1 items-center px-3"
             style={{
               zIndex: 1,
-              paddingTop: insets.top + 8,
-              paddingBottom: insets.bottom + 24,
+              paddingTop: 8,
+              paddingBottom: 16,
               overflow: 'visible',
             }}>
             <View

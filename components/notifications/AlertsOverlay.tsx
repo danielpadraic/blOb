@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { BackHandler, Pressable, View } from 'react-native';
+import { BackHandler, View } from 'react-native';
 
 import { AlertsPanel } from '@/components/notifications/AlertsPanel';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { THEME, themeShadow } from '@/lib/theme';
 
 type AlertsOverlayProps = {
@@ -21,34 +22,8 @@ export function AlertsOverlay({ visible, onClose }: AlertsOverlayProps) {
     return () => sub.remove();
   }, [visible, onClose]);
 
-  if (!visible) {
-    return null;
-  }
-
   return (
-    <View
-      style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
-        zIndex: 40,
-        elevation: 40,
-      }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss alerts"
-        onPress={onClose}
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0,
-          backgroundColor: 'rgba(16, 19, 18, 0.28)',
-        }}
-      />
+    <ChromeOverlay visible={visible} onClose={onClose} align="start" dim>
       <View
         style={{
           marginTop: 8,
@@ -63,6 +38,6 @@ export function AlertsOverlay({ visible, onClose }: AlertsOverlayProps) {
         }}>
         <AlertsPanel compact onClose={onClose} />
       </View>
-    </View>
+    </ChromeOverlay>
   );
 }

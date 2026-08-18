@@ -20,7 +20,7 @@ export default function CreateChallengeScreen() {
           options={{
             title: 'Create a Challenge',
             headerShown: false,
-            presentation: 'transparentModal',
+            presentation: 'containedTransparentModal',
             animation: 'fade',
             contentStyle: { backgroundColor: 'transparent' },
           }}

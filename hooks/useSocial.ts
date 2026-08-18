@@ -27,6 +27,7 @@ import {
   fetchStoryChallengeOptions,
   fetchViewedStoryIds,
   groupStories,
+  detectPeopleSearch,
   otherFriendshipUserId,
   searchPeople,
   followUser,
@@ -159,11 +160,12 @@ export function useFriendRequests(userId?: string | null) {
 
 export function usePeopleSearch(query: string) {
   const { user } = useAuth();
-  const term = query.trim();
+  const parsed = detectPeopleSearch(query);
+  const term = parsed ? `${parsed.kind}:${parsed.term}` : '';
   return useQuery({
     queryKey: socialKeys.peopleSearch(user?.id ?? '', term),
-    enabled: Boolean(user?.id && term.length >= 2),
-    queryFn: () => searchPeople(term, user!.id),
+    enabled: Boolean(user?.id && parsed),
+    queryFn: () => searchPeople(query, user!.id),
   });
 }
 

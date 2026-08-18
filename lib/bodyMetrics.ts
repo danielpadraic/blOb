@@ -16,13 +16,19 @@ export function clampBodyFat(value: number): number {
   return Math.min(BODY_FAT_MAX, Math.max(BODY_FAT_MIN, Math.round(value * 10) / 10));
 }
 
-/** Map 5–45% onto 10 frames with a blend to the next frame. */
-export function bodyFatFrameBlend(percent: number): { from: number; to: number; t: number } {
+/** Map 5–45% onto the nearest of 10 representative frames. */
+export function bodyFatFrameIndex(percent: number): number {
   const pct = clampBodyFat(percent);
   const scaled = ((pct - BODY_FAT_MIN) / (BODY_FAT_MAX - BODY_FAT_MIN)) * (BODY_FAT_FRAME_COUNT - 1);
-  const from = Math.max(0, Math.min(BODY_FAT_FRAME_COUNT - 1, Math.floor(scaled)));
-  const to = Math.max(0, Math.min(BODY_FAT_FRAME_COUNT - 1, from + 1));
-  return { from, to, t: from === to ? 0 : scaled - from };
+  return Math.max(0, Math.min(BODY_FAT_FRAME_COUNT - 1, Math.round(scaled)));
+}
+
+/** Snap a body-fat % onto the representative frame’s percent. */
+export function bodyFatSnapPercent(percent: number): number {
+  const index = bodyFatFrameIndex(percent);
+  return clampBodyFat(
+    BODY_FAT_MIN + (index / Math.max(BODY_FAT_FRAME_COUNT - 1, 1)) * (BODY_FAT_MAX - BODY_FAT_MIN),
+  );
 }
 
 export function calcBmi(heightCm: number, weightKg: number): number | null {

@@ -6,8 +6,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
@@ -37,7 +37,9 @@ export default function RootLayout() {
         <AuthProvider>
           <WalletProvider>
             <StatusBar style="dark" />
-            <RootNavigator />
+            <AppFrame>
+              <RootNavigator />
+            </AppFrame>
           </WalletProvider>
         </AuthProvider>
       </QueryClientProvider>
@@ -88,11 +90,30 @@ function RootNavigator() {
         <Stack.Protected guard={path === 'app'}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="story" options={{ headerShown: false, animation: 'fade' }} />
-          <Stack.Screen name="messages" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Screen name="+not-found" />
       </Stack>
     </>
+  );
+}
+
+function AppFrame({ children }: { children: ReactNode }) {
+  if (Platform.OS !== 'web') {
+    return children;
+  }
+  return (
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: THEME.primary }}>
+      <View
+        style={{
+          flex: 1,
+          width: '100%',
+          maxWidth: 430,
+          backgroundColor: THEME.background,
+          overflow: 'hidden',
+        }}>
+        {children}
+      </View>
+    </View>
   );
 }
 
