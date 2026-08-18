@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
-import { asCopyTone } from '@/lib/copy';
+import { asCopyTone, copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProfileUpdate, PublicProfile } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, isUnknownColumnError } from '@/utils/errors';
 import { isProfileComplete } from '@/utils/validators';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchPublicProfileById } from '@/hooks/usePublicProfile';
@@ -192,6 +192,13 @@ export function useUsernameAvailability(
   };
 }
 
+function omitOptionalPreferences<
+  T extends { motivation_tone?: unknown; mute_mentions?: unknown; timezone?: unknown },
+>(row: T): Omit<T, 'motivation_tone' | 'mute_mentions' | 'timezone'> {
+  const { motivation_tone: _tone, mute_mentions: _mute, timezone: _tz, ...rest } = row;
+  return rest;
+}
+
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -202,10 +209,25 @@ export function useUpdateProfile() {
         throw new Error('You need to be signed in.');
       }
       const { error } = await supabase.from('profiles').update(patch).eq('id', user.id);
-      if (error) {
-        throw new Error(getErrorMessage(error));
+      if (!error) {
+        return patch;
       }
-      return patch;
+      if (isUnknownColumnError(error)) {
+        const retryPatch = omitOptionalPreferences(patch);
+        if (Object.keys(retryPatch).length === 0) {
+          throw new Error(copy('error.preferenceSave'));
+        }
+        const retry = await supabase.from('profiles').update(retryPatch).eq('id', user.id);
+        if (!retry.error) {
+          return retryPatch;
+        }
+        throw new Error(
+          isUnknownColumnError(retry.error)
+            ? copy('error.preferenceSave')
+            : getErrorMessage(retry.error),
+        );
+      }
+      throw new Error(getErrorMessage(error));
     },
     onSuccess: (patch) => {
       queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>
@@ -226,33 +248,42 @@ export function useCompleteProfile() {
         throw new Error('You need to be signed in.');
       }
 
-      const { error } = await supabase.from('profiles').upsert(
-        {
-          id: user.id,
-          username: patch.username ?? `blob_${user.id.replace(/-/g, '').slice(0, 10)}`,
-          display_name: patch.display_name ?? null,
-          avatar_url: patch.avatar_url ?? null,
-          bio: patch.bio ?? null,
-          height_cm: patch.height_cm ?? null,
-          current_weight: patch.current_weight ?? null,
-          goal_weight: patch.goal_weight ?? null,
-          weight_unit: patch.weight_unit ?? 'lb',
-          gender: patch.gender ?? null,
-          body_fat_pct: patch.body_fat_pct ?? null,
-          body_metrics_completed_at: patch.body_metrics_completed_at ?? null,
-          typical_weekly_workout_frequency:
-            patch.typical_weekly_workout_frequency ?? null,
-          primary_activities: patch.primary_activities ?? [],
-          skill_tags: patch.skill_tags ?? [],
-          show_fitness_stats_publicly: patch.show_fitness_stats_publicly ?? false,
-          motivation_tone: patch.motivation_tone ?? 'neutral',
-        },
-        { onConflict: 'id' },
-      );
+      const row = {
+        id: user.id,
+        username: patch.username ?? `blob_${user.id.replace(/-/g, '').slice(0, 10)}`,
+        display_name: patch.display_name ?? null,
+        avatar_url: patch.avatar_url ?? null,
+        bio: patch.bio ?? null,
+        height_cm: patch.height_cm ?? null,
+        current_weight: patch.current_weight ?? null,
+        goal_weight: patch.goal_weight ?? null,
+        weight_unit: patch.weight_unit ?? 'lb',
+        gender: patch.gender ?? null,
+        body_fat_pct: patch.body_fat_pct ?? null,
+        body_metrics_completed_at: patch.body_metrics_completed_at ?? null,
+        typical_weekly_workout_frequency:
+          patch.typical_weekly_workout_frequency ?? null,
+        primary_activities: patch.primary_activities ?? [],
+        skill_tags: patch.skill_tags ?? [],
+        show_fitness_stats_publicly: patch.show_fitness_stats_publicly ?? false,
+        motivation_tone: patch.motivation_tone ?? 'neutral',
+      };
 
-      if (error) {
-        throw new Error(getErrorMessage(error));
+      const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' });
+      if (!error) {
+        return;
       }
+      // Never block account creation on optional prefs / schema-cache misses.
+      const retryRow = omitOptionalPreferences(row);
+      const retry = await supabase.from('profiles').upsert(retryRow, { onConflict: 'id' });
+      if (!retry.error) {
+        return;
+      }
+      throw new Error(
+        isUnknownColumnError(error) || isUnknownColumnError(retry.error)
+          ? copy('error.preferenceSave')
+          : getErrorMessage(retry.error),
+      );
     },
     onSuccess: (_data, patch) => {
       queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>

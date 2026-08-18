@@ -76,12 +76,15 @@ create table public.profiles (
   allow_profile_posts boolean not null default true,
   profile_visibility text not null default 'public' check (profile_visibility in ('public', 'friends')),
   mute_mentions boolean not null default false,
+  motivation_tone text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   constraint username_format check (username ~ '^[a-z0-9_]{3,24}$'),
   constraint credits_non_negative check (credits >= 0),
   constraint coins_non_negative check (coins >= 0),
-  constraint bucks_non_negative check (bucks >= 0)
+  constraint bucks_non_negative check (bucks >= 0),
+  constraint profiles_motivation_tone_check
+    check (motivation_tone is null or motivation_tone in ('gentle', 'neutral', 'honest'))
 );
 
 comment on table public.profiles is 'Public identity + private fitness stats. Extends auth.users.';
@@ -94,6 +97,8 @@ comment on column public.profiles.body_fat_pct is 'PRIVATE estimated body fat %.
 comment on column public.profiles.body_metrics_completed_at is 'When set, Official Fitness Challenges may be joined. After this, current_weight is stored in kg.';
 comment on column public.profiles.fitness_profile is 'PRIVATE jsonb training background for matching. Read via get_my_profile().';
 comment on column public.profiles.is_official is 'Server-enforced official account. Client display only. Do not grant powers from username.';
+comment on column public.profiles.motivation_tone is
+  'Optional UI copy tone. gentle | neutral | honest. Owner-only via get_my_profile(); not on public profile selects.';
 
 create trigger profiles_set_updated_at
   before update on public.profiles

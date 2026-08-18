@@ -5,6 +5,20 @@ export function getErrorMessage(error: unknown): string {
   return humanize(raw);
 }
 
+/** Missing column / schema-cache miss (PGRST204, 42703). */
+export function isUnknownColumnError(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  const code = String(record?.code ?? '').toUpperCase();
+  const raw = extractRawMessage(error).toLowerCase();
+  return (
+    code === 'PGRST204' ||
+    code === '42703' ||
+    raw.includes('pgrst204') ||
+    (raw.includes('schema cache') && raw.includes('column')) ||
+    (raw.includes('could not find the') && raw.includes('column'))
+  );
+}
+
 /** Missing table / schema-cache miss (PGRST205, 42P01, 404). Safe to treat as empty. */
 export function isMissingRelationError(error: unknown): boolean {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
@@ -400,6 +414,15 @@ function humanize(raw: string): string {
   }
   if (message.includes('permission') || message.includes('denied')) {
     return 'We need permission to continue. You can change this in Settings.';
+  }
+  if (
+    message.includes('pgrst204') ||
+    (message.includes('schema cache') && message.includes('column')) ||
+    (message.includes('could not find the') && message.includes('column')) ||
+    (message.includes('motivation_tone') &&
+      (message.includes('could not find') || message.includes('schema cache')))
+  ) {
+    return copy('error.preferenceSave');
   }
 
   return raw;

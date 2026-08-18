@@ -19,6 +19,7 @@ const STRINGS = {
   'profile.toneNeutral': 'Neutral',
   'profile.toneHonest': 'Honest',
   'error.uploadPhoto': 'Couldn’t upload photo. Try again.',
+  'error.preferenceSave': 'Couldn’t save that preference. You can set it later.',
   'error.notEnoughPeople': 'Not enough people joined.',
   'post.deleteConfirm': 'Delete?',
   'post.delete': 'Delete',
