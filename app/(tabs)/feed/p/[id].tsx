@@ -30,8 +30,13 @@ export default function PostThreadScreen() {
           currentUserId={user?.id}
           commenting={createComment.isPending}
           onReact={(type, commentId) => toggleReaction.mutate({ post: post.data!, type, commentId })}
-          onComment={(content, parentId) =>
-            createComment.mutateAsync({ postId: post.data!.id, content, parentId })
+          onComment={(content, parentId, mentionedUserIds) =>
+            createComment.mutateAsync({
+              postId: post.data!.id,
+              content,
+              parentId,
+              mentionedUserIds,
+            })
           }
         />
       )}

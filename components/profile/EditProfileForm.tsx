@@ -84,6 +84,9 @@ type EditValues = {
   weight_unit: WeightUnit;
   body_fat_pct: number;
   motivation_tone: CopyTone;
+  allow_profile_posts: boolean;
+  mute_mentions: boolean;
+  profile_visibility: 'public' | 'friends';
 };
 
 type FieldError = Partial<Record<keyof EditValues, string>>;
@@ -284,6 +287,15 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
     if (dirty.motivation_tone) {
       patch.motivation_tone = asCopyTone(values.motivation_tone);
     }
+    if (dirty.allow_profile_posts) {
+      patch.allow_profile_posts = values.allow_profile_posts;
+    }
+    if (dirty.mute_mentions) {
+      patch.mute_mentions = values.mute_mentions;
+    }
+    if (dirty.profile_visibility) {
+      patch.profile_visibility = values.profile_visibility;
+    }
     if (dirty.primary_activities) {
       patch.primary_activities = values.primary_activities;
     }
@@ -449,6 +461,28 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
             <MotivationToneChips
               value={tone}
               onChange={(next) => setValue('motivation_tone', next, { shouldDirty: true })}
+            />
+            <AppText className="text-[13px] font-semibold text-charcoal">{copy('wall.visibility')}</AppText>
+            <SegmentedControl
+              value={watch('profile_visibility')}
+              options={[
+                { value: 'public', label: 'Public' },
+                { value: 'friends', label: 'Friends' },
+              ]}
+              onChange={(next) =>
+                setValue('profile_visibility', next, { shouldDirty: true })
+              }
+              accessibilityLabel={copy('wall.visibility')}
+            />
+            <SettingToggle
+              label={copy('wall.allow')}
+              value={watch('allow_profile_posts')}
+              onChange={(next) => setValue('allow_profile_posts', next, { shouldDirty: true })}
+            />
+            <SettingToggle
+              label={copy('wall.muteMentions')}
+              value={watch('mute_mentions')}
+              onChange={(next) => setValue('mute_mentions', next, { shouldDirty: true })}
             />
           </View>
 
@@ -819,5 +853,49 @@ function buildDefaults(profile?: Profile | null): EditValues {
     body_fat_pct:
       profile?.body_fat_pct != null ? clampBodyFat(Number(profile.body_fat_pct)) : BODY_FAT_DEFAULT,
     motivation_tone: asCopyTone(profile?.motivation_tone),
+    allow_profile_posts: profile?.allow_profile_posts !== false,
+    mute_mentions: Boolean(profile?.mute_mentions),
+    profile_visibility: profile?.profile_visibility === 'friends' ? 'friends' : 'public',
   };
+}
+
+function SettingToggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      accessibilityLabel={label}
+      onPress={() => onChange(!value)}
+      className="flex-row items-center justify-between"
+      style={{ minHeight: 44 }}>
+      <AppText className="mr-3 flex-1 text-[14px] leading-5 text-charcoal">{label}</AppText>
+      <View
+        style={{
+          width: 48,
+          height: 28,
+          borderRadius: 14,
+          padding: 2,
+          backgroundColor: value ? THEME.accent : THEME.border,
+          justifyContent: 'center',
+        }}>
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: THEME.surface,
+            alignSelf: value ? 'flex-end' : 'flex-start',
+          }}
+        />
+      </View>
+    </Pressable>
+  );
 }

@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Dimensions,
   Pressable,
@@ -28,11 +27,12 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreatePost } from '@/hooks/useFeed';
 import {
+  useBlockUser,
   useHiddenPostIds,
   useHidePost,
   useMutedUserIds,
+  useRemoveFromWall,
   useReportPost,
-  useSoftDeletePost,
   useToggleMute,
 } from '@/hooks/usePostModeration';
 import { useFriends, useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
@@ -58,7 +58,7 @@ export type WindowRect = {
   height: number;
 };
 
-type OverflowPanel = 'menu' | 'share' | 'report' | 'delete' | 'send';
+type OverflowPanel = 'menu' | 'share' | 'report' | 'send';
 
 type Sheet =
   | { kind: 'overflow'; post: PostWithMeta; anchor: WindowRect; panel: OverflowPanel }
@@ -249,23 +249,25 @@ function OverflowPopover({
 }) {
   const hide = useHidePost();
   const report = useReportPost();
-  const remove = useSoftDeletePost();
+  const removeFromWall = useRemoveFromWall();
   const friends = useFriends();
   const startChat = useGetOrCreateConversation();
   const send = useSendMessage();
   const [busy, setBusy] = useState(false);
   const mine = Boolean(userId && userId === post.author_id);
+  const host = Boolean(userId && post.wall_host_id && userId === post.wall_host_id && !post.wall_removed_at);
 
-  async function onDelete() {
+  async function onRemoveFromWall() {
     if (busy) {
       return;
     }
     setBusy(true);
     try {
-      await remove.mutateAsync(post.id);
+      await removeFromWall.mutateAsync(post.id);
       onClose();
-    } catch {
-      onToast(copy('error.deletePost'));
+      onToast(copy('wall.remove'));
+    } catch (error) {
+      Alert.alert('Couldn’t remove that', getErrorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -284,39 +286,36 @@ function OverflowPopover({
   return (
     <AnchoredPopover anchor={anchor} onClose={onClose}>
       {panel === 'menu' ? (
-        <View className="flex-row items-center" style={{ columnGap: 2 }}>
-          <IconAction
-            label="Share"
-            icon={GLYPH.share}
-            onPress={() => onPanel('share')}
-          />
-          {!mine ? (
+        <View>
+          <View className="flex-row items-center" style={{ columnGap: 2 }}>
             <IconAction
-              label="Hide"
-              icon={GLYPH.hide}
-              onPress={() => {
-                hide.mutate(post.id, {
-                  onSuccess: () => onClose(),
-                  onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)),
-                });
-              }}
+              label="Share"
+              icon={GLYPH.share}
+              onPress={() => onPanel('share')}
             />
-          ) : null}
-          {!mine ? (
-            <IconAction
-              label="Report"
-              icon={GLYPH.flag}
-              color={THEME.danger}
-              onPress={() => onPanel('report')}
-            />
-          ) : null}
-          {mine ? (
-            <IconAction
-              label="Delete"
-              icon={GLYPH.trash}
-              color={THEME.danger}
-              onPress={() => onPanel('delete')}
-            />
+            {!mine ? (
+              <IconAction
+                label="Hide"
+                icon={GLYPH.hide}
+                onPress={() => {
+                  hide.mutate(post.id, {
+                    onSuccess: () => onClose(),
+                    onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)),
+                  });
+                }}
+              />
+            ) : null}
+            {!mine ? (
+              <IconAction
+                label="Report"
+                icon={GLYPH.flag}
+                color={THEME.danger}
+                onPress={() => onPanel('report')}
+              />
+            ) : null}
+          </View>
+          {host ? (
+            <ListRow label={copy('wall.remove')} onPress={() => void onRemoveFromWall()} />
           ) : null}
         </View>
       ) : null}
@@ -362,27 +361,6 @@ function OverflowPopover({
               />
             ))}
           </ChipRow>
-        </View>
-      ) : null}
-
-      {panel === 'delete' ? (
-        <View style={{ minWidth: 132, paddingHorizontal: 10, paddingVertical: 8 }}>
-          <AppText className="text-[14px] font-extrabold text-charcoal">{copy('post.deleteConfirm')}</AppText>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={copy('post.delete')}
-            disabled={busy}
-            onPress={() => void onDelete()}
-            className="mt-2 items-center justify-center"
-            style={{ minHeight: 36 }}>
-            {busy ? (
-              <ActivityIndicator color={THEME.danger} />
-            ) : (
-              <AppText className="text-[14px] font-semibold" style={{ color: THEME.danger }}>
-                {copy('post.delete')}
-              </AppText>
-            )}
-          </Pressable>
         </View>
       ) : null}
 
@@ -471,6 +449,7 @@ function ProfileMuteMenu({
   onToast: (message: string) => void;
 }) {
   const toggle = useToggleMute();
+  const block = useBlockUser();
   return (
     <View style={{ minWidth: 140 }}>
       <ListRow
@@ -486,6 +465,18 @@ function ProfileMuteMenu({
               onError: (error) => Alert.alert('Couldn’t update that', getErrorMessage(error)),
             },
           );
+        }}
+      />
+      <ListRow
+        label={copy('wall.block')}
+        onPress={() => {
+          block.mutate(userId, {
+            onSuccess: () => {
+              onClose();
+              onToast(copy('wall.block'));
+            },
+            onError: (error) => Alert.alert('Couldn’t block that', getErrorMessage(error)),
+          });
         }}
       />
     </View>

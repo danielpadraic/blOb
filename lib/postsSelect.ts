@@ -13,6 +13,7 @@ export type PostsSchema = {
   hasModeration: boolean;
   hasQuote: boolean;
   hasDeletedAt: boolean;
+  hasWall: boolean;
 };
 
 const CORE_SCHEMA: PostsSchema = {
@@ -21,6 +22,7 @@ const CORE_SCHEMA: PostsSchema = {
   hasModeration: false,
   hasQuote: false,
   hasDeletedAt: false,
+  hasWall: false,
 };
 
 let cached: Promise<PostsSchema> | null = null;
@@ -32,6 +34,7 @@ function schemaFromSelect(select: string): PostsSchema {
     hasModeration: select.includes('moderation_status'),
     hasQuote: select.includes('quoted_post_id'),
     hasDeletedAt: select.includes('deleted_at'),
+    hasWall: select.includes('wall_host_id'),
   };
 }
 
@@ -72,10 +75,13 @@ async function loadPostsSchema(): Promise<PostsSchema> {
 
   const withQuote = `${select}, quoted_post_id, quote_snapshot, deleted_at`;
   const extra = await trySelect(withQuote);
-  if (extra.ok) {
-    return schemaFromSelect(withQuote);
+  let working = extra.ok ? withQuote : select;
+  const withWall = `${working}, wall_host_id, wall_removed_at`;
+  const wall = await trySelect(withWall);
+  if (wall.ok) {
+    return schemaFromSelect(withWall);
   }
-  return schemaFromSelect(select);
+  return schemaFromSelect(working);
 }
 
 /** No RPC. Probe with limit 0, then cache the working select list. */

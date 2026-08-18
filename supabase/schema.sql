@@ -72,6 +72,10 @@ create table public.profiles (
   coins numeric(12,2) not null default 50.00,
   bucks numeric(12,2) not null default 0,
   is_official boolean not null default false,
+  is_creator boolean not null default false,
+  allow_profile_posts boolean not null default true,
+  profile_visibility text not null default 'public' check (profile_visibility in ('public', 'friends')),
+  mute_mentions boolean not null default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   constraint username_format check (username ~ '^[a-z0-9_]{3,24}$'),
@@ -1554,6 +1558,8 @@ create table public.posts (
   challenge_id uuid references public.challenges(id) on delete cascade, -- null = global feed
   content text,
   media_urls text[] default '{}',
+  wall_host_id uuid references public.profiles(id) on delete set null,
+  wall_removed_at timestamptz,
   created_at timestamptz default now(),
   constraint post_has_body check (
     (content is not null and length(btrim(content)) > 0)
@@ -1580,6 +1586,24 @@ create table public.comments (
   content text not null,
   created_at timestamptz default now(),
   constraint comment_not_empty check (length(btrim(content)) > 0)
+);
+
+create table public.post_mentions (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  mentioned_user_id uuid not null references public.profiles(id) on delete cascade,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz default now(),
+  unique (post_id, mentioned_user_id)
+);
+
+create table public.comment_mentions (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references public.comments(id) on delete cascade,
+  mentioned_user_id uuid not null references public.profiles(id) on delete cascade,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz default now(),
+  unique (comment_id, mentioned_user_id)
 );
 
 create index comments_post_id_created_at_idx on public.comments (post_id, created_at);

@@ -155,7 +155,14 @@ export function notificationHref(item: AppNotification): Href | null {
   if (data.post_id) {
     return { pathname: '/feed/p/[id]', params: { id: data.post_id } };
   }
-  if (item.type === 'tagged' || item.type === 'post_comment' || item.type === 'post_reaction' || item.type === 'post_reposted') {
+  if (
+    item.type === 'tagged' ||
+    item.type === 'mentioned' ||
+    item.type === 'profile_wall' ||
+    item.type === 'post_comment' ||
+    item.type === 'post_reaction' ||
+    item.type === 'post_reposted'
+  ) {
     return '/feed';
   }
   return null;
@@ -173,7 +180,10 @@ export function notificationGlyph(type: string, data?: NotificationData): string
     case 'challenge_new':
       return '✨';
     case 'tagged':
+    case 'mentioned':
       return '🏷️';
+    case 'profile_wall':
+      return '📝';
     case 'challenge_joined':
     case 'challenge_join_confirmed':
       return '🤝';

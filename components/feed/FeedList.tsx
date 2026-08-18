@@ -27,6 +27,7 @@ type FeedListProps = {
   headerTop?: ReactNode;
   headerExtra?: ReactNode;
   empty?: ReactNode;
+  highlightPostId?: string;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -35,6 +36,7 @@ type FeedListProps = {
     post: PostWithMeta,
     content: string,
     parentId?: string | null,
+    mentionedUserIds?: string[],
   ) => Promise<unknown> | void;
 };
 
@@ -54,6 +56,7 @@ export function FeedList({
   headerTop,
   headerExtra,
   empty,
+  highlightPostId,
   onRefresh,
   onRetry,
   onCompose,
@@ -114,10 +117,12 @@ export function FeedList({
               post={post}
               currentUserId={currentUserId}
               commenting={commenting}
+              highlighted={highlightPostId === post.id}
               onReact={(type, commentId) => onReact(post, type, commentId)}
               onComment={
                 onComment
-                  ? (content, parentId) => onComment(post, content, parentId)
+                  ? (content, parentId, mentionedUserIds) =>
+                      onComment(post, content, parentId, mentionedUserIds)
                   : undefined
               }
             />

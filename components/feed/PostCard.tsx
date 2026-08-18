@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
+import { MentionText } from '@/components/feed/MentionText';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { OfficialMark } from '@/components/profile/OfficialMark';
@@ -35,8 +36,13 @@ type PostCardProps = {
   post: PostWithMeta;
   currentUserId?: string;
   onReact: (type: ReactionType, commentId?: string | null) => void;
-  onComment?: (content: string, parentId?: string | null) => Promise<unknown> | void;
+  onComment?: (
+    content: string,
+    parentId?: string | null,
+    mentionedUserIds?: string[],
+  ) => Promise<unknown> | void;
   commenting?: boolean;
+  highlighted?: boolean;
 };
 
 export function PostCard({
@@ -45,6 +51,7 @@ export function PostCard({
   onReact,
   onComment,
   commenting,
+  highlighted,
 }: PostCardProps) {
   const [showComposer, setShowComposer] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -63,7 +70,14 @@ export function PostCard({
   const menuOpen = Boolean(social?.isOpenFor(post.id));
 
   return (
-    <Card padded={false} style={{ paddingHorizontal: 12, paddingVertical: 12 }}>
+    <Card
+      padded={false}
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderWidth: highlighted ? 1.5 : 0,
+        borderColor: highlighted ? THEME.accent : 'transparent',
+      }}>
       <View className="flex-row items-start gap-2.5">
         <ProfileLink username={post.author?.username} userId={post.author_id}>
           <Avatar uri={post.author?.avatar_url} name={name} size={42} radius={14} />
@@ -82,6 +96,11 @@ export function PostCard({
               </ProfileLink>
               <AppText className="text-[11px] leading-4 text-muted" numberOfLines={1}>
                 @{handle} · {formatFeedTime(post.created_at)} · {audienceLabel(audience)}
+                {post.wall_host
+                  ? ` · ${copy('wall.onHost', 'neutral', {
+                      name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
+                    })}`
+                  : ''}
               </AppText>
             </View>
             {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
@@ -99,7 +118,7 @@ export function PostCard({
                   social?.toggleOverflow(post, { x, y, width, height });
                 });
               }}
-              className="h-7 w-7 items-center justify-center">
+              className="h-11 w-11 items-center justify-center">
               <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
             </Pressable>
           </View>
@@ -107,6 +126,7 @@ export function PostCard({
           {content ? (
             <PostBody
               content={content}
+              mentions={post.mentions}
               challengeId={post.challenge_id}
               expanded={expanded}
               canExpand={canExpand}
@@ -143,9 +163,11 @@ export function PostCard({
             <InlineComposer
               placeholder="Write a reply…"
               submitting={commenting}
-              onSubmit={async (text) => {
+              audience={audience}
+              audienceUserIds={post.audience_user_ids ?? []}
+              onSubmit={async (text, mentionedUserIds) => {
                 try {
-                  await onComment(text, null);
+                  await onComment(text, null, mentionedUserIds);
                   setShowComposer(false);
                 } catch (error) {
                   Alert.alert('Couldn’t post that reply', getErrorMessage(error));
@@ -233,12 +255,14 @@ function ChallengeTitleLink({
 
 function PostBody({
   content,
+  mentions,
   challengeId,
   expanded,
   canExpand,
   onToggle,
 }: {
   content: string;
+  mentions?: PostWithMeta['mentions'];
   challengeId: string | null;
   expanded: boolean;
   canExpand: boolean;
@@ -262,11 +286,11 @@ function PostBody({
         </AppText>
       ) : (
         <>
-          <AppText
-            className="text-[14px] leading-[20px] text-ink"
-            numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}>
-            {content}
-          </AppText>
+          <MentionText
+            content={content}
+            mentions={mentions}
+            numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}
+          />
           {challengeId ? (
             <View className="mt-1">
               <ChallengeTitleLink challengeId={challengeId} title={title} />

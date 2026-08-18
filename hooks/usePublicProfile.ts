@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
+import { PUBLIC_PROFILE_COLUMNS, PUBLIC_PROFILE_COLUMNS_BASE } from '@/lib/constants';
 import { asWalletCurrency } from '@/lib/currency';
 import { officialFlags } from '@/lib/profileBadges';
 import { supabase } from '@/lib/supabase';
@@ -202,13 +202,34 @@ async function fetchPublicProfileBundle(handle: string): Promise<PublicProfileBu
   };
 }
 
+function isMissingProfileColumn(error: { message?: string } | null): boolean {
+  const text = String(error?.message ?? '').toLowerCase();
+  return (
+    (text.includes('is_creator') ||
+      text.includes('allow_profile_posts') ||
+      text.includes('profile_visibility')) &&
+    (text.includes('does not exist') || text.includes('schema cache') || text.includes('42703') || text.includes('pgrst204'))
+  );
+}
+
+async function selectPublicProfile(match: { column: 'id' | 'username'; value: string }) {
+  const full = supabase.from('profiles').select(PUBLIC_PROFILE_COLUMNS).eq(match.column, match.value).maybeSingle();
+  const first = await full;
+  if (!first.error) {
+    return first;
+  }
+  if (!isMissingProfileColumn(first.error)) {
+    return first;
+  }
+  return supabase.from('profiles').select(PUBLIC_PROFILE_COLUMNS_BASE).eq(match.column, match.value).maybeSingle();
+}
+
 async function fetchPublicProfile(handle: string): Promise<PublicProfile> {
   const decoded = decodeURIComponent(handle).trim();
   const byId = UUID_RE.test(decoded);
-  const query = supabase.from('profiles').select(PUBLIC_PROFILE_COLUMNS);
   const { data, error } = byId
-    ? await query.eq('id', decoded).maybeSingle()
-    : await query.eq('username', decoded.toLowerCase()).maybeSingle();
+    ? await selectPublicProfile({ column: 'id', value: decoded })
+    : await selectPublicProfile({ column: 'username', value: decoded.toLowerCase() });
   if (error) {
     throw new Error(getErrorMessage(error));
   }
@@ -219,11 +240,7 @@ async function fetchPublicProfile(handle: string): Promise<PublicProfile> {
 }
 
 export async function fetchPublicProfileById(id: string): Promise<PublicProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(PUBLIC_PROFILE_COLUMNS)
-    .eq('id', id)
-    .maybeSingle();
+  const { data, error } = await selectPublicProfile({ column: 'id', value: id });
   if (error) {
     throw new Error(getErrorMessage(error));
   }
@@ -277,7 +294,7 @@ async function fetchRecommendedProfiles(userId: string): Promise<PublicProfile[]
 
   const { data, error } = await supabase
     .from('profiles')
-    .select(PUBLIC_PROFILE_COLUMNS)
+    .select(PUBLIC_PROFILE_COLUMNS_BASE)
     .neq('id', userId)
     .order('created_at', { ascending: false })
     .limit(16);

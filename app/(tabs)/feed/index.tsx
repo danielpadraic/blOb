@@ -81,8 +81,8 @@ export default function FeedScreen() {
         onRetry={() => void feed.refetch()}
         onCompose={(input) => createPost.mutateAsync(input)}
         onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-        onComment={(post, content, parentId) =>
-          createComment.mutateAsync({ postId: post.id, content, parentId })
+        onComment={(post, content, parentId, mentionedUserIds) =>
+          createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
         }
       />
     </Screen>

@@ -4,6 +4,7 @@ import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
 
+import { MentionField } from '@/components/feed/MentionField';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -24,6 +25,9 @@ import {
 import { captureHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
+import type { MentionDoc } from '@/lib/mentions';
+import { wallHostLabel } from '@/lib/profileWall';
+import { supabase } from '@/lib/supabase';
 import type { ComposeInput, QuoteSnapshot } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { handleEnterToSubmit } from '@/utils/keyboard';
@@ -44,6 +48,7 @@ type ComposerProps = {
   submitting?: boolean;
   autoFocus?: boolean;
   quote?: { postId: string; snapshot: QuoteSnapshot; audience?: string | null } | null;
+  wallHost?: { id: string; name?: string | null; username?: string | null } | null;
   onSubmit: (input: ComposeInput) => Promise<unknown> | void;
 };
 
@@ -52,6 +57,7 @@ export function Composer({
   submitting,
   autoFocus,
   quote,
+  wallHost,
   onSubmit,
 }: ComposerProps) {
   const { user } = useAuth();
@@ -59,17 +65,17 @@ export function Composer({
   const resolvedPlaceholder = placeholder ?? copy('home.composer', asCopyTone(profile?.motivation_tone));
   const router = useRouter();
   const friends = useFriends();
-  const [content, setContent] = useState('');
+  const [doc, setDoc] = useState<MentionDoc>({ text: '', chips: [] });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState('');
-  const [audience, setAudience] = useState<PostAudience>(DEFAULT_POST_AUDIENCE);
+  const [audience, setAudience] = useState<PostAudience>(wallHost ? 'public' : DEFAULT_POST_AUDIENCE);
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
 
   const busy = Boolean(submitting || uploading);
   const canPost =
-    Boolean(content.trim() || attachments.length > 0 || quote) &&
+    Boolean(doc.text.trim() || attachments.length > 0 || quote) &&
     (audience !== 'specific' || audienceUserIds.length > 0);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
@@ -150,19 +156,30 @@ export function Composer({
           mediaUrls.push(url);
         }
       }
+      if (wallHost?.id) {
+        const allowed = await supabase.rpc('can_post_on_profile', { p_host_id: wallHost.id });
+        if (allowed.error || allowed.data !== true) {
+          throw new Error(copy('wall.closed'));
+        }
+      }
       await onSubmit({
-        content: content.trim(),
+        content: doc.text.trim(),
         mediaUrls,
         audience,
         audienceUserIds: audience === 'specific' ? audienceUserIds : [],
+        mentionedUserIds: doc.chips.map((chip) => chip.userId),
+        wallHostId: wallHost?.id ?? null,
         quotedPostId: quote?.postId ?? null,
         quoteSnapshot: quote?.snapshot ?? null,
       });
-      setContent('');
+      setDoc({ text: '', chips: [] });
       setAttachments([]);
-      setAudience(DEFAULT_POST_AUDIENCE);
+      setAudience(wallHost ? 'public' : DEFAULT_POST_AUDIENCE);
       setAudienceUserIds([]);
     } catch (error) {
+      if (getErrorMessage(error) === copy('wall.closed')) {
+        throw error;
+      }
       Alert.alert('Couldn’t post that', getErrorMessage(error));
     } finally {
       setUploading(false);
@@ -179,22 +196,18 @@ export function Composer({
           radius={14}
         />
         <View className="min-w-0 flex-1">
-          <Input
-            value={content}
-            onChangeText={setContent}
+          {wallHost ? (
+            <AppText className="mb-1 text-[12px] font-semibold" style={{ color: THEME.accent }}>
+              {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
+            </AppText>
+          ) : null}
+          <MentionField
             placeholder={resolvedPlaceholder}
-            multiline
             autoFocus={autoFocus}
-            blurOnSubmit={false}
-            className="px-0 py-1 text-[14px]"
-            style={{
-              minHeight: 36,
-              paddingVertical: 6,
-              paddingHorizontal: 0,
-              borderWidth: 0,
-              backgroundColor: 'transparent',
-            }}
-            onKeyPress={(event) => handleEnterToSubmit(event, () => void handleSubmit())}
+            audience={audience}
+            audienceUserIds={audienceUserIds}
+            onChange={setDoc}
+            onSubmit={() => void handleSubmit()}
             accessibilityLabel="Write a post"
           />
         </View>

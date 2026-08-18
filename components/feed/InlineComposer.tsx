@@ -1,46 +1,51 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
+import { MentionField } from '@/components/feed/MentionField';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { handleEnterToSubmit } from '@/utils/keyboard';
+import type { MentionDoc } from '@/lib/mentions';
+import type { PostAudience } from '@/lib/postAudience';
 
 type InlineComposerProps = {
   placeholder?: string;
   submitting?: boolean;
   submitLabel?: string;
-  onSubmit: (content: string) => Promise<unknown> | void;
+  audience?: PostAudience | string;
+  audienceUserIds?: string[];
+  onSubmit: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
 };
 
 export function InlineComposer({
   placeholder = 'Write a reply…',
   submitting,
   submitLabel = 'Reply',
+  audience = 'public',
+  audienceUserIds = [],
   onSubmit,
 }: InlineComposerProps) {
-  const [draft, setDraft] = useState('');
+  const [doc, setDoc] = useState<MentionDoc>({ text: '', chips: [] });
 
   async function submit() {
-    const trimmed = draft.trim();
+    const trimmed = doc.text.trim();
     if (!trimmed || submitting) {
       return;
     }
-    await onSubmit(trimmed);
-    setDraft('');
+    await onSubmit(
+      trimmed,
+      doc.chips.map((chip) => chip.userId),
+    );
+    setDoc({ text: '', chips: [] });
   }
 
   return (
     <View className="flex-row items-end gap-2">
       <View className="flex-1">
-        <Input
-          value={draft}
-          onChangeText={setDraft}
+        <MentionField
           placeholder={placeholder}
-          multiline
-          blurOnSubmit={false}
-          className="py-2"
-          style={{ minHeight: 40, paddingVertical: 8 }}
-          onKeyPress={(event) => handleEnterToSubmit(event, () => void submit())}
+          audience={audience}
+          audienceUserIds={audienceUserIds}
+          onChange={setDoc}
+          onSubmit={() => void submit()}
           accessibilityLabel={placeholder}
         />
       </View>
@@ -48,7 +53,7 @@ export function InlineComposer({
         title={submitLabel}
         size="sm"
         loading={submitting}
-        disabled={!draft.trim()}
+        disabled={!doc.text.trim()}
         onPress={() => void submit()}
       />
     </View>

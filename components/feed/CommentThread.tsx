@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { InlineComposer } from '@/components/feed/InlineComposer';
+import { MentionText } from '@/components/feed/MentionText';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
@@ -14,10 +15,16 @@ import { formatFeedTime } from '@/utils/format';
 
 const INDENT = 12;
 
+type ReplyHandler = (
+  content: string,
+  parentId?: string | null,
+  mentionedUserIds?: string[],
+) => Promise<unknown> | void;
+
 type CommentThreadProps = {
   comments: CommentWithAuthor[];
   currentUserId?: string;
-  onReply: (content: string, parentId?: string | null) => Promise<unknown> | void;
+  onReply: ReplyHandler;
   onReact?: (commentId: string, type: ReactionType) => void;
   composing?: boolean;
 };
@@ -76,7 +83,7 @@ function CommentItem({
   nested: boolean;
   currentUserId?: string;
   composing?: boolean;
-  onReply: (content: string, parentId?: string | null) => Promise<unknown> | void;
+  onReply: ReplyHandler;
   onReact?: (commentId: string, type: ReactionType) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -108,7 +115,11 @@ function CommentItem({
               <AppText className="text-[11px] font-normal text-muted">@{handle}</AppText>
             </AppText>
           </ProfileLink>
-          <AppText className="text-[13px] leading-[18px] text-ink">{comment.content}</AppText>
+          <MentionText
+            content={comment.content}
+            mentions={comment.mentions}
+            className="text-[13px] leading-[18px] text-ink"
+          />
           <AppText className="mt-0.5 text-[11px] text-muted">{formatFeedTime(comment.created_at)}</AppText>
           <View className="mt-0.5">
             <ReactionBar
@@ -130,9 +141,9 @@ function CommentItem({
           <InlineComposer
             placeholder={`Reply to ${name}…`}
             submitting={composing}
-            onSubmit={async (text) => {
+            onSubmit={async (text, mentionedUserIds) => {
               try {
-                await onReply(text, comment.id);
+                await onReply(text, comment.id, mentionedUserIds);
                 setOpen(false);
               } catch (error) {
                 Alert.alert('Couldn’t post that reply', getErrorMessage(error));

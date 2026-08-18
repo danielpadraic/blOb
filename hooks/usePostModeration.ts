@@ -115,6 +115,51 @@ export function useSoftDeletePost() {
   });
 }
 
+export function useRemoveFromWall() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      const { error } = await supabase.rpc('remove_post_from_wall', { p_post_id: postId });
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useBlockUser() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      const { error } = await supabase.rpc('block_user', { p_target: targetUserId });
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+    },
+    onSuccess: (_data, targetUserId) => {
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['mutes', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['blocked-ids', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['public-profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+      void queryClient.invalidateQueries({ queryKey: ['friends'] });
+      void queryClient.invalidateQueries({ queryKey: ['follow'] });
+      void queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+    },
+  });
+}
+
 export function useToggleMute() {
   const { user } = useAuth();
   const queryClient = useQueryClient();

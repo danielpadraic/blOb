@@ -217,6 +217,21 @@ const STRINGS = {
   'official.infinity': '∞',
   'official.friends': 'Friends',
   'official.sendConfirm': 'Check all three. This cannot be reversed.',
+  'mention.empty': 'No one to tag for this audience.',
+  'mention.picker': 'Tag someone',
+  'wall.empty': {
+    gentle: 'Quiet wall. I’m here if someone writes.',
+    neutral: 'Nothing on this wall yet.',
+    honest: 'Blank wall. Someone has to go first.',
+  },
+  'wall.posted': 'Posted on {name}’s profile',
+  'wall.closed': 'You can’t post here anymore.',
+  'wall.onHost': 'On {name}’s profile',
+  'wall.remove': 'Remove from profile',
+  'wall.allow': 'Allow others to post on your profile',
+  'wall.muteMentions': 'Mute mention notifications',
+  'wall.visibility': 'Who can see your profile',
+  'wall.block': 'Block',
 } as const;
 
 export type CopyKey = keyof typeof STRINGS;

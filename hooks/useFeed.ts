@@ -9,6 +9,7 @@ import type {
   CommentWithAuthor,
   ComposeInput,
   Post,
+  PostMention,
   PostWithMeta,
   PublicProfile,
   Reaction,
@@ -26,13 +27,17 @@ type FeedScope =
   | { kind: 'challenge'; challengeId: string }
   | { kind: 'global' }
   | { kind: 'ids'; challengeIds: string[] }
-  | { kind: 'authors'; authorIds: string[] };
+  | { kind: 'authors'; authorIds: string[] }
+  | { kind: 'wall'; hostId: string };
 
 async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
   if (scope.kind === 'ids' && scope.challengeIds.length === 0) {
     return [];
   }
   if (scope.kind === 'authors' && scope.authorIds.length === 0) {
+    return [];
+  }
+  if (scope.kind === 'wall' && !scope.hostId) {
     return [];
   }
 
@@ -75,6 +80,10 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
       ? query.in('challenge_id', scope.challengeIds)
       : scope.kind === 'authors'
         ? query.in('author_id', scope.authorIds)
+        : scope.kind === 'wall'
+          ? query.or(
+              `and(author_id.eq.${scope.hostId},wall_host_id.is.null),and(wall_host_id.eq.${scope.hostId},wall_removed_at.is.null)`,
+            )
         : query.is('challenge_id', null);
 }
 
@@ -96,6 +105,7 @@ function postInsertPayload(
     audience_user_ids?: string[];
     quoted_post_id?: string | null;
     quote_snapshot?: PostWithMeta['quote_snapshot'];
+    wall_host_id?: string | null;
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -112,10 +122,13 @@ function postInsertPayload(
     payload.quoted_post_id = base.quoted_post_id;
     payload.quote_snapshot = base.quote_snapshot ?? null;
   }
+  if (schema.hasWall && base.wall_host_id) {
+    payload.wall_host_id = base.wall_host_id;
+  }
   return payload;
 }
 
-async function withSocial(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
+async function withSocial(posts: PostWithMeta[], viewerId?: string): Promise<PostWithMeta[]> {
   const ids = posts.map((post) => post.id);
   if (ids.length === 0) {
     return posts;
@@ -162,10 +175,85 @@ async function withSocial(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
     reactionsByPost.set(reaction.post_id, list);
   }
 
-  return posts.map((post) => ({
+  const withComments = posts.map((post) => ({
     ...post,
     comments: commentsByPost.get(post.id) ?? post.comments ?? [],
     reactions: reactionsByPost.get(post.id) ?? post.reactions ?? [],
+  }));
+  return withMentions(withComments, viewerId);
+}
+
+async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<PostWithMeta[]> {
+  const postIds = posts.map((post) => post.id);
+  const commentIds = posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.id));
+  const [postMentionRows, commentMentionRows] = await Promise.all([
+    supabase.from('post_mentions').select('post_id, mentioned_user_id').in('post_id', postIds),
+    commentIds.length > 0
+      ? supabase.from('comment_mentions').select('comment_id, mentioned_user_id').in('comment_id', commentIds)
+      : Promise.resolve({ data: [] as { comment_id: string; mentioned_user_id: string }[], error: null }),
+  ]);
+  if (postMentionRows.error && !isMissingRelationError(postMentionRows.error)) {
+    console.log('[blob:feed] post_mentions skipped', postMentionRows.error.message);
+  }
+  const postMentions = postMentionRows.error ? [] : (postMentionRows.data ?? []);
+  const commentMentions = commentMentionRows.error ? [] : (commentMentionRows.data ?? []);
+  const mentionedIds = [
+    ...postMentions.map((row) => row.mentioned_user_id),
+    ...commentMentions.map((row) => row.mentioned_user_id),
+    ...posts.map((post) => post.wall_host_id).filter((id): id is string => Boolean(id)),
+  ];
+  const unique = [...new Set(mentionedIds)];
+  const [profiles, blocked] = await Promise.all([
+    unique.length
+      ? supabase.from('profiles').select('id, username, display_name, avatar_url, is_official').in('id', unique)
+      : Promise.resolve({ data: [] as { id: string; username: string; display_name: string | null }[], error: null }),
+    viewerId && unique.length
+      ? supabase
+          .from('friendships')
+          .select('user_a_id, user_b_id')
+          .eq('status', 'blocked')
+          .or(`user_a_id.eq.${viewerId},user_b_id.eq.${viewerId}`)
+      : Promise.resolve({ data: [] as { user_a_id: string; user_b_id: string }[], error: null }),
+  ]);
+  const byId = new Map((profiles.data ?? []).map((row) => [row.id, row]));
+  const blockedIds = new Set<string>();
+  for (const row of blocked.data ?? []) {
+    blockedIds.add(row.user_a_id === viewerId ? row.user_b_id : row.user_a_id);
+  }
+
+  const mentionsByPost = new Map<string, PostMention[]>();
+  for (const row of postMentions) {
+    const profile = byId.get(row.mentioned_user_id);
+    const list = mentionsByPost.get(row.post_id) ?? [];
+    list.push({
+      userId: row.mentioned_user_id,
+      username: profile?.username ?? 'blob',
+      displayName: profile?.display_name,
+      available: Boolean(profile?.username) && !blockedIds.has(row.mentioned_user_id),
+    });
+    mentionsByPost.set(row.post_id, list);
+  }
+  const mentionsByComment = new Map<string, PostMention[]>();
+  for (const row of commentMentions) {
+    const profile = byId.get(row.mentioned_user_id);
+    const list = mentionsByComment.get(row.comment_id) ?? [];
+    list.push({
+      userId: row.mentioned_user_id,
+      username: profile?.username ?? 'blob',
+      displayName: profile?.display_name,
+      available: Boolean(profile?.username) && !blockedIds.has(row.mentioned_user_id),
+    });
+    mentionsByComment.set(row.comment_id, list);
+  }
+
+  return posts.map((post) => ({
+    ...post,
+    mentions: mentionsByPost.get(post.id) ?? [],
+    wall_host: post.wall_host_id ? asPublicProfile(byId.get(post.wall_host_id) ?? null) ?? null : post.wall_host,
+    comments: (post.comments ?? []).map((comment) => ({
+      ...comment,
+      mentions: mentionsByComment.get(comment.id) ?? comment.mentions,
+    })),
   }));
 }
 
@@ -344,7 +432,7 @@ async function fetchPosts(input: {
 }): Promise<PostWithMeta[]> {
   if (input.challengeId) {
     const rows = await queryPosts({ kind: 'challenge', challengeId: input.challengeId });
-    return hydrateAuthors(await withSocial(rows));
+    return hydrateAuthors(await withSocial(rows, input.userId));
   }
 
   if (!input.userId) {
@@ -384,6 +472,7 @@ async function fetchPosts(input: {
           return true;
         })
         .slice(0, 50),
+      userId,
     ),
   );
 }
@@ -464,12 +553,27 @@ export function useAuthorFeed(authorId?: string | null) {
     queryKey: ['feed', 'author', authorId, user?.id],
     enabled: Boolean(authorId),
     queryFn: async (): Promise<PostWithMeta[]> => {
-      const rows = await queryPosts({ kind: 'authors', authorIds: [authorId!] });
+      const schema = await resolvePostsSchema();
+      let rows: PostWithMeta[];
+      try {
+        rows = schema.hasWall
+          ? await queryPosts({ kind: 'wall', hostId: authorId! })
+          : await queryPosts({ kind: 'authors', authorIds: [authorId!] });
+      } catch {
+        rows = await queryPosts({ kind: 'authors', authorIds: [authorId!] });
+      }
       const hidden = user?.id ? new Set(await fetchHiddenPostIds(user.id)) : new Set<string>();
-      const publicOnly = rows.filter(
-        (post) => asPostAudience(post.audience) === 'public' && !hidden.has(post.id),
-      );
-      return hydrateAuthors(await withSocial(publicOnly));
+      const mine = Boolean(user?.id && user.id === authorId);
+      const visible = rows.filter((post) => {
+        if (hidden.has(post.id)) {
+          return false;
+        }
+        if (post.wall_host_id === authorId) {
+          return !post.wall_removed_at;
+        }
+        return mine || asPostAudience(post.audience) === 'public';
+      });
+      return hydrateAuthors(await withSocial(visible, user?.id));
     },
   });
 }
@@ -495,7 +599,7 @@ export function usePost(postId?: string | null) {
         return null;
       }
       const rows = await hydrateAuthors(
-        await withSocial([withQuoteSnapshot(data as unknown as PostWithMeta)]),
+        await withSocial([withQuoteSnapshot(data as unknown as PostWithMeta)], user?.id),
       );
       return rows[0] ?? null;
     },
@@ -568,12 +672,27 @@ export function useCreatePost(challengeId?: string | null) {
         audience_user_ids,
         quoted_post_id,
         quote_snapshot: quoted_post_id ? (input.quoteSnapshot ?? null) : null,
+        wall_host_id: input.wallHostId ?? null,
       });
       const created = await supabase.from('posts').insert(payload).select(schema.select).single();
       if (created.error) {
         throw new Error(getErrorMessage(created.error));
       }
-      return created.data;
+      const createdPost = created.data as unknown as Post;
+      const mentionIds = [...new Set((input.mentionedUserIds ?? []).filter((id) => id && id !== user.id))];
+      if (mentionIds.length > 0 && createdPost.id) {
+        const mentions = await supabase.from('post_mentions').insert(
+          mentionIds.map((mentioned_user_id) => ({
+            post_id: createdPost.id,
+            mentioned_user_id,
+            author_id: user.id,
+          })),
+        );
+        if (mentions.error && !isMissingRelationError(mentions.error)) {
+          console.log('[blob:feed] post_mentions insert failed', mentions.error.message);
+        }
+      }
+      return createdPost;
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: ['feed', key] });
@@ -589,6 +708,12 @@ export function useCreatePost(challengeId?: string | null) {
           audience_user_ids: input.audience === 'specific' ? (input.audienceUserIds ?? []) : [],
           quoted_post_id: input.quotedPostId ?? null,
           quote_snapshot: input.quoteSnapshot ?? null,
+          wall_host_id: input.wallHostId ?? null,
+          mentions: (input.mentionedUserIds ?? []).map((userId) => ({
+            userId,
+            username: '',
+            available: true,
+          })),
           created_at: new Date().toISOString(),
           author: asPublicProfile(profile ?? { id: user.id }),
           comments: [],
@@ -609,6 +734,7 @@ export function useCreatePost(challengeId?: string | null) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void queryClient.invalidateQueries({ queryKey: ['feed-events'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed', 'author'] });
       void reportBadgeActivity();
     },
   });
@@ -752,6 +878,27 @@ function isPersistedId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
+async function insertCommentMentions(
+  commentId: string,
+  authorId: string,
+  mentionedUserIds?: string[],
+) {
+  const ids = [...new Set((mentionedUserIds ?? []).filter((id) => id && id !== authorId))];
+  if (ids.length === 0) {
+    return;
+  }
+  const { error } = await supabase.from('comment_mentions').insert(
+    ids.map((mentioned_user_id) => ({
+      comment_id: commentId,
+      mentioned_user_id,
+      author_id: authorId,
+    })),
+  );
+  if (error && !isMissingRelationError(error)) {
+    console.log('[blob:feed] comment_mentions insert failed', error.message);
+  }
+}
+
 export function useCreateComment(challengeId?: string | null) {
   const { user } = useAuth();
   const { profile } = useMyProfile();
@@ -759,7 +906,12 @@ export function useCreateComment(challengeId?: string | null) {
   const key = challengeId ?? 'global';
 
   return useMutation({
-    mutationFn: async (input: { postId: string; content: string; parentId?: string | null }) => {
+    mutationFn: async (input: {
+      postId: string;
+      content: string;
+      parentId?: string | null;
+      mentionedUserIds?: string[];
+    }) => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
@@ -782,6 +934,7 @@ export function useCreateComment(challengeId?: string | null) {
         if (nested.error) {
           throw new Error(getErrorMessage(nested.error));
         }
+        await insertCommentMentions(nested.data.id, user.id, input.mentionedUserIds);
         return nested.data;
       }
 
@@ -789,6 +942,7 @@ export function useCreateComment(challengeId?: string | null) {
       if (error) {
         throw new Error(getErrorMessage(error));
       }
+      await insertCommentMentions(data.id, user.id, input.mentionedUserIds);
       return data;
     },
     onMutate: async (input) => {

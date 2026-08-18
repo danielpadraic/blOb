@@ -219,6 +219,10 @@ export interface Profile {
   timezone?: string | null;
   motivation_tone?: 'gentle' | 'neutral' | 'honest' | null;
   is_official?: boolean;
+  is_creator?: boolean;
+  allow_profile_posts?: boolean;
+  profile_visibility?: 'public' | 'friends' | string | null;
+  mute_mentions?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -233,6 +237,9 @@ export interface PublicProfile {
   primary_activities: string[];
   show_fitness_stats_publicly: boolean;
   is_official?: boolean;
+  is_creator?: boolean;
+  allow_profile_posts?: boolean;
+  profile_visibility?: 'public' | 'friends' | string | null;
   created_at: string;
   height_cm: number | null;
   current_weight: number | null;
@@ -407,6 +414,8 @@ export interface Post {
   quoted_post_id?: string | null;
   quote_snapshot?: QuoteSnapshot | null;
   deleted_at?: string | null;
+  wall_host_id?: string | null;
+  wall_removed_at?: string | null;
   created_at: string;
 }
 
@@ -415,8 +424,17 @@ export type ComposeInput = {
   mediaUrls?: string[];
   audience?: PostAudience;
   audienceUserIds?: string[];
+  mentionedUserIds?: string[];
+  wallHostId?: string | null;
   quotedPostId?: string | null;
   quoteSnapshot?: QuoteSnapshot | null;
+};
+
+export type PostMention = {
+  userId: string;
+  username: string;
+  displayName?: string | null;
+  available: boolean;
 };
 
 export interface Comment {
@@ -426,6 +444,7 @@ export interface Comment {
   parent_id?: string | null;
   content: string;
   created_at: string;
+  mentions?: PostMention[];
 }
 
 export interface CommentWithAuthor extends Comment {
@@ -436,8 +455,10 @@ export interface CommentWithAuthor extends Comment {
 
 export interface PostWithMeta extends Post {
   author?: PublicProfile | null;
+  wall_host?: PublicProfile | null;
   comments?: CommentWithAuthor[];
   reactions?: Reaction[];
+  mentions?: PostMention[];
 }
 
 export interface Reaction {
@@ -504,6 +525,8 @@ export type NotificationType =
   | 'post_reaction'
   | 'post_reposted'
   | 'tagged'
+  | 'mentioned'
+  | 'profile_wall'
   | 'challenge_joined'
   | 'follow'
   | 'coins_received'
@@ -596,6 +619,9 @@ export type ProfileUpdate = Partial<
     | 'skill_tags'
     | 'show_fitness_stats_publicly'
     | 'motivation_tone'
+    | 'allow_profile_posts'
+    | 'profile_visibility'
+    | 'mute_mentions'
   >
 >;
 
@@ -935,6 +961,62 @@ export type Database = {
           Relationship<'comments_parent_id_fkey', 'parent_id', 'comments', 'id'>,
         ]
       >;
+      post_mentions: TableDef<
+        {
+          id: string;
+          post_id: string;
+          mentioned_user_id: string;
+          author_id: string;
+          created_at: string;
+        },
+        Partial<{
+          id: string;
+          post_id: string;
+          mentioned_user_id: string;
+          author_id: string;
+          created_at: string;
+        }>,
+        Partial<{
+          id: string;
+          post_id: string;
+          mentioned_user_id: string;
+          author_id: string;
+          created_at: string;
+        }>,
+        [
+          Relationship<'post_mentions_post_id_fkey', 'post_id', 'posts', 'id'>,
+          Relationship<'post_mentions_mentioned_user_id_fkey', 'mentioned_user_id', 'profiles', 'id'>,
+          Relationship<'post_mentions_author_id_fkey', 'author_id', 'profiles', 'id'>,
+        ]
+      >;
+      comment_mentions: TableDef<
+        {
+          id: string;
+          comment_id: string;
+          mentioned_user_id: string;
+          author_id: string;
+          created_at: string;
+        },
+        Partial<{
+          id: string;
+          comment_id: string;
+          mentioned_user_id: string;
+          author_id: string;
+          created_at: string;
+        }>,
+        Partial<{
+          id: string;
+          comment_id: string;
+          mentioned_user_id: string;
+          author_id: string;
+          created_at: string;
+        }>,
+        [
+          Relationship<'comment_mentions_comment_id_fkey', 'comment_id', 'comments', 'id'>,
+          Relationship<'comment_mentions_mentioned_user_id_fkey', 'mentioned_user_id', 'profiles', 'id'>,
+          Relationship<'comment_mentions_author_id_fkey', 'author_id', 'profiles', 'id'>,
+        ]
+      >;
       reactions: TableDef<
         Reaction,
         Partial<Reaction>,
@@ -1136,6 +1218,18 @@ export type Database = {
       };
       report_post: {
         Args: { p_post_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      can_post_on_profile: {
+        Args: { p_host_id: string };
+        Returns: boolean;
+      };
+      remove_post_from_wall: {
+        Args: { p_post_id: string };
+        Returns: undefined;
+      };
+      block_user: {
+        Args: { p_target: string };
         Returns: undefined;
       };
       soft_delete_post: {

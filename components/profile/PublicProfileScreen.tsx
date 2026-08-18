@@ -1,5 +1,5 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 
 import { FeedList } from '@/components/feed/FeedList';
@@ -16,6 +16,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { useFollowState } from '@/hooks/useFollow';
 import { useCopyTone } from '@/hooks/useCopy';
 import {
   useCreateComment,
@@ -30,11 +31,12 @@ import {
   useGetOrCreateConversation,
   useSendFriendRequest,
 } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
+import { canPostOnProfile } from '@/lib/profileWall';
 import { conversationHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { isOfficialAccount } from '@/lib/official';
-import { THEME } from '@/lib/theme';
-import { copy } from '@/lib/copy';
+import { THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { mediaKind } from '@/utils/media';
 
@@ -59,18 +61,22 @@ const PROFILE_HEADER_BASE = {
 } as const;
 
 export default function PublicProfileScreen() {
-  const params = useLocalSearchParams<{ username: string }>();
+  const params = useLocalSearchParams<{ username: string; posted?: string }>();
   const handle = Array.isArray(params.username) ? params.username[0] : params.username;
+  const postedId = Array.isArray(params.posted) ? params.posted[0] : params.posted;
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const tone = useCopyTone();
   const bundle = usePublicProfile(handle);
   const [tab, setTab] = useState<ProfileTab>('posts');
+  const [toast, setToast] = useState<string | null>(null);
 
   const profile = bundle.data?.profile;
   const posts = useAuthorFeed(profile?.id);
   const friendsQuery = useFriends(profile?.id);
   const friendship = useFriendshipStatus(profile?.id);
+  const follow = useFollowState(profile?.id);
   const sendRequest = useSendFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
   const toggleReaction = useToggleReaction();
@@ -86,6 +92,19 @@ export default function PublicProfileScreen() {
     }),
     [headerTitle],
   );
+
+  useEffect(() => {
+    if (!postedId || !profile) {
+      return;
+    }
+    setTab('posts');
+    const message = copy('wall.posted', tone, { name: personDisplayName(profile) });
+    setToast(message);
+    const timer = setTimeout(() => {
+      setToast((current) => (current === message ? null : current));
+    }, 2200);
+    return () => clearTimeout(timer);
+  }, [postedId, profile, tone]);
 
   if (bundle.isLoading) {
     return (
@@ -130,6 +149,13 @@ export default function PublicProfileScreen() {
   });
   const friendCount = friendsQuery.data?.length ?? 0;
   const relation = friendship.data;
+  const canPost = canPostOnProfile({
+    viewerId: user?.id,
+    host: profile,
+    friends: relation?.status === 'accepted',
+    followingCreator: follow.isFollowing,
+    blocked: relation?.status === 'blocked',
+  });
 
   function friendAction() {
     if (!profile || isSelf || official) {
@@ -234,6 +260,34 @@ export default function PublicProfileScreen() {
                     );
                   }}
                 />
+                {canPost ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Post"
+                    onPress={() => {
+                      router.push({
+                        pathname: '/feed/compose',
+                        params: {
+                          wallHostId: profile.id,
+                          wallHostName: name,
+                          wallHostUsername: profile.username,
+                          returnTo: pathname,
+                        },
+                      });
+                    }}
+                    className="flex-row items-center justify-center px-3"
+                    style={{
+                      minHeight: 44,
+                      minWidth: 44,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: THEME.border,
+                      backgroundColor: THEME.surface,
+                    }}>
+                    <Glyph name={GLYPH.plus} color={THEME.textPrimary} size={14} />
+                    <AppText className="ml-1 text-[14px] font-semibold text-charcoal">Post</AppText>
+                  </Pressable>
+                ) : null}
               </View>
             )}
           </View>
@@ -252,15 +306,16 @@ export default function PublicProfileScreen() {
             isLoading={posts.isLoading}
             error={posts.error instanceof Error ? posts.error.message : null}
             currentUserId={user?.id}
-            emptyTitle="No posts yet."
-            emptyBody=" "
-            empty={<AppText className="py-4 text-center text-[14px] text-muted">No posts yet.</AppText>}
+            highlightPostId={postedId}
+            emptyTitle={copy('wall.empty', tone)}
+            emptyBody=""
+            empty={<MascotState kind="empty" title={copy('wall.empty', tone)} compact />}
             canCompose={false}
             commenting={createComment.isPending}
             onRetry={() => void posts.refetch()}
             onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-            onComment={(post, content, parentId) =>
-              createComment.mutateAsync({ postId: post.id, content, parentId })
+            onComment={(post, content, parentId, mentionedUserIds) =>
+              createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
             }
           />
         ) : null}
@@ -329,6 +384,21 @@ export default function PublicProfileScreen() {
           )
         ) : null}
       </View>
+      {toast ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 24 }}>
+          <View
+            className="mx-8 items-center px-4 py-2.5"
+            style={{
+              backgroundColor: THEME.primary,
+              borderRadius: 16,
+              ...themeShadow('card'),
+            }}>
+            <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
+              {toast}
+            </AppText>
+          </View>
+        </View>
+      ) : null}
     </Screen>
   );
 }
