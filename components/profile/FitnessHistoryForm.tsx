@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import { z } from 'zod';
 
+import { LastDoneSlider } from '@/components/profile/LastDoneSlider';
 import { UnitToggle } from '@/components/profile/UnitToggle';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,27 +13,50 @@ import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useUpdateProfile } from '@/hooks/useProfile';
+import { copy } from '@/lib/copy';
 import type { BodyUnitSystem } from '@/lib/bodyMetrics';
 import {
   EQUIPMENT_OPTIONS,
+  EXPERIENCE_LEVELS,
   EXPERIENCE_OPTIONS,
   GOAL_OPTIONS,
+  LAST_DONE_DEFAULT,
+  LAST_DONE_VALUES,
   LIMITATION_OPTIONS,
+  PRIMARY_GOALS,
   SPORT_PRESETS,
   TRAINING_DAYS,
+  asLastDone,
   clampDays,
-  clampYears,
   fitnessProfileFromUser,
-  fitnessProfileSchema,
   normalizeMileTime,
+  sportLabel,
   toggleString,
   type FitnessProfile,
+  type LastDoneBucket,
+  type PrimaryGoal,
 } from '@/lib/fitnessProfile';
 import { THEME } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
-const formSchema = fitnessProfileSchema.extend({
+const formSchema = z.object({
+  experience_level: z.enum(EXPERIENCE_LEVELS),
+  primary_goals: z.array(z.enum(PRIMARY_GOALS)).max(5),
+  training_days_per_week: z.number().int().min(1).max(7),
+  sports: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(40),
+        last_done: z.enum(LAST_DONE_VALUES),
+      }),
+    )
+    .max(12),
+  last_mile_run: z.union([z.literal('never'), z.string().min(1).max(24)]),
+  limitations: z.array(z.string().min(1).max(40)).max(12),
+  limitations_notes: z.string().max(280),
+  preferred_units: z.enum(['imperial', 'metric']),
+  equipment_access: z.array(z.string().min(1).max(40)).max(16),
   last_mile_kind: z.enum(['never', 'time']),
   last_mile_time: z.string(),
   custom_sport: z.string().optional(),
@@ -67,7 +91,7 @@ export function FitnessHistoryForm({ profile, onSkip, afterSave }: FitnessHistor
 
   const sports = useFieldArray({ control, name: 'sports' });
   const experience = watch('experience_level');
-  const goal = watch('primary_goal');
+  const goals = watch('primary_goals') ?? [];
   const days = watch('training_days_per_week');
   const sportRows = watch('sports');
   const mileKind = watch('last_mile_kind');
@@ -96,7 +120,7 @@ export function FitnessHistoryForm({ profile, onSkip, afterSave }: FitnessHistor
     if (sportRows.some((row) => row.name.toLowerCase() === label.toLowerCase())) {
       return;
     }
-    sports.append({ name: label, years: 1 });
+    sports.append({ name: label, last_done: LAST_DONE_DEFAULT });
     setValue('custom_sport', '');
   }
 
@@ -109,16 +133,18 @@ export function FitnessHistoryForm({ profile, onSkip, afterSave }: FitnessHistor
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
+    const primary_goals = values.primary_goals ?? [];
     const payload: FitnessProfile = {
       experience_level: values.experience_level,
-      primary_goal: values.primary_goal,
+      primary_goals,
+      primary_goal: primary_goals[0] ?? 'general',
       training_days_per_week: clampDays(values.training_days_per_week),
       sports: values.sports
-        .map((row: { name: string; years: number }) => ({
+        .map((row: { name: string; last_done: LastDoneBucket }) => ({
           name: row.name.trim(),
-          years: clampYears(Number(row.years)),
+          last_done: asLastDone(row.last_done),
         }))
-        .filter((row: { name: string; years: number }) => row.name.length > 0),
+        .filter((row: { name: string }) => row.name.length > 0),
       last_mile_run:
         values.last_mile_kind === 'never' ? 'never' : normalizeMileTime(values.last_mile_time),
       limitations: values.limitations,
@@ -191,16 +217,23 @@ export function FitnessHistoryForm({ profile, onSkip, afterSave }: FitnessHistor
         </View>
       </Question>
 
-      <Question label="What’s the main aim right now?">
+      <Question label="Aims">
         <ChipRow>
-          {GOAL_OPTIONS.map((option) => (
-            <Chip
-              key={option.value}
-              label={option.label}
-              selected={goal === option.value}
-              onPress={() => setValue('primary_goal', option.value, { shouldDirty: true })}
-            />
-          ))}
+          {GOAL_OPTIONS.map((option) => {
+            const selected = goals.includes(option.value);
+            return (
+              <Chip
+                key={option.value}
+                label={option.label}
+                selected={selected}
+                onPress={() =>
+                  setValue('primary_goals', toggleString<PrimaryGoal>(goals, option.value), {
+                    shouldDirty: true,
+                  })
+                }
+              />
+            );
+          })}
         </ChipRow>
       </Question>
 
@@ -217,49 +250,62 @@ export function FitnessHistoryForm({ profile, onSkip, afterSave }: FitnessHistor
         </ChipRow>
       </Question>
 
-      <Question
-        label="Sports & activities"
-        hint="Tap a few you know. Years are a rough guess — close is plenty.">
+      <Question label="Sports & activities" hint={copy('training.lastDoneHint')}>
         <ChipRow>
           {SPORT_PRESETS.map((name) => {
             const selected = sportRows.some((row) => row.name.toLowerCase() === name);
             return (
               <Chip
                 key={name}
-                label={name === 'hiit' ? 'HIIT' : name === 'hyrox' ? 'HYROX' : name}
+                label={sportLabel(name)}
                 selected={selected}
                 onPress={() => (selected ? removeSportNamed(name) : addSport(name))}
               />
             );
           })}
         </ChipRow>
-        <View className="gap-2">
+        <View className="gap-3">
           {sports.fields.map((field, index) => (
-            <View key={field.id} className="flex-row items-center gap-2">
-              <View className="flex-1">
-                <AppText className="text-[14px] font-semibold capitalize text-charcoal">
-                  {field.name}
+            <View
+              key={field.id}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                columnGap: 10,
+              }}>
+              <View
+                style={{
+                  flexShrink: 0,
+                  maxWidth: '38%',
+                  backgroundColor: THEME.accent,
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  minHeight: 36,
+                  justifyContent: 'center',
+                }}>
+                <AppText
+                  numberOfLines={1}
+                  className="text-sm font-semibold"
+                  style={{
+                    color: THEME.accentForeground,
+                    flexShrink: 0,
+                  }}>
+                  {sportLabel(field.name)}
                 </AppText>
               </View>
-              <AppText className="text-[12px] text-muted">Years</AppText>
-              <Controller
-                control={control}
-                name={`sports.${index}.years`}
-                render={({ field: { value, onChange } }) => (
-                  <Input
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    value={String(value ?? '')}
-                    onChangeText={(text) => onChange(clampYears(Number(text) || 0))}
-                    className="min-h-[44px] w-[72px] px-3 py-2 text-center"
-                  />
-                )}
-              />
-              <Pressable onPress={() => sports.remove(index)} accessibilityRole="button">
-                <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                  Remove
-                </AppText>
-              </Pressable>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Controller
+                  control={control}
+                  name={`sports.${index}.last_done`}
+                  render={({ field: { value, onChange } }) => (
+                    <LastDoneSlider
+                      value={asLastDone(value)}
+                      onChange={(next: LastDoneBucket) => onChange(next)}
+                      accessibilityLabel={`${sportLabel(field.name)} last done`}
+                    />
+                  )}
+                />
+              </View>
             </View>
           ))}
         </View>
@@ -367,9 +413,9 @@ export function FitnessHistoryForm({ profile, onSkip, afterSave }: FitnessHistor
         </ChipRow>
       </Question>
 
-      {errors.experience_level || errors.primary_goal || errors.training_days_per_week ? (
+      {errors.experience_level || errors.training_days_per_week ? (
         <AppText className="text-[13px]" style={{ color: THEME.danger }}>
-          Pick an experience level, a goal, and how often you train.
+          Pick an experience level and how often you train.
         </AppText>
       ) : null}
       {formError ? (
@@ -412,6 +458,7 @@ function buildDefaults(profile?: Profile | null): FormValues {
   const never = data.last_mile_run === 'never';
   return {
     ...data,
+    primary_goals: data.primary_goals ?? [],
     last_mile_kind: never ? 'never' : 'time',
     last_mile_time: never ? '' : data.last_mile_run,
     custom_sport: '',

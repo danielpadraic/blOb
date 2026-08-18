@@ -4,16 +4,24 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import { Composer } from '@/components/feed/Composer';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Avatar } from '@/components/ui/Avatar';
-import { Button } from '@/components/ui/Button';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
@@ -28,6 +36,7 @@ import {
   useToggleMute,
 } from '@/hooks/usePostModeration';
 import { useFriends, useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
 import { postShareUrl } from '@/lib/postShare';
 import { snapshotFromPost } from '@/lib/quotePost';
 import { personDisplayName } from '@/lib/social';
@@ -42,19 +51,24 @@ const REPORT_REASONS = [
   { value: 'other', label: 'Other' },
 ] as const;
 
+export type WindowRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type OverflowPanel = 'menu' | 'share' | 'report' | 'delete' | 'send';
+
 type Sheet =
-  | { kind: 'overflow'; post: PostWithMeta }
-  | { kind: 'share'; post: PostWithMeta }
-  | { kind: 'report'; post: PostWithMeta }
-  | { kind: 'delete'; post: PostWithMeta }
+  | { kind: 'overflow'; post: PostWithMeta; anchor: WindowRect; panel: OverflowPanel }
   | { kind: 'quote'; post: PostWithMeta }
-  | { kind: 'send'; post: PostWithMeta }
-  | { kind: 'profile'; userId: string; muted: boolean };
+  | { kind: 'profile'; userId: string; muted: boolean; anchor: WindowRect };
 
 type SocialSheetsValue = {
-  toggleOverflow: (post: PostWithMeta) => void;
-  toggleProfileMenu: (userId: string) => void;
-  openShare: (post: PostWithMeta) => void;
+  toggleOverflow: (post: PostWithMeta, anchor: WindowRect) => void;
+  toggleProfileMenu: (userId: string, anchor: WindowRect) => void;
+  openShare: (post: PostWithMeta, anchor: WindowRect) => void;
   isOpenFor: (postId: string) => boolean;
   isMuted: (userId: string) => boolean;
   isHidden: (postId: string) => boolean;
@@ -105,25 +119,27 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
     };
   }, [close]);
 
-  const toggleOverflow = useCallback((post: PostWithMeta) => {
+  const toggleOverflow = useCallback((post: PostWithMeta, anchor: WindowRect) => {
     setSheet((current) =>
-      current?.kind === 'overflow' && current.post.id === post.id ? null : { kind: 'overflow', post },
+      current?.kind === 'overflow' && current.post.id === post.id
+        ? null
+        : { kind: 'overflow', post, anchor, panel: 'menu' },
     );
   }, []);
 
   const toggleProfileMenu = useCallback(
-    (userId: string) => {
+    (userId: string, anchor: WindowRect) => {
       setSheet((current) =>
         current?.kind === 'profile' && current.userId === userId
           ? null
-          : { kind: 'profile', userId, muted: muted.has(userId) },
+          : { kind: 'profile', userId, muted: muted.has(userId), anchor },
       );
     },
     [muted],
   );
 
-  const openShare = useCallback((post: PostWithMeta) => {
-    setSheet({ kind: 'share', post });
+  const openShare = useCallback((post: PostWithMeta, anchor: WindowRect) => {
+    setSheet({ kind: 'overflow', post, anchor, panel: 'share' });
   }, []);
 
   const value = useMemo<SocialSheetsValue>(
@@ -185,206 +201,228 @@ function SheetView({
   }
   if (sheet.kind === 'overflow') {
     return (
-      <OverflowSheet
+      <OverflowPopover
         post={sheet.post}
         userId={userId}
+        anchor={sheet.anchor}
+        panel={sheet.panel}
         onClose={onClose}
-        onShare={() => onOpen({ kind: 'share', post: sheet.post })}
-        onReport={() => onOpen({ kind: 'report', post: sheet.post })}
-        onDelete={() => onOpen({ kind: 'delete', post: sheet.post })}
-      />
-    );
-  }
-  if (sheet.kind === 'share') {
-    return (
-      <ShareSheet
-        post={sheet.post}
-        onClose={onClose}
-        onRepost={() => onOpen({ kind: 'quote', post: sheet.post })}
-        onSend={() => onOpen({ kind: 'send', post: sheet.post })}
         onToast={onToast}
+        onPanel={(panel) => onOpen({ ...sheet, panel })}
+        onQuote={() => onOpen({ kind: 'quote', post: sheet.post })}
       />
     );
-  }
-  if (sheet.kind === 'report') {
-    return <ReportSheet post={sheet.post} onClose={onClose} onToast={onToast} />;
-  }
-  if (sheet.kind === 'delete') {
-    return <DeleteSheet post={sheet.post} onClose={onClose} onToast={onToast} />;
   }
   if (sheet.kind === 'quote') {
     return <QuoteSheet post={sheet.post} onClose={onClose} />;
   }
-  if (sheet.kind === 'send') {
-    return <SendSheet post={sheet.post} onClose={onClose} onToast={onToast} />;
-  }
   return (
-    <ProfileMuteSheet
-      userId={sheet.userId}
-      muted={sheet.muted}
-      onClose={onClose}
-      onToast={onToast}
-    />
+    <AnchoredPopover anchor={sheet.anchor} onClose={onClose}>
+      <ProfileMuteMenu
+        userId={sheet.userId}
+        muted={sheet.muted}
+        onClose={onClose}
+        onToast={onToast}
+      />
+    </AnchoredPopover>
   );
 }
 
-function OverflowSheet({
+function OverflowPopover({
   post,
   userId,
+  anchor,
+  panel,
   onClose,
-  onShare,
-  onReport,
-  onDelete,
+  onToast,
+  onPanel,
+  onQuote,
 }: {
   post: PostWithMeta;
   userId?: string;
+  anchor: WindowRect;
+  panel: OverflowPanel;
   onClose: () => void;
-  onShare: () => void;
-  onReport: () => void;
-  onDelete: () => void;
+  onToast: (message: string) => void;
+  onPanel: (panel: OverflowPanel) => void;
+  onQuote: () => void;
 }) {
   const hide = useHidePost();
+  const report = useReportPost();
+  const remove = useSoftDeletePost();
+  const friends = useFriends();
+  const startChat = useGetOrCreateConversation();
+  const send = useSendMessage();
+  const [busy, setBusy] = useState(false);
   const mine = Boolean(userId && userId === post.author_id);
 
+  async function onDelete() {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await remove.mutateAsync(post.id);
+      onClose();
+    } catch {
+      onToast(copy('error.deletePost'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendTo(friendId: string) {
+    const conversation = await startChat.mutateAsync(friendId);
+    await send.mutateAsync({
+      conversation_id: conversation.id,
+      body: postShareUrl(post.id),
+    });
+    onClose();
+    onToast('Sent.');
+  }
+
   return (
-    <ChromeOverlay visible onClose={onClose}>
-      <IconSheet>
-        <IconAction
-          label="Share"
-          icon={GLYPH.send}
-          onPress={onShare}
-        />
-        {!mine ? (
+    <AnchoredPopover anchor={anchor} onClose={onClose}>
+      {panel === 'menu' ? (
+        <View className="flex-row items-center" style={{ columnGap: 2 }}>
           <IconAction
-            label="Hide"
-            icon={GLYPH.hide}
-            onPress={() => {
-              hide.mutate(post.id, {
-                onSuccess: () => {
-                  onClose();
-                },
-                onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)),
-              });
-            }}
+            label="Share"
+            icon={GLYPH.share}
+            onPress={() => onPanel('share')}
           />
-        ) : null}
-        {!mine ? (
-          <IconAction label="Report" icon={GLYPH.flag} color={THEME.danger} onPress={onReport} />
-        ) : null}
-        {mine ? (
-          <IconAction label="Delete" icon={GLYPH.trash} color={THEME.danger} onPress={onDelete} />
-        ) : null}
-      </IconSheet>
-    </ChromeOverlay>
-  );
-}
-
-function ShareSheet({
-  post,
-  onClose,
-  onRepost,
-  onSend,
-  onToast,
-}: {
-  post: PostWithMeta;
-  onClose: () => void;
-  onRepost: () => void;
-  onSend: () => void;
-  onToast: (message: string) => void;
-}) {
-  return (
-    <ChromeOverlay visible onClose={onClose}>
-      <ListSheet>
-        <ListRow
-          label="Send in DM"
-          onPress={onSend}
-        />
-        <ListRow label="Repost" onPress={onRepost} />
-        <ListRow
-          label="Copy link"
-          onPress={() => {
-            void Clipboard.setStringAsync(postShareUrl(post.id))
-              .then(() => {
-                onClose();
-                onToast('Link copied.');
-              })
-              .catch((error) => Alert.alert('Couldn’t copy that', getErrorMessage(error)));
-          }}
-        />
-      </ListSheet>
-    </ChromeOverlay>
-  );
-}
-
-function ReportSheet({
-  post,
-  onClose,
-  onToast,
-}: {
-  post: PostWithMeta;
-  onClose: () => void;
-  onToast: (message: string) => void;
-}) {
-  const report = useReportPost();
-  return (
-    <ChromeOverlay visible onClose={onClose}>
-      <ListSheet>
-        <AppText className="px-1 pb-3 text-[15px] font-extrabold text-charcoal">Report</AppText>
-        <ChipRow>
-          {REPORT_REASONS.map((reason) => (
-            <Chip
-              key={reason.value}
-              label={reason.label}
+          {!mine ? (
+            <IconAction
+              label="Hide"
+              icon={GLYPH.hide}
               onPress={() => {
-                report.mutate(
-                  { postId: post.id, reason: reason.value },
-                  {
-                    onSuccess: () => {
-                      onClose();
-                      onToast('Reported.');
-                    },
-                    onError: (error) => Alert.alert('Couldn’t report that', getErrorMessage(error)),
-                  },
-                );
+                hide.mutate(post.id, {
+                  onSuccess: () => onClose(),
+                  onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)),
+                });
               }}
             />
-          ))}
-        </ChipRow>
-      </ListSheet>
-    </ChromeOverlay>
-  );
-}
+          ) : null}
+          {!mine ? (
+            <IconAction
+              label="Report"
+              icon={GLYPH.flag}
+              color={THEME.danger}
+              onPress={() => onPanel('report')}
+            />
+          ) : null}
+          {mine ? (
+            <IconAction
+              label="Delete"
+              icon={GLYPH.trash}
+              color={THEME.danger}
+              onPress={() => onPanel('delete')}
+            />
+          ) : null}
+        </View>
+      ) : null}
 
-function DeleteSheet({
-  post,
-  onClose,
-  onToast,
-}: {
-  post: PostWithMeta;
-  onClose: () => void;
-  onToast: (message: string) => void;
-}) {
-  const remove = useSoftDeletePost();
-  return (
-    <ChromeOverlay visible onClose={onClose}>
-      <ListSheet>
-        <AppText className="mb-3 text-[16px] font-extrabold text-charcoal">Delete post?</AppText>
-        <Button
-          title="Delete"
-          variant="danger"
-          loading={remove.isPending}
-          onPress={() => {
-            remove.mutate(post.id, {
-              onSuccess: () => {
-                onClose();
-                onToast('Deleted.');
-              },
-              onError: (error) => Alert.alert('Couldn’t delete that', getErrorMessage(error)),
-            });
-          }}
-        />
-      </ListSheet>
-    </ChromeOverlay>
+      {panel === 'share' ? (
+        <View style={{ minWidth: 168 }}>
+          <ListRow label="Send in DM" onPress={() => onPanel('send')} />
+          <ListRow label="Repost" onPress={onQuote} />
+          <ListRow
+            label="Copy link"
+            onPress={() => {
+              void Clipboard.setStringAsync(postShareUrl(post.id))
+                .then(() => {
+                  onClose();
+                  onToast('Link copied.');
+                })
+                .catch((error) => Alert.alert('Couldn’t copy that', getErrorMessage(error)));
+            }}
+          />
+        </View>
+      ) : null}
+
+      {panel === 'report' ? (
+        <View style={{ minWidth: 196, paddingHorizontal: 6, paddingVertical: 4 }}>
+          <AppText className="px-1 pb-2 text-[13px] font-extrabold text-charcoal">Report</AppText>
+          <ChipRow>
+            {REPORT_REASONS.map((reason) => (
+              <Chip
+                key={reason.value}
+                label={reason.label}
+                onPress={() => {
+                  report.mutate(
+                    { postId: post.id, reason: reason.value },
+                    {
+                      onSuccess: () => {
+                        onClose();
+                        onToast('Reported.');
+                      },
+                      onError: (error) => Alert.alert('Couldn’t report that', getErrorMessage(error)),
+                    },
+                  );
+                }}
+              />
+            ))}
+          </ChipRow>
+        </View>
+      ) : null}
+
+      {panel === 'delete' ? (
+        <View style={{ minWidth: 132, paddingHorizontal: 10, paddingVertical: 8 }}>
+          <AppText className="text-[14px] font-extrabold text-charcoal">{copy('post.deleteConfirm')}</AppText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copy('post.delete')}
+            disabled={busy}
+            onPress={() => void onDelete()}
+            className="mt-2 items-center justify-center"
+            style={{ minHeight: 36 }}>
+            {busy ? (
+              <ActivityIndicator color={THEME.danger} />
+            ) : (
+              <AppText className="text-[14px] font-semibold" style={{ color: THEME.danger }}>
+                {copy('post.delete')}
+              </AppText>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+
+      {panel === 'send' ? (
+        <View style={{ minWidth: 200, maxWidth: 260, paddingHorizontal: 6, paddingVertical: 4 }}>
+          <AppText className="px-1 pb-2 text-[13px] font-extrabold text-charcoal">Send in DM</AppText>
+          {(friends.data ?? []).length === 0 ? (
+            <AppText className="px-1 pb-1 text-sm text-muted">Add friends first.</AppText>
+          ) : (
+            <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
+              {(friends.data ?? []).map((row) => {
+                const id = row.profile?.id;
+                if (!id) {
+                  return null;
+                }
+                const name = personDisplayName(row.profile);
+                return (
+                  <Pressable
+                    key={id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Send to ${name}`}
+                    onPress={() => {
+                      void sendTo(id).catch((error) =>
+                        Alert.alert('Couldn’t send that', getErrorMessage(error)),
+                      );
+                    }}
+                    className="flex-row items-center py-2"
+                    style={{ minHeight: 44 }}>
+                    <Avatar uri={row.profile?.avatar_url} name={name} size={32} />
+                    <AppText className="ml-2 flex-1 text-[13px] font-semibold text-charcoal" numberOfLines={1}>
+                      {name}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      ) : null}
+    </AnchoredPopover>
   );
 }
 
@@ -421,71 +459,7 @@ function QuoteSheet({ post, onClose }: { post: PostWithMeta; onClose: () => void
   );
 }
 
-function SendSheet({
-  post,
-  onClose,
-  onToast,
-}: {
-  post: PostWithMeta;
-  onClose: () => void;
-  onToast: (message: string) => void;
-}) {
-  const friends = useFriends();
-  const startChat = useGetOrCreateConversation();
-  const send = useSendMessage();
-  const rows = friends.data ?? [];
-
-  async function sendTo(userId: string) {
-    const conversation = await startChat.mutateAsync(userId);
-    await send.mutateAsync({
-      conversation_id: conversation.id,
-      body: postShareUrl(post.id),
-    });
-    onClose();
-    onToast('Sent.');
-  }
-
-  return (
-    <ChromeOverlay visible onClose={onClose}>
-      <ListSheet>
-        <AppText className="mb-3 text-[16px] font-extrabold text-charcoal">Send in DM</AppText>
-        {rows.length === 0 ? (
-          <AppText className="text-sm text-muted">Add friends first.</AppText>
-        ) : (
-          <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled">
-            {rows.map((row) => {
-              const id = row.profile?.id;
-              if (!id) {
-                return null;
-              }
-              const name = personDisplayName(row.profile);
-              return (
-                <Pressable
-                  key={id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Send to ${name}`}
-                  onPress={() => {
-                    void sendTo(id).catch((error) =>
-                      Alert.alert('Couldn’t send that', getErrorMessage(error)),
-                    );
-                  }}
-                  className="flex-row items-center py-2.5"
-                  style={{ minHeight: 44 }}>
-                  <Avatar uri={row.profile?.avatar_url} name={name} size={36} />
-                  <AppText className="ml-3 flex-1 text-[14px] font-semibold text-charcoal" numberOfLines={1}>
-                    {name}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-      </ListSheet>
-    </ChromeOverlay>
-  );
-}
-
-function ProfileMuteSheet({
+function ProfileMuteMenu({
   userId,
   muted,
   onClose,
@@ -498,43 +472,95 @@ function ProfileMuteSheet({
 }) {
   const toggle = useToggleMute();
   return (
-    <ChromeOverlay visible onClose={onClose}>
-      <ListSheet>
-        <ListRow
-          label={muted ? 'Unmute' : 'Mute'}
-          onPress={() => {
-            toggle.mutate(
-              { userId, muted },
-              {
-                onSuccess: () => {
-                  onClose();
-                  onToast(muted ? 'Unmuted.' : 'Muted.');
-                },
-                onError: (error) => Alert.alert('Couldn’t update that', getErrorMessage(error)),
+    <View style={{ minWidth: 140 }}>
+      <ListRow
+        label={muted ? 'Unmute' : 'Mute'}
+        onPress={() => {
+          toggle.mutate(
+            { userId, muted },
+            {
+              onSuccess: () => {
+                onClose();
+                onToast(muted ? 'Unmuted.' : 'Muted.');
               },
-            );
-          }}
-        />
-      </ListSheet>
-    </ChromeOverlay>
+              onError: (error) => Alert.alert('Couldn’t update that', getErrorMessage(error)),
+            },
+          );
+        }}
+      />
+    </View>
   );
 }
 
-function IconSheet({ children }: { children: ReactNode }) {
+function AnchoredPopover({
+  anchor,
+  onClose,
+  children,
+}: {
+  anchor: WindowRect;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const hostRef = useRef<View>(null);
+  const [host, setHost] = useState<WindowRect | null>(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+
+  function measureHost() {
+    hostRef.current?.measureInWindow((x, y, width, height) => {
+      setHost({ x, y, width, height });
+    });
+  }
+
+  const windowSize = Dimensions.get('window');
+  const hostX = host?.x ?? 0;
+  const hostY = host?.y ?? 0;
+  const hostW = host?.width || windowSize.width;
+  const hostH = host?.height || windowSize.height;
+  const popW = box.width || 168;
+  const popH = box.height || 56;
+  const gap = 6;
+  const localX = anchor.x - hostX;
+  const localY = anchor.y - hostY;
+  let top = localY + anchor.height + gap;
+  if (top + popH > hostH - 8) {
+    const above = localY - gap - popH;
+    top = above >= 8 ? above : Math.max(8, hostH - popH - 8);
+  }
+  let left = localX + anchor.width - popW;
+  left = Math.min(Math.max(8, left), Math.max(8, hostW - popW - 8));
+
   return (
-    <View className="items-center px-5 pb-5 pt-3">
+    <View
+      ref={hostRef}
+      pointerEvents="box-none"
+      collapsable={false}
+      onLayout={measureHost}
+      style={styles.host}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+        onPress={onClose}
+        style={styles.dismiss}
+      />
       <View
-        className="flex-row items-center justify-center"
-        style={{
-          backgroundColor: THEME.surface,
-          borderRadius: 22,
-          borderWidth: 1,
-          borderColor: THEME.border,
-          paddingHorizontal: 10,
-          paddingVertical: 10,
-          columnGap: 8,
-          ...themeShadow('card'),
-        }}>
+        pointerEvents="auto"
+        collapsable={false}
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          if (width !== box.width || height !== box.height) {
+            setBox({ width, height });
+          }
+        }}
+        style={[
+          styles.popover,
+          {
+            top,
+            left,
+            backgroundColor: THEME.surface,
+            borderColor: THEME.border,
+            ...themeShadow('card'),
+          },
+        ]}>
         {children}
       </View>
     </View>
@@ -558,25 +584,9 @@ function IconAction({
       accessibilityLabel={label}
       onPress={onPress}
       className="items-center justify-center"
-      style={{ width: 52, height: 52, minWidth: 44, minHeight: 44, borderRadius: 16 }}>
-      <Glyph name={icon} color={color} size={22} />
+      style={{ width: 44, height: 44, minWidth: 44, minHeight: 44, borderRadius: 14 }}>
+      <Glyph name={icon} color={color} size={20} />
     </Pressable>
-  );
-}
-
-function ListSheet({ children }: { children: ReactNode }) {
-  return (
-    <View
-      className="px-5 pt-4"
-      style={{
-        backgroundColor: THEME.surface,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        paddingBottom: 16,
-        maxHeight: '100%',
-      }}>
-      {children}
-    </View>
   );
 }
 
@@ -585,9 +595,34 @@ function ListRow({ label, onPress }: { label: string; onPress: () => void }) {
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="justify-center px-1"
-      style={{ minHeight: 48, borderBottomWidth: 1, borderBottomColor: THEME.border }}>
-      <AppText className="text-[16px] font-semibold text-charcoal">{label}</AppText>
+      className="justify-center px-3"
+      style={{ minHeight: 44 }}>
+      <AppText className="text-[14px] font-semibold text-charcoal">{label}</AppText>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  host: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 40,
+    elevation: 40,
+  },
+  dismiss: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  popover: {
+    position: 'absolute',
+    zIndex: 41,
+    elevation: 41,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+});

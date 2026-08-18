@@ -1,3 +1,5 @@
+import { copy } from '@/lib/copy';
+
 export function getErrorMessage(error: unknown): string {
   const raw = extractRawMessage(error);
   return humanize(raw);
@@ -308,6 +310,13 @@ function humanize(raw: string): string {
   }
   if (message.includes('oauth') || message.includes('provider')) {
     return 'That sign-in didn’t finish. Please try again.';
+  }
+  if (
+    message.includes('not enough people') ||
+    message.includes('underfill') ||
+    message.includes('cancelled_underfilled')
+  ) {
+    return copy('error.notEnoughPeople');
   }
   if (message.includes('cancel')) {
     return 'Sign-in was cancelled.';

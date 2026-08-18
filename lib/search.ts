@@ -1,4 +1,5 @@
 import { searchPeople } from '@/lib/social';
+import { resolvePostsSchema } from '@/lib/postsSelect';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, Post, PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -75,9 +76,10 @@ async function searchChallenges(like: string): Promise<SearchChallenge[]> {
 }
 
 async function searchPosts(like: string): Promise<Post[]> {
+  const schema = await resolvePostsSchema();
   const { data, error } = await supabase
     .from('posts')
-    .select('id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, created_at')
+    .select(schema.select)
     .ilike('content', like)
     .order('created_at', { ascending: false })
     .limit(12);
@@ -85,7 +87,7 @@ async function searchPosts(like: string): Promise<Post[]> {
     console.log('[blob:search] posts', getErrorMessage(error));
     return [];
   }
-  return (data ?? []) as Post[];
+  return (data ?? []) as unknown as Post[];
 }
 
 function countHashtags(posts: Post[], preferred?: string): SearchHashtag[] {

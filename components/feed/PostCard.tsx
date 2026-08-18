@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -48,6 +48,7 @@ export function PostCard({
   const [expanded, setExpanded] = useState(false);
   const social = useSocialSheetsOptional();
   const router = useRouter();
+  const moreRef = useRef<View>(null);
 
   const name = post.author?.display_name ?? post.author?.username ?? 'blob';
   const handle = post.author?.username ?? 'blob';
@@ -82,11 +83,17 @@ export function PostCard({
               <ProofFlagButton postId={post.id} />
             ) : null}
             <Pressable
+              ref={moreRef}
               accessibilityRole="button"
               accessibilityLabel="Post menu"
               accessibilityState={{ expanded: menuOpen }}
               hitSlop={8}
-              onPress={() => social?.toggleOverflow(post)}
+              collapsable={false}
+              onPress={() => {
+                moreRef.current?.measureInWindow((x, y, width, height) => {
+                  social?.toggleOverflow(post, { x, y, width, height });
+                });
+              }}
               className="h-7 w-7 items-center justify-center">
               <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
             </Pressable>
@@ -124,7 +131,7 @@ export function PostCard({
             commentCount={comments.length}
             onReact={(type) => onReact(type)}
             onReply={onComment ? () => setShowComposer((value) => !value) : undefined}
-            onShare={() => social?.openShare(post)}
+            onShare={(anchor) => social?.openShare(post, anchor)}
           />
 
           {showComposer && onComment ? (

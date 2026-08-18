@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, type Ref } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -22,6 +22,7 @@ type ScreenProps = ViewProps & {
   padded?: boolean;
   className?: string;
   edges?: readonly Edge[];
+  scrollRef?: Ref<ScrollView>;
 };
 
 export function Screen({
@@ -30,6 +31,7 @@ export function Screen({
   padded = true,
   className,
   edges = DEFAULT_EDGES,
+  scrollRef,
   ...props
 }: ScreenProps) {
   const segments = useSegments();
@@ -55,6 +57,7 @@ export function Screen({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (
           <ScrollView
+            ref={scrollRef}
             className="flex-1"
             style={SCREEN_BACKGROUND}
             contentContainerClassName={cn('grow', padded && 'px-4')}

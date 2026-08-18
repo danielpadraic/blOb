@@ -1,8 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
+import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+
+function stripPostFromFeeds(queryClient: QueryClient, postId: string) {
+  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
+    if (Array.isArray(current)) {
+      return current.filter((row) => !row || typeof row !== 'object' || row.id !== postId);
+    }
+    if (current && typeof current === 'object' && 'id' in current && current.id === postId) {
+      return null;
+    }
+    return current;
+  });
+}
 
 export function useHiddenPostIds() {
   const { user } = useAuth();
@@ -53,7 +66,11 @@ export function useHidePost() {
         throw new Error(getErrorMessage(error));
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, postId) => {
+      queryClient.setQueryData(['post-hides', user?.id], (current: string[] | undefined) =>
+        current?.includes(postId) ? current : [...(current ?? []), postId],
+      );
+      stripPostFromFeeds(queryClient, postId);
       void queryClient.invalidateQueries({ queryKey: ['post-hides', user?.id] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
@@ -75,15 +92,24 @@ export function useReportPost() {
 }
 
 export function useSoftDeletePost() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (postId: string) => {
-      const { error } = await supabase.rpc('soft_delete_post', { p_post_id: postId });
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      const { error } = await supabase
+        .from('posts')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', postId)
+        .eq('author_id', user.id);
       if (error) {
-        throw new Error(getErrorMessage(error));
+        throw new Error(copy('error.deletePost'));
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, postId) => {
+      stripPostFromFeeds(queryClient, postId);
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });

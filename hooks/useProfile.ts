@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import { asCopyTone } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProfileUpdate, PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
-import { uploadAvatarImage } from '@/utils/upload';
 import { isProfileComplete } from '@/utils/validators';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchPublicProfileById } from '@/hooks/usePublicProfile';
+import { uploadProfilePhoto } from '@/lib/profilePhoto';
 
 function isNoRow(error: { code?: string; details?: string; message: string }): boolean {
   const code = String(error.code ?? '');
@@ -47,6 +48,7 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     body_metrics_completed_at: profile.body_metrics_completed_at ?? null,
     fitness_profile: profile.fitness_profile ?? null,
     timezone: profile.timezone ?? null,
+    motivation_tone: asCopyTone(profile.motivation_tone),
   };
 }
 
@@ -242,6 +244,7 @@ export function useCompleteProfile() {
           primary_activities: patch.primary_activities ?? [],
           skill_tags: patch.skill_tags ?? [],
           show_fitness_stats_publicly: patch.show_fitness_stats_publicly ?? false,
+          motivation_tone: patch.motivation_tone ?? 'neutral',
         },
         { onConflict: 'id' },
       );
@@ -261,16 +264,20 @@ export function useCompleteProfile() {
 
 export function useUploadAvatar() {
   const { user } = useAuth();
-  const updateProfile = useUpdateProfile();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (uri: string) => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      const publicUrl = await uploadAvatarImage({ uri, userId: user.id });
-      await updateProfile.mutateAsync({ avatar_url: publicUrl });
-      return publicUrl;
+      return uploadProfilePhoto(user.id, uri);
+    },
+    onSuccess: (publicUrl) => {
+      queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>
+        current && typeof current === 'object' ? { ...current, avatar_url: publicUrl } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
     },
   });
 }

@@ -169,6 +169,9 @@ export default function SubmitWorkoutScreen() {
   }
 
   const missing = proofSteps.filter((type) => !drafts[type]?.uri?.trim());
+  const firstCameraIndex = proofSteps.findIndex(
+    (type) => (isImageProof(type) || isVideoProof(type)) && !drafts[type]?.uri?.trim(),
+  );
 
   return (
     <Screen padded={false} edges={['left', 'right', 'bottom']}>
@@ -183,7 +186,7 @@ export default function SubmitWorkoutScreen() {
         </AppText>
 
         <View className="mt-5 gap-6">
-          {proofSteps.map((type) => (
+          {proofSteps.map((type, index) => (
             <View key={type}>
               <AppText className="mb-2 text-[15px] font-bold text-charcoal">
                 {proofMeta(type).label}
@@ -194,6 +197,7 @@ export default function SubmitWorkoutScreen() {
                   uri={drafts[type]?.uri}
                   compact
                   locked={busy}
+                  autoOpen={index === firstCameraIndex && filledCount === 0}
                   onPicked={(uri, mimeType) => onPicked(type, uri, mimeType)}
                 />
               ) : (

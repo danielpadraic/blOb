@@ -1210,6 +1210,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         setBobTipOpen(true);
         setTipIndex(0);
         setLiveChallengeId(challenge.id);
+        scrollRef.current?.scrollTo({ y: 0 });
       } catch (error) {
         skipSaveRef.current = false;
         const message = getErrorMessage(error) || 'Couldn’t publish this challenge.';

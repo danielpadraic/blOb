@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { CameraView, type CameraType } from 'expo-camera';
 
+import { lastCameraFacing, rememberCameraFacing } from '@/components/capture/cameraFacing';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
@@ -34,7 +35,7 @@ export function InAppCamera({
   onUnavailable,
 }: InAppCameraProps) {
   const cameraRef = useRef<CameraView>(null);
-  const [facing, setFacing] = useState<CameraType>('back');
+  const [facing, setFacing] = useState<CameraType>(lastCameraFacing);
   const [ready, setReady] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -244,7 +245,13 @@ export function InAppCamera({
           accessibilityRole="button"
           accessibilityLabel="Flip camera"
           disabled={!live}
-          onPress={() => setFacing((current) => (current === 'back' ? 'front' : 'back'))}
+          onPress={() =>
+            setFacing((current) => {
+              const next = current === 'back' ? 'front' : 'back';
+              rememberCameraFacing(next);
+              return next;
+            })
+          }
           className="h-12 w-12 items-center justify-center rounded-2xl"
           style={{ backgroundColor: 'rgba(16,19,18,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }}>
           <AppText className="text-[11px] font-extrabold" style={{ color: '#fff' }}>

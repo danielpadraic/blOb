@@ -8,10 +8,24 @@ export type { FitnessProfile };
 export const EXPERIENCE_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
 export const PRIMARY_GOALS = ['strength', 'endurance', 'fat_loss', 'general', 'competition'] as const;
 export const TRAINING_DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
+export const LAST_DONE_VALUES = ['lt_30d', '3m', '6m', '1y', '2y', '5y', 'gt_5y'] as const;
 
 export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number];
 export type PrimaryGoal = (typeof PRIMARY_GOALS)[number];
-export type SportYears = { name: string; years: number };
+export type LastDoneBucket = (typeof LAST_DONE_VALUES)[number];
+export type FitnessSport = { name: string; last_done: LastDoneBucket };
+
+export const LAST_DONE_LABELS: Record<LastDoneBucket, string> = {
+  lt_30d: '<30 days',
+  '3m': '3 mo',
+  '6m': '6 mo',
+  '1y': '1 yr',
+  '2y': '2 yr',
+  '5y': '5 yr',
+  gt_5y: '>5 yr',
+};
+
+export const LAST_DONE_DEFAULT: LastDoneBucket = 'lt_30d';
 
 export const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string; hint: string }[] = [
   { value: 'beginner', label: 'Getting going', hint: 'New, returning, or still finding a groove.' },
@@ -64,18 +78,25 @@ export const EQUIPMENT_OPTIONS = [
   { value: 'bodyweight', label: 'Just me' },
 ] as const;
 
+const lastDoneSchema = z.enum(LAST_DONE_VALUES);
+
+const sportSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40),
+    last_done: lastDoneSchema.optional(),
+    years: z.coerce.number().min(0).max(80).optional(),
+  })
+  .transform((row) => ({
+    name: row.name,
+    last_done: row.last_done ?? yearsToLastDone(row.years),
+  }));
+
 export const fitnessProfileSchema = z.object({
   experience_level: z.enum(EXPERIENCE_LEVELS),
-  primary_goal: z.enum(PRIMARY_GOALS),
+  primary_goals: z.array(z.enum(PRIMARY_GOALS)).max(5).default([]),
+  primary_goal: z.enum(PRIMARY_GOALS).optional(),
   training_days_per_week: z.number().int().min(1).max(7),
-  sports: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1).max(40),
-        years: z.number().min(0).max(80),
-      }),
-    )
-    .max(12),
+  sports: z.array(sportSchema).max(12),
   last_mile_run: z.union([z.literal('never'), z.string().min(1).max(24)]),
   limitations: z.array(z.string().min(1).max(40)).max(12),
   limitations_notes: z.string().max(280),
@@ -85,28 +106,74 @@ export const fitnessProfileSchema = z.object({
 
 const fitnessProfileParseSchema = fitnessProfileSchema.extend({
   training_days_per_week: z.coerce.number().int().min(1).max(7),
-  sports: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1).max(40),
-        years: z.coerce.number().min(0).max(80),
-      }),
-    )
-    .max(12),
 });
+
+export function asLastDone(value: unknown): LastDoneBucket {
+  if (typeof value === 'string' && LAST_DONE_VALUES.includes(value as LastDoneBucket)) {
+    return value as LastDoneBucket;
+  }
+  return LAST_DONE_DEFAULT;
+}
+
+export function yearsToLastDone(years?: number | null): LastDoneBucket {
+  if (years == null || !Number.isFinite(years)) {
+    return LAST_DONE_DEFAULT;
+  }
+  if (years < 0.2) {
+    return 'lt_30d';
+  }
+  if (years < 0.4) {
+    return '3m';
+  }
+  if (years < 0.8) {
+    return '6m';
+  }
+  if (years < 1.5) {
+    return '1y';
+  }
+  if (years < 3.5) {
+    return '2y';
+  }
+  if (years < 5.5) {
+    return '5y';
+  }
+  return 'gt_5y';
+}
 
 export function parseFitnessProfile(raw: unknown): FitnessProfile | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return null;
   }
-  const parsed = fitnessProfileParseSchema.safeParse(raw);
-  return parsed.success ? parsed.data : null;
+  const row = raw as Record<string, unknown>;
+  const goalsRaw = row.primary_goals;
+  const legacyGoal = row.primary_goal;
+  const primary_goals = Array.isArray(goalsRaw)
+    ? goalsRaw.filter((item): item is PrimaryGoal =>
+        typeof item === 'string' && PRIMARY_GOALS.includes(item as PrimaryGoal),
+      )
+    : typeof legacyGoal === 'string' && PRIMARY_GOALS.includes(legacyGoal as PrimaryGoal)
+      ? [legacyGoal as PrimaryGoal]
+      : [];
+  const parsed = fitnessProfileParseSchema.safeParse({
+    ...row,
+    primary_goals,
+    primary_goal: primary_goals[0],
+  });
+  if (!parsed.success) {
+    return null;
+  }
+  return {
+    ...parsed.data,
+    primary_goals,
+    primary_goal: primary_goals[0] ?? parsed.data.primary_goal ?? 'general',
+  };
 }
 
 export function emptyFitnessProfile(units: BodyUnitSystem = 'imperial'): FitnessProfile {
   return {
     experience_level: 'beginner',
     primary_goal: 'general',
+    primary_goals: [],
     training_days_per_week: 3,
     sports: [],
     last_mile_run: 'never',
@@ -126,7 +193,7 @@ export function fitnessProfileFromUser(profile?: Profile | null): FitnessProfile
     .map((name) => name.trim())
     .filter(Boolean)
     .slice(0, 8)
-    .map((name) => ({ name, years: 1 }));
+    .map((name) => ({ name, last_done: LAST_DONE_DEFAULT }));
 
   return {
     ...base,
@@ -136,6 +203,8 @@ export function fitnessProfileFromUser(profile?: Profile | null): FitnessProfile
       existing?.training_days_per_week ?? (typeof days === 'number' ? days : 3),
     ),
     sports: existing?.sports?.length ? existing.sports : fromActivities,
+    primary_goals: existing?.primary_goals ?? [],
+    primary_goal: existing?.primary_goals?.[0] ?? existing?.primary_goal ?? 'general',
   };
 }
 
@@ -143,7 +212,7 @@ export function hasCompletedFitnessHistory(
   profile?: { fitness_profile?: unknown } | null,
 ): boolean {
   const parsed = parseFitnessProfile(profile?.fitness_profile);
-  return Boolean(parsed?.experience_level && parsed?.primary_goal);
+  return Boolean(parsed?.experience_level);
 }
 
 export function clampDays(value: number): number {
@@ -153,11 +222,18 @@ export function clampDays(value: number): number {
   return Math.min(7, Math.max(1, Math.round(value)));
 }
 
-export function clampYears(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 1;
+export function sportLabel(name: string): string {
+  const lower = name.trim().toLowerCase();
+  if (lower === 'hiit') {
+    return 'HIIT';
   }
-  return Math.min(80, Math.max(0, Math.round(value * 10) / 10));
+  if (lower === 'hyrox') {
+    return 'HYROX';
+  }
+  if (!lower) {
+    return name;
+  }
+  return lower.slice(0, 1).toUpperCase() + lower.slice(1);
 }
 
 /** Store mile times as m:ss, or "never". */
@@ -194,6 +270,14 @@ export function goalLabel(value?: string | null): string {
   return GOAL_OPTIONS.find((option) => option.value === value)?.label ?? 'Not set';
 }
 
-export function toggleString(list: string[], value: string): string[] {
+export function goalsLabel(goals?: string[] | null, fallback?: string | null): string {
+  const labels = (goals ?? []).map((goal) => goalLabel(goal)).filter((label) => label !== 'Not set');
+  if (labels.length > 0) {
+    return labels.join(', ');
+  }
+  return goalLabel(fallback);
+}
+
+export function toggleString<T extends string>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 }

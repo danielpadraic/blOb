@@ -1,9 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { CaptureStudio } from '@/components/capture/CaptureStudio';
+import { captureKindFor, type CaptureMode } from '@/components/capture/types';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
-import type { CaptureMode } from '@/components/capture/types';
 
 export default function CaptureScreen() {
   const params = useLocalSearchParams<{ mode?: string; media?: string }>();
@@ -11,7 +11,8 @@ export default function CaptureScreen() {
   const rawMedia = Array.isArray(params.media) ? params.media[0] : params.media;
   const initialMode: CaptureMode =
     rawMode === 'reel' || rawMode === 'post' ? rawMode : 'story';
-  const initialMedia = rawMedia === 'video' || rawMedia === 'photo' ? rawMedia : undefined;
+  const requestedMedia = rawMedia === 'video' || rawMedia === 'photo' ? rawMedia : undefined;
+  const initialMedia = captureKindFor(initialMode, requestedMedia);
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>

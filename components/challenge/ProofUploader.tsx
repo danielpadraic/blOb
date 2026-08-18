@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
 import { Button } from '@/components/ui/Button';
@@ -15,13 +15,13 @@ import {
 } from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
 import type { ProofType } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
 
 type ProofUploaderProps = {
   type: ProofType;
   uri?: string | null;
   locked?: boolean;
   compact?: boolean;
+  autoOpen?: boolean;
   onPicked: (uri: string, mimeType?: string | null) => void;
   onClear?: () => void;
 };
@@ -31,6 +31,7 @@ export function ProofUploader({
   uri,
   locked = false,
   compact = false,
+  autoOpen = false,
   onPicked,
 }: ProofUploaderProps) {
   const meta = proofMeta(type);
@@ -39,6 +40,14 @@ export function ProofUploader({
   const [blocked, setBlocked] = useState(false);
   const [webFallback, setWebFallback] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (autoOpen && !uri && !locked) {
+      void startCamera();
+    }
+    // First empty still/video proof opens the camera immediately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen]);
 
   async function startCamera() {
     if (locked || busy) {
@@ -117,29 +126,46 @@ export function ProofUploader({
           backgroundColor: THEME.surface,
         }}>
         {uri && isVideo ? (
-          <View className={emptyHeight} style={{ minHeight: previewHeight }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retake video"
+            disabled={locked}
+            onPress={() => void startCamera()}
+            className={emptyHeight}
+            style={{ minHeight: previewHeight }}>
             <AppText className="text-center text-base font-semibold text-charcoal">
               Video attached
             </AppText>
             <AppText className="mt-2 text-center text-sm leading-6 text-muted">
               {meta.helper}
             </AppText>
-          </View>
+          </Pressable>
         ) : uri ? (
-          <Image
-            source={{ uri }}
-            style={{ height: previewHeight, width: '100%' }}
-            contentFit="contain"
-          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retake photo"
+            disabled={locked}
+            onPress={() => void startCamera()}>
+            <Image
+              source={{ uri }}
+              style={{ height: previewHeight, width: '100%' }}
+              contentFit="contain"
+            />
+          </Pressable>
         ) : (
-          <View className={emptyHeight}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isVideo ? 'Record video' : 'Take photo'}
+            disabled={locked}
+            onPress={() => void startCamera()}
+            className={emptyHeight}>
             <AppText className="text-center text-base font-semibold text-charcoal">
               {meta.label}
             </AppText>
             <AppText className="mt-2 text-center text-sm leading-6 text-muted">
               {meta.helper}
             </AppText>
-          </View>
+          </Pressable>
         )}
       </View>
 

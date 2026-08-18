@@ -34,17 +34,20 @@ export type FitnessExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type FitnessPrimaryGoal = 'strength' | 'endurance' | 'fat_loss' | 'general' | 'competition';
 export type FitnessUnitSystem = 'imperial' | 'metric';
 
-export type FitnessSportYears = {
+export type LastDoneBucket = 'lt_30d' | '3m' | '6m' | '1y' | '2y' | '5y' | 'gt_5y';
+
+export type FitnessSport = {
   name: string;
-  years: number;
+  last_done: LastDoneBucket;
 };
 
 /** Private jsonb on profiles. Used for matching and placement. */
 export type FitnessProfile = {
   experience_level: FitnessExperienceLevel;
   primary_goal: FitnessPrimaryGoal;
+  primary_goals?: FitnessPrimaryGoal[];
   training_days_per_week: number;
-  sports: FitnessSportYears[];
+  sports: FitnessSport[];
   last_mile_run: string | 'never';
   limitations: string[];
   limitations_notes: string;
@@ -200,6 +203,7 @@ export interface Profile {
   bucks: number;
   last_shown_coin_balance?: number | null;
   timezone?: string | null;
+  motivation_tone?: 'gentle' | 'neutral' | 'honest' | null;
   created_at: string;
   updated_at: string;
 }
@@ -573,6 +577,7 @@ export type ProfileUpdate = Partial<
     | 'primary_activities'
     | 'skill_tags'
     | 'show_fitness_stats_publicly'
+    | 'motivation_tone'
   >
 >;
 

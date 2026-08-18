@@ -18,18 +18,21 @@ export function Chip({ label, selected, onPress }: ChipProps) {
       accessibilityState={{ selected: Boolean(selected) }}
       className="items-center justify-center rounded-full px-4"
       style={{
-        backgroundColor: selected ? THEME.accentSoft : THEME.surface,
+        backgroundColor: selected ? THEME.accent : THEME.surface,
         borderWidth: 1,
         borderColor: selected ? THEME.accent : THEME.border,
         minHeight: 36,
+        flexShrink: 0,
       }}>
       <AppText
         className="text-center text-sm font-semibold capitalize"
+        numberOfLines={1}
         style={{
-          color: selected ? THEME.accent : THEME.textPrimary,
+          color: selected ? THEME.accentForeground : THEME.textPrimary,
           includeFontPadding: false,
           textAlignVertical: 'center',
           lineHeight: 16,
+          flexShrink: 0,
         }}>
         {label}
       </AppText>

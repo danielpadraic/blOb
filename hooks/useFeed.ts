@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience, DEFAULT_POST_AUDIENCE } from '@/lib/postAudience';
+import { resolvePostsSchema, type PostsSchema } from '@/lib/postsSelect';
 import { supabase } from '@/lib/supabase';
 import type {
   CommentWithAuthor,
@@ -14,13 +15,10 @@ import type {
   ReactionType,
 } from '@/lib/types';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 
-const POST_COLUMNS =
-  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, moderation_status, quoted_post_id, quote_snapshot, deleted_at, created_at';
-const POST_COLUMNS_LEGACY = 'id, author_id, challenge_id, content, media_urls, created_at';
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at';
 
@@ -38,49 +36,46 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
     return [];
   }
 
-  const query = supabase
-    .from('posts')
-    .select(POST_COLUMNS)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  let { data, error } =
-    scope.kind === 'challenge'
-      ? await query.eq('challenge_id', scope.challengeId)
-      : scope.kind === 'ids'
-        ? await query.in('challenge_id', scope.challengeIds)
-        : scope.kind === 'authors'
-          ? await query.in('author_id', scope.authorIds)
-          : await query.is('challenge_id', null);
-
-  if (error && (isMissingAudienceColumn(error.message) || isMissingModerationColumn(error.message) || isMissingQuoteColumn(error.message))) {
-    const legacy = supabase
-      .from('posts')
-      .select(POST_COLUMNS_LEGACY)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    const retry =
-      scope.kind === 'challenge'
-        ? await legacy.eq('challenge_id', scope.challengeId)
-        : scope.kind === 'ids'
-          ? await legacy.in('challenge_id', scope.challengeIds)
-          : scope.kind === 'authors'
-            ? await legacy.in('author_id', scope.authorIds)
-            : await legacy.is('challenge_id', null);
-    data = retry.data as typeof data;
-    error = retry.error;
-  }
+  const schema = await resolvePostsSchema();
+  const result = await fetchPostRows(schema.select, scope, true);
+  const { data, error } =
+    result.error && isMissingDeletedAt(result.error)
+      ? await fetchPostRows(schema.select, scope, false)
+      : result;
 
   if (error) {
     throw new Error(getErrorMessage(error));
   }
-  return ((data ?? []) as unknown as PostWithMeta[]).filter(
-    (post) =>
-      !post.deleted_at &&
-      post.moderation_status !== 'under_review' &&
-      post.moderation_status !== 'removed',
-  ).map(withQuoteSnapshot);
+  return ((data ?? []) as unknown as PostWithMeta[])
+    .filter(
+      (post) =>
+        !post.deleted_at &&
+        post.moderation_status !== 'under_review' &&
+        post.moderation_status !== 'removed',
+    )
+    .map(withQuoteSnapshot);
+}
+
+function isMissingDeletedAt(error: { message?: string }): boolean {
+  const text = String(error.message ?? '').toLowerCase();
+  return (
+    text.includes('deleted_at') &&
+    (text.includes('does not exist') || text.includes('schema cache') || text.includes('42703'))
+  );
+}
+
+function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
+  let query = supabase.from('posts').select(select).order('created_at', { ascending: false }).limit(50);
+  if (hideDeleted) {
+    query = query.is('deleted_at', null);
+  }
+  return scope.kind === 'challenge'
+    ? query.eq('challenge_id', scope.challengeId)
+    : scope.kind === 'ids'
+      ? query.in('challenge_id', scope.challengeIds)
+      : scope.kind === 'authors'
+        ? query.in('author_id', scope.authorIds)
+        : query.is('challenge_id', null);
 }
 
 function withQuoteSnapshot(post: PostWithMeta): PostWithMeta {
@@ -90,22 +85,34 @@ function withQuoteSnapshot(post: PostWithMeta): PostWithMeta {
   };
 }
 
-function isMissingQuoteColumn(message: string): boolean {
-  const text = message.toLowerCase();
-  return (
-    (text.includes('quoted_post_id') || text.includes('quote_snapshot') || text.includes('deleted_at')) &&
-    (text.includes('does not exist') || text.includes('schema cache'))
-  );
-}
-
-function isMissingModerationColumn(message: string): boolean {
-  const text = message.toLowerCase();
-  return text.includes('moderation_status') && (text.includes('does not exist') || text.includes('schema cache'));
-}
-
-function isMissingAudienceColumn(message: string): boolean {
-  const text = message.toLowerCase();
-  return text.includes('audience') && (text.includes('does not exist') || text.includes('schema cache'));
+function postInsertPayload(
+  schema: PostsSchema,
+  base: {
+    author_id: string;
+    challenge_id?: string | null;
+    content: string | null;
+    media_urls: string[];
+    audience?: string;
+    audience_user_ids?: string[];
+    quoted_post_id?: string | null;
+    quote_snapshot?: PostWithMeta['quote_snapshot'];
+  },
+) {
+  const payload: Record<string, unknown> = {
+    author_id: base.author_id,
+    challenge_id: base.challenge_id ?? null,
+    content: base.content,
+    media_urls: base.media_urls,
+  };
+  if (schema.hasAudience) {
+    payload.audience = base.audience ?? DEFAULT_POST_AUDIENCE;
+    payload.audience_user_ids = base.audience_user_ids ?? [];
+  }
+  if (schema.hasQuote && base.quoted_post_id) {
+    payload.quoted_post_id = base.quoted_post_id;
+    payload.quote_snapshot = base.quote_snapshot ?? null;
+  }
+  return payload;
 }
 
 async function withSocial(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
@@ -261,6 +268,9 @@ function dedupePosts(groups: PostWithMeta[][]): PostWithMeta[] {
 async function fetchHiddenPostIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase.from('post_hides').select('post_id').eq('user_id', userId);
   if (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:feed] post_hides lookup skipped', error.message);
+    }
     return [];
   }
   return (data ?? []).map((row) => row.post_id);
@@ -269,6 +279,9 @@ async function fetchHiddenPostIds(userId: string): Promise<string[]> {
 async function fetchMutedUserIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase.from('mutes').select('muted_user_id').eq('user_id', userId);
   if (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:feed] mutes lookup skipped', error.message);
+    }
     return [];
   }
   return (data ?? []).map((row) => row.muted_user_id);
@@ -385,24 +398,25 @@ export async function insertWorkoutCheckInPost(input: {
   const content = `Logged today for the ${title} 💪`;
   const media_urls = input.mediaUrls ?? [];
 
-  const payload = {
+  const schema = await resolvePostsSchema();
+  const payload = postInsertPayload(schema, {
     author_id: input.userId,
     challenge_id: input.challengeId,
     content,
     media_urls,
     audience: DEFAULT_POST_AUDIENCE,
-    audience_user_ids: [] as string[],
-  };
+    audience_user_ids: [],
+  });
 
-  const created = await supabase.from('posts').insert(payload).select(POST_COLUMNS).single();
+  const created = await supabase.from('posts').insert(payload).select(schema.select).single();
   if (!created.error) {
-    return created.data as Post;
+    return created.data as unknown as Post;
   }
 
   if (media_urls.length > 0) {
-    const retry = await supabase.from('posts').insert(payload).select(POST_COLUMNS).single();
+    const retry = await supabase.from('posts').insert(payload).select(schema.select).single();
     if (!retry.error) {
-      return retry.data as Post;
+      return retry.data as unknown as Post;
     }
     const missingMedia =
       retry.error.message.toLowerCase().includes('media_urls') ||
@@ -415,20 +429,23 @@ export async function insertWorkoutCheckInPost(input: {
 
   const withoutMedia = await supabase
     .from('posts')
-    .insert({
-      author_id: input.userId,
-      challenge_id: input.challengeId,
-      content,
-      audience: DEFAULT_POST_AUDIENCE,
-      audience_user_ids: [],
-    })
-    .select(POST_COLUMNS)
+    .insert(
+      postInsertPayload(schema, {
+        author_id: input.userId,
+        challenge_id: input.challengeId,
+        content,
+        media_urls: [],
+        audience: DEFAULT_POST_AUDIENCE,
+        audience_user_ids: [],
+      }),
+    )
+    .select(schema.select)
     .single();
   if (withoutMedia.error) {
     console.log('[blob:submit] auto-post failed', withoutMedia.error.message);
     return null;
   }
-  return withoutMedia.data as Post;
+  return withoutMedia.data as unknown as Post;
 }
 
 export function useFeed(challengeId?: string | null) {
@@ -463,27 +480,23 @@ export function usePost(postId?: string | null) {
     queryKey: ['feed', 'post', postId, user?.id],
     enabled: Boolean(postId),
     queryFn: async (): Promise<PostWithMeta | null> => {
-      const { data, error } = await supabase
+      const schema = await resolvePostsSchema();
+      const filtered = await supabase
         .from('posts')
-        .select(POST_COLUMNS)
+        .select(schema.select)
         .eq('id', postId!)
+        .is('deleted_at', null)
         .maybeSingle();
-      if (error && isMissingQuoteColumn(error.message)) {
-        const legacy = await supabase
-          .from('posts')
-          .select(POST_COLUMNS_LEGACY)
-          .eq('id', postId!)
-          .maybeSingle();
-        if (legacy.error || !legacy.data) {
-          return null;
-        }
-        const rows = await hydrateAuthors(await withSocial([legacy.data as PostWithMeta]));
-        return rows[0] ?? null;
-      }
-      if (error || !data || (data as PostWithMeta).deleted_at) {
+      const { data, error } =
+        filtered.error && isMissingDeletedAt(filtered.error)
+          ? await supabase.from('posts').select(schema.select).eq('id', postId!).maybeSingle()
+          : filtered;
+      if (error || !data || (data as unknown as PostWithMeta).deleted_at) {
         return null;
       }
-      const rows = await hydrateAuthors(await withSocial([withQuoteSnapshot(data as PostWithMeta)]));
+      const rows = await hydrateAuthors(
+        await withSocial([withQuoteSnapshot(data as unknown as PostWithMeta)]),
+      );
       return rows[0] ?? null;
     },
   });
@@ -540,7 +553,11 @@ export function useCreatePost(challengeId?: string | null) {
       if (audience === 'specific' && audience_user_ids.length === 0) {
         throw new Error('Pick at least one person.');
       }
-      const payload = {
+      const schema = await resolvePostsSchema();
+      if (quoted_post_id && !schema.hasQuote) {
+        throw new Error('Repost isn’t wired on the server yet. Apply the latest migration.');
+      }
+      const payload = postInsertPayload(schema, {
         author_id: user.id,
         challenge_id: challengeId ?? null,
         content: content || null,
@@ -549,31 +566,12 @@ export function useCreatePost(challengeId?: string | null) {
         audience_user_ids,
         quoted_post_id,
         quote_snapshot: quoted_post_id ? (input.quoteSnapshot ?? null) : null,
-      };
-      const created = await supabase.from('posts').insert(payload).select(POST_COLUMNS).single();
-      if (!created.error) {
-        return created.data;
-      }
-      if (quoted_post_id && isMissingQuoteColumn(created.error.message)) {
-        throw new Error('Repost isn’t wired on the server yet. Apply the latest migration.');
-      }
-      if (!isMissingAudienceColumn(created.error.message)) {
+      });
+      const created = await supabase.from('posts').insert(payload).select(schema.select).single();
+      if (created.error) {
         throw new Error(getErrorMessage(created.error));
       }
-      const { data, error } = await supabase
-        .from('posts')
-        .insert({
-          author_id: user.id,
-          challenge_id: challengeId ?? null,
-          content: content || null,
-          media_urls,
-        })
-        .select(POST_COLUMNS_LEGACY)
-        .single();
-      if (error) {
-        throw new Error(getErrorMessage(error));
-      }
-      return data;
+      return created.data;
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: ['feed', key] });

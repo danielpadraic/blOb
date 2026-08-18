@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 
 import { FeedList } from '@/components/feed/FeedList';
@@ -73,6 +73,7 @@ export default function PublicProfileScreen() {
   const createComment = useCreateComment();
   const startChat = useGetOrCreateConversation();
   const social = useSocialSheetsOptional();
+  const menuRef = useRef<View>(null);
   const headerTitle = profile?.username ? `@${profile.username}` : 'Profile';
   const headerOptions = useMemo(
     () => ({
@@ -164,10 +165,16 @@ export default function PublicProfileScreen() {
             ? undefined
             : () => (
                 <Pressable
+                  ref={menuRef}
+                  collapsable={false}
                   accessibilityRole="button"
                   accessibilityLabel="Profile menu"
                   hitSlop={8}
-                  onPress={() => social?.toggleProfileMenu(profile.id)}
+                  onPress={() => {
+                    menuRef.current?.measureInWindow((x, y, width, height) => {
+                      social?.toggleProfileMenu(profile.id, { x, y, width, height });
+                    });
+                  }}
                   style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                   <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
                 </Pressable>

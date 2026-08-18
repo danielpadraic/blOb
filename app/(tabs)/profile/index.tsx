@@ -20,7 +20,7 @@ import {
   hasCompletedBodyMetrics,
   profileWeightKg,
 } from '@/lib/bodyMetrics';
-import { experienceLabel, goalLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
+import { experienceLabel, goalsLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
 import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
@@ -177,7 +177,10 @@ export default function ProfileScreen() {
               />
               <StatCell
                 label="Aim"
-                value={goalLabel(profile.fitness_profile?.primary_goal)}
+                value={goalsLabel(
+                  profile.fitness_profile?.primary_goals,
+                  profile.fitness_profile?.primary_goal,
+                )}
                 borderLeft
               />
             </View>

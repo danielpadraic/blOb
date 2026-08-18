@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
@@ -16,7 +17,7 @@ type ReactionBarProps = {
   compact?: boolean;
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
-  onShare?: () => void;
+  onShare?: (anchor: { x: number; y: number; width: number; height: number }) => void;
 };
 
 export function ReactionBar({
@@ -71,16 +72,40 @@ export function ReactionBar({
       ) : null}
       {onShare ? (
         <View className="flex-1 items-end">
-          <Action
-            compact={compact}
-            icon={GLYPH.share}
-            label="Share"
-            color={THEME.textMuted}
-            onPress={onShare}
-          />
+          <ShareAction compact={compact} onShare={onShare} />
         </View>
       ) : null}
     </View>
+  );
+}
+
+function ShareAction({
+  compact,
+  onShare,
+}: {
+  compact?: boolean;
+  onShare: (anchor: { x: number; y: number; width: number; height: number }) => void;
+}) {
+  const ref = useRef<View>(null);
+  return (
+    <Pressable
+      ref={ref}
+      collapsable={false}
+      accessibilityRole="button"
+      accessibilityLabel="Share"
+      onPress={() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          onShare({ x, y, width, height });
+        });
+      }}
+      className={
+        compact
+          ? 'h-6 flex-row items-center rounded-full px-1'
+          : 'h-7 flex-row items-center rounded-full px-1.5'
+      }
+      hitSlop={compact ? 4 : 6}>
+      <Glyph name={GLYPH.share} color={THEME.textMuted} size={compact ? 14 : 16} />
+    </Pressable>
   );
 }
 

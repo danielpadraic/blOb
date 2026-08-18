@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import * as ImagePicker from 'expo-image-picker';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
+import { BfpSliderCopy, MotivationToneChips } from '@/components/profile/MotivationToneChips';
 import { MorphingBlob, preloadBodyFatFrames } from '@/components/profile/MorphingBlob';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
@@ -17,6 +17,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SetupProgress } from '@/components/ui/SetupProgress';
 import { AppText } from '@/components/ui/AppText';
+import { useAuth } from '@/hooks/useAuth';
 import {
   useCompleteProfile,
   useMyProfile,
@@ -37,7 +38,9 @@ import {
   inputWeightToKg,
   profileWeightKg,
 } from '@/lib/bodyMetrics';
+import { asCopyTone, copy, type CopyTone } from '@/lib/copy';
 import { hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
+import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
@@ -80,12 +83,9 @@ const STEP_COPY = [
   },
 ] as const;
 
-type ProfileSetupWizardProps = {
-  mode?: 'setup' | 'edit';
-};
-
-export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) {
+export function ProfileSetupWizard() {
   const router = useRouter();
+  const { user } = useAuth();
   const { profile } = useMyProfile();
   const completeProfile = useCompleteProfile();
   const uploadAvatar = useUploadAvatar();
@@ -93,6 +93,8 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
   const [formError, setFormError] = useState<string | null>(null);
   const [exactOpen, setExactOpen] = useState(false);
   const [exactDraft, setExactDraft] = useState(String(BODY_FAT_DEFAULT));
+  const [tone, setTone] = useState<CopyTone>(() => asCopyTone(profile?.motivation_tone));
+  const scrollRef = useRef<ScrollView>(null);
 
   const defaults = useMemo(() => buildDefaults(profile), [profile]);
 
@@ -113,6 +115,16 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
   useEffect(() => {
     reset(buildDefaults(profile));
   }, [profile, reset]);
+
+  useEffect(() => {
+    if (profile?.motivation_tone) {
+      setTone(asCopyTone(profile.motivation_tone));
+    }
+  }, [profile?.motivation_tone]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0 });
+  }, [step]);
 
   const username = watch('username');
   const activities = watch('primary_activities');
@@ -150,6 +162,12 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
   useEffect(() => {
     preloadBodyFatFrames();
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      void ensureOwnProfileRow(user.id);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     setExactDraft(String(Math.round(clampBodyFat(Number(bodyFat)))));
@@ -199,24 +217,22 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
   }
 
   async function pickAvatar() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setFormError('Turn on photo access in Settings.');
+    if (!user) {
+      setFormError('You need to be signed in.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]?.uri) {
-      try {
-        setFormError(null);
-        await uploadAvatar.mutateAsync(result.assets[0].uri);
-      } catch (error) {
-        setFormError(getErrorMessage(error));
+    try {
+      setFormError(null);
+      const uri = await pickCropProfilePhoto();
+      if (!uri) {
+        return;
       }
+      await uploadAvatar.mutateAsync(uri);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setFormError(
+        message === 'Turn on photo access in Settings.' ? message : copy('error.uploadPhoto'),
+      );
     }
   }
 
@@ -271,15 +287,8 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
         ),
         primary_activities: values.primary_activities,
         show_fitness_stats_publicly: false,
+        motivation_tone: tone,
       });
-      if (mode === 'edit') {
-        if (router.canGoBack()) {
-          router.back();
-          return;
-        }
-        router.replace('/profile');
-        return;
-      }
       if (!hasCompletedFitnessHistory(profile)) {
         router.replace(FITNESS_HISTORY_HREF);
         return;
@@ -298,7 +307,7 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
         ? 'Available'
         : 'lowercase, unique, 3–24 characters';
 
-  const copy = STEP_COPY[step];
+  const stepCopy = STEP_COPY[step];
 
   function applyExact() {
     const next = clampBodyFat(Number(exactDraft));
@@ -307,11 +316,11 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
   }
 
   return (
-    <Screen scroll>
+    <Screen scroll scrollRef={scrollRef}>
       <View className="items-center pt-2">
         <BlobMascot size={132} motion="float" />
-        <AppText className="mt-5 text-3xl font-bold text-charcoal">{copy.title}</AppText>
-        <AppText className="mt-2 px-2 text-center leading-6 text-muted">{copy.body}</AppText>
+        <AppText className="mt-5 text-3xl font-bold text-charcoal">{stepCopy.title}</AppText>
+        <AppText className="mt-2 px-2 text-center leading-6 text-muted">{stepCopy.body}</AppText>
       </View>
 
       <View className="mt-7">
@@ -382,6 +391,7 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
               />
             )}
           />
+          <MotivationToneChips value={tone} onChange={setTone} />
         </View>
       ) : null}
 
@@ -579,7 +589,8 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
           {metricsReady && (gender === 'male' || gender === 'female') ? (
             <View>
               <MorphingBlob gender={gender} bodyFatPct={bodyFat} />
-              <View style={{ marginTop: -8 }}>
+              <View className="mt-1 gap-2">
+                <BfpSliderCopy tone={tone} />
                 <Controller
                   control={control}
                   name="body_fat_pct"
@@ -595,7 +606,7 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
                 <View className="mt-2 flex-row items-end gap-2">
                   <View className="flex-1">
                     <Input
-                      label="Exact body fat %"
+                      label={copy('bfp.exactLabel')}
                       keyboardType="decimal-pad"
                       inputMode="decimal"
                       value={exactDraft}
@@ -608,7 +619,7 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
               ) : (
                 <Pressable className="mt-2" onPress={() => setExactOpen(true)} accessibilityRole="button">
                   <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                    Enter exact %
+                    {copy('bfp.enterExact')}
                   </AppText>
                 </Pressable>
               )}
@@ -652,7 +663,7 @@ export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) 
 }
 
 export default function ProfileSetupScreen() {
-  return <ProfileSetupWizard mode="setup" />;
+  return <ProfileSetupWizard />;
 }
 
 function buildDefaults(

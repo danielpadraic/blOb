@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { z } from 'zod';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
+import { BfpSliderCopy } from '@/components/profile/MotivationToneChips';
 import { MorphingBlob, preloadBodyFatFrames } from '@/components/profile/MorphingBlob';
 import { UnitToggle } from '@/components/profile/UnitToggle';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +31,7 @@ import {
   weightUnitFromSystem,
   type BodyUnitSystem,
 } from '@/lib/bodyMetrics';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -334,7 +336,8 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
       {metricsReady && (gender === 'male' || gender === 'female') ? (
         <View>
           <MorphingBlob gender={gender} bodyFatPct={bodyFat} />
-          <View style={{ marginTop: -8 }}>
+          <View className="mt-1 gap-2">
+            <BfpSliderCopy tone={profile?.motivation_tone} />
             <Controller
               control={control}
               name="body_fat_pct"
@@ -350,7 +353,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
             <View className="mt-2 flex-row items-end gap-2">
               <View className="flex-1">
                 <Input
-                  label="Exact body fat %"
+                  label={copy('bfp.exactLabel')}
                   keyboardType="decimal-pad"
                   inputMode="decimal"
                   value={exactDraft}
@@ -363,7 +366,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
           ) : (
             <Pressable className="mt-2" onPress={() => setExactOpen(true)} accessibilityRole="button">
               <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                Enter exact %
+                {copy('bfp.enterExact')}
               </AppText>
             </Pressable>
           )}

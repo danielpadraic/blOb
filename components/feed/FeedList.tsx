@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useRef } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { Composer } from '@/components/feed/Composer';
@@ -57,6 +58,8 @@ export function FeedList({
   onReact,
   onComment,
 }: FeedListProps) {
+  const scrollRef = useRef<ScrollView>(null);
+
   if (error) {
     return (
       <MascotState
@@ -69,6 +72,7 @@ export function FeedList({
     );
   }
 
+  const visiblePosts = posts.filter((post) => !post.deleted_at);
   const body = (
     <>
       {headerTop}
@@ -78,7 +82,10 @@ export function FeedList({
         <Composer
           placeholder={composerPlaceholder}
           submitting={composing}
-          onSubmit={onCompose}
+          onSubmit={async (input) => {
+            await onCompose(input);
+            scrollRef.current?.scrollTo({ y: 0 });
+          }}
         />
       ) : null}
 
@@ -96,11 +103,11 @@ export function FeedList({
           body="Your blob is gathering the latest check-ins."
           compact={embedded}
         />
-      ) : posts.length === 0 ? (
+      ) : visiblePosts.length === 0 ? (
         empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact={embedded} />
       ) : (
         <View className="gap-3">
-          {posts.map((post) => (
+          {visiblePosts.map((post) => (
             <PostCard
               key={post.id}
               post={post}
@@ -125,6 +132,7 @@ export function FeedList({
 
   return (
     <ScrollView
+      ref={scrollRef}
       className="flex-1"
       contentContainerClassName="gap-3 pb-8"
       refreshControl={

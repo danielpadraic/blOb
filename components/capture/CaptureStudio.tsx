@@ -4,8 +4,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 
-import { InAppCamera, type CameraCaptureKind } from '@/components/capture/InAppCamera';
-import type { CapturedMedia, CaptureMode } from '@/components/capture/types';
+import { InAppCamera } from '@/components/capture/InAppCamera';
+import { captureKindFor, type CapturedMedia, type CaptureMode } from '@/components/capture/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -63,12 +63,7 @@ export function CaptureStudio({
   const friends = useFriends();
 
   const mode = initialMode;
-  const captureKind: CameraCaptureKind =
-    mode === 'reel' || initialMedia === 'video'
-      ? 'video'
-      : initialMedia === 'photo'
-        ? 'photo'
-        : 'mixed';
+  const captureKind = captureKindFor(mode, initialMedia);
   const maxDuration = mode === 'reel' ? REEL_MAX : mode === 'post' ? POST_MAX : STORY_MAX;
 
   const [step, setStep] = useState<'camera' | 'preview'>('camera');
@@ -134,8 +129,8 @@ export function CaptureStudio({
       setDenied(permission);
       return;
     }
-    const videos = captureKind !== 'photo';
-    const images = captureKind !== 'video';
+    const videos = captureKind === 'video';
+    const images = captureKind === 'photo' || mode === 'story';
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: videos && images ? ['images', 'videos'] : videos ? ['videos'] : ['images'],
       quality: 0.8,
