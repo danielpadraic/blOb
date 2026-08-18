@@ -51,9 +51,9 @@ export function StackBackButton({ fallback }: StackBackButtonProps) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Back"
-      hitSlop={12}
+      hitSlop={8}
       onPress={() => popToFallback(router, target)}
-      className="items-center justify-center py-1 pr-3">
+      className="h-11 w-11 items-center justify-center">
       <AppText
         className="text-[22px] font-semibold leading-7"
         style={{ color: THEME.textPrimary }}>

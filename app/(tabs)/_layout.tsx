@@ -7,7 +7,7 @@ import { QuickActionSheet, type QuickActionId } from '@/components/navigation/Qu
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
-import { TabChromeHeader, isAlertsTab } from '@/components/wallet/TabChrome';
+import { TabChromeHeader, isAlertsTab, isChallengeIdRoute } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
@@ -115,12 +115,14 @@ export default function TabLayout() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-      <TabChromeHeader
-        alertsOpen={alertsOpen}
-        searchOpen={searchOpen}
-        onToggleAlerts={toggleAlerts}
-        onToggleSearch={toggleSearch}
-      />
+      {isChallengeIdRoute(segments as string[]) ? null : (
+        <TabChromeHeader
+          alertsOpen={alertsOpen}
+          searchOpen={searchOpen}
+          onToggleAlerts={toggleAlerts}
+          onToggleSearch={toggleSearch}
+        />
+      )}
       <View className="flex-1" style={{ overflow: 'hidden' }}>
         <SocialSheetsHost>
         <Tabs

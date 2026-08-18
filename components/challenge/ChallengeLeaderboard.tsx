@@ -88,7 +88,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View
       className="flex-1 items-center py-2"
-      style={{ backgroundColor: THEME.accentSoft, borderRadius: 14 }}>
+      style={{ backgroundColor: THEME.accentSoft, borderRadius: 16 }}>
       <AppText className="text-[18px] font-extrabold text-charcoal">{value}</AppText>
       <AppText className="text-[11px] font-semibold text-muted">{label}</AppText>
     </View>

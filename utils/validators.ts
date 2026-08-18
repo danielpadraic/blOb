@@ -219,7 +219,16 @@ export const createChallengeSchema = z
     task: z.string().trim().max(80).optional().or(z.literal('')),
     min_participants: z.string().optional(),
     misses_allowed: z.string().optional(),
-    proof_type: z.enum(['photo', 'video', 'check_in', 'honor']).optional(),
+    proof_type: z.enum(['photo', 'video', 'check_in', 'checkin', 'honor', 'hr']).optional(),
+    challenge_proofs: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr']),
+        }),
+      )
+      .optional(),
     proof_review: z.enum(['auto', 'host']).optional(),
     host_funded: z.boolean().optional(),
     host_budget: z.string().optional(),
@@ -533,7 +542,11 @@ export const createChallengeSchema = z
       });
     }
 
-    if (values.proof_type !== 'honor' && values.proofs.length < 1) {
+    if (
+      !(values.challenge_proofs && values.challenge_proofs.length > 0) &&
+      values.proof_type !== 'honor' &&
+      values.proofs.length < 1
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['proofs'],

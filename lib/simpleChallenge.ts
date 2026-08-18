@@ -1,14 +1,25 @@
 import { addDays } from 'date-fns';
 
 import { defaultChallengeStart } from '@/lib/challengeSchedule';
-import type { ChallengeCategory, ProofType } from '@/lib/types';
+import type { ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
+import {
+  BEFORE_AFTER_HR_PRESET,
+  SIMPLE_PROOF_CAP,
+  defaultChallengeProofs,
+  firstProofMethod,
+  makeProof,
+  proofRequirementsFrom,
+  proofTypeFromMethod,
+  type ChallengeProof,
+  type ChallengeProofMethod,
+} from '@/lib/challengeProofs';
 import { copy } from '@/lib/copy';
 import type { CreateChallengeValues } from '@/utils/validators';
 
 export type SimpleCurrency = 'coins' | 'bucks';
 export type SimpleVisibility = 'public' | 'friends' | 'invite';
-export type SimpleProof = 'photo' | 'video' | 'check_in' | 'honor';
+export type SimpleProof = ChallengeProofMethod;
 export type SimpleFrequency = 'once' | 'daily' | '3x_week' | 'custom';
 export type SimpleDurationPreset = 1 | 7 | 30 | 'custom';
 export type SimpleChallengeType =
@@ -52,11 +63,12 @@ export const SIMPLE_FREQUENCY_CHIPS: { value: SimpleFrequency; label: string }[]
   { value: 'custom', label: 'Custom' },
 ];
 
-export const SIMPLE_PROOF_CHIPS: { value: SimpleProof; label: string; icon: string }[] = [
+export const SIMPLE_PROOF_METHODS: { value: ChallengeProofMethod; label: string; icon: string }[] = [
   { value: 'photo', label: 'Photo', icon: '📷' },
   { value: 'video', label: 'Video', icon: '🎥' },
-  { value: 'check_in', label: 'Check-in', icon: '✓' },
+  { value: 'checkin', label: 'Check-in', icon: '✓' },
   { value: 'honor', label: 'Honor', icon: '🤝' },
+  { value: 'hr', label: 'Heart rate', icon: '♥' },
 ];
 
 export type SimpleChallengeDraft = {
@@ -72,7 +84,7 @@ export type SimpleChallengeDraft = {
   task: string;
   frequency: SimpleFrequency;
   custom_checkins: number;
-  proof_type: SimpleProof;
+  proofs: ChallengeProof[];
   visibility: SimpleVisibility;
 };
 
@@ -91,7 +103,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     task: '',
     frequency: 'daily',
     custom_checkins: 7,
-    proof_type: 'photo',
+    proofs: defaultChallengeProofs(),
     visibility: 'public',
   };
 }
@@ -130,17 +142,41 @@ export function deviceTimezone(): string {
   }
 }
 
-function proofsFor(type: SimpleProof): ProofType[] {
-  if (type === 'photo') {
-    return ['photo'];
+export function applyBeforeAfterHrPreset(): ChallengeProof[] {
+  return BEFORE_AFTER_HR_PRESET.map((item) => makeProof(item.name, item.method));
+}
+
+export function addSimpleProof(proofs: ChallengeProof[]): ChallengeProof[] {
+  if (proofs.length >= SIMPLE_PROOF_CAP) {
+    return proofs;
   }
-  if (type === 'video') {
-    return ['video'];
+  return [...proofs, makeProof(copy('create.proofFallback'), 'photo')];
+}
+
+export function removeSimpleProof(proofs: ChallengeProof[], id: string): ChallengeProof[] {
+  if (proofs.length <= 1) {
+    return proofs;
   }
-  if (type === 'check_in') {
-    return ['text_note'];
-  }
-  return [];
+  return proofs.filter((item) => item.id !== id);
+}
+
+export function syncProofNameWithTask(
+  proofs: ChallengeProof[],
+  previousTask: string,
+  nextTask: string,
+): ChallengeProof[] {
+  const previousDefault = previousTask.trim() || copy('create.proofFallback');
+  const nextDefault = nextTask.trim() || copy('create.proofFallback');
+  return proofs.map((item, index) => {
+    if (index !== 0) {
+      return item;
+    }
+    const name = item.name.trim();
+    if (!name || name === previousDefault) {
+      return { ...item, name: nextDefault };
+    }
+    return item;
+  });
 }
 
 export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateChallengeValues {
@@ -151,6 +187,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const invite = draft.visibility === 'invite';
   const buyIn = bucks ? 0 : Math.max(Math.floor(draft.buy_in) || 0, 0);
   const hostBudget = bucks ? Math.max(Math.floor(draft.host_budget) || 0, 0) : 0;
+  const proofs = draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs(draft.task);
+  const legacyTypes = proofRequirementsFrom(proofs).map((item) => item.type);
 
   return {
     ...DEFAULT_CREATE_VALUES,
@@ -172,7 +210,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     frequency: draft.frequency === 'once' ? 'once' : draft.frequency === '3x_week' ? '3x_week' : draft.frequency === 'custom' ? 'custom' : 'daily',
     rule_activity: type.activity,
     extra_rules: [],
-    proofs: proofsFor(draft.proof_type),
+    proofs: legacyTypes,
+    challenge_proofs: proofs,
     tasks: DEFAULT_CREATE_VALUES.tasks,
     prize_structure: 'equal_split',
     funding_model: bucks ? 'creator' : 'participants',
@@ -182,7 +221,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     min_participants: '2',
     misses_allowed: '0',
     proof_review: 'auto',
-    proof_type: draft.proof_type,
+    proof_type: proofTypeFromMethod(firstProofMethod(proofs)) as CreateChallengeValues['proof_type'],
     task: draft.task.trim(),
     host_funded: bucks,
     host_budget: String(hostBudget),

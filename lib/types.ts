@@ -105,7 +105,7 @@ export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly' | 'once' | '3x_w
 
 export type ChallengeVisibility = 'public' | 'unlisted' | 'private' | 'friends' | 'invite';
 
-export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'honor';
+export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'checkin' | 'honor' | 'hr';
 
 export type ChallengeFormat = 'consistency' | 'points' | 'lms';
 
@@ -169,6 +169,20 @@ export type ReactionType = 'like' | 'fire' | 'strong';
 export interface ProofRequirement {
   type: ProofType;
   required: boolean;
+}
+
+export type ChallengeProofMethod = 'photo' | 'video' | 'checkin' | 'honor' | 'hr';
+
+export interface ChallengeProof {
+  id: string;
+  name: string;
+  method: ChallengeProofMethod;
+}
+
+export interface ChallengeProofPart {
+  method: ChallengeProofMethod;
+  url?: string | null;
+  text?: string | null;
 }
 
 export interface ChallengeTask {
@@ -238,6 +252,7 @@ export interface Challenge {
   days_required: number;
   min_minutes: number;
   proof_requirements: ProofRequirement[];
+  proofs?: ChallengeProof[];
   target_count: number;
   frequency: ChallengeFrequency | string | null;
   tasks: ChallengeTask[];
@@ -363,6 +378,7 @@ export interface WorkoutSubmission {
   notes: string | null;
   status: SubmissionStatus;
   task_ids?: string[];
+  proof_parts?: Record<string, ChallengeProofPart> | null;
   created_at: string;
 }
 
@@ -1008,10 +1024,13 @@ export type Database = {
       log_workout: {
         Args: {
           p_challenge_id: string;
-          p_pre_selfie_url: string;
-          p_post_selfie_url: string;
-          p_hr_monitor_url: string;
+          p_submission_date?: string;
+          p_pre_selfie_url?: string;
+          p_post_selfie_url?: string;
+          p_hr_monitor_url?: string;
           p_notes?: string | null;
+          p_task_ids?: unknown;
+          p_proof_parts?: unknown;
         };
         Returns: WorkoutSubmission & { days_completed: number };
       };

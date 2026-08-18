@@ -5,6 +5,11 @@ import {
   LOBBY_PAGE_SIZE,
   PROOF_TYPES,
 } from '@/lib/constants';
+import {
+  namedProofsFromLegacyTypes,
+  resolveChallengeProofs,
+  type ChallengeProof,
+} from '@/lib/challengeProofs';
 import { supabase } from '@/lib/supabase';
 import type {
   Challenge,
@@ -86,6 +91,7 @@ export type CreateChallengeInput = {
   required_checkins?: number | null;
   misses_allowed?: number;
   proof_type?: string | null;
+  proofs?: unknown;
   proof_review?: string;
   payout_mode?: string;
   timezone?: string | null;
@@ -453,6 +459,13 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     proof_requirements: Array.isArray(row.proof_requirements)
       ? (row.proof_requirements as ProofRequirement[])
       : DEFAULT_PROOFS,
+    proofs: resolveChallengeProofs({
+      proofs: row.proofs,
+      proof_type: row.proof_type,
+      proof_requirements: Array.isArray(row.proof_requirements)
+        ? (row.proof_requirements as ProofRequirement[])
+        : null,
+    }),
     target_count: Number(row.target_count ?? daysRequired),
     frequency: normalizeFrequency(row.frequency),
     tasks: normalizeTasks(row.tasks),
@@ -818,7 +831,7 @@ export async function fetchLobbyFriendCounts(
 }
 
 export function requiredProofTypes(
-  challenge: Pick<Challenge, 'proof_requirements' | 'challenge_type' | 'tasks'> | null | undefined,
+  challenge: Pick<Challenge, 'proof_requirements' | 'challenge_type' | 'tasks' | 'proofs' | 'proof_type'> | null | undefined,
 ): ProofType[] {
   if (isPointsChallenge(challenge)) {
     const fromTasks = (challenge?.tasks ?? [])
@@ -834,11 +847,47 @@ export function requiredProofTypes(
     return ['text_note'];
   }
 
+  const named = requiredChallengeProofs(challenge);
+  const fromNamed = named
+    .map((proof) => {
+      if (proof.method === 'honor') {
+        return null;
+      }
+      if (proof.method === 'video') {
+        return 'video' as ProofType;
+      }
+      if (proof.method === 'checkin') {
+        return 'text_note' as ProofType;
+      }
+      if (proof.method === 'hr') {
+        return 'hr_monitor' as ProofType;
+      }
+      return 'photo' as ProofType;
+    })
+    .filter((type): type is ProofType => type != null);
+  if (fromNamed.length > 0 || named.some((proof) => proof.method === 'honor')) {
+    return fromNamed;
+  }
+
   const listed = (challenge?.proof_requirements ?? DEFAULT_PROOFS)
     .filter((item) => item?.required !== false)
     .map((item) => item.type)
     .filter(Boolean);
   return listed.length > 0 ? listed : [...PROOF_TYPES];
+}
+
+export function requiredChallengeProofs(
+  challenge: Pick<Challenge, 'proofs' | 'proof_type' | 'proof_requirements' | 'challenge_type' | 'tasks'> | null | undefined,
+): ChallengeProof[] {
+  if (isPointsChallenge(challenge)) {
+    const types = requiredProofTypes(challenge);
+    return namedProofsFromLegacyTypes(types);
+  }
+  return resolveChallengeProofs({
+    proofs: challenge?.proofs,
+    proof_type: challenge?.proof_type,
+    proof_requirements: challenge?.proof_requirements,
+  });
 }
 
 async function ensureCreatorParticipant(challengeId: string) {
@@ -912,6 +961,7 @@ export async function insertUserChallenge(input: CreateChallengeInput): Promise<
     required_checkins: input.required_checkins ?? input.target_count,
     misses_allowed: input.misses_allowed ?? 0,
     proof_type: input.proof_type ?? null,
+    proofs: input.proofs ?? null,
     proof_review: input.proof_review ?? 'auto',
     payout_mode: input.payout_mode ?? 'even_split_remaining',
     timezone: input.timezone ?? null,

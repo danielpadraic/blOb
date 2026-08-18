@@ -419,6 +419,7 @@ export default function ChallengesScreen() {
                         joined={participating}
                         hosting={hosting}
                         invited={!participating && !hosting}
+                        participantStatus={progressById.get(challenge.id)?.status}
                         onPress={() => openChallenge(challenge.id)}
                       />
                     );

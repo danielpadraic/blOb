@@ -14,6 +14,12 @@ import {
   withParticipantCounts,
 } from '@/lib/challenges';
 import {
+  firstProofMethod,
+  namedProofsFromLegacyTypes,
+  proofRequirementsFrom,
+  proofTypeFromMethod,
+} from '@/lib/challengeProofs';
+import {
   fetchChallengeSettlement,
   markChallengeJudging,
   settleChallenge,
@@ -509,6 +515,11 @@ export function useCreateChallenge() {
         );
       }
 
+      const namedProofs =
+        values.challenge_proofs && values.challenge_proofs.length > 0
+          ? values.challenge_proofs
+          : namedProofsFromLegacyTypes(values.proofs);
+
       return insertUserChallenge({
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
@@ -519,7 +530,10 @@ export function useCreateChallenge() {
         min_minutes: minMinutes,
         proof_requirements: isPoints
           ? []
-          : values.proofs.map((type) => ({ type, required: true })),
+          : namedProofs.length > 0
+            ? proofRequirementsFrom(namedProofs)
+            : values.proofs.map((type) => ({ type, required: true })),
+        proofs: isPoints ? [] : namedProofs,
         target_count: targetCount,
         frequency: isPoints ? 'once' : values.frequency,
         tasks,
@@ -557,7 +571,9 @@ export function useCreateChallenge() {
         task: values.task?.trim() || values.rule_activity.trim() || null,
         required_checkins: Number(values.required_checkins) || targetCount,
         misses_allowed: Math.max(Number(values.misses_allowed) || 0, 0),
-        proof_type: values.proof_type ?? (values.proofs[0] === 'video' ? 'video' : values.proofs.length ? 'photo' : 'honor'),
+        proof_type:
+          values.proof_type ??
+          proofTypeFromMethod(firstProofMethod(namedProofs)),
         proof_review: values.proof_review ?? 'auto',
         payout_mode:
           values.payout_mode ??

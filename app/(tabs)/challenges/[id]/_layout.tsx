@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { StackBackButton } from '@/components/navigation/StackBackButton';
+import { WalletBar } from '@/components/wallet/WalletBar';
 import { THEME } from '@/lib/theme';
 
 export default function ChallengeIdLayout() {
@@ -22,9 +23,19 @@ export default function ChallengeIdLayout() {
           title: 'Challenge',
           headerBackVisible: false,
           headerLeft: () => <StackBackButton />,
+          headerRight: () => <WalletBar />,
         }}
       />
-      <Stack.Screen name="submit" options={{ headerShown: true, title: 'Log workout' }} />
+      <Stack.Screen
+        name="submit"
+        options={{
+          headerShown: true,
+          title: 'Log workout',
+          headerBackVisible: false,
+          headerLeft: () => <StackBackButton />,
+          headerRight: () => <WalletBar />,
+        }}
+      />
     </Stack>
   );
 }

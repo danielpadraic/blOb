@@ -16,21 +16,25 @@ import { useMyProfile } from '@/hooks/useProfile';
 import {
   SIMPLE_DURATION_CHIPS,
   SIMPLE_FREQUENCY_CHIPS,
-  SIMPLE_PROOF_CHIPS,
+  SIMPLE_PROOF_METHODS,
   SIMPLE_TYPES,
+  addSimpleProof,
+  applyBeforeAfterHrPreset,
   defaultSimpleDraft,
   durationDaysOf,
+  removeSimpleProof,
   requiredCheckinsOf,
   simpleDraftToCreateValues,
+  syncProofNameWithTask,
   validateSimpleDraft,
   type SimpleChallengeDraft,
   type SimpleChallengeType,
   type SimpleCurrency,
   type SimpleDurationPreset,
   type SimpleFrequency,
-  type SimpleProof,
   type SimpleVisibility,
 } from '@/lib/simpleChallenge';
+import { SIMPLE_PROOF_CAP, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
@@ -189,6 +193,9 @@ export function SimpleCreateForm() {
                   patch({
                     type: item.value as SimpleChallengeType,
                     task: draft.task || defaultTask(item.value),
+                    proofs: draft.task
+                      ? draft.proofs
+                      : syncProofNameWithTask(draft.proofs, draft.task, defaultTask(item.value)),
                   })
                 }
               />
@@ -258,7 +265,12 @@ export function SimpleCreateForm() {
           label={copy('create.taskLabel')}
           placeholder={copy('create.taskPlaceholder')}
           value={draft.task}
-          onChangeText={(task) => patch({ task })}
+          onChangeText={(task) =>
+            patch({
+              task,
+              proofs: syncProofNameWithTask(draft.proofs, draft.task, task),
+            })
+          }
           maxLength={80}
         />
 
@@ -294,18 +306,75 @@ export function SimpleCreateForm() {
         </View>
 
         <View className="gap-2">
-          <SectionLabel>{copy('create.proof')}</SectionLabel>
-          <View className="flex-row flex-wrap gap-2">
-            {SIMPLE_PROOF_CHIPS.map((item) => (
-              <IconChip
-                key={item.value}
-                icon={item.icon}
-                label={item.label}
-                selected={draft.proof_type === item.value}
-                onPress={() => patch({ proof_type: item.value as SimpleProof })}
-              />
+          <SectionLabel>{copy('create.proofs')}</SectionLabel>
+          <View className="gap-3">
+            {draft.proofs.map((proof) => (
+              <View key={proof.id} className="gap-2">
+                <View className="flex-row items-center gap-2">
+                  <View className="flex-1">
+                    <Input
+                      placeholder={copy('create.proofFallback')}
+                      value={proof.name}
+                      onChangeText={(name) =>
+                        patch({
+                          proofs: draft.proofs.map((item) =>
+                            item.id === proof.id ? { ...item, name } : item,
+                          ),
+                        })
+                      }
+                      maxLength={40}
+                    />
+                  </View>
+                  {draft.proofs.length > 1 ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove proof"
+                      onPress={() => patch({ proofs: removeSimpleProof(draft.proofs, proof.id) })}
+                      className="h-[52px] w-[52px] items-center justify-center rounded-xl"
+                      style={{ borderWidth: 1, borderColor: THEME.border, backgroundColor: THEME.surface }}>
+                      <AppText className="text-[18px] font-semibold text-muted">×</AppText>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View className="flex-row flex-wrap gap-2">
+                  {SIMPLE_PROOF_METHODS.map((item) => (
+                    <IconChip
+                      key={item.value}
+                      icon={item.icon}
+                      label={item.label}
+                      selected={proof.method === item.value}
+                      onPress={() =>
+                        patch({
+                          proofs: draft.proofs.map((row) =>
+                            row.id === proof.id
+                              ? { ...row, method: item.value as ChallengeProofMethod }
+                              : row,
+                          ),
+                        })
+                      }
+                    />
+                  ))}
+                </View>
+              </View>
             ))}
           </View>
+          <View className="flex-row flex-wrap gap-2">
+            {draft.proofs.length < SIMPLE_PROOF_CAP ? (
+              <IconChip
+                icon=""
+                label={copy('create.addProof')}
+                selected={false}
+                onPress={() => patch({ proofs: addSimpleProof(draft.proofs) })}
+              />
+            ) : null}
+            <IconChip
+              icon=""
+              label={copy('create.proofPreset')}
+              selected={false}
+              onPress={() => patch({ proofs: applyBeforeAfterHrPreset() })}
+            />
+          </View>
+          <AppText className="text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
         </View>
 
         <View className="gap-2">

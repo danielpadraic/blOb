@@ -91,6 +91,7 @@ export type PublishChallengePayload = {
   required_checkins?: number | null;
   misses_allowed?: number;
   proof_type?: string | null;
+  proofs?: unknown;
   proof_review?: string;
   payout_mode?: string;
   timezone?: string | null;

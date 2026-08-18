@@ -4,9 +4,9 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
-import { requiredProofTypes, isPointsChallenge, isUnlimitedChallenge, lastManStandingRequirement, prizeStructureSummary } from '@/lib/challenges';
+import { requiredChallengeProofs, isPointsChallenge, isUnlimitedChallenge, lastManStandingRequirement, prizeStructureSummary } from '@/lib/challenges';
+import { proofDisplayName } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
-import { proofMeta } from '@/lib/constants';
 import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
 import { formatWallet, formatWalletWithUsd, isBucksChallenge } from '@/lib/currency';
@@ -27,8 +27,9 @@ function acknowledgments(challenge: Challenge) {
   const bucks = isBucksChallenge(challenge);
   const buyIn = bucks ? formatWalletWithUsd(buyInAmount, 'bucks') : formatWallet(buyInAmount, 'coins');
   const isFree = buyInAmount <= 0;
-  const proofs = requiredProofTypes(challenge);
-  const proofLabels = proofs.map((type) => proofMeta(type).label).join(', ');
+  const proofs = requiredChallengeProofs(challenge);
+  const proofLabels = proofs.map((proof) => proofDisplayName(proof)).join(', ');
+  const honorOnly = proofs.length > 0 && proofs.every((proof) => proof.method === 'honor');
   const points = isPointsChallenge(challenge);
   const unlimited = isUnlimitedChallenge(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
@@ -86,7 +87,9 @@ function acknowledgments(challenge: Challenge) {
           : [
               ruleCopy.primary,
               ...ruleCopy.extras,
-              `Each log needs: ${proofLabels}. No honor system.`,
+              honorOnly
+                ? 'Honor. Confirm to log.'
+                : `Each log needs: ${proofLabels}. ${copy('create.proofsHelper')}`,
             ]
               .filter(Boolean)
               .join('\n'),

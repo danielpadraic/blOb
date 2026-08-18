@@ -283,6 +283,7 @@ create table public.challenges (
   days_required int not null default 6,
   min_minutes int not null default 30,
   proof_requirements jsonb not null default '[{"type":"pre_selfie","required":true},{"type":"post_selfie","required":true},{"type":"hr_monitor","required":true}]',
+  proofs jsonb not null default '[]'::jsonb,
   status text not null default 'upcoming' check (status in ('upcoming','open','in_progress','judging','settled')),
   starts_at timestamptz not null,
   ends_at timestamptz,
@@ -316,6 +317,7 @@ comment on column public.challenges.frequency is 'How often a consistency log co
 comment on column public.challenges.target_count is 'Successful logs required to finish a consistency challenge.';
 comment on column public.challenges.tasks is 'Points-challenge task list: id, title, points, proof_required, proof_types.';
 comment on column public.challenges.proof_requirements is 'JSON list of required proof types per consistency log.';
+comment on column public.challenges.proofs is 'Named proof list [{id, name, method}]. methods: photo | video | checkin | honor | hr.';
 comment on column public.challenges.prize_pool is 'Creator contribution plus participant buy-ins. Updated on publish and join.';
 comment on column public.challenges.prize_structure is 'How the prize pool is paid out: winner_take_all, equal_split, or top_places.';
 comment on column public.challenges.top_places_mode is 'For top_places: percent of finishers, or a fixed count.';
@@ -1198,6 +1200,7 @@ create table public.workout_submissions (
   notes text,
   status text default 'pending_review' check (status in ('pending_review','approved','rejected')),
   task_ids jsonb not null default '[]'::jsonb,
+  proof_parts jsonb not null default '{}'::jsonb,
   created_at timestamptz default now(),
   unique(challenge_id, user_id, submission_date)
 );
@@ -1205,6 +1208,8 @@ create table public.workout_submissions (
 comment on table public.workout_submissions is 'One proof set per calendar day per participant. Privacy-first: not publicly readable.';
 comment on column public.workout_submissions.task_ids is
   'Points challenges: task ids completed in this log. Empty for consistency / three-proof days.';
+comment on column public.workout_submissions.proof_parts is
+  'Parts for this log, keyed by challenge proof id.';
 
 create index workout_submissions_user_date_idx on public.workout_submissions (user_id, submission_date desc);
 create index workout_submissions_challenge_status_idx on public.workout_submissions (challenge_id, status);

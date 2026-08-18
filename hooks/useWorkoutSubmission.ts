@@ -3,8 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { logWorkout } from '@/lib/challenges/logWorkout';
+import {
+  logHasEveryProof,
+  parseProofParts,
+  resolveChallengeProofs,
+} from '@/lib/challengeProofs';
 import { supabase } from '@/lib/supabase';
-import type { ChallengeParticipant, ProofType, WorkoutSubmission } from '@/lib/types';
+import type { ChallengeParticipant, ChallengeProof, ProofType, WorkoutSubmission } from '@/lib/types';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
 import { signedProofUrl } from '@/utils/upload';
@@ -19,7 +24,7 @@ export type WorkoutSubmissionView = WorkoutSubmission & {
 };
 
 const SUBMISSION_COLUMNS =
-  'id, challenge_id, user_id, submission_date, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, status, created_at';
+  'id, challenge_id, user_id, submission_date, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, status, created_at, proof_parts';
 
 function submissionQueryKey(challengeId: string | undefined, userId: string | undefined, date: string) {
   return ['workout-submission', challengeId, userId, date] as const;
@@ -48,6 +53,7 @@ function asSubmission(row: Record<string, unknown>): WorkoutSubmission {
     notes: (row.notes as string | null) ?? null,
     status: (row.status as WorkoutSubmission['status']) ?? 'pending_review',
     task_ids: Array.isArray(row.task_ids) ? row.task_ids.map(String) : [],
+    proof_parts: parseProofParts(row.proof_parts),
     created_at: String(row.created_at ?? new Date().toISOString()),
   };
 }
@@ -80,7 +86,20 @@ async function fetchTodaySubmission(
     .maybeSingle();
   if (result.error) {
     if (isMissingColumn(result.error.message)) {
-      return null;
+      const fallback = await supabase
+        .from('workout_submissions')
+        .select('id, challenge_id, user_id, submission_date, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, status, created_at')
+        .eq('challenge_id', challengeId)
+        .eq('user_id', userId)
+        .eq('submission_date', date)
+        .maybeSingle();
+      if (fallback.error) {
+        if (isMissingColumn(fallback.error.message)) {
+          return null;
+        }
+        throw new Error(getErrorMessage(fallback.error));
+      }
+      return fallback.data ? asSubmission(fallback.data as Record<string, unknown>) : null;
     }
     throw new Error(getErrorMessage(result.error));
   }
@@ -152,7 +171,8 @@ export function useCompletedTaskIds(challengeId: string | undefined) {
 
 type SubmitWorkoutInput = {
   challengeId: string;
-  images: Array<{ type: ProofType; uri: string; mimeType?: string | null }>;
+  images: Array<{ type: ProofType; uri: string; mimeType?: string | null; proofId?: string; text?: string | null }>;
+  required?: ChallengeProof[];
   notes?: string | null;
 };
 
@@ -169,13 +189,15 @@ export function useSubmitWorkout() {
         throw new Error('You need to be signed in.');
       }
 
-      if (input.images.length < 1) {
+      const required = input.required ?? [];
+      if (required.length === 0 && input.images.length < 1) {
         throw new Error('Add every required proof to log today.');
       }
 
       const logged = await logWorkout({
         challengeId: input.challengeId,
         proofs: input.images,
+        required,
         notes: input.notes ?? null,
       });
 
@@ -240,15 +262,44 @@ export function usePeriodCompletions(challengeId: string | undefined) {
     queryKey: ['challenge-completions', challengeId, date],
     enabled: Boolean(challengeId),
     queryFn: async (): Promise<Set<string>> => {
-      const { data, error } = await supabase
+      const challengeResult = await supabase
+        .from('challenges')
+        .select('proofs, proof_type, proof_requirements, challenge_type, tasks')
+        .eq('id', challengeId!)
+        .maybeSingle();
+      if (challengeResult.error) {
+        throw new Error(getErrorMessage(challengeResult.error));
+      }
+      const proofs = resolveChallengeProofs({
+        proofs: (challengeResult.data as { proofs?: unknown } | null)?.proofs,
+        proof_type: (challengeResult.data as { proof_type?: unknown } | null)?.proof_type,
+        proof_requirements: (challengeResult.data as { proof_requirements?: Array<{ type?: string; required?: boolean }> } | null)
+          ?.proof_requirements,
+      });
+
+      const withParts = await supabase
         .from('workout_submissions')
-        .select('user_id')
+        .select('user_id, proof_parts')
         .eq('challenge_id', challengeId!)
         .eq('submission_date', date);
-      if (error) {
-        throw new Error(getErrorMessage(error));
+      if (withParts.error) {
+        if (isMissingColumn(withParts.error.message)) {
+          const fallback = await supabase
+            .from('workout_submissions')
+            .select('user_id')
+            .eq('challenge_id', challengeId!)
+            .eq('submission_date', date);
+          if (fallback.error) {
+            throw new Error(getErrorMessage(fallback.error));
+          }
+          return new Set((fallback.data ?? []).map((row) => String((row as { user_id: string }).user_id)));
+        }
+        throw new Error(getErrorMessage(withParts.error));
       }
-      return new Set((data ?? []).map((row) => String((row as { user_id: string }).user_id)));
+      const complete = (withParts.data ?? []).filter((row) =>
+        logHasEveryProof(proofs, parseProofParts((row as { proof_parts?: unknown }).proof_parts)),
+      );
+      return new Set(complete.map((row) => String((row as { user_id: string }).user_id)));
     },
   });
 }

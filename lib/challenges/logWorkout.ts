@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/supabase';
+import {
+  captureTypeForMethod,
+  type ChallengeProof,
+  type ChallengeProofPart,
+} from '@/lib/challengeProofs';
 import type { ProofType, WorkoutSubmission } from '@/lib/types';
+import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
 import { challengeProofUrl, uploadChallengeProof } from '@/utils/upload';
 
@@ -7,11 +13,14 @@ export type LogWorkoutProof = {
   type: ProofType;
   uri: string;
   mimeType?: string | null;
+  proofId?: string;
+  text?: string | null;
 };
 
 export type LogWorkoutInput = {
   challengeId: string;
   proofs: LogWorkoutProof[];
+  required?: ChallengeProof[];
   notes?: string | null;
 };
 
@@ -19,9 +28,6 @@ export type LogWorkoutResult = WorkoutSubmission & {
   days_completed: number;
   media_urls: string[];
 };
-
-const SLOT_TYPES: ProofType[] = ['pre_selfie', 'post_selfie', 'hr_monitor'];
-const TEXT_TYPES = new Set<ProofType>(['text_note', 'link']);
 
 function throwMapped(error: { message?: string; code?: string; details?: string }): never {
   const blob = [error.code, error.message, error.details].filter(Boolean).join(' ');
@@ -55,6 +61,7 @@ function asResult(
   row: Record<string, unknown>,
   mediaUrls: string[],
   daysCompleted: number,
+  parts: Record<string, ChallengeProofPart>,
 ): LogWorkoutResult {
   return {
     id: String(row.id ?? ''),
@@ -67,9 +74,54 @@ function asResult(
     notes: (row.notes as string | null) ?? null,
     status: (row.status as WorkoutSubmission['status']) ?? 'pending_review',
     task_ids: Array.isArray(row.task_ids) ? row.task_ids.map(String) : [],
+    proof_parts: (row.proof_parts as Record<string, ChallengeProofPart> | null) ?? parts,
     created_at: String(row.created_at ?? new Date().toISOString()),
     days_completed: daysCompleted,
     media_urls: mediaUrls,
+  };
+}
+
+function assignLegacySlots(
+  required: ChallengeProof[],
+  parts: Record<string, ChallengeProofPart>,
+): { pre: string; post: string; hr: string; notes: string | null } {
+  let pre = '';
+  let post = '';
+  let hr = '';
+  const notes: string[] = [];
+  const extras: string[] = [];
+
+  for (const proof of required) {
+    const part = parts[proof.id];
+    if (proof.method === 'checkin' && part?.text?.trim()) {
+      notes.push(part.text.trim());
+    }
+    const url = part?.url?.trim() ?? '';
+    if (!url) {
+      continue;
+    }
+    if (proof.method === 'hr' && !hr) {
+      hr = url;
+      continue;
+    }
+    const named = proof.name.trim().toLowerCase();
+    if (named.includes('pre') && !pre) {
+      pre = url;
+      continue;
+    }
+    if (named.includes('post') && !post) {
+      post = url;
+      continue;
+    }
+    extras.push(url);
+  }
+
+  const take = (): string => extras.shift() ?? '';
+  return {
+    pre: pre || take(),
+    post: post || take(),
+    hr: hr || take(),
+    notes: notes.join('\n') || null,
   };
 }
 
@@ -80,16 +132,21 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     throw new Error('You need to be signed in.');
   }
 
+  const required = input.required ?? [];
+  const mediaProofs = input.proofs.filter(
+    (item) => item.uri.trim() && (item.type !== 'text_note' && item.type !== 'link'),
+  );
   const textBits = input.proofs
-    .filter((item) => TEXT_TYPES.has(item.type) && item.uri.trim())
-    .map((item) => item.uri.trim());
-  const mediaProofs = input.proofs.filter((item) => !TEXT_TYPES.has(item.type) && item.uri.trim());
-  if (mediaProofs.length === 0 && textBits.length === 0 && !input.notes?.trim()) {
+    .filter((item) => (item.type === 'text_note' || item.type === 'link' || item.text) && (item.text ?? item.uri).trim())
+    .map((item) => (item.text ?? item.uri).trim());
+
+  if (required.length === 0 && mediaProofs.length === 0 && textBits.length === 0 && !input.notes?.trim()) {
     throw new Error('Add every required proof to log today.');
   }
 
   const uploaded = await Promise.all(
     mediaProofs.map(async (item) => ({
+      proofId: item.proofId,
       type: item.type,
       url: await challengeProofUrl(
         await uploadChallengeProof({
@@ -103,19 +160,41 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     })),
   );
 
-  const byType = new Map(uploaded.map((item) => [item.type, item.url]));
-  const extras = uploaded.filter((item) => !SLOT_TYPES.includes(item.type)).map((item) => item.url);
-  const takeExtra = (): string => extras.shift() ?? '';
+  const parts: Record<string, ChallengeProofPart> = {};
+  if (required.length > 0) {
+    for (const proof of required) {
+      if (proof.method === 'honor') {
+        parts[proof.id] = { method: 'honor' };
+        continue;
+      }
+      if (proof.method === 'checkin') {
+        const row = input.proofs.find((item) => item.proofId === proof.id);
+        parts[proof.id] = {
+          method: 'checkin',
+          text: (row?.text ?? row?.uri ?? '').trim() || null,
+        };
+        continue;
+      }
+      const uploadedRow = uploaded.find((item) => item.proofId === proof.id);
+      parts[proof.id] = {
+        method: proof.method,
+        url: uploadedRow?.url ?? null,
+      };
+    }
+  }
 
+  const slots = assignLegacySlots(required, parts);
   const mediaUrls = uploaded.map((item) => item.url);
-  const notes = [...textBits, input.notes?.trim()].filter(Boolean).join('\n') || null;
+  const notes = [...textBits, input.notes?.trim(), slots.notes].filter(Boolean).join('\n') || null;
 
   const { data, error } = await supabase.rpc('log_workout', {
     p_challenge_id: input.challengeId,
-    p_pre_selfie_url: byType.get('pre_selfie') ?? takeExtra(),
-    p_post_selfie_url: byType.get('post_selfie') ?? takeExtra(),
-    p_hr_monitor_url: byType.get('hr_monitor') ?? takeExtra(),
+    p_submission_date: utcDateStamp(),
+    p_pre_selfie_url: slots.pre || uploaded.find((item) => item.type === 'pre_selfie')?.url || '',
+    p_post_selfie_url: slots.post || uploaded.find((item) => item.type === 'post_selfie')?.url || '',
+    p_hr_monitor_url: slots.hr || uploaded.find((item) => item.type === 'hr_monitor')?.url || '',
     p_notes: notes,
+    p_proof_parts: parts,
   });
 
   if (error) {
@@ -139,5 +218,10 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     },
     mediaUrls,
     daysCompleted,
+    parts,
   );
+}
+
+export function proofUploadType(proof: ChallengeProof): ProofType {
+  return captureTypeForMethod(proof.method);
 }

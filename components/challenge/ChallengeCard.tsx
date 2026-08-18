@@ -2,15 +2,14 @@ import { type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import { Pressable, View } from 'react-native';
 
-import { CurrencyMark, StakeAmount } from '@/components/currency/CurrencyMark';
+import { ChallengePosterCard } from '@/components/challenge/ChallengePosterCard';
+import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { Badge } from '@/components/ui/Badge';
 import { AppText } from '@/components/ui/AppText';
-import { isUnlimitedChallenge } from '@/lib/challenges';
-import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { CHALLENGE_TYPES } from '@/lib/constants';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
-import { lobbyDiscoverTimeLabel, lobbyDurationLabel, lobbyPlayersLabel, lobbyTimeLabel } from '@/utils/format';
+import { lobbyDiscoverTimeLabel, lobbyDurationLabel, lobbyPlayersLabel } from '@/utils/format';
 
 type ChallengeCardProps = {
   challenge: ChallengeWithStats;
@@ -22,6 +21,7 @@ type ChallengeCardProps = {
   invited?: boolean;
   onJoin?: () => void;
   friendCount?: number;
+  participantStatus?: string | null;
 };
 
 const cardShell = {
@@ -128,6 +128,7 @@ export function ChallengeCard({
   invited = false,
   onJoin,
   friendCount = 0,
+  participantStatus,
 }: ChallengeCardProps) {
   if (variant === 'rail') {
     return (
@@ -138,6 +139,7 @@ export function ChallengeCard({
         joined={joined}
         hosting={hosting}
         invited={invited}
+        participantStatus={participantStatus}
       />
     );
   }
@@ -256,6 +258,7 @@ function LobbyRailCard({
   joined = false,
   hosting = false,
   invited = false,
+  participantStatus,
 }: {
   challenge: ChallengeWithStats;
   myDays?: number | null;
@@ -263,97 +266,17 @@ function LobbyRailCard({
   joined?: boolean;
   hosting?: boolean;
   invited?: boolean;
+  participantStatus?: string | null;
 }) {
-  const unlimited = isUnlimitedChallenge(challenge);
-  const hostOnly = hosting && !joined;
-  const inviteOnly = invited && !joined && !hosting;
-  const days = Math.max(Number(myDays) || 0, 0);
-  const progressCopy = joinedProgressCopy(challenge, days);
-  const buyIn = Number(challenge.buy_in_amount ?? 0);
-
   return (
-    <View style={[cardShell, { width: 230, padding: 12, gap: 6 }]}>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={challenge.title}>
-        <View className="flex-row flex-wrap items-center gap-1">
-          <CurrencyMark currency={challenge.currency} size={14} />
-          <Badge
-            label={hostOnly ? 'Hosting' : inviteOnly ? 'Invited' : 'Joined'}
-            tone={hostOnly ? 'charcoal' : inviteOnly ? 'coral' : 'mint'}
-            className="px-1.5 py-0.5"
-          />
-          {challenge.is_official ? (
-            <Badge label="Official" tone="charcoal" className="px-1.5 py-0.5" />
-          ) : null}
-        </View>
-        <AppText className="mt-1 text-[15px] font-extrabold leading-5 text-charcoal" numberOfLines={2}>
-          {challenge.title}
-        </AppText>
-        {challenge.cover_image_url ? (
-          <Image
-            source={{ uri: challenge.cover_image_url }}
-            style={{
-              marginTop: 6,
-              height: 64,
-              width: '100%',
-              borderRadius: 8,
-              backgroundColor: THEME.background,
-            }}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        ) : null}
-        <View className="mt-1.5 flex-row flex-wrap gap-1">
-          <InfoTag label={lobbyDurationLabel(challenge)} />
-          <InfoTag label={typeLabel(challenge)} />
-        </View>
-        {buyIn > 0 ? (
-          <View className="mt-1.5">
-            <StakeAmount
-              amount={buyIn}
-              currency={challenge.currency}
-              size={13}
-              textClassName="text-[11px] font-semibold text-charcoal"
-            />
-          </View>
-        ) : null}
-        {hostOnly ? (
-          <AppText className="mt-1 text-[11px] font-semibold text-muted">
-            You’re hosting — not competing
-          </AppText>
-        ) : inviteOnly ? (
-          <AppText className="mt-1 text-[11px] font-semibold text-muted">
-            You’re invited — join to compete
-          </AppText>
-        ) : unlimited ? (
-          <AppText className="mt-1 text-[11px] font-semibold text-muted">Still in</AppText>
-        ) : (
-          <View className="mt-1 gap-1">
-            <AppText className="text-[11px] font-semibold text-charcoal">
-              {progressCopy.label}
-            </AppText>
-            <View
-              className="h-1 overflow-hidden rounded-full"
-              style={{ backgroundColor: THEME.border }}>
-              <View
-                className="h-full rounded-full"
-                style={{
-                  width: `${Math.min(100, progressCopy.ratio * 100)}%`,
-                  backgroundColor: THEME.accent,
-                }}
-              />
-            </View>
-          </View>
-        )}
-        <AppText className="mt-1 text-[11px] font-semibold text-muted" numberOfLines={1}>
-          {lobbyTimeLabel(challenge)}
-        </AppText>
-      </Pressable>
-      {onPress ? (
-        <CardCta title={hostOnly ? 'Manage' : inviteOnly ? 'View' : 'Continue'} onPress={onPress} />
-      ) : null}
-    </View>
+    <ChallengePosterCard
+      challenge={challenge}
+      onPress={onPress}
+      joined={joined}
+      hosting={hosting}
+      invited={invited}
+      daysCompleted={myDays}
+      participantStatus={participantStatus}
+    />
   );
 }

@@ -52,6 +52,16 @@ export function isLobbyListRoute(segments: string[]): boolean {
   return parts[0] === 'challenges' && (!parts[1] || parts[1] === 'index');
 }
 
+/** Nested `/challenges/[id]` (and submit), not lobby/create/callout/profile. */
+export function isChallengeIdRoute(segments: string[]): boolean {
+  const parts = segments.filter((segment) => !segment.startsWith('('));
+  if (parts[0] !== 'challenges' || !parts[1]) {
+    return false;
+  }
+  const nested = parts[1];
+  return nested !== 'index' && nested !== 'create' && nested !== 'callout' && nested !== 'u';
+}
+
 type TabChromeHeaderProps = {
   alertsOpen?: boolean;
   searchOpen?: boolean;

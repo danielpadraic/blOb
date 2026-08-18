@@ -11,15 +11,24 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
 import { useSubmitWorkout, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
-import { requiredProofTypes } from '@/lib/challenges';
-import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
-import { isImageProof, isVideoProof, proofMeta } from '@/lib/constants';
-import { THEME } from '@/lib/theme';
-import type { ProofType } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
+import { requiredChallengeProofs } from '@/lib/challenges';
+import {
+  captureTypeForMethod,
+  partSatisfies,
+  proofDisplayName,
+  type ChallengeProof,
+  type ChallengeProofPart,
+} from '@/lib/challengeProofs';
 import { copy } from '@/lib/copy';
+import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
+import { THEME } from '@/lib/theme';
+import { getErrorMessage } from '@/utils/errors';
 
-type ProofDraft = Partial<Record<ProofType, { uri?: string; mimeType?: string | null }>>;
+type SlotDraft = {
+  uri?: string;
+  mimeType?: string | null;
+  text?: string;
+};
 
 function LoggedState({ onBack }: { onBack: () => void }) {
   return (
@@ -44,6 +53,16 @@ function LoggedState({ onBack }: { onBack: () => void }) {
   );
 }
 
+function slotPart(proof: ChallengeProof, draft: SlotDraft | undefined): ChallengeProofPart {
+  if (proof.method === 'honor') {
+    return { method: 'honor' };
+  }
+  if (proof.method === 'checkin') {
+    return { method: 'checkin', text: draft?.text ?? draft?.uri ?? '' };
+  }
+  return { method: proof.method, url: draft?.uri ?? '' };
+}
+
 export default function SubmitWorkoutScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -53,24 +72,32 @@ export default function SubmitWorkoutScreen() {
   const today = useTodaySubmission(id);
   const submit = useSubmitWorkout();
 
-  const [drafts, setDrafts] = useState<ProofDraft>({});
+  const [drafts, setDrafts] = useState<Record<string, SlotDraft>>({});
   const [error, setError] = useState<string | null>(null);
-  const [captureType, setCaptureType] = useState<ProofType | null>(null);
+  const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
 
   const challenge = challengeQuery.data;
-  const proofSteps = requiredProofTypes(challenge);
-  const filledCount = proofSteps.filter((type) => Boolean(drafts[type]?.uri?.trim())).length;
+  const proofSteps = requiredChallengeProofs(challenge);
+  const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
   const busy = submit.isPending;
   const proofCountLabel =
     proofSteps.length === 1 ? '1 proof' : `${proofSteps.length} proofs`;
 
-  function onPicked(type: ProofType, uri: string, mimeType?: string | null) {
+  function onMedia(proofId: string, uri: string, mimeType?: string | null) {
     if (busy) {
       return;
     }
-    setDrafts((current) => ({ ...current, [type]: { uri, mimeType } }));
+    setDrafts((current) => ({ ...current, [proofId]: { ...current[proofId], uri, mimeType } }));
+    setError(null);
+  }
+
+  function onText(proofId: string, text: string) {
+    if (busy) {
+      return;
+    }
+    setDrafts((current) => ({ ...current, [proofId]: { ...current[proofId], text } }));
     setError(null);
   }
 
@@ -80,20 +107,44 @@ export default function SubmitWorkoutScreen() {
     }
     setError(null);
     try {
-      const images = proofSteps.flatMap((type) => {
-        const draft = drafts[type];
-        if (!draft?.uri?.trim()) {
-          return [];
+      const images: Array<{
+        type: ReturnType<typeof captureTypeForMethod>;
+        uri: string;
+        mimeType?: string | null;
+        proofId: string;
+        text?: string | null;
+      }> = [];
+      for (const proof of proofSteps) {
+        if (proof.method === 'honor') {
+          continue;
         }
-        return [{ type, uri: draft.uri.trim(), mimeType: draft.mimeType }];
-      });
-      if (images.length < proofSteps.length) {
+        if (proof.method === 'checkin') {
+          const text = drafts[proof.id]?.text?.trim() ?? '';
+          if (!text) {
+            continue;
+          }
+          images.push({ type: captureTypeForMethod(proof.method), uri: text, text, proofId: proof.id });
+          continue;
+        }
+        const draft = drafts[proof.id];
+        if (!draft?.uri?.trim()) {
+          continue;
+        }
+        images.push({
+          type: captureTypeForMethod(proof.method),
+          uri: draft.uri.trim(),
+          mimeType: draft.mimeType,
+          proofId: proof.id,
+        });
+      }
+      if (!allReady) {
         setError(`Add all ${proofCountLabel} to log today.`);
         return;
       }
       await submit.mutateAsync({
         challengeId: id,
         images,
+        required: proofSteps,
       });
       router.back();
     } catch (caught) {
@@ -172,29 +223,34 @@ export default function SubmitWorkoutScreen() {
     );
   }
 
-  const missing = proofSteps.filter((type) => !drafts[type]?.uri?.trim());
-  const firstCameraType = proofSteps.find(
-    (type) => (isImageProof(type) || isVideoProof(type)) && !drafts[type]?.uri?.trim(),
+  const missing = proofSteps.filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id])));
+  const firstCamera = proofSteps.find(
+    (proof) =>
+      (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') &&
+      !drafts[proof.id]?.uri?.trim(),
   );
-  const activeCapture =
-    captureType ?? (!skippedAuto && filledCount === 0 ? firstCameraType ?? null : null);
+  const activeCaptureId =
+    captureId ?? (!skippedAuto && filledCount === proofSteps.filter((proof) => proof.method === 'honor').length
+      ? firstCamera?.id ?? null
+      : null);
+  const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;
 
-  if (activeCapture) {
+  if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr')) {
     return (
       <Screen padded={false} edges={TAB_ROOT_EDGES}>
         <Stack.Screen options={{ headerShown: false }} />
         <ProofUploader
-          type={activeCapture}
+          type={captureTypeForMethod(activeProof.method)}
           fill
           autoOpen
           locked={busy}
           onPicked={(uri, mimeType) => {
-            onPicked(activeCapture, uri, mimeType);
-            setCaptureType(null);
+            onMedia(activeProof.id, uri, mimeType);
+            setCaptureId(null);
             setSkippedAuto(true);
           }}
           onCancel={() => {
-            setCaptureType(null);
+            setCaptureId(null);
             setSkippedAuto(true);
           }}
         />
@@ -213,30 +269,31 @@ export default function SubmitWorkoutScreen() {
         <AppText className="text-center text-sm text-muted">
           Add {proofCountLabel}, then confirm. One log per UTC day.
         </AppText>
+        <AppText className="mt-1 text-center text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
 
         <View className="mt-5 gap-6">
-          {proofSteps.map((type) => (
-            <View key={type}>
+          {proofSteps.map((proof) => (
+            <View key={proof.id}>
               <AppText className="mb-2 text-[15px] font-bold text-charcoal">
-                {proofMeta(type).label}
+                {proofDisplayName(proof)}
               </AppText>
-              {isImageProof(type) || isVideoProof(type) ? (
-                <ProofUploader
-                  type={type}
-                  uri={drafts[type]?.uri}
-                  compact
-                  locked={busy}
-                  onRequestOpen={() => setCaptureType(type)}
-                  onPicked={(uri, mimeType) => onPicked(type, uri, mimeType)}
+              {proof.method === 'honor' ? (
+                <AppText className="text-sm text-muted">Honor. Confirm to log.</AppText>
+              ) : proof.method === 'checkin' ? (
+                <Input
+                  placeholder="What did you do?"
+                  value={drafts[proof.id]?.text ?? ''}
+                  onChangeText={(value) => onText(proof.id, value)}
+                  editable={!busy}
                 />
               ) : (
-                <Input
-                  placeholder={type === 'link' ? 'https://' : proofMeta(type).helper}
-                  value={drafts[type]?.uri ?? ''}
-                  onChangeText={(value) => onPicked(type, value)}
-                  autoCapitalize={type === 'link' ? 'none' : 'sentences'}
-                  keyboardType={type === 'link' ? 'url' : 'default'}
-                  editable={!busy}
+                <ProofUploader
+                  type={captureTypeForMethod(proof.method)}
+                  uri={drafts[proof.id]?.uri}
+                  compact
+                  locked={busy}
+                  onRequestOpen={() => setCaptureId(proof.id)}
+                  onPicked={(uri, mimeType) => onMedia(proof.id, uri, mimeType)}
                 />
               )}
             </View>
@@ -245,7 +302,7 @@ export default function SubmitWorkoutScreen() {
 
         {missing.length > 0 && filledCount > 0 ? (
           <AppText className="mt-4 text-sm leading-5 text-muted">
-            Still needed: {missing.map((type) => proofMeta(type).short).join(', ')}.
+            Still needed: {missing.map((proof) => proofDisplayName(proof)).join(', ')}.
           </AppText>
         ) : null}
 
