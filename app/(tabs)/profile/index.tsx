@@ -13,8 +13,11 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
+import { formatProfileWeight, hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
+import { experienceLabel, goalLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
+import { BODY_METRICS_HREF, FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
-import { formatHeight, formatWeight } from '@/utils/units';
+import { formatHeight } from '@/utils/units';
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -79,6 +82,38 @@ export default function ProfileScreen() {
         </Pressable>
         <Button title="Send Coins or Bucks" variant="outline" onPress={() => router.push('/profile/send')} />
 
+        {hasCompletedBodyMetrics(profile) ? (
+          <Button
+            title="Update body metrics"
+            variant="outline"
+            onPress={() => router.push(BODY_METRICS_HREF)}
+          />
+        ) : (
+          <Card className="gap-2">
+            <AppText className="text-[16px] font-extrabold text-charcoal">Finish body metrics</AppText>
+            <AppText className="text-[13px] leading-5 text-muted">
+              A private snapshot that unlocks Official Fitness Challenges. Not a score — just better matching.
+            </AppText>
+            <Button title="Add body metrics" onPress={() => router.push(BODY_METRICS_HREF)} />
+          </Card>
+        )}
+
+        {hasCompletedFitnessHistory(profile) ? (
+          <Button
+            title="Update fitness history"
+            variant="outline"
+            onPress={() => router.push(FITNESS_HISTORY_HREF)}
+          />
+        ) : (
+          <Card className="gap-2">
+            <AppText className="text-[16px] font-extrabold text-charcoal">Add fitness history</AppText>
+            <AppText className="text-[13px] leading-5 text-muted">
+              Optional, but it helps us place you in the right challenges. Skip anything that doesn’t fit.
+            </AppText>
+            <Button title="Add fitness history" onPress={() => router.push(FITNESS_HISTORY_HREF)} />
+          </Card>
+        )}
+
         <Card padded={false}>
           <View className="px-4 py-3" style={{ borderBottomWidth: 1, borderBottomColor: THEME.border }}>
             <AppText className="text-[13px] font-semibold text-charcoal">
@@ -102,10 +137,36 @@ export default function ProfileScreen() {
             />
             <StatCell
               label="Weight"
-              value={formatWeight(profile.current_weight, profile.weight_unit)}
+              value={formatProfileWeight(profile)}
               borderLeft
             />
           </View>
+          {hasCompletedFitnessHistory(profile) ? (
+            <View
+              className="flex-row"
+              style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
+              <StatCell
+                label="Experience"
+                value={experienceLabel(profile.fitness_profile?.experience_level)}
+              />
+              <StatCell
+                label="Aim"
+                value={goalLabel(profile.fitness_profile?.primary_goal)}
+                borderLeft
+              />
+            </View>
+          ) : null}
+          {hasCompletedBodyMetrics(profile) && profile.body_fat_pct != null ? (
+            <View
+              className="flex-row"
+              style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
+              <StatCell
+                label="Body fat"
+                value={`${Math.round(Number(profile.body_fat_pct))}%`}
+              />
+              <View className="flex-1" />
+            </View>
+          ) : null}
           <View className="px-4 py-2.5" style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
             <AppText className="text-[11px] leading-4 text-muted">
               {profile.show_fitness_stats_publicly

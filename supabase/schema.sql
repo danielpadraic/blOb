@@ -60,9 +60,13 @@ create table public.profiles (
   current_weight numeric,
   goal_weight numeric,
   weight_unit text default 'kg' check (weight_unit in ('kg','lb')),
+  gender text check (gender is null or gender in ('male','female')),
+  body_fat_pct numeric,
+  body_metrics_completed_at timestamptz,
   typical_weekly_workout_frequency int,
   primary_activities text[] default '{}',
   skill_tags text[] default '{}',
+  fitness_profile jsonb,
   show_fitness_stats_publicly boolean default false,
   credits numeric(12,2) default 50.00, -- alias of coins; kept for older readers
   coins numeric(12,2) not null default 50.00,
@@ -80,6 +84,10 @@ comment on column public.profiles.credits is 'PRIVATE alias of coins. Not grante
 comment on column public.profiles.coins is 'PRIVATE Blob Coins. Read via get_my_profile().';
 comment on column public.profiles.bucks is 'PRIVATE Blob Bucks (1 Buck = $1 USD). Read via get_my_profile().';
 comment on column public.profiles.show_fitness_stats_publicly is 'When false, height/weight/frequency are redacted in profiles_public.';
+comment on column public.profiles.gender is 'PRIVATE. male or female. Read via get_my_profile().';
+comment on column public.profiles.body_fat_pct is 'PRIVATE estimated body fat %. Read via get_my_profile().';
+comment on column public.profiles.body_metrics_completed_at is 'When set, Official Fitness Challenges may be joined. After this, current_weight is stored in kg.';
+comment on column public.profiles.fitness_profile is 'PRIVATE jsonb training background for matching. Read via get_my_profile().';
 
 create trigger profiles_set_updated_at
   before update on public.profiles
@@ -2408,5 +2416,9 @@ insert into public.challenges (
 -- Badge catalog, awards, and Coin rewards: supabase/migrations/20260815_badges.sql.
 -- Activity logging, progress, and judging: supabase/migrations/20260815_challenge_loop.sql.
 -- Challenge escrow spine (publish/join/refund/distribute RPCs): supabase/migrations/20260817_challenge_escrow_spine.sql.
+-- Stories + 24h views: supabase/migrations/20260818043000_stories.sql.
+-- Direct messages: supabase/migrations/20260818053000_messages.sql.
+-- Body metrics + Official join gate: supabase/migrations/20260818060000_body_metrics.sql.
+-- Fitness history jsonb: supabase/migrations/20260818070000_fitness_profile.sql.
 
 commit;

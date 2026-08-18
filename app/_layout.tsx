@@ -87,6 +87,8 @@ function RootNavigator() {
         <Stack.Screen name="invite/[token]" />
         <Stack.Protected guard={path === 'app'}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="story" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="messages" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Screen name="+not-found" />
       </Stack>

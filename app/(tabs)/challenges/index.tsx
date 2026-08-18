@@ -13,6 +13,7 @@ import { AppText } from '@/components/ui/AppText';
 import { AppHeader } from '@/components/wallet/AppHeader';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyProfile } from '@/hooks/useProfile';
 import {
   useDiscoverChallenges,
   useJoinChallenge,
@@ -21,11 +22,12 @@ import {
   useMyLobbyChallenges,
 } from '@/hooks/useChallenge';
 import { useChallengeDrafts, useDiscardChallengeDraft } from '@/hooks/useChallengeDraft';
+import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { isVisibleDraft } from '@/lib/challengeDraft';
 import { isBucksChallenge } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
-import { challengeDetailHref } from '@/lib/routes';
+import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
 import { getErrorMessage } from '@/utils/errors';
 
 type LobbyFilter = 'all' | 'joined' | 'open' | 'official' | 'bucks' | 'coins';
@@ -149,6 +151,7 @@ function FilterChip({
 export default function ChallengesScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { profile } = useMyProfile();
   const discoverQuery = useDiscoverChallenges();
   const joinedQuery = useMyLobbyChallenges();
   const mine = useMyChallengeProgress();
@@ -232,6 +235,10 @@ export default function ChallengesScreen() {
   function requestJoin(challenge: ChallengeWithStats) {
     if (!user) {
       router.push('/login');
+      return;
+    }
+    if (challenge.is_official && !hasCompletedBodyMetrics(profile)) {
+      router.push(BODY_METRICS_HREF);
       return;
     }
     setJoinError(null);

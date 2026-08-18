@@ -285,6 +285,25 @@ export async function uploadChallengeCover(input: {
   });
 }
 
+export async function uploadStoryMedia(input: {
+  uri: string;
+  userId: string;
+  mimeType?: string | null;
+  blob?: Blob | null;
+}): Promise<string> {
+  const contentType = coerceImageContentType(input.mimeType ?? input.blob?.type, input.uri);
+  if (!contentType.startsWith('image/') && !contentType.startsWith('video/')) {
+    throw new Error('Stories need a photo or a short video.');
+  }
+  return uploadPostMedia({
+    uri: input.uri,
+    userId: input.userId,
+    fileStem: `stories/${Date.now()}`,
+    mimeType: contentType,
+    blob: input.blob,
+  });
+}
+
 export async function uploadPostMedia(input: {
   uri: string;
   userId: string;

@@ -265,6 +265,9 @@ function humanize(raw: string): string {
   if (message.includes('not_joinable')) {
     return 'This challenge is not accepting competitors.';
   }
+  if (message.includes('body_metrics_required') || message.includes('add body metrics first')) {
+    return 'Add body metrics first to join Official Fitness Challenges.';
+  }
   if (message.includes('lms_not_finished')) {
     return 'Last Man Standing is not down to one person yet.';
   }

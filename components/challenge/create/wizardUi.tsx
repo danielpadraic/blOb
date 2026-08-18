@@ -122,7 +122,7 @@ export function WizardModalShell({
             style={{
               zIndex: 1,
               paddingTop: insets.top + 8,
-              paddingBottom: insets.bottom + 8,
+              paddingBottom: insets.bottom + 24,
               overflow: 'visible',
             }}>
             <View

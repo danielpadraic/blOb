@@ -34,5 +34,8 @@ function profileHref(pathname: string, handle: string): Href {
   if (pathname.startsWith('/profile')) {
     return { pathname: '/profile/u/[username]', params: { username: handle } };
   }
+  if (pathname.startsWith('/friends') || pathname.startsWith('/messages')) {
+    return { pathname: '/friends/u/[username]', params: { username: handle } };
+  }
   return { pathname: '/feed/u/[username]', params: { username: handle } };
 }

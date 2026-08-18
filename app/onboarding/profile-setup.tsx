@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, Switch, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'expo-router';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
@@ -27,6 +28,7 @@ import {
   WORKOUT_FREQUENCY_OPTIONS,
 } from '@/lib/constants';
 import type { WeightUnit } from '@/lib/types';
+import { BODY_METRICS_HREF } from '@/lib/routes';
 import { getErrorMessage } from '@/utils/errors';
 import {
   cmToFeetInches,
@@ -62,6 +64,7 @@ const STEP_COPY = [
 ] as const;
 
 export default function ProfileSetupScreen() {
+  const router = useRouter();
   const { profile } = useMyProfile();
   const completeProfile = useCompleteProfile();
   const uploadAvatar = useUploadAvatar();
@@ -194,6 +197,7 @@ export default function ProfileSetupScreen() {
         primary_activities: values.primary_activities,
         show_fitness_stats_publicly: values.show_fitness_stats_publicly,
       });
+      router.replace(BODY_METRICS_HREF);
     } catch (error) {
       setFormError(getErrorMessage(error));
     }

@@ -37,6 +37,7 @@ export const GLYPH = {
   shield: { ios: 'checkmark.shield.fill', android: 'verified_user', web: 'verified_user' },
   camera: { ios: 'camera.fill', android: 'photo_camera', web: 'photo_camera' },
   heartbeat: { ios: 'heart.fill', android: 'monitor_heart', web: 'monitor_heart' },
+  search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
   bell: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
 } as const satisfies Record<string, GlyphName>;
 

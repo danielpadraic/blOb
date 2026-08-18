@@ -13,8 +13,8 @@
       "bundleIdentifier": "app.blob.mobile",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "blOb needs photo access to submit workout proofs and set your avatar.",
-        "NSCameraUsageDescription": "blOb needs camera access to capture workout proofs."
+        "NSPhotoLibraryUsageDescription": "blOb needs photo access for stories, proofs, and your avatar.",
+        "NSCameraUsageDescription": "blOb needs camera access for stories and workout proofs."
       }
     },
     "android": {
@@ -26,7 +26,8 @@
       "package": "app.blob.mobile",
       "permissions": [
         "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
       ]
     },
     "web": {
@@ -49,13 +50,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "blOb needs photo access to submit workout proofs and set your avatar.",
-          "cameraPermission": "blOb needs camera access to capture workout proofs."
+          "photosPermission": "blOb needs photo access for stories, proofs, and your avatar.",
+          "cameraPermission": "blOb needs camera access for stories and workout proofs."
         }
       ],
       "expo-apple-authentication",
       "expo-web-browser",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

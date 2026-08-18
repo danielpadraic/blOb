@@ -4,8 +4,9 @@ import { useRouter, type Href } from 'expo-router';
 
 import { AppText } from '@/components/ui/AppText';
 import { useChallenges } from '@/hooks/useChallenge';
+import { useReels } from '@/hooks/useSocial';
 import { challengeDetailHref } from '@/lib/routes';
-import { THEME, themeShadow } from '@/lib/theme';
+import { themeShadow } from '@/lib/theme';
 
 type MomentVariant = 'teal' | 'dark' | 'soft';
 
@@ -14,7 +15,7 @@ type MomentItem = {
   handle: string;
   title: string;
   variant: MomentVariant;
-  href: Href;
+  href?: Href;
 };
 
 const VARIANTS: MomentVariant[] = ['teal', 'dark', 'dark', 'soft'];
@@ -25,27 +26,36 @@ const GRADIENTS: Record<MomentVariant, readonly [string, string]> = {
   soft: ['#DFF6F2', '#7DDDCF'],
 };
 
-const DEMO_MOMENTS: MomentItem[] = [
-  { id: 'demo-weekly', handle: '@blob', title: 'Official weekly', variant: 'teal', href: '/challenges' },
-  { id: 'demo-streak', handle: '@you', title: 'Log streak', variant: 'dark', href: '/challenges' },
-  { id: 'demo-lobby', handle: '@lobby', title: 'Open lobby', variant: 'dark', href: '/challenges' },
-  { id: 'demo-join', handle: '@crew', title: 'Join a crew', variant: 'soft', href: '/challenges' },
-];
+const COMING_SOON: MomentItem = {
+  id: 'reels-soon',
+  handle: '@blob',
+  title: 'Reels coming soon',
+  variant: 'soft',
+};
 
 export function ReelsRow() {
   const router = useRouter();
+  const reels = useReels(8);
   const challenges = useChallenges();
-  const live = (challenges.data ?? []).slice(0, 4).map((challenge, index) => ({
+  const liveReels = (reels.data ?? []).slice(0, 8).map((reel, index) => ({
+    id: reel.id,
+    handle: '@blob',
+    title: reel.caption?.trim() || 'Reel',
+    variant: VARIANTS[index % VARIANTS.length],
+    href: reel.challenge_id ? challengeDetailHref(reel.challenge_id, 'feed') : undefined,
+  }));
+  const liveChallenges = (challenges.data ?? []).slice(0, 4).map((challenge, index) => ({
     id: challenge.id,
     handle: challenge.is_official ? '@official' : '@blob',
     title: challenge.title,
     variant: VARIANTS[index % VARIANTS.length],
     href: challengeDetailHref(challenge.id, 'feed'),
   }));
-  const cards = live.length > 0 ? padMoments(live) : DEMO_MOMENTS;
+  const cards = liveReels.length > 0 ? liveReels : [COMING_SOON, ...liveChallenges].slice(0, 4);
 
   return (
-    <View style={{ marginHorizontal: -16 }}>
+    <View className="gap-2" style={{ marginHorizontal: -16 }}>
+      <AppText className="px-4 text-[13px] font-bold text-muted">Reels</AppText>
       <ScrollView
         horizontal
         nestedScrollEnabled
@@ -53,19 +63,15 @@ export function ReelsRow() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingBottom: 2 }}>
         {cards.map((item) => (
-          <MomentCard key={item.id} item={item} onPress={() => router.push(item.href)} />
+          <MomentCard
+            key={item.id}
+            item={item}
+            onPress={item.href ? () => router.push(item.href!) : undefined}
+          />
         ))}
       </ScrollView>
     </View>
   );
-}
-
-function padMoments(live: MomentItem[]) {
-  if (live.length >= 4) {
-    return live;
-  }
-  const used = new Set(live.map((item) => item.id));
-  return [...live, ...DEMO_MOMENTS.filter((item) => !used.has(item.id))].slice(0, 4);
 }
 
 function MomentCard({
@@ -73,7 +79,7 @@ function MomentCard({
   onPress,
 }: {
   item: MomentItem;
-  onPress: () => void;
+  onPress?: () => void;
 }) {
   const light = item.variant === 'soft';
   const color = light ? '#12332D' : '#FFFFFF';
@@ -81,7 +87,8 @@ function MomentCard({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : 'text'}
       accessibilityLabel={`${item.title} ${item.handle}`}
       style={{ ...themeShadow('card') }}>
       <LinearGradient

@@ -23,6 +23,7 @@ type FeedListProps = {
   embedded?: boolean;
   headerTop?: ReactNode;
   headerExtra?: ReactNode;
+  empty?: ReactNode;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -50,6 +51,7 @@ export function FeedList({
   embedded,
   headerTop,
   headerExtra,
+  empty,
   onRefresh,
   onRetry,
   onCompose,
@@ -97,7 +99,7 @@ export function FeedList({
           compact={embedded}
         />
       ) : posts.length === 0 ? (
-        <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact={embedded} />
+        empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact={embedded} />
       ) : (
         <View className="gap-3">
           {posts.map((post) => (

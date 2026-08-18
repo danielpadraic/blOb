@@ -32,6 +32,7 @@ const RPC_MESSAGES: Record<string, string> = {
   CHALLENGE_NOT_FOUND: 'Challenge not found.',
   ALREADY_STARTED: 'This challenge already started.',
   NOT_JOINABLE: 'This challenge is not accepting competitors.',
+  BODY_METRICS_REQUIRED: 'Add body metrics first to join Official Fitness Challenges.',
   ALREADY_JOINED: 'You already joined this challenge.',
   LOBBY_FULL: 'This challenge is full.',
   NOT_INVITED: 'This challenge is private. Ask the host for an invite.',

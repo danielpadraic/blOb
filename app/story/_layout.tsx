@@ -1,0 +1,33 @@
+import { Stack } from 'expo-router';
+
+import { THEME } from '@/lib/theme';
+
+export default function StoryStackLayout() {
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        headerTintColor: THEME.textPrimary,
+        headerStyle: { backgroundColor: THEME.background },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: THEME.background },
+      }}>
+      <Stack.Screen
+        name="create"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+          contentStyle: { backgroundColor: THEME.background },
+        }}
+      />
+      <Stack.Screen
+        name="[id]"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          contentStyle: { backgroundColor: '#101312' },
+        }}
+      />
+    </Stack>
+  );
+}

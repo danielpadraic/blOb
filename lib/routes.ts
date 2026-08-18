@@ -18,6 +18,26 @@ export function inviteHref(token: string) {
   };
 }
 
+export const STORY_CREATE_HREF = '/story/create' as const;
+
+export function storyHref(id: string) {
+  return {
+    pathname: '/story/[id]' as const,
+    params: { id },
+  };
+}
+
+export const MESSAGES_HREF = '/messages' as const;
+export const BODY_METRICS_HREF = '/profile/body-metrics' as const;
+export const FITNESS_HISTORY_HREF = '/profile/fitness-history' as const;
+
+export function conversationHref(id: string) {
+  return {
+    pathname: '/messages/[id]' as const,
+    params: { id },
+  };
+}
+
 export const TAB_STACK_SCREEN_OPTIONS = {
   headerTintColor: THEME.textPrimary,
   headerStyle: { backgroundColor: THEME.background },

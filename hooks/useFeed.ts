@@ -217,6 +217,19 @@ async function fetchJoinedChallengeIds(userId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.challenge_id);
 }
 
+async function fetchFriendIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('friendships')
+    .select('user_a_id, user_b_id')
+    .eq('status', 'accepted')
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
+  if (error) {
+    console.log('[blob:feed] friends lookup failed', error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id));
+}
+
 async function fetchFollowingIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('follows')
@@ -243,17 +256,19 @@ async function fetchPosts(input: {
     return hydrateAuthors(await withSocial(global));
   }
 
-  const [challengeIds, followingIds] = await Promise.all([
+  const [challengeIds, followingIds, friendIds] = await Promise.all([
     fetchJoinedChallengeIds(input.userId),
     fetchFollowingIds(input.userId),
+    fetchFriendIds(input.userId),
   ]);
+  const authorIds = [...new Set([input.userId, ...followingIds, ...friendIds])];
 
-  const [joined, following] = await Promise.all([
+  const [joined, people] = await Promise.all([
     queryPosts({ kind: 'ids', challengeIds }),
-    queryPosts({ kind: 'authors', authorIds: followingIds }),
+    queryPosts({ kind: 'authors', authorIds }),
   ]);
 
-  return hydrateAuthors(await withSocial(dedupePosts([global, joined, following]).slice(0, 50)));
+  return hydrateAuthors(await withSocial(dedupePosts([global, joined, people]).slice(0, 50)));
 }
 
 export async function insertWorkoutCheckInPost(input: {
@@ -417,8 +432,8 @@ export function useCreatePost(challengeId?: string | null) {
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['feed', key] });
-      void queryClient.invalidateQueries({ queryKey: ['feed', 'author', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed-events'] });
       void reportBadgeActivity();
     },
   });

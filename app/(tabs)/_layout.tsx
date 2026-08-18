@@ -7,10 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ComposeTabButton } from '@/components/navigation/ComposeTabButton';
 import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
-import { TabChromeHeader, isAlertsTab, isLobbyListRoute } from '@/components/wallet/TabChrome';
+import { TabChromeHeader, isAlertsTab, isLobbyListRoute, isMainTabRoute } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
-import { useNotificationsRealtime, useUnreadNotificationCount } from '@/hooks/useNotifications';
+import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { THEME, themeShadow } from '@/lib/theme';
 import { LOBBY_HREF } from '@/lib/routes';
 
@@ -21,10 +21,9 @@ export default function TabLayout() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const loggable = useLoggableChallenge();
-  const unread = useUnreadNotificationCount();
   useNotificationsRealtime();
-  const unreadCount = unread.data ?? 0;
   const tabBottom = Math.max(insets.bottom, 10);
+  const hideTabBar = !isMainTabRoute(segments as string[]);
 
   const closeAlerts = useCallback(() => {
     setAlertsOpen(false);
@@ -89,22 +88,24 @@ export default function TabLayout() {
           headerShown: false,
           tabBarActiveTintColor: THEME.accent,
           tabBarInactiveTintColor: THEME.textMuted,
-          tabBarStyle: {
-            position: 'absolute',
-            left: 10,
-            right: 10,
-            bottom: tabBottom,
-            height: 70,
-            backgroundColor: 'rgba(255,255,255,0.94)',
-            borderTopWidth: 0,
-            borderWidth: 1,
-            borderColor: THEME.border,
-            borderRadius: 23,
-            paddingTop: 8,
-            paddingBottom: 8,
-            overflow: 'visible',
-            ...themeShadow('bar'),
-          },
+          tabBarStyle: hideTabBar
+            ? { display: 'none' }
+            : {
+                position: 'absolute',
+                left: 10,
+                right: 10,
+                bottom: tabBottom,
+                height: 70,
+                backgroundColor: 'rgba(255,255,255,0.94)',
+                borderTopWidth: 0,
+                borderWidth: 1,
+                borderColor: THEME.border,
+                borderRadius: 23,
+                paddingTop: 8,
+                paddingBottom: 8,
+                overflow: 'visible',
+                ...themeShadow('bar'),
+              },
           tabBarItemStyle: {
             paddingTop: 2,
           },
@@ -173,26 +174,25 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="notifications"
+          name="friends"
           options={{
-            title: 'Alerts',
-            tabBarAccessibilityLabel: 'Notifications',
-            tabBarBadge: unreadCount > 99 ? '99+' : unreadCount > 0 ? unreadCount : undefined,
-            tabBarBadgeStyle: {
-              backgroundColor: THEME.accent,
-              color: THEME.primaryForeground,
-              fontSize: 10,
-              fontWeight: '700',
-            },
+            title: 'Friends',
             tabBarIcon: ({ color }) => (
               <SymbolView
-                name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
+                name={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
                 tintColor={color}
                 size={26}
               />
             ),
           }}
           listeners={{ tabPress: closeAlerts }}
+        />
+        <Tabs.Screen
+          name="notifications"
+          options={{
+            href: null,
+            title: 'Alerts',
+          }}
         />
         <Tabs.Screen
           name="profile"

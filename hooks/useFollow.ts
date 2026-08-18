@@ -112,6 +112,12 @@ export function useToggleFollow(userId?: string | null) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['follow', user?.id, userId] });
       void queryClient.invalidateQueries({ queryKey: ['follow-counts', userId] });
+      if (user?.id) {
+        void queryClient.invalidateQueries({ queryKey: ['following', user.id] });
+      }
+      if (userId) {
+        void queryClient.invalidateQueries({ queryKey: ['followers', userId] });
+      }
       void reportBadgeActivity();
     },
   });

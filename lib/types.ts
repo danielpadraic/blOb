@@ -1,4 +1,55 @@
+import type {
+  Conversation,
+  ConversationMember,
+  FeedEvent,
+  Follow,
+  Friendship,
+  Message,
+  Reel,
+  ReelTag,
+  Story,
+  StoryView,
+} from '@/types/social';
+
+export type {
+  Conversation,
+  ConversationMember,
+  FeedEvent,
+  FeedEventType,
+  FeedEventVisibility,
+  Follow,
+  Friendship,
+  FriendshipStatus,
+  Message,
+  Reel,
+  ReelTag,
+  Story,
+  StoryView,
+} from '@/types/social';
+
 export type WeightUnit = 'kg' | 'lb';
+
+export type FitnessExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+export type FitnessPrimaryGoal = 'strength' | 'endurance' | 'fat_loss' | 'general' | 'competition';
+export type FitnessUnitSystem = 'imperial' | 'metric';
+
+export type FitnessSportYears = {
+  name: string;
+  years: number;
+};
+
+/** Private jsonb on profiles. Used for matching and placement. */
+export type FitnessProfile = {
+  experience_level: FitnessExperienceLevel;
+  primary_goal: FitnessPrimaryGoal;
+  training_days_per_week: number;
+  sports: FitnessSportYears[];
+  last_mile_run: string | 'never';
+  limitations: string[];
+  limitations_notes: string;
+  preferred_units: FitnessUnitSystem;
+  equipment_access: string[];
+};
 
 export type ChallengeStatus =
   | 'draft'
@@ -126,6 +177,10 @@ export interface Profile {
   current_weight: number | null;
   goal_weight: number | null;
   weight_unit: WeightUnit;
+  gender?: 'male' | 'female' | null;
+  body_fat_pct?: number | null;
+  body_metrics_completed_at?: string | null;
+  fitness_profile?: FitnessProfile | null;
   typical_weekly_workout_frequency: number | null;
   primary_activities: string[];
   skill_tags: string[];
@@ -435,12 +490,6 @@ export type AcceptChallengeInviteResult = {
   already_accepted?: boolean;
 };
 
-export interface Follow {
-  follower_id: string;
-  following_id: string;
-  created_at: string;
-}
-
 export type ProfileUpdate = Partial<
   Pick<
     Profile,
@@ -452,6 +501,10 @@ export type ProfileUpdate = Partial<
     | 'current_weight'
     | 'goal_weight'
     | 'weight_unit'
+    | 'gender'
+    | 'body_fat_pct'
+    | 'body_metrics_completed_at'
+    | 'fitness_profile'
     | 'typical_weekly_workout_frequency'
     | 'primary_activities'
     | 'skill_tags'
@@ -628,6 +681,90 @@ export type Database = {
         [
           Relationship<'follows_follower_id_fkey', 'follower_id', 'profiles', 'id'>,
           Relationship<'follows_following_id_fkey', 'following_id', 'profiles', 'id'>,
+        ]
+      >;
+      friendships: TableDef<
+        Friendship,
+        Partial<Friendship>,
+        Partial<Friendship>,
+        [
+          Relationship<'friendships_user_a_id_fkey', 'user_a_id', 'profiles', 'id'>,
+          Relationship<'friendships_user_b_id_fkey', 'user_b_id', 'profiles', 'id'>,
+          Relationship<'friendships_requested_by_fkey', 'requested_by', 'profiles', 'id'>,
+        ]
+      >;
+      feed_events: TableDef<
+        FeedEvent,
+        Partial<FeedEvent>,
+        Partial<FeedEvent>,
+        [
+          Relationship<'feed_events_actor_id_fkey', 'actor_id', 'profiles', 'id'>,
+          Relationship<'feed_events_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+        ]
+      >;
+      stories: TableDef<
+        Story,
+        Partial<Story>,
+        Partial<Story>,
+        [
+          Relationship<'stories_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'stories_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+        ]
+      >;
+      story_views: TableDef<
+        StoryView,
+        Partial<StoryView>,
+        Partial<StoryView>,
+        [
+          Relationship<'story_views_story_id_fkey', 'story_id', 'stories', 'id'>,
+          Relationship<'story_views_viewer_id_fkey', 'viewer_id', 'profiles', 'id'>,
+        ]
+      >;
+      reels: TableDef<
+        Reel,
+        Partial<Reel>,
+        Partial<Reel>,
+        [
+          Relationship<'reels_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'reels_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+        ]
+      >;
+      reel_tags: TableDef<
+        ReelTag,
+        Partial<ReelTag>,
+        Partial<ReelTag>,
+        [
+          Relationship<'reel_tags_reel_id_fkey', 'reel_id', 'reels', 'id'>,
+          Relationship<'reel_tags_tagged_user_id_fkey', 'tagged_user_id', 'profiles', 'id'>,
+        ]
+      >;
+      conversations: TableDef<
+        Conversation,
+        Partial<Conversation>,
+        Partial<Conversation>,
+        [Relationship<'conversations_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>]
+      >;
+      conversation_members: TableDef<
+        ConversationMember,
+        Partial<ConversationMember>,
+        Partial<ConversationMember>,
+        [
+          Relationship<
+            'conversation_members_conversation_id_fkey',
+            'conversation_id',
+            'conversations',
+            'id'
+          >,
+          Relationship<'conversation_members_user_id_fkey', 'user_id', 'profiles', 'id'>,
+        ]
+      >;
+      messages: TableDef<
+        Message,
+        Partial<Message>,
+        Partial<Message>,
+        [
+          Relationship<'messages_conversation_id_fkey', 'conversation_id', 'conversations', 'id'>,
+          Relationship<'messages_sender_id_fkey', 'sender_id', 'profiles', 'id'>,
         ]
       >;
       badges: TableDef<BadgeDefinition, Partial<BadgeDefinition>, Partial<BadgeDefinition>>;

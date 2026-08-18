@@ -13,7 +13,7 @@ import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
-import { LOBBY_HREF } from '@/lib/routes';
+import { BODY_METRICS_HREF, LOBBY_HREF } from '@/lib/routes';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -72,6 +72,7 @@ import {
 } from '@/lib/settlement';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWallet, isBucksChallenge, isSponsoredBucks, walletBalance } from '@/lib/currency';
+import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import {
@@ -79,6 +80,9 @@ import {
   formatDateRange,
   prizeIfYouFinish,
 } from '@/utils/format';
+
+const BODY_METRICS_JOIN_COPY =
+  'Official challenges use body metrics for matching. Add yours to join — it stays private.';
 
 export default function ChallengeDetailScreen() {
   const params = useLocalSearchParams<{ id: string; returnTo?: string }>();
@@ -161,6 +165,9 @@ export default function ChallengeDetailScreen() {
     if (isChallengeFull(challenge)) {
       return 'This challenge is full.';
     }
+    if (challenge.is_official && !hasCompletedBodyMetrics(profile)) {
+      return BODY_METRICS_JOIN_COPY;
+    }
     const buyIn = Number(challenge.buy_in_amount) || 0;
     const wallet = walletBalance(profile, challenge.currency);
     if (buyIn > 0 && profile && wallet < buyIn) {
@@ -170,6 +177,7 @@ export default function ChallengeDetailScreen() {
   }, [challenge, isJoined, profile]);
 
   const canJoin = Boolean(challenge) && !isJoined && !joinBlocked;
+  const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
   const inviteOnly = isInviteOnlyChallenge(challenge);
   const windowEnded = Boolean(challenge && hasChallengeEnded(challenge, new Date(nowMs)));
@@ -943,7 +951,13 @@ export default function ChallengeDetailScreen() {
               {actionError ? (
                 <AppText className="text-sm leading-5 text-coral-dark">{actionError}</AppText>
               ) : null}
-              {canJoin ? (
+              {needsBodyMetrics ? (
+                <Button
+                  title="Add body metrics"
+                  size="lg"
+                  onPress={() => router.push(BODY_METRICS_HREF)}
+                />
+              ) : canJoin ? (
                 <Button
                   title={isFreeEntry ? 'Join free' : `Join for ${money(buyInAmount)}`}
                   size="lg"

@@ -24,7 +24,9 @@ import {
 } from '@/hooks/useFeed';
 import { useBadgeProgress } from '@/hooks/useBadges';
 import { usePublicProfile } from '@/hooks/usePublicProfile';
+import { useGetOrCreateConversation } from '@/hooks/useSocial';
 import { WalletBar } from '@/components/wallet/WalletBar';
+import { conversationHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -62,6 +64,7 @@ export default function PublicProfileScreen() {
   const createComment = useCreateComment();
   const deletePost = useDeletePost();
   const badgesQuery = useBadgeProgress(profile?.id);
+  const startChat = useGetOrCreateConversation();
   const headerTitle = profile?.username ? `@${profile.username}` : 'Profile';
   const headerOptions = useMemo(
     () => ({
@@ -148,6 +151,18 @@ export default function PublicProfileScreen() {
                         Alert.alert('Couldn’t update follow', getErrorMessage(error)),
                     })
                   }
+                />
+                <Button
+                  title="Message"
+                  size="sm"
+                  variant="outline"
+                  loading={startChat.isPending}
+                  onPress={() => {
+                    void startChat.mutateAsync(profile.id).then(
+                      (conversation) => router.push(conversationHref(conversation.id)),
+                      (error) => Alert.alert('Couldn’t open that chat', getErrorMessage(error)),
+                    );
+                  }}
                 />
                 <Button
                   title="Call out"

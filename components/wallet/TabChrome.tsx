@@ -11,7 +11,7 @@ import { THEME } from '@/lib/theme';
 
 export const TAB_ROOT_EDGES: Edge[] = ['left', 'right'];
 
-const MAIN_TABS = new Set(['feed', 'challenges', 'notifications', 'profile']);
+const MAIN_TABS = new Set(['feed', 'challenges', 'friends', 'notifications', 'profile']);
 
 export function isMainTabRoute(segments: string[]): boolean {
   const parts = segments.filter((segment) => !segment.startsWith('('));

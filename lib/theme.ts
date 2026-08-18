@@ -30,8 +30,8 @@ export const THEME = {
   },
 } as const;
 
-/** Space so tab-root screens clear the floating pill bar. */
-export const TAB_BAR_CONTENT_INSET = 110;
+/** Space so tab-root screens clear the floating pill bar (70px bar + inset + gap). */
+export const TAB_BAR_CONTENT_INSET = 128;
 
 export function themeShadow(kind: 'card' | 'bar' = 'card'): ViewStyle {
   if (kind === 'bar') {

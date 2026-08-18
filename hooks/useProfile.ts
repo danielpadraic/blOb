@@ -32,12 +32,18 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     throw new Error('Couldn’t load your wallet. Try signing in again.');
   }
   const coins = Number(profile.coins ?? profile.credits ?? 0);
+  const gender = profile.gender === 'male' || profile.gender === 'female' ? profile.gender : null;
+  const bodyFat = profile.body_fat_pct == null ? null : Number(profile.body_fat_pct);
   return {
     ...profile,
     id: profile.id || userId,
     coins,
     bucks: Number(profile.bucks ?? 0),
     credits: coins,
+    gender,
+    body_fat_pct: Number.isFinite(bodyFat) ? bodyFat : null,
+    body_metrics_completed_at: profile.body_metrics_completed_at ?? null,
+    fitness_profile: profile.fitness_profile ?? null,
   };
 }
 
@@ -195,7 +201,10 @@ export function useUpdateProfile() {
       }
       return patch;
     },
-    onSuccess: () => {
+    onSuccess: (patch) => {
+      queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>
+        current && typeof current === 'object' ? { ...current, ...patch } : current,
+      );
       void queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
     },
   });
@@ -235,7 +244,10 @@ export function useCompleteProfile() {
         throw new Error(getErrorMessage(error));
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, patch) => {
+      queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>
+        current && typeof current === 'object' ? { ...current, ...patch } : current,
+      );
       void queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
     },
   });
