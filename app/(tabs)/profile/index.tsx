@@ -13,11 +13,20 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
-import { formatProfileWeight, hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
+import {
+  calcBmi,
+  formatBmi,
+  formatProfileWeight,
+  hasCompletedBodyMetrics,
+  profileWeightKg,
+} from '@/lib/bodyMetrics';
 import { experienceLabel, goalLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
-import { BODY_METRICS_HREF, FITNESS_HISTORY_HREF } from '@/lib/routes';
+import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
+
+const PHYSICAL_DISCLAIMER =
+  'Private unless you share them. Used for Challenge recommendations and competition placement.';
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -29,7 +38,7 @@ export default function ProfileScreen() {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
         <AppHeader title="You" />
-        <MascotState kind="loading" title="Finding your blob" />
+        <MascotState kind="loading" title="Loading profile" />
       </Screen>
     );
   }
@@ -56,13 +65,19 @@ export default function ProfileScreen() {
     profile.typical_weekly_workout_frequency != null
       ? `${profile.typical_weekly_workout_frequency}x / week`
       : 'Not set';
+  const weightKg = profileWeightKg(profile);
+  const bmi =
+    profile.height_cm != null && weightKg != null ? calcBmi(profile.height_cm, weightKg) : null;
+  const genderLabel =
+    profile.gender === 'male' ? 'Male' : profile.gender === 'female' ? 'Female' : 'Not set';
 
   return (
     <Screen scroll edges={TAB_ROOT_EDGES}>
       <AppHeader title="You" />
       <ProfileHeader profile={profile} />
 
-      <View className="mt-3">
+      <View className="mt-3 flex-row flex-wrap gap-2">
+        <Button title="Edit profile" size="sm" onPress={() => router.push('/profile/edit')} />
         <Button
           title="View public profile"
           variant="outline"
@@ -74,6 +89,7 @@ export default function ProfileScreen() {
             })
           }
         />
+        <Button title="Account" variant="outline" size="sm" onPress={() => router.push('/profile/account')} />
       </View>
 
       <View className="mt-4 gap-3">
@@ -83,18 +99,47 @@ export default function ProfileScreen() {
         <Button title="Send Coins or Bucks" variant="outline" onPress={() => wallet?.openSend()} />
 
         {hasCompletedBodyMetrics(profile) ? (
-          <Button
-            title="Update body metrics"
-            variant="outline"
-            onPress={() => router.push(BODY_METRICS_HREF)}
-          />
+          <Card padded={false}>
+            <View
+              className="flex-row items-center justify-between px-4 py-3"
+              style={{ borderBottomWidth: 1, borderBottomColor: THEME.border }}>
+              <AppText className="text-[13px] font-semibold text-charcoal">Physical Details</AppText>
+              <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Private
+              </AppText>
+            </View>
+            <View className="flex-row">
+              <StatCell label="Gender" value={genderLabel} />
+              <StatCell
+                label="Height"
+                value={formatHeight(profile.height_cm, profile.weight_unit)}
+                borderLeft
+              />
+            </View>
+            <View className="flex-row" style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
+              <StatCell label="Weight" value={formatProfileWeight(profile)} />
+              <StatCell label="BMI" value={formatBmi(bmi)} borderLeft />
+            </View>
+            {profile.body_fat_pct != null ? (
+              <View className="flex-row" style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
+                <StatCell label="Body fat" value={`${Math.round(Number(profile.body_fat_pct))}%`} />
+                <View className="flex-1" />
+              </View>
+            ) : null}
+            <View className="px-4 py-2.5" style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
+              <AppText className="text-[11px] leading-4 text-muted">{PHYSICAL_DISCLAIMER}</AppText>
+            </View>
+          </Card>
         ) : (
           <Card className="gap-2">
-            <AppText className="text-[16px] font-extrabold text-charcoal">Finish body metrics</AppText>
-            <AppText className="text-[13px] leading-5 text-muted">
-              A private snapshot that unlocks Official Fitness Challenges. Not a score — just better matching.
-            </AppText>
-            <Button title="Add body metrics" onPress={() => router.push(BODY_METRICS_HREF)} />
+            <View className="flex-row items-center justify-between">
+              <AppText className="text-[16px] font-extrabold text-charcoal">Physical Details</AppText>
+              <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Private
+              </AppText>
+            </View>
+            <AppText className="text-[13px] leading-5 text-muted">{PHYSICAL_DISCLAIMER}</AppText>
+            <Button title="Add Physical Details" onPress={() => router.push('/profile/edit')} />
           </Card>
         )}
 
@@ -106,9 +151,9 @@ export default function ProfileScreen() {
           />
         ) : (
           <Card className="gap-2">
-            <AppText className="text-[16px] font-extrabold text-charcoal">Add fitness history</AppText>
+            <AppText className="text-[16px] font-extrabold text-charcoal">Fitness history</AppText>
             <AppText className="text-[13px] leading-5 text-muted">
-              Optional, but it helps us place you in the right challenges. Skip anything that doesn’t fit.
+              Helps place you in Challenges.
             </AppText>
             <Button title="Add fitness history" onPress={() => router.push(FITNESS_HISTORY_HREF)} />
           </Card>
@@ -116,30 +161,11 @@ export default function ProfileScreen() {
 
         <Card padded={false}>
           <View className="px-4 py-3" style={{ borderBottomWidth: 1, borderBottomColor: THEME.border }}>
-            <AppText className="text-[13px] font-semibold text-charcoal">
-              Training snapshot
-            </AppText>
+            <AppText className="text-[13px] font-semibold text-charcoal">Training</AppText>
           </View>
           <View className="flex-row">
             <StatCell label="Activities" value={activities} />
-            <StatCell
-              label="Frequency"
-              value={frequency}
-              borderLeft
-            />
-          </View>
-          <View
-            className="flex-row"
-            style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
-            <StatCell
-              label="Height"
-              value={formatHeight(profile.height_cm, profile.weight_unit)}
-            />
-            <StatCell
-              label="Weight"
-              value={formatProfileWeight(profile)}
-              borderLeft
-            />
+            <StatCell label="Frequency" value={frequency} borderLeft />
           </View>
           {hasCompletedFitnessHistory(profile) ? (
             <View
@@ -156,24 +182,6 @@ export default function ProfileScreen() {
               />
             </View>
           ) : null}
-          {hasCompletedBodyMetrics(profile) && profile.body_fat_pct != null ? (
-            <View
-              className="flex-row"
-              style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
-              <StatCell
-                label="Body fat"
-                value={`${Math.round(Number(profile.body_fat_pct))}%`}
-              />
-              <View className="flex-1" />
-            </View>
-          ) : null}
-          <View className="px-4 py-2.5" style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
-            <AppText className="text-[11px] leading-4 text-muted">
-              {profile.show_fitness_stats_publicly
-                ? 'Visible on your public profile.'
-                : 'Only you can see these numbers.'}
-            </AppText>
-          </View>
         </Card>
 
         <View className="mt-2">

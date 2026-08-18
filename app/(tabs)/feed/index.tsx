@@ -4,6 +4,7 @@ import { ChallengeRail } from '@/components/feed/ChallengeRail';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { FeedList } from '@/components/feed/FeedList';
+import { RecommendedProfiles } from '@/components/feed/RecommendedProfiles';
 import { ReelsRow } from '@/components/feed/ReelsRow';
 import { StoryTray } from '@/components/feed/StoryTray';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -13,7 +14,6 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   useCreateComment,
   useCreatePost,
-  useDeletePost,
   useFeed,
   useToggleReaction,
 } from '@/hooks/useFeed';
@@ -25,7 +25,6 @@ export default function FeedScreen() {
   const stories = useActiveStories();
   const createPost = useCreatePost();
   const createComment = useCreateComment();
-  const deletePost = useDeletePost();
   const toggleReaction = useToggleReaction();
   const posts = feed.data ?? [];
   const refreshing = (feed.isRefetching || stories.isRefetching) && !feed.isLoading;
@@ -71,6 +70,7 @@ export default function FeedScreen() {
         headerExtra={
           <View className="gap-3">
             <ReelsRow />
+            <RecommendedProfiles />
             <ChallengeRail />
           </View>
         }
@@ -82,7 +82,6 @@ export default function FeedScreen() {
         onComment={(post, content, parentId) =>
           createComment.mutateAsync({ postId: post.id, content, parentId })
         }
-        onDelete={(post) => deletePost.mutateAsync(post.id)}
       />
     </Screen>
   );

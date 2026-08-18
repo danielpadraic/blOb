@@ -6,7 +6,7 @@ type FeedHeaderProps = {
   subtitle?: string;
 };
 
-export function FeedHeader({ subtitle = 'What your crew is competing on' }: FeedHeaderProps) {
+export function FeedHeader({ subtitle = 'Friends, Challenges, and official posts' }: FeedHeaderProps) {
   return (
     <View className="mb-3">
       <AppText className="text-[22px] font-extrabold text-charcoal">Home</AppText>

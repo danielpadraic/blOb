@@ -1,39 +1,44 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Image, View } from 'react-native';
 
 import { FeedList } from '@/components/feed/FeedList';
-import { ProfileBadges } from '@/components/profile/ProfileBadges';
 import { ProfileChallengeRow } from '@/components/profile/ProfileChallengeRow';
-import { ProfileEarnings } from '@/components/profile/ProfileEarnings';
+import { ProfileLink } from '@/components/profile/ProfileLink';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-import { useFollowState, useToggleFollow } from '@/hooks/useFollow';
 import {
   useCreateComment,
   useAuthorFeed,
-  useDeletePost,
   useToggleReaction,
 } from '@/hooks/useFeed';
-import { useBadgeProgress } from '@/hooks/useBadges';
-import { usePublicProfile } from '@/hooks/usePublicProfile';
-import { useGetOrCreateConversation } from '@/hooks/useSocial';
-import { WalletBar } from '@/components/wallet/WalletBar';
+import { usePublicProfile, type ProfileChallenge } from '@/hooks/usePublicProfile';
+import {
+  useAcceptFriendRequest,
+  useFriends,
+  useFriendshipStatus,
+  useGetOrCreateConversation,
+  useSendFriendRequest,
+} from '@/hooks/useSocial';
+import { isCreatorAccount } from '@/lib/creator';
 import { conversationHref } from '@/lib/routes';
+import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
+import { mediaKind } from '@/utils/media';
 
 const TABS = [
   { value: 'posts', label: 'Posts' },
-  { value: 'hosted', label: 'Hosted' },
-  { value: 'play', label: 'Challenges' },
+  { value: 'about', label: 'About' },
+  { value: 'friends', label: 'Friends' },
+  { value: 'photos', label: 'Photos' },
+  { value: 'challenges', label: 'Challenges' },
 ] as const;
 
 type ProfileTab = (typeof TABS)[number]['value'];
@@ -57,24 +62,19 @@ export default function PublicProfileScreen() {
   const [tab, setTab] = useState<ProfileTab>('posts');
 
   const profile = bundle.data?.profile;
-  const follow = useFollowState(profile?.id);
-  const toggleFollow = useToggleFollow(profile?.id);
   const posts = useAuthorFeed(profile?.id);
+  const friendsQuery = useFriends(profile?.id);
+  const friendship = useFriendshipStatus(profile?.id);
+  const sendRequest = useSendFriendRequest();
+  const acceptRequest = useAcceptFriendRequest();
   const toggleReaction = useToggleReaction();
   const createComment = useCreateComment();
-  const deletePost = useDeletePost();
-  const badgesQuery = useBadgeProgress(profile?.id);
   const startChat = useGetOrCreateConversation();
   const headerTitle = profile?.username ? `@${profile.username}` : 'Profile';
   const headerOptions = useMemo(
     () => ({
       ...PROFILE_HEADER_BASE,
       title: headerTitle,
-      headerRight: () => (
-        <View className="pr-1">
-          <WalletBar />
-        </View>
-      ),
     }),
     [headerTitle],
   );
@@ -83,7 +83,7 @@ export default function PublicProfileScreen() {
     return (
       <Screen>
         <Stack.Screen options={headerOptions} />
-        <MascotState kind="loading" title="Finding that blob" compact />
+        <MascotState kind="loading" title="Loading profile" compact />
       </Screen>
     );
   }
@@ -95,7 +95,7 @@ export default function PublicProfileScreen() {
         <MascotState
           kind="error"
           title="Couldn’t load that profile"
-          body={bundle.error instanceof Error ? bundle.error.message : 'Try another blob.'}
+          body={bundle.error instanceof Error ? bundle.error.message : 'Try another username.'}
           actionLabel="Retry"
           onAction={() => void bundle.refetch()}
           compact
@@ -105,9 +105,52 @@ export default function PublicProfileScreen() {
   }
 
   const name = profile.display_name ?? profile.username;
-  const stats = bundle.data.stats;
-  const isSelf = follow.isSelf;
-  const badges = badgesQuery.data ?? [];
+  const isSelf = Boolean(user?.id && user.id === profile.id);
+  const publicPosts = posts.data ?? [];
+  const photos = publicPosts.flatMap((post) =>
+    (post.media_urls ?? []).filter((url) => mediaKind(url) === 'image'),
+  );
+  const publicChallenges = [
+    ...bundle.data.hosted,
+    ...bundle.data.participating,
+  ].filter((item, index, list) => {
+    if (list.findIndex((row) => row.challenge.id === item.challenge.id) !== index) {
+      return false;
+    }
+    return isPublicChallenge(item);
+  });
+  const friendCount = friendsQuery.data?.length ?? 0;
+  const relation = friendship.data;
+
+  function friendAction() {
+    if (!profile || isSelf) {
+      return;
+    }
+    if (relation?.status === 'accepted') {
+      return;
+    }
+    if (relation?.incoming) {
+      acceptRequest.mutate(profile.id, {
+        onError: (error) => Alert.alert('Couldn’t accept that request', getErrorMessage(error)),
+      });
+      return;
+    }
+    if (relation?.status === 'pending') {
+      return;
+    }
+    sendRequest.mutate(profile.id, {
+      onError: (error) => Alert.alert('Couldn’t send that request', getErrorMessage(error)),
+    });
+  }
+
+  const friendTitle =
+    relation?.status === 'accepted'
+      ? 'Friends'
+      : relation?.incoming
+        ? 'Accept'
+        : relation?.status === 'pending'
+          ? 'Request sent'
+          : 'Add friend';
 
   return (
     <Screen scroll edges={PROFILE_SCREEN_EDGES}>
@@ -115,43 +158,33 @@ export default function PublicProfileScreen() {
 
       <View className="gap-3 pb-4 pt-2">
         <View className="flex-row items-start gap-3">
-          <View
-            className="items-center justify-center rounded-full"
-            style={{
-              width: 80,
-              height: 80,
-              backgroundColor: THEME.accentSoft,
-              padding: 3,
-            }}>
-            <Avatar uri={profile.avatar_url} name={name} size={74} />
-          </View>
+          <Avatar uri={profile.avatar_url} name={name} size={80} />
           <View className="min-w-0 flex-1">
             <AppText className="text-[20px] font-bold leading-6 text-charcoal" numberOfLines={1}>
               {name}
             </AppText>
             <AppText className="text-[13px] text-muted">@{profile.username}</AppText>
-            <View className="mt-1.5 flex-row items-center gap-3">
-              <FollowStat icon={GLYPH.people} value={follow.followers} label="followers" />
-              <FollowStat icon={GLYPH.person} value={follow.following} label="following" />
+            <View className="mt-2 flex-row gap-3">
+              <Count label="Friends" value={friendCount} />
+              <Count label="Posts" value={publicPosts.length} />
+              <Count label="Challenges" value={publicChallenges.length} />
             </View>
             {isSelf ? (
               <View className="mt-2 self-start">
-                <Button title="Edit in You" size="sm" variant="outline" onPress={() => router.push('/profile')} />
+                <Button title="Edit profile" size="sm" onPress={() => router.push('/profile/edit')} />
               </View>
             ) : (
               <View className="mt-2 flex-row flex-wrap gap-2">
                 <Button
-                  title={follow.isFollowing ? 'Following' : 'Follow'}
+                  title={friendTitle}
                   size="sm"
-                  variant={follow.isFollowing ? 'outline' : 'secondary'}
-                  loading={toggleFollow.isPending}
-                  onPress={() =>
-                    toggleFollow.mutate(!follow.isFollowing, {
-                      onError: (error) =>
-                        Alert.alert('Couldn’t update follow', getErrorMessage(error)),
-                    })
-                  }
+                  variant={relation?.status === 'accepted' || relation?.status === 'pending' ? 'outline' : 'primary'}
+                  loading={sendRequest.isPending || acceptRequest.isPending}
+                  onPress={friendAction}
                 />
+                {isCreatorAccount() ? (
+                  <Button title="Follow" size="sm" variant="outline" disabled />
+                ) : null}
                 <Button
                   title="Message"
                   size="sm"
@@ -164,17 +197,6 @@ export default function PublicProfileScreen() {
                     );
                   }}
                 />
-                <Button
-                  title="Call out"
-                  size="sm"
-                  variant="outline"
-                  onPress={() =>
-                    router.push({
-                      pathname: '/challenges/callout/create',
-                      params: { username: profile.username },
-                    })
-                  }
-                />
               </View>
             )}
           </View>
@@ -182,38 +204,20 @@ export default function PublicProfileScreen() {
 
         {profile.bio ? (
           <AppText className="text-[14px] leading-5 text-ink">{profile.bio}</AppText>
-        ) : (
-          <AppText className="text-[13px] text-muted">This blob is the strong, silent type.</AppText>
-        )}
-
-        <Card padded={false}>
-          <View className="flex-row">
-            <StatCell glyph={GLYPH.check} label="Completed" value={String(stats.completedCount)} />
-            <StatCell glyph={GLYPH.flag} label="Hosted" value={String(stats.hostedCount)} borderLeft />
-            <StatCell
-              glyph={GLYPH.streak}
-              label="Best run"
-              value={stats.bestRun > 0 ? `${stats.bestRun}d` : '—'}
-              borderLeft
-            />
-          </View>
-        </Card>
-
-        <ProfileEarnings coins={stats.coinsEarned} bucks={stats.bucksEarned} />
-
-        <ProfileBadges badges={badges} />
+        ) : null}
 
         <SegmentedControl value={tab} options={TABS} onChange={setTab} accessibilityLabel="Profile sections" />
 
         {tab === 'posts' ? (
           <FeedList
             embedded
-            posts={posts.data ?? []}
+            posts={publicPosts}
             isLoading={posts.isLoading}
             error={posts.error instanceof Error ? posts.error.message : null}
             currentUserId={user?.id}
-            emptyTitle="No posts yet"
-            emptyBody="When they check in, it’ll land here."
+            emptyTitle="No posts yet."
+            emptyBody=" "
+            empty={<AppText className="py-4 text-center text-[14px] text-muted">No posts yet.</AppText>}
             canCompose={false}
             commenting={createComment.isPending}
             onRetry={() => void posts.refetch()}
@@ -221,38 +225,67 @@ export default function PublicProfileScreen() {
             onComment={(post, content, parentId) =>
               createComment.mutateAsync({ postId: post.id, content, parentId })
             }
-            onDelete={(post) => deletePost.mutateAsync(post.id)}
           />
         ) : null}
 
-        {tab === 'hosted' ? (
-          bundle.data.hosted.length === 0 ? (
-            <MascotState
-              compact
-              kind="empty"
-              title="No hosted challenges yet"
-              body="When they set the stakes, the lobby will show it here."
-            />
+        {tab === 'about' ? (
+          <Card className="gap-2">
+            <Row label="Username" value={`@${profile.username}`} />
+            <Row label="Bio" value={profile.bio?.trim() || 'No bio yet.'} />
+          </Card>
+        ) : null}
+
+        {tab === 'friends' ? (
+          friendCount === 0 ? (
+            <AppText className="py-4 text-center text-[14px] text-muted">No friends yet.</AppText>
           ) : (
-            <View className="gap-1.5">
-              {bundle.data.hosted.map((item) => (
-                <ProfileChallengeRow key={item.challenge.id} item={item} />
+            <View className="flex-row flex-wrap" style={{ marginHorizontal: -4 }}>
+              {(friendsQuery.data ?? []).map((row) => {
+                const friend = row.profile;
+                if (!friend) {
+                  return null;
+                }
+                return (
+                  <View key={friend.id} className="w-1/3 p-1">
+                    <ProfileLink username={friend.username} userId={friend.id}>
+                      <View className="items-center gap-1 py-2">
+                        <Avatar
+                          uri={friend.avatar_url}
+                          name={personDisplayName(friend)}
+                          size={64}
+                        />
+                        <AppText className="text-center text-[12px] font-semibold text-charcoal" numberOfLines={1}>
+                          {personDisplayName(friend)}
+                        </AppText>
+                      </View>
+                    </ProfileLink>
+                  </View>
+                );
+              })}
+            </View>
+          )
+        ) : null}
+
+        {tab === 'photos' ? (
+          photos.length === 0 ? (
+            <AppText className="py-4 text-center text-[14px] text-muted">No photos yet.</AppText>
+          ) : (
+            <View className="flex-row flex-wrap" style={{ marginHorizontal: -3 }}>
+              {photos.map((uri) => (
+                <View key={uri} className="w-1/3 p-0.5">
+                  <Image source={{ uri }} style={{ width: '100%', aspectRatio: 1, borderRadius: 8 }} />
+                </View>
               ))}
             </View>
           )
         ) : null}
 
-        {tab === 'play' ? (
-          bundle.data.participating.length === 0 ? (
-            <MascotState
-              compact
-              kind="empty"
-              title="Not in any challenges"
-              body="Call them out, or wait until they buy in."
-            />
+        {tab === 'challenges' ? (
+          publicChallenges.length === 0 ? (
+            <AppText className="py-4 text-center text-[14px] text-muted">No Challenges yet.</AppText>
           ) : (
             <View className="gap-1.5">
-              {bundle.data.participating.map((item) => (
+              {publicChallenges.map((item) => (
                 <ProfileChallengeRow key={item.challenge.id} item={item} />
               ))}
             </View>
@@ -263,49 +296,28 @@ export default function PublicProfileScreen() {
   );
 }
 
-function FollowStat({
-  icon,
-  value,
-  label,
-}: {
-  icon: GlyphId;
-  value: number;
-  label: string;
-}) {
+function isPublicChallenge(item: ProfileChallenge): boolean {
+  if (item.challenge.is_official) {
+    return true;
+  }
+  const visibility = String(item.challenge.visibility ?? 'public').toLowerCase();
+  return visibility === 'public' || visibility === 'unlisted';
+}
+
+function Count({ label, value }: { label: string; value: number }) {
   return (
-    <View className="flex-row items-center gap-1">
-      <Glyph name={icon} color={THEME.textMuted} size={13} />
-      <AppText className="text-[12px] text-muted">
-        <AppText className="font-semibold text-charcoal">{value}</AppText> {label}
-      </AppText>
+    <View>
+      <AppText className="text-[15px] font-extrabold text-charcoal">{value}</AppText>
+      <AppText className="text-[11px] text-muted">{label}</AppText>
     </View>
   );
 }
 
-function StatCell({
-  label,
-  value,
-  glyph,
-  borderLeft,
-}: {
-  label: string;
-  value: string;
-  glyph: GlyphId;
-  borderLeft?: boolean;
-}) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
-    <View
-      className="flex-1 px-2 py-2.5"
-      style={borderLeft ? { borderLeftWidth: 1, borderLeftColor: THEME.border } : undefined}>
-      <View className="items-center">
-        <Glyph name={glyph} color={THEME.accent} size={16} />
-      </View>
-      <AppText className="mt-1 text-center text-[15px] font-bold text-charcoal" numberOfLines={1}>
-        {value}
-      </AppText>
-      <AppText className="mt-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </AppText>
+    <View>
+      <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</AppText>
+      <AppText className="mt-0.5 text-[14px] leading-5 text-charcoal">{value}</AppText>
     </View>
   );
 }

@@ -23,7 +23,6 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   useAcceptFriendRequest,
   useConversations,
-  useFollowUser,
   useFollowing,
   useFriendRequests,
   useFriends,
@@ -63,7 +62,6 @@ export default function FriendsScreen() {
   const followingQuery = useFollowing();
   const searchQuery = usePeopleSearch(query);
 
-  const followUser = useFollowUser();
   const sendRequest = useSendFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
   const rejectRequest = useRejectFriendRequest();
@@ -93,14 +91,12 @@ export default function FriendsScreen() {
   const parsedSearch = detectPeopleSearch(query);
   const results = parsedSearch ? (searchQuery.data ?? []) : [];
   const busyId =
-    followUser.variables ??
     sendRequest.variables ??
     acceptRequest.variables ??
     rejectRequest.variables ??
     startChat.variables ??
     null;
   const actionPending =
-    followUser.isPending ||
     sendRequest.isPending ||
     acceptRequest.isPending ||
     rejectRequest.isPending;
@@ -138,13 +134,7 @@ export default function FriendsScreen() {
       router.push({ pathname: '/friends/u/[username]', params: { username: profile.username } });
       return;
     }
-    if (relation === 'none') {
-      followUser.mutate(profile.id, {
-        onError: (error) => fail(error, 'Couldn’t follow'),
-      });
-      return;
-    }
-    if (relation === 'following') {
+    if (relation === 'none' || relation === 'following') {
       sendRequest.mutate(profile.id, {
         onError: (error) => fail(error, 'Couldn’t send that request'),
       });

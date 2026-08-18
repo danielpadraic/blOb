@@ -33,7 +33,6 @@ import {
 import {
   useCreateComment,
   useCreatePost,
-  useDeletePost,
   useFeed,
   useToggleReaction,
 } from '@/hooks/useFeed';
@@ -103,7 +102,6 @@ export default function ChallengeDetailScreen() {
   const settlementQuery = useChallengeSettlement(id);
   const feed = useFeed(id);
   const createPost = useCreatePost(id);
-  const deletePost = useDeletePost(id);
   const createComment = useCreateComment(id);
   const toggleReaction = useToggleReaction();
 
@@ -1001,7 +999,6 @@ export default function ChallengeDetailScreen() {
           onComment={(post, content, parentId) =>
             createComment.mutateAsync({ postId: post.id, content, parentId })
           }
-          onDelete={(post) => deletePost.mutateAsync(post.id)}
         />
       </ScrollView>
 

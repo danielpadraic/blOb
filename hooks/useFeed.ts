@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
+import { asPostAudience, DEFAULT_POST_AUDIENCE } from '@/lib/postAudience';
 import { supabase } from '@/lib/supabase';
 import type {
   CommentWithAuthor,
@@ -16,7 +17,9 @@ import { getErrorMessage } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 
-const POST_COLUMNS = 'id, author_id, challenge_id, content, media_urls, created_at';
+const POST_COLUMNS =
+  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, created_at';
+const POST_COLUMNS_LEGACY = 'id, author_id, challenge_id, content, media_urls, created_at';
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at';
 
@@ -40,7 +43,7 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
     .order('created_at', { ascending: false })
     .limit(50);
 
-  const { data, error } =
+  let { data, error } =
     scope.kind === 'challenge'
       ? await query.eq('challenge_id', scope.challengeId)
       : scope.kind === 'ids'
@@ -49,10 +52,33 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
           ? await query.in('author_id', scope.authorIds)
           : await query.is('challenge_id', null);
 
+  if (error && isMissingAudienceColumn(error.message)) {
+    const legacy = supabase
+      .from('posts')
+      .select(POST_COLUMNS_LEGACY)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    const retry =
+      scope.kind === 'challenge'
+        ? await legacy.eq('challenge_id', scope.challengeId)
+        : scope.kind === 'ids'
+          ? await legacy.in('challenge_id', scope.challengeIds)
+          : scope.kind === 'authors'
+            ? await legacy.in('author_id', scope.authorIds)
+            : await legacy.is('challenge_id', null);
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
     throw new Error(getErrorMessage(error));
   }
   return (data ?? []) as unknown as PostWithMeta[];
+}
+
+function isMissingAudienceColumn(message: string): boolean {
+  const text = message.toLowerCase();
+  return text.includes('audience') && (text.includes('does not exist') || text.includes('schema cache'));
 }
 
 async function withSocial(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
@@ -230,16 +256,30 @@ async function fetchFriendIds(userId: string): Promise<string[]> {
   return (data ?? []).map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id));
 }
 
-async function fetchFollowingIds(userId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('follows')
-    .select('following_id')
-    .eq('follower_id', userId);
+async function fetchHostedChallengeIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('challenges').select('id').eq('created_by', userId);
   if (error) {
-    console.log('[blob:feed] following lookup failed', error.message);
+    console.log('[blob:feed] hosted challenges lookup failed', error.message);
     return [];
   }
-  return (data ?? []).map((row) => row.following_id);
+  return (data ?? []).map((row) => row.id);
+}
+
+async function fetchOfficialAnnouncementPosts(): Promise<PostWithMeta[]> {
+  const { data, error } = await supabase
+    .from('challenges')
+    .select('id, created_by')
+    .eq('is_official', true);
+  if (error || !data?.length) {
+    if (error) {
+      console.log('[blob:feed] official challenges lookup failed', error.message);
+    }
+    return [];
+  }
+  const challengeIds = data.map((row) => row.id);
+  const hostIds = new Set(data.map((row) => row.created_by).filter(Boolean));
+  const posts = await queryPosts({ kind: 'ids', challengeIds });
+  return posts.filter((post) => hostIds.has(post.author_id) && asPostAudience(post.audience) === 'public');
 }
 
 async function fetchPosts(input: {
@@ -251,24 +291,27 @@ async function fetchPosts(input: {
     return hydrateAuthors(await withSocial(rows));
   }
 
-  const global = await queryPosts({ kind: 'global' });
   if (!input.userId) {
-    return hydrateAuthors(await withSocial(global));
+    return [];
   }
 
-  const [challengeIds, followingIds, friendIds] = await Promise.all([
+  const [joinedIds, hostedIds, friendIds, official] = await Promise.all([
     fetchJoinedChallengeIds(input.userId),
-    fetchFollowingIds(input.userId),
+    fetchHostedChallengeIds(input.userId),
     fetchFriendIds(input.userId),
+    fetchOfficialAnnouncementPosts(),
   ]);
-  const authorIds = [...new Set([input.userId, ...followingIds, ...friendIds])];
+  const challengeIds = [...new Set([...joinedIds, ...hostedIds])];
+  const authorIds = [...new Set([input.userId, ...friendIds])];
 
-  const [joined, people] = await Promise.all([
+  const [challengePosts, people] = await Promise.all([
     queryPosts({ kind: 'ids', challengeIds }),
     queryPosts({ kind: 'authors', authorIds }),
   ]);
 
-  return hydrateAuthors(await withSocial(dedupePosts([global, joined, people]).slice(0, 50)));
+  return hydrateAuthors(
+    await withSocial(dedupePosts([people, challengePosts, official]).slice(0, 50)),
+  );
 }
 
 export async function insertWorkoutCheckInPost(input: {
@@ -286,6 +329,8 @@ export async function insertWorkoutCheckInPost(input: {
     challenge_id: input.challengeId,
     content,
     media_urls,
+    audience: DEFAULT_POST_AUDIENCE,
+    audience_user_ids: [] as string[],
   };
 
   const created = await supabase.from('posts').insert(payload).select(POST_COLUMNS).single();
@@ -313,6 +358,8 @@ export async function insertWorkoutCheckInPost(input: {
       author_id: input.userId,
       challenge_id: input.challengeId,
       content,
+      audience: DEFAULT_POST_AUDIENCE,
+      audience_user_ids: [],
     })
     .select(POST_COLUMNS)
     .single();
@@ -339,7 +386,8 @@ export function useAuthorFeed(authorId?: string | null) {
     enabled: Boolean(authorId),
     queryFn: async (): Promise<PostWithMeta[]> => {
       const rows = await queryPosts({ kind: 'authors', authorIds: [authorId!] });
-      return hydrateAuthors(await withSocial(rows));
+      const publicOnly = rows.filter((post) => asPostAudience(post.audience) === 'public');
+      return hydrateAuthors(await withSocial(publicOnly));
     },
   });
 }
@@ -386,8 +434,28 @@ export function useCreatePost(challengeId?: string | null) {
       }
       const content = input.content.trim();
       const media_urls = input.mediaUrls?.filter(Boolean) ?? [];
+      const audience = input.audience ?? DEFAULT_POST_AUDIENCE;
+      const audience_user_ids = audience === 'specific' ? (input.audienceUserIds ?? []) : [];
       if (!content && media_urls.length === 0) {
         throw new Error('Write something, or attach a photo first.');
+      }
+      if (audience === 'specific' && audience_user_ids.length === 0) {
+        throw new Error('Pick at least one person.');
+      }
+      const payload = {
+        author_id: user.id,
+        challenge_id: challengeId ?? null,
+        content: content || null,
+        media_urls,
+        audience,
+        audience_user_ids,
+      };
+      const created = await supabase.from('posts').insert(payload).select(POST_COLUMNS).single();
+      if (!created.error) {
+        return created.data;
+      }
+      if (!isMissingAudienceColumn(created.error.message)) {
+        throw new Error(getErrorMessage(created.error));
       }
       const { data, error } = await supabase
         .from('posts')
@@ -397,7 +465,7 @@ export function useCreatePost(challengeId?: string | null) {
           content: content || null,
           media_urls,
         })
-        .select(POST_COLUMNS)
+        .select(POST_COLUMNS_LEGACY)
         .single();
       if (error) {
         throw new Error(getErrorMessage(error));
@@ -414,6 +482,8 @@ export function useCreatePost(challengeId?: string | null) {
           challenge_id: challengeId ?? null,
           content: input.content.trim() || null,
           media_urls: input.mediaUrls ?? [],
+          audience: input.audience ?? DEFAULT_POST_AUDIENCE,
+          audience_user_ids: input.audience === 'specific' ? (input.audienceUserIds ?? []) : [],
           created_at: new Date().toISOString(),
           author: asPublicProfile(profile ?? { id: user.id }),
           comments: [],

@@ -3,14 +3,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
+import { InAppCamera } from '@/components/capture/InAppCamera';
 import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { isVideoProof, proofMeta } from '@/lib/constants';
 import {
+  cameraIsAvailable,
   ensureCapturePermissions,
   ensureLibraryPermission,
   openAppSettings,
-  permissionCopy,
 } from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
 import type { ProofType } from '@/lib/types';
@@ -33,67 +34,76 @@ export function ProofUploader({
   onPicked,
 }: ProofUploaderProps) {
   const meta = proofMeta(type);
-  const isSelfie = type === 'pre_selfie' || type === 'post_selfie';
   const isVideo = isVideoProof(type);
-  const [busy, setBusy] = useState<'camera' | 'library' | null>(null);
+  const [open, setOpen] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [webFallback, setWebFallback] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  async function pick(source: 'camera' | 'library') {
+  async function startCamera() {
     if (locked || busy) {
       return;
     }
-    setBusy(source);
+    setBusy(true);
     try {
-      if (source === 'camera') {
-        const permission = await ensureCapturePermissions(isVideo ? 'video' : 'photo');
-        if (!permission.ok) {
-          const copy = permissionCopy(permission.kind);
-          Alert.alert(copy.title, copy.body, [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => void openAppSettings() },
-          ]);
-          return;
-        }
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: isVideo ? ['videos'] : ['images'],
-          allowsEditing: isSelfie,
-          aspect: isSelfie ? [3, 4] : undefined,
-          quality: 0.8,
-          videoMaxDuration: isVideo ? 30 : undefined,
-        });
-        if (!result.canceled && result.assets[0]?.uri) {
-          onPicked(result.assets[0].uri, result.assets[0].mimeType);
-        }
-        return;
-      }
-
-      const permission = await ensureLibraryPermission();
+      const permission = await ensureCapturePermissions(isVideo ? 'video' : 'photo');
       if (!permission.ok) {
-        const copy = permissionCopy(permission.kind);
-        Alert.alert(copy.title, copy.body, [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => void openAppSettings() },
-        ]);
-        return;
+        setBlocked(true);
+      } else {
+        setBlocked(false);
+        const available = await cameraIsAvailable();
+        setWebFallback(!available);
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: isVideo ? ['videos'] : ['images'],
-        allowsEditing: isSelfie,
-        aspect: isSelfie ? [3, 4] : undefined,
-        quality: 0.8,
-        videoMaxDuration: isVideo ? 30 : undefined,
-      });
-      if (!result.canceled && result.assets[0]?.uri) {
-        onPicked(result.assets[0].uri, result.assets[0].mimeType);
-      }
-    } catch (error) {
-      Alert.alert('Couldn’t add that proof', getErrorMessage(error));
+      setOpen(true);
     } finally {
-      setBusy(null);
+      setBusy(false);
+    }
+  }
+
+  async function openLibrary() {
+    const permission = await ensureLibraryPermission();
+    if (!permission.ok) {
+      Alert.alert('Photo library is off.', 'Turn it on in Settings.', [
+        { text: 'Open Settings', onPress: () => void openAppSettings() },
+      ]);
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: isVideo ? ['videos'] : ['images'],
+      allowsEditing: false,
+      quality: 0.8,
+      videoMaxDuration: isVideo ? 30 : undefined,
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      onPicked(result.assets[0].uri, result.assets[0].mimeType);
+      setOpen(false);
     }
   }
 
   const emptyHeight = compact ? 'h-[120px] items-center justify-center px-6' : 'h-[220px] items-center justify-center px-6';
   const previewHeight = compact ? 148 : 280;
+
+  if (open && !locked) {
+    return (
+      <View style={{ height: Math.max(previewHeight, 320), borderRadius: THEME.radius, overflow: 'hidden' }}>
+        <InAppCamera
+          capture={isVideo ? 'video' : 'photo'}
+          maxDuration={isVideo ? 30 : 15}
+          blocked={blocked}
+          webFallback={webFallback}
+          onCaptured={(media) => {
+            onPicked(media.uri, media.mimeType);
+            setOpen(false);
+          }}
+          onOpenGallery={() => void openLibrary()}
+          onCancel={() => setOpen(false)}
+          onUnavailable={() => setWebFallback(true)}
+        />
+      </View>
+    );
+  }
 
   return (
     <View className="gap-3">
@@ -134,27 +144,12 @@ export function ProofUploader({
       </View>
 
       {locked ? null : (
-        <View className="flex-row gap-3">
-          <View className="flex-1">
-            <Button
-              title={uri ? (isVideo ? 'Re-record' : 'Retake') : isVideo ? 'Record' : 'Take photo'}
-              size="md"
-              loading={busy === 'camera'}
-              disabled={Boolean(busy)}
-              onPress={() => void pick('camera')}
-            />
-          </View>
-          <View className="flex-1">
-            <Button
-              title={uri ? 'Replace' : isVideo ? 'Choose video' : 'Choose photo'}
-              variant="outline"
-              size="md"
-              loading={busy === 'library'}
-              disabled={Boolean(busy)}
-              onPress={() => void pick('library')}
-            />
-          </View>
-        </View>
+        <Button
+          title={uri ? (isVideo ? 'Re-record' : 'Retake') : isVideo ? 'Record' : 'Take photo'}
+          size="md"
+          loading={busy}
+          onPress={() => void startCamera()}
+        />
       )}
     </View>
   );

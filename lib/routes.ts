@@ -20,10 +20,10 @@ export function inviteHref(token: string) {
 
 export const CAPTURE_HREF = '/capture' as const;
 
-export function captureHref(mode?: 'story' | 'reel' | 'post' | 'choose') {
+export function captureHref(mode: 'story' | 'reel' | 'post' = 'story', media?: 'photo' | 'video') {
   return {
     pathname: '/capture' as const,
-    params: mode && mode !== 'choose' ? { mode } : {},
+    params: media ? { mode, media } : { mode },
   };
 }
 

@@ -20,9 +20,9 @@ const ACTION: Record<
   Exclude<PeopleRelation, 'self'>,
   { title: string; variant: 'primary' | 'secondary' | 'outline' | 'mint' | 'ghost' }
 > = {
-  none: { title: 'Follow', variant: 'secondary' },
+  none: { title: 'Add friend', variant: 'primary' },
   following: { title: 'Add friend', variant: 'primary' },
-  requested: { title: 'Requested', variant: 'outline' },
+  requested: { title: 'Request sent', variant: 'outline' },
   incoming: { title: 'Accept', variant: 'primary' },
   friends: { title: 'Friends', variant: 'mint' },
 };
@@ -75,10 +75,10 @@ function statusLabel(relation: PeopleRelation) {
     case 'requested':
       return 'Request sent';
     case 'following':
-      return 'Following';
+      return 'Not friends yet';
     case 'self':
       return 'That’s you';
     default:
-      return 'Not following yet';
+      return 'Not friends yet';
   }
 }

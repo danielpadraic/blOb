@@ -231,6 +231,9 @@ export function useCompleteProfile() {
           current_weight: patch.current_weight ?? null,
           goal_weight: patch.goal_weight ?? null,
           weight_unit: patch.weight_unit ?? 'lb',
+          gender: patch.gender ?? null,
+          body_fat_pct: patch.body_fat_pct ?? null,
+          body_metrics_completed_at: patch.body_metrics_completed_at ?? null,
           typical_weekly_workout_frequency:
             patch.typical_weekly_workout_frequency ?? null,
           primary_activities: patch.primary_activities ?? [],

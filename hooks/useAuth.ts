@@ -39,6 +39,8 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateEmail: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -196,6 +198,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateEmail = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.updateUser({ email: email.trim() });
+    if (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      throw new Error(getErrorMessage(error));
+    }
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -207,6 +223,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithGoogle,
       signInWithApple,
       signOut,
+      updateEmail,
+      updatePassword,
     }),
     [
       isLoading,
@@ -216,6 +234,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithGoogle,
       signOut,
       signUp,
+      updateEmail,
+      updatePassword,
     ],
   );
 

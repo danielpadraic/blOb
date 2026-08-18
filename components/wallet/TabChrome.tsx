@@ -54,10 +54,17 @@ export function isLobbyListRoute(segments: string[]): boolean {
 
 type TabChromeHeaderProps = {
   alertsOpen?: boolean;
+  searchOpen?: boolean;
   onToggleAlerts?: () => void;
+  onToggleSearch?: () => void;
 };
 
-export function TabChromeHeader({ alertsOpen = false, onToggleAlerts }: TabChromeHeaderProps) {
+export function TabChromeHeader({
+  alertsOpen = false,
+  searchOpen = false,
+  onToggleAlerts,
+  onToggleSearch,
+}: TabChromeHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const wallet = useWalletOptional();
@@ -78,6 +85,12 @@ export function TabChromeHeader({ alertsOpen = false, onToggleAlerts }: TabChrom
       }}>
       <View className="flex-row items-center px-4 pb-2.5 pt-2">
         <BlobMascot variant="logo" size={56} />
+        <HeaderIcon
+          label={searchOpen ? 'Close search' : 'Search'}
+          active={searchOpen}
+          onPress={onToggleSearch}>
+          <Glyph name={GLYPH.search} color={searchOpen ? THEME.accent : THEME.textPrimary} size={20} />
+        </HeaderIcon>
         <View className="flex-1" />
         <WalletBar />
         <HeaderIcon

@@ -33,7 +33,6 @@ type FeedListProps = {
     content: string,
     parentId?: string | null,
   ) => Promise<unknown> | void;
-  onDelete?: (post: PostWithMeta) => Promise<unknown> | void;
 };
 
 export function FeedList({
@@ -57,7 +56,6 @@ export function FeedList({
   onCompose,
   onReact,
   onComment,
-  onDelete,
 }: FeedListProps) {
   if (error) {
     return (
@@ -114,7 +112,6 @@ export function FeedList({
                   ? (content, parentId) => onComment(post, content, parentId)
                   : undefined
               }
-              onDelete={onDelete ? () => onDelete(post) : undefined}
             />
           ))}
         </View>

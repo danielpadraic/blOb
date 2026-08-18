@@ -12,10 +12,7 @@ export default function NewPostScreen() {
 
   return (
     <Screen>
-      <AppText className="mb-3 text-[22px] font-bold text-charcoal">What’s the play?</AppText>
-      <AppText className="mb-4 text-muted">
-        Share a workout, a win, or a dare. Tag someone with @username if you want them to see it.
-      </AppText>
+      <AppText className="mb-4 text-[22px] font-bold text-charcoal">New post</AppText>
       <View>
         <Composer
           autoFocus

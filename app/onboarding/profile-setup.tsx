@@ -1,10 +1,12 @@
+import { useEffect, useMemo, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Pressable, Switch, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 
+import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
+import { MorphingBlob, preloadBodyFatFrames } from '@/components/profile/MorphingBlob';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -23,12 +25,22 @@ import {
 } from '@/hooks/useProfile';
 import {
   ACTIVITY_OPTIONS,
-  COLORS,
-  SEED_CREDITS,
   WORKOUT_FREQUENCY_OPTIONS,
 } from '@/lib/constants';
+import {
+  BODY_FAT_DEFAULT,
+  BODY_FAT_MAX,
+  BODY_FAT_MIN,
+  calcBmi,
+  clampBodyFat,
+  formatBmi,
+  inputWeightToKg,
+  profileWeightKg,
+} from '@/lib/bodyMetrics';
+import { hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
+import { FITNESS_HISTORY_HREF } from '@/lib/routes';
+import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
-import { BODY_METRICS_HREF } from '@/lib/routes';
 import { getErrorMessage } from '@/utils/errors';
 import {
   cmToFeetInches,
@@ -48,28 +60,39 @@ const UNIT_OPTIONS = [
   { value: 'kg' as const, label: 'cm + kg' },
 ];
 
+const GENDER_OPTIONS = [
+  { value: 'male' as const, label: 'Male' },
+  { value: 'female' as const, label: 'Female' },
+];
+
 const STEP_COPY = [
   {
-    title: 'Nice to meet you',
-    body: 'This is how other blobs will know you. Take a minute — it only happens once.',
+    title: 'Profile',
+    body: 'How you show up on blOb.',
   },
   {
-    title: 'How you train',
-    body: 'No pressure to be perfect. Just honest.',
+    title: 'Training',
+    body: 'Used to match you with the right Challenges.',
   },
   {
-    title: 'Your body, privately',
-    body: 'These stay private unless you choose to share them. Coins are never public.',
+    title: 'Physical Details',
+    body: 'Private unless you share them. Used for Challenge recommendations and competition placement.',
   },
 ] as const;
 
-export default function ProfileSetupScreen() {
+type ProfileSetupWizardProps = {
+  mode?: 'setup' | 'edit';
+};
+
+export function ProfileSetupWizard({ mode = 'setup' }: ProfileSetupWizardProps) {
   const router = useRouter();
   const { profile } = useMyProfile();
   const completeProfile = useCompleteProfile();
   const uploadAvatar = useUploadAvatar();
   const [step, setStep] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
+  const [exactOpen, setExactOpen] = useState(false);
+  const [exactDraft, setExactDraft] = useState(String(BODY_FAT_DEFAULT));
 
   const defaults = useMemo(() => buildDefaults(profile), [profile]);
 
@@ -80,17 +103,57 @@ export default function ProfileSetupScreen() {
     setValue,
     getValues,
     trigger,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<ProfileSetupValues>({
     resolver: zodResolver(profileSetupSchema),
     defaultValues: defaults,
   });
 
+  useEffect(() => {
+    reset(buildDefaults(profile));
+  }, [profile, reset]);
+
   const username = watch('username');
   const activities = watch('primary_activities');
   const unit = watch('weight_unit');
   const frequency = watch('typical_weekly_workout_frequency');
+  const gender = watch('gender');
+  const bodyFat = watch('body_fat_pct');
+  const heightCmWatch = watch('height_cm');
+  const heightFt = watch('height_ft');
+  const heightIn = watch('height_in');
+  const currentWeight = watch('current_weight');
   const availability = useUsernameAvailability(username, profile?.username);
+
+  const liveHeightCm =
+    unit === 'lb'
+      ? feetInchesToCm(Number(heightFt || 0), Number(heightIn || 0))
+      : Number(heightCmWatch);
+  const liveWeightKg = inputWeightToKg(
+    Number(currentWeight),
+    unit === 'kg' ? 'metric' : 'imperial',
+  );
+  const liveBmi = useMemo(() => {
+    if (!Number.isFinite(liveHeightCm) || liveHeightCm < 80 || !Number.isFinite(liveWeightKg) || liveWeightKg <= 0) {
+      return null;
+    }
+    return calcBmi(liveHeightCm, liveWeightKg);
+  }, [liveHeightCm, liveWeightKg]);
+  const metricsReady =
+    (gender === 'male' || gender === 'female') &&
+    Number.isFinite(liveHeightCm) &&
+    liveHeightCm >= 100 &&
+    Number.isFinite(liveWeightKg) &&
+    liveWeightKg >= 30;
+
+  useEffect(() => {
+    preloadBodyFatFrames();
+  }, []);
+
+  useEffect(() => {
+    setExactDraft(String(Math.round(clampBodyFat(Number(bodyFat)))));
+  }, [bodyFat]);
 
   function switchUnits(next: WeightUnit) {
     const current = getValues('weight_unit');
@@ -116,11 +179,11 @@ export default function ProfileSetupScreen() {
       }
     }
 
-    const currentWeight = Number(getValues('current_weight'));
-    if (Number.isFinite(currentWeight) && currentWeight > 0) {
+    const weight = Number(getValues('current_weight'));
+    if (Number.isFinite(weight) && weight > 0) {
       setValue(
         'current_weight',
-        prettyNumber(convertWeight(currentWeight, current, next)),
+        prettyNumber(convertWeight(weight, current, next)),
         { shouldValidate: false },
       );
     }
@@ -138,7 +201,7 @@ export default function ProfileSetupScreen() {
   async function pickAvatar() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setFormError('We need photo access to set your avatar. You can turn this on in Settings.');
+      setFormError('Turn on photo access in Settings.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -171,7 +234,7 @@ export default function ProfileSetupScreen() {
 
   const onSubmit = handleSubmit(async (values) => {
     if (availability.isTaken) {
-      setFormError('That username is taken. Try another one.');
+      setFormError('That username is taken.');
       setStep(0);
       return;
     }
@@ -180,6 +243,15 @@ export default function ProfileSetupScreen() {
       values.weight_unit === 'lb'
         ? feetInchesToCm(Number(values.height_ft), Number(values.height_in || 0))
         : Number(values.height_cm);
+    const weightKg = inputWeightToKg(
+      Number(values.current_weight),
+      values.weight_unit === 'kg' ? 'metric' : 'imperial',
+    );
+    const goal = parseOptionalNumber(values.goal_weight);
+    const goalKg =
+      goal != null
+        ? inputWeightToKg(goal, values.weight_unit === 'kg' ? 'metric' : 'imperial')
+        : null;
 
     try {
       await completeProfile.mutateAsync({
@@ -187,31 +259,52 @@ export default function ProfileSetupScreen() {
         display_name: values.display_name,
         avatar_url: profile?.avatar_url,
         bio: values.bio || null,
+        gender: values.gender,
         height_cm: Number.isFinite(heightCm) ? heightCm : null,
-        current_weight: parseOptionalNumber(values.current_weight),
-        goal_weight: parseOptionalNumber(values.goal_weight),
+        current_weight: Number.isFinite(weightKg) ? weightKg : null,
+        goal_weight: goalKg,
         weight_unit: values.weight_unit,
+        body_fat_pct: clampBodyFat(values.body_fat_pct),
+        body_metrics_completed_at: new Date().toISOString(),
         typical_weekly_workout_frequency: parseOptionalNumber(
           values.typical_weekly_workout_frequency,
         ),
         primary_activities: values.primary_activities,
-        show_fitness_stats_publicly: values.show_fitness_stats_publicly,
+        show_fitness_stats_publicly: false,
       });
-      router.replace(BODY_METRICS_HREF);
+      if (mode === 'edit') {
+        if (router.canGoBack()) {
+          router.back();
+          return;
+        }
+        router.replace('/profile');
+        return;
+      }
+      if (!hasCompletedFitnessHistory(profile)) {
+        router.replace(FITNESS_HISTORY_HREF);
+        return;
+      }
+      router.replace('/feed');
     } catch (error) {
       setFormError(getErrorMessage(error));
     }
   });
 
   const usernameHint = availability.isChecking
-    ? 'Checking if that’s free…'
+    ? 'Checking…'
     : availability.isTaken
       ? 'That username is taken'
       : availability.isAvailable
-        ? 'Nice — that one’s free'
+        ? 'Available'
         : 'lowercase, unique, 3–24 characters';
 
   const copy = STEP_COPY[step];
+
+  function applyExact() {
+    const next = clampBodyFat(Number(exactDraft));
+    setValue('body_fat_pct', next, { shouldDirty: true });
+    setExactOpen(false);
+  }
 
   return (
     <Screen scroll>
@@ -240,7 +333,6 @@ export default function ProfileSetupScreen() {
             <AppText className="mt-3 text-sm font-semibold text-charcoal">
               {uploadAvatar.isPending ? 'Uploading…' : 'Add a photo'}
             </AppText>
-            <AppText className="mt-1 text-xs text-muted">Optional, but it helps people find you.</AppText>
           </Pressable>
           <Controller
             control={control}
@@ -273,7 +365,6 @@ export default function ProfileSetupScreen() {
                 onChangeText={onChange}
                 onBlur={onBlur}
                 error={errors.display_name?.message}
-                hint="Your real first name, a nickname — whatever feels right."
               />
             )}
           />
@@ -287,7 +378,6 @@ export default function ProfileSetupScreen() {
                 onChangeText={onChange}
                 onBlur={onBlur}
                 multiline
-                placeholder="One sentence about how you train."
                 error={errors.bio?.message}
               />
             )}
@@ -298,14 +388,7 @@ export default function ProfileSetupScreen() {
       {step === 1 ? (
         <View className="mt-8 gap-5">
           <Card className="gap-4">
-            <View className="gap-1">
-              <AppText className="text-base font-semibold text-charcoal">
-                Primary activities
-              </AppText>
-              <AppText className="text-sm leading-5 text-muted">
-                Pick everything that counts for you.
-              </AppText>
-            </View>
+            <AppText className="text-base font-semibold text-charcoal">What do you train?</AppText>
             <ChipRow>
               {ACTIVITY_OPTIONS.map((activity) => {
                 const selected = activities.includes(activity);
@@ -331,12 +414,7 @@ export default function ProfileSetupScreen() {
             ) : null}
           </Card>
           <Card className="gap-4">
-            <View className="gap-1">
-              <AppText className="text-base font-semibold text-charcoal">Typical week</AppText>
-              <AppText className="text-sm leading-5 text-muted">
-                How many workouts do you usually get in?
-              </AppText>
-            </View>
+            <AppText className="text-base font-semibold text-charcoal">Workouts per week</AppText>
             <ChipRow>
               {WORKOUT_FREQUENCY_OPTIONS.map((option) => (
                 <Chip
@@ -363,6 +441,25 @@ export default function ProfileSetupScreen() {
       {step === 2 ? (
         <View className="mt-8 gap-5">
           <View className="gap-2">
+            <AppText className="text-sm font-semibold text-charcoal">Gender</AppText>
+            <Controller
+              control={control}
+              name="gender"
+              render={({ field: { value, onChange } }) => (
+                <SegmentedControl
+                  value={value || null}
+                  options={GENDER_OPTIONS}
+                  onChange={onChange}
+                  accessibilityLabel="Gender"
+                />
+              )}
+            />
+            {errors.gender ? (
+              <AppText className="text-xs text-coral-dark">{errors.gender.message}</AppText>
+            ) : null}
+          </View>
+
+          <View className="gap-2">
             <AppText className="text-sm font-semibold text-charcoal">Units</AppText>
             <SegmentedControl
               accessibilityLabel="Measurement units"
@@ -370,9 +467,6 @@ export default function ProfileSetupScreen() {
               options={UNIT_OPTIONS}
               onChange={switchUnits}
             />
-            <AppText className="text-xs leading-5 text-muted">
-              Switch anytime — we’ll convert what you’ve already entered.
-            </AppText>
           </View>
 
           {unit === 'lb' ? (
@@ -425,7 +519,7 @@ export default function ProfileSetupScreen() {
               name="height_cm"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Height (cm)"
+                  label="Height"
                   keyboardType="decimal-pad"
                   inputMode="decimal"
                   value={value}
@@ -466,33 +560,66 @@ export default function ProfileSetupScreen() {
                 onChangeText={onChange}
                 onBlur={onBlur}
                 placeholder="Optional"
-                hint="Optional. Skip it if you’re here for consistency, not the scale."
                 error={errors.goal_weight?.message}
               />
             )}
           />
 
-          <Controller
-            control={control}
-            name="show_fitness_stats_publicly"
-            render={({ field: { onChange, value } }) => (
-              <Card className="flex-row items-center justify-between">
-                <View className="mr-4 flex-1 gap-1">
-                  <AppText className="font-semibold text-charcoal">Show stats publicly</AppText>
-                  <AppText className="text-sm leading-5 text-muted">
-                    Off by default. Your {SEED_CREDITS} starting coins stay private either way.
-                  </AppText>
-                </View>
-                <Switch
-                  value={value}
-                  onValueChange={onChange}
-                  trackColor={{ true: COLORS.mintDark, false: COLORS.line }}
-                  thumbColor={COLORS.white}
-                  ios_backgroundColor={COLORS.line}
+          {liveBmi != null ? (
+            <Card>
+              <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                BMI
+              </AppText>
+              <AppText className="mt-1 text-[28px] font-extrabold text-charcoal">
+                {formatBmi(liveBmi)}
+              </AppText>
+            </Card>
+          ) : null}
+
+          {metricsReady && (gender === 'male' || gender === 'female') ? (
+            <View>
+              <MorphingBlob gender={gender} bodyFatPct={bodyFat} />
+              <View style={{ marginTop: -8 }}>
+                <Controller
+                  control={control}
+                  name="body_fat_pct"
+                  render={({ field: { value, onChange } }) => (
+                    <BodyFatSlider
+                      value={value}
+                      onChange={(next) => onChange(clampBodyFat(next))}
+                    />
+                  )}
                 />
-              </Card>
-            )}
-          />
+              </View>
+              {exactOpen ? (
+                <View className="mt-2 flex-row items-end gap-2">
+                  <View className="flex-1">
+                    <Input
+                      label="Exact body fat %"
+                      keyboardType="decimal-pad"
+                      inputMode="decimal"
+                      value={exactDraft}
+                      onChangeText={setExactDraft}
+                      placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
+                    />
+                  </View>
+                  <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
+                </View>
+              ) : (
+                <Pressable className="mt-2" onPress={() => setExactOpen(true)} accessibilityRole="button">
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                    Enter exact %
+                  </AppText>
+                </Pressable>
+              )}
+            </View>
+          ) : (
+            <Card>
+              <AppText className="text-[13px] leading-5 text-muted">
+                Add gender, height, and weight to set body fat.
+              </AppText>
+            </Card>
+          )}
         </View>
       ) : null}
 
@@ -510,7 +637,7 @@ export default function ProfileSetupScreen() {
           />
         ) : (
           <Button
-            title="Finish & Enter blOb"
+            title="Finish"
             size="lg"
             onPress={onSubmit}
             loading={isSubmitting || completeProfile.isPending}
@@ -522,6 +649,10 @@ export default function ProfileSetupScreen() {
       </View>
     </Screen>
   );
+}
+
+export default function ProfileSetupScreen() {
+  return <ProfileSetupWizard mode="setup" />;
 }
 
 function buildDefaults(
@@ -539,16 +670,38 @@ function buildDefaults(
     heightIn = String(inches);
   }
 
+  const kg = profileWeightKg(profile ?? {});
+  const displayWeight =
+    kg != null ? prettyNumber(unit === 'kg' ? kg : convertWeight(kg, 'kg', 'lb')) : '';
+  const goalKg = profile?.goal_weight;
+  const displayGoal =
+    goalKg != null && Number.isFinite(goalKg)
+      ? prettyNumber(
+          profile?.body_metrics_completed_at
+            ? unit === 'kg'
+              ? goalKg
+              : convertWeight(goalKg, 'kg', 'lb')
+            : unit === profile?.weight_unit
+              ? goalKg
+              : convertWeight(goalKg, profile?.weight_unit ?? 'lb', unit),
+        )
+      : '';
+
   return {
     username: profile?.username?.startsWith('blob_') ? '' : (profile?.username ?? ''),
     display_name: profile?.display_name ?? '',
     bio: profile?.bio ?? '',
+    gender: (profile?.gender === 'male' || profile?.gender === 'female'
+      ? profile.gender
+      : '') as ProfileSetupValues['gender'],
     height_cm: heightCm,
     height_ft: heightFt,
     height_in: heightIn,
-    current_weight: profile?.current_weight != null ? prettyNumber(profile.current_weight) : '',
-    goal_weight: profile?.goal_weight != null ? prettyNumber(profile.goal_weight) : '',
+    current_weight: displayWeight,
+    goal_weight: displayGoal,
     weight_unit: unit,
+    body_fat_pct:
+      profile?.body_fat_pct != null ? clampBodyFat(Number(profile.body_fat_pct)) : BODY_FAT_DEFAULT,
     typical_weekly_workout_frequency:
       profile?.typical_weekly_workout_frequency != null
         ? String(profile.typical_weekly_workout_frequency)
@@ -556,6 +709,6 @@ function buildDefaults(
     primary_activities: (profile?.primary_activities ?? []).filter((item) =>
       ACTIVITY_OPTIONS.includes(item as (typeof ACTIVITY_OPTIONS)[number]),
     ) as ProfileSetupValues['primary_activities'],
-    show_fitness_stats_publicly: profile?.show_fitness_stats_publicly ?? false,
+    show_fitness_stats_publicly: false,
   };
 }

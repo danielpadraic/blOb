@@ -17,6 +17,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useChallenges } from '@/hooks/useChallenge';
 import { PROOF_META } from '@/lib/constants';
 import { challengeDetailHref } from '@/lib/routes';
+import { audienceLabel, asPostAudience } from '@/lib/postAudience';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -31,7 +32,6 @@ type PostCardProps = {
   currentUserId?: string;
   onReact: (type: ReactionType, commentId?: string | null) => void;
   onComment?: (content: string, parentId?: string | null) => Promise<unknown> | void;
-  onDelete?: () => Promise<unknown> | void;
   commenting?: boolean;
 };
 
@@ -40,7 +40,6 @@ export function PostCard({
   currentUserId,
   onReact,
   onComment,
-  onDelete,
   commenting,
 }: PostCardProps) {
   const [showComposer, setShowComposer] = useState(false);
@@ -50,7 +49,7 @@ export function PostCard({
   const name = post.author?.display_name ?? post.author?.username ?? 'blob';
   const handle = post.author?.username ?? 'blob';
   const comments = post.comments ?? [];
-  const isOwn = Boolean(currentUserId && post.author_id === currentUserId);
+  const audience = asPostAudience(post.audience);
   const content = post.content?.trim() ?? '';
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
@@ -77,7 +76,6 @@ export function PostCard({
     setMenuOpen(false);
     try {
       await Clipboard.setStringAsync(postShareUrl(post.id));
-      Alert.alert('Link copied', 'Send it to a fellow blob.');
     } catch (error) {
       Alert.alert('Couldn’t copy that', getErrorMessage(error));
     }
@@ -85,38 +83,11 @@ export function PostCard({
 
   function reportPost() {
     setMenuOpen(false);
-    Alert.alert(
-      'Report this post?',
-      'We’ll take a look. Thanks for keeping the blobverse decent.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report',
-          onPress: () => Alert.alert('Got it', 'Flag received. Our blobs are on it.'),
-        },
-      ],
-    );
-  }
-
-  function confirmDelete() {
-    setMenuOpen(false);
-    if (!onDelete) {
-      return;
-    }
-    Alert.alert('Delete this post?', 'This blob’s gone for good.', [
-      { text: 'Keep it', style: 'cancel' },
+    Alert.alert('Report this post?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            try {
-              await onDelete();
-            } catch (error) {
-              Alert.alert('Couldn’t delete that', getErrorMessage(error));
-            }
-          })();
-        },
+        text: 'Report',
+        onPress: () => Alert.alert('Reported', 'We’ll take a look.'),
       },
     ]);
   }
@@ -137,14 +108,15 @@ export function PostCard({
                 </AppText>
               </ProfileLink>
               <AppText className="text-[11px] leading-4 text-muted" numberOfLines={1}>
-                @{handle} · {formatFeedTime(post.created_at)}
+                @{handle} · {formatFeedTime(post.created_at)} · {audienceLabel(audience)}
               </AppText>
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Post menu"
+              accessibilityState={{ expanded: menuOpen }}
               hitSlop={8}
-              onPress={() => setMenuOpen(true)}
+              onPress={() => setMenuOpen((open) => !open)}
               className="h-7 w-7 items-center justify-center">
               <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
             </Pressable>
@@ -210,11 +182,9 @@ export function PostCard({
 
       <PostOverflowMenu
         visible={menuOpen}
-        isOwn={isOwn}
         onClose={() => setMenuOpen(false)}
         onReport={reportPost}
         onCopyLink={() => void copyLink()}
-        onDelete={isOwn && onDelete ? confirmDelete : undefined}
       />
     </Card>
   );

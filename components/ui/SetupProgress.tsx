@@ -4,7 +4,7 @@ import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
 
-const STEPS = ['You', 'Training', 'Body'];
+const STEPS = ['Profile', 'Training', 'Physical Details'];
 
 type SetupProgressProps = {
   step: number;

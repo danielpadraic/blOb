@@ -222,9 +222,9 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
     return (
       <View className="gap-4 pb-8 pt-2">
         <Card>
-          <AppText className="text-[22px] font-extrabold text-charcoal">You’re set</AppText>
+          <AppText className="text-[22px] font-extrabold text-charcoal">Saved</AppText>
           <AppText className="mt-2 text-[14px] leading-5 text-muted">
-            Official Fitness Challenges are unlocked whenever you want them. Nothing here is a grade.
+            Physical Details are on your profile.
           </AppText>
         </Card>
         <Button title="Continue" size="lg" onPress={finish} />
@@ -235,9 +235,9 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
   return (
     <View className="gap-4 pb-4 pt-2">
       <View>
-        <AppText className="text-[22px] font-extrabold text-charcoal">Body metrics</AppText>
+        <AppText className="text-[22px] font-extrabold text-charcoal">Physical Details</AppText>
         <AppText className="mt-1 text-[14px] leading-5 text-muted">
-          Used for Official Fitness Challenges and better matching. Private unless you share stats.
+          Private unless you share them. Used for Challenge recommendations and competition placement.
         </AppText>
       </View>
 
@@ -370,9 +370,8 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
         </View>
       ) : (
         <Card>
-          <AppText className="text-[15px] font-extrabold text-charcoal">Your blob appears next</AppText>
-          <AppText className="mt-1 text-[13px] leading-5 text-muted">
-            Pick gender, height, and weight. Then you can slide body fat — playful, private, not a score.
+          <AppText className="text-[15px] font-extrabold text-charcoal">
+            Add gender, height, and weight to set body fat.
           </AppText>
         </Card>
       )}
@@ -380,9 +379,6 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
       <Card>
         <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">BMI</AppText>
         <AppText className="mt-1 text-[28px] font-extrabold text-charcoal">{formatBmi(liveBmi)}</AppText>
-        <AppText className="mt-1 text-[13px] leading-5 text-muted">
-          A rough height-to-weight ratio. Not a grade, not a verdict.
-        </AppText>
       </Card>
 
       {errors.gender ? (

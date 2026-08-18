@@ -11,16 +11,16 @@ export type MediaPermissionResult =
 
 const COPY: Record<MediaPermissionKind, { title: string; body: string }> = {
   camera: {
-    title: 'Camera access needed',
-    body: 'Take a check-in photo or Story for your Challenge. Turn camera on in Settings, then come back.',
+    title: 'Camera is off',
+    body: 'Turn it on in Settings. Gallery still works.',
   },
   microphone: {
-    title: 'Microphone access needed',
-    body: 'Record a short Story or Reel with sound. Turn microphone on in Settings, then come back.',
+    title: 'Microphone is off',
+    body: 'Turn it on in Settings to record with sound.',
   },
   library: {
-    title: 'Photo access needed',
-    body: 'Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins. Turn it on in Settings.',
+    title: 'Photo library is off',
+    body: 'Turn it on in Settings to pick from your camera roll.',
   },
 };
 

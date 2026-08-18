@@ -11,6 +11,7 @@ export type QuickActionId =
   | 'join'
   | 'post'
   | 'story'
+  | 'reel'
   | 'coins'
   | 'callout';
 
@@ -49,7 +50,8 @@ export function QuickActionSheet({
     { id: 'callout', glyph: '⚔️', label: 'Call someone out' },
     { id: 'join', glyph: '🤝', label: 'Join a Challenge' },
     { id: 'post', glyph: '✍️', label: 'New Post' },
-    { id: 'story', glyph: '🎬', label: 'Add to Story / Reel' },
+    { id: 'story', glyph: '📷', label: 'Story' },
+    { id: 'reel', glyph: '🎬', label: 'Reel' },
     { id: 'coins', glyph: '🪙', label: 'Send Coins or Bucks' },
   ];
 

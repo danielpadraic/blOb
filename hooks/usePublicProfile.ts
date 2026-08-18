@@ -10,12 +10,13 @@ import type {
   PublicProfile,
 } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
+import { useAuth } from '@/hooks/useAuth';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const CHALLENGE_PREVIEW_COLUMNS =
-  'id, title, is_official, created_by, buy_in_amount, status, prize_pool, currency, challenge_type, target_count, days_required, tasks';
+  'id, title, is_official, created_by, buy_in_amount, status, prize_pool, currency, challenge_type, target_count, days_required, tasks, visibility';
 
 export type ProfileChallenge = {
   challenge: Pick<
@@ -32,6 +33,7 @@ export type ProfileChallenge = {
     | 'target_count'
     | 'days_required'
     | 'tasks'
+    | 'visibility'
   > & {
     days_required?: number;
   };
@@ -65,6 +67,15 @@ export function usePublicProfile(handle?: string) {
     queryKey: ['public-profile', handle],
     enabled: Boolean(handle),
     queryFn: () => fetchPublicProfileBundle(handle!),
+  });
+}
+
+export function useRecommendedProfiles() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['recommended-profiles', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: () => fetchRecommendedProfiles(user!.id),
   });
 }
 
@@ -239,14 +250,41 @@ function splitPayouts(rows: unknown[]): { coins: number; bucks: number } {
 }
 
 function redactPublicProfile(row: PublicProfile): PublicProfile {
-  if (row.show_fitness_stats_publicly) {
-    return row;
-  }
   return {
     ...row,
+    skill_tags: row.skill_tags ?? [],
+    show_fitness_stats_publicly: false,
     height_cm: null,
     current_weight: null,
     goal_weight: null,
+    weight_unit: null,
     typical_weekly_workout_frequency: null,
+    primary_activities: [],
   };
+}
+
+async function fetchRecommendedProfiles(userId: string): Promise<PublicProfile[]> {
+  const { data: friendRows } = await supabase
+    .from('friendships')
+    .select('user_a_id, user_b_id')
+    .eq('status', 'accepted')
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
+  const exclude = new Set(
+    (friendRows ?? []).map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id)),
+  );
+  exclude.add(userId);
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PUBLIC_PROFILE_COLUMNS)
+    .neq('id', userId)
+    .order('created_at', { ascending: false })
+    .limit(16);
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  return ((data ?? []) as PublicProfile[])
+    .filter((row) => !exclude.has(row.id))
+    .map(redactPublicProfile)
+    .slice(0, 4);
 }

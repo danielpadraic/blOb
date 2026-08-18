@@ -5,7 +5,7 @@ import { useRouter, type Href } from 'expo-router';
 import { AppText } from '@/components/ui/AppText';
 import { useChallenges } from '@/hooks/useChallenge';
 import { useReels } from '@/hooks/useSocial';
-import { challengeDetailHref } from '@/lib/routes';
+import { CAPTURE_REEL_HREF, challengeDetailHref } from '@/lib/routes';
 import { themeShadow } from '@/lib/theme';
 
 type MomentVariant = 'teal' | 'dark' | 'soft';
@@ -51,7 +51,14 @@ export function ReelsRow() {
     variant: VARIANTS[index % VARIANTS.length],
     href: challengeDetailHref(challenge.id, 'feed'),
   }));
-  const cards = liveReels.length > 0 ? liveReels : [COMING_SOON, ...liveChallenges].slice(0, 4);
+  const createCard: MomentItem = {
+    id: 'new-reel',
+    handle: 'You',
+    title: 'New Reel',
+    variant: 'teal',
+    href: CAPTURE_REEL_HREF,
+  };
+  const cards = [createCard, ...(liveReels.length > 0 ? liveReels : [COMING_SOON, ...liveChallenges].slice(0, 3))];
 
   return (
     <View className="gap-2" style={{ marginHorizontal: -16 }}>

@@ -321,4 +321,4 @@ export const DISCOVER_CHALLENGE_STATUSES = [
 export const LOBBY_PAGE_SIZE = 40;
 
 export const PUBLIC_PROFILE_COLUMNS =
-  'id, username, display_name, avatar_url, bio, skill_tags, primary_activities, show_fitness_stats_publicly, created_at, height_cm, current_weight, goal_weight, weight_unit, typical_weekly_workout_frequency';
+  'id, username, display_name, avatar_url, bio, skill_tags, created_at';

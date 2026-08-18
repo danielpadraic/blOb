@@ -6,6 +6,8 @@ export default function YouStackLayout() {
   return (
     <Stack screenOptions={TAB_STACK_SCREEN_OPTIONS}>
       <Stack.Screen name="index" options={HIDDEN_STACK_HEADER} />
+      <Stack.Screen name="edit" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="account" options={{ title: 'Account' }} />
       <Stack.Screen name="send" options={{ title: 'Send' }} />
       <Stack.Screen name="body-metrics" options={{ title: 'Body metrics' }} />
       <Stack.Screen name="fitness-history" options={{ title: 'Fitness history' }} />

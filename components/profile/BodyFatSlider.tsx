@@ -78,7 +78,6 @@ export function BodyFatSlider({ value, onChange }: BodyFatSliderProps) {
       </View>
       <View className="flex-row justify-between">
         <AppText className="text-[11px] text-muted">{BODY_FAT_MIN}%</AppText>
-        <AppText className="text-[11px] text-muted">Just a shape. Not a score.</AppText>
         <AppText className="text-[11px] text-muted">{BODY_FAT_MAX}%</AppText>
       </View>
     </View>

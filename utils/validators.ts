@@ -43,19 +43,21 @@ export const profileSetupSchema = z.object({
       'Use lowercase letters, numbers, and underscores',
     )
     .refine((value) => !value.startsWith('blob_'), {
-      message: 'Pick a name that feels like you',
+      message: 'That prefix is reserved',
     }),
-  display_name: z.string().trim().min(2, 'Tell us what to call you').max(48),
+  display_name: z.string().trim().min(2, 'Enter a display name').max(48),
   bio: z.string().max(160, 'Keep it to 160 characters').optional(),
+  gender: z.enum(['male', 'female'], { message: 'Pick Male or Female' }),
   height_cm: z.string().optional(),
   height_ft: z.string().optional(),
   height_in: z.string().optional(),
   current_weight: z.string().min(1, 'Add your current weight'),
   goal_weight: z.string().optional(),
   weight_unit: z.enum(['kg', 'lb']),
+  body_fat_pct: z.number(),
   typical_weekly_workout_frequency: z
     .string()
-    .min(1, 'How often do you usually train?'),
+    .min(1, 'Pick workouts per week'),
   primary_activities: z
     .array(z.enum(ACTIVITY_OPTIONS))
     .min(1, 'Pick at least one activity'),
@@ -91,7 +93,7 @@ export const profileSetupSchema = z.object({
       ctx.addIssue({
         code: 'custom',
         path: ['current_weight'],
-        message: 'That weight looks off — double-check it',
+        message: 'That weight looks off',
       });
     }
     if (values.goal_weight?.trim()) {
@@ -100,7 +102,7 @@ export const profileSetupSchema = z.object({
         ctx.addIssue({
           code: 'custom',
           path: ['goal_weight'],
-          message: 'That goal looks off — double-check it',
+          message: 'That goal looks off',
         });
       }
     }
@@ -126,7 +128,7 @@ export const profileSetupSchema = z.object({
     ctx.addIssue({
       code: 'custom',
       path: ['current_weight'],
-      message: 'That weight looks off — double-check it',
+      message: 'That weight looks off',
     });
   }
   if (values.goal_weight?.trim()) {
@@ -135,7 +137,7 @@ export const profileSetupSchema = z.object({
       ctx.addIssue({
         code: 'custom',
         path: ['goal_weight'],
-        message: 'That goal looks off — double-check it',
+        message: 'That goal looks off',
       });
     }
   }
@@ -541,13 +543,14 @@ export const PROFILE_STEP_FIELDS = {
   0: ['username', 'display_name', 'bio'] as const,
   1: ['primary_activities', 'typical_weekly_workout_frequency'] as const,
   2: [
+    'gender',
     'height_cm',
     'height_ft',
     'height_in',
     'current_weight',
     'goal_weight',
     'weight_unit',
-    'show_fitness_stats_publicly',
+    'body_fat_pct',
   ] as const,
 };
 

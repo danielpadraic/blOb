@@ -1,3 +1,4 @@
+import type { PostAudience } from '@/lib/postAudience';
 import type {
   Conversation,
   ConversationMember,
@@ -337,18 +338,24 @@ export interface WorkoutSubmission {
   created_at: string;
 }
 
+export type { PostAudience };
+
 export interface Post {
   id: string;
   author_id: string;
   challenge_id: string | null;
   content: string | null;
   media_urls: string[];
+  audience?: PostAudience;
+  audience_user_ids?: string[];
   created_at: string;
 }
 
 export type ComposeInput = {
   content: string;
   mediaUrls?: string[];
+  audience?: PostAudience;
+  audienceUserIds?: string[];
 };
 
 export interface Comment {

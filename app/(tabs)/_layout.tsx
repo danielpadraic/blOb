@@ -5,12 +5,13 @@ import { View } from 'react-native';
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
 import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
+import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { TabChromeHeader, isAlertsTab } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { useWalletOptional } from '@/hooks/useWallet';
-import { CAPTURE_HREF, LOBBY_HREF } from '@/lib/routes';
+import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 export default function TabLayout() {
@@ -19,11 +20,13 @@ export default function TabLayout() {
   const wallet = useWalletOptional();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const loggable = useLoggableChallenge();
   useNotificationsRealtime();
 
   const closeOverlays = useCallback(() => {
     setAlertsOpen(false);
+    setSearchOpen(false);
     setSheetOpen(false);
     wallet?.closeAll();
   }, [wallet]);
@@ -41,9 +44,21 @@ export default function TabLayout() {
       router.navigate('/feed');
       return;
     }
+    setSearchOpen(false);
     setSheetOpen(false);
     wallet?.closeAll();
     setAlertsOpen(true);
+  }
+
+  function toggleSearch() {
+    if (searchOpen) {
+      setSearchOpen(false);
+      return;
+    }
+    setAlertsOpen(false);
+    setSheetOpen(false);
+    wallet?.closeAll();
+    setSearchOpen(true);
   }
 
   function openSheet() {
@@ -74,7 +89,11 @@ export default function TabLayout() {
       return;
     }
     if (id === 'story') {
-      go(CAPTURE_HREF);
+      go(CAPTURE_STORY_HREF);
+      return;
+    }
+    if (id === 'reel') {
+      go(CAPTURE_REEL_HREF);
       return;
     }
     if (id === 'coins') {
@@ -90,7 +109,12 @@ export default function TabLayout() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-      <TabChromeHeader alertsOpen={alertsOpen} onToggleAlerts={toggleAlerts} />
+      <TabChromeHeader
+        alertsOpen={alertsOpen}
+        searchOpen={searchOpen}
+        onToggleAlerts={toggleAlerts}
+        onToggleSearch={toggleSearch}
+      />
       <View className="flex-1" style={{ overflow: 'hidden' }}>
         <Tabs
           tabBar={() => null}
@@ -130,6 +154,7 @@ export default function TabLayout() {
           />
         </Tabs>
         <AlertsOverlay visible={alertsOpen} onClose={closeAlerts} />
+        <SearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
         <QuickActionSheet
           visible={sheetOpen}
           loggable={loggable.data}

@@ -1,22 +1,26 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useFriends } from '@/hooks/useSocial';
 import {
-  ensureCapturePermissions,
-  ensureLibraryPermission,
-  openAppSettings,
-  permissionCopy,
-} from '@/lib/mediaPermissions';
+  DEFAULT_POST_AUDIENCE,
+  POST_AUDIENCE_OPTIONS,
+  type PostAudience,
+} from '@/lib/postAudience';
+import { captureHref } from '@/lib/routes';
+import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import type { ComposeInput } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -48,14 +52,20 @@ export function Composer({
 }: ComposerProps) {
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const router = useRouter();
+  const friends = useFriends();
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState('');
+  const [audience, setAudience] = useState<PostAudience>(DEFAULT_POST_AUDIENCE);
+  const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
 
   const busy = Boolean(submitting || uploading);
-  const canPost = Boolean(content.trim() || attachments.length > 0);
+  const canPost =
+    Boolean(content.trim() || attachments.length > 0) &&
+    (audience !== 'specific' || audienceUserIds.length > 0);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
     setAttachments((current) => {
@@ -65,75 +75,6 @@ export function Composer({
       }
       return [...current, { ...attachment, id: `${Date.now()}-${current.length}` }];
     });
-  }
-
-  async function pickMedia(mediaTypes: Array<'images' | 'videos'>, source: 'camera' | 'library') {
-    const video = mediaTypes.includes('videos');
-    if (source === 'camera') {
-      const permission = await ensureCapturePermissions(video ? 'video' : 'photo');
-      if (!permission.ok) {
-        const copy = permissionCopy(permission.kind);
-        Alert.alert(copy.title, copy.body, [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => void openAppSettings() },
-        ]);
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes,
-        quality: 0.8,
-        allowsEditing: false,
-        videoMaxDuration: video ? 60 : undefined,
-      });
-      if (result.canceled || !result.assets[0]?.uri) {
-        return;
-      }
-      const asset = result.assets[0];
-      addAttachment({
-        uri: asset.uri,
-        kind: video ? 'video' : 'photo',
-        mimeType: asset.mimeType ?? asset.file?.type,
-        name: asset.fileName ?? asset.file?.name,
-        blob: asset.file ?? null,
-      });
-      return;
-    }
-    const permission = await ensureLibraryPermission();
-    if (!permission.ok) {
-      const copy = permissionCopy(permission.kind);
-      Alert.alert(copy.title, copy.body, [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => void openAppSettings() },
-      ]);
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes,
-      quality: 0.8,
-      allowsEditing: false,
-      videoMaxDuration: 60,
-      preferredAssetRepresentationMode:
-        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-    });
-    if (result.canceled || !result.assets[0]?.uri) {
-      return;
-    }
-    const asset = result.assets[0];
-    addAttachment({
-      uri: asset.uri,
-      kind: video ? 'video' : 'photo',
-      mimeType: asset.mimeType ?? asset.file?.type,
-      name: asset.fileName ?? asset.file?.name,
-      blob: asset.file ?? null,
-    });
-  }
-
-  function askMedia(kind: 'images' | 'videos') {
-    Alert.alert(kind === 'videos' ? 'Add a video' : 'Add a photo', 'Camera or library — your call.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Camera', onPress: () => void pickMedia([kind], 'camera') },
-      { text: 'Library', onPress: () => void pickMedia([kind], 'library') },
-    ]);
   }
 
   async function pickFile() {
@@ -202,9 +143,16 @@ export function Composer({
         });
         mediaUrls.push(url);
       }
-      await onSubmit({ content: content.trim(), mediaUrls });
+      await onSubmit({
+        content: content.trim(),
+        mediaUrls,
+        audience,
+        audienceUserIds: audience === 'specific' ? audienceUserIds : [],
+      });
       setContent('');
       setAttachments([]);
+      setAudience(DEFAULT_POST_AUDIENCE);
+      setAudienceUserIds([]);
     } catch (error) {
       Alert.alert('Couldn’t post that', getErrorMessage(error));
     } finally {
@@ -266,11 +214,52 @@ export function Composer({
       ) : null}
 
       <View
+        className="mt-2"
+        style={{ borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 8 }}>
+        <SegmentedControl
+          value={audience}
+          options={POST_AUDIENCE_OPTIONS}
+          onChange={setAudience}
+          accessibilityLabel="Post audience"
+        />
+        {audience === 'specific' ? (
+          <View className="mt-2 gap-1.5">
+            <AppText className="text-[12px] text-muted">Who can see this</AppText>
+            {(friends.data ?? []).length === 0 ? (
+              <AppText className="text-[12px] text-muted">Add friends first.</AppText>
+            ) : (
+              <ChipRow>
+                {(friends.data ?? []).map((row) => {
+                  const id = row.profile?.id;
+                  if (!id) {
+                    return null;
+                  }
+                  const selected = audienceUserIds.includes(id);
+                  return (
+                    <Chip
+                      key={id}
+                      label={personDisplayName(row.profile)}
+                      selected={selected}
+                      onPress={() =>
+                        setAudienceUserIds((current) =>
+                          selected ? current.filter((item) => item !== id) : [...current, id],
+                        )
+                      }
+                    />
+                  );
+                })}
+              </ChipRow>
+            )}
+          </View>
+        ) : null}
+      </View>
+
+      <View
         className="mt-2 flex-row items-center"
         style={{ borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 8 }}>
-        <AttachButton glyph="📷" label="Photo" onPress={() => askMedia('images')} />
+        <AttachButton glyph="📷" label="Photo" onPress={() => router.push(captureHref('post', 'photo'))} />
         <View style={{ width: 1, height: 16, backgroundColor: THEME.border }} />
-        <AttachButton glyph="🎥" label="Video" onPress={() => askMedia('videos')} />
+        <AttachButton glyph="🎥" label="Video" onPress={() => router.push(captureHref('post', 'video'))} />
         <View style={{ width: 1, height: 16, backgroundColor: THEME.border }} />
         <AttachButton glyph="📎" label="Other" onPress={onOther} />
       </View>
