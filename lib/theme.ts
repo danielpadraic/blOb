@@ -33,6 +33,8 @@ export const THEME = {
 /** Height of the floating pill tab bar (not including bottom inset). */
 export const TAB_BAR_HEIGHT = 70;
 export const TAB_BAR_GUTTER = 10;
+/** Compose + peeks into the scene; scroll content needs this extra bottom space. */
+export const TAB_BAR_PEEK = 40;
 
 /** Space so tab-root screens clear the floating pill bar (70px bar + inset + gap). */
 export const TAB_BAR_CONTENT_INSET = 128;

@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { z } from 'zod';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
-import { MorphingBlob } from '@/components/profile/MorphingBlob';
+import { MorphingBlob, preloadBodyFatFrames } from '@/components/profile/MorphingBlob';
 import { UnitToggle } from '@/components/profile/UnitToggle';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -146,6 +146,10 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
     setExactDraft(String(Math.round(bodyFat)));
   }, [bodyFat]);
 
+  useEffect(() => {
+    preloadBodyFatFrames();
+  }, []);
+
   function switchUnits(next: BodyUnitSystem) {
     const current = getValues('units');
     if (current === next) {
@@ -229,7 +233,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
   }
 
   return (
-    <View className="gap-4 pb-8 pt-2">
+    <View className="gap-4 pb-4 pt-2">
       <View>
         <AppText className="text-[22px] font-extrabold text-charcoal">Body metrics</AppText>
         <AppText className="mt-1 text-[14px] leading-5 text-muted">
@@ -327,29 +331,23 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
         )}
       />
 
-      <Card>
-        <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">BMI</AppText>
-        <AppText className="mt-1 text-[28px] font-extrabold text-charcoal">{formatBmi(liveBmi)}</AppText>
-        <AppText className="mt-1 text-[13px] leading-5 text-muted">
-          A rough height-to-weight ratio. Not a grade, not a verdict.
-        </AppText>
-      </Card>
-
       {metricsReady && (gender === 'male' || gender === 'female') ? (
-        <>
+        <View>
           <MorphingBlob gender={gender} bodyFatPct={bodyFat} />
-          <Controller
-            control={control}
-            name="body_fat_pct"
-            render={({ field: { value, onChange } }) => (
-              <BodyFatSlider
-                value={value}
-                onChange={(next) => onChange(clampBodyFat(next))}
-              />
-            )}
-          />
+          <View style={{ marginTop: -8 }}>
+            <Controller
+              control={control}
+              name="body_fat_pct"
+              render={({ field: { value, onChange } }) => (
+                <BodyFatSlider
+                  value={value}
+                  onChange={(next) => onChange(clampBodyFat(next))}
+                />
+              )}
+            />
+          </View>
           {exactOpen ? (
-            <View className="flex-row items-end gap-2">
+            <View className="mt-2 flex-row items-end gap-2">
               <View className="flex-1">
                 <Input
                   label="Exact body fat %"
@@ -363,13 +361,13 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
               <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
             </View>
           ) : (
-            <Pressable onPress={() => setExactOpen(true)} accessibilityRole="button">
+            <Pressable className="mt-2" onPress={() => setExactOpen(true)} accessibilityRole="button">
               <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
                 Enter exact %
               </AppText>
             </Pressable>
           )}
-        </>
+        </View>
       ) : (
         <Card>
           <AppText className="text-[15px] font-extrabold text-charcoal">Your blob appears next</AppText>
@@ -378,6 +376,14 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
           </AppText>
         </Card>
       )}
+
+      <Card>
+        <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">BMI</AppText>
+        <AppText className="mt-1 text-[28px] font-extrabold text-charcoal">{formatBmi(liveBmi)}</AppText>
+        <AppText className="mt-1 text-[13px] leading-5 text-muted">
+          A rough height-to-weight ratio. Not a grade, not a verdict.
+        </AppText>
+      </Card>
 
       {errors.gender ? (
         <AppText className="text-[13px]" style={{ color: THEME.danger }}>

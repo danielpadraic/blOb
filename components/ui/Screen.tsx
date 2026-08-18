@@ -10,7 +10,7 @@ import { useSegments } from 'expo-router';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { isInsideTabChrome } from '@/components/wallet/TabChrome';
-import { THEME } from '@/lib/theme';
+import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
 
 const DEFAULT_EDGES: Edge[] = ['top', 'left', 'right'];
@@ -58,7 +58,7 @@ export function Screen({
             className="flex-1"
             style={SCREEN_BACKGROUND}
             contentContainerClassName={cn('grow', padded && 'px-4')}
-            contentContainerStyle={{ paddingBottom: 24 }}
+            contentContainerStyle={{ paddingBottom: insideChrome ? 24 + TAB_BAR_PEEK : 24 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             {children}

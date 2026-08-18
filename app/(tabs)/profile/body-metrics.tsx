@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 
 import { BodyMetricsForm } from '@/components/profile/BodyMetricsForm';
+import { BodyFatFramePreload } from '@/components/profile/MorphingBlob';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
@@ -39,6 +40,7 @@ export default function BodyMetricsScreen() {
   if (isLoading) {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
+        <BodyFatFramePreload />
         <MascotState kind="loading" title="Finding your blob" />
       </Screen>
     );
@@ -47,6 +49,7 @@ export default function BodyMetricsScreen() {
   if (error) {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
+        <BodyFatFramePreload />
         <MascotState
           kind="error"
           title="Couldn’t load body metrics"
@@ -60,6 +63,7 @@ export default function BodyMetricsScreen() {
 
   return (
     <Screen scroll edges={TAB_ROOT_EDGES}>
+      <BodyFatFramePreload />
       <BodyMetricsForm profile={profile} onSkip={skip} afterSave={goNext} />
     </Screen>
   );

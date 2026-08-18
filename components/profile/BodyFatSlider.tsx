@@ -40,11 +40,7 @@ export function BodyFatSlider({ value, onChange }: BodyFatSliderProps) {
   );
 
   return (
-    <View className="gap-2">
-      <View className="flex-row items-end justify-between">
-        <AppText className="text-[13px] text-muted">Body fat</AppText>
-        <AppText className="text-[28px] font-extrabold text-charcoal">{Math.round(pct)}%</AppText>
-      </View>
+    <View className="gap-1.5">
       <GestureDetector gesture={gesture}>
         <View
           className="h-11 justify-center"
@@ -76,6 +72,10 @@ export function BodyFatSlider({ value, onChange }: BodyFatSliderProps) {
           />
         </View>
       </GestureDetector>
+      <View className="flex-row items-end justify-between">
+        <AppText className="text-[13px] text-muted">Body fat</AppText>
+        <AppText className="text-[22px] font-extrabold text-charcoal">{Math.round(pct)}%</AppText>
+      </View>
       <View className="flex-row justify-between">
         <AppText className="text-[11px] text-muted">{BODY_FAT_MIN}%</AppText>
         <AppText className="text-[11px] text-muted">Just a shape. Not a score.</AppText>
