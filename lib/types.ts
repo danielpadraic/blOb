@@ -1,0 +1,840 @@
+export type WeightUnit = 'kg' | 'lb';
+
+export type ChallengeStatus =
+  | 'draft'
+  | 'upcoming'
+  | 'open'
+  | 'starting'
+  | 'in_progress'
+  | 'ended'
+  | 'judging'
+  | 'distributing'
+  | 'settled'
+  | 'cancelled';
+
+export type ParticipantStatus =
+  | 'joined'
+  | 'active'
+  | 'eliminated'
+  | 'completed'
+  | 'failed'
+  | 'withdrawn'
+  | 'refunded_pre_start';
+
+export type SubmissionStatus = 'pending_review' | 'approved' | 'rejected';
+
+export type ProofType =
+  | 'pre_selfie'
+  | 'post_selfie'
+  | 'hr_monitor'
+  | 'photo'
+  | 'screenshot'
+  | 'text_note'
+  | 'link'
+  | 'video';
+
+export type ChallengeCategory =
+  | 'fitness'
+  | 'sports'
+  | 'productivity'
+  | 'education'
+  | 'creative'
+  | 'reading'
+  | 'gaming'
+  | 'other';
+
+export type ChallengeKind = 'consistency' | 'points';
+
+export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly' | 'once';
+
+export type ChallengeVisibility = 'public' | 'unlisted' | 'private';
+
+export type PrizeStructure = 'winner_take_all' | 'equal_split' | 'top_places';
+
+export type TopPlacesMode = 'percent' | 'count';
+
+export type TopPlacesDistribution = 'even' | 'scaled';
+
+export type FundingModel = 'creator' | 'hybrid' | 'participants';
+
+export type WalletCurrency = 'coins' | 'bucks';
+
+export type ChallengeLane = 'coins' | 'private' | 'official';
+
+export type ProfileBadgeTone = 'gold' | 'green' | 'teal' | 'charcoal' | 'mint';
+
+export interface BadgeDefinition {
+  key: string;
+  name: string;
+  description: string;
+  icon: string;
+  tone: string;
+  coin_reward: number;
+  metric: string;
+  threshold: number;
+  tier: number;
+  sort_order: number;
+}
+
+export interface UserBadge {
+  user_id: string;
+  badge_key: string;
+  earned_at: string;
+  coin_reward: number;
+  title?: string | null;
+  awarded_at?: string | null;
+}
+
+export interface WalletLedgerEntry {
+  id: string;
+  user_id: string | null;
+  challenge_id?: string | null;
+  currency: WalletCurrency | string;
+  amount: number;
+  entry_type?: string;
+  balance_after?: number | null;
+  metadata?: Record<string, unknown>;
+  reason?: string | null;
+  ref_type?: string | null;
+  ref_id?: string | null;
+  created_at: string;
+}
+
+export type ReactionType = 'like' | 'fire' | 'strong';
+
+export interface ProofRequirement {
+  type: ProofType;
+  required: boolean;
+}
+
+export interface ChallengeTask {
+  id: string;
+  title: string;
+  points: number;
+  proof_required: boolean;
+  proof_types?: string[];
+}
+
+/** Extends auth.users. Credits are owner-private. */
+export interface Profile {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  height_cm: number | null;
+  current_weight: number | null;
+  goal_weight: number | null;
+  weight_unit: WeightUnit;
+  typical_weekly_workout_frequency: number | null;
+  primary_activities: string[];
+  skill_tags: string[];
+  show_fitness_stats_publicly: boolean;
+  credits: number;
+  coins: number;
+  bucks: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PublicProfile {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  skill_tags: string[];
+  primary_activities: string[];
+  show_fitness_stats_publicly: boolean;
+  created_at: string;
+  height_cm: number | null;
+  current_weight: number | null;
+  goal_weight: number | null;
+  weight_unit: WeightUnit | null;
+  typical_weekly_workout_frequency: number | null;
+}
+
+export interface Challenge {
+  id: string;
+  title: string;
+  description: string | null;
+  rules: string | null;
+  is_official: boolean;
+  created_by: string | null;
+  buy_in_amount: number;
+  days_required: number;
+  min_minutes: number;
+  proof_requirements: ProofRequirement[];
+  target_count: number;
+  frequency: ChallengeFrequency | string | null;
+  tasks: ChallengeTask[];
+  status: ChallengeStatus;
+  starts_at: string;
+  ends_at: string | null;
+  prize_pool: number;
+  prize_structure: PrizeStructure | string | null;
+  top_places_mode: TopPlacesMode | string | null;
+  top_places_value: number | null;
+  top_places_distribution: TopPlacesDistribution | string | null;
+  scaled_first_place_pct?: number | null;
+  funding_model: FundingModel | string | null;
+  creator_contribution: number;
+  max_participants: number | null;
+  min_participants?: number | null;
+  is_unlimited: boolean;
+  start_mode?: string | null;
+  start_within_value?: number | null;
+  start_within_unit?: string | null;
+  full_lobby_start_time?: string | null;
+  full_lobby_day_offset?: number | null;
+  end_mode?: string | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+  creator_participating?: boolean;
+  cover_image_url?: string | null;
+  rules_video_url?: string | null;
+  official_started_at?: string | null;
+  judging_started_at?: string | null;
+  distribution_mode?: string | null;
+  distribution_scheduled_at?: string | null;
+  distributed_at?: string | null;
+  rules_list?: unknown;
+  rules_structured?: unknown;
+  category: ChallengeCategory | string | null;
+  challenge_type: ChallengeKind | string | null;
+  visibility: ChallengeVisibility | string | null;
+  challenge_lane?: ChallengeLane | string | null;
+  currency: WalletCurrency | string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChallengeWithStats extends Challenge {
+  participant_count: number;
+  eligible_count?: number;
+  eliminated_count?: number;
+}
+
+export interface ChallengeParticipant {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  status: ParticipantStatus;
+  days_completed: number;
+  joined_at: string;
+  completed_at: string | null;
+  eliminated_at: string | null;
+  ready_at?: string | null;
+  points?: number;
+  buy_in_paid?: number;
+  currency?: WalletCurrency | string | null;
+}
+
+export interface ChallengeParticipantWithProfile extends ChallengeParticipant {
+  profile?: PublicProfile | null;
+}
+
+export interface ChallengeSettlement {
+  id: string;
+  challenge_id: string;
+  settled_by: string | null;
+  prize_pool: number;
+  distributed: number;
+  prize_structure: PrizeStructure | string;
+  winner_count: number;
+  settled_at: string;
+  slices?: ChallengePayout[];
+}
+
+export interface ChallengePayout {
+  id?: string;
+  settlement_id?: string;
+  challenge_id?: string;
+  user_id: string;
+  place: number;
+  score: number;
+  amount: number;
+  reason: string;
+  created_at?: string;
+}
+
+export interface ChallengePayoutWithProfile extends ChallengePayout {
+  profile?: PublicProfile | null;
+}
+
+export interface ChallengeSettlementView {
+  already_settled: boolean;
+  settlement: ChallengeSettlement;
+  payouts: ChallengePayoutWithProfile[];
+}
+
+export interface WorkoutSubmission {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  submission_date: string;
+  pre_selfie_url: string | null;
+  post_selfie_url: string | null;
+  hr_monitor_url: string | null;
+  notes: string | null;
+  status: SubmissionStatus;
+  task_ids?: string[];
+  created_at: string;
+}
+
+export interface Post {
+  id: string;
+  author_id: string;
+  challenge_id: string | null;
+  content: string | null;
+  media_urls: string[];
+  created_at: string;
+}
+
+export type ComposeInput = {
+  content: string;
+  mediaUrls?: string[];
+};
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  author_id: string;
+  parent_id?: string | null;
+  content: string;
+  created_at: string;
+}
+
+export interface CommentWithAuthor extends Comment {
+  author?: PublicProfile | null;
+  replies?: CommentWithAuthor[];
+  reactions?: Reaction[];
+}
+
+export interface PostWithMeta extends Post {
+  author?: PublicProfile | null;
+  comments?: CommentWithAuthor[];
+  reactions?: Reaction[];
+}
+
+export interface Reaction {
+  id: string;
+  user_id: string;
+  post_id: string | null;
+  comment_id?: string | null;
+  reaction_type: ReactionType;
+  created_at: string;
+}
+
+export interface CoinTransfer {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  amount: number;
+  currency?: WalletCurrency | string | null;
+  created_at: string;
+}
+
+export type CalloutStatus =
+  | 'pending'
+  | 'active'
+  | 'resolving'
+  | 'settled'
+  | 'disputed'
+  | 'cancelled';
+
+export interface Callout {
+  id: string;
+  challenger_id: string;
+  opponent_id: string;
+  currency: WalletCurrency;
+  stake_amount: number;
+  win_condition: string;
+  deadline: string;
+  status: CalloutStatus;
+  held: boolean;
+  challenger_pick: string | null;
+  opponent_pick: string | null;
+  winner_id: string | null;
+  challenger_cancel_at: string | null;
+  opponent_cancel_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type NotificationType =
+  | 'challenge_invite'
+  | 'challenge_new'
+  | 'challenge_starting'
+  | 'tagged'
+  | 'challenge_joined'
+  | 'follow'
+  | 'coins_received'
+  | 'challenge_settled'
+  | 'challenge_placed'
+  | 'challenge_eliminated'
+  | 'callout_received'
+  | 'callout_accepted'
+  | 'callout_resolved'
+  | 'callout_disputed'
+  | 'callout_cancelled'
+  | 'badge_unlocked';
+
+export type NotificationData = {
+  challenge_id?: string;
+  post_id?: string;
+  comment_id?: string;
+  username?: string;
+  amount?: number;
+  transfer_id?: string;
+  place?: number;
+  callout_id?: string;
+  currency?: string;
+  badge_key?: string;
+  coin_reward?: number;
+};
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  actor_id: string | null;
+  type: NotificationType | string;
+  title: string;
+  body: string | null;
+  data: NotificationData;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface ChallengeInvite {
+  id: string;
+  challenge_id: string;
+  inviter_id: string;
+  invitee_id: string | null;
+  token?: string;
+  status?: 'pending' | 'accepted' | 'revoked' | string;
+  accepted_at?: string | null;
+  created_at: string;
+}
+
+export type ChallengeInviteWithInvitee = ChallengeInvite & {
+  invitee?: Pick<PublicProfile, 'id' | 'username' | 'display_name' | 'avatar_url'> | null;
+};
+
+export type CreateChallengeInviteResult = {
+  ok: boolean;
+  invite_id: string;
+  challenge_id: string;
+  token: string;
+};
+
+export type AcceptChallengeInviteResult = {
+  ok: boolean;
+  challenge_id: string;
+  already_host?: boolean;
+  already_accepted?: boolean;
+};
+
+export interface Follow {
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+}
+
+export type ProfileUpdate = Partial<
+  Pick<
+    Profile,
+    | 'username'
+    | 'display_name'
+    | 'avatar_url'
+    | 'bio'
+    | 'height_cm'
+    | 'current_weight'
+    | 'goal_weight'
+    | 'weight_unit'
+    | 'typical_weekly_workout_frequency'
+    | 'primary_activities'
+    | 'skill_tags'
+    | 'show_fitness_stats_publicly'
+  >
+>;
+
+type Relationship<
+  ForeignKeyName extends string,
+  Columns extends string,
+  ReferencedRelation extends string,
+  ReferencedColumns extends string,
+  IsOneToOne extends boolean = false,
+> = {
+  foreignKeyName: ForeignKeyName;
+  columns: Columns[];
+  isOneToOne: IsOneToOne;
+  referencedRelation: ReferencedRelation;
+  referencedColumns: ReferencedColumns[];
+};
+
+type AsRecord<T> = {
+  [K in keyof T]: T[K];
+};
+
+type TableDef<
+  Row,
+  Insert = Partial<Row>,
+  Update = Partial<Row>,
+  Relationships extends unknown[] = [],
+> = {
+  Row: AsRecord<Row>;
+  Insert: AsRecord<Insert>;
+  Update: AsRecord<Update>;
+  Relationships: Relationships;
+};
+
+export type Database = {
+  public: {
+    Tables: {
+      profiles: TableDef<
+        Profile,
+        Omit<Profile, 'created_at' | 'updated_at' | 'credits' | 'coins' | 'bucks'> & {
+          credits?: number;
+          coins?: number;
+          bucks?: number;
+          created_at?: string;
+          updated_at?: string;
+        }
+      >;
+      challenges: TableDef<
+        Challenge,
+        Partial<Challenge>,
+        Partial<Challenge>,
+        [Relationship<'challenges_created_by_fkey', 'created_by', 'profiles', 'id'>]
+      >;
+      challenge_drafts: TableDef<
+        {
+          id?: string;
+          owner_id?: string;
+          user_id?: string;
+          title?: string | null;
+          step?: number;
+          start_path?: string | null;
+          template_id?: string | null;
+          source_challenge_id?: string | null;
+          payload: Record<string, unknown>;
+          updated_at?: string;
+        },
+        Partial<{
+          id: string;
+          owner_id: string;
+          user_id: string;
+          title: string | null;
+          step: number;
+          start_path: string | null;
+          template_id: string | null;
+          source_challenge_id: string | null;
+          payload: Record<string, unknown>;
+          updated_at: string;
+        }>
+      >;
+      challenge_participants: TableDef<
+        ChallengeParticipant,
+        Partial<ChallengeParticipant>,
+        Partial<ChallengeParticipant>,
+        [
+          Relationship<
+            'challenge_participants_challenge_id_fkey',
+            'challenge_id',
+            'challenges',
+            'id'
+          >,
+          Relationship<'challenge_participants_user_id_fkey', 'user_id', 'profiles', 'id'>,
+        ]
+      >;
+      challenge_settlements: TableDef<
+        ChallengeSettlement,
+        Partial<ChallengeSettlement>,
+        Partial<ChallengeSettlement>,
+        [
+          Relationship<
+            'challenge_settlements_challenge_id_fkey',
+            'challenge_id',
+            'challenges',
+            'id'
+          >,
+        ]
+      >;
+      challenge_payouts: TableDef<
+        ChallengePayout,
+        Partial<ChallengePayout>,
+        Partial<ChallengePayout>,
+        [
+          Relationship<'challenge_payouts_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+          Relationship<'challenge_payouts_user_id_fkey', 'user_id', 'profiles', 'id'>,
+        ]
+      >;
+      coin_transfers: TableDef<
+        CoinTransfer,
+        Partial<CoinTransfer>,
+        Partial<CoinTransfer>,
+        [
+          Relationship<'coin_transfers_sender_id_fkey', 'sender_id', 'profiles', 'id'>,
+          Relationship<'coin_transfers_recipient_id_fkey', 'recipient_id', 'profiles', 'id'>,
+        ]
+      >;
+      callouts: TableDef<
+        Callout,
+        Partial<Callout>,
+        Partial<Callout>,
+        [
+          Relationship<'callouts_challenger_id_fkey', 'challenger_id', 'profiles', 'id'>,
+          Relationship<'callouts_opponent_id_fkey', 'opponent_id', 'profiles', 'id'>,
+        ]
+      >;
+      challenge_invites: TableDef<
+        ChallengeInvite,
+        Partial<ChallengeInvite>,
+        Partial<ChallengeInvite>,
+        [
+          Relationship<'challenge_invites_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+          Relationship<'challenge_invites_inviter_id_fkey', 'inviter_id', 'profiles', 'id'>,
+          Relationship<'challenge_invites_invitee_id_fkey', 'invitee_id', 'profiles', 'id'>,
+        ]
+      >;
+      notifications: TableDef<
+        AppNotification,
+        Partial<AppNotification>,
+        Partial<AppNotification>,
+        [
+          Relationship<'notifications_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'notifications_actor_id_fkey', 'actor_id', 'profiles', 'id'>,
+        ]
+      >;
+      workout_submissions: TableDef<
+        WorkoutSubmission,
+        Partial<WorkoutSubmission>,
+        Partial<WorkoutSubmission>,
+        [
+          Relationship<
+            'workout_submissions_challenge_id_fkey',
+            'challenge_id',
+            'challenges',
+            'id'
+          >,
+          Relationship<'workout_submissions_user_id_fkey', 'user_id', 'profiles', 'id'>,
+        ]
+      >;
+      follows: TableDef<
+        Follow,
+        Partial<Follow>,
+        Partial<Follow>,
+        [
+          Relationship<'follows_follower_id_fkey', 'follower_id', 'profiles', 'id'>,
+          Relationship<'follows_following_id_fkey', 'following_id', 'profiles', 'id'>,
+        ]
+      >;
+      badges: TableDef<BadgeDefinition, Partial<BadgeDefinition>, Partial<BadgeDefinition>>;
+      user_badges: TableDef<
+        UserBadge,
+        Partial<UserBadge>,
+        Partial<UserBadge>,
+        [
+          Relationship<'user_badges_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'user_badges_badge_key_fkey', 'badge_key', 'badges', 'key'>,
+        ]
+      >;
+      wallet_ledger: TableDef<
+        WalletLedgerEntry,
+        Partial<WalletLedgerEntry>,
+        Partial<WalletLedgerEntry>,
+        [Relationship<'wallet_ledger_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      posts: TableDef<
+        Post,
+        Partial<Post>,
+        Partial<Post>,
+        [
+          Relationship<'posts_author_id_fkey', 'author_id', 'profiles', 'id'>,
+          Relationship<'posts_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+        ]
+      >;
+      comments: TableDef<
+        Comment,
+        Partial<Comment>,
+        Partial<Comment>,
+        [
+          Relationship<'comments_post_id_fkey', 'post_id', 'posts', 'id'>,
+          Relationship<'comments_author_id_fkey', 'author_id', 'profiles', 'id'>,
+          Relationship<'comments_parent_id_fkey', 'parent_id', 'comments', 'id'>,
+        ]
+      >;
+      reactions: TableDef<
+        Reaction,
+        Partial<Reaction>,
+        Partial<Reaction>,
+        [
+          Relationship<'reactions_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'reactions_post_id_fkey', 'post_id', 'posts', 'id'>,
+          Relationship<'reactions_comment_id_fkey', 'comment_id', 'comments', 'id'>,
+        ]
+      >;
+    };
+    Views: {
+      profiles_public: {
+        Row: AsRecord<PublicProfile>;
+        Relationships: [];
+      };
+    };
+    Functions: {
+      get_my_profile: {
+        Args: Record<string, never>;
+        Returns: Profile | null;
+      };
+      join_challenge: {
+        Args: { p_challenge_id: string };
+        Returns: { ok: boolean; challenge_id: string; prize_pool: number };
+      };
+      publish_challenge: {
+        Args: { p_payload: Record<string, unknown> };
+        Returns: { ok: boolean; challenge_id: string; prize_pool: number };
+      };
+      refund_pre_start: {
+        Args: { p_challenge_id: string; p_user_id?: string };
+        Returns: { ok: boolean; already_refunded?: boolean; refunded?: number };
+      };
+      mark_challenge_started: {
+        Args: { p_challenge_id: string };
+        Returns: { ok: boolean; already_started?: boolean; official_started_at: string };
+      };
+      eliminate_participant: {
+        Args: { p_challenge_id: string; p_user_id: string };
+        Returns: { ok: boolean; already_eliminated?: boolean; prize_pool_unchanged?: boolean };
+      };
+      close_challenge_for_judging: {
+        Args: { p_challenge_id: string };
+        Returns: {
+          ok?: boolean;
+          challenge_id?: string;
+          status?: string;
+          judging_started_at?: string;
+          distributable_at?: string;
+        };
+      };
+      ensure_challenge_judging: {
+        Args: { p_challenge_id: string };
+        Returns: {
+          ok?: boolean;
+          challenge_id?: string;
+          status?: string;
+          judging_started_at?: string;
+          distributable_at?: string;
+        };
+      };
+      distribute_challenge: {
+        Args: { p_challenge_id: string };
+        Returns: { ok: boolean; paid?: number; solo_forfeit?: boolean; distributed_at?: string };
+      };
+      sync_challenge_statuses: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      get_challenge_settlement: {
+        Args: { p_challenge_id: string };
+        Returns: ChallengeSettlementView | null;
+      };
+      settle_challenge: {
+        Args: { p_challenge_id: string };
+        Returns: ChallengeSettlementView;
+      };
+      log_workout: {
+        Args: {
+          p_challenge_id: string;
+          p_pre_selfie_url: string;
+          p_post_selfie_url: string;
+          p_hr_monitor_url: string;
+          p_notes?: string | null;
+        };
+        Returns: WorkoutSubmission & { days_completed: number };
+      };
+      mark_challenge_judging: {
+        Args: { p_challenge_id: string };
+        Returns: Challenge;
+      };
+      refresh_participant_progress: {
+        Args: { p_challenge_id: string; p_user_id: string };
+        Returns: number;
+      };
+      transfer_coins: {
+        Args: { p_recipient_id: string; p_amount: number };
+        Returns: CoinTransfer;
+      };
+      transfer_funds: {
+        Args: { p_recipient_id: string; p_amount: number; p_currency?: string };
+        Returns: CoinTransfer;
+      };
+      create_callout: {
+        Args: {
+          p_opponent_id: string;
+          p_amount: number;
+          p_currency: string;
+          p_win_condition: string;
+          p_deadline: string;
+        };
+        Returns: Callout;
+      };
+      accept_callout: {
+        Args: { p_callout_id: string };
+        Returns: Callout;
+      };
+      decline_callout: {
+        Args: { p_callout_id: string };
+        Returns: Callout;
+      };
+      submit_callout_result: {
+        Args: { p_callout_id: string; p_winner_id: string };
+        Returns: Callout;
+      };
+      cancel_callout: {
+        Args: { p_callout_id: string };
+        Returns: Callout;
+      };
+      mark_notifications_read: {
+        Args: { p_ids?: string[] | null };
+        Returns: number;
+      };
+      mark_notification_read: {
+        Args: { p_id: string };
+        Returns: number;
+      };
+      mark_all_notifications_read: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      invite_to_challenge: {
+        Args: { p_challenge_id: string; p_invitee_id: string };
+        Returns: ChallengeInvite;
+      };
+      create_challenge_invite: {
+        Args: { p_challenge_id: string };
+        Returns: CreateChallengeInviteResult;
+      };
+      accept_challenge_invite: {
+        Args: { p_token: string };
+        Returns: AcceptChallengeInviteResult;
+      };
+      user_can_access_challenge: {
+        Args: { p_challenge_id: string; p_user_id?: string };
+        Returns: boolean;
+      };
+      lifetime_earnings: {
+        Args: { p_user_id: string };
+        Returns: { coins: number; bucks: number; callout_wins: number }[];
+      };
+      evaluate_badges: {
+        Args: Record<string, never>;
+        Returns: {
+          newly_awarded: { key: string; title: string; coin_reward: number }[];
+        };
+      };
+    };
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};

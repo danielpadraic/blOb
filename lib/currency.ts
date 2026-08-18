@@ -1,0 +1,74 @@
+import type { Challenge, Profile, WalletCurrency } from '@/lib/types';
+import { formatBucks, formatCoins, formatUsd } from '@/utils/format';
+
+export function asWalletCurrency(value: string | null | undefined): WalletCurrency {
+  return value === 'bucks' ? 'bucks' : 'coins';
+}
+
+export function challengeCurrency(
+  challenge: { currency?: string | null } | null | undefined,
+): WalletCurrency {
+  return asWalletCurrency(challenge?.currency);
+}
+
+export function isBucksChallenge(
+  challenge: { currency?: string | null } | null | undefined,
+): boolean {
+  return challengeCurrency(challenge) === 'bucks';
+}
+
+export function isSponsoredBucks(
+  challenge: Pick<Challenge, 'is_official' | 'buy_in_amount' | 'currency'> | null | undefined,
+): boolean {
+  if (!challenge) {
+    return false;
+  }
+  return (
+    Boolean(challenge.is_official) &&
+    isBucksChallenge(challenge) &&
+    Number(challenge.buy_in_amount) <= 0
+  );
+}
+
+export function formatWalletNumber(amount: number | null | undefined): string {
+  const value = Number(amount ?? 0);
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+export function formatWallet(
+  amount: number | null | undefined,
+  currency?: string | null,
+): string {
+  return asWalletCurrency(currency) === 'bucks' ? formatBucks(amount) : formatCoins(amount);
+}
+
+export function formatWalletWithUsd(
+  amount: number | null | undefined,
+  currency?: string | null,
+): string {
+  const label = formatWallet(amount, currency);
+  if (asWalletCurrency(currency) === 'bucks') {
+    return `${label} (${formatUsd(amount)})`;
+  }
+  return label;
+}
+
+export function walletBalance(
+  profile: Pick<Profile, 'coins' | 'bucks' | 'credits'> | null | undefined,
+  currency?: string | null,
+): number {
+  if (!profile) {
+    return 0;
+  }
+  if (asWalletCurrency(currency) === 'bucks') {
+    return Number(profile.bucks ?? 0);
+  }
+  return Number(profile.coins ?? profile.credits ?? 0);
+}
+
+export function currencyNoun(currency?: string | null, plural = true): string {
+  if (asWalletCurrency(currency) === 'bucks') {
+    return plural ? 'Bucks' : 'Buck';
+  }
+  return plural ? 'Coins' : 'Coin';
+}

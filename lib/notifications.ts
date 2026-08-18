@@ -1,0 +1,179 @@
+import { challengeDetailHref } from '@/lib/routes';
+import { supabase } from '@/lib/supabase';
+import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
+import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+import type { Href } from 'expo-router';
+
+const NOTIFICATION_COLUMNS =
+  'id, user_id, actor_id, type, title, body, data, read_at, created_at';
+
+export function asNotification(row: AppNotification): AppNotification {
+  const data = (row.data ?? {}) as NotificationData;
+  return {
+    ...row,
+    body: row.body ?? null,
+    actor_id: row.actor_id ?? null,
+    read_at: row.read_at ?? null,
+    data,
+  };
+}
+
+export async function fetchNotifications(): Promise<AppNotification[]> {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select(NOTIFICATION_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(80);
+  if (error) {
+    if (isMissingRelationError(error)) {
+      console.log('[blob:notifications] table missing', error.message);
+      return [];
+    }
+    throw new Error(getErrorMessage(error));
+  }
+  return ((data ?? []) as AppNotification[]).map(asNotification);
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .is('read_at', null);
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return 0;
+    }
+    throw new Error(getErrorMessage(error));
+  }
+  return count ?? 0;
+}
+
+function isMissingRpc(error: unknown): boolean {
+  const raw = getErrorMessage(error).toLowerCase();
+  return (
+    isMissingRelationError(error) ||
+    raw.includes('could not find') ||
+    raw.includes('does not exist') ||
+    raw.includes('schema cache') ||
+    raw.includes('404')
+  );
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const named = await supabase.rpc('mark_notification_read', { p_id: id });
+  if (!named.error) {
+    return;
+  }
+  if (!isMissingRpc(named.error)) {
+    throw new Error(getErrorMessage(named.error));
+  }
+  const fallback = await supabase.rpc('mark_notifications_read', { p_ids: [id] });
+  if (fallback.error && !isMissingRelationError(fallback.error)) {
+    throw new Error(getErrorMessage(fallback.error));
+  }
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const named = await supabase.rpc('mark_all_notifications_read');
+  if (!named.error) {
+    return;
+  }
+  if (!isMissingRpc(named.error)) {
+    throw new Error(getErrorMessage(named.error));
+  }
+  const fallback = await supabase.rpc('mark_notifications_read', { p_ids: null });
+  if (fallback.error && !isMissingRelationError(fallback.error)) {
+    throw new Error(getErrorMessage(fallback.error));
+  }
+}
+
+export async function markNotificationsRead(ids?: string[]): Promise<void> {
+  if (ids && ids.length === 1) {
+    await markNotificationRead(ids[0]);
+    return;
+  }
+  if (!ids || ids.length === 0) {
+    await markAllNotificationsRead();
+    return;
+  }
+  const { error } = await supabase.rpc('mark_notifications_read', { p_ids: ids });
+  if (error && !isMissingRelationError(error)) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function inviteToChallenge(
+  challengeId: string,
+  inviteeId: string,
+): Promise<ChallengeInvite> {
+  const { data, error } = await supabase.rpc('invite_to_challenge', {
+    p_challenge_id: challengeId,
+    p_invitee_id: inviteeId,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error('Invite sent, but we couldn’t load the receipt.');
+  }
+  return row as ChallengeInvite;
+}
+
+export function notificationHref(item: AppNotification): Href | null {
+  const data = item.data ?? {};
+  if (item.type === 'follow' && data.username) {
+    return { pathname: '/feed/u/[username]', params: { username: data.username } };
+  }
+  if (data.callout_id) {
+    return `/challenges/callout/${data.callout_id}`;
+  }
+  if (item.type === 'coins_received' || item.type === 'badge_unlocked') {
+    return '/profile';
+  }
+  if (data.challenge_id) {
+    return challengeDetailHref(data.challenge_id, 'lobby');
+  }
+  if (item.type === 'tagged') {
+    return '/feed';
+  }
+  return null;
+}
+
+export function notificationGlyph(type: string, data?: NotificationData): string {
+  switch (type) {
+    case 'challenge_invite':
+      return '🏁';
+    case 'challenge_starting':
+      return '⏰';
+    case 'challenge_new':
+      return '✨';
+    case 'tagged':
+      return '🏷️';
+    case 'challenge_joined':
+      return '🤝';
+    case 'follow':
+      return '👋';
+    case 'coins_received':
+      return data?.currency === 'bucks' ? '💵' : '🪙';
+    case 'callout_received':
+    case 'callout_accepted':
+      return '⚔️';
+    case 'callout_resolved':
+      return '🏆';
+    case 'callout_disputed':
+      return '⚠️';
+    case 'callout_cancelled':
+      return '↩️';
+    case 'badge_unlocked':
+      return '🏅';
+    case 'challenge_settled':
+      return '🏆';
+    case 'challenge_placed':
+      return '🥇';
+    case 'challenge_eliminated':
+      return '💔';
+    default:
+      return '🔔';
+  }
+}

@@ -1,0 +1,136 @@
+import { useCallback } from 'react';
+import { FlatList, Pressable, View } from 'react-native';
+import { useRouter } from 'expo-router';
+
+import { MascotState } from '@/components/mascot/MascotState';
+import { AppText } from '@/components/ui/AppText';
+import {
+  useMarkNotificationsRead,
+  useNotifications,
+} from '@/hooks/useNotifications';
+import { notificationGlyph, notificationHref } from '@/lib/notifications';
+import { THEME } from '@/lib/theme';
+import type { AppNotification } from '@/lib/types';
+import { formatFeedTime } from '@/utils/format';
+
+type AlertsPanelProps = {
+  compact?: boolean;
+  onClose?: () => void;
+};
+
+export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
+  const router = useRouter();
+  const list = useNotifications();
+  const markRead = useMarkNotificationsRead();
+  const items = list.data ?? [];
+  const unreadCount = items.filter((item) => !item.read_at).length;
+
+  const onOpen = useCallback(
+    (item: AppNotification) => {
+      if (!item.read_at) {
+        markRead.mutate([item.id]);
+      }
+      onClose?.();
+      const href = notificationHref(item);
+      if (href) {
+        router.push(href);
+      }
+    },
+    [markRead, onClose, router],
+  );
+
+  return (
+    <View className={compact ? 'px-3 pt-3' : undefined}>
+      <View className="mb-2 flex-row items-center justify-between">
+        <AppText className="text-[18px] font-extrabold text-charcoal">Alerts</AppText>
+        {unreadCount > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => markRead.mutate(undefined)}
+            hitSlop={8}>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              Mark all read
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {list.isLoading ? (
+        <MascotState compact={compact} kind="loading" title="Checking your inbox" />
+      ) : list.error ? (
+        <MascotState
+          compact={compact}
+          kind="error"
+          title="Couldn’t load notifications"
+          body={list.error instanceof Error ? list.error.message : 'Try again in a moment.'}
+          actionLabel="Retry"
+          onAction={() => void list.refetch()}
+        />
+      ) : items.length === 0 ? (
+        <MascotState compact={compact} kind="empty" title="You’re all caught up." />
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: compact ? 12 : 24 }}
+          style={compact ? { maxHeight: 340 } : undefined}
+          onRefresh={() => void list.refetch()}
+          refreshing={list.isRefetching && !list.isLoading}
+          renderItem={({ item }) => (
+            <NotificationRow item={item} onPress={() => onOpen(item)} />
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+function NotificationRow({
+  item,
+  onPress,
+}: {
+  item: AppNotification;
+  onPress: () => void;
+}) {
+  const unread = !item.read_at;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      className="mb-2 flex-row items-start px-3 py-3"
+      style={{
+        backgroundColor: THEME.surface,
+        borderRadius: THEME.radius,
+        borderWidth: 1,
+        borderColor: THEME.border,
+      }}>
+      <View
+        className="h-10 w-10 items-center justify-center rounded-full"
+        style={{ backgroundColor: THEME.surface2 }}>
+        <AppText className="text-[18px]">{notificationGlyph(item.type, item.data)}</AppText>
+      </View>
+      <View className="ml-3 flex-1">
+        <View className="flex-row items-center justify-between gap-2">
+          <AppText
+            className={`flex-1 text-charcoal ${unread ? 'font-bold' : 'font-medium'}`}
+            numberOfLines={1}>
+            {item.title}
+          </AppText>
+          <AppText className="text-[11px] text-muted">{formatFeedTime(item.created_at)}</AppText>
+        </View>
+        {item.body ? (
+          <AppText className="mt-0.5 text-sm leading-5 text-muted" numberOfLines={2}>
+            {item.body}
+          </AppText>
+        ) : null}
+      </View>
+      {unread ? (
+        <View
+          className="ml-2 mt-2 h-2 w-2 rounded-full"
+          style={{ backgroundColor: THEME.accent }}
+        />
+      ) : null}
+    </Pressable>
+  );
+}

@@ -1,0 +1,158 @@
+import { useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
+
+import { InlineComposer } from '@/components/feed/InlineComposer';
+import { ReactionBar } from '@/components/feed/ReactionBar';
+import { ProfileLink } from '@/components/profile/ProfileLink';
+import { Avatar } from '@/components/ui/Avatar';
+import { AppText } from '@/components/ui/AppText';
+import { THEME } from '@/lib/theme';
+import type { CommentWithAuthor, ReactionType } from '@/lib/types';
+import { nestComments } from '@/utils/comments';
+import { getErrorMessage } from '@/utils/errors';
+import { formatFeedTime } from '@/utils/format';
+
+const INDENT = 12;
+
+type CommentThreadProps = {
+  comments: CommentWithAuthor[];
+  currentUserId?: string;
+  onReply: (content: string, parentId?: string | null) => Promise<unknown> | void;
+  onReact?: (commentId: string, type: ReactionType) => void;
+  composing?: boolean;
+};
+
+export function CommentThread({
+  comments,
+  currentUserId,
+  onReply,
+  onReact,
+  composing,
+}: CommentThreadProps) {
+  const [showAll, setShowAll] = useState(false);
+  const roots = nestComments(comments);
+
+  if (comments.length === 0) {
+    return null;
+  }
+
+  const previewLimit = 3;
+  const visibleRoots = showAll ? roots : roots.slice(0, previewLimit);
+  const hiddenCount = roots.length - visibleRoots.length;
+
+  return (
+    <View className="gap-2">
+      {hiddenCount > 0 ? (
+        <Pressable accessibilityRole="button" onPress={() => setShowAll(true)}>
+          <AppText className="text-[13px] font-semibold text-muted">
+            View all {comments.length} replies
+          </AppText>
+        </Pressable>
+      ) : null}
+      {visibleRoots.map((comment) => (
+        <CommentItem
+          key={comment.id}
+          comment={comment}
+          nested={false}
+          currentUserId={currentUserId}
+          composing={composing}
+          onReply={onReply}
+          onReact={onReact}
+        />
+      ))}
+    </View>
+  );
+}
+
+function CommentItem({
+  comment,
+  nested,
+  currentUserId,
+  composing,
+  onReply,
+  onReact,
+}: {
+  comment: CommentWithAuthor;
+  nested: boolean;
+  currentUserId?: string;
+  composing?: boolean;
+  onReply: (content: string, parentId?: string | null) => Promise<unknown> | void;
+  onReact?: (commentId: string, type: ReactionType) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
+  const handle = comment.author?.username ?? 'blob';
+  const replies = comment.replies ?? [];
+
+  return (
+    <View
+      className="gap-1.5"
+      style={
+        nested
+          ? {
+              marginLeft: INDENT,
+              borderLeftWidth: 2,
+              borderLeftColor: THEME.accentSoft,
+              paddingLeft: 8,
+            }
+          : undefined
+      }>
+      <View className="flex-row gap-2">
+        <ProfileLink username={comment.author?.username} userId={comment.author_id}>
+          <Avatar uri={comment.author?.avatar_url} name={name} size={nested ? 20 : 24} />
+        </ProfileLink>
+        <View className="min-w-0 flex-1">
+          <ProfileLink username={comment.author?.username} userId={comment.author_id}>
+            <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
+              {name}{' '}
+              <AppText className="text-[11px] font-normal text-muted">@{handle}</AppText>
+            </AppText>
+          </ProfileLink>
+          <AppText className="text-[13px] leading-[18px] text-ink">{comment.content}</AppText>
+          <AppText className="mt-0.5 text-[11px] text-muted">{formatFeedTime(comment.created_at)}</AppText>
+          <View className="mt-0.5">
+            <ReactionBar
+              compact
+              reactions={comment.reactions}
+              currentUserId={currentUserId}
+              onReact={(type) => onReact?.(comment.id, type)}
+              onReply={() => setOpen((value) => !value)}
+            />
+          </View>
+        </View>
+      </View>
+
+      {open ? (
+        <View style={{ marginLeft: 28 }}>
+          <AppText className="mb-1 text-[11px] font-semibold text-muted">
+            Replying to @{handle}
+          </AppText>
+          <InlineComposer
+            placeholder={`Reply to ${name}…`}
+            submitting={composing}
+            onSubmit={async (text) => {
+              try {
+                await onReply(text, comment.id);
+                setOpen(false);
+              } catch (error) {
+                Alert.alert('Couldn’t post that reply', getErrorMessage(error));
+              }
+            }}
+          />
+        </View>
+      ) : null}
+
+      {replies.map((reply) => (
+        <CommentItem
+          key={reply.id}
+          comment={reply}
+          nested
+          currentUserId={currentUserId}
+          composing={composing}
+          onReply={onReply}
+          onReact={onReact}
+        />
+      ))}
+    </View>
+  );
+}

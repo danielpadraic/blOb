@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "blOb",
+    "slug": "blob-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/mascot/blob-icon.png",
+    "scheme": "blob",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F7F5",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.blob.mobile",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "blOb needs photo access to submit workout proofs and set your avatar.",
+        "NSCameraUsageDescription": "blOb needs camera access to capture workout proofs."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#131515",
+        "foregroundImage": "./assets/mascot/blob-wave.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "app.blob.mobile",
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/mascot/blob-logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/mascot/blob-wave.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F7F5"
+        }
+      ],
+      "expo-secure-store",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "blOb needs photo access to submit workout proofs and set your avatar.",
+          "cameraPermission": "blOb needs camera access to capture workout proofs."
+        }
+      ],
+      "expo-apple-authentication",
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

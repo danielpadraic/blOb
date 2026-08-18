@@ -1,0 +1,153 @@
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { AppText } from '@/components/ui/AppText';
+import { useCoinRecipientSearch, useCoinRecipientSuggestions } from '@/hooks/useCoins';
+import { useInviteToChallenge } from '@/hooks/useNotifications';
+import { THEME } from '@/lib/theme';
+import type { PublicProfile } from '@/lib/types';
+import { getErrorMessage } from '@/utils/errors';
+
+type InviteToChallengeModalProps = {
+  visible: boolean;
+  challengeId: string;
+  challengeTitle: string;
+  onClose: () => void;
+};
+
+function personName(profile: PublicProfile): string {
+  return profile.display_name?.trim() || profile.username;
+}
+
+export function InviteToChallengeModal({
+  visible,
+  challengeId,
+  challengeTitle,
+  onClose,
+}: InviteToChallengeModalProps) {
+  const insets = useSafeAreaInsets();
+  const invite = useInviteToChallenge(challengeId);
+  const suggestions = useCoinRecipientSuggestions();
+  const [query, setQuery] = useState('');
+  const search = useCoinRecipientSearch(query);
+  const results = useMemo(
+    () => (query.trim().length >= 2 ? (search.data ?? []) : []),
+    [query, search.data],
+  );
+
+  function close() {
+    if (invite.isPending) {
+      return;
+    }
+    setQuery('');
+    onClose();
+  }
+
+  async function pick(person: PublicProfile) {
+    try {
+      await invite.mutateAsync(person.id);
+      Alert.alert('Invite sent', `${personName(person)} will see this in Notifications.`);
+      setQuery('');
+      onClose();
+    } catch (error) {
+      Alert.alert('Couldn’t invite', getErrorMessage(error));
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+      <Pressable className="flex-1 justify-end bg-charcoal/70" onPress={close}>
+        <Pressable
+          className="max-h-[88%] px-5 pt-4"
+          style={{
+            backgroundColor: THEME.background,
+            borderTopLeftRadius: THEME.radiusLg,
+            borderTopRightRadius: THEME.radiusLg,
+            paddingBottom: Math.max(insets.bottom, 16) + 8,
+          }}
+          onPress={(event) => event.stopPropagation()}>
+          <View className="mb-3 items-center">
+            <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+          </View>
+          <AppText className="text-xl font-bold text-charcoal">Invite to {challengeTitle}</AppText>
+          <AppText className="mt-1 mb-4 text-muted">
+            Search a username. They’ll get a notification with a link to this challenge.
+          </AppText>
+          <Input
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search by username"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+          />
+          {search.isFetching && query.trim().length >= 2 ? (
+            <ActivityIndicator className="mt-4" color={THEME.accent} />
+          ) : null}
+          <View className="mt-3">
+            {query.trim().length >= 2 ? (
+              <PeopleList people={results} empty="No blobs match that name." onPick={pick} />
+            ) : (
+              <PeopleList
+                people={suggestions.data?.following ?? []}
+                empty={undefined}
+                onPick={pick}
+              />
+            )}
+          </View>
+          <View className="mt-4">
+            <Button title="Close" variant="ghost" onPress={close} disabled={invite.isPending} />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function PeopleList({
+  people,
+  empty,
+  onPick,
+}: {
+  people: PublicProfile[];
+  empty?: string;
+  onPick: (profile: PublicProfile) => void;
+}) {
+  if (people.length === 0) {
+    return empty ? <AppText className="mt-2 text-sm text-muted">{empty}</AppText> : null;
+  }
+  return (
+    <View
+      className="overflow-hidden"
+      style={{
+        borderRadius: THEME.radius,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        backgroundColor: THEME.surface,
+      }}>
+      {people.map((person, index) => {
+        const name = personName(person);
+        return (
+          <Pressable
+            key={person.id}
+            onPress={() => onPick(person)}
+            className="flex-row items-center px-3 py-3"
+            style={{
+              borderTopWidth: index === 0 ? 0 : 1,
+              borderTopColor: THEME.border,
+            }}>
+            <Avatar uri={person.avatar_url} name={name} size={40} />
+            <View className="ml-3 flex-1">
+              <AppText className="font-semibold text-charcoal">{name}</AppText>
+              <AppText className="text-sm text-muted">@{person.username}</AppText>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}

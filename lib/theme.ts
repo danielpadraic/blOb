@@ -1,0 +1,82 @@
+import { Platform, type ViewStyle } from 'react-native';
+
+export const THEME = {
+  background: '#F7F7F5',
+  surface: '#FFFFFF',
+  surface2: '#F2F5F3',
+  primary: '#101312',
+  primaryForeground: '#FFFFFF',
+  secondaryDark: '#151716',
+  accent: '#2C9B89',
+  accentSoft: '#E7F7F3',
+  accentBright: '#72D9CB',
+  accentForeground: '#FFFFFF',
+  gold: '#D7A62F',
+  textPrimary: '#151716',
+  textSecondary: '#151716',
+  textMuted: '#7F8581',
+  border: '#E8EBE8',
+  borderSubtle: 'rgba(25, 34, 31, 0.12)',
+  danger: '#9A3B3B',
+  radius: 22,
+  radiusSm: 14,
+  radiusLg: 22,
+  space: {
+    8: 8,
+    12: 12,
+    16: 16,
+    24: 24,
+    32: 32,
+  },
+} as const;
+
+/** Space so tab-root screens clear the floating pill bar. */
+export const TAB_BAR_CONTENT_INSET = 110;
+
+export function themeShadow(kind: 'card' | 'bar' = 'card'): ViewStyle {
+  if (kind === 'bar') {
+    return Platform.OS === 'web'
+      ? { boxShadow: '0 10px 30px rgba(20, 28, 26, 0.16)' }
+      : {
+          boxShadow: [
+            {
+              color: 'rgba(20, 28, 26, 0.16)',
+              offsetX: 0,
+              offsetY: 10,
+              blurRadius: 30,
+            },
+          ],
+        };
+  }
+
+  return Platform.OS === 'web'
+    ? { boxShadow: '0 8px 24px rgba(25, 34, 31, 0.07)' }
+    : {
+        boxShadow: [
+          {
+            color: 'rgba(25, 34, 31, 0.07)',
+            offsetX: 0,
+            offsetY: 8,
+            blurRadius: 24,
+          },
+        ],
+      };
+}
+
+/** Back-compat aliases used across the app. */
+export const COLORS = {
+  charcoal: THEME.primary,
+  charcoal800: THEME.secondaryDark,
+  cream: THEME.background,
+  cream100: THEME.border,
+  coral: THEME.accent,
+  coralDark: THEME.danger,
+  mint: THEME.accentBright,
+  mintDark: THEME.accent,
+  ink: THEME.textPrimary,
+  muted: THEME.textMuted,
+  line: THEME.border,
+  white: THEME.surface,
+  accentSoft: THEME.accentSoft,
+  danger: THEME.danger,
+} as const;

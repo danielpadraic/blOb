@@ -1,0 +1,28 @@
+---
+description: Lock blOb UI to the modern feed prototype tokens and chrome.
+alwaysApply: true
+---
+
+# blOb design lock
+
+All new UI uses the prototype tokens in `lib/theme.ts`. Do not reintroduce bulky gray blocks or a white/matte fill behind Bob.
+
+- **bg** `#F7F7F5` · **surface** `#FFFFFF` · **line** `#E8EBE8`
+- **teal** `#2C9B89` · **tealSoft** `#E7F7F3` · **teal2** `#72D9CB`
+- **ink** `#151716` · **muted** `#7F8581` · **black** `#101312`
+- Soft card shadow `0 8px 24px rgba(25,34,31,.07)` · radius **20–22**
+- Keep the floating pill tab bar and header wallet + bell pattern
+- Primary buttons black; teal for active tabs, links, and mint chips
+- Bob mascot stays on a transparent background
+
+```tsx
+// ❌ BAD
+<View style={{ backgroundColor: '#E5E5E5', borderRadius: 8 }}>
+  <BlobMascot />
+</View>
+
+// ✅ GOOD
+<View style={{ backgroundColor: THEME.surface, borderRadius: THEME.radius, ...themeShadow() }}>
+  <BlobMascot />
+</View>
+```
