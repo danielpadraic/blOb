@@ -5,6 +5,8 @@ import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { useChallengeShareState } from '@/hooks/useChallenge';
+import { copy } from '@/lib/copy';
 import {
   feedEventAction,
   isChallengeFeedEvent,
@@ -24,6 +26,7 @@ export function FeedItem({ event, joined, onPressChallenge }: FeedItemProps) {
   const name = personDisplayName(event.actor);
   const won = event.event_type === 'challenge_won';
   const challengeLinked = isChallengeFeedEvent(event);
+  const share = useChallengeShareState(challengeLinked ? event.challenge_id : null);
   const note =
     typeof event.metadata?.caption === 'string'
       ? event.metadata.caption
@@ -73,8 +76,10 @@ export function FeedItem({ event, joined, onPressChallenge }: FeedItemProps) {
               won={won}
               onPress={onPressChallenge}
             />
-          ) : challengeLinked ? (
-            <AppText className="mt-2 text-[12px] text-muted">Challenge details coming soon.</AppText>
+          ) : share.data?.reason === 'geo' ? (
+            <AppText className="mt-2 text-[12px]" style={{ color: THEME.textMuted }}>
+              {copy('geo.unavailable')}
+            </AppText>
           ) : null}
           <View className="mt-3 flex-row items-center gap-4">
             <View className="flex-row items-center gap-1.5 opacity-50">

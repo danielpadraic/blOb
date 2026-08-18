@@ -235,6 +235,7 @@ export const createChallengeSchema = z
     required_checkins: z.string().optional(),
     payout_mode: z.enum(['even_split_remaining', 'winner_take_all', 'top_places']).optional(),
     format: z.enum(['consistency', 'points', 'lms']).optional(),
+    discoverability: z.enum(['invite_only', 'friends_of_friends']).nullable().optional(),
     rules: z
       .string()
       .trim()

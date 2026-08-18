@@ -1,3 +1,4 @@
+import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type {
   CloseChallengeForJudgingResult,
@@ -38,7 +39,7 @@ const RPC_MESSAGES: Record<string, string> = {
   NOT_INVITED: 'This challenge is private. Ask the host for an invite.',
   JOIN_CLOSED: 'Join closed when this challenge started.',
   FRIENDS_ONLY: 'This challenge is for friends of the host.',
-  CHALLENGE_NOT_ENDED: 'This challenge hasn’t ended yet.',
+  GEO_BLOCKED: copy('geo.unavailable'),
   POST_NOT_FOUND: 'That post is gone.',
   NOT_A_CHALLENGE_PROOF: 'Only challenge proofs can be flagged.',
   CANNOT_FLAG_OWN: 'You can’t flag your own proof.',

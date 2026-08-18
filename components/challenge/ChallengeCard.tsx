@@ -3,6 +3,8 @@ import { Image } from 'expo-image';
 import { Pressable, View } from 'react-native';
 
 import { ChallengePosterCard } from '@/components/challenge/ChallengePosterCard';
+import { Avatar } from '@/components/ui/Avatar';
+import { copy } from '@/lib/copy';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { Badge } from '@/components/ui/Badge';
 import { AppText } from '@/components/ui/AppText';
@@ -22,6 +24,7 @@ type ChallengeCardProps = {
   onJoin?: () => void;
   friendCount?: number;
   participantStatus?: string | null;
+  socialProof?: { name: string; avatarUrl?: string | null; kind: 'hosting' | 'joined' };
 };
 
 const cardShell = {
@@ -129,6 +132,7 @@ export function ChallengeCard({
   onJoin,
   friendCount = 0,
   participantStatus,
+  socialProof,
 }: ChallengeCardProps) {
   if (variant === 'rail') {
     return (
@@ -140,6 +144,7 @@ export function ChallengeCard({
         hosting={hosting}
         invited={invited}
         participantStatus={participantStatus}
+        socialProof={socialProof}
       />
     );
   }
@@ -259,6 +264,7 @@ function LobbyRailCard({
   hosting = false,
   invited = false,
   participantStatus,
+  socialProof,
 }: {
   challenge: ChallengeWithStats;
   myDays?: number | null;
@@ -267,16 +273,29 @@ function LobbyRailCard({
   hosting?: boolean;
   invited?: boolean;
   participantStatus?: string | null;
+  socialProof?: { name: string; avatarUrl?: string | null; kind: 'hosting' | 'joined' };
 }) {
   return (
-    <ChallengePosterCard
-      challenge={challenge}
-      onPress={onPress}
-      joined={joined}
-      hosting={hosting}
-      invited={invited}
-      daysCompleted={myDays}
-      participantStatus={participantStatus}
-    />
+    <View>
+      <ChallengePosterCard
+        challenge={challenge}
+        onPress={onPress}
+        joined={joined}
+        hosting={hosting}
+        invited={invited}
+        daysCompleted={myDays}
+        participantStatus={participantStatus}
+      />
+      {socialProof ? (
+        <View className="mt-2 flex-row items-center" style={{ minHeight: 44, maxWidth: 250 }}>
+          <Avatar uri={socialProof.avatarUrl} name={socialProof.name} size={28} />
+          <AppText className="ml-2 flex-1 text-[12px] font-semibold text-charcoal" numberOfLines={1}>
+            {copy(socialProof.kind === 'hosting' ? 'lobby.friendsHosting' : 'lobby.friendsJoined', 'neutral', {
+              name: socialProof.name,
+            })}
+          </AppText>
+        </View>
+      ) : null}
+    </View>
   );
 }

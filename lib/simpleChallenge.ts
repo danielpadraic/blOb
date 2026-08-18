@@ -14,6 +14,7 @@ import {
   type ChallengeProof,
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
+import { resolveDiscoverability } from '@/lib/challengeDiscoverability';
 import { copy } from '@/lib/copy';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -86,6 +87,7 @@ export type SimpleChallengeDraft = {
   custom_checkins: number;
   proofs: ChallengeProof[];
   visibility: SimpleVisibility;
+  friends_of_friends: boolean;
 };
 
 export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
@@ -105,6 +107,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     custom_checkins: 7,
     proofs: defaultChallengeProofs(),
     visibility: 'public',
+    friends_of_friends: true,
   };
 }
 
@@ -197,6 +200,11 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     category: type.category,
     challenge_type: 'consistency',
     visibility: invite ? 'invite' : draft.visibility === 'friends' ? 'friends' : 'public',
+    discoverability: resolveDiscoverability({
+      visibility: invite ? 'invite' : draft.visibility,
+      currency: draft.currency,
+      friendsOfFriends: draft.friends_of_friends,
+    }),
     challenge_lane: 'coins',
     buy_in: String(buyIn),
     duration_type: 'fixed',

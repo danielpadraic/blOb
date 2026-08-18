@@ -15,7 +15,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { useChallenges } from '@/hooks/useChallenge';
+import { useChallengeShareState } from '@/hooks/useChallenge';
 import { PROOF_META } from '@/lib/constants';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
@@ -133,7 +133,7 @@ export function PostCard({
               onToggle={() => setExpanded((value) => !value)}
             />
           ) : post.challenge_id && !quote ? (
-            <ChallengeTitleLink challengeId={post.challenge_id} />
+            <ChallengeShareFooter challengeId={post.challenge_id} />
           ) : null}
 
           {quote ? (
@@ -253,6 +253,25 @@ function ChallengeTitleLink({
   );
 }
 
+function GeoUnavailable() {
+  return (
+    <AppText className="mt-1 text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+      {copy('geo.unavailable')}
+    </AppText>
+  );
+}
+
+function ChallengeShareFooter({ challengeId }: { challengeId: string }) {
+  const share = useChallengeShareState(challengeId);
+  if (share.data?.reason === 'geo') {
+    return <GeoUnavailable />;
+  }
+  if (share.data?.reason !== 'ok') {
+    return null;
+  }
+  return <ChallengeTitleLink challengeId={challengeId} title={share.data.title} />;
+}
+
 function PostBody({
   content,
   mentions,
@@ -268,10 +287,10 @@ function PostBody({
   canExpand: boolean;
   onToggle: () => void;
 }) {
-  const challenges = useChallenges();
-  const title = challengeId
-    ? challenges.data?.find((item) => item.id === challengeId)?.title
-    : null;
+  const share = useChallengeShareState(challengeId);
+  const title = share.data?.reason === 'ok' ? share.data.title : null;
+  const geoBlocked = share.data?.reason === 'geo';
+  const hidden = share.data?.reason === 'hidden';
   const matchIndex = title ? content.indexOf(title) : -1;
 
   return (
@@ -291,7 +310,8 @@ function PostBody({
             mentions={mentions}
             numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}
           />
-          {challengeId ? (
+          {geoBlocked ? <GeoUnavailable /> : null}
+          {challengeId && !geoBlocked && !hidden && share.data?.reason === 'ok' ? (
             <View className="mt-1">
               <ChallengeTitleLink challengeId={challengeId} title={title} />
             </View>

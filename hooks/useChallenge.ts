@@ -5,13 +5,20 @@ import { applyLaneForPublish } from '@/lib/challengeLane';
 import { ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
   fetchChallengeById,
+  fetchChallengeShareState,
+  fetchActiveChallenges,
+  fetchCompetingChallenges,
   fetchDiscoverChallenges,
+  fetchFriendsDiscoverChallenges,
+  fetchHostingChallenges,
   fetchJoinedLobbyChallenges,
   fetchLobbyChallenges,
   fetchLobbyFriendCounts,
+  fetchOfficialDiscoverChallenges,
   insertUserChallenge,
   joinChallenge,
   withParticipantCounts,
+  type FriendChallengeProof,
 } from '@/lib/challenges';
 import {
   firstProofMethod,
@@ -31,6 +38,7 @@ import {
   deriveFinishTarget,
   extraHasMinMinutes,
 } from '@/lib/consistencyRules';
+import { copy } from '@/lib/copy';
 import { DEFAULT_MIN_MINUTES, OFFICIAL_CHALLENGE, OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -68,6 +76,71 @@ export function useDiscoverChallenges() {
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       await prepareLobby(user?.id);
       return withParticipantCounts(await fetchDiscoverChallenges(user?.id));
+    },
+  });
+}
+
+export function useHostingChallenges() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['lobby-hosting', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<ChallengeWithStats[]> => {
+      await prepareLobby(user?.id);
+      return withParticipantCounts(await fetchHostingChallenges(user!.id));
+    },
+  });
+}
+
+export function useCompetingChallenges() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['lobby-active', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<ChallengeWithStats[]> => {
+      return withParticipantCounts(await fetchCompetingChallenges(user!.id));
+    },
+  });
+}
+
+export function useOfficialDiscoverChallenges() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['lobby-official', user?.id],
+    queryFn: async (): Promise<ChallengeWithStats[]> => {
+      await prepareLobby(user?.id);
+      return withParticipantCounts(await fetchOfficialDiscoverChallenges(user?.id));
+    },
+  });
+}
+
+export function useFriendsDiscoverChallenges() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['lobby-friends', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<Array<FriendChallengeProof & { challenge: ChallengeWithStats }>> => {
+      const rows = await fetchFriendsDiscoverChallenges(user!.id);
+      const withCounts = await withParticipantCounts(rows.map((row) => row.challenge));
+      const byId = new Map(withCounts.map((row) => [row.id, row]));
+      return rows
+        .map((row) => {
+          const challenge = byId.get(row.challenge.id);
+          return challenge ? { ...row, challenge } : null;
+        })
+        .filter((row): row is FriendChallengeProof & { challenge: ChallengeWithStats } => Boolean(row));
+    },
+  });
+}
+
+export function useFeedActiveChallenges() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['feed-active-challenges', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<ChallengeWithStats[]> => {
+      await prepareLobby(user?.id);
+      return withParticipantCounts(await fetchActiveChallenges(user!.id));
     },
   });
 }
@@ -118,6 +191,15 @@ export function useLobbyFriendCounts(challengeIds: string[]) {
   });
 }
 
+export function useChallengeShareState(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ['challenge-share', id],
+    enabled: Boolean(id),
+    staleTime: 60_000,
+    queryFn: () => fetchChallengeShareState(id!),
+  });
+}
+
 export function useChallenge(id: string | undefined) {
   return useQuery({
     queryKey: ['challenge', id],
@@ -125,11 +207,19 @@ export function useChallenge(id: string | undefined) {
     queryFn: async (): Promise<ChallengeWithStats> => {
       console.log('[blob:detail] load', id);
       await syncChallengeStatuses();
-      const challenge = await fetchChallengeById(id!);
-      return {
-        ...challenge,
-        participant_count: Number(challenge.participant_count ?? 0),
-      };
+      try {
+        const challenge = await fetchChallengeById(id!);
+        return {
+          ...challenge,
+          participant_count: 0,
+        };
+      } catch (error) {
+        const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: id! });
+        if (reason.data === 'geo') {
+          throw new Error(copy('geo.unavailable'));
+        }
+        throw error;
+      }
     },
   });
 }
@@ -387,6 +477,11 @@ export function useJoinChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
       void reportBadgeActivity();
@@ -584,6 +679,7 @@ export function useCreateChallenge() {
               : 'even_split_remaining'),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         start_rule: 'at_starts_at',
+        discoverability: values.discoverability ?? null,
       });
     },
     onSuccess: (challenge, values) => {
@@ -603,6 +699,11 @@ export function useCreateChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.refetchQueries({ queryKey: ['lobby-discover'] });
       void queryClient.refetchQueries({ queryKey: ['lobby-joined'] });
       void queryClient.invalidateQueries({ queryKey: ['reusable-challenges'] });
@@ -645,6 +746,11 @@ export function useMarkChallengeJudging() {
       void queryClient.invalidateQueries({ queryKey: ['challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
     },
   });
@@ -674,6 +780,11 @@ export function useSettleChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
       if (user) {

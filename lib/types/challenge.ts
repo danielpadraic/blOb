@@ -96,6 +96,7 @@ export type PublishChallengePayload = {
   payout_mode?: string;
   timezone?: string | null;
   start_rule?: string;
+  discoverability?: string | null;
 };
 
 export type PublishChallengeResult = {

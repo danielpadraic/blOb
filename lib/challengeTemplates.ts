@@ -103,6 +103,7 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   category: 'fitness',
   challenge_type: 'consistency',
   visibility: 'public',
+  discoverability: null,
   challenge_lane: 'coins',
   buy_in: '0',
   duration_type: 'fixed',

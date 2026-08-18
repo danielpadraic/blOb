@@ -104,6 +104,7 @@ export type ChallengeKind = 'consistency' | 'points';
 export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly' | 'once' | '3x_week' | 'custom';
 
 export type ChallengeVisibility = 'public' | 'unlisted' | 'private' | 'friends' | 'invite';
+export type ChallengeDiscoverability = 'invite_only' | 'friends_of_friends';
 
 export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'checkin' | 'honor' | 'hr';
 
@@ -298,6 +299,8 @@ export interface Challenge {
   category: ChallengeCategory | string | null;
   challenge_type: ChallengeKind | string | null;
   visibility: ChallengeVisibility | string | null;
+  discoverability?: ChallengeDiscoverability | string | null;
+  allowed_states?: string[] | null;
   challenge_lane?: ChallengeLane | string | null;
   currency: WalletCurrency | string | null;
   host_funded?: boolean;
@@ -1189,6 +1192,14 @@ export type Database = {
       user_can_access_challenge: {
         Args: { p_challenge_id: string; p_user_id?: string };
         Returns: boolean;
+      };
+      challenge_available_in_jurisdiction: {
+        Args: { p_challenge_id: string; p_user_id?: string };
+        Returns: boolean;
+      };
+      challenge_access_reason: {
+        Args: { p_challenge_id: string };
+        Returns: string;
       };
       lifetime_earnings: {
         Args: { p_user_id: string };

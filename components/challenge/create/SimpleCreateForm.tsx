@@ -149,6 +149,7 @@ export function SimpleCreateForm() {
                 currency: value,
                 buy_in: value === 'bucks' ? 0 : draft.buy_in,
                 host_budget: value === 'coins' ? 0 : Math.max(draft.host_budget, 1),
+                friends_of_friends: draft.visibility === 'invite' && value === 'coins',
               })
             }
           />
@@ -387,8 +388,45 @@ export function SimpleCreateForm() {
               { value: 'friends' as SimpleVisibility, label: copy('create.friends') },
               { value: 'invite' as SimpleVisibility, label: copy('create.invite') },
             ]}
-            onChange={(visibility) => patch({ visibility })}
+            onChange={(visibility) =>
+              patch({
+                visibility,
+                friends_of_friends: visibility === 'invite' && draft.currency === 'coins',
+              })
+            }
           />
+          {draft.visibility === 'invite' ? (
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: draft.friends_of_friends }}
+              accessibilityLabel={copy('create.friendsOfFriends')}
+              onPress={() => patch({ friends_of_friends: !draft.friends_of_friends })}
+              className="flex-row items-center justify-between"
+              style={{ minHeight: 44 }}>
+              <AppText className="mr-3 flex-1 text-[14px] leading-5 text-charcoal">
+                {copy('create.friendsOfFriends')}
+              </AppText>
+              <View
+                style={{
+                  width: 48,
+                  height: 28,
+                  borderRadius: 14,
+                  padding: 2,
+                  backgroundColor: draft.friends_of_friends ? THEME.accent : THEME.border,
+                  justifyContent: 'center',
+                }}>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: THEME.surface,
+                    alignSelf: draft.friends_of_friends ? 'flex-end' : 'flex-start',
+                  }}
+                />
+              </View>
+            </Pressable>
+          ) : null}
         </View>
 
         {needed > 0 ? (

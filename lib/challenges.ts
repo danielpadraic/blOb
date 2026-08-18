@@ -28,7 +28,16 @@ import type {
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
 import { challengeCurrency, formatWallet } from '@/lib/currency';
 import { applyLaneForPublish, isInviteOnlyChallenge } from '@/lib/challengeLane';
+import {
+  isInviteOnlyDiscoverable,
+  isJoinableNotStarted,
+  isLiveOrUpcoming,
+} from '@/lib/challengeDiscoverability';
+
 import { formatCoins } from '@/utils/format';
+import { copy } from '@/lib/copy';
+
+const JOINABLE_NOT_STARTED_STATUSES = ['open', 'upcoming', 'starting'] as const;
 
 const DEFAULT_PROOFS: ProofRequirement[] = [
   { type: 'pre_selfie', required: true },
@@ -96,6 +105,7 @@ export type CreateChallengeInput = {
   payout_mode?: string;
   timezone?: string | null;
   start_rule?: string;
+  discoverability?: string | null;
 };
 
 type ChallengeRow = Record<string, unknown>;
@@ -512,6 +522,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     category: (row.category as string | null) ?? null,
     challenge_type: rawType === 'points' ? 'points' : 'consistency',
     visibility: (row.visibility as string | null) ?? null,
+    discoverability: (row.discoverability as string | null) ?? null,
+    allowed_states: Array.isArray(row.allowed_states) ? (row.allowed_states as string[]) : null,
     challenge_lane: (row.challenge_lane as string | null) ?? null,
     currency: challengeCurrency(row as { currency?: string | null }),
     host_funded: Boolean(row.host_funded),
@@ -560,6 +572,183 @@ export function sortMyLobby(rows: Challenge[]): Challenge[] {
     const updatedB = new Date(b.updated_at ?? b.created_at).getTime();
     return updatedB - updatedA;
   });
+}
+
+async function fetchAcceptedFriendIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('friendships')
+    .select('user_a_id, user_b_id, status')
+    .eq('status', 'accepted')
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
+  if (error) {
+    console.log('[blob:lobby] friends skipped', error.message);
+    return [];
+  }
+  return [...new Set(
+    (data ?? []).map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id)).filter(Boolean),
+  )];
+}
+
+export async function fetchActiveChallenges(userId?: string): Promise<Challenge[]> {
+  if (!userId) {
+    return [];
+  }
+  const [mine, joinedIds] = await Promise.all([
+    fetchJoinedLobbyChallenges(userId),
+    fetchJoinedChallengeIds(userId),
+  ]);
+  const joined = new Set(joinedIds);
+  return sortMyLobby(
+    mine.filter(
+      (row) =>
+        isLiveOrUpcoming(row.status) &&
+        (row.created_by === userId || joined.has(row.id)),
+    ),
+  );
+}
+
+export async function fetchHostingChallenges(userId?: string): Promise<Challenge[]> {
+  if (!userId) {
+    return [];
+  }
+  const mine = await fetchJoinedLobbyChallenges(userId);
+  return sortMyLobby(
+    mine.filter((row) => row.created_by === userId && isLiveOrUpcoming(row.status)),
+  );
+}
+
+export async function fetchCompetingChallenges(userId?: string): Promise<Challenge[]> {
+  if (!userId) {
+    return [];
+  }
+  const joinedIds = new Set(await fetchJoinedChallengeIds(userId));
+  const mine = await fetchJoinedLobbyChallenges(userId);
+  return sortMyLobby(
+    mine.filter(
+      (row) =>
+        row.created_by !== userId &&
+        joinedIds.has(row.id) &&
+        isLiveOrUpcoming(row.status),
+    ),
+  );
+}
+
+export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<Challenge[]> {
+  const listed = await selectChallengeList(
+    (query) =>
+      query
+        .eq('is_official', true as unknown as string)
+        .in('status', DISCOVER_CHALLENGE_STATUSES)
+        .order('starts_at', { ascending: true })
+        .limit(LOBBY_PAGE_SIZE),
+    'official-discover',
+  );
+  const joined = new Set(userId ? await fetchJoinedChallengeIds(userId) : []);
+  const rows = listed
+    .map(normalizeChallenge)
+    .filter((row) => {
+      if (!row.is_official || !isLiveOrUpcoming(row.status) || joined.has(row.id)) {
+        return false;
+      }
+      if (userId && row.created_by === userId) {
+        return false;
+      }
+      if (row.official_started_at) {
+        return false;
+      }
+      return true;
+    });
+  return sortOfficialFirst(rows);
+}
+
+export type FriendChallengeProof = {
+  challenge: Challenge;
+  kind: 'hosting' | 'joined';
+  friendId: string;
+};
+
+export async function fetchFriendsDiscoverChallenges(userId?: string): Promise<FriendChallengeProof[]> {
+  if (!userId) {
+    return [];
+  }
+  const friendIds = await fetchAcceptedFriendIds(userId);
+  if (friendIds.length === 0) {
+    return [];
+  }
+  const [joinedIdList, invitedIdList] = await Promise.all([
+    fetchJoinedChallengeIds(userId),
+    fetchInvitedChallengeIds(userId),
+  ]);
+  const joinedIds = new Set(joinedIdList);
+  const invitedIds = new Set(invitedIdList);
+  const hosted = await selectChallengeList(
+    (query) =>
+      query
+        .in('created_by', friendIds)
+        .in('status', JOINABLE_NOT_STARTED_STATUSES)
+        .order('starts_at', { ascending: true })
+        .limit(LOBBY_PAGE_SIZE),
+    'friends-hosted',
+  ).catch((error) => {
+    console.log('[blob:lobby] friends-hosted skipped', error);
+    return [] as ChallengeRow[];
+  });
+
+  const friendParts = await supabase
+    .from('challenge_participants')
+    .select('challenge_id, user_id, status')
+    .in('user_id', friendIds)
+    .in('status', ['joined', 'active', 'completed']);
+  const friendChallengeIds = [
+    ...new Set((friendParts.data ?? []).map((row) => row.challenge_id).filter(Boolean)),
+  ].filter((id) => !joinedIds.has(id));
+  const joinedByFriends =
+    friendChallengeIds.length === 0
+      ? []
+      : await selectChallengeList(
+          (query) =>
+            query
+              .in('id', friendChallengeIds)
+              .in('status', JOINABLE_NOT_STARTED_STATUSES)
+              .order('starts_at', { ascending: true })
+              .limit(LOBBY_PAGE_SIZE),
+          'friends-joined',
+        ).catch((error) => {
+          console.log('[blob:lobby] friends-joined skipped', error);
+          return [] as ChallengeRow[];
+        });
+
+  const byId = new Map<string, Challenge>();
+  for (const row of [...hosted, ...joinedByFriends]) {
+    const challenge = normalizeChallenge(row);
+    if (
+      challenge.is_official ||
+      joinedIds.has(challenge.id) ||
+      challenge.created_by === userId ||
+      !isJoinableNotStarted(challenge.status) ||
+      (isInviteOnlyDiscoverable(challenge) && !invitedIds.has(challenge.id))
+    ) {
+      continue;
+    }
+    byId.set(challenge.id, challenge);
+  }
+
+  const proof: FriendChallengeProof[] = [];
+  for (const challenge of byId.values()) {
+    if (challenge.created_by && friendIds.includes(challenge.created_by)) {
+      proof.push({ challenge, kind: 'hosting', friendId: challenge.created_by });
+      continue;
+    }
+    const joiner = (friendParts.data ?? []).find((row) => row.challenge_id === challenge.id);
+    if (joiner?.user_id) {
+      proof.push({ challenge, kind: 'joined', friendId: joiner.user_id });
+    }
+  }
+  return proof.sort(
+    (a, b) =>
+      new Date(a.challenge.starts_at ?? a.challenge.created_at).getTime() -
+      new Date(b.challenge.starts_at ?? b.challenge.created_at).getTime(),
+  );
 }
 
 export async function fetchDiscoverChallenges(_userId?: string): Promise<Challenge[]> {
@@ -711,7 +900,32 @@ export async function fetchChallengeById(id: string): Promise<Challenge> {
     return normalizeChallenge(data);
   }
 
+  const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: id });
+  if (reason.data === 'geo') {
+    throw new Error(copy('geo.unavailable'));
+  }
   throw new Error(getErrorMessage(lastError ?? 'Challenge not found'));
+}
+
+export type ChallengeShareState = {
+  reason: 'ok' | 'geo' | 'hidden';
+  title: string | null;
+};
+
+export async function fetchChallengeShareState(id: string): Promise<ChallengeShareState> {
+  const { data, error } = await supabase
+    .from('challenges')
+    .select('id, title')
+    .eq('id', id)
+    .maybeSingle();
+  if (!error && data) {
+    return { reason: 'ok', title: String((data as { title?: string }).title ?? '') || null };
+  }
+  const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: id });
+  if (reason.data === 'geo') {
+    return { reason: 'geo', title: null };
+  }
+  return { reason: 'hidden', title: null };
 }
 
 export async function joinChallenge(challengeId: string): Promise<ChallengeParticipant> {
@@ -967,11 +1181,22 @@ export async function insertUserChallenge(input: CreateChallengeInput): Promise<
     timezone: input.timezone ?? null,
     start_rule: input.start_rule ?? 'at_starts_at',
     is_official: false,
+    discoverability: input.discoverability ?? null,
   }, input.draft_id);
   const { maybeRequestPushPermission } = await import('@/lib/push');
   void maybeRequestPushPermission();
   if (participating) {
     await ensureCreatorParticipant(result.challenge_id);
+  }
+  if (input.discoverability === 'invite_only' || input.discoverability === 'friends_of_friends') {
+    const { error } = await supabase
+      .from('challenges')
+      .update({ discoverability: input.discoverability })
+      .eq('id', result.challenge_id)
+      .eq('created_by', input.created_by);
+    if (error) {
+      console.log('[blob:create] discoverability skipped', error.message);
+    }
   }
   return fetchChallengeById(result.challenge_id);
 }

@@ -258,12 +258,13 @@ export default function ChallengeDetailScreen() {
   }
 
   if (challengeQuery.error || !challenge) {
+    const blocked = String(challengeQuery.error?.message ?? '').includes(copy('geo.unavailable'));
     return (
       <Screen>
         <MascotState
           kind="error"
-          title={copy('challenge.notFound')}
-          body={challengeQuery.error?.message ?? 'This blob wandered off.'}
+          title={blocked ? copy('geo.unavailable') : copy('challenge.notFound')}
+          body={blocked ? undefined : challengeQuery.error?.message ?? 'This blob wandered off.'}
           actionLabel="Retry"
           onAction={() => void challengeQuery.refetch()}
         />
