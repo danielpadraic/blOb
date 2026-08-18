@@ -4,9 +4,13 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ComposeTabButton } from '@/components/navigation/ComposeTabButton';
-import { AppText } from '@/components/ui/AppText';
+import { Avatar } from '@/components/ui/Avatar';
+import { useMyProfile } from '@/hooks/useProfile';
 import { LOBBY_HREF } from '@/lib/routes';
+import { personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
+
+const HIT = 44;
 
 type BlobTabBarProps = {
   onOpenCompose: () => void;
@@ -73,9 +77,9 @@ export function BlobTabBar({ onOpenCompose, onTabPress }: BlobTabBarProps) {
           ...themeShadow('bar'),
         }}>
         <TabSlot
-          label="Feed"
+          label="Home"
           selected={active === 'feed'}
-          icon={{ ios: 'text.bubble.fill', android: 'forum', web: 'forum' }}
+          icon={{ ios: 'house.fill', android: 'home', web: 'home' }}
           onPress={() => go('/feed')}
         />
         <TabSlot
@@ -98,12 +102,7 @@ export function BlobTabBar({ onOpenCompose, onTabPress }: BlobTabBarProps) {
           icon={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
           onPress={() => go('/friends')}
         />
-        <TabSlot
-          label="You"
-          selected={active === 'profile'}
-          icon={{ ios: 'person.fill', android: 'person', web: 'person' }}
-          onPress={() => go('/profile')}
-        />
+        <YouTabSlot selected={active === 'profile'} onPress={() => go('/profile')} />
       </View>
     </View>
   );
@@ -127,11 +126,45 @@ function TabSlot({
       accessibilityState={{ selected }}
       accessibilityLabel={label}
       onPress={onPress}
-      style={{ flex: 1, minWidth: 0, paddingTop: 2, alignItems: 'center', justifyContent: 'center' }}>
+      hitSlop={4}
+      style={{
+        flex: 1,
+        minWidth: HIT,
+        minHeight: HIT,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
       <SymbolView name={icon} tintColor={color} size={26} />
-      <AppText style={{ color, fontSize: 11, fontWeight: '700', marginTop: 2 }}>
-        {label}
-      </AppText>
+    </Pressable>
+  );
+}
+
+function YouTabSlot({ selected, onPress }: { selected: boolean; onPress: () => void }) {
+  const { profile } = useMyProfile();
+  const name = profile ? personDisplayName(profile) : 'You';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel="You"
+      onPress={onPress}
+      hitSlop={4}
+      style={{
+        flex: 1,
+        minWidth: HIT,
+        minHeight: HIT,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <View
+        style={{
+          padding: 2,
+          borderRadius: 999,
+          borderWidth: 2,
+          borderColor: selected ? THEME.accent : 'transparent',
+        }}>
+        <Avatar uri={profile?.avatar_url} name={name} size={28} />
+      </View>
     </Pressable>
   );
 }

@@ -1,14 +1,16 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Image, View } from 'react-native';
+import { Alert, Image, Pressable, View } from 'react-native';
 
 import { FeedList } from '@/components/feed/FeedList';
 import { ProfileChallengeRow } from '@/components/profile/ProfileChallengeRow';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { MascotState } from '@/components/mascot/MascotState';
+import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
@@ -70,6 +72,7 @@ export default function PublicProfileScreen() {
   const toggleReaction = useToggleReaction();
   const createComment = useCreateComment();
   const startChat = useGetOrCreateConversation();
+  const social = useSocialSheetsOptional();
   const headerTitle = profile?.username ? `@${profile.username}` : 'Profile';
   const headerOptions = useMemo(
     () => ({
@@ -154,7 +157,23 @@ export default function PublicProfileScreen() {
 
   return (
     <Screen scroll edges={PROFILE_SCREEN_EDGES}>
-      <Stack.Screen options={headerOptions} />
+      <Stack.Screen
+        options={{
+          ...headerOptions,
+          headerRight: isSelf
+            ? undefined
+            : () => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Profile menu"
+                  hitSlop={8}
+                  onPress={() => social?.toggleProfileMenu(profile.id)}
+                  style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                  <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
+                </Pressable>
+              ),
+        }}
+      />
 
       <View className="gap-3 pb-4 pt-2">
         <View className="flex-row items-start gap-3">

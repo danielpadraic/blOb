@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, AppState, Pressable, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,7 +8,13 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile, useUpdateProfile, useUsernameAvailability } from '@/hooks/useProfile';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
+import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
+import {
+  getPushPermissionState,
+  openNotificationSettings,
+  type PushPermissionState,
+} from '@/lib/push';
 
 export default function AccountScreen() {
   const { user, updateEmail, updatePassword } = useAuth();
@@ -20,6 +26,17 @@ export default function AccountScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState<'username' | 'email' | 'password' | null>(null);
+  const [pushState, setPushState] = useState<PushPermissionState>('undetermined');
+
+  useEffect(() => {
+    void getPushPermissionState().then(setPushState);
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        void getPushPermissionState().then(setPushState);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const availability = useUsernameAvailability(username, profile?.username);
 
@@ -93,6 +110,27 @@ export default function AccountScreen() {
     <Screen scroll edges={TAB_ROOT_EDGES}>
       <AppText className="mb-4 text-[22px] font-extrabold text-charcoal">Account</AppText>
       <View className="gap-5">
+        <View className="gap-2">
+          <AppText className="text-sm font-semibold text-charcoal">Notifications</AppText>
+          <AppText className="text-sm leading-5 text-muted">
+            {pushState === 'granted'
+              ? 'Push is on.'
+              : pushState === 'denied'
+                ? 'Push is off. In-app alerts still work.'
+                : 'Push stays off until a friend request, invite, or Challenge.'}
+          </AppText>
+          {pushState !== 'granted' && pushState !== 'unavailable' ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void openNotificationSettings()}
+              hitSlop={8}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+                Open system settings
+              </AppText>
+            </Pressable>
+          ) : null}
+        </View>
         <View className="gap-3">
           <Input
             label="Username"

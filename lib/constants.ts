@@ -157,7 +157,8 @@ export const CHALLENGE_FREQUENCIES = [
 
 export const CHALLENGE_VISIBILITY = [
   { value: 'public', label: 'Public', helper: 'Anyone in the Lobby can find and join it.' },
-  { value: 'private', label: 'Private', helper: 'Hidden from the Lobby except to you. Share the link.' },
+  { value: 'friends', label: 'Friends', helper: 'Only your friends can find and join it.' },
+  { value: 'invite', label: 'Invite', helper: 'Only people you invite can join.' },
 ] as const satisfies readonly { value: ChallengeVisibility; label: string; helper: string }[];
 
 export const PRIZE_STRUCTURES = [
@@ -299,6 +300,8 @@ export const CHALLENGE_STATUS_LABEL: Record<string, string> = {
   in_progress: 'In progress',
   judging: 'Judging',
   settled: 'Settled',
+  cancelled_underfilled: 'Cancelled',
+  cancelled: 'Cancelled',
 };
 
 export const LOBBY_CHALLENGE_STATUSES = [

@@ -40,10 +40,13 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     coins,
     bucks: Number(profile.bucks ?? 0),
     credits: coins,
+    last_shown_coin_balance:
+      profile.last_shown_coin_balance == null ? null : Number(profile.last_shown_coin_balance),
     gender,
     body_fat_pct: Number.isFinite(bodyFat) ? bodyFat : null,
     body_metrics_completed_at: profile.body_metrics_completed_at ?? null,
     fitness_profile: profile.fitness_profile ?? null,
+    timezone: profile.timezone ?? null,
   };
 }
 

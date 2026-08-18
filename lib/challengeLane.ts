@@ -20,18 +20,12 @@ export function isInviteOnlyChallenge(input: {
   if (input.challenge_lane === 'private') {
     return true;
   }
-  if (input.challenge_lane === 'coins') {
-    return false;
-  }
-  return (
-    String(input.visibility ?? '').toLowerCase() === 'private' &&
-    String(input.funding_model ?? '') === 'creator'
-  );
+  return String(input.visibility ?? '').toLowerCase() === 'invite';
 }
 
 export type LanePublishFields = {
   challenge_lane: UserChallengeLane;
-  visibility: 'public' | 'private';
+  visibility: 'public' | 'private' | 'friends' | 'invite';
   currency: 'coins' | 'bucks';
   buy_in_amount: number;
 };
@@ -41,20 +35,35 @@ export function applyLaneForPublish(input: {
   visibility?: string | null;
   currency?: string | null;
   buy_in_amount?: number | string | null;
+  host_funded?: boolean;
 }): LanePublishFields {
   const lane = normalizeUserChallengeLane(input.challenge_lane);
   const buyIn = Math.max(Number(input.buy_in_amount) || 0, 0);
+  const vis = String(input.visibility ?? 'public').toLowerCase();
+  const visibility: LanePublishFields['visibility'] =
+    vis === 'friends' ? 'friends' : vis === 'invite' ? 'invite' : vis === 'private' ? 'private' : 'public';
+
   if (lane === 'private') {
     return {
       challenge_lane: 'private',
-      visibility: 'private',
+      visibility: visibility === 'invite' ? 'invite' : 'private',
       currency: input.currency === 'bucks' ? 'bucks' : 'coins',
       buy_in_amount: 0,
     };
   }
+
+  if (input.currency === 'bucks' || input.host_funded) {
+    return {
+      challenge_lane: 'coins',
+      visibility,
+      currency: 'bucks',
+      buy_in_amount: 0,
+    };
+  }
+
   return {
     challenge_lane: 'coins',
-    visibility: input.visibility === 'private' ? 'private' : 'public',
+    visibility,
     currency: 'coins',
     buy_in_amount: buyIn,
   };
@@ -86,7 +95,10 @@ export function applyLaneToFormValues<T extends LaneFormSlice>(values: T, lane: 
     ...values,
     challenge_lane: 'coins',
     currency: 'coins',
-    visibility: values.visibility === 'private' ? 'private' : 'public',
+    visibility:
+      values.visibility === 'friends' || values.visibility === 'invite' || values.visibility === 'private'
+        ? values.visibility
+        : 'public',
   };
 }
 

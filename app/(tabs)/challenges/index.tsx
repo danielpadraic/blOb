@@ -28,6 +28,7 @@ import { isBucksChallenge } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
+import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
 
 type LobbyFilter = 'all' | 'joined' | 'open' | 'official' | 'bucks' | 'coins';
@@ -238,6 +239,7 @@ export default function ChallengesScreen() {
       return;
     }
     if (challenge.is_official && !hasCompletedBodyMetrics(profile)) {
+      void supabase.rpc('notify_my_profile_gate', { p_missing: 'physical details' });
       router.push(BODY_METRICS_HREF);
       return;
     }

@@ -15,7 +15,9 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Take a check-in photo or Story for your Challenge.",
         "NSMicrophoneUsageDescription": "Record a short Story or Reel with sound for your Challenge.",
-        "NSPhotoLibraryUsageDescription": "Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins."
+        "NSPhotoLibraryUsageDescription": "Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins.",
+        "NSUserNotificationsUsageDescription": "Alerts for friend requests, Challenge invites, and check-ins.",
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
@@ -30,7 +32,8 @@
         "RECORD_AUDIO",
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
-        "READ_MEDIA_VISUAL_USER_SELECTED"
+        "READ_MEDIA_VISUAL_USER_SELECTED",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -70,7 +73,16 @@
       "expo-apple-authentication",
       "expo-web-browser",
       "@react-native-community/datetimepicker",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/mascot/blob-icon.png",
+          "color": "#2C9B89",
+          "defaultChannel": "alerts",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

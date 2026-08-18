@@ -45,12 +45,12 @@ export function wizardStepIndex(key: CreateWizardStepKey): number {
 export const CREATE_STEP_FIELDS: Record<number, readonly (keyof CreateChallengeValues)[]> = {
   0: ['challenge_lane'],
   1: [],
-  2: ['title', 'description', 'category', 'visibility'],
+  2: ['title', 'description', 'category', 'visibility', 'task'],
   3: ['challenge_type'],
   4: ['duration_type', 'duration_days', 'starts_at', 'ends_at', 'end_mode', 'duration_value', 'duration_unit', 'frequency', 'target_count'],
   5: ['prize_structure', 'top_places_mode', 'top_places_value', 'top_places_distribution'],
   6: ['funding_model', 'creator_contribution'],
-  7: ['buy_in', 'currency', 'participant_cap', 'max_participants', 'creator_participating'],
+  7: ['buy_in', 'currency', 'participant_cap', 'max_participants', 'creator_participating', 'min_participants', 'misses_allowed', 'proof_review'],
   8: ['rules', 'proofs', 'tasks', 'frequency', 'target_count', 'rule_activity', 'extra_rules', 'min_minutes', 'cover_image_url', 'rules_video_url'],
   9: [],
 };
@@ -104,7 +104,7 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   challenge_type: 'consistency',
   visibility: 'public',
   challenge_lane: 'coins',
-  buy_in: '10',
+  buy_in: '0',
   duration_type: 'fixed',
   ...defaultSchedule(),
   target_count: '6',
@@ -127,6 +127,16 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   cover_image_url: '',
   rules_video_url: '',
   rules: '',
+  task: '',
+  min_participants: '2',
+  misses_allowed: '0',
+  proof_type: 'photo',
+  proof_review: 'auto',
+  host_funded: false,
+  host_budget: '0',
+  required_checkins: '6',
+  payout_mode: 'even_split_remaining',
+  format: 'consistency',
 };
 
 export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
@@ -483,7 +493,7 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
       : `${buyIn > 0 ? `${formatWallet(buyIn, values.currency)} to enter` : 'Free to enter'}. Unlimited competitors.`;
 
   return [
-    { title: 'Who it’s for', body: `${values.title.trim()}\n${values.description.trim()}\n${vis}` },
+    { title: 'Who it’s for', body: `${values.title.trim()}\n${(values.description ?? '').trim()}\n${vis}` },
     { title: 'How you win', body: scoring },
     { title: 'How long it runs', body: duration },
     {

@@ -65,7 +65,7 @@ async function searchChallenges(like: string): Promise<SearchChallenge[]> {
     .from('challenges')
     .select('id, title, is_official, visibility, status')
     .ilike('title', like)
-    .or('visibility.eq.public,visibility.is.null,is_official.eq.true')
+    .or('visibility.eq.public,visibility.eq.friends,visibility.is.null,is_official.eq.true')
     .limit(8);
   if (error) {
     console.log('[blob:search] challenges', getErrorMessage(error));

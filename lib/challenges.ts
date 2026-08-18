@@ -78,6 +78,18 @@ export type CreateChallengeInput = {
   rules_video_url?: string | null;
   rules_list?: unknown;
   draft_id?: string | null;
+  min_participants?: number;
+  host_funded?: boolean;
+  host_budget?: number;
+  format?: string;
+  task?: string | null;
+  required_checkins?: number | null;
+  misses_allowed?: number;
+  proof_type?: string | null;
+  proof_review?: string;
+  payout_mode?: string;
+  timezone?: string | null;
+  start_rule?: string;
 };
 
 type ChallengeRow = Record<string, unknown>;
@@ -87,6 +99,7 @@ type ChallengeListQuery = {
   select: (columns: string) => ChallengeListQuery;
   in: (column: string, values: readonly string[]) => ChallengeListQuery;
   eq: (column: string, value: string) => ChallengeListQuery;
+  or: (filters: string) => ChallengeListQuery;
   order: (column: string, options?: { ascending?: boolean }) => ChallengeListQuery;
   limit: (count: number) => ChallengeListQuery;
   maybeSingle: () => Promise<QueryResult<ChallengeRow>>;
@@ -134,7 +147,7 @@ function isDiscoverStatus(status: string | null | undefined): boolean {
 
 function isListedVisibility(visibility: string | null | undefined): boolean {
   const value = String(visibility ?? 'public').toLowerCase();
-  return value !== 'private';
+  return value === 'public' || value === 'unlisted' || value === 'friends' || value === '';
 }
 
 export function isLiveCompetitorStatus(status: string | null | undefined): boolean {
@@ -242,7 +255,14 @@ export function frequencyNoun(frequency: string | null | undefined): string {
 }
 
 export function normalizeFrequency(value: unknown): ChallengeFrequency {
-  if (value === 'weekly' || value === 'monthly' || value === 'once' || value === 'daily') {
+  if (
+    value === 'weekly' ||
+    value === 'monthly' ||
+    value === 'once' ||
+    value === 'daily' ||
+    value === '3x_week' ||
+    value === 'custom'
+  ) {
     return value;
   }
   return 'daily';
@@ -481,6 +501,17 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     visibility: (row.visibility as string | null) ?? null,
     challenge_lane: (row.challenge_lane as string | null) ?? null,
     currency: challengeCurrency(row as { currency?: string | null }),
+    host_funded: Boolean(row.host_funded),
+    host_budget: Number(row.host_budget ?? row.creator_contribution ?? 0),
+    format: (row.format as string | null) ?? null,
+    task: (row.task as string | null) ?? null,
+    required_checkins: row.required_checkins == null ? null : Number(row.required_checkins),
+    misses_allowed: Number(row.misses_allowed ?? 0),
+    proof_type: (row.proof_type as string | null) ?? null,
+    proof_review: (row.proof_review as string | null) ?? null,
+    payout_mode: (row.payout_mode as string | null) ?? null,
+    timezone: (row.timezone as string | null) ?? null,
+    start_rule: (row.start_rule as string | null) ?? null,
     created_at: String(row.created_at ?? now),
     updated_at: String(row.updated_at ?? now),
   };
@@ -523,7 +554,7 @@ export async function fetchDiscoverChallenges(_userId?: string): Promise<Challen
     (query) =>
       query
         .in('status', DISCOVER_CHALLENGE_STATUSES)
-        .or('is_official.eq.true,visibility.in.(public,unlisted),visibility.is.null')
+        .or('is_official.eq.true,visibility.in.(public,unlisted,friends),visibility.is.null')
         .order('starts_at', { ascending: true })
         .limit(LOBBY_PAGE_SIZE),
     'discover',
@@ -672,6 +703,8 @@ export async function fetchChallengeById(id: string): Promise<Challenge> {
 
 export async function joinChallenge(challengeId: string): Promise<ChallengeParticipant> {
   await joinChallengeRpc(challengeId);
+  const { maybeRequestPushPermission } = await import('@/lib/push');
+  void maybeRequestPushPermission();
   const { data: session } = await supabase.auth.getUser();
   const userId = session.user?.id;
   if (!userId) {
@@ -832,6 +865,7 @@ export async function insertUserChallenge(input: CreateChallengeInput): Promise<
     visibility: input.visibility,
     currency: input.currency,
     buy_in_amount: input.buy_in_amount,
+    host_funded: input.host_funded,
   });
   const participating = input.creator_participating === true;
   const result = await publishChallenge({
@@ -850,7 +884,7 @@ export async function insertUserChallenge(input: CreateChallengeInput): Promise<
     length_unit: input.is_unlimited ? null : input.length_unit ?? 'days',
     is_unlimited: input.is_unlimited,
     max_participants: input.max_participants,
-    min_participants: 1,
+    min_participants: input.min_participants ?? 2,
     buy_in_amount: lane.buy_in_amount,
     currency: lane.currency,
     creator_participating: participating,
@@ -871,8 +905,21 @@ export async function insertUserChallenge(input: CreateChallengeInput): Promise<
     creator_contribution: input.creator_contribution,
     frequency: input.frequency,
     target_count: input.target_count,
+    host_funded: input.host_funded ?? lane.currency === 'bucks',
+    host_budget: input.host_budget ?? input.creator_contribution,
+    format: input.format ?? input.challenge_type,
+    task: input.task ?? null,
+    required_checkins: input.required_checkins ?? input.target_count,
+    misses_allowed: input.misses_allowed ?? 0,
+    proof_type: input.proof_type ?? null,
+    proof_review: input.proof_review ?? 'auto',
+    payout_mode: input.payout_mode ?? 'even_split_remaining',
+    timezone: input.timezone ?? null,
+    start_rule: input.start_rule ?? 'at_starts_at',
     is_official: false,
   }, input.draft_id);
+  const { maybeRequestPushPermission } = await import('@/lib/push');
+  void maybeRequestPushPermission();
   if (participating) {
     await ensureCreatorParticipant(result.challenge_id);
   }

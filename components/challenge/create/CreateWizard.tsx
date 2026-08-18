@@ -130,7 +130,7 @@ const FOCUSABLE_FIELDS = new Set([
   'rules_video_url',
 ]);
 
-export function CreateWizard() {
+export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ resume?: string | string[]; draftId?: string | string[] }>();
@@ -144,8 +144,8 @@ export function CreateWizard() {
   const saveDraft = useSaveChallengeDraft();
   const discardDraft = useDiscardChallengeDraft();
   const reusable = useReusableChallenges();
-  const [step, setStep] = useState(0);
-  const [startPath, setStartPath] = useState<CreateStartPath>(null);
+  const [step, setStep] = useState(STEP_GOAL);
+  const [startPath, setStartPath] = useState<CreateStartPath>('scratch');
   const [templateId, setTemplateId] = useState<ChallengeTemplateId | null>(null);
   const [sourceChallengeId, setSourceChallengeId] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -155,12 +155,12 @@ export function CreateWizard() {
   const [bucksAcks, setBucksAcks] = useState<Record<string, boolean>>({});
   const [liveChallengeId, setLiveChallengeId] = useState<string | null>(null);
   const [coverBusy, setCoverBusy] = useState(false);
-  const [tutorialOn, setTutorialOn] = useState(true);
-  const [bobTipOpen, setBobTipOpen] = useState(true);
+  const [tutorialOn, setTutorialOn] = useState(false);
+  const [bobTipOpen, setBobTipOpen] = useState(false);
   const [tipIndex, setTipIndex] = useState(0);
   const [entryTab, setEntryTab] = useState<EntryTab>('coins');
   const [skillAck, setSkillAck] = useState(false);
-  const [laneChosen, setLaneChosen] = useState(false);
+  const [laneChosen, setLaneChosen] = useState(true);
   const [bobError, setBobError] = useState<{ field: string; line: string } | null>(null);
 
   const {
@@ -1167,7 +1167,7 @@ export function CreateWizard() {
   function goBack() {
     setFormError(null);
     clearBobError();
-    if (step === 0) {
+    if (step <= STEP_GOAL) {
       leaveWizard();
       return;
     }
@@ -1289,19 +1289,8 @@ export function CreateWizard() {
     await authStorage.setItem(TUTORIAL_KEY, 'on');
   }
 
-  return (
-    <WizardModalShell onClose={closeWizard} bob={bob}>
-      <Stack.Screen
-        options={{
-          title: 'Create a Challenge',
-          headerShown: false,
-          presentation: 'containedTransparentModal',
-          animation: 'fade',
-          contentStyle: { backgroundColor: 'transparent' },
-        }}
-      />
-
-      <View className="flex-1">
+  const wizardBody = (
+    <View className="flex-1" style={{ backgroundColor: embedded ? THEME.background : undefined }}>
         {liveChallengeId ? (
           <View className="flex-1 items-center justify-center px-6">
             <AppText className="text-center text-2xl font-bold text-charcoal">
@@ -1326,6 +1315,7 @@ export function CreateWizard() {
             status={savedFlash ? 'Saved' : null}
             trailing={
               <View className="flex-row items-center gap-1">
+                <AppText className="mr-1 text-[13px] font-semibold text-muted">Advanced</AppText>
                 {tutorialOn && bobTipOpen ? null : (
                   <Pressable
                     accessibilityRole="button"
@@ -1508,7 +1498,7 @@ export function CreateWizard() {
             </View>
             <View className="flex-1">
               <Button
-                title={lastStep ? 'Publish Challenge' : 'Next'}
+                title={lastStep ? 'Publish' : 'Next'}
                 loading={lastStep && publishing}
                 onPress={() => void goNext()}
               />
@@ -1518,6 +1508,29 @@ export function CreateWizard() {
           </WizardFocusContext.Provider>
         )}
       </View>
+  );
+
+  if (embedded) {
+    return (
+      <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+        <Stack.Screen options={{ headerShown: false, title: 'Advanced' }} />
+        {wizardBody}
+      </View>
+    );
+  }
+
+  return (
+    <WizardModalShell onClose={closeWizard} bob={bob}>
+      <Stack.Screen
+        options={{
+          title: 'Advanced',
+          headerShown: false,
+          presentation: 'containedTransparentModal',
+          animation: 'fade',
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
+      />
+      {wizardBody}
     </WizardModalShell>
   );
 }
@@ -1732,6 +1745,23 @@ function GoalSlide({
         )}
       />
       </FieldAnchor>
+      <FieldAnchor name="task">
+        <Controller
+          control={control}
+          name="task"
+          render={({ field: { onChange, onBlur, value, ref } }) => (
+            <Input
+              ref={ref}
+              label="Task"
+              placeholder="Run 1 mile"
+              value={value ?? ''}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              error={errors.task?.message}
+            />
+          )}
+        />
+      </FieldAnchor>
       <FieldAnchor name="visibility">
       {isPrivateLane ? (
         <FieldLabel label="Visibility">
@@ -1743,10 +1773,11 @@ function GoalSlide({
       <FieldLabel label="Visibility" error={errors.visibility?.message}>
         <SegmentedControl
           accessibilityLabel="Visibility"
-          value={visibility}
+          value={visibility === 'private' ? 'invite' : visibility}
           options={[
             { value: 'public', label: 'Public' },
-            { value: 'private', label: 'Unlisted' },
+            { value: 'friends', label: 'Friends' },
+            { value: 'invite', label: 'Invite' },
           ]}
           onChange={onVisibilityChange}
         />
@@ -2414,6 +2445,62 @@ function EntrySlide({
           Unlimited competitors. Anyone can join while the challenge is open.
         </AppText>
       )}
+      <FieldAnchor name="min_participants">
+        <Controller
+          control={control}
+          name="min_participants"
+          render={({ field: { onChange, onBlur, value, ref } }) => (
+            <Input
+              ref={ref}
+              label="Min to start"
+              placeholder="2"
+              keyboardType="number-pad"
+              value={value ?? '2'}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              error={errors.min_participants?.message}
+              hint="If fewer people have joined at start, it cancels and coin buy-ins refund."
+            />
+          )}
+        />
+      </FieldAnchor>
+      <FieldAnchor name="misses_allowed">
+        <Controller
+          control={control}
+          name="misses_allowed"
+          render={({ field: { onChange, onBlur, value, ref } }) => (
+            <Input
+              ref={ref}
+              label="Misses allowed"
+              placeholder="0"
+              keyboardType="number-pad"
+              value={value ?? '0'}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              error={errors.misses_allowed?.message}
+            />
+          )}
+        />
+      </FieldAnchor>
+      <FieldAnchor name="proof_review">
+        <Controller
+          control={control}
+          name="proof_review"
+          render={({ field: { onChange, value } }) => (
+            <FieldLabel label="Proof review">
+              <SegmentedControl
+                accessibilityLabel="Proof review"
+                value={value === 'host' ? 'host' : 'auto'}
+                options={[
+                  { value: 'auto', label: 'Auto' },
+                  { value: 'host', label: 'Host' },
+                ]}
+                onChange={onChange}
+              />
+            </FieldLabel>
+          )}
+        />
+      </FieldAnchor>
       <FieldAnchor name="creator_participating">
       <View className="flex-row items-center justify-between">
         <View className="mr-4 flex-1">

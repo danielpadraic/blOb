@@ -556,6 +556,8 @@ export async function sendFriendRequest(fromUserId: string, toUserId: string): P
     .select(FRIENDSHIP_COLUMNS)
     .single();
   throwIfError(error);
+  const { maybeRequestPushPermission } = await import('@/lib/push');
+  void maybeRequestPushPermission();
   return data as Friendship;
 }
 
@@ -574,6 +576,8 @@ export async function acceptFriendRequest(userId: string, fromUserId: string): P
     .select(FRIENDSHIP_COLUMNS)
     .single();
   throwIfError(error);
+  const { maybeRequestPushPermission } = await import('@/lib/push');
+  void maybeRequestPushPermission();
   return data as Friendship;
 }
 

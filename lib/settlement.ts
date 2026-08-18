@@ -22,6 +22,32 @@ export function isJoinableStatus(status: string | null | undefined): boolean {
   return JOINABLE_STATUSES.includes(status as ChallengeStatus);
 }
 
+export function isJoinWindowOpen(
+  challenge: {
+    status?: string | null;
+    starts_at?: string | null;
+    official_started_at?: string | null;
+    start_rule?: string | null;
+    is_official?: boolean | null;
+  },
+  now = new Date(),
+): boolean {
+  const status = String(challenge.status ?? '');
+  if (challenge.is_official || challenge.start_rule !== 'at_starts_at') {
+    if (challenge.official_started_at) {
+      return false;
+    }
+    return isJoinableStatus(status);
+  }
+  if (status !== 'open') {
+    return false;
+  }
+  if (challenge.starts_at && now.getTime() >= new Date(challenge.starts_at).getTime()) {
+    return false;
+  }
+  return true;
+}
+
 export function isSettledStatus(status: string | null | undefined): boolean {
   return status === 'settled';
 }

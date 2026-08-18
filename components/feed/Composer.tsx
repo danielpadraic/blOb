@@ -4,6 +4,7 @@ import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
 
+import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -22,7 +23,7 @@ import {
 import { captureHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
-import type { ComposeInput } from '@/lib/types';
+import type { ComposeInput, QuoteSnapshot } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { handleEnterToSubmit } from '@/utils/keyboard';
 import { isHttpUrl, mediaKind } from '@/utils/media';
@@ -41,6 +42,7 @@ type ComposerProps = {
   placeholder?: string;
   submitting?: boolean;
   autoFocus?: boolean;
+  quote?: { postId: string; snapshot: QuoteSnapshot; audience?: string | null } | null;
   onSubmit: (input: ComposeInput) => Promise<unknown> | void;
 };
 
@@ -48,6 +50,7 @@ export function Composer({
   placeholder = 'What’s the play today?',
   submitting,
   autoFocus,
+  quote,
   onSubmit,
 }: ComposerProps) {
   const { user } = useAuth();
@@ -64,7 +67,7 @@ export function Composer({
 
   const busy = Boolean(submitting || uploading);
   const canPost =
-    Boolean(content.trim() || attachments.length > 0) &&
+    Boolean(content.trim() || attachments.length > 0 || quote) &&
     (audience !== 'specific' || audienceUserIds.length > 0);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
@@ -129,25 +132,29 @@ export function Composer({
     setUploading(true);
     try {
       const mediaUrls: string[] = [];
-      for (const [index, attachment] of attachments.entries()) {
-        if (attachment.kind === 'link') {
-          mediaUrls.push(attachment.uri);
-          continue;
+      if (!quote) {
+        for (const [index, attachment] of attachments.entries()) {
+          if (attachment.kind === 'link') {
+            mediaUrls.push(attachment.uri);
+            continue;
+          }
+          const url = await uploadPostMedia({
+            uri: attachment.uri,
+            userId: user.id,
+            fileStem: `${Date.now()}-${index}`,
+            mimeType: attachment.mimeType ?? attachment.blob?.type,
+            blob: attachment.blob,
+          });
+          mediaUrls.push(url);
         }
-        const url = await uploadPostMedia({
-          uri: attachment.uri,
-          userId: user.id,
-          fileStem: `${Date.now()}-${index}`,
-          mimeType: attachment.mimeType ?? attachment.blob?.type,
-          blob: attachment.blob,
-        });
-        mediaUrls.push(url);
       }
       await onSubmit({
         content: content.trim(),
         mediaUrls,
         audience,
         audienceUserIds: audience === 'specific' ? audienceUserIds : [],
+        quotedPostId: quote?.postId ?? null,
+        quoteSnapshot: quote?.snapshot ?? null,
       });
       setContent('');
       setAttachments([]);
@@ -199,7 +206,13 @@ export function Composer({
         />
       </View>
 
-      {attachments.length > 0 ? (
+      {quote ? (
+        <View className="mt-2" pointerEvents="none">
+          <QuoteEmbed snapshot={quote.snapshot} audience={quote.audience ?? quote.snapshot.audience} />
+        </View>
+      ) : null}
+
+      {attachments.length > 0 && !quote ? (
         <View className="mt-2 flex-row flex-wrap gap-1.5">
           {attachments.map((attachment) => (
             <AttachmentChip
@@ -254,6 +267,7 @@ export function Composer({
         ) : null}
       </View>
 
+      {!quote ? (
       <View
         className="mt-2 flex-row items-center"
         style={{ borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 8 }}>
@@ -263,6 +277,7 @@ export function Composer({
         <View style={{ width: 1, height: 16, backgroundColor: THEME.border }} />
         <AttachButton glyph="📎" label="Other" onPress={onOther} />
       </View>
+      ) : null}
 
       {linkOpen ? (
         <View

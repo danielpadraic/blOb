@@ -40,6 +40,11 @@ export const GLYPH = {
   heartbeat: { ios: 'heart.fill', android: 'monitor_heart', web: 'monitor_heart' },
   search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
   bell: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
+  send: { ios: 'paperplane.fill', android: 'send', web: 'send' },
+  hide: { ios: 'eye.slash', android: 'visibility_off', web: 'visibility_off' },
+  trash: { ios: 'trash', android: 'delete', web: 'delete' },
+  mute: { ios: 'speaker.slash.fill', android: 'volume_off', web: 'volume_off' },
+  unmute: { ios: 'speaker.wave.2.fill', android: 'volume_up', web: 'volume_up' },
 } as const satisfies Record<string, GlyphName>;
 
 export type GlyphId = (typeof GLYPH)[keyof typeof GLYPH];

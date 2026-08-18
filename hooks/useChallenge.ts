@@ -497,6 +497,7 @@ export function useCreateChallenge() {
         visibility: values.visibility,
         currency: values.currency,
         buy_in_amount: values.buy_in,
+        host_funded: values.host_funded === true || values.currency === 'bucks',
       });
       const currentWallet = walletBalance(profile, lane.currency);
       if (contribution > 0 && currentWallet < contribution) {
@@ -546,6 +547,24 @@ export function useCreateChallenge() {
         rules_video_url: video,
         rules_list: rulesStructured,
         draft_id: values.draft_id ?? null,
+        min_participants: Math.max(Number(values.min_participants) || 2, 2),
+        host_funded: values.host_funded === true || lane.currency === 'bucks',
+        host_budget: contribution,
+        format: unlimited ? 'lms' : values.format ?? values.challenge_type,
+        task: values.task?.trim() || values.rule_activity.trim() || null,
+        required_checkins: Number(values.required_checkins) || targetCount,
+        misses_allowed: Math.max(Number(values.misses_allowed) || 0, 0),
+        proof_type: values.proof_type ?? (values.proofs[0] === 'video' ? 'video' : values.proofs.length ? 'photo' : 'honor'),
+        proof_review: values.proof_review ?? 'auto',
+        payout_mode:
+          values.payout_mode ??
+          (values.prize_structure === 'winner_take_all'
+            ? 'winner_take_all'
+            : values.prize_structure === 'top_places'
+              ? 'top_places'
+              : 'even_split_remaining'),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        start_rule: 'at_starts_at',
       });
     },
     onSuccess: (challenge, values) => {

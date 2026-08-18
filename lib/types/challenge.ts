@@ -18,6 +18,7 @@ export type ChallengeEscrowStatus =
   | 'judging'
   | 'distributing'
   | 'settled'
+  | 'cancelled_underfilled'
   | 'cancelled';
 
 export type ParticipantEscrowStatus =
@@ -83,6 +84,17 @@ export type PublishChallengePayload = {
   is_official?: boolean;
   frequency?: string | null;
   target_count?: number | null;
+  host_funded?: boolean;
+  host_budget?: number;
+  format?: string;
+  task?: string | null;
+  required_checkins?: number | null;
+  misses_allowed?: number;
+  proof_type?: string | null;
+  proof_review?: string;
+  payout_mode?: string;
+  timezone?: string | null;
+  start_rule?: string;
 };
 
 export type PublishChallengeResult = {

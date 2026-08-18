@@ -1,4 +1,6 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { fetchPublicProfilesByIds } from '@/lib/social';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -8,12 +10,14 @@ import { FeedList } from '@/components/feed/FeedList';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
+import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { BODY_METRICS_HREF, LOBBY_HREF } from '@/lib/routes';
+import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -37,7 +41,7 @@ import {
   useToggleReaction,
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
-import { useLoggedWorkoutCount, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
+import { useLoggedWorkoutCount, usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { CHALLENGE_STATUS_LABEL, FUNDING_MODELS, proofMeta } from '@/lib/constants';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import {
@@ -64,7 +68,7 @@ import {
   hasChallengeStarted,
   isClosedForLogs,
   isDistributeGateOpen,
-  isJoinableStatus,
+  isJoinWindowOpen,
   loggingOpensHelper,
   payoutCountdownLabel,
   startsInLabel,
@@ -81,7 +85,7 @@ import {
 } from '@/utils/format';
 
 const BODY_METRICS_JOIN_COPY =
-  'Official challenges use body metrics for matching. Add yours to join — it stays private.';
+  'Missing: physical details. Official Challenges need them for matching — they stay private.';
 
 export default function ChallengeDetailScreen() {
   const params = useLocalSearchParams<{ id: string; returnTo?: string }>();
@@ -94,8 +98,21 @@ export default function ChallengeDetailScreen() {
   const challengeQuery = useChallenge(id);
   const hostQuery = useProfile(challengeQuery.data?.created_by ?? undefined);
   const roster = useChallengeParticipants(id);
+  const boardProfiles = useQuery({
+    queryKey: ['challenge-board-profiles', id, (roster.data ?? []).map((row) => row.user_id).join(',')],
+    enabled: Boolean(id && roster.data && roster.data.length > 0),
+    queryFn: () => fetchPublicProfilesByIds((roster.data ?? []).map((row) => row.user_id)),
+  });
+  const boardRoster = useMemo(() => {
+    const map = new Map((boardProfiles.data ?? []).map((profile) => [profile.id, profile]));
+    return (roster.data ?? []).map((row) => ({
+      ...row,
+      profile: map.get(row.user_id) ?? row.profile,
+    }));
+  }, [boardProfiles.data, roster.data]);
   const todaySubmission = useTodaySubmission(id);
   const loggedCount = useLoggedWorkoutCount(id);
+  const completions = usePeriodCompletions(id);
   const join = useJoinChallenge();
   const markJudging = useMarkChallengeJudging();
   const settle = useSettleChallenge();
@@ -147,10 +164,13 @@ export default function ChallengeDetailScreen() {
     if (!challenge || isJoined) {
       return null;
     }
-    if (challenge.status === 'settled' || challenge.status === 'judging') {
+    if (challenge.status === 'settled' || challenge.status === 'judging' || challenge.status === 'cancelled_underfilled' || challenge.status === 'cancelled') {
       return 'This challenge is no longer accepting competitors.';
     }
-    if (!isJoinableStatus(challenge.status)) {
+    if (!isJoinWindowOpen(challenge)) {
+      if (challenge.starts_at && new Date() >= new Date(challenge.starts_at)) {
+        return 'Join closed when this challenge started.';
+      }
       return 'This challenge is no longer accepting competitors.';
     }
     if (
@@ -177,6 +197,13 @@ export default function ChallengeDetailScreen() {
   const canJoin = Boolean(challenge) && !isJoined && !joinBlocked;
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
+
+  useEffect(() => {
+    if (!needsBodyMetrics) {
+      return;
+    }
+    void supabase.rpc('notify_my_profile_gate', { p_missing: 'physical details' });
+  }, [needsBodyMetrics]);
   const inviteOnly = isInviteOnlyChallenge(challenge);
   const windowEnded = Boolean(challenge && hasChallengeEnded(challenge, new Date(nowMs)));
   const judgingHold =
@@ -518,6 +545,14 @@ export default function ChallengeDetailScreen() {
             <AppText className="mt-2 leading-6 text-ink">{challenge.description}</AppText>
           </Card>
         ) : null}
+
+        <View className="mt-4">
+          <ChallengeLeaderboard
+            challenge={challenge}
+            roster={boardRoster}
+            completedUserIds={completions.data ?? new Set()}
+          />
+        </View>
 
         {challenge.rules_video_url ? (
           <Card className="mt-4">

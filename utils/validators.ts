@@ -182,11 +182,12 @@ export const createChallengeSchema = z
     description: z
       .string()
       .trim()
-      .min(8, 'Tell people who this is for and what a win looks like')
-      .max(500, 'Keep the description under 500 characters'),
+      .max(500, 'Keep the description under 500 characters')
+      .optional()
+      .or(z.literal('')),
     category: z.enum(CHALLENGE_CATEGORIES),
     challenge_type: z.enum(['consistency', 'points']),
-    visibility: z.enum(['public', 'private']),
+    visibility: z.enum(['public', 'private', 'friends', 'invite']),
     duration_days: z.string(),
     duration_type: z.enum(['fixed', 'unlimited']),
     starts_at: z.string(),
@@ -195,7 +196,7 @@ export const createChallengeSchema = z
     duration_value: z.string(),
     duration_unit: z.enum(['days', 'weeks', 'months']),
     target_count: z.string(),
-    frequency: z.enum(['daily', 'weekly', 'monthly', 'once']),
+    frequency: z.enum(['daily', 'weekly', 'monthly', 'once', '3x_week', 'custom']),
     proofs: z.array(z.enum(CREATE_PROOF_TYPES)),
     tasks: z.array(createChallengeTaskSchema),
     prize_structure: z.enum(['winner_take_all', 'equal_split', 'top_places']),
@@ -215,6 +216,16 @@ export const createChallengeSchema = z
     rules_video_url: z.string().trim().optional().or(z.literal('')),
     rule_activity: z.string().trim().max(40, 'Keep the activity name under 40 characters'),
     extra_rules: z.array(extraRuleSchema),
+    task: z.string().trim().max(80).optional().or(z.literal('')),
+    min_participants: z.string().optional(),
+    misses_allowed: z.string().optional(),
+    proof_type: z.enum(['photo', 'video', 'check_in', 'honor']).optional(),
+    proof_review: z.enum(['auto', 'host']).optional(),
+    host_funded: z.boolean().optional(),
+    host_budget: z.string().optional(),
+    required_checkins: z.string().optional(),
+    payout_mode: z.enum(['even_split_remaining', 'winner_take_all', 'top_places']).optional(),
+    format: z.enum(['consistency', 'points', 'lms']).optional(),
     rules: z
       .string()
       .trim()
@@ -241,7 +252,7 @@ export const createChallengeSchema = z
       });
     }
 
-    if (values.challenge_lane === 'coins' && values.currency === 'bucks') {
+    if (values.challenge_lane === 'coins' && values.currency === 'bucks' && values.host_funded !== true) {
       ctx.addIssue({
         code: 'custom',
         path: ['currency'],
@@ -487,11 +498,11 @@ export const createChallengeSchema = z
       return;
     }
 
-    if (values.rule_activity.trim().length < 2) {
+    if (!(values.task ?? '').trim() && values.rule_activity.trim().length < 2) {
       ctx.addIssue({
         code: 'custom',
-        path: ['rule_activity'],
-        message: 'Name the activity competitors log',
+        path: ['task'],
+        message: 'Add a task',
       });
     }
 
@@ -522,7 +533,7 @@ export const createChallengeSchema = z
       });
     }
 
-    if (values.proofs.length < 1) {
+    if (values.proof_type !== 'honor' && values.proofs.length < 1) {
       ctx.addIssue({
         code: 'custom',
         path: ['proofs'],

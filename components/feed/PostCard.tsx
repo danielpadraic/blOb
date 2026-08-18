@@ -1,23 +1,25 @@
 import { useState } from 'react';
-import { Alert, Linking, Platform, Pressable, Share, View } from 'react-native';
+import { Alert, Linking, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
-import * as LinkingExpo from 'expo-linking';
 
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
-import { PostOverflowMenu } from '@/components/feed/PostOverflowMenu';
+import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { ProfileLink } from '@/components/profile/ProfileLink';
+import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useChallenges } from '@/hooks/useChallenge';
 import { PROOF_META } from '@/lib/constants';
+import { postHref } from '@/lib/postShare';
+import { asQuoteSnapshot } from '@/lib/quotePost';
 import { challengeDetailHref } from '@/lib/routes';
 import { audienceLabel, asPostAudience } from '@/lib/postAudience';
+import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -44,53 +46,18 @@ export function PostCard({
 }: PostCardProps) {
   const [showComposer, setShowComposer] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const social = useSocialSheetsOptional();
+  const router = useRouter();
 
   const name = post.author?.display_name ?? post.author?.username ?? 'blob';
   const handle = post.author?.username ?? 'blob';
   const comments = post.comments ?? [];
   const audience = asPostAudience(post.audience);
   const content = post.content?.trim() ?? '';
+  const quote = asQuoteSnapshot(post.quote_snapshot);
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
-
-  async function sharePost() {
-    const url = postShareUrl(post.id);
-    try {
-      if (Platform.OS === 'ios') {
-        await Share.share({ url, message: content || undefined });
-      } else {
-        await Share.share({ message: content ? `${content}\n\n${url}` : url });
-      }
-    } catch (error) {
-      try {
-        await Clipboard.setStringAsync(url);
-        Alert.alert('Link copied', 'Share sheet skipped — the link is on your clipboard.');
-      } catch {
-        Alert.alert('Couldn’t share that', getErrorMessage(error));
-      }
-    }
-  }
-
-  async function copyLink() {
-    setMenuOpen(false);
-    try {
-      await Clipboard.setStringAsync(postShareUrl(post.id));
-    } catch (error) {
-      Alert.alert('Couldn’t copy that', getErrorMessage(error));
-    }
-  }
-
-  function reportPost() {
-    setMenuOpen(false);
-    Alert.alert('Report this post?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Report',
-        onPress: () => Alert.alert('Reported', 'We’ll take a look.'),
-      },
-    ]);
-  }
+  const menuOpen = Boolean(social?.isOpenFor(post.id));
 
   return (
     <Card padded={false} style={{ paddingHorizontal: 12, paddingVertical: 12 }}>
@@ -111,12 +78,15 @@ export function PostCard({
                 @{handle} · {formatFeedTime(post.created_at)} · {audienceLabel(audience)}
               </AppText>
             </View>
+            {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
+              <ProofFlagButton postId={post.id} />
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Post menu"
               accessibilityState={{ expanded: menuOpen }}
               hitSlop={8}
-              onPress={() => setMenuOpen((open) => !open)}
+              onPress={() => social?.toggleOverflow(post)}
               className="h-7 w-7 items-center justify-center">
               <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
             </Pressable>
@@ -130,8 +100,20 @@ export function PostCard({
               canExpand={canExpand}
               onToggle={() => setExpanded((value) => !value)}
             />
-          ) : post.challenge_id ? (
+          ) : post.challenge_id && !quote ? (
             <ChallengeTitleLink challengeId={post.challenge_id} />
+          ) : null}
+
+          {quote ? (
+            <QuoteEmbed
+              snapshot={quote}
+              audience={quote.audience ?? post.audience}
+              onPress={() => {
+                if (post.quoted_post_id) {
+                  router.push(postHref(post.quoted_post_id));
+                }
+              }}
+            />
           ) : null}
 
           <ProofMedia urls={post.media_urls ?? []} />
@@ -142,7 +124,7 @@ export function PostCard({
             commentCount={comments.length}
             onReact={(type) => onReact(type)}
             onReply={onComment ? () => setShowComposer((value) => !value) : undefined}
-            onShare={() => void sharePost()}
+            onShare={() => social?.openShare(post)}
           />
 
           {showComposer && onComment ? (
@@ -179,19 +161,43 @@ export function PostCard({
           ) : null}
         </View>
       </View>
-
-      <PostOverflowMenu
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        onReport={reportPost}
-        onCopyLink={() => void copyLink()}
-      />
     </Card>
   );
 }
 
-function postShareUrl(postId: string) {
-  return LinkingExpo.createURL(`post/${postId}`);
+function ProofFlagButton({ postId }: { postId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  async function onFlag() {
+    if (busy || done) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('flag_challenge_proof', { p_post_id: postId });
+      if (error) {
+        throw error;
+      }
+      setDone(true);
+    } catch (error) {
+      Alert.alert('Couldn’t flag that', getErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={done ? 'Flagged' : 'Flag proof'}
+      disabled={busy || done}
+      hitSlop={8}
+      onPress={() => void onFlag()}
+      className="h-7 w-7 items-center justify-center">
+      <Glyph name={GLYPH.flag} color={done ? THEME.danger : THEME.textMuted} size={15} />
+    </Pressable>
+  );
 }
 
 function ChallengeTitleLink({

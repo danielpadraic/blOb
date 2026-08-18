@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
+import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience, DEFAULT_POST_AUDIENCE } from '@/lib/postAudience';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -18,7 +19,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 
 const POST_COLUMNS =
-  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, created_at';
+  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, moderation_status, quoted_post_id, quote_snapshot, deleted_at, created_at';
 const POST_COLUMNS_LEGACY = 'id, author_id, challenge_id, content, media_urls, created_at';
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at';
@@ -40,6 +41,7 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
   const query = supabase
     .from('posts')
     .select(POST_COLUMNS)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -52,7 +54,7 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
           ? await query.in('author_id', scope.authorIds)
           : await query.is('challenge_id', null);
 
-  if (error && isMissingAudienceColumn(error.message)) {
+  if (error && (isMissingAudienceColumn(error.message) || isMissingModerationColumn(error.message) || isMissingQuoteColumn(error.message))) {
     const legacy = supabase
       .from('posts')
       .select(POST_COLUMNS_LEGACY)
@@ -66,14 +68,39 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
           : scope.kind === 'authors'
             ? await legacy.in('author_id', scope.authorIds)
             : await legacy.is('challenge_id', null);
-    data = retry.data;
+    data = retry.data as typeof data;
     error = retry.error;
   }
 
   if (error) {
     throw new Error(getErrorMessage(error));
   }
-  return (data ?? []) as unknown as PostWithMeta[];
+  return ((data ?? []) as unknown as PostWithMeta[]).filter(
+    (post) =>
+      !post.deleted_at &&
+      post.moderation_status !== 'under_review' &&
+      post.moderation_status !== 'removed',
+  ).map(withQuoteSnapshot);
+}
+
+function withQuoteSnapshot(post: PostWithMeta): PostWithMeta {
+  return {
+    ...post,
+    quote_snapshot: asQuoteSnapshot(post.quote_snapshot) ?? post.quote_snapshot ?? null,
+  };
+}
+
+function isMissingQuoteColumn(message: string): boolean {
+  const text = message.toLowerCase();
+  return (
+    (text.includes('quoted_post_id') || text.includes('quote_snapshot') || text.includes('deleted_at')) &&
+    (text.includes('does not exist') || text.includes('schema cache'))
+  );
+}
+
+function isMissingModerationColumn(message: string): boolean {
+  const text = message.toLowerCase();
+  return text.includes('moderation_status') && (text.includes('does not exist') || text.includes('schema cache'));
 }
 
 function isMissingAudienceColumn(message: string): boolean {
@@ -231,6 +258,22 @@ function dedupePosts(groups: PostWithMeta[][]): PostWithMeta[] {
   );
 }
 
+async function fetchHiddenPostIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('post_hides').select('post_id').eq('user_id', userId);
+  if (error) {
+    return [];
+  }
+  return (data ?? []).map((row) => row.post_id);
+}
+
+async function fetchMutedUserIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('mutes').select('muted_user_id').eq('user_id', userId);
+  if (error) {
+    return [];
+  }
+  return (data ?? []).map((row) => row.muted_user_id);
+}
+
 async function fetchJoinedChallengeIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('challenge_participants')
@@ -295,11 +338,13 @@ async function fetchPosts(input: {
     return [];
   }
 
-  const [joinedIds, hostedIds, friendIds, official] = await Promise.all([
+  const [joinedIds, hostedIds, friendIds, official, hiddenIds, mutedIds] = await Promise.all([
     fetchJoinedChallengeIds(input.userId),
     fetchHostedChallengeIds(input.userId),
     fetchFriendIds(input.userId),
     fetchOfficialAnnouncementPosts(),
+    fetchHiddenPostIds(input.userId),
+    fetchMutedUserIds(input.userId),
   ]);
   const challengeIds = [...new Set([...joinedIds, ...hostedIds])];
   const authorIds = [...new Set([input.userId, ...friendIds])];
@@ -309,8 +354,24 @@ async function fetchPosts(input: {
     queryPosts({ kind: 'authors', authorIds }),
   ]);
 
+  const hidden = new Set(hiddenIds);
+  const muted = new Set(mutedIds);
+  const userId = input.userId;
+
   return hydrateAuthors(
-    await withSocial(dedupePosts([people, challengePosts, official]).slice(0, 50)),
+    await withSocial(
+      dedupePosts([people, challengePosts, official])
+        .filter((post) => {
+          if (hidden.has(post.id)) {
+            return false;
+          }
+          if (post.author_id !== userId && muted.has(post.author_id)) {
+            return false;
+          }
+          return true;
+        })
+        .slice(0, 50),
+    ),
   );
 }
 
@@ -381,13 +442,49 @@ export function useFeed(challengeId?: string | null) {
 }
 
 export function useAuthorFeed(authorId?: string | null) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['feed', 'author', authorId],
+    queryKey: ['feed', 'author', authorId, user?.id],
     enabled: Boolean(authorId),
     queryFn: async (): Promise<PostWithMeta[]> => {
       const rows = await queryPosts({ kind: 'authors', authorIds: [authorId!] });
-      const publicOnly = rows.filter((post) => asPostAudience(post.audience) === 'public');
+      const hidden = user?.id ? new Set(await fetchHiddenPostIds(user.id)) : new Set<string>();
+      const publicOnly = rows.filter(
+        (post) => asPostAudience(post.audience) === 'public' && !hidden.has(post.id),
+      );
       return hydrateAuthors(await withSocial(publicOnly));
+    },
+  });
+}
+
+export function usePost(postId?: string | null) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['feed', 'post', postId, user?.id],
+    enabled: Boolean(postId),
+    queryFn: async (): Promise<PostWithMeta | null> => {
+      const { data, error } = await supabase
+        .from('posts')
+        .select(POST_COLUMNS)
+        .eq('id', postId!)
+        .maybeSingle();
+      if (error && isMissingQuoteColumn(error.message)) {
+        const legacy = await supabase
+          .from('posts')
+          .select(POST_COLUMNS_LEGACY)
+          .eq('id', postId!)
+          .maybeSingle();
+        if (legacy.error || !legacy.data) {
+          return null;
+        }
+        const rows = await hydrateAuthors(await withSocial([legacy.data as PostWithMeta]));
+        return rows[0] ?? null;
+      }
+      if (error || !data || (data as PostWithMeta).deleted_at) {
+        return null;
+      }
+      const rows = await hydrateAuthors(await withSocial([withQuoteSnapshot(data as PostWithMeta)]));
+      return rows[0] ?? null;
     },
   });
 }
@@ -436,7 +533,8 @@ export function useCreatePost(challengeId?: string | null) {
       const media_urls = input.mediaUrls?.filter(Boolean) ?? [];
       const audience = input.audience ?? DEFAULT_POST_AUDIENCE;
       const audience_user_ids = audience === 'specific' ? (input.audienceUserIds ?? []) : [];
-      if (!content && media_urls.length === 0) {
+      const quoted_post_id = input.quotedPostId ?? null;
+      if (!content && media_urls.length === 0 && !quoted_post_id) {
         throw new Error('Write something, or attach a photo first.');
       }
       if (audience === 'specific' && audience_user_ids.length === 0) {
@@ -449,10 +547,15 @@ export function useCreatePost(challengeId?: string | null) {
         media_urls,
         audience,
         audience_user_ids,
+        quoted_post_id,
+        quote_snapshot: quoted_post_id ? (input.quoteSnapshot ?? null) : null,
       };
       const created = await supabase.from('posts').insert(payload).select(POST_COLUMNS).single();
       if (!created.error) {
         return created.data;
+      }
+      if (quoted_post_id && isMissingQuoteColumn(created.error.message)) {
+        throw new Error('Repost isn’t wired on the server yet. Apply the latest migration.');
       }
       if (!isMissingAudienceColumn(created.error.message)) {
         throw new Error(getErrorMessage(created.error));
@@ -484,6 +587,8 @@ export function useCreatePost(challengeId?: string | null) {
           media_urls: input.mediaUrls ?? [],
           audience: input.audience ?? DEFAULT_POST_AUDIENCE,
           audience_user_ids: input.audience === 'specific' ? (input.audienceUserIds ?? []) : [],
+          quoted_post_id: input.quotedPostId ?? null,
+          quote_snapshot: input.quoteSnapshot ?? null,
           created_at: new Date().toISOString(),
           author: asPublicProfile(profile ?? { id: user.id }),
           comments: [],

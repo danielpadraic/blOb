@@ -6,10 +6,12 @@ import { BlobTabBar } from '@/components/navigation/BlobTabBar';
 import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
+import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
 import { TabChromeHeader, isAlertsTab } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -23,11 +25,13 @@ export default function TabLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const loggable = useLoggableChallenge();
   useNotificationsRealtime();
+  usePushNotifications();
 
   const closeOverlays = useCallback(() => {
     setAlertsOpen(false);
     setSearchOpen(false);
     setSheetOpen(false);
+    closeSocialSheets();
     wallet?.closeAll();
   }, [wallet]);
 
@@ -116,13 +120,14 @@ export default function TabLayout() {
         onToggleSearch={toggleSearch}
       />
       <View className="flex-1" style={{ overflow: 'hidden' }}>
+        <SocialSheetsHost>
         <Tabs
           tabBar={() => null}
           screenOptions={{
             headerShown: false,
             tabBarStyle: { display: 'none' },
           }}>
-          <Tabs.Screen name="feed" options={{ title: 'Feed' }} listeners={{ tabPress: closeOverlays }} />
+          <Tabs.Screen name="feed" options={{ title: 'Home' }} listeners={{ tabPress: closeOverlays }} />
           <Tabs.Screen
             name="challenges"
             options={{
@@ -162,6 +167,7 @@ export default function TabLayout() {
           onAction={onAction}
         />
         <WalletHost />
+        </SocialSheetsHost>
       </View>
       <BlobTabBar onOpenCompose={openSheet} onTabPress={closeOverlays} />
     </View>

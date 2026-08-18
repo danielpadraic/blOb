@@ -1,6 +1,7 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { format, isToday, isYesterday } from 'date-fns';
 
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
@@ -18,12 +19,45 @@ type AlertsPanelProps = {
   onClose?: () => void;
 };
 
+type ListRow =
+  | { kind: 'day'; id: string; label: string }
+  | { kind: 'item'; id: string; item: AppNotification };
+
+function dayLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  if (isToday(date)) {
+    return 'Today';
+  }
+  if (isYesterday(date)) {
+    return 'Yesterday';
+  }
+  return format(date, 'EEE, MMM d');
+}
+
+function groupByDay(items: AppNotification[]): ListRow[] {
+  const rows: ListRow[] = [];
+  let last = '';
+  for (const item of items) {
+    const label = dayLabel(item.created_at);
+    if (label && label !== last) {
+      last = label;
+      rows.push({ kind: 'day', id: `day-${label}-${item.id}`, label });
+    }
+    rows.push({ kind: 'item', id: item.id, item });
+  }
+  return rows;
+}
+
 export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const router = useRouter();
   const list = useNotifications();
   const markRead = useMarkNotificationsRead();
   const items = list.data ?? [];
   const unreadCount = items.filter((item) => !item.read_at).length;
+  const rows = useMemo(() => groupByDay(items), [items]);
 
   const onOpen = useCallback(
     (item: AppNotification) => {
@@ -70,16 +104,23 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
         <MascotState compact={compact} kind="empty" title="You’re all caught up." />
       ) : (
         <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
+          data={rows}
+          keyExtractor={(row) => row.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: compact ? 12 : 24 }}
           style={compact ? { maxHeight: 340 } : undefined}
           onRefresh={() => void list.refetch()}
           refreshing={list.isRefetching && !list.isLoading}
-          renderItem={({ item }) => (
-            <NotificationRow item={item} onPress={() => onOpen(item)} />
-          )}
+          renderItem={({ item: row }) =>
+            row.kind === 'day' ? (
+              <AppText
+                className="mb-1 mt-2 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                {row.label}
+              </AppText>
+            ) : (
+              <NotificationRow item={row.item} onPress={() => onOpen(row.item)} />
+            )
+          }
         />
       )}
     </View>
@@ -114,7 +155,7 @@ function NotificationRow({
         <View className="flex-row items-center justify-between gap-2">
           <AppText
             className={`flex-1 text-charcoal ${unread ? 'font-bold' : 'font-medium'}`}
-            numberOfLines={1}>
+            numberOfLines={2}>
             {item.title}
           </AppText>
           <AppText className="text-[11px] text-muted">{formatFeedTime(item.created_at)}</AppText>

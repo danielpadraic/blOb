@@ -1,4 +1,4 @@
-import { challengeDetailHref } from '@/lib/routes';
+import { challengeDetailHref, storyHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
@@ -117,24 +117,45 @@ export async function inviteToChallenge(
   if (!row) {
     throw new Error('Invite sent, but we couldn’t load the receipt.');
   }
+  const { maybeRequestPushPermission } = await import('@/lib/push');
+  void maybeRequestPushPermission();
   return row as ChallengeInvite;
 }
 
 export function notificationHref(item: AppNotification): Href | null {
   const data = item.data ?? {};
-  if (item.type === 'follow' && data.username) {
-    return { pathname: '/feed/u/[username]', params: { username: data.username } };
+  if (data.href) {
+    return data.href as Href;
+  }
+  if (data.story_id) {
+    return storyHref(data.story_id);
+  }
+  if (
+    item.type === 'friend_request' ||
+    item.type === 'friend_accepted' ||
+    item.type === 'follow'
+  ) {
+    if (data.username) {
+      return { pathname: '/friends/u/[username]', params: { username: data.username } };
+    }
+    return '/friends';
+  }
+  if (item.type === 'profile_incomplete') {
+    return '/profile/body-metrics';
+  }
+  if (item.type === 'coins_received' || item.type === 'badge_unlocked' || item.type === 'payout_received') {
+    return '/profile';
   }
   if (data.callout_id) {
     return `/challenges/callout/${data.callout_id}`;
   }
-  if (item.type === 'coins_received' || item.type === 'badge_unlocked') {
-    return '/profile';
-  }
   if (data.challenge_id) {
     return challengeDetailHref(data.challenge_id, 'lobby');
   }
-  if (item.type === 'tagged') {
+  if (data.post_id) {
+    return { pathname: '/feed/p/[id]', params: { id: data.post_id } };
+  }
+  if (item.type === 'tagged' || item.type === 'post_comment' || item.type === 'post_reaction' || item.type === 'post_reposted') {
     return '/feed';
   }
   return null;
@@ -145,16 +166,29 @@ export function notificationGlyph(type: string, data?: NotificationData): string
     case 'challenge_invite':
       return '🏁';
     case 'challenge_starting':
+    case 'challenge_checkin_reminder':
       return '⏰';
+    case 'challenge_checkin':
+      return '✅';
     case 'challenge_new':
       return '✨';
     case 'tagged':
       return '🏷️';
     case 'challenge_joined':
+    case 'challenge_join_confirmed':
       return '🤝';
+    case 'friend_request':
+    case 'friend_accepted':
     case 'follow':
       return '👋';
+    case 'post_comment':
+      return '💬';
+    case 'post_reaction':
+      return data?.currency === 'bucks' ? '🔥' : '❤️';
+    case 'post_reposted':
+      return '🔁';
     case 'coins_received':
+    case 'payout_received':
       return data?.currency === 'bucks' ? '💵' : '🪙';
     case 'callout_received':
     case 'callout_accepted':
@@ -168,11 +202,18 @@ export function notificationGlyph(type: string, data?: NotificationData): string
     case 'badge_unlocked':
       return '🏅';
     case 'challenge_settled':
+    case 'challenge_won':
       return '🏆';
     case 'challenge_placed':
       return '🥇';
     case 'challenge_eliminated':
+    case 'challenge_lost':
+    case 'competitor_dropped':
       return '💔';
+    case 'challenge_cancelled':
+      return '↩️';
+    case 'profile_incomplete':
+      return '📋';
     default:
       return '🔔';
   }

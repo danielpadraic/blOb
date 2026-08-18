@@ -1,20 +1,83 @@
-import { Pressable, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
+import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
 import { formatBucks, formatCoins } from '@/utils/format';
 
 export function WalletBar() {
   const { profile } = useMyProfile();
   const wallet = useWalletOptional();
+  const queryClient = useQueryClient();
+  const coins = Number(profile?.coins ?? profile?.credits ?? 0);
+  const lastShown = Number(profile?.last_shown_coin_balance ?? coins);
+  const [displayCoins, setDisplayCoins] = useState(coins);
+  const animating = useRef(false);
+  const shownAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+    if (shownAt.current === coins) {
+      setDisplayCoins(coins);
+      return;
+    }
+    if (coins < lastShown) {
+      setDisplayCoins(coins);
+      shownAt.current = coins;
+      void markShown();
+      return;
+    }
+    if (coins === lastShown) {
+      setDisplayCoins(coins);
+      shownAt.current = coins;
+      return;
+    }
+    if (coins > lastShown && !animating.current) {
+      void countUp(lastShown, coins);
+    }
+  }, [coins, lastShown, profile?.id]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && coins > lastShown && !animating.current) {
+        void countUp(lastShown, coins);
+      }
+    });
+    return () => sub.remove();
+  }, [coins, lastShown]);
+
+  async function countUp(from: number, to: number) {
+    animating.current = true;
+    const start = Math.max(from, 0);
+    const end = to;
+    const steps = Math.min(24, Math.max(8, end - start));
+    const step = (end - start) / steps;
+    for (let i = 1; i <= steps; i += 1) {
+      setDisplayCoins(Math.round(start + step * i));
+      await sleep(24);
+    }
+    setDisplayCoins(end);
+    animating.current = false;
+    shownAt.current = end;
+    await markShown();
+  }
+
+  async function markShown() {
+    await supabase.rpc('mark_coin_balance_shown');
+    void queryClient.invalidateQueries({ queryKey: ['profile'] });
+  }
+
   if (!profile || !wallet) {
     return null;
   }
 
-  const coins = Number(profile.coins ?? profile.credits ?? 0);
   const bucks = Number(profile.bucks ?? 0);
 
   return (
@@ -35,7 +98,7 @@ export function WalletBar() {
       <View className="flex-row items-center">
         <CurrencyMark currency="coins" size={18} />
         <AppText className="ml-1.5 text-[12px] font-extrabold text-charcoal">
-          {formatCoins(coins).replace(' Coins', '')}
+          {formatCoins(displayCoins).replace(' Coins', '')}
         </AppText>
       </View>
       <AppText className="mx-1.5 text-[12px] font-extrabold text-muted">·</AppText>
@@ -47,4 +110,8 @@ export function WalletBar() {
       </View>
     </Pressable>
   );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

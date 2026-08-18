@@ -223,10 +223,32 @@ export function useSubmitWorkout() {
       void queryClient.invalidateQueries({
         queryKey: ['logged-workout-days', input.challengeId],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ['challenge-completions', input.challengeId],
+      });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge', input.challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
+    },
+  });
+}
+
+export function usePeriodCompletions(challengeId: string | undefined) {
+  const date = utcDateStamp();
+  return useQuery({
+    queryKey: ['challenge-completions', challengeId, date],
+    enabled: Boolean(challengeId),
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from('workout_submissions')
+        .select('user_id')
+        .eq('challenge_id', challengeId!)
+        .eq('submission_date', date);
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+      return new Set((data ?? []).map((row) => String((row as { user_id: string }).user_id)));
     },
   });
 }

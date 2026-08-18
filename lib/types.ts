@@ -62,6 +62,7 @@ export type ChallengeStatus =
   | 'judging'
   | 'distributing'
   | 'settled'
+  | 'cancelled_underfilled'
   | 'cancelled';
 
 export type ParticipantStatus =
@@ -97,9 +98,17 @@ export type ChallengeCategory =
 
 export type ChallengeKind = 'consistency' | 'points';
 
-export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly' | 'once';
+export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly' | 'once' | '3x_week' | 'custom';
 
-export type ChallengeVisibility = 'public' | 'unlisted' | 'private';
+export type ChallengeVisibility = 'public' | 'unlisted' | 'private' | 'friends' | 'invite';
+
+export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'honor';
+
+export type ChallengeFormat = 'consistency' | 'points' | 'lms';
+
+export type ProofReview = 'auto' | 'host';
+
+export type PayoutMode = 'even_split_remaining' | 'winner_take_all' | 'top_places';
 
 export type PrizeStructure = 'winner_take_all' | 'equal_split' | 'top_places';
 
@@ -189,6 +198,8 @@ export interface Profile {
   credits: number;
   coins: number;
   bucks: number;
+  last_shown_coin_balance?: number | null;
+  timezone?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -261,6 +272,17 @@ export interface Challenge {
   visibility: ChallengeVisibility | string | null;
   challenge_lane?: ChallengeLane | string | null;
   currency: WalletCurrency | string | null;
+  host_funded?: boolean;
+  host_budget?: number;
+  format?: ChallengeFormat | string | null;
+  task?: string | null;
+  required_checkins?: number | null;
+  misses_allowed?: number;
+  proof_type?: SimpleProofType | string | null;
+  proof_review?: ProofReview | string | null;
+  payout_mode?: PayoutMode | string | null;
+  timezone?: string | null;
+  start_rule?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -340,6 +362,17 @@ export interface WorkoutSubmission {
 
 export type { PostAudience };
 
+export type QuoteSnapshot = {
+  author_id: string;
+  display_name: string;
+  username: string;
+  avatar_url: string | null;
+  body: string;
+  media_preview_url: string | null;
+  created_at: string;
+  audience?: string | null;
+};
+
 export interface Post {
   id: string;
   author_id: string;
@@ -348,6 +381,10 @@ export interface Post {
   media_urls: string[];
   audience?: PostAudience;
   audience_user_ids?: string[];
+  moderation_status?: 'visible' | 'under_review' | 'removed' | string | null;
+  quoted_post_id?: string | null;
+  quote_snapshot?: QuoteSnapshot | null;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -356,6 +393,8 @@ export type ComposeInput = {
   mediaUrls?: string[];
   audience?: PostAudience;
   audienceUserIds?: string[];
+  quotedPostId?: string | null;
+  quoteSnapshot?: QuoteSnapshot | null;
 };
 
 export interface Comment {
@@ -429,6 +468,19 @@ export type NotificationType =
   | 'challenge_invite'
   | 'challenge_new'
   | 'challenge_starting'
+  | 'challenge_join_confirmed'
+  | 'challenge_checkin_reminder'
+  | 'challenge_checkin'
+  | 'competitor_dropped'
+  | 'challenge_won'
+  | 'challenge_lost'
+  | 'payout_received'
+  | 'profile_incomplete'
+  | 'friend_request'
+  | 'friend_accepted'
+  | 'post_comment'
+  | 'post_reaction'
+  | 'post_reposted'
   | 'tagged'
   | 'challenge_joined'
   | 'follow'
@@ -441,12 +493,14 @@ export type NotificationType =
   | 'callout_resolved'
   | 'callout_disputed'
   | 'callout_cancelled'
-  | 'badge_unlocked';
+  | 'badge_unlocked'
+  | 'challenge_cancelled';
 
 export type NotificationData = {
   challenge_id?: string;
   post_id?: string;
   comment_id?: string;
+  story_id?: string;
   username?: string;
   amount?: number;
   transfer_id?: string;
@@ -455,6 +509,8 @@ export type NotificationData = {
   currency?: string;
   badge_key?: string;
   coin_reward?: number;
+  href?: string;
+  dedupe_key?: string;
 };
 
 export interface AppNotification {
@@ -798,6 +854,52 @@ export type Database = {
         [
           Relationship<'posts_author_id_fkey', 'author_id', 'profiles', 'id'>,
           Relationship<'posts_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+          Relationship<'posts_quoted_post_id_fkey', 'quoted_post_id', 'posts', 'id'>,
+        ]
+      >;
+      post_hides: TableDef<
+        { user_id: string; post_id: string; created_at: string },
+        Partial<{ user_id: string; post_id: string; created_at: string }>,
+        Partial<{ user_id: string; post_id: string; created_at: string }>,
+        [
+          Relationship<'post_hides_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'post_hides_post_id_fkey', 'post_id', 'posts', 'id'>,
+        ]
+      >;
+      post_reports: TableDef<
+        {
+          id: string;
+          post_id: string;
+          reporter_id: string;
+          reason: string;
+          created_at: string;
+        },
+        Partial<{
+          id: string;
+          post_id: string;
+          reporter_id: string;
+          reason: string;
+          created_at: string;
+        }>,
+        Partial<{
+          id: string;
+          post_id: string;
+          reporter_id: string;
+          reason: string;
+          created_at: string;
+        }>,
+        [
+          Relationship<'post_reports_post_id_fkey', 'post_id', 'posts', 'id'>,
+          Relationship<'post_reports_reporter_id_fkey', 'reporter_id', 'profiles', 'id'>,
+        ]
+      >;
+      mutes: TableDef<
+        { user_id: string; muted_user_id: string; created_at: string },
+        Partial<{ user_id: string; muted_user_id: string; created_at: string }>,
+        Partial<{ user_id: string; muted_user_id: string; created_at: string }>,
+        [
+          Relationship<'mutes_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'mutes_muted_user_id_fkey', 'muted_user_id', 'profiles', 'id'>,
         ]
       >;
       comments: TableDef<
@@ -831,6 +933,14 @@ export type Database = {
       get_my_profile: {
         Args: Record<string, never>;
         Returns: Profile | null;
+      };
+      mark_coin_balance_shown: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      flag_challenge_proof: {
+        Args: { p_post_id: string };
+        Returns: { ok: boolean; hidden?: boolean; flag_count?: number };
       };
       join_challenge: {
         Args: { p_challenge_id: string };
@@ -985,6 +1095,34 @@ export type Database = {
       search_people: {
         Args: { p_query: string };
         Returns: PublicProfile[];
+      };
+      register_push_token: {
+        Args: { p_token: string; p_platform?: string | null };
+        Returns: undefined;
+      };
+      clear_push_token: {
+        Args: { p_token: string };
+        Returns: undefined;
+      };
+      notify_my_profile_gate: {
+        Args: { p_missing?: string | null };
+        Returns: string | null;
+      };
+      report_post: {
+        Args: { p_post_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      soft_delete_post: {
+        Args: { p_post_id: string };
+        Returns: undefined;
+      };
+      enqueue_checkin_reminders: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      enqueue_profile_reminders: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

@@ -234,11 +234,15 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
     return {
       ...DEFAULT_CREATE_VALUES,
       title: asString(row.title, DEFAULT_CREATE_VALUES.title),
-      description: asString(row.description, DEFAULT_CREATE_VALUES.description),
+      description: asString(row.description, DEFAULT_CREATE_VALUES.description ?? ''),
       category,
       challenge_type: row.challenge_type === 'points' ? 'points' : 'consistency',
       visibility:
-        row.challenge_lane === 'private' || row.visibility === 'private' ? 'private' : 'public',
+        row.visibility === 'friends' || row.visibility === 'invite' || row.visibility === 'private'
+          ? row.visibility
+          : row.challenge_lane === 'private'
+            ? 'invite'
+            : 'public',
       challenge_lane: row.challenge_lane === 'private' ? 'private' : 'coins',
       duration_type: row.duration_type === 'unlimited' ? 'unlimited' : 'fixed',
       ...ensureSchedule({
@@ -337,10 +341,25 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
   return cloneTemplateValues({
     ...DEFAULT_CREATE_VALUES,
     title: challenge.title,
+    task: challenge.task ?? '',
+    min_participants: String(Math.max(Number(challenge.min_participants) || 2, 2)),
+    misses_allowed: String(Math.max(Number(challenge.misses_allowed) || 0, 0)),
+    proof_type:
+      challenge.proof_type === 'video' || challenge.proof_type === 'check_in' || challenge.proof_type === 'honor'
+        ? challenge.proof_type
+        : 'photo',
+    proof_review: challenge.proof_review === 'host' ? 'host' : 'auto',
+    host_funded: Boolean(challenge.host_funded),
+    host_budget: String(Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0)),
     description: challenge.description ?? '',
     category: normalizeChallengeCategory(challenge.category, 'other'),
     challenge_type: challenge.challenge_type === 'points' ? 'points' : 'consistency',
-    visibility: challenge.visibility === 'private' ? 'private' : 'public',
+    visibility:
+      challenge.visibility === 'friends' ||
+      challenge.visibility === 'invite' ||
+      challenge.visibility === 'private'
+        ? challenge.visibility
+        : 'public',
     challenge_lane: challenge.challenge_lane === 'private' ? 'private' : 'coins',
     duration_type: 'fixed',
     ...ensureSchedule({
