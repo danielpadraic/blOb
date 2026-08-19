@@ -12,10 +12,17 @@ type CurrencyMarkProps = {
   currency?: string | null;
   size?: number;
   showLabel?: boolean;
+  accessibilityLabel?: string;
 };
 
-export function CurrencyMark({ currency, size = 28, showLabel = false }: CurrencyMarkProps) {
+export function CurrencyMark({
+  currency,
+  size = 28,
+  showLabel = false,
+  accessibilityLabel,
+}: CurrencyMarkProps) {
   const kind = asWalletCurrency(currency);
+  const label = accessibilityLabel ?? (kind === 'bucks' ? 'Blob Bucks' : 'Blob Coins');
   return (
     <View className="flex-row items-center">
       <Image
@@ -24,7 +31,7 @@ export function CurrencyMark({ currency, size = 28, showLabel = false }: Currenc
         contentFit="contain"
         contentPosition="center"
         cachePolicy="memory-disk"
-        accessibilityLabel={kind === 'bucks' ? 'Blob Bucks' : 'Blob Coins'}
+        accessibilityLabel={label}
       />
       {showLabel ? (
         <AppText
@@ -63,6 +70,31 @@ export function StakeAmount({
       <CurrencyMark currency={currency} size={size} />
       <AppText className={`ml-0.5 ${textClassName}`}>
         {value <= 0 ? '0' : formatWalletNumber(value)}
+      </AppText>
+    </View>
+  );
+}
+
+type BuckUsdAmountProps = {
+  amount: number | null | undefined;
+  size?: number;
+  textClassName?: string;
+  color?: string;
+};
+
+/** Buck icon + $0.00. Never prints the word Bucks. */
+export function BuckUsdAmount({
+  amount,
+  size = 14,
+  textClassName = 'text-[12px] font-extrabold text-charcoal',
+  color,
+}: BuckUsdAmountProps) {
+  const value = Number(amount ?? 0);
+  return (
+    <View className="flex-row items-center">
+      <CurrencyMark currency="bucks" size={size} accessibilityLabel="$" />
+      <AppText className={`ml-0.5 ${textClassName}`} style={color ? { color } : undefined}>
+        {`$${value.toFixed(2)}`}
       </AppText>
     </View>
   );

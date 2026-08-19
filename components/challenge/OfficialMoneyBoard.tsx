@@ -1,9 +1,17 @@
+import { useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
+import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
+import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { officialBob } from '@/copy/officialBob';
 import { copy } from '@/lib/copy';
-import { formatWallet } from '@/lib/currency';
+import {
+  armingCountdownLabel,
+  isOfficialJoinable,
+  officialContestantsNeeded,
+  officialStartNeededLabel,
+} from '@/lib/officialSeries';
 import { THEME } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 
@@ -16,14 +24,33 @@ export function officialGuarantee(
 export function OfficialMoneyBoard({
   challenge,
   finished = 0,
+  onInvite,
 }: {
   challenge: ChallengeWithStats;
   finished?: number;
+  onInvite?: () => void;
 }) {
+  const filling = isOfficialJoinable(challenge);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!filling || challenge.status !== 'arming') {
+      return;
+    }
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [filling, challenge.status]);
+
   const guarantee = officialGuarantee(challenge);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
+  const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const joined = Math.max(Number(challenge.participant_count) || 0, 0);
-  const money = (amount: number) => formatWallet(amount, challenge.currency);
+  const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
+  const startLine =
+    needed > 0
+      ? officialStartNeededLabel(needed)
+      : challenge.status === 'arming'
+        ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
+        : null;
 
   return (
     <View
@@ -35,27 +62,49 @@ export function OfficialMoneyBoard({
         backgroundColor: THEME.surface,
         padding: 12,
       }}>
-      <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-        <Stat label={copy('board.joined')} value={String(joined)} />
-        <Stat label={copy('board.finished')} value={String(Math.max(finished, 0))} />
-        <Stat label={copy('board.pot')} value={money(pot)} />
-        <Stat label={copy('board.guarantee')} value={money(guarantee)} />
-      </View>
+      {filling ? (
+        <>
+          <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+            <Stat label={copy('create.buyIn')} value={<BuckUsdAmount amount={buyIn} size={16} />} />
+            <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
+            <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} />
+          </View>
+          {startLine ? (
+            <AppText className="mt-1 text-[12px] leading-5 text-muted">{startLine}</AppText>
+          ) : null}
+          <OfficialInviteButton
+            challengeId={challenge.id}
+            challengeTitle={challenge.title}
+            onOpenPicker={onInvite}
+          />
+        </>
+      ) : (
+        <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+          <Stat label={copy('board.joined')} value={String(joined)} />
+          <Stat label={copy('board.finished')} value={String(Math.max(finished, 0))} />
+          <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} />
+          <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
+        </View>
+      )}
       <AppText className="mt-1 text-[12px] leading-5 text-muted">{officialBob('legalBoard')}</AppText>
       <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalDays')}</AppText>
     </View>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <View style={{ width: '31%', minWidth: 88 }}>
       <AppText className="text-[9px] font-semibold uppercase tracking-wide text-muted">
         {label}
       </AppText>
-      <AppText className="mt-0.5 text-[13px] font-extrabold text-charcoal" numberOfLines={2}>
-        {value}
-      </AppText>
+      {typeof value === 'string' ? (
+        <AppText className="mt-0.5 text-[13px] font-extrabold text-charcoal" numberOfLines={2}>
+          {value}
+        </AppText>
+      ) : (
+        <View className="mt-0.5">{value}</View>
+      )}
     </View>
   );
 }

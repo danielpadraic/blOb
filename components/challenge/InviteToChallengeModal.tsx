@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useCoinRecipientSearch, useCoinRecipientSuggestions } from '@/hooks/useCoins';
 import { useInviteToChallenge } from '@/hooks/useNotifications';
+import { useFriends } from '@/hooks/useSocial';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -18,6 +19,9 @@ type InviteToChallengeModalProps = {
   challengeId: string;
   challengeTitle: string;
   onClose: () => void;
+  friendsFirst?: boolean;
+  onShareLink?: () => void;
+  shareBusy?: boolean;
 };
 
 function personName(profile: PublicProfile): string {
@@ -29,15 +33,29 @@ export function InviteToChallengeModal({
   challengeId,
   challengeTitle,
   onClose,
+  friendsFirst = false,
+  onShareLink,
+  shareBusy = false,
 }: InviteToChallengeModalProps) {
   const invite = useInviteToChallenge(challengeId);
   const suggestions = useCoinRecipientSuggestions();
+  const friends = useFriends();
   const [query, setQuery] = useState('');
   const search = useCoinRecipientSearch(query);
   const results = useMemo(
     () => (query.trim().length >= 2 ? (search.data ?? []) : []),
     [query, search.data],
   );
+  const friendPeople = useMemo(
+    () =>
+      (friends.data ?? [])
+        .map((row) => row.profile)
+        .filter((profile): profile is PublicProfile => Boolean(profile)),
+    [friends.data],
+  );
+  const defaultPeople = friendsFirst
+    ? friendPeople
+    : (suggestions.data?.following ?? []);
 
   function close() {
     if (invite.isPending) {
@@ -74,8 +92,21 @@ export function InviteToChallengeModal({
           </View>
           <AppText className="text-xl font-bold text-charcoal">Invite to {challengeTitle}</AppText>
           <AppText className="mt-1 mb-4 text-muted">
-            Search a username. They’ll get a notification with a link to this challenge.
+            {friendsFirst
+              ? 'Pick a friend, or share the link. A small promise. Then you move.'
+              : 'Search a username. They’ll get a notification with a link to this challenge.'}
           </AppText>
+          {onShareLink ? (
+            <View className="mb-4">
+              <Button
+                title="Share link"
+                size="lg"
+                variant="outline"
+                loading={shareBusy}
+                onPress={onShareLink}
+              />
+            </View>
+          ) : null}
           <Input
             value={query}
             onChangeText={setQuery}
@@ -92,8 +123,8 @@ export function InviteToChallengeModal({
               <PeopleList people={results} empty={copy('friends.noneMatch')} onPick={pick} />
             ) : (
               <PeopleList
-                people={suggestions.data?.following ?? []}
-                empty={undefined}
+                people={defaultPeople}
+                empty={friendsFirst ? 'No friends yet. Share the link instead.' : undefined}
                 onPick={pick}
               />
             )}

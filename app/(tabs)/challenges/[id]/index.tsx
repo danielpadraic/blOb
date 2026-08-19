@@ -2,13 +2,13 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-rou
 import { useQuery } from '@tanstack/react-query';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Alert, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BucksTag } from '@/components/currency/BucksTag';
-import { CurrencyMark } from '@/components/currency/CurrencyMark';
+import { BuckUsdAmount, CurrencyMark } from '@/components/currency/CurrencyMark';
 import { FeedList } from '@/components/feed/FeedList';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
@@ -83,6 +83,7 @@ import { fetchHealthWorkoutById } from '@/lib/health/remote';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWallet, isBucksChallenge, isSponsoredBucks, walletBalance } from '@/lib/currency';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
+import { shareOfficialChallenge } from '@/lib/officialShare';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
@@ -554,7 +555,9 @@ export default function ChallengeDetailScreen() {
           ) : null}
           <View className="gap-3 p-4">
             <View className="flex-row flex-wrap gap-1.5">
-              {isBucksChallenge(challenge) ? <BucksTag challenge={challenge} /> : null}
+              {isBucksChallenge(challenge) && !isOfficialJoinable(challenge) ? (
+                <BucksTag challenge={challenge} />
+              ) : null}
               {challenge.is_official ? (
                 <HeroChip
                   label={isSponsoredBucks(challenge) ? 'Sponsored' : 'Official'}
@@ -617,10 +620,21 @@ export default function ChallengeDetailScreen() {
                   Current pool
                 </AppText>
                 <View className="mt-1 flex-row items-center">
-                  <CurrencyMark currency={challenge.currency} size={18} />
-                  <AppText className="ml-1.5 text-[22px] font-extrabold" style={{ color: '#fff' }}>
-                    {money(Number(challenge.prize_pool))}
-                  </AppText>
+                  {isOfficialJoinable(challenge) ? (
+                    <BuckUsdAmount
+                      amount={Number(challenge.prize_pool)}
+                      size={18}
+                      textClassName="text-[22px] font-extrabold"
+                      color="#fff"
+                    />
+                  ) : (
+                    <>
+                      <CurrencyMark currency={challenge.currency} size={18} />
+                      <AppText className="ml-1.5 text-[22px] font-extrabold" style={{ color: '#fff' }}>
+                        {money(Number(challenge.prize_pool))}
+                      </AppText>
+                    </>
+                  )}
                 </View>
                   </>
                 )}
@@ -693,7 +707,11 @@ export default function ChallengeDetailScreen() {
             <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalAllFinish')}</AppText>
             <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalZero')}</AppText>
             <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
-            <OfficialMoneyBoard challenge={challenge} finished={finishers} />
+            <OfficialMoneyBoard
+              challenge={challenge}
+              finished={finishers}
+              onInvite={() => setInviteOpen(true)}
+            />
           </Card>
         ) : null}
 
@@ -1076,11 +1094,19 @@ export default function ChallengeDetailScreen() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={onConfirmJoin}
       />
-      {isHost ? (
+      {isHost || isOfficialJoinable(challenge) ? (
         <InviteToChallengeModal
           visible={inviteOpen}
           challengeId={challenge.id}
           challengeTitle={challenge.title}
+          friendsFirst={isOfficialJoinable(challenge)}
+          onShareLink={() => {
+            void shareOfficialChallenge(challenge.id).then((result) => {
+              if (result === 'copied') {
+                Alert.alert('Link copied', 'A small promise. Then you move.');
+              }
+            });
+          }}
           onClose={() => setInviteOpen(false)}
         />
       ) : null}

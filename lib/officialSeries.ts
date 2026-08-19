@@ -61,3 +61,28 @@ export function officialAlreadyStartedCopy(): string {
 export function officialToStartAmount(guarantee: number): number {
   return Math.max(Number(guarantee) || 0, 0) * 1.5;
 }
+
+/** Paid joins still needed so pot reaches 1.5× guarantee. */
+export function officialContestantsNeeded(input: {
+  guarantee: number;
+  pot: number;
+  buyIn: number;
+}): number {
+  const guarantee = Math.max(Number(input.guarantee) || 0, 0);
+  const pot = Math.max(Number(input.pot) || 0, 0);
+  const buyIn = Number(input.buyIn) || 0;
+  if (buyIn <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.ceil((officialToStartAmount(guarantee) - pot) / buyIn));
+}
+
+export function officialStartNeededLabel(needed: number): string | null {
+  if (needed <= 0) {
+    return null;
+  }
+  if (needed === 1) {
+    return 'Start: 1 more contestant needed';
+  }
+  return `Start: ${needed} more contestants needed`;
+}
