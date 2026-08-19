@@ -6,7 +6,7 @@ export const OFFICIAL_DETAILS_LINES = [
   'Official days end at 11:59 p.m. Central Time.',
   'A phone camera is required. Heart-rate proof is required (Watch, Fitness, or a screenshot).',
   'Anyone in the challenge can anonymously flag a post that does not meet these rules. Flagged posts are reviewed.',
-  'Miss a day, post incorrect proof, or post no proof, and you are out.',
+  'Miss a day, forget to post, post incorrect proof, or post no proof, and you are out. Join the next challenge and try again.',
   'Buy-ins are not refundable. You only get money back if you finish and are paid in the split.',
   '18+. Void where prohibited. Not medical advice.',
 ] as const;
