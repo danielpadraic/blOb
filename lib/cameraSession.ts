@@ -44,7 +44,7 @@ export function takePrimedCameraStream(): MediaStream | null {
   return stream;
 }
 
-export async function primeCameraFromGesture(kind: 'photo' | 'video' = 'photo'): Promise<void> {
+export async function primeCameraFromGesture(kind: 'photo' | 'video' = 'video'): Promise<void> {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     return;
   }

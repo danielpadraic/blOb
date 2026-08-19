@@ -13,7 +13,7 @@ import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboar
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
-import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
+import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -29,7 +29,6 @@ import {
   useChallenge,
   useChallengeParticipants,
   useChallengeSettlement,
-  useJoinChallenge,
   useMarkChallengeJudging,
   useSettleChallenge,
 } from '@/hooks/useChallenge';
@@ -41,7 +40,6 @@ import {
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
-import { useWallet } from '@/hooks/useWallet';
 import { useLoggedWorkoutCount, usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -100,7 +98,6 @@ export default function ChallengeDetailScreen() {
   useDismissTo(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useMyProfile();
-  const wallet = useWallet();
   const challengeQuery = useChallenge(id);
   const hostQuery = useProfile(challengeQuery.data?.created_by ?? undefined);
   const roster = useChallengeParticipants(id);
@@ -125,7 +122,7 @@ export default function ChallengeDetailScreen() {
   });
   const loggedCount = useLoggedWorkoutCount(id);
   const completions = usePeriodCompletions(id, challengeQuery.data);
-  const join = useJoinChallenge();
+  const joinSheet = useJoinConfirm();
   const markJudging = useMarkChallengeJudging();
   const settle = useSettleChallenge();
   const settlementQuery = useChallengeSettlement(id);
@@ -134,7 +131,6 @@ export default function ChallengeDetailScreen() {
   const createComment = useCreateComment(id);
   const toggleReaction = useToggleReaction();
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -347,24 +343,15 @@ export default function ChallengeDetailScreen() {
   }
 
   function onJoinPress() {
-    if (join.isPending || !canJoin || isHost) {
+    if (joinSheet.loading || !challenge || isHost || isJoined || !canJoinBase) {
+      return;
+    }
+    if (needsBodyMetrics) {
+      router.push(BODY_METRICS_HREF);
       return;
     }
     setActionError(null);
-    setConfirmOpen(true);
-  }
-
-  function onConfirmJoin() {
-    if (!id || join.isPending) {
-      return;
-    }
-    setActionError(null);
-    join.mutate(id, {
-      onSuccess: () => setConfirmOpen(false),
-      onError: (error) => {
-        setActionError(getErrorMessage(error));
-      },
-    });
+    joinSheet.open(challenge);
   }
 
   function onJudgePress() {
@@ -760,7 +747,7 @@ export default function ChallengeDetailScreen() {
                         : ''
                     }.`}
               </AppText>
-              {actionError && !confirmOpen && !judgeOpen && !settleOpen ? (
+              {actionError && !judgeOpen && !settleOpen ? (
                 <AppText className="text-sm leading-5 text-coral-dark">{actionError}</AppText>
               ) : null}
               {canJudge ? (
@@ -921,20 +908,12 @@ export default function ChallengeDetailScreen() {
                 size="lg"
                 onPress={() => router.push(BODY_METRICS_HREF)}
               />
-            ) : canJoin ? (
+            ) : canJoin || needsTopUp ? (
               <Button
                 title={isFreeEntry ? 'Join free' : joinCta.joinLabel}
                 size="lg"
-                loading={join.isPending}
+                loading={joinSheet.loading}
                 onPress={onJoinPress}
-              />
-            ) : needsTopUp ? (
-              <Button
-                title={joinCta.topUpLabel}
-                size="lg"
-                onPress={() =>
-                  wallet.openTopUp({ amount: joinCta.shortfall, returnChallengeId: challenge.id })
-                }
               />
             ) : null}
           </View>
@@ -942,14 +921,6 @@ export default function ChallengeDetailScreen() {
       </View>
       ) : null}
 
-      <JoinConfirmModal
-        visible={confirmOpen && canJoin}
-        challenge={challenge}
-        loading={join.isPending}
-        error={actionError}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={onConfirmJoin}
-      />
       {isHost || isOfficialJoinable(challenge) ? (
         <InviteToChallengeModal
           visible={inviteOpen}

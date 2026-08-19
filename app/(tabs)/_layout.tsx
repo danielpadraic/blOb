@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tabs, usePathname, useRouter, useSegments, type Href } from 'expo-router';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
 import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
+import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
 import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { TourHost } from '@/components/tour/TourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
@@ -27,7 +28,9 @@ import { THEME } from '@/lib/theme';
 export default function TabLayout() {
   return (
     <TourProvider>
-      <TabLayoutInner />
+      <JoinConfirmProvider>
+        <TabLayoutInner />
+      </JoinConfirmProvider>
     </TourProvider>
   );
 }
@@ -156,7 +159,7 @@ function TabLayoutInner() {
     }
     if (id === 'story') {
       closeOverlays();
-      void primeCameraFromGesture('photo').then(() => {
+      void primeCameraFromGesture('video').then(() => {
         setTimeout(() => router.push(CAPTURE_STORY_HREF), 60);
       });
       return;
@@ -234,7 +237,6 @@ function TabLayoutInner() {
           onClose={() => setSheetOpen(false)}
           onAction={onAction}
         />
-        <WalletHost />
         <HealthLogPromptHost />
         {onOnboarding ? null : <OfficialPitchHost />}
         </SocialSheetsHost>
@@ -246,6 +248,10 @@ function TabLayoutInner() {
           onTabPress={closeOverlays}
         />
       )}
+      <JoinConfirmLayer />
+      <View pointerEvents="box-none" style={styles.chromeLayer}>
+        <WalletHost />
+      </View>
       {onOnboarding ? null : (
         <>
           {profile && !profile.tutorial_completed_at ? <FirstRunTourLauncher /> : null}
@@ -256,3 +262,15 @@ function TabLayoutInner() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  chromeLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 210,
+    elevation: 210,
+  },
+});

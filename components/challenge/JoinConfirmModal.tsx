@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
@@ -9,10 +12,12 @@ import { proofDisplayName } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
-import { formatCash, formatWallet, isBucksChallenge } from '@/lib/currency';
+import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
+import { bucksJoinCta } from '@/lib/joinCta';
 import { formatUsd } from '@/utils/format';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
+import { useMyProfile } from '@/hooks/useProfile';
 
 type JoinConfirmModalProps = {
   visible: boolean;
@@ -22,6 +27,8 @@ type JoinConfirmModalProps = {
   onClose: () => void;
   onConfirm: () => void;
 };
+
+const DISMISS_Y = 88;
 
 function acknowledgments(challenge: Challenge) {
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
@@ -37,26 +44,7 @@ function acknowledgments(challenge: Challenge) {
 
   const prizeCopy = prizeStructureSummary(challenge);
   if (challenge.is_official) {
-    const amount = isFree ? 'free' : bucks ? formatCash(buyInAmount) : formatWallet(buyInAmount, 'coins');
-    return [
-      {
-        id: 'buyin',
-        title: 'Buy-in',
-        body: officialBob('joinLegal', { amount }),
-      },
-      {
-        id: 'split',
-        title: officialBob('legalBoard'),
-        body: `${officialBob('detailsOut')} ${officialBob('detailsRefund')} ${officialBob('legalDays')}`,
-      },
-      {
-        id: 'proofs',
-        title: proofs.length === 1 ? 'Proof is required' : `${proofs.length} proofs, every log`,
-        body: honorOnly
-          ? 'Honor. Confirm to log.'
-          : `Each log needs: ${proofLabels}. ${copy('create.proofsHelper')}`,
-      },
-    ];
+    return [];
   }
 
   return [
@@ -139,19 +127,39 @@ export function JoinConfirmModal({
   onClose,
   onConfirm,
 }: JoinConfirmModalProps) {
+  const insets = useSafeAreaInsets();
+  const { profile } = useMyProfile();
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
   const buyIn = bucks ? formatCash(buyInAmount) : formatWallet(buyInAmount, 'coins');
   const isFree = buyInAmount <= 0;
   const items = acknowledgments(challenge);
-  const allChecked = items.every((item) => checked[item.id]);
+  const allChecked = items.length === 0 || items.every((item) => checked[item.id]);
+  const translateY = useSharedValue(0);
+  const cta = bucksJoinCta({
+    currency: challenge.currency,
+    buyIn: buyInAmount,
+    wallet: walletBalance(profile, challenge.currency),
+    hasProfile: Boolean(profile),
+  });
+  const official = Boolean(challenge.is_official);
+  const confirmTitle = official
+    ? cta.needsTopUp
+      ? cta.topUpLabel
+      : isFree
+        ? 'Confirm and join free'
+        : `Confirm and pay ${buyIn}`
+    : isFree
+      ? 'Confirm and join free'
+      : `Confirm and pay ${buyIn}`;
 
   useEffect(() => {
     if (!visible) {
       setChecked({});
+      translateY.value = 0;
     }
-  }, [visible]);
+  }, [translateY, visible]);
 
   function toggle(id: string) {
     setChecked((current) => ({ ...current, [id]: !current[id] }));
@@ -164,12 +172,74 @@ export function JoinConfirmModal({
     onClose();
   }
 
+  const handlePan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(8)
+        .failOffsetX([-24, 24])
+        .onUpdate((event) => {
+          translateY.value = Math.max(0, event.translationY);
+        })
+        .onEnd((event) => {
+          if (loading) {
+            translateY.value = withTiming(0, { duration: 180 });
+            return;
+          }
+          if (event.translationY > DISMISS_Y || event.velocityY > 900) {
+            runOnJS(onClose)();
+            return;
+          }
+          translateY.value = withTiming(0, { duration: 180 });
+        }),
+    [loading, onClose, translateY],
+  );
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const sheetChrome = {
+    backgroundColor: THEME.surface,
+    borderTopLeftRadius: THEME.radiusLg,
+    borderTopRightRadius: THEME.radiusLg,
+    width: '100%' as const,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: Math.max(insets.bottom, 16) + 8,
+  };
+
+  if (official) {
+    return (
+      <ChromeOverlay visible={visible} onClose={close} dim="heavy">
+        <GestureDetector gesture={handlePan}>
+          <Animated.View style={[sheetChrome, { minHeight: '70%' }, sheetStyle]}>
+            <View className="items-center pb-3 pt-2" accessibilityRole="adjustable" accessibilityLabel="Dismiss">
+              <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+            </View>
+            <AppText className="text-2xl font-bold text-charcoal">
+              {isFree ? 'Join this challenge?' : `Join for ${buyIn}?`}
+            </AppText>
+            <AppText className="mt-3 text-[15px] leading-6 text-muted">{officialBob('joinBob')}</AppText>
+            <AppText className="mt-3 text-[13px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
+            {error ? (
+              <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
+            ) : null}
+            <View className="mt-6 gap-3">
+              <Button title={confirmTitle} size="lg" loading={loading} onPress={onConfirm} />
+              <Button title="Not now." variant="ghost" onPress={close} disabled={loading} />
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      </ChromeOverlay>
+    );
+  }
+
   return (
     <ChromeOverlay visible={visible} onClose={close}>
       <Pressable
         className="max-h-[92%] px-5 pb-10 pt-6"
         style={{
-          backgroundColor: THEME.background,
+          backgroundColor: THEME.surface,
           borderTopLeftRadius: THEME.radiusLg,
           borderTopRightRadius: THEME.radiusLg,
         }}
@@ -178,9 +248,7 @@ export function JoinConfirmModal({
             {isFree ? 'Join this challenge?' : `Join for ${buyIn}?`}
           </AppText>
           <AppText className="mt-2 text-muted">
-            {challenge.is_official
-              ? officialBob('joinBob')
-              : bucks
+            {bucks
               ? isFree
                 ? 'This official challenge pays real money. Check every box. 1 Buck = $1 USD.'
                 : `Check every box. ${buyIn} leaves immediately. This cannot be reversed.`
@@ -232,16 +300,12 @@ export function JoinConfirmModal({
             </View>
           </ScrollView>
 
-          {challenge.is_official ? (
-            <AppText className="mt-4 text-[12px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
-          ) : null}
-
           <View className="mt-6 gap-3">
             {error ? (
               <AppText className="text-sm leading-5 text-coral-dark">{error}</AppText>
             ) : null}
             <Button
-              title={isFree ? 'Confirm and join free' : `Confirm and pay ${buyIn}`}
+              title={confirmTitle}
               size="lg"
               loading={loading}
               disabled={!allChecked}

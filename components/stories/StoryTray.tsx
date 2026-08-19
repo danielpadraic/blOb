@@ -16,7 +16,7 @@ export function StoryTray() {
 
   function openGroup(group: StoryGroup) {
     if (group.stories.length === 0) {
-      void primeCameraFromGesture('photo');
+      void primeCameraFromGesture('video');
       router.push(STORY_CREATE_HREF);
       return;
     }
@@ -40,7 +40,7 @@ export function StoryTray() {
               seen={group.stories.length === 0 || (!group.isOwn && !unseen)}
               onPress={() => openGroup(group)}
               onAdd={() => {
-                void primeCameraFromGesture('photo');
+                void primeCameraFromGesture('video');
                 router.push(STORY_CREATE_HREF);
               }}
             />

@@ -546,7 +546,7 @@ export function InAppCamera({
                 borderRadius: 37,
                 borderWidth: 4,
                 borderColor: '#fff',
-                backgroundColor: video ? THEME.danger : '#fff',
+                backgroundColor: video ? '#FF3B30' : '#fff',
                 opacity: shutterEnabled || recording ? 1 : 0.45,
               }}
             />

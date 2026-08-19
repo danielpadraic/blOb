@@ -6,7 +6,7 @@ type ChromeOverlayProps = {
   onClose?: () => void;
   children: ReactNode;
   align?: 'end' | 'center' | 'start';
-  dim?: boolean;
+  dim?: boolean | 'heavy';
 };
 
 /** Fills the parent (the gap between header and tab bar). Never use RN Modal for in-app sheets. */
@@ -22,14 +22,16 @@ export function ChromeOverlay({
   }
 
   const justifyContent = align === 'center' ? 'center' : align === 'start' ? 'flex-start' : 'flex-end';
+  const scrim =
+    dim === 'heavy' ? 'rgba(16, 19, 18, 0.88)' : dim ? 'rgba(16, 19, 18, 0.55)' : 'transparent';
 
   return (
-    <View pointerEvents="box-none" style={styles.host}>
+    <View pointerEvents="auto" style={styles.host}>
       <View
         accessibilityRole="none"
         accessibilityLabel={onClose ? 'Dismiss' : undefined}
         accessible={Boolean(onClose)}
-        style={[styles.backdrop, { backgroundColor: dim ? 'rgba(16, 19, 18, 0.55)' : 'transparent' }]}
+        style={[styles.backdrop, { backgroundColor: scrim }]}
         onStartShouldSetResponder={() => Boolean(onClose)}
         onResponderRelease={() => onClose?.()}
         {...(Platform.OS === 'web' && onClose ? ({ onClick: onClose } as object) : null)}

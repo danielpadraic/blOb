@@ -3,13 +3,13 @@ import { Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
-import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
+import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-import { useFeaturedOfficialChallenge, useJoinChallenge, useMyChallengeProgress } from '@/hooks/useChallenge';
+import { useFeaturedOfficialChallenge, useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
@@ -26,7 +26,6 @@ import {
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
 import { isClosedForLogs } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
 
 export function FeaturedOfficialStrip() {
   const router = useRouter();
@@ -34,9 +33,7 @@ export function FeaturedOfficialStrip() {
   const { profile } = useMyProfile();
   const featured = useFeaturedOfficialChallenge();
   const mine = useMyChallengeProgress();
-  const join = useJoinChallenge();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const joinSheet = useJoinConfirm();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const challenge = featured.data ?? null;
@@ -123,21 +120,10 @@ export function FeaturedOfficialStrip() {
         router.push(BODY_METRICS_HREF);
         return;
       }
-      setActionError(null);
-      setConfirmOpen(true);
+      joinSheet.open(card);
       return;
     }
     openDetail();
-  }
-
-  async function onConfirmJoin() {
-    try {
-      setActionError(null);
-      await join.mutateAsync(card.id);
-      setConfirmOpen(false);
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-    }
   }
 
   return (
@@ -202,8 +188,11 @@ export function FeaturedOfficialStrip() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={ctaLabel}
-              disabled={join.isPending}
-              onPress={onCta}
+              disabled={joinSheet.loading}
+              onPress={(event) => {
+                event.stopPropagation();
+                onCta();
+              }}
               style={{
                 minHeight: 44,
                 minWidth: 44,
@@ -212,7 +201,7 @@ export function FeaturedOfficialStrip() {
                 backgroundColor: THEME.primary,
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: join.isPending ? 0.38 : 1,
+                opacity: joinSheet.loading ? 0.38 : 1,
               }}>
               <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
                 {ctaLabel}
@@ -225,16 +214,6 @@ export function FeaturedOfficialStrip() {
           )}
         </LinearGradient>
       </Pressable>
-      <JoinConfirmModal
-        visible={confirmOpen}
-        challenge={card}
-        loading={join.isPending}
-        error={actionError}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          void onConfirmJoin();
-        }}
-      />
     </TourAnchor>
   );
 }
