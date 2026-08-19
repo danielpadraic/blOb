@@ -1,15 +1,15 @@
 import { Redirect } from 'expo-router';
 import type { Href } from 'expo-router';
 
-import { BootScreen } from '@/components/ui/BootScreen';
 import { useMyProfile } from '@/hooks/useProfile';
+import { TABS_HREF } from '@/lib/routes';
 import { hasAcceptedLegal } from '@/utils/validators';
 
 export default function OnboardingIndex() {
   const { profile, path } = useMyProfile();
 
-  if (path === 'boot') {
-    return <BootScreen />;
+  if (path === 'app') {
+    return <Redirect href={TABS_HREF} />;
   }
 
   if (!hasAcceptedLegal(profile)) {

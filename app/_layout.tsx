@@ -6,7 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -20,6 +20,7 @@ import { inviteHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { queryClient } from '@/lib/queryClient';
 import { paymentsProviderError } from '@/services/payments';
+import { isProfileComplete } from '@/utils/validators';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -48,17 +49,41 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { isLoading, isConfigured } = useAuth();
-  const { isBootstrapping, path } = useMyProfile();
+  const { isLoading, isConfigured, session } = useAuth();
+  const { isBootstrapping, path, profile } = useMyProfile();
   const pathname = usePathname();
   const onOnboarding = pathname.startsWith('/onboarding');
-  const keepSetupMounted = path === 'setup' || (path === 'app' && onOnboarding);
+  const [bootExpired, setBootExpired] = useState(false);
+  const blocking = isLoading || isBootstrapping || path === 'boot';
 
   useEffect(() => {
-    if (!isLoading && !isBootstrapping) {
+    if (!blocking) {
+      setBootExpired(false);
+      return;
+    }
+    const handle = setTimeout(() => setBootExpired(true), 2000);
+    return () => clearTimeout(handle);
+  }, [blocking]);
+
+  const resolvedPath = useMemo(() => {
+    if (path !== 'boot') {
+      return path;
+    }
+    if (!bootExpired) {
+      return 'boot';
+    }
+    if (!session) {
+      return 'auth';
+    }
+    return isProfileComplete(profile) ? 'app' : 'setup';
+  }, [bootExpired, path, profile, session]);
+  const keepSetupMounted = resolvedPath === 'setup' || (resolvedPath === 'app' && onOnboarding);
+
+  useEffect(() => {
+    if (!blocking || bootExpired) {
       void SplashScreen.hideAsync();
     }
-  }, [isBootstrapping, isLoading]);
+  }, [blocking, bootExpired]);
 
   if (!isConfigured) {
     return (
@@ -82,15 +107,15 @@ function RootNavigator() {
   }
 
   // Session + profile check must always resolve. A missing profile is onboarding, not a hang.
-  if (isLoading || isBootstrapping || path === 'boot') {
+  if (blocking && !bootExpired) {
     return <BootScreen />;
   }
 
   return (
     <>
-      <PendingInviteRedirect ready={path === 'app'} />
+      <PendingInviteRedirect ready={resolvedPath === 'app'} />
       <Stack screenOptions={ROOT_STACK_OPTIONS}>
-        <Stack.Protected guard={path === 'auth'}>
+        <Stack.Protected guard={resolvedPath === 'auth'}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
         <Stack.Protected guard={keepSetupMounted}>
@@ -99,20 +124,13 @@ function RootNavigator() {
         <Stack.Screen name="index" />
         <Stack.Screen name="auth" />
         <Stack.Screen name="invite/[token]" />
-        <Stack.Protected guard={path === 'app'}>
+        <Stack.Protected guard={resolvedPath === 'app'}>
           <Stack.Screen name="(tabs)" />
           {/* Route group `story` stays so `/story/[id]` links keep working. User-facing name is Wave. */}
           <Stack.Screen name="story" options={{ headerShown: false, animation: 'fade' }} />
         </Stack.Protected>
         <Stack.Screen name="+not-found" />
       </Stack>
-      {path === 'app' && onOnboarding ? (
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
-          <BootScreen />
-        </View>
-      ) : null}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Tabs, useRouter, useSegments, type Href } from 'expo-router';
+import { Tabs, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import { View } from 'react-native';
 
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
@@ -35,12 +35,20 @@ function FirstRunTourLauncher() {
   const { profile } = useMyProfile();
   const tour = useTour();
   const router = useRouter();
+  const pathname = usePathname();
   const started = useRef(false);
   const start = tour.start;
   const active = tour.active;
+  const onOnboarding = pathname.startsWith('/onboarding');
 
   useEffect(() => {
-    if (active || tour.createActive || !profile || profile.tutorial_completed_at) {
+    if (
+      onOnboarding ||
+      active ||
+      tour.createActive ||
+      !profile ||
+      profile.tutorial_completed_at
+    ) {
       return;
     }
     router.navigate('/feed');
@@ -52,7 +60,7 @@ function FirstRunTourLauncher() {
       start();
     }, 450);
     return () => clearTimeout(handle);
-  }, [active, profile?.id, profile?.tutorial_completed_at, router, start, tour.createActive]);
+  }, [active, onOnboarding, profile?.id, profile?.tutorial_completed_at, router, start, tour.createActive]);
 
   return null;
 }
@@ -60,6 +68,8 @@ function FirstRunTourLauncher() {
 function TabLayoutInner() {
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
+  const onOnboarding = pathname.startsWith('/onboarding');
   const wallet = useWalletOptional();
   const { profile, refetch } = useMyProfile();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -223,17 +233,23 @@ function TabLayoutInner() {
         />
         <WalletHost />
         <HealthLogPromptHost />
-        <OfficialPitchHost />
+        {onOnboarding ? null : <OfficialPitchHost />}
         </SocialSheetsHost>
       </View>
-      <BlobTabBar
-        composeOpen={sheetOpen}
-        onToggleCompose={toggleSheet}
-        onTabPress={closeOverlays}
-      />
-      {profile && !profile.tutorial_completed_at ? <FirstRunTourLauncher /> : null}
-      <TourHost onFinished={() => void refetch()} />
-      <CreateTourHost />
+      {onOnboarding ? null : (
+        <BlobTabBar
+          composeOpen={sheetOpen}
+          onToggleCompose={toggleSheet}
+          onTabPress={closeOverlays}
+        />
+      )}
+      {onOnboarding ? null : (
+        <>
+          {profile && !profile.tutorial_completed_at ? <FirstRunTourLauncher /> : null}
+          <TourHost onFinished={() => void refetch()} />
+          <CreateTourHost />
+        </>
+      )}
     </View>
   );
 }

@@ -3,13 +3,15 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LegalAcceptSheet, type LegalSheetId } from '@/components/legal/LegalAcceptSheet';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
-import { SKILL_ATTESTATION } from '@/copy/legalDocs';
+import { LEGAL_PRIVACY_VERSION, LEGAL_TOS_VERSION } from '@/copy/legalDocs';
 import { acceptLegal } from '@/lib/legal';
 import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -17,18 +19,71 @@ import { getErrorMessage } from '@/utils/errors';
 import { isProfileNamed } from '@/utils/validators';
 import type { Profile } from '@/lib/types';
 
+const ROWS: { id: LegalSheetId; title: string }[] = [
+  { id: 'terms', title: 'Terms of Service' },
+  { id: 'privacy', title: 'Privacy Policy' },
+  { id: 'skill', title: 'Skill rule' },
+];
+
+const FINISH_MS = 2000;
+const FINISH_ERROR = 'Couldn’t finish — try again.';
+
 export default function LegalAcceptScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile, refetch } = useMyProfile();
-  const [tos, setTos] = useState(false);
-  const [privacy, setPrivacy] = useState(false);
-  const [skill, setSkill] = useState(false);
+  const [agreed, setAgreed] = useState<Record<LegalSheetId, boolean>>({
+    terms: false,
+    privacy: false,
+    skill: false,
+  });
+  const [openDoc, setOpenDoc] = useState<LegalSheetId | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ready = tos && privacy && skill;
+  const ready = agreed.terms && agreed.privacy && agreed.skill;
+
+  function nextHref(patch: Partial<Profile>): Href {
+    const named = isProfileNamed({ ...profile, ...patch } as Profile);
+    return named ? TABS_HREF : ('/onboarding/profile-setup' as Href);
+  }
+
+  async function finish(patch: Partial<Profile>) {
+    if (!user?.id) {
+      setError(FINISH_ERROR);
+      return false;
+    }
+    await Promise.race([
+      refetch()
+        .then(() => undefined)
+        .catch(() => undefined),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, FINISH_MS);
+      }),
+    ]);
+    if (!user?.id) {
+      setError(FINISH_ERROR);
+      return false;
+    }
+    queryClient.setQueryData(['profile', user.id, 'self'], (current) => {
+      if (!current || typeof current !== 'object') {
+        return current;
+      }
+      const row = current as Profile;
+      return {
+        ...row,
+        tos_accepted_at: row.tos_accepted_at ?? patch.tos_accepted_at,
+        privacy_accepted_at: row.privacy_accepted_at ?? patch.privacy_accepted_at,
+        skill_attestation_at: row.skill_attestation_at ?? patch.skill_attestation_at,
+        tos_version: row.tos_version ?? patch.tos_version,
+        privacy_version: row.privacy_version ?? patch.privacy_version,
+      };
+    });
+    router.replace(nextHref(patch));
+    return true;
+  }
 
   async function submit() {
     if (!ready || busy) {
@@ -43,19 +98,19 @@ export default function LegalAcceptScreen() {
         tos_accepted_at: acceptedAt,
         privacy_accepted_at: acceptedAt,
         skill_attestation_at: acceptedAt,
+        tos_version: LEGAL_TOS_VERSION,
+        privacy_version: LEGAL_PRIVACY_VERSION,
       };
       if (user?.id) {
         queryClient.setQueryData(['profile', user.id, 'self'], (current) =>
           current && typeof current === 'object' ? { ...current, ...patch } : current,
         );
       }
-      const named = isProfileNamed({ ...profile, ...patch } as Profile);
-      if (named) {
-        router.replace(TABS_HREF);
-      } else {
-        router.replace('/onboarding/profile-setup' as Href);
+      const ok = await finish(patch);
+      setBusy(false);
+      if (!ok) {
+        return;
       }
-      void refetch();
     } catch (err) {
       setError(getErrorMessage(err) || 'Couldn’t save that. Try again.');
       setBusy(false);
@@ -66,7 +121,7 @@ export default function LegalAcceptScreen() {
     <Screen padded={false}>
       <ScrollView
         className="flex-1"
-        contentContainerClassName="grow px-5 pb-10 pt-6"
+        contentContainerClassName="grow px-5 pb-6 pt-6"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <AppText className="text-[22px] font-extrabold text-charcoal">Legal</AppText>
@@ -74,26 +129,18 @@ export default function LegalAcceptScreen() {
           Read each document, then confirm. This is required before you can use blOb.
         </AppText>
 
-        <View className="mt-6 gap-4">
-          <LegalCheck
-            checked={tos}
-            onToggle={() => setTos((current) => !current)}
-            label="I agree to the Terms of Service and User Agreement"
-            linkLabel="Read the Terms of Service and User Agreement"
-            onOpen={() => router.push('/onboarding/terms' as Href)}
-          />
-          <LegalCheck
-            checked={privacy}
-            onToggle={() => setPrivacy((current) => !current)}
-            label="I agree to the Privacy Policy"
-            linkLabel="Read the Privacy Policy"
-            onOpen={() => router.push('/onboarding/privacy' as Href)}
-          />
-          <LegalCheck
-            checked={skill}
-            onToggle={() => setSkill((current) => !current)}
-            label={SKILL_ATTESTATION}
-          />
+        <View className="mt-6 gap-3">
+          {ROWS.map((row) => (
+            <LegalRow
+              key={row.id}
+              title={row.title}
+              checked={agreed[row.id]}
+              onOpen={() => {
+                setError(null);
+                setOpenDoc(row.id);
+              }}
+            />
+          ))}
         </View>
 
         {error ? (
@@ -101,72 +148,82 @@ export default function LegalAcceptScreen() {
             {error}
           </AppText>
         ) : null}
-
-        <View className="mt-8">
-          <Button
-            title="Agree and continue"
-            size="lg"
-            disabled={!ready}
-            loading={busy}
-            onPress={() => void submit()}
-          />
-        </View>
       </ScrollView>
+
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 10,
+          paddingBottom: Math.max(insets.bottom, 16),
+          borderTopWidth: 1,
+          borderTopColor: THEME.border,
+          backgroundColor: THEME.background,
+        }}>
+        <Button
+          title="Continue"
+          size="lg"
+          disabled={!ready}
+          loading={busy}
+          onPress={() => void submit()}
+        />
+      </View>
+
+      <LegalAcceptSheet
+        doc={openDoc}
+        onClose={() => setOpenDoc(null)}
+        onAgree={(id) => {
+          setAgreed((current) => ({ ...current, [id]: true }));
+          setOpenDoc(null);
+        }}
+      />
     </Screen>
   );
 }
 
-function LegalCheck({
+function LegalRow({
+  title,
   checked,
-  onToggle,
-  label,
-  linkLabel,
   onOpen,
 }: {
+  title: string;
   checked: boolean;
-  onToggle: () => void;
-  label: string;
-  linkLabel?: string;
-  onOpen?: () => void;
+  onOpen: () => void;
 }) {
   return (
-    <View
-      className="px-4 py-3"
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={checked ? `${title}, agreed` : `Read ${title}`}
+      onPress={onOpen}
+      className="flex-row items-center px-4"
       style={{
+        minHeight: 56,
         backgroundColor: THEME.surface,
         borderRadius: THEME.radius,
         borderWidth: 1,
-        borderColor: checked ? THEME.accent : THEME.border,
+        borderColor: checked ? THEME.primary : THEME.border,
+        gap: 12,
       }}>
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked }}
-        onPress={onToggle}
-        style={{ minHeight: 44, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-        <View
-          style={{
-            width: 22,
-            height: 22,
-            marginTop: 2,
-            borderRadius: 6,
-            borderWidth: 1.5,
-            borderColor: checked ? THEME.accent : THEME.border,
-            backgroundColor: checked ? THEME.accent : THEME.surface,
-          }}
-        />
-        <AppText className="flex-1 text-[14px] leading-6 text-charcoal">{label}</AppText>
-      </Pressable>
-      {linkLabel && onOpen ? (
-        <Pressable
-          accessibilityRole="link"
-          onPress={onOpen}
-          hitSlop={8}
-          style={{ minHeight: 44, justifyContent: 'center', paddingLeft: 34 }}>
-          <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
-            {linkLabel}
-          </AppText>
-        </Pressable>
-      ) : null}
-    </View>
+      <View
+        pointerEvents="none"
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 6,
+          borderWidth: 1.5,
+          borderColor: checked ? THEME.primary : THEME.border,
+          backgroundColor: checked ? THEME.primary : THEME.surface,
+          opacity: checked ? 1 : 0.45,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        {checked ? (
+          <AppText style={{ color: THEME.primaryForeground, fontSize: 12, fontWeight: '700' }}>✓</AppText>
+        ) : null}
+      </View>
+      <AppText className="flex-1 text-[15px] font-semibold text-charcoal">{title}</AppText>
+      <AppText className="text-[13px] font-semibold" style={{ color: THEME.primary }}>
+        {checked ? 'Agreed' : 'Read'}
+      </AppText>
+    </Pressable>
   );
 }
