@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
-import { AppState, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { AppState, BackHandler, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { TourAnchor } from '@/components/tour/TourAnchor';
@@ -88,6 +88,7 @@ import {
   type ChallengeEndMode,
 } from '@/lib/challengeSchedule';
 import { THEME } from '@/lib/theme';
+import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { copy } from '@/lib/copy';
 import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
@@ -137,9 +138,15 @@ const FOCUSABLE_FIELDS = new Set([
 export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ resume?: string | string[]; draftId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    resume?: string | string[];
+    draftId?: string | string[];
+    returnTo?: string | string[];
+  }>();
   const resumeOnOpen = (Array.isArray(params.resume) ? params.resume[0] : params.resume) === '1';
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
+  const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const dismissFallback = returnTo === 'feed' ? TABS_HREF : LOBBY_HREF;
   const { profile } = useMyProfile();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -1196,6 +1203,18 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     leaveWizard();
   }
 
+  const closeWizardRef = useRef(closeWizard);
+  closeWizardRef.current = closeWizard;
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        closeWizardRef.current();
+        return true;
+      });
+      return () => sub.remove();
+    }, []),
+  );
+
   function leaveWizard() {
     if (leavingRef.current) {
       return;
@@ -1205,7 +1224,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       .then(() => queryClient.invalidateQueries({ queryKey: challengeDraftsQueryKey(user?.id) }))
       .finally(() => {
         skipSaveRef.current = true;
-        router.back();
+        router.dismissTo(dismissFallback);
       });
   }
 
@@ -1335,7 +1354,12 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                 <TourAnchor id="create-advanced-simple">
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.replace('/challenges/create')}
+                  onPress={() =>
+                    router.replace({
+                      pathname: '/challenges/create',
+                      params: returnTo === 'feed' ? { returnTo: 'feed' } : {},
+                    })
+                  }
                   className="h-7 items-center justify-center px-1">
                   <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
                     {copy('create.simple')}
@@ -1356,11 +1380,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Close"
-                  hitSlop={8}
                   onPress={closeWizard}
-                  className="h-7 w-7 items-center justify-center rounded-full"
+                  className="h-11 w-11 items-center justify-center rounded-full"
                   style={{ backgroundColor: THEME.background, borderWidth: 1, borderColor: THEME.border }}>
-                  <AppText className="text-[16px] font-semibold text-muted">×</AppText>
+                  <AppText className="text-[22px] font-semibold text-muted">×</AppText>
                 </Pressable>
               </View>
             }

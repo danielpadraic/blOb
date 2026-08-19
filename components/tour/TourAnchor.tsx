@@ -42,15 +42,15 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
   );
 
   useEffect(() => {
-    if (!tour?.active) {
+    if (!tour?.active && !tour?.createActive) {
       return;
     }
     const frame = requestAnimationFrame(report);
     return () => cancelAnimationFrame(frame);
-  }, [report, tour?.active, tour?.epoch]);
+  }, [report, tour?.active, tour?.createActive, tour?.epoch]);
 
   useEffect(() => {
-    if (!tour?.active || tour.targetId !== id) {
+    if ((!tour?.active && !tour?.createActive) || tour.targetId !== id) {
       return;
     }
     if (Platform.OS === 'web') {
@@ -59,7 +59,7 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
     }
     const handle = setTimeout(report, 360);
     return () => clearTimeout(handle);
-  }, [id, report, tour?.active, tour?.targetId]);
+  }, [id, report, tour?.active, tour?.createActive, tour?.targetId]);
 
   return (
     <View ref={viewRef} collapsable={false} onLayout={onLayout} style={style}>

@@ -25,13 +25,6 @@ const REVIEW = wizardStepIndex('review');
 
 export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
   {
-    id: 'simple-visibility',
-    target: 'create-simple-visibility',
-    placement: 'below',
-    title: 'Who can join',
-    body: 'Public is listed. Friends or invite-only stay quieter.',
-  },
-  {
     id: 'simple-currency',
     target: 'create-simple-currency',
     placement: 'below',
@@ -44,6 +37,13 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     title: 'Buy-in',
     body: 'What each competitor pays to enter. 0 is free.',
+  },
+  {
+    id: 'simple-type',
+    target: 'create-simple-type',
+    placement: 'below',
+    title: 'Type',
+    body: 'Any Exercise is the default. Pick a sport chip only if you want one.',
   },
   {
     id: 'simple-start',
@@ -71,7 +71,7 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-frequency',
     placement: 'below',
     title: 'Frequency',
-    body: 'How often they have to log.',
+    body: 'How often they have to log. Custom adds a count and a period: 7 each week.',
   },
   {
     id: 'simple-proof',
@@ -81,11 +81,18 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     body: 'What they attach when they log.',
   },
   {
+    id: 'simple-visibility',
+    target: 'create-simple-visibility',
+    placement: 'below',
+    title: 'Who can join',
+    body: 'Public is listed. Friends or invite-only stay quieter.',
+  },
+  {
     id: 'simple-advanced',
     target: 'create-simple-advanced',
     placement: 'above',
     title: 'Advanced',
-    body: 'Advanced is the other track — caps, misses, judging, and invite-only.',
+    body: 'Advanced is the other track — caps, misses, judging, and invite-only. Skip anytime; it does not block publish.',
   },
 ];
 

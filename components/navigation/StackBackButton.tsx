@@ -3,7 +3,7 @@ import { BackHandler, Pressable } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
 import { AppText } from '@/components/ui/AppText';
-import { LOBBY_HREF } from '@/lib/routes';
+import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 type StackBackButtonProps = {
@@ -22,6 +22,10 @@ function fallbackHref(returnTo?: string | string[], explicit?: Href): Href {
 }
 
 export function popToFallback(router: ReturnType<typeof useRouter>, fallback: Href) {
+  if (fallback === TABS_HREF) {
+    router.dismissTo(fallback);
+    return;
+  }
   if (router.canGoBack()) {
     router.back();
     return;

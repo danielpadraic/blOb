@@ -6,21 +6,23 @@ import type { CreateTourTrack } from '@/lib/createTour';
 
 export function useCreateChallengeTour(track: CreateTourTrack, enabled = true) {
   const tour = useTourOptional();
+  const startCreate = tour?.startCreate;
+  const stopCreate = tour?.stopCreate;
   const { profile, isFetched } = useMyProfile();
-  const started = useRef(false);
+  const launched = useRef(false);
 
   useEffect(() => {
-    if (!enabled || !tour || started.current || !isFetched) {
+    if (!enabled || !startCreate || !isFetched || profile?.create_tour_opt_out_at || launched.current) {
       return;
     }
-    if (profile?.create_tour_opt_out_at) {
-      return;
-    }
-    started.current = true;
-    const handle = setTimeout(() => tour.startCreate(track), 320);
+    launched.current = true;
+    const handle = setTimeout(() => startCreate(track), 400);
+    return () => clearTimeout(handle);
+  }, [enabled, isFetched, profile?.create_tour_opt_out_at, startCreate, track]);
+
+  useEffect(() => {
     return () => {
-      clearTimeout(handle);
-      tour.stopCreate();
+      stopCreate?.();
     };
-  }, [enabled, isFetched, profile?.create_tour_opt_out_at, tour, track]);
+  }, [stopCreate]);
 }

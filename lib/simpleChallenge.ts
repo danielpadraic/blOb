@@ -22,8 +22,10 @@ export type SimpleCurrency = 'coins' | 'bucks';
 export type SimpleVisibility = 'public' | 'friends' | 'invite';
 export type SimpleProof = ChallengeProofMethod;
 export type SimpleFrequency = 'once' | 'daily' | '3x_week' | 'custom';
+export type SimpleCustomPeriod = 'day' | 'week' | 'month' | 'duration';
 export type SimpleDurationPreset = 1 | 7 | 30 | 'custom';
 export type SimpleChallengeType =
+  | 'any_exercise'
   | 'running'
   | 'lifting'
   | 'steps'
@@ -40,6 +42,7 @@ export const SIMPLE_TYPES: {
   category: ChallengeCategory;
   activity: string;
 }[] = [
+  { value: 'any_exercise', label: 'Any Exercise', icon: '', category: 'fitness', activity: 'any_exercise' },
   { value: 'running', label: 'Running', icon: '🏃', category: 'fitness', activity: 'running' },
   { value: 'lifting', label: 'Lifting', icon: '🏋', category: 'fitness', activity: 'lifting' },
   { value: 'steps', label: 'Steps', icon: '👟', category: 'fitness', activity: 'walking' },
@@ -55,6 +58,13 @@ export const SIMPLE_DURATION_CHIPS: { value: SimpleDurationPreset; label: string
   { value: 7, label: '7 days' },
   { value: 30, label: '30 days' },
   { value: 'custom', label: 'Custom' },
+];
+
+export const SIMPLE_CUSTOM_PERIODS: { value: SimpleCustomPeriod; label: string }[] = [
+  { value: 'day', label: 'Day' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: 'duration', label: 'Duration of challenge' },
 ];
 
 export const SIMPLE_FREQUENCY_CHIPS: { value: SimpleFrequency; label: string }[] = [
@@ -85,6 +95,7 @@ export type SimpleChallengeDraft = {
   task: string;
   frequency: SimpleFrequency;
   custom_checkins: number;
+  custom_period: SimpleCustomPeriod;
   proofs: ChallengeProof[];
   visibility: SimpleVisibility;
   friends_of_friends: boolean;
@@ -96,7 +107,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     currency: 'coins',
     buy_in: 0,
     host_budget: 0,
-    type: 'running',
+    type: 'any_exercise',
     title: '',
     description: '',
     starts_at: starts.toISOString(),
@@ -105,6 +116,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     task: '',
     frequency: 'daily',
     custom_checkins: 7,
+    custom_period: 'week',
     proofs: defaultChallengeProofs(),
     visibility: 'public',
     friends_of_friends: true,
@@ -129,7 +141,31 @@ export function requiredCheckinsOf(draft: SimpleChallengeDraft): number {
   if (draft.frequency === '3x_week') {
     return Math.max(Math.ceil((days / 7) * 3), 1);
   }
-  return Math.max(Math.floor(draft.custom_checkins) || 1, 1);
+  const n = Math.max(Math.floor(draft.custom_checkins) || 1, 1);
+  if (draft.custom_period === 'day') {
+    return n * days;
+  }
+  if (draft.custom_period === 'week') {
+    return n * Math.max(Math.ceil(days / 7), 1);
+  }
+  if (draft.custom_period === 'month') {
+    return n * Math.max(Math.ceil(days / 30), 1);
+  }
+  return n;
+}
+
+export function customFrequencyCopy(n: number, period: SimpleCustomPeriod): string {
+  const count = Math.max(Math.floor(n) || 1, 1);
+  if (period === 'day') {
+    return `${count} each day`;
+  }
+  if (period === 'week') {
+    return `${count} each week`;
+  }
+  if (period === 'month') {
+    return `${count} each month`;
+  }
+  return `${count} each duration of challenge`;
 }
 
 export function endsAtOf(draft: SimpleChallengeDraft): string {

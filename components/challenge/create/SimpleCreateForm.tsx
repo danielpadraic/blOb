@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
+import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { Button } from '@/components/ui/Button';
+import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -16,12 +18,14 @@ import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
+  SIMPLE_CUSTOM_PERIODS,
   SIMPLE_DURATION_CHIPS,
   SIMPLE_FREQUENCY_CHIPS,
   SIMPLE_PROOF_METHODS,
   SIMPLE_TYPES,
   addSimpleProof,
   applyBeforeAfterHrPreset,
+  customFrequencyCopy,
   defaultSimpleDraft,
   durationDaysOf,
   removeSimpleProof,
@@ -32,6 +36,7 @@ import {
   type SimpleChallengeDraft,
   type SimpleChallengeType,
   type SimpleCurrency,
+  type SimpleCustomPeriod,
   type SimpleDurationPreset,
   type SimpleFrequency,
   type SimpleVisibility,
@@ -39,20 +44,24 @@ import {
 import { SIMPLE_PROOF_CAP, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
+import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
 function IconChip({
   icon,
+  glyph,
   label,
   selected,
   onPress,
 }: {
   icon: string;
+  glyph?: GlyphId;
   label: string;
   selected: boolean;
   onPress: () => void;
 }) {
+  const color = selected ? THEME.accent : THEME.textPrimary;
   return (
     <Pressable
       onPress={onPress}
@@ -66,10 +75,8 @@ function IconChip({
         minHeight: 36,
         gap: 6,
       }}>
-      {icon ? <AppText className="text-[14px]">{icon}</AppText> : null}
-      <AppText
-        className="text-sm font-semibold"
-        style={{ color: selected ? THEME.accent : THEME.textPrimary }}>
+      {glyph ? <Glyph name={glyph} color={color} size={14} /> : icon ? <AppText className="text-[14px]">{icon}</AppText> : null}
+      <AppText className="text-sm font-semibold" style={{ color }}>
         {label}
       </AppText>
     </Pressable>
@@ -86,11 +93,14 @@ function SectionLabel({ children }: { children: string }) {
 
 export function SimpleCreateForm() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const create = useCreateChallenge();
   const [draft, setDraft] = useState<SimpleChallengeDraft>(() => defaultSimpleDraft());
   const [error, setError] = useState<string | null>(null);
+  useDismissTo(returnTo === 'feed' ? TABS_HREF : LOBBY_HREF);
   useCreateChallengeTour('simple');
 
   function patch(partial: Partial<SimpleChallengeDraft>) {
@@ -135,8 +145,13 @@ export function SimpleCreateForm() {
 
   return (
     <Screen scroll padded edges={TAB_ROOT_EDGES}>
-      <View className="gap-5 pt-3">
-        <AppText className="text-[22px] font-extrabold text-charcoal">{copy('create.screenTitle')}</AppText>
+      <View className="gap-5 pt-1">
+        <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
+          <StackBackButton fallback={returnTo === 'feed' ? TABS_HREF : LOBBY_HREF} />
+          <AppText className="flex-1 text-[22px] font-extrabold text-charcoal">
+            {copy('create.screenTitle')}
+          </AppText>
+        </View>
 
         <TourAnchor id="create-simple-currency">
         <View className="gap-2">
@@ -190,6 +205,7 @@ export function SimpleCreateForm() {
         </View>
         </TourAnchor>
 
+        <TourAnchor id="create-simple-type">
         <View className="gap-2">
           <SectionLabel>{copy('create.type')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
@@ -197,6 +213,7 @@ export function SimpleCreateForm() {
               <IconChip
                 key={item.value}
                 icon={item.icon}
+                glyph={item.value === 'any_exercise' ? GLYPH.anyExercise : undefined}
                 label={item.label}
                 selected={draft.type === item.value}
                 onPress={() =>
@@ -212,6 +229,7 @@ export function SimpleCreateForm() {
             ))}
           </View>
         </View>
+        </TourAnchor>
 
         <Input
           label={copy('create.titleLabel')}
@@ -305,15 +323,30 @@ export function SimpleCreateForm() {
             ))}
           </View>
           {draft.frequency === 'custom' ? (
-            <View className="flex-row items-center justify-between">
-              <AppText className="text-sm font-semibold text-charcoal">{copy('create.checkins')}</AppText>
-              <Stepper
-                accessibilityLabel={copy('create.checkins')}
-                value={draft.custom_checkins}
-                min={1}
-                max={100}
-                onChange={(custom_checkins) => patch({ custom_checkins })}
-              />
+            <View className="gap-2">
+              <View className="flex-row items-center justify-between">
+                <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
+                  {customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
+                </AppText>
+                <Stepper
+                  accessibilityLabel={customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
+                  value={draft.custom_checkins}
+                  min={1}
+                  max={100}
+                  onChange={(custom_checkins) => patch({ custom_checkins })}
+                />
+              </View>
+              <View className="flex-row flex-wrap gap-2">
+                {SIMPLE_CUSTOM_PERIODS.map((item) => (
+                  <IconChip
+                    key={item.value}
+                    icon=""
+                    label={item.label}
+                    selected={draft.custom_period === item.value}
+                    onPress={() => patch({ custom_period: item.value as SimpleCustomPeriod })}
+                  />
+                ))}
+              </View>
             </View>
           ) : (
             <AppText className="text-[12px] text-muted">
@@ -470,7 +503,12 @@ export function SimpleCreateForm() {
         <TourAnchor id="create-simple-advanced">
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/challenges/create?mode=advanced')}
+          onPress={() =>
+            router.push({
+              pathname: '/challenges/create',
+              params: returnTo === 'feed' ? { mode: 'advanced', returnTo: 'feed' } : { mode: 'advanced' },
+            })
+          }
           className="items-center py-2">
           <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
             {copy('create.advanced')}
@@ -483,6 +521,9 @@ export function SimpleCreateForm() {
 }
 
 function defaultTask(type: SimpleChallengeType): string {
+  if (type === 'any_exercise') {
+    return '';
+  }
   if (type === 'running') {
     return 'Run 1 mile';
   }

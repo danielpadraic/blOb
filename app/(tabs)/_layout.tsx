@@ -39,19 +39,19 @@ function FirstRunTourLauncher() {
   const active = tour.active;
 
   useEffect(() => {
-    if (active || !profile || profile.tutorial_completed_at) {
+    if (active || tour.createActive || !profile || profile.tutorial_completed_at) {
       return;
     }
     router.navigate('/feed');
     const handle = setTimeout(() => {
-      if (started.current) {
+      if (started.current || tour.createActive) {
         return;
       }
       started.current = true;
       start();
     }, 450);
     return () => clearTimeout(handle);
-  }, [active, profile?.id, profile?.tutorial_completed_at, router, start]);
+  }, [active, profile?.id, profile?.tutorial_completed_at, router, start, tour.createActive]);
 
   return null;
 }
@@ -130,7 +130,8 @@ function TabLayoutInner() {
       return;
     }
     if (id === 'create') {
-      go('/challenges/create');
+      const root = (segments as string[]).filter((segment) => !segment.startsWith('('))[0];
+      go(root === 'feed' ? '/challenges/create?returnTo=feed' : '/challenges/create');
       return;
     }
     if (id === 'join') {

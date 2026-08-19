@@ -31,7 +31,7 @@ export function FeedEmptyState({ compact }: FeedEmptyStateProps) {
         <Button
           title="Create a challenge"
           variant="mint"
-          onPress={() => router.push('/challenges/create')}
+          onPress={() => router.push('/challenges/create?returnTo=feed')}
         />
       </View>
     </View>
