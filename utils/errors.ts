@@ -381,8 +381,11 @@ function humanize(raw: string): string {
   if (message.includes('legal_required')) {
     return 'Agree to the Terms, Privacy Policy, and skill statement to continue.';
   }
+  if (message.includes('row-level security') || message.includes('42501')) {
+    return 'Couldn’t save that (permission). Try again.';
+  }
   if (message.includes('profile_missing')) {
-    return 'Finish creating your profile, then try again.';
+    return 'Couldn’t save that. Try again.';
   }
   if (message.includes('not_joinable')) {
     return 'This challenge is not accepting competitors.';

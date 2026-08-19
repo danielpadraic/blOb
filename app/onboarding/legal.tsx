@@ -25,9 +25,6 @@ const ROWS: { id: LegalSheetId; title: string }[] = [
   { id: 'skill', title: 'Skill rule' },
 ];
 
-const FINISH_MS = 2000;
-const FINISH_ERROR = 'Couldn’t finish — try again.';
-
 export default function LegalAcceptScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -45,48 +42,12 @@ export default function LegalAcceptScreen() {
 
   const ready = agreed.terms && agreed.privacy && agreed.skill;
 
-  function nextHref(patch: Partial<Profile>): Href {
-    const named = isProfileNamed({ ...profile, ...patch } as Profile);
-    return named ? TABS_HREF : ('/onboarding/profile-setup' as Href);
-  }
-
-  async function finish(patch: Partial<Profile>) {
-    if (!user?.id) {
-      setError(FINISH_ERROR);
-      return false;
-    }
-    await Promise.race([
-      refetch()
-        .then(() => undefined)
-        .catch(() => undefined),
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, FINISH_MS);
-      }),
-    ]);
-    if (!user?.id) {
-      setError(FINISH_ERROR);
-      return false;
-    }
-    queryClient.setQueryData(['profile', user.id, 'self'], (current) => {
-      if (!current || typeof current !== 'object') {
-        return current;
-      }
-      const row = current as Profile;
-      return {
-        ...row,
-        tos_accepted_at: row.tos_accepted_at ?? patch.tos_accepted_at,
-        privacy_accepted_at: row.privacy_accepted_at ?? patch.privacy_accepted_at,
-        skill_attestation_at: row.skill_attestation_at ?? patch.skill_attestation_at,
-        tos_version: row.tos_version ?? patch.tos_version,
-        privacy_version: row.privacy_version ?? patch.privacy_version,
-      };
-    });
-    router.replace(nextHref(patch));
-    return true;
-  }
-
   async function submit() {
     if (!ready || busy) {
+      return;
+    }
+    if (!user?.id) {
+      setError('Sign in to continue.');
       return;
     }
     setBusy(true);
@@ -95,24 +56,29 @@ export default function LegalAcceptScreen() {
       await acceptLegal();
       const acceptedAt = new Date().toISOString();
       const patch: Partial<Profile> = {
+        id: user.id,
         tos_accepted_at: acceptedAt,
         privacy_accepted_at: acceptedAt,
         skill_attestation_at: acceptedAt,
         tos_version: LEGAL_TOS_VERSION,
         privacy_version: LEGAL_PRIVACY_VERSION,
       };
-      if (user?.id) {
-        queryClient.setQueryData(['profile', user.id, 'self'], (current) =>
-          current && typeof current === 'object' ? { ...current, ...patch } : current,
-        );
-      }
-      const ok = await finish(patch);
-      setBusy(false);
-      if (!ok) {
-        return;
-      }
+      const merged = {
+        ...(profile && typeof profile === 'object' ? profile : { id: user.id }),
+        ...patch,
+      } as Profile;
+      queryClient.setQueryData(['profile', user.id, 'self'], merged);
+      router.replace(isProfileNamed(merged) ? TABS_HREF : ('/onboarding/profile-setup' as Href));
+      void refetch().then((result) => {
+        const row = result.data && typeof result.data === 'object' ? (result.data as Profile) : merged;
+        queryClient.setQueryData(['profile', user.id, 'self'], {
+          ...row,
+          ...patch,
+        });
+      });
     } catch (err) {
       setError(getErrorMessage(err) || 'Couldn’t save that. Try again.');
+    } finally {
       setBusy(false);
     }
   }
