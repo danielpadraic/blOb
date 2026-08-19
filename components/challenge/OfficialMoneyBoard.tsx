@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
-import { remainingFromChallenge } from '@/components/challenge/ChallengePosterCard';
+import { officialBob } from '@/copy/officialBob';
 import { copy } from '@/lib/copy';
 import { formatWallet } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
@@ -13,13 +13,16 @@ export function officialGuarantee(
   return Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
 }
 
-export function OfficialMoneyBoard({ challenge }: { challenge: ChallengeWithStats }) {
+export function OfficialMoneyBoard({
+  challenge,
+  finished = 0,
+}: {
+  challenge: ChallengeWithStats;
+  finished?: number;
+}) {
   const guarantee = officialGuarantee(challenge);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const joined = Math.max(Number(challenge.participant_count) || 0, 0);
-  const remaining = remainingFromChallenge(challenge);
-  const toStart = guarantee * 1.5;
-  const share = remaining > 0 ? pot / remaining : 0;
   const money = (amount: number) => formatWallet(amount, challenge.currency);
 
   return (
@@ -33,13 +36,12 @@ export function OfficialMoneyBoard({ challenge }: { challenge: ChallengeWithStat
         padding: 12,
       }}>
       <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-        <Stat label={copy('board.guarantee')} value={money(guarantee)} />
-        <Stat label={copy('board.pot')} value={money(pot)} />
-        <Stat label={copy('board.toStart')} value={money(toStart)} />
         <Stat label={copy('board.joined')} value={String(joined)} />
-        <Stat label={copy('board.remaining')} value={String(remaining)} />
-        <Stat label={copy('board.yourShare')} value={money(share)} />
+        <Stat label={copy('board.finished')} value={String(Math.max(finished, 0))} />
+        <Stat label={copy('board.pot')} value={money(pot)} />
+        <Stat label={copy('board.guarantee')} value={money(guarantee)} />
       </View>
+      <AppText className="mt-1 text-[12px] leading-5 text-muted">{officialBob('legalBoard')}</AppText>
     </View>
   );
 }

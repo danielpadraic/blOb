@@ -50,7 +50,7 @@ function acknowledgments(challenge: Challenge) {
       },
       {
         id: 'split',
-        title: officialBob('legalPot'),
+        title: officialBob('legalBoard'),
         body: `${officialBob('legalAllFinish')} ${officialBob('legalZero')}`,
       },
       {

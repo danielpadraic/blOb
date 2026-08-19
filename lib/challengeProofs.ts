@@ -15,6 +15,7 @@ export type ChallengeProofPart = {
   method: ChallengeProofMethod;
   url?: string | null;
   text?: string | null;
+  healthWorkoutId?: string | null;
 };
 
 export const SIMPLE_PROOF_CAP = 4;
@@ -213,6 +214,9 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
   if (proof.method === 'checkin') {
     return Boolean(part?.text?.trim() || part?.url?.trim());
   }
+  if (proof.method === 'hr') {
+    return Boolean(part?.url?.trim() || part?.healthWorkoutId?.trim());
+  }
   return Boolean(part?.url?.trim());
 }
 
@@ -244,6 +248,12 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
       method,
       url: typeof row.url === 'string' ? row.url : null,
       text: typeof row.text === 'string' ? row.text : null,
+      healthWorkoutId:
+        typeof row.healthWorkoutId === 'string'
+          ? row.healthWorkoutId
+          : typeof row.health_workout_id === 'string'
+            ? row.health_workout_id
+            : null,
     };
   }
   return parts;

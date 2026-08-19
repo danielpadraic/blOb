@@ -167,6 +167,7 @@ export function ProofUploader({
           blockedReason={blockedReason}
           webFallback={webFallback}
           chromeInset={fill}
+          hrScreenshot={type === 'hr_monitor'}
           onCaptured={(media) => {
             onPicked(media.uri, media.mimeType);
             setOpen(false);
@@ -277,6 +278,20 @@ export function ProofUploader({
           </AppText>
           <AppText className="mt-2 text-center text-sm leading-6 text-muted">
             {meta.helper}
+          </AppText>
+        </Pressable>
+      ) : uri?.startsWith('health:') ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Replace workout proof"
+          disabled={locked}
+          onPress={() => void startCamera()}
+          className={emptyHeight}>
+          <AppText className="text-center text-base font-semibold text-charcoal">
+            Workout attached
+          </AppText>
+          <AppText className="mt-2 text-center text-sm leading-6 text-muted">
+            Camera screenshot still works if you want a picture instead.
           </AppText>
         </Pressable>
       ) : uri ? (

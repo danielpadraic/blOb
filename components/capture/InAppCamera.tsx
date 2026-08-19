@@ -24,6 +24,7 @@ type InAppCameraProps = {
   onUnavailable: () => void;
   onUseWorkout?: () => void;
   onStartWatch?: () => void;
+  hrScreenshot?: boolean;
 };
 
 export function InAppCamera({
@@ -39,6 +40,7 @@ export function InAppCamera({
   onUnavailable,
   onUseWorkout,
   onStartWatch,
+  hrScreenshot = false,
 }: InAppCameraProps) {
   const cameraRef = useRef<CameraView>(null);
   const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing());
@@ -263,8 +265,26 @@ export function InAppCamera({
       </View>
 
       <View
-        className="absolute left-6 right-6 flex-row items-center justify-between"
+        className="absolute left-6 right-6"
         style={{ bottom: bottomPad }}>
+        {hrScreenshot ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="HR screenshot"
+            onPress={onOpenGallery}
+            className="mb-3 self-center items-center justify-center rounded-full px-4"
+            style={{
+              minHeight: 44,
+              backgroundColor: 'rgba(16,19,18,0.72)',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.35)',
+            }}>
+            <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
+              HR screenshot
+            </AppText>
+          </Pressable>
+        ) : null}
+        <View className="flex-row items-center justify-between">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open gallery"

@@ -232,7 +232,7 @@ export const PROOF_META: Record<
   },
   hr_monitor: {
     label: 'Heart-rate proof',
-    helper: 'Watch or strap screenshot covering at least 30 minutes.',
+    helper: 'Fitness or watch screenshot covering at least 30 minutes. A Watch is optional.',
     short: 'Heart rate',
   },
   photo: {
@@ -283,9 +283,9 @@ export function isVideoProof(type: string): boolean {
 export const OFFICIAL_CHALLENGE = {
   title: OFFICIAL_CHALLENGE_TITLE,
   description:
-    'Show up. Six days. Thirty honest minutes. Proof required — no honor system.',
+    'Show up every day. Thirty honest minutes. A picture before, a picture after, and HR proof — screenshot is enough.',
   rules:
-    'Complete 6 workouts of at least 30 minutes in 7 days. Each day you must submit a pre-selfie, a post-selfie, and a heart-rate monitor screenshot. Miss a required day and you are out. Prize pool is split equally among finishers.',
+    'Complete 6 workouts of at least 30 minutes in 7 days. Each required day needs a pre-selfie, a post-selfie, and HR proof (a Fitness screenshot or an attached workout). If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. If nobody finishes and there are no valid days, the guarantee rolls into the next Official week.',
   buyIn: DEFAULT_BUY_IN,
   daysRequired: DEFAULT_DAYS_REQUIRED,
   windowDays: 7,

@@ -22,6 +22,8 @@ import {
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
 import { copy } from '@/lib/copy';
+import { upsertHealthWorkout } from '@/lib/health/remote';
+import { getHealthProvider } from '@/services/health';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
@@ -62,7 +64,8 @@ function slotPart(proof: ChallengeProof, draft: SlotDraft | undefined): Challeng
   if (proof.method === 'checkin') {
     return { method: 'checkin', text: draft?.text ?? draft?.uri ?? '' };
   }
-  return { method: proof.method, url: draft?.uri ?? '' };
+  const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
+  return { method: proof.method, url: healthWorkoutId ? '' : draft?.uri ?? '', healthWorkoutId };
 }
 
 export default function SubmitWorkoutScreen() {
@@ -165,6 +168,22 @@ export default function SubmitWorkoutScreen() {
       return;
     }
     setError(null);
+    const hrProof = proofSteps.find((proof) => proof.method === 'hr');
+    if (hrProof && user?.id) {
+      try {
+        const provider = getHealthProvider();
+        const enriched = provider?.enrichHeartRate
+          ? await provider.enrichHeartRate(workout)
+          : workout;
+        const healthWorkoutId = await upsertHealthWorkout(user.id, enriched);
+        onMedia(hrProof.id, `health:${healthWorkoutId}`);
+        setCaptureId(null);
+        setSkippedAuto(true);
+      } catch (caught) {
+        setError(getErrorMessage(caught));
+      }
+      return;
+    }
     await submitHealth.mutateAsync({ challengeId: id, workout });
     router.replace(`/challenges/${id}?logged=1`);
   }

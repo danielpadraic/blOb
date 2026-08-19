@@ -679,12 +679,11 @@ export default function ChallengeDetailScreen() {
             <AppText className="text-[16px] font-extrabold leading-5 text-charcoal">
               {officialBob('cardPromise')}
             </AppText>
-            <AppText className="text-[14px] leading-5 text-charcoal">{officialBob('cardSplit')}</AppText>
-            <AppText className="mt-1 text-[13px] leading-5 text-muted">{officialBob('legalPot')}</AppText>
-            <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalAllFinish')}</AppText>
+            <AppText className="text-[14px] leading-5 text-charcoal">{officialBob('legalBoard')}</AppText>
+            <AppText className="mt-1 text-[13px] leading-5 text-muted">{officialBob('legalAllFinish')}</AppText>
             <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalZero')}</AppText>
             <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
-            <OfficialMoneyBoard challenge={challenge} />
+            <OfficialMoneyBoard challenge={challenge} finished={finishers} />
           </Card>
         ) : null}
 

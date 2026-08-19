@@ -136,8 +136,16 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
 
   const required = input.required ?? [];
   const mediaProofs = input.proofs.filter(
-    (item) => item.uri.trim() && (item.type !== 'text_note' && item.type !== 'link'),
+    (item) =>
+      item.uri.trim() &&
+      !item.uri.startsWith('health:') &&
+      item.type !== 'text_note' &&
+      item.type !== 'link',
   );
+  const healthWorkoutId =
+    input.proofs
+      .map((item) => (item.uri.startsWith('health:') ? item.uri.slice('health:'.length) : ''))
+      .find((id) => id.trim()) ?? null;
   const textBits = input.proofs
     .filter((item) => (item.type === 'text_note' || item.type === 'link' || item.text) && (item.text ?? item.uri).trim())
     .map((item) => (item.text ?? item.uri).trim());
@@ -178,9 +186,15 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
         continue;
       }
       const uploadedRow = uploaded.find((item) => item.proofId === proof.id);
+      const healthId = (input.proofs.find((item) => item.proofId === proof.id)?.uri ?? '').startsWith(
+        'health:',
+      )
+        ? input.proofs.find((item) => item.proofId === proof.id)!.uri.slice('health:'.length)
+        : null;
       parts[proof.id] = {
         method: proof.method,
         url: uploadedRow?.url ?? null,
+        healthWorkoutId: healthId,
       };
     }
   }
@@ -197,6 +211,7 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     p_hr_monitor_url: slots.hr || uploaded.find((item) => item.type === 'hr_monitor')?.url || '',
     p_notes: notes,
     p_proof_parts: parts,
+    p_health_workout_id: healthWorkoutId,
   });
 
   if (error) {

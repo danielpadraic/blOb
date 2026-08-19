@@ -1128,7 +1128,7 @@ export type Database = {
         Returns: number;
       };
       flag_challenge_proof: {
-        Args: { p_post_id: string };
+        Args: { p_post_id: string; p_reason?: string | null };
         Returns: { ok: boolean; hidden?: boolean; flag_count?: number };
       };
       join_challenge: {
@@ -1205,6 +1205,7 @@ export type Database = {
           p_notes?: string | null;
           p_task_ids?: unknown;
           p_proof_parts?: unknown;
+          p_health_workout_id?: string | null;
         };
         Returns: WorkoutSubmission & { days_completed: number };
       };

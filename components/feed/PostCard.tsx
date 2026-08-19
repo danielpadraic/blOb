@@ -207,9 +207,28 @@ function ProofFlagButton({ postId }: { postId: string }) {
     if (busy || done) {
       return;
     }
+    Alert.alert(copy('proof.flag'), copy('proof.flagReason'), [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Flag',
+        style: 'destructive',
+        onPress: () => {
+          void runFlag();
+        },
+      },
+    ]);
+  }
+
+  async function runFlag() {
+    if (busy || done) {
+      return;
+    }
     setBusy(true);
     try {
-      const { error } = await supabase.rpc('flag_challenge_proof', { p_post_id: postId });
+      const { error } = await supabase.rpc('flag_challenge_proof', {
+        p_post_id: postId,
+        p_reason: copy('proof.flagReason'),
+      });
       if (error) {
         throw error;
       }
