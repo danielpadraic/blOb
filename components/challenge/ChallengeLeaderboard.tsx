@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import type { Challenge, ChallengeParticipantWithProfile } from '@/lib/types';
 import { isLiveCompetitorStatus } from '@/lib/challenges';
-import { formatWallet } from '@/lib/currency';
+import { formatCash } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { utcDateStamp } from '@/utils/dates';
@@ -21,10 +21,12 @@ export function ChallengeLeaderboard({
   challenge,
   roster,
   completedUserIds,
+  joined = false,
 }: {
   challenge: Challenge;
   roster: ChallengeParticipantWithProfile[] | undefined;
   completedUserIds: Set<string>;
+  joined?: boolean;
 }) {
   const rows = useMemo<BoardRow[]>(() => {
     return (roster ?? []).map((row) => {
@@ -54,21 +56,23 @@ export function ChallengeLeaderboard({
   const remainingCount = remaining.length;
   const pot = Number(challenge.prize_pool) || 0;
   const share = remainingCount > 0 ? pot / remainingCount : 0;
+  const shareLine = copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish', 'neutral', {
+    amount: formatCash(share),
+  });
+  const empty = remaining.length === 0 && dropped.length === 0;
 
   return (
     <Card className="gap-3">
       <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
         Board
       </AppText>
-      <View className="flex-row gap-2">
+      <View className="flex-row" style={{ gap: 8 }}>
         <Stat label={copy('board.remaining')} value={String(remainingCount)} />
-        <Stat label={copy('board.donePeriod')} value={String(completed.length)} />
+        <Stat label={copy('board.caughtUp')} value={String(completed.length)} />
         <Stat label={copy('board.dropped')} value={String(dropped.length)} />
       </View>
-      <AppText className="text-sm font-semibold text-charcoal">
-        {copy('board.liveShare', 'neutral', { amount: formatWallet(share, challenge.currency) })}
-      </AppText>
-      {remaining.length === 0 && dropped.length === 0 ? (
+      <AppText className="text-sm font-semibold text-charcoal">{shareLine}</AppText>
+      {empty ? (
         <AppText className="text-sm text-muted">No one on the board yet.</AppText>
       ) : (
         <View className="gap-1.5">
@@ -87,10 +91,25 @@ export function ChallengeLeaderboard({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View
-      className="flex-1 items-center py-2"
-      style={{ backgroundColor: THEME.accentSoft, borderRadius: 16 }}>
-      <AppText className="text-[18px] font-extrabold text-charcoal">{value}</AppText>
-      <AppText className="text-[11px] font-semibold text-muted">{label}</AppText>
+      className="min-w-0 flex-1 items-center"
+      style={{
+        backgroundColor: THEME.accentSoft,
+        borderRadius: 12,
+        padding: 12,
+      }}>
+      <AppText className="text-[26px] font-extrabold leading-8 text-charcoal">{value}</AppText>
+      <AppText
+        className="mt-1 text-[10px] font-semibold text-muted"
+        numberOfLines={1}
+        ellipsizeMode="clip"
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        style={{
+          letterSpacing: 0,
+          ...(Platform.OS === 'web' ? { whiteSpace: 'nowrap' as const } : null),
+        }}>
+        {label}
+      </AppText>
     </View>
   );
 }

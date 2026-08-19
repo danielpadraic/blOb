@@ -617,6 +617,7 @@ export default function ChallengeDetailScreen() {
             challenge={challenge}
             roster={boardRoster}
             completedUserIds={completions.data ?? new Set()}
+            joined={isJoined}
           />
         </View>
 
