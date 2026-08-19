@@ -12,7 +12,7 @@ import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCar
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
-import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
+import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
@@ -78,7 +78,6 @@ import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib
 import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
-import { shareOfficialChallenge } from '@/lib/officialShare';
 import { TAB_BAR_PEEK, tabBarLift, THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
@@ -123,6 +122,7 @@ export default function ChallengeDetailScreen() {
   const loggedCount = useLoggedWorkoutCount(id);
   const completions = usePeriodCompletions(id, challengeQuery.data);
   const joinSheet = useJoinConfirm();
+  const inviteHost = useInviteHost();
   const markJudging = useMarkChallengeJudging();
   const settle = useSettleChallenge();
   const settlementQuery = useChallengeSettlement(id);
@@ -133,7 +133,6 @@ export default function ChallengeDetailScreen() {
 
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [watchToast, setWatchToast] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -145,6 +144,16 @@ export default function ChallengeDetailScreen() {
   );
   const isJoined = Boolean(participation);
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
+  function openInvite() {
+    if (!challenge) {
+      return;
+    }
+    inviteHost?.open({
+      challengeId: challenge.id,
+      challengeTitle: challenge.title,
+      shareLink: isOfficialJoinable(challenge) || isHost,
+    });
+  }
   const competitorCount = useMemo(() => {
     if (!roster.data) {
       return Math.max(Number(challenge?.participant_count) || 0, isJoined ? 1 : 0);
@@ -524,7 +533,7 @@ export default function ChallengeDetailScreen() {
             nowMs={nowMs}
             showProgressRing={isJoined}
             cancelled={wasCancelled}
-            onInvite={() => setInviteOpen(true)}>
+            onInvite={openInvite}>
             {isHost &&
             !inviteOnly &&
             !isOfficialJoinable(challenge) &&
@@ -534,7 +543,7 @@ export default function ChallengeDetailScreen() {
                 title="Invite someone"
                 variant="outline"
                 size="sm"
-                onPress={() => setInviteOpen(true)}
+                onPress={openInvite}
               />
             ) : null}
           </ChallengeHeroCard>
@@ -562,7 +571,7 @@ export default function ChallengeDetailScreen() {
                 <OfficialMoneyBoard
                   challenge={challenge}
                   finished={finishers}
-                  onInvite={() => setInviteOpen(true)}
+                  onInvite={openInvite}
                 />
               </View>
             )}
@@ -730,7 +739,7 @@ export default function ChallengeDetailScreen() {
         {isHost && inviteOnly && challenge.status !== 'settled' && !wasCancelled ? (
           <ChallengeInvitesCard
             challengeId={challenge.id}
-            onInvitePerson={() => setInviteOpen(true)}
+            onInvitePerson={openInvite}
           />
         ) : null}
 
@@ -922,22 +931,6 @@ export default function ChallengeDetailScreen() {
       </View>
       ) : null}
 
-      {isHost || isOfficialJoinable(challenge) ? (
-        <InviteToChallengeModal
-          visible={inviteOpen}
-          challengeId={challenge.id}
-          challengeTitle={challenge.title}
-          friendsFirst={isOfficialJoinable(challenge)}
-          onShareLink={() => {
-            void shareOfficialChallenge(challenge.id).then((result) => {
-              if (result === 'copied') {
-                Alert.alert('Link copied', 'A small promise. Then you move.');
-              }
-            });
-          }}
-          onClose={() => setInviteOpen(false)}
-        />
-      ) : null}
       <SettleConfirmModal
         visible={judgeOpen}
         challenge={challenge}

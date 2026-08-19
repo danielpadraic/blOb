@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
@@ -6,16 +6,28 @@ import { THEME } from '@/lib/theme';
 
 type MessageInputProps = {
   sending?: boolean;
+  autoFocus?: boolean;
+  disabled?: boolean;
   onSend: (body: string) => void;
 };
 
-export function MessageInput({ sending, onSend }: MessageInputProps) {
+export function MessageInput({ sending, autoFocus = false, disabled = false, onSend }: MessageInputProps) {
   const [value, setValue] = useState('');
+  const inputRef = useRef<TextInput>(null);
   const trimmed = value.trim();
-  const disabled = trimmed.length === 0;
+  const blocked = disabled || Boolean(sending);
+  const canSend = trimmed.length > 0 && !blocked;
+
+  useEffect(() => {
+    if (!autoFocus || disabled) {
+      return;
+    }
+    const handle = setTimeout(() => inputRef.current?.focus(), 80);
+    return () => clearTimeout(handle);
+  }, [autoFocus, disabled]);
 
   function submit() {
-    if (disabled) {
+    if (!canSend) {
       return;
     }
     onSend(trimmed);
@@ -27,6 +39,7 @@ export function MessageInput({ sending, onSend }: MessageInputProps) {
       className="flex-row items-end gap-2 px-4 py-3"
       style={{ backgroundColor: THEME.background, borderTopWidth: 1, borderTopColor: THEME.border }}>
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={setValue}
         placeholder="Message"
@@ -35,7 +48,8 @@ export function MessageInput({ sending, onSend }: MessageInputProps) {
         selectionColor={THEME.accent}
         multiline
         maxLength={2000}
-        editable={true}
+        editable={!blocked}
+        autoFocus={autoFocus}
         onSubmitEditing={submit}
         blurOnSubmit={false}
         className="max-h-[120px] min-h-[44px] flex-1 px-4 py-2.5 text-[15px]"
@@ -50,14 +64,14 @@ export function MessageInput({ sending, onSend }: MessageInputProps) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Send message"
-        accessibilityState={{ busy: Boolean(sending) }}
-        disabled={disabled}
+        accessibilityState={{ busy: Boolean(sending), disabled: !canSend }}
+        disabled={!canSend}
         onPress={submit}
         className="h-11 items-center justify-center px-4"
         style={{
           backgroundColor: THEME.primary,
           borderRadius: 18,
-          opacity: disabled ? 0.38 : 1,
+          opacity: canSend ? 1 : 0.38,
         }}>
         <AppText className="text-[14px] font-semibold" style={{ color: THEME.primaryForeground }}>
           Send

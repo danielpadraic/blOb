@@ -8,7 +8,7 @@ import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
 import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
-import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
+import { InviteHost } from '@/components/challenge/InviteHost';
 import { TourHost } from '@/components/tour/TourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
 import { TourProvider, useTour } from '@/components/tour/TourContext';
@@ -195,6 +195,7 @@ function TabLayoutInner() {
       <View
         className="flex-1"
         style={{ overflow: friendsTabRoot ? 'visible' : 'hidden', minHeight: 0 }}>
+        <InviteHost>
         <SocialSheetsHost>
         <Tabs
           tabBar={() => null}
@@ -228,7 +229,7 @@ function TabLayoutInner() {
             listeners={{ tabPress: closeOverlays }}
           />
           <Tabs.Screen name="notifications" options={{ href: null, title: 'Alerts' }} />
-          <Tabs.Screen name="messages" options={{ href: null, title: 'Messages' }} />
+          <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
           <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />
           <Tabs.Screen
             name="profile"
@@ -251,6 +252,7 @@ function TabLayoutInner() {
         <HealthLogPromptHost />
         {onOnboarding ? null : <OfficialPitchHost />}
         </SocialSheetsHost>
+        </InviteHost>
       </View>
       {onOnboarding || pathname.includes('/capture') ? null : (
         <BlobTabBar

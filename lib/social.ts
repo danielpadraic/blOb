@@ -962,8 +962,56 @@ export async function fetchConversation(
   userId: string,
   conversationId: string,
 ): Promise<ConversationPreview | null> {
-  const rows = await fetchConversations(userId);
-  return rows.find((row) => row.id === conversationId) ?? null;
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(CONVERSATION_COLUMNS)
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return null;
+    }
+    throwIfError(error);
+  }
+  if (!data) {
+    return null;
+  }
+  const conversation = data as Conversation;
+  const { data: members, error: memberError } = await supabase
+    .from('conversation_members')
+    .select(CONVERSATION_MEMBER_COLUMNS)
+    .eq('conversation_id', conversationId);
+  if (memberError) {
+    if (isMissingRelationError(memberError)) {
+      return null;
+    }
+    throwIfError(memberError);
+  }
+  const memberRows = (members ?? []) as ConversationMember[];
+  const membership = memberRows.find((row) => row.user_id === userId);
+  if (!membership) {
+    return null;
+  }
+  const peerId = otherConversationUserId(memberRows, userId);
+  const profiles = peerId ? await fetchPublicProfilesByIds([peerId]) : [];
+  const { data: lastRows, error: lastError } = await supabase
+    .from('messages')
+    .select(MESSAGE_COLUMNS)
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (lastError && !isMissingRelationError(lastError)) {
+    throwIfError(lastError);
+  }
+  const lastMessage = ((lastRows ?? [])[0] as Message | undefined) ?? null;
+  return {
+    ...conversation,
+    membership,
+    members: memberRows,
+    last_message: lastMessage,
+    unread: conversationHasUnread(membership, lastMessage, userId),
+    peer: profiles[0] ?? null,
+  };
 }
 
 export async function fetchMessages(
@@ -1035,14 +1083,13 @@ export async function getOrCreateDirectConversation(
     throw new Error('You can’t message yourself.');
   }
 
-  const { data: rpcData, error: rpcError } = await (
-    supabase.rpc as unknown as (
-      fn: 'get_or_create_direct_conversation',
-      args: { p_other_user_id: string },
-    ) => Promise<{ data: Conversation | null; error: unknown }>
-  )('get_or_create_direct_conversation', { p_other_user_id: otherUserId });
-  if (!rpcError && rpcData) {
-    return rpcData;
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    'get_or_create_direct_conversation',
+    { p_other_user_id: otherUserId },
+  );
+  const rpcRow = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as Conversation | null;
+  if (!rpcError && rpcRow?.id) {
+    return rpcRow;
   }
   if (rpcError && !isMissingRelationError(rpcError)) {
     throwIfError(rpcError);

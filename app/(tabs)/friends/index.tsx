@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
 import { FriendCard } from '@/components/social/FriendCard';
@@ -29,7 +29,6 @@ import {
   useFollowing,
   useFriendRequests,
   useFriends,
-  useGetOrCreateConversation,
   usePeopleSearch,
   useRejectFriendRequest,
   useSendFriendRequest,
@@ -37,7 +36,7 @@ import {
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
-import { conversationHref } from '@/lib/routes';
+import { directMessageHref } from '@/lib/routes';
 import {
   detectPeopleSearch,
   otherFriendshipUserId,
@@ -73,6 +72,8 @@ const PANE_CONTENT = {
 export default function FriendsScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ segment?: string }>();
+  const segmentParam = Array.isArray(params.segment) ? params.segment[0] : params.segment;
   const [segment, setSegment] = useState<FriendsSegment>('friends');
   const [query, setQuery] = useState('');
   const searchRef = useRef<TextInput>(null);
@@ -85,7 +86,6 @@ export default function FriendsScreen() {
   const sendRequest = useSendFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
   const rejectRequest = useRejectFriendRequest();
-  const startChat = useGetOrCreateConversation();
 
   const friends = friendsQuery.data ?? [];
   const incoming = requestsQuery.data?.incoming ?? [];
@@ -112,7 +112,6 @@ export default function FriendsScreen() {
     sendRequest.variables ??
     acceptRequest.variables ??
     rejectRequest.variables ??
-    startChat.variables ??
     null;
   const actionPending =
     sendRequest.isPending ||
@@ -134,17 +133,22 @@ export default function FriendsScreen() {
     setTimeout(() => searchRef.current?.focus(), 80);
   }
 
+  useEffect(() => {
+    if (segmentParam === 'search' || segmentParam === 'requests' || segmentParam === 'friends') {
+      setSegment(segmentParam);
+    }
+  }, [segmentParam]);
+
   function fail(error: unknown, title: string) {
     Alert.alert(title, getErrorMessage(error));
   }
 
-  async function onMessage(targetUserId: string) {
-    try {
-      const conversation = await startChat.mutateAsync(targetUserId);
-      router.push(conversationHref(conversation.id));
-    } catch (error) {
-      fail(error, 'Couldn’t open that chat');
+  function onMessage(targetUserId: string) {
+    if (!targetUserId) {
+      fail(new Error('Couldn’t open that chat'), 'Couldn’t open that chat');
+      return;
     }
+    router.push(directMessageHref(targetUserId));
   }
 
   function onSearchPrimary(profile: PublicProfile, relation: PeopleRelation) {
@@ -196,7 +200,7 @@ export default function FriendsScreen() {
             friends={friends}
             refreshing={refreshing}
             userId={user?.id}
-            messagingId={startChat.isPending ? startChat.variables ?? null : null}
+            messagingId={null}
             onRefresh={() => {
               void friendsQuery.refetch();
               void requestsQuery.refetch();

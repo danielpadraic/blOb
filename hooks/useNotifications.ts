@@ -175,14 +175,32 @@ export function useInviteToChallenge(challengeId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (inviteeId: string) => {
+    mutationFn: async (inviteeIds: string | string[]) => {
       if (!challengeId) {
         throw new Error('Challenge not found.');
       }
-      return inviteToChallenge(challengeId, inviteeId);
+      const ids = [...new Set((Array.isArray(inviteeIds) ? inviteeIds : [inviteeIds]).filter(Boolean))];
+      if (ids.length === 0) {
+        throw new Error('Pick someone to invite.');
+      }
+      const sent: string[] = [];
+      const failed: { id: string; error: unknown }[] = [];
+      for (const inviteeId of ids) {
+        try {
+          await inviteToChallenge(challengeId, inviteeId);
+          sent.push(inviteeId);
+        } catch (error) {
+          failed.push({ id: inviteeId, error });
+        }
+      }
+      if (sent.length === 0) {
+        throw failed[0]?.error ?? new Error('Couldn’t send that invite.');
+      }
+      return { sent, failed };
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['challenge-invites', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }

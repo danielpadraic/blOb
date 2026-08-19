@@ -1,32 +1,25 @@
 import { Alert, Pressable } from 'react-native';
 
+import { useInviteHost } from '@/components/challenge/InviteHost';
 import { AppText } from '@/components/ui/AppText';
-import { shareOfficialChallenge } from '@/lib/officialShare';
 import { THEME } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
 
 type OfficialInviteButtonProps = {
   challengeId: string;
   challengeTitle?: string;
   onOpenPicker?: () => void;
   tone?: 'card' | 'hero';
+  shareLink?: boolean;
 };
 
 export function OfficialInviteButton({
   challengeId,
+  challengeTitle,
   onOpenPicker,
   tone = 'card',
+  shareLink = true,
 }: OfficialInviteButtonProps) {
-  async function share() {
-    try {
-      const result = await shareOfficialChallenge(challengeId);
-      if (result === 'copied') {
-        Alert.alert('Link copied', 'A small promise. Then you move.');
-      }
-    } catch (error) {
-      Alert.alert('Couldn’t share', getErrorMessage(error));
-    }
-  }
+  const host = useInviteHost();
 
   function onPress(event?: { stopPropagation?: () => void }) {
     event?.stopPropagation?.();
@@ -34,7 +27,15 @@ export function OfficialInviteButton({
       onOpenPicker();
       return;
     }
-    void share();
+    if (!host) {
+      Alert.alert('Couldn’t invite', 'Open this challenge and tap Invite again.');
+      return;
+    }
+    host.open({
+      challengeId,
+      challengeTitle: challengeTitle?.trim() || 'this challenge',
+      shareLink,
+    });
   }
 
   return (

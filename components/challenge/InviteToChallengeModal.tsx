@@ -1,27 +1,26 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
-import { useCoinRecipientSearch, useCoinRecipientSuggestions } from '@/hooks/useCoins';
 import { useInviteToChallenge } from '@/hooks/useNotifications';
 import { useFriends } from '@/hooks/useSocial';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
-import { copy } from '@/lib/copy';
 
 type InviteToChallengeModalProps = {
   visible: boolean;
   challengeId: string;
   challengeTitle: string;
   onClose: () => void;
-  friendsFirst?: boolean;
   onShareLink?: () => void;
   shareBusy?: boolean;
+  onSent?: (names: string[]) => void;
 };
 
 function personName(profile: PublicProfile): string {
@@ -33,19 +32,15 @@ export function InviteToChallengeModal({
   challengeId,
   challengeTitle,
   onClose,
-  friendsFirst = false,
   onShareLink,
   shareBusy = false,
+  onSent,
 }: InviteToChallengeModalProps) {
+  const router = useRouter();
   const invite = useInviteToChallenge(challengeId);
-  const suggestions = useCoinRecipientSuggestions();
   const friends = useFriends();
   const [query, setQuery] = useState('');
-  const search = useCoinRecipientSearch(query);
-  const results = useMemo(
-    () => (query.trim().length >= 2 ? (search.data ?? []) : []),
-    [query, search.data],
-  );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const friendPeople = useMemo(
     () =>
       (friends.data ?? [])
@@ -53,28 +48,78 @@ export function InviteToChallengeModal({
         .filter((profile): profile is PublicProfile => Boolean(profile)),
     [friends.data],
   );
-  const defaultPeople = friendsFirst
-    ? friendPeople
-    : (suggestions.data?.following ?? []);
+  const visiblePeople = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) {
+      return friendPeople;
+    }
+    return friendPeople.filter((person) => {
+      const name = personName(person).toLowerCase();
+      return name.includes(needle) || person.username.toLowerCase().includes(needle);
+    });
+  }, [friendPeople, query]);
+  const selectedPeople = friendPeople.filter((person) => selected.has(person.id));
 
   function close() {
     if (invite.isPending) {
       return;
     }
     setQuery('');
+    setSelected(new Set());
     onClose();
   }
 
-  async function pick(person: PublicProfile) {
+  function toggle(person: PublicProfile) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(person.id)) {
+        next.delete(person.id);
+      } else {
+        next.add(person.id);
+      }
+      return next;
+    });
+  }
+
+  function goFind() {
+    close();
+    router.push({ pathname: '/friends', params: { segment: 'search' } });
+  }
+
+  async function confirm() {
+    if (selectedPeople.length === 0) {
+      Alert.alert('Pick a friend', 'Select at least one friend to invite.');
+      return;
+    }
     try {
-      await invite.mutateAsync(person.id);
-      Alert.alert('Invite sent', `${personName(person)} will see this in Notifications.`);
+      const result = await invite.mutateAsync(selectedPeople.map((person) => person.id));
+      const sentNames = selectedPeople
+        .filter((person) => result.sent.includes(person.id))
+        .map(personName);
+      if (result.failed.length > 0 && sentNames.length === 0) {
+        Alert.alert('Couldn’t invite', getErrorMessage(result.failed[0]?.error));
+        return;
+      }
+      if (sentNames.length === 1) {
+        onSent?.(sentNames);
+      } else if (sentNames.length > 1) {
+        onSent?.(sentNames);
+      }
+      if (result.failed.length > 0) {
+        Alert.alert(
+          'Some invites didn’t send',
+          result.failed.map((row) => getErrorMessage(row.error)).join('\n'),
+        );
+      }
       setQuery('');
+      setSelected(new Set());
       onClose();
     } catch (error) {
       Alert.alert('Couldn’t invite', getErrorMessage(error));
     }
   }
+
+  const emptyFriends = !friends.isLoading && friendPeople.length === 0;
 
   return (
     <ChromeOverlay visible={visible} onClose={close}>
@@ -87,51 +132,75 @@ export function InviteToChallengeModal({
           paddingBottom: 16,
         }}
         onPress={(event) => event.stopPropagation()}>
-          <View className="mb-3 items-center">
-            <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+        <View className="mb-3 items-center">
+          <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+        </View>
+        <AppText className="text-xl font-bold text-charcoal">Invite to {challengeTitle}</AppText>
+        <AppText className="mt-1 mb-4 text-muted">
+          Pick friends. They’ll get a notification — they still join themselves.
+        </AppText>
+        {onShareLink ? (
+          <View className="mb-4">
+            <Button
+              title="Share link"
+              size="lg"
+              variant="outline"
+              loading={shareBusy}
+              onPress={onShareLink}
+            />
           </View>
-          <AppText className="text-xl font-bold text-charcoal">Invite to {challengeTitle}</AppText>
-          <AppText className="mt-1 mb-4 text-muted">
-            {friendsFirst
-              ? 'Pick a friend, or share the link. A small promise. Then you move.'
-              : 'Search a username. They’ll get a notification with a link to this challenge.'}
-          </AppText>
-          {onShareLink ? (
-            <View className="mb-4">
+        ) : null}
+        {emptyFriends ? (
+          <View className="mb-2">
+            <AppText className="text-[15px] font-semibold text-charcoal">Add a friend first</AppText>
+            <AppText className="mt-1 text-[13px] text-muted">
+              Invites go to accepted friends.
+            </AppText>
+            <View className="mt-3">
+              <Button title="Find" onPress={goFind} />
+            </View>
+          </View>
+        ) : (
+          <>
+            <Input
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search friends"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {friends.isLoading ? (
+              <ActivityIndicator className="mt-4" color={THEME.accent} />
+            ) : (
+              <ScrollView
+                className="mt-3"
+                style={{ maxHeight: 320 }}
+                keyboardShouldPersistTaps="handled">
+                <PeopleList
+                  people={visiblePeople}
+                  selected={selected}
+                  empty={query.trim() ? 'No friends match that.' : 'Add a friend first'}
+                  onToggle={toggle}
+                />
+              </ScrollView>
+            )}
+            <View className="mt-4">
               <Button
-                title="Share link"
-                size="lg"
-                variant="outline"
-                loading={shareBusy}
-                onPress={onShareLink}
+                title={
+                  selectedPeople.length > 1
+                    ? `Send invites · ${selectedPeople.length}`
+                    : 'Send invite'
+                }
+                loading={invite.isPending}
+                disabled={selectedPeople.length === 0}
+                onPress={() => void confirm()}
               />
             </View>
-          ) : null}
-          <Input
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search by username"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-          />
-          {search.isFetching && query.trim().length >= 2 ? (
-            <ActivityIndicator className="mt-4" color={THEME.accent} />
-          ) : null}
-          <View className="mt-3">
-            {query.trim().length >= 2 ? (
-              <PeopleList people={results} empty={copy('friends.noneMatch')} onPick={pick} />
-            ) : (
-              <PeopleList
-                people={defaultPeople}
-                empty={friendsFirst ? 'No friends yet. Share the link instead.' : undefined}
-                onPick={pick}
-              />
-            )}
-          </View>
-          <View className="mt-4">
-            <Button title="Close" variant="ghost" onPress={close} disabled={invite.isPending} />
-          </View>
+          </>
+        )}
+        <View className="mt-2">
+          <Button title="Close" variant="ghost" onPress={close} disabled={invite.isPending} />
+        </View>
       </Pressable>
     </ChromeOverlay>
   );
@@ -139,12 +208,14 @@ export function InviteToChallengeModal({
 
 function PeopleList({
   people,
+  selected,
   empty,
-  onPick,
+  onToggle,
 }: {
   people: PublicProfile[];
+  selected: Set<string>;
   empty?: string;
-  onPick: (profile: PublicProfile) => void;
+  onToggle: (profile: PublicProfile) => void;
 }) {
   if (people.length === 0) {
     return empty ? <AppText className="mt-2 text-sm text-muted">{empty}</AppText> : null;
@@ -160,19 +231,36 @@ function PeopleList({
       }}>
       {people.map((person, index) => {
         const name = personName(person);
+        const on = selected.has(person.id);
         return (
           <Pressable
             key={person.id}
-            onPress={() => onPick(person)}
+            onPress={() => onToggle(person)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: on }}
             className="flex-row items-center px-3 py-3"
             style={{
               borderTopWidth: index === 0 ? 0 : 1,
               borderTopColor: THEME.border,
+              backgroundColor: on ? THEME.accentSoft : THEME.surface,
             }}>
             <Avatar uri={person.avatar_url} name={name} size={40} />
             <View className="ml-3 flex-1">
               <AppText className="font-semibold text-charcoal">{name}</AppText>
               <AppText className="text-sm text-muted">@{person.username}</AppText>
+            </View>
+            <View
+              className="h-6 w-6 items-center justify-center rounded-full"
+              style={{
+                borderWidth: 1,
+                borderColor: on ? THEME.accent : THEME.border,
+                backgroundColor: on ? THEME.accent : THEME.surface,
+              }}>
+              {on ? (
+                <AppText className="text-[12px] font-extrabold" style={{ color: THEME.primaryForeground }}>
+                  ✓
+                </AppText>
+              ) : null}
             </View>
           </Pressable>
         );

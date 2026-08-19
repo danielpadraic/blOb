@@ -28,12 +28,11 @@ import {
   useAcceptFriendRequest,
   useFriends,
   useFriendshipStatus,
-  useGetOrCreateConversation,
   useSendFriendRequest,
 } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { canPostOnProfile } from '@/lib/profileWall';
-import { conversationHref } from '@/lib/routes';
+import { directMessageHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -81,7 +80,6 @@ export default function PublicProfileScreen() {
   const acceptRequest = useAcceptFriendRequest();
   const toggleReaction = useToggleReaction();
   const createComment = useCreateComment();
-  const startChat = useGetOrCreateConversation();
   const social = useSocialSheetsOptional();
   const menuRef = useRef<View>(null);
   const headerTitle = profile?.username ? `@${profile.username}` : 'Profile';
@@ -252,13 +250,7 @@ export default function PublicProfileScreen() {
                   title="Message"
                   size="sm"
                   variant="outline"
-                  loading={startChat.isPending}
-                  onPress={() => {
-                    void startChat.mutateAsync(profile.id).then(
-                      (conversation) => router.push(conversationHref(conversation.id)),
-                      (error) => Alert.alert('Couldn’t open that chat', getErrorMessage(error)),
-                    );
-                  }}
+                  onPress={() => router.push(directMessageHref(profile.id))}
                 />
                 {canPost ? (
                   <Pressable

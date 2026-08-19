@@ -1348,6 +1348,16 @@ export type Database = {
         Args: { p_challenge_id: string; p_invitee_id: string };
         Returns: ChallengeInvite;
       };
+      get_or_create_direct_conversation: {
+        Args: { p_other_user_id: string };
+        Returns: {
+          id: string;
+          is_group: boolean;
+          challenge_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+      };
       create_challenge_invite: {
         Args: { p_challenge_id: string };
         Returns: CreateChallengeInviteResult;

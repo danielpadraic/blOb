@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
+import { supabase } from '@/lib/supabase';
 import {
   SOCIAL_PAGE_SIZE,
   acceptFriendRequest,
@@ -905,26 +906,83 @@ export function useConversations() {
 
 export function useConversation(conversationId?: string | null) {
   const { user } = useAuth();
+  const valid = Boolean(conversationId && conversationId !== 'new');
   const list = useConversations();
   const cached = list.data?.find((row) => row.id === conversationId) ?? null;
   const fallback = useQuery({
     queryKey: socialKeys.conversation(conversationId ?? ''),
-    enabled: Boolean(user?.id && conversationId && !cached && !list.isLoading),
+    enabled: Boolean(user?.id && valid),
     queryFn: () => fetchConversation(user!.id, conversationId!),
   });
   return {
     data: cached ?? fallback.data ?? null,
-    isLoading: list.isLoading || fallback.isLoading,
-    error: list.error ?? fallback.error,
+    isLoading: Boolean(valid && !cached && fallback.isLoading),
+    error:
+      fallback.error ??
+      (valid &&
+      !cached &&
+      fallback.isSuccess &&
+      !fallback.data
+        ? new Error('Couldn’t open this chat.')
+        : null),
+    refetch: fallback.refetch,
   };
 }
 
 export function useMessages(conversationId?: string | null) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const valid = Boolean(conversationId && conversationId !== 'new');
+  const query = useQuery({
     queryKey: socialKeys.messages(conversationId ?? ''),
-    enabled: Boolean(conversationId),
+    enabled: valid,
     queryFn: () => fetchMessages(conversationId!),
   });
+
+  useEffect(() => {
+    if (!valid || !conversationId) {
+      return;
+    }
+    const channelName = `messages:${conversationId}`;
+    for (const existing of supabase.getChannels()) {
+      if (existing.topic === channelName || existing.topic === `realtime:${channelName}`) {
+        void supabase.removeChannel(existing);
+      }
+    }
+    const channel = supabase.channel(channelName);
+    channel
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const row = payload.new as Message;
+          if (!row?.id) {
+            return;
+          }
+          queryClient.setQueryData<Message[]>(socialKeys.messages(conversationId), (current) => {
+            const withoutOptimistic = (current ?? []).filter(
+              (item) => item.id !== row.id && !item.id.startsWith('optimistic-'),
+            );
+            if (withoutOptimistic.some((item) => item.id === row.id)) {
+              return current;
+            }
+            return [...withoutOptimistic, row].sort(
+              (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+            );
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [conversationId, queryClient, valid]);
+
+  return query;
 }
 
 export function useSendMessage() {

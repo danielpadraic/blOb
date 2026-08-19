@@ -46,11 +46,23 @@ export const MESSAGES_HREF = '/messages' as const;
 export const BODY_METRICS_HREF = '/profile/body-metrics' as const;
 export const FITNESS_HISTORY_HREF = '/profile/fitness-history' as const;
 
-export function conversationHref(id: string) {
+export function conversationHref(
+  id: string,
+  extra?: { peerId?: string; focus?: boolean },
+) {
   return {
     pathname: '/messages/[id]' as const,
-    params: { id },
+    params: {
+      id,
+      ...(extra?.peerId ? { peerId: extra.peerId } : {}),
+      ...(extra?.focus ? { focus: '1' } : {}),
+    },
   };
+}
+
+/** Open a DM from a profile/Friends row before the thread id exists. */
+export function directMessageHref(peerId: string) {
+  return conversationHref('new', { peerId, focus: true });
 }
 
 export const TAB_STACK_SCREEN_OPTIONS = {
