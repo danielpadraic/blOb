@@ -53,7 +53,7 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
     if ((!tour?.active && !tour?.createActive) || tour.targetId !== id) {
       return;
     }
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && !tour.createActive) {
       const node = viewRef.current as unknown as { scrollIntoView?: (opts: ScrollIntoViewOptions) => void };
       node?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     }

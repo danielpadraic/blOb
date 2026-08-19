@@ -646,6 +646,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     setTipIndex(step === STEP_ENTRY ? wizardEntryTabTipIndex(entryTab) : 0);
     if (!pendingAnchor.current) {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
+      tour?.setCreateScrollY(0);
     }
   }, [step, liveChallengeId]);
 
@@ -1391,11 +1392,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         </View>
 
         <ScrollView
-          ref={scrollRef}
+          ref={(node) => {
+            scrollRef.current = node;
+            tour?.setCreateScroll(node);
+          }}
           className="mt-3 flex-1 px-4"
-          contentContainerClassName="gap-3 pb-3"
+          contentContainerClassName="gap-3"
+          contentContainerStyle={{ paddingBottom: tour?.createActive ? 220 : 24 }}
           keyboardShouldPersistTaps="always"
           nestedScrollEnabled
+          onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}>
           <View ref={contentRef} collapsable={false} className="gap-3">
           {step === STEP_LANE ? (

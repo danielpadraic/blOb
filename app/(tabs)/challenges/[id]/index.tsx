@@ -81,7 +81,7 @@ import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { shareOfficialChallenge } from '@/lib/officialShare';
-import { tabBarLift, THEME } from '@/lib/theme';
+import { TAB_BAR_PEEK, tabBarLift, THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
 import { getErrorMessage } from '@/utils/errors';
@@ -425,16 +425,11 @@ export default function ChallengeDetailScreen() {
   }
 
   const proofSteps = requiredChallengeProofs(challenge);
-  const isFitness = (challenge.category ?? 'fitness') === 'fitness';
   const isPoints = isPointsChallenge(challenge);
   const isUnlimited = isUnlimitedChallenge(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
   const target = daysRequired;
-  const logTitle = isPoints
-    ? 'Log progress'
-    : isFitness
-      ? 'Log today’s workout'
-      : 'Log today’s proof';
+  const logTitle = 'Log';
   const proofHeadline =
     proofSteps.length === 1
       ? 'Proof for every log'
@@ -505,6 +500,8 @@ export default function ChallengeDetailScreen() {
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
     (isJoined || (!isHost && challenge.status !== 'judging'));
+  const stickyPad = tabBarLift(insets.bottom) + TAB_BAR_PEEK;
+  const stickyBlock = showStickyCta ? 62 : 0;
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
@@ -519,7 +516,8 @@ export default function ChallengeDetailScreen() {
       <ScrollView
         ref={scrollRef}
         className="flex-1"
-        contentContainerClassName="px-4 pb-4"
+        contentContainerClassName="px-4"
+        contentContainerStyle={{ paddingBottom: stickyPad + stickyBlock + 16 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -853,9 +851,14 @@ export default function ChallengeDetailScreen() {
       {showStickyCta ? (
       <View
         style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 20,
           paddingHorizontal: 16,
           paddingTop: 10,
-          paddingBottom: tabBarLift(insets.bottom),
+          paddingBottom: stickyPad,
           backgroundColor: THEME.background,
           borderTopWidth: 1,
           borderTopColor: THEME.border,
@@ -928,13 +931,7 @@ export default function ChallengeDetailScreen() {
               <AppText className="text-sm leading-5 text-coral-dark" numberOfLines={2}>
                 {joinBlocked}
               </AppText>
-            ) : (
-              <AppText className="text-sm leading-5 text-muted" numberOfLines={1}>
-                {isFreeEntry
-                  ? 'Joining is free. It does not take money from your wallet.'
-                  : `Joining takes ${money(buyInAmount)} right now and adds it to the prize pool.`}
-              </AppText>
-            )}
+            ) : null}
             {actionError ? (
               <AppText className="text-sm leading-5 text-coral-dark">{actionError}</AppText>
             ) : null}

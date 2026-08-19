@@ -4,6 +4,8 @@ import {
   Platform,
   ScrollView,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ViewProps,
 } from 'react-native';
 import { useSegments } from 'expo-router';
@@ -23,6 +25,8 @@ type ScreenProps = ViewProps & {
   className?: string;
   edges?: readonly Edge[];
   scrollRef?: Ref<ScrollView>;
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  contentPaddingBottom?: number;
 };
 
 export function Screen({
@@ -32,6 +36,8 @@ export function Screen({
   className,
   edges = DEFAULT_EDGES,
   scrollRef,
+  onScroll,
+  contentPaddingBottom,
   ...props
 }: ScreenProps) {
   const segments = useSegments();
@@ -61,8 +67,12 @@ export function Screen({
             className="flex-1"
             style={SCREEN_BACKGROUND}
             contentContainerClassName={cn('grow', padded && 'px-4')}
-            contentContainerStyle={{ paddingBottom: insideChrome ? 24 + TAB_BAR_PEEK : 24 }}
+            contentContainerStyle={{
+              paddingBottom: contentPaddingBottom ?? (insideChrome ? 24 + TAB_BAR_PEEK : 24),
+            }}
             keyboardShouldPersistTaps="handled"
+            onScroll={onScroll}
+            scrollEventThrottle={onScroll ? 16 : undefined}
             showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>

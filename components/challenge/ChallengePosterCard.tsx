@@ -216,7 +216,7 @@ export function OfficialFillingStats({
 
   return (
     <View>
-      <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+      <View className="flex-row" style={{ gap: 8 }}>
         <PosterStat
           label={copy('create.buyIn')}
           value={<BuckUsdAmount amount={buyIn} textClassName={amountClass} color={amountColor} />}
@@ -275,10 +275,13 @@ function PosterStat({
   labelColor?: string;
 }) {
   return (
-    <View style={{ width: '47%' }}>
+    <View style={{ flex: 1, minWidth: 0 }}>
       <AppText
-        className="text-[9px] font-semibold uppercase tracking-wide"
-        style={{ color: labelColor ?? THEME.textMuted }}>
+        className="text-[9px] font-semibold uppercase"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        style={{ color: labelColor ?? THEME.textMuted, letterSpacing: 0.2 }}>
         {label}
       </AppText>
       {typeof value === 'string' ? (

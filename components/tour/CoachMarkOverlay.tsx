@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { AppText } from '@/components/ui/AppText';
 import type { TourPlacement } from '@/lib/tour';
-import { TAB_BAR_HEIGHT, THEME, themeShadow } from '@/lib/theme';
+import { TAB_BAR_PEEK, tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 const MIN_HOLE = 44;
 const HOLE_PAD = 6;
@@ -25,6 +25,8 @@ type CoachMarkOverlayProps = {
   onBack: () => void;
   onNext: () => void;
   footer?: ReactNode;
+  topReserve?: number;
+  bottomReserve?: number;
 };
 
 export function CoachMarkOverlay({
@@ -40,12 +42,15 @@ export function CoachMarkOverlay({
   onBack,
   onNext,
   footer,
+  topReserve: topReserveProp,
+  bottomReserve: bottomReserveProp,
 }: CoachMarkOverlayProps) {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [tooltipSize, setTooltipSize] = useState({ width: 0, height: 0 });
   const tooltipW = Math.min(300, screenW - 24);
   const tooltipH = tooltipSize.height || 188;
+  const bottomReserve = bottomReserveProp ?? tabBarLift(insets.bottom) + TAB_BAR_PEEK;
   const pos = placeTooltip({
     hole,
     placement,
@@ -53,8 +58,8 @@ export function CoachMarkOverlay({
     tooltipH,
     screenW,
     screenH,
-    bottomReserve: TAB_BAR_HEIGHT + Math.max(insets.bottom, 10) + 8,
-    topReserve: Math.max(insets.top, 8),
+    bottomReserve,
+    topReserve: topReserveProp ?? Math.max(insets.top, 8),
   });
 
   return (
@@ -138,14 +143,17 @@ export function expandHole(
   rect: LayoutRectangle | null,
   screenW: number,
   screenH: number,
+  bounds?: { minTop?: number; maxBottom?: number },
 ): LayoutRectangle | null {
   if (!rect) {
     return null;
   }
   const width = Math.max(rect.width + HOLE_PAD * 2, MIN_HOLE);
   const height = Math.max(rect.height + HOLE_PAD * 2, MIN_HOLE);
+  const minTop = bounds?.minTop ?? 4;
+  const maxBottom = bounds?.maxBottom ?? screenH - 4;
   const x = clamp(rect.x + rect.width / 2 - width / 2, 4, screenW - width - 4);
-  const y = clamp(rect.y + rect.height / 2 - height / 2, 4, screenH - height - 4);
+  const y = clamp(rect.y + rect.height / 2 - height / 2, minTop, Math.max(minTop, maxBottom - height));
   return { x, y, width, height };
 }
 
@@ -305,8 +313,11 @@ function placeTooltip(input: {
   const above = input.hole.y - input.tooltipH - TOOLTIP_GAP;
   const belowFits = below + input.tooltipH <= input.screenH - input.bottomReserve;
   const aboveFits = above >= input.topReserve;
+  const usableMid = (input.topReserve + (input.screenH - input.bottomReserve)) / 2;
+  const fieldIsLow = input.hole.y + input.hole.height / 2 > usableMid;
+  const preferBelow = input.placement === 'below' && !fieldIsLow;
 
-  if (input.placement === 'below') {
+  if (preferBelow) {
     if (belowFits) {
       return { top: below, left, caret: 'top', caretAlign: caretAlign(left) };
     }

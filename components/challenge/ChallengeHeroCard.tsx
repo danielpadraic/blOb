@@ -103,28 +103,64 @@ export function ChallengeHeroCard({
           Cancelled
         </AppText>
       ) : null}
-      {cancelled ? null : (
+      {cancelled ? null : official ? (
+        <View className="gap-3">
+          {showProgressRing && joined ? (
+            <View className="flex-row items-center justify-end">
+              <ProgressRing
+                progress={progressRatio}
+                size={72}
+                strokeWidth={7}
+                label={`${daysCompleted}`}
+                caption={challenge.challenge_type === 'points' ? 'tasks' : 'logs'}
+                labelClassName="text-[16px] font-extrabold text-white"
+                color="#72D9CB"
+              />
+            </View>
+          ) : (
+            <View>
+              <AppText
+                className="text-[11px] font-semibold uppercase"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
+                Goal
+              </AppText>
+              <AppText className="mt-1 text-[15px] font-bold" style={{ color: '#fff' }} numberOfLines={1}>
+                {goalLabel}
+              </AppText>
+              {subtitle ? (
+                <AppText
+                  className="mt-0.5 text-[11px]"
+                  style={{ color: 'rgba(255,255,255,0.72)' }}
+                  numberOfLines={1}>
+                  {subtitle}
+                </AppText>
+              ) : null}
+            </View>
+          )}
+          <OfficialFillingStats
+            challenge={challenge}
+            nowMs={nowMs}
+            showStartLine={filling}
+            tone="hero"
+          />
+        </View>
+      ) : (
         <View className="flex-row items-start justify-between gap-3">
           <View className="min-w-0 flex-1">
-            {official ? (
-              <OfficialFillingStats
-                challenge={challenge}
-                nowMs={nowMs}
-                showStartLine={filling}
-                tone="hero"
-              />
-            ) : (
-              <View>
-                <AppText
-                  className="text-[11px] font-semibold uppercase"
-                  style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.6 }}>
-                  Current pool
-                </AppText>
-                <AppText className="mt-1 text-[22px] font-extrabold" style={{ color: '#fff' }}>
-                  {poolLabel}
-                </AppText>
-              </View>
-            )}
+            <AppText
+              className="text-[11px] font-semibold uppercase"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
+              Current pool
+            </AppText>
+            <AppText className="mt-1 text-[22px] font-extrabold" style={{ color: '#fff' }} numberOfLines={1}>
+              {poolLabel}
+            </AppText>
           </View>
           {showProgressRing && joined ? (
             <View className="items-center">
@@ -140,7 +176,7 @@ export function ChallengeHeroCard({
               <AppText
                 className="mt-1 text-center text-[12px] font-semibold"
                 style={{ color: '#fff' }}
-                numberOfLines={2}>
+                numberOfLines={1}>
                 {goalLabel}
               </AppText>
             </View>
@@ -148,16 +184,23 @@ export function ChallengeHeroCard({
             <View className="max-w-[42%] items-end">
               <AppText
                 className="text-[11px] font-semibold uppercase"
-                style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.6 }}>
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
                 Goal
               </AppText>
-              <AppText className="mt-1 text-right text-[15px] font-bold" style={{ color: '#fff' }}>
+              <AppText
+                className="mt-1 text-right text-[15px] font-bold"
+                style={{ color: '#fff' }}
+                numberOfLines={1}>
                 {goalLabel}
               </AppText>
               {subtitle ? (
                 <AppText
                   className="mt-0.5 text-right text-[11px]"
-                  style={{ color: 'rgba(255,255,255,0.72)' }}>
+                  style={{ color: 'rgba(255,255,255,0.72)' }}
+                  numberOfLines={1}>
                   {subtitle}
                 </AppText>
               ) : null}

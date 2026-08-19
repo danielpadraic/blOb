@@ -9,6 +9,8 @@ export type CreateTourStep = {
   placement: TourPlacement;
   title: string;
   body: string;
+  titleBucks?: string;
+  bodyBucks?: string;
   wizardStep?: number;
 };
 
@@ -29,35 +31,37 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-currency',
     placement: 'below',
     title: 'Currency',
-    body: 'Coin icon for Coins. $ icon for real money. Same toggle on Advanced.',
+    body: 'Coins are rewards. $ is real money.',
   },
   {
     id: 'simple-buyin',
     target: 'create-simple-buyin',
     placement: 'below',
     title: 'Buy-in',
-    body: 'Coins: what each competitor pays. $: Total prize pool you fund, shown as $1.00.',
+    body: 'Each person pays this to join.',
+    titleBucks: 'Prize',
+    bodyBucks: 'You fund this prize pool.',
   },
   {
     id: 'simple-type',
     target: 'create-simple-type',
     placement: 'below',
     title: 'Type',
-    body: 'Any Exercise is the default. Pick a sport chip only if you want one.',
+    body: 'What kind of work. Any Exercise is fine.',
   },
   {
     id: 'simple-start',
     target: 'create-simple-start',
     placement: 'below',
     title: 'Start',
-    body: 'Date and time logging opens.',
+    body: 'When logging opens.',
   },
   {
     id: 'simple-duration',
     target: 'create-simple-duration',
     placement: 'below',
     title: 'Duration',
-    body: 'How long the challenge runs.',
+    body: 'How long it runs.',
   },
   {
     id: 'simple-task',
@@ -71,7 +75,7 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-frequency',
     placement: 'below',
     title: 'Frequency',
-    body: 'How often they have to log. Custom adds a count and a period: 7 each week.',
+    body: 'How often they have to log.',
   },
   {
     id: 'simple-proof',
@@ -85,14 +89,14 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-visibility',
     placement: 'below',
     title: 'Who can join',
-    body: 'Public is listed. Friends or invite-only stay quieter.',
+    body: 'Public is listed. Friends stay quieter.',
   },
   {
     id: 'simple-advanced',
     target: 'create-simple-advanced',
     placement: 'above',
     title: 'Advanced',
-    body: 'Advanced is the other track — caps, misses, judging, and invite-only. Skip anytime; it does not block publish.',
+    body: 'Caps, misses, judging, and invite-only.',
   },
 ];
 
@@ -103,7 +107,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: LANE,
     title: 'Lane',
-    body: 'Coin Challenge or Private. Private is invite-only and you fund the prize.',
+    body: 'Coin Challenge or Private.',
   },
   {
     id: 'adv-start',
@@ -119,7 +123,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: GOAL,
     title: 'Type',
-    body: 'What kind of contest this is. Skill and effort only.',
+    body: 'What kind of contest this is.',
   },
   {
     id: 'adv-title',
@@ -159,7 +163,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: TYPE,
     title: 'Scoring',
-    body: 'Consistency logs on a schedule. Points rank a task list.',
+    body: 'Consistency or a ranked task list.',
   },
   {
     id: 'adv-starts',
@@ -167,7 +171,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: DURATION,
     title: 'Start',
-    body: 'When logging opens. Local time, saved as UTC.',
+    body: 'When logging opens.',
   },
   {
     id: 'adv-end',
@@ -175,7 +179,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: DURATION,
     title: 'End',
-    body: 'Pick an end date or a length from the start.',
+    body: 'An end date or a length from the start.',
   },
   {
     id: 'adv-duration',
@@ -191,7 +195,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: PRIZE,
     title: 'Payout',
-    body: 'How the prize pool splits when people finish.',
+    body: 'How the prize pool splits.',
   },
   {
     id: 'adv-funding',
@@ -199,7 +203,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: FUNDING,
     title: 'Funding',
-    body: 'Who puts money in the pool — competitors, you, or both.',
+    body: 'Who puts money in the pool.',
   },
   {
     id: 'adv-currency',
@@ -207,7 +211,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: ENTRY,
     title: 'Currency',
-    body: 'Coin icon for Coins. $ icon for real money.',
+    body: 'Coins are rewards. $ is real money.',
   },
   {
     id: 'adv-buyin',
@@ -215,7 +219,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: ENTRY,
     title: 'Buy-in',
-    body: 'What each competitor pays to enter. Free if you host the prize.',
+    body: 'What each competitor pays to enter.',
   },
   {
     id: 'adv-cap',
@@ -231,7 +235,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: ENTRY,
     title: 'Min to start',
-    body: 'Too few people at start cancels and refunds coin buy-ins.',
+    body: 'Too few people cancels and refunds coins.',
   },
   {
     id: 'adv-misses',
@@ -247,7 +251,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: ENTRY,
     title: 'Judging',
-    body: 'Auto accepts proofs. Host means you review them.',
+    body: 'Auto accepts proofs. Host means you review.',
   },
   {
     id: 'adv-host-join',
@@ -255,7 +259,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: ENTRY,
     title: 'You compete',
-    body: 'On if you are in it too. Off if you are hosting only.',
+    body: 'On if you are in it too.',
   },
   {
     id: 'adv-proofs',
@@ -271,7 +275,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: RULES,
     title: 'Extra rules',
-    body: 'Minutes, extra constraints, cover, and video if you need them.',
+    body: 'Minutes, constraints, cover, and video.',
   },
   {
     id: 'adv-review',
@@ -279,7 +283,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'above',
     wizardStep: REVIEW,
     title: 'Review',
-    body: 'Check it, then publish. Skip this tour anytime — it does not block publish.',
+    body: 'Check it, then publish.',
   },
   {
     id: 'adv-simple',
@@ -287,7 +291,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: REVIEW,
     title: 'Simple',
-    body: 'Simple is the other track if you want fewer fields.',
+    body: 'The other track if you want fewer fields.',
   },
 ];
 

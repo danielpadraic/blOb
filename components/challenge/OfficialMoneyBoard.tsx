@@ -63,7 +63,7 @@ export function OfficialMoneyBoard({
       }}>
       {filling ? (
         <>
-          <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+          <View className="flex-row" style={{ gap: 8 }}>
             <Stat label={copy('create.buyIn')} value={<BuckUsdAmount amount={buyIn} size={16} />} />
             <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
             <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} />
@@ -78,7 +78,7 @@ export function OfficialMoneyBoard({
           />
         </>
       ) : (
-        <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+        <View className="flex-row" style={{ gap: 6 }}>
           <Stat label={copy('board.joined')} value={String(joined)} />
           <Stat label={copy('board.finished')} value={String(Math.max(finished, 0))} />
           <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} />
@@ -91,12 +91,17 @@ export function OfficialMoneyBoard({
 
 function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <View style={{ width: '31%', minWidth: 88 }}>
-      <AppText className="text-[9px] font-semibold uppercase tracking-wide text-muted">
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <AppText
+        className="text-[9px] font-semibold uppercase text-muted"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        style={{ letterSpacing: 0.2 }}>
         {label}
       </AppText>
       {typeof value === 'string' ? (
-        <AppText className="mt-0.5 text-[13px] font-extrabold text-charcoal" numberOfLines={2}>
+        <AppText className="mt-0.5 text-[13px] font-extrabold text-charcoal" numberOfLines={1}>
           {value}
         </AppText>
       ) : (

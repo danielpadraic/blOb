@@ -10,6 +10,8 @@ import {
 import { type LayoutRectangle, type ScrollView } from 'react-native';
 
 import type { CreateTourTrack } from '@/lib/createTour';
+import { scrollDeltaToCenter, scrollViewToY } from '@/lib/tourScroll';
+import type { SimpleCurrency } from '@/lib/simpleChallenge';
 
 export type TourRect = LayoutRectangle;
 
@@ -33,6 +35,14 @@ type TourContextValue = {
   rectFor: (id: string | null) => TourRect | null;
   setHomeScroll: (node: ScrollView | null) => void;
   scrollHomeToTop: () => void;
+  createCurrency: SimpleCurrency;
+  setCreateCurrency: (value: SimpleCurrency) => void;
+  setCreateScroll: (node: ScrollView | null) => void;
+  setCreateScrollY: (y: number) => void;
+  centerCreateRect: (
+    rect: LayoutRectangle,
+    viewport: { top: number; bottom: number; center: number },
+  ) => boolean;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
@@ -45,10 +55,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [createActive, setCreateActive] = useState(false);
   const [createRunId, setCreateRunId] = useState(0);
   const [createTrack, setCreateTrack] = useState<CreateTourTrack | null>(null);
+  const [createCurrency, setCreateCurrency] = useState<SimpleCurrency>('coins');
   const [version, setVersion] = useState(0);
   const rects = useRef(new Map<string, TourRect>());
   const homeScroll = useRef<ScrollView | null>(null);
   const createPeek = useRef<((step: number) => void) | null>(null);
+  const createScroll = useRef<ScrollView | null>(null);
+  const createScrollY = useRef(0);
 
   const register = useCallback((id: string, rect: TourRect | null) => {
     if (!rect || rect.width < 1 || rect.height < 1) {
@@ -80,6 +93,35 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const scrollHomeToTop = useCallback(() => {
     homeScroll.current?.scrollTo({ y: 0, animated: true });
   }, []);
+
+  const setCreateScroll = useCallback((node: ScrollView | null) => {
+    createScroll.current = node;
+    if (!node) {
+      createScrollY.current = 0;
+    }
+  }, []);
+
+  const setCreateScrollY = useCallback((y: number) => {
+    createScrollY.current = y;
+  }, []);
+
+  const centerCreateRect = useCallback(
+    (rect: LayoutRectangle, viewport: { top: number; bottom: number; center: number }) => {
+      const scroll = createScroll.current;
+      if (!scroll) {
+        return false;
+      }
+      const delta = scrollDeltaToCenter(rect, viewport);
+      if (Math.abs(delta) < 8) {
+        return false;
+      }
+      const next = Math.max(0, createScrollY.current + delta);
+      createScrollY.current = next;
+      scrollViewToY(scroll, next);
+      return true;
+    },
+    [],
+  );
 
   const start = useCallback(() => {
     setCreateActive(false);
@@ -137,11 +179,18 @@ export function TourProvider({ children }: { children: ReactNode }) {
       rectFor,
       setHomeScroll,
       scrollHomeToTop,
+      createCurrency,
+      setCreateCurrency,
+      setCreateScroll,
+      setCreateScrollY,
+      centerCreateRect,
     }),
     [
       active,
       bump,
+      centerCreateRect,
       createActive,
+      createCurrency,
       createRunId,
       createTrack,
       epoch,
@@ -150,7 +199,10 @@ export function TourProvider({ children }: { children: ReactNode }) {
       register,
       runId,
       scrollHomeToTop,
+      setCreateCurrency,
       setCreatePeek,
+      setCreateScroll,
+      setCreateScrollY,
       setHomeScroll,
       start,
       startCreate,

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTourOptional } from '@/components/tour/TourContext';
 import { Button } from '@/components/ui/Button';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
@@ -118,6 +119,12 @@ export function SimpleCreateForm() {
   const [error, setError] = useState<string | null>(null);
   useDismissTo(returnTo === 'feed' ? TABS_HREF : LOBBY_HREF);
   useCreateChallengeTour('simple');
+  const tour = useTourOptional();
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    tour?.setCreateCurrency(draft.currency);
+  }, [draft.currency, tour]);
 
   function patch(partial: Partial<SimpleChallengeDraft>) {
     setDraft((current) => {
@@ -181,7 +188,16 @@ export function SimpleCreateForm() {
   }
 
   return (
-    <Screen scroll padded edges={TAB_ROOT_EDGES}>
+    <Screen
+      scroll
+      padded
+      edges={TAB_ROOT_EDGES}
+      scrollRef={(node) => {
+        scrollRef.current = node;
+        tour?.setCreateScroll(node);
+      }}
+      onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
+      contentPaddingBottom={tour?.createActive ? 220 : undefined}>
       <View className="gap-5 pt-1">
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
           <StackBackButton fallback={returnTo === 'feed' ? TABS_HREF : LOBBY_HREF} />
