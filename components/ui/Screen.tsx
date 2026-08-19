@@ -38,6 +38,7 @@ export function Screen({
   scrollRef,
   onScroll,
   contentPaddingBottom,
+  style,
   ...props
 }: ScreenProps) {
   const segments = useSegments();
@@ -50,16 +51,17 @@ export function Screen({
   const body = (
     <View
       className={cn('flex-1', padded && 'px-4', className)}
-      style={SCREEN_BACKGROUND}
+      style={[SCREEN_BACKGROUND, { minHeight: 0, overflow: 'visible' }, style]}
       {...props}>
       {children}
     </View>
   );
 
   return (
-    <SafeAreaView className="flex-1" style={SCREEN_BACKGROUND} edges={resolvedEdges}>
+    <SafeAreaView className="flex-1" style={[SCREEN_BACKGROUND, { minHeight: 0 }]} edges={resolvedEdges}>
       <KeyboardAvoidingView
         className="flex-1"
+        style={{ minHeight: 0 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (
           <ScrollView

@@ -180,6 +180,8 @@ function TabLayoutInner() {
     }
   }
 
+  const friendsTabRoot = pathname === '/friends';
+
   return (
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
       {isChallengeIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
@@ -190,7 +192,9 @@ function TabLayoutInner() {
           onToggleSearch={toggleSearch}
         />
       )}
-      <View className="flex-1" style={{ overflow: 'hidden' }}>
+      <View
+        className="flex-1"
+        style={{ overflow: friendsTabRoot ? 'visible' : 'hidden', minHeight: 0 }}>
         <SocialSheetsHost>
         <Tabs
           tabBar={() => null}
@@ -215,7 +219,14 @@ function TabLayoutInner() {
               href: null,
             }}
           />
-          <Tabs.Screen name="friends" options={{ title: 'Friends' }} listeners={{ tabPress: closeOverlays }} />
+          <Tabs.Screen
+            name="friends"
+            options={{
+              title: 'Friends',
+              sceneStyle: { flex: 1, minHeight: 0, overflow: 'visible' },
+            }}
+            listeners={{ tabPress: closeOverlays }}
+          />
           <Tabs.Screen name="notifications" options={{ href: null, title: 'Alerts' }} />
           <Tabs.Screen name="messages" options={{ href: null, title: 'Messages' }} />
           <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />

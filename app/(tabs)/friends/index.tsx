@@ -1,11 +1,15 @@
-import { useMemo, useRef, useState, type RefObject } from 'react';
+import { useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
+  Platform,
   RefreshControl,
   ScrollView,
   TextInput,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -19,7 +23,6 @@ import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
-import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useAcceptFriendRequest,
@@ -39,9 +42,10 @@ import {
   detectPeopleSearch,
   otherFriendshipUserId,
   peopleRelation,
+  type FriendEdge,
   type PeopleRelation,
 } from '@/lib/social';
-import { THEME } from '@/lib/theme';
+import { TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -52,6 +56,19 @@ const SEGMENTS = [
 ] as const;
 
 type FriendsSegment = (typeof SEGMENTS)[number]['value'];
+
+const PANE_FILL: ViewStyle = { flex: 1, minHeight: 0, overflow: 'visible' };
+
+const PANE_SCROLL: StyleProp<ViewStyle> =
+  Platform.OS === 'web'
+    ? ({ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' } as object as ViewStyle)
+    : { flex: 1, minHeight: 0 };
+
+const PANE_CONTENT = {
+  paddingTop: 16,
+  paddingBottom: TAB_BAR_CONTENT_INSET,
+  gap: 12,
+};
 
 export default function FriendsScreen() {
   const { user } = useAuth();
@@ -159,7 +176,6 @@ export default function FriendsScreen() {
     (requestsQuery.isRefetching && !requestsQuery.isLoading);
 
   return (
-    <TourAnchor id="tour-friends">
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
       <FriendsHeader
         friendCount={friends.length}
@@ -172,67 +188,68 @@ export default function FriendsScreen() {
         accessibilityLabel="Friends sections"
       />
 
-      {segment === 'friends' ? (
-        <FriendsPane
-          loading={friendsQuery.isLoading}
-          error={friendsQuery.error instanceof Error ? friendsQuery.error.message : null}
-          friends={friends}
-          refreshing={refreshing}
-          userId={user?.id}
-          messagingId={startChat.isPending ? startChat.variables ?? null : null}
-          onRefresh={() => {
-            void friendsQuery.refetch();
-            void requestsQuery.refetch();
-          }}
-          onRetry={() => void friendsQuery.refetch()}
-          onFind={goFind}
-          onMessage={(friend) => onMessage(otherFriendshipUserId(friend, user?.id ?? ''))}
-        />
-      ) : null}
+      <View style={PANE_FILL}>
+        {segment === 'friends' ? (
+          <FriendsPane
+            loading={friendsQuery.isLoading}
+            error={friendsQuery.error instanceof Error ? friendsQuery.error.message : null}
+            friends={friends}
+            refreshing={refreshing}
+            userId={user?.id}
+            messagingId={startChat.isPending ? startChat.variables ?? null : null}
+            onRefresh={() => {
+              void friendsQuery.refetch();
+              void requestsQuery.refetch();
+            }}
+            onRetry={() => void friendsQuery.refetch()}
+            onFind={goFind}
+            onMessage={(friend) => onMessage(otherFriendshipUserId(friend, user?.id ?? ''))}
+          />
+        ) : null}
 
-      {segment === 'requests' ? (
-        <RequestsPane
-          loading={requestsQuery.isLoading}
-          error={requestsQuery.error instanceof Error ? requestsQuery.error.message : null}
-          incoming={incoming}
-          outgoing={outgoing}
-          userId={user?.id}
-          busyId={actionPending ? busyId : null}
-          onRetry={() => void requestsQuery.refetch()}
-          onFind={goFind}
-          onAccept={(id) =>
-            acceptRequest.mutate(id, {
-              onError: (error) => fail(error, 'Couldn’t accept that request'),
-            })
-          }
-          onDecline={(id) =>
-            rejectRequest.mutate(id, {
-              onError: (error) => fail(error, 'Couldn’t decline that request'),
-            })
-          }
-          onCancel={(id) =>
-            rejectRequest.mutate(id, {
-              onError: (error) => fail(error, 'Couldn’t cancel that request'),
-            })
-          }
-        />
-      ) : null}
+        {segment === 'requests' ? (
+          <RequestsPane
+            loading={requestsQuery.isLoading}
+            error={requestsQuery.error instanceof Error ? requestsQuery.error.message : null}
+            incoming={incoming}
+            outgoing={outgoing}
+            userId={user?.id}
+            busyId={actionPending ? busyId : null}
+            onRetry={() => void requestsQuery.refetch()}
+            onFind={goFind}
+            onAccept={(id) =>
+              acceptRequest.mutate(id, {
+                onError: (error) => fail(error, 'Couldn’t accept that request'),
+              })
+            }
+            onDecline={(id) =>
+              rejectRequest.mutate(id, {
+                onError: (error) => fail(error, 'Couldn’t decline that request'),
+              })
+            }
+            onCancel={(id) =>
+              rejectRequest.mutate(id, {
+                onError: (error) => fail(error, 'Couldn’t cancel that request'),
+              })
+            }
+          />
+        ) : null}
 
-      {segment === 'search' ? (
-        <SearchPane
-          query={query}
-          inputRef={searchRef}
-          loading={searchQuery.isFetching && Boolean(parsedSearch)}
-          results={results}
-          userId={user?.id}
-          graph={graph}
-          busyId={actionPending ? busyId : null}
-          onChangeQuery={setQuery}
-          onPrimary={onSearchPrimary}
-        />
-      ) : null}
+        {segment === 'search' ? (
+          <SearchPane
+            query={query}
+            inputRef={searchRef}
+            loading={searchQuery.isFetching && Boolean(parsedSearch)}
+            results={results}
+            userId={user?.id}
+            graph={graph}
+            busyId={actionPending ? busyId : null}
+            onChangeQuery={setQuery}
+            onPrimary={onSearchPrimary}
+          />
+        ) : null}
+      </View>
     </Screen>
-    </TourAnchor>
   );
 }
 
@@ -250,64 +267,79 @@ function FriendsPane({
 }: {
   loading: boolean;
   error: string | null;
-  friends: ReturnType<typeof useFriends>['data'];
+  friends: FriendEdge[];
   refreshing: boolean;
   userId?: string;
   messagingId: string | null;
   onRefresh: () => void;
   onRetry: () => void;
   onFind: () => void;
-  onMessage: (friend: NonNullable<ReturnType<typeof useFriends>['data']>[number]) => void;
+  onMessage: (friend: FriendEdge) => void;
 }) {
   const tone = useCopyTone();
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.accent} />
+  );
+
   if (loading) {
-    return <MascotState kind="loading" title={copy('friends.loading', tone)} compact />;
+    return (
+      <PaneScroll refreshControl={refreshControl}>
+        <MascotState kind="loading" title={copy('friends.loading', tone)} compact />
+      </PaneScroll>
+    );
   }
   if (error) {
     return (
-      <MascotState
-        kind="error"
-        title="Couldn’t load friends"
-        body={error}
-        actionLabel="Retry"
-        onAction={onRetry}
-        compact
-      />
+      <PaneScroll refreshControl={refreshControl}>
+        <MascotState
+          kind="error"
+          title="Couldn’t load friends"
+          body={error}
+          actionLabel="Retry"
+          onAction={onRetry}
+          compact
+        />
+      </PaneScroll>
     );
   }
-  if (!friends || friends.length === 0) {
+  if (friends.length === 0) {
     return (
-      <MascotState
-        kind="empty"
-        title={copy('friends.empty', tone)}
-        actionLabel="Find people"
-        onAction={onFind}
-        compact
-      />
+      <PaneScroll refreshControl={refreshControl}>
+        <MascotState
+          kind="empty"
+          title={copy('friends.empty', tone)}
+          actionLabel="Find people"
+          onAction={onFind}
+          compact
+        />
+      </PaneScroll>
     );
   }
 
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="gap-3 pb-4 pt-4"
+    <FlatList
+      data={friends}
+      keyExtractor={(friend) => `${friend.user_a_id}-${friend.user_b_id}`}
+      style={PANE_SCROLL}
+      contentContainerStyle={PANE_CONTENT}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.accent} />
-      }>
-      {friends.map((friend) => {
+      initialNumToRender={16}
+      maxToRenderPerBatch={16}
+      windowSize={10}
+      removeClippedSubviews={Platform.OS !== 'web'}
+      refreshControl={refreshControl}
+      renderItem={({ item: friend }) => {
         const otherId = userId ? otherFriendshipUserId(friend, userId) : (friend.profile?.id ?? '');
         return (
           <FriendCard
-            key={`${friend.user_a_id}-${friend.user_b_id}`}
             friend={friend}
             messaging={messagingId === otherId}
             onMessage={() => onMessage(friend)}
           />
         );
-      })}
-    </ScrollView>
+      }}
+    />
   );
 }
 
@@ -326,8 +358,8 @@ function RequestsPane({
 }: {
   loading: boolean;
   error: string | null;
-  incoming: NonNullable<ReturnType<typeof useFriendRequests>['data']>['incoming'];
-  outgoing: NonNullable<ReturnType<typeof useFriendRequests>['data']>['outgoing'];
+  incoming: FriendEdge[];
+  outgoing: FriendEdge[];
   userId?: string;
   busyId: string | null;
   onRetry: () => void;
@@ -338,39 +370,43 @@ function RequestsPane({
 }) {
   const tone = useCopyTone();
   if (loading) {
-    return <MascotState kind="loading" title="Checking requests" compact />;
+    return (
+      <PaneScroll>
+        <MascotState kind="loading" title="Checking requests" compact />
+      </PaneScroll>
+    );
   }
   if (error) {
     return (
-      <MascotState
-        kind="error"
-        title="Couldn’t load requests"
-        body={error}
-        actionLabel="Retry"
-        onAction={onRetry}
-        compact
-      />
+      <PaneScroll>
+        <MascotState
+          kind="error"
+          title="Couldn’t load requests"
+          body={error}
+          actionLabel="Retry"
+          onAction={onRetry}
+          compact
+        />
+      </PaneScroll>
     );
   }
   if (incoming.length === 0 && outgoing.length === 0) {
     return (
-      <MascotState
-        kind="empty"
-        title={copy('alerts.empty', tone)}
-        body="No pending requests. Find someone in the Lobby and send a request after you compete."
-        actionLabel="Find people"
-        onAction={onFind}
-        compact
-      />
+      <PaneScroll>
+        <MascotState
+          kind="empty"
+          title={copy('alerts.empty', tone)}
+          body="No pending requests. Find someone in the Lobby and send a request after you compete."
+          actionLabel="Find people"
+          onAction={onFind}
+          compact
+        />
+      </PaneScroll>
     );
   }
 
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="gap-3 pb-4 pt-4"
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}>
+    <PaneScroll>
       {incoming.length > 0 ? (
         <View className="gap-3">
           <AppText className="text-[13px] font-semibold text-muted">Incoming</AppText>
@@ -410,7 +446,7 @@ function RequestsPane({
           })}
         </View>
       ) : null}
-    </ScrollView>
+    </PaneScroll>
   );
 }
 
@@ -451,7 +487,7 @@ function SearchPane({
         : null;
 
   return (
-    <View className="flex-1 pt-4">
+    <View style={[PANE_FILL, { paddingTop: 16 }]}>
       <Input
         ref={inputRef}
         value={query}
@@ -475,45 +511,68 @@ function SearchPane({
               : 'Type two characters to search.'}
         </AppText>
       ) : null}
-      {parsed && !loading && results.length === 0 ? (
-        <MascotState
-          kind="empty"
-          title={copy('friends.noneMatch', tone)}
-          compact
-        />
-      ) : null}
-      {!term && !loading ? (
-        <MascotState
-          kind="empty"
-          title="Find your people"
-          body="Search by name or @username, or paste a full email or phone number."
-          compact
-        />
-      ) : null}
-      {results.length > 0 ? (
-        <ScrollView
-          className="mt-3 flex-1"
-          contentContainerClassName="gap-3 pb-4"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
-          {results.map((profile) => {
-            const relation = peopleRelation({
-              userId,
-              targetId: profile.id,
-              ...graph,
-            });
-            return (
-              <UserSearchResult
-                key={profile.id}
-                profile={profile}
-                relation={relation}
-                busy={busyId === profile.id}
-                onPrimary={() => onPrimary(profile, relation)}
-              />
-            );
-          })}
-        </ScrollView>
-      ) : null}
+      <View style={PANE_FILL}>
+        {parsed && !loading && results.length === 0 ? (
+          <PaneScroll>
+            <MascotState kind="empty" title={copy('friends.noneMatch', tone)} compact />
+          </PaneScroll>
+        ) : null}
+        {!term && !loading ? (
+          <PaneScroll>
+            <MascotState
+              kind="empty"
+              title="Find your people"
+              body="Search by name or @username, or paste a full email or phone number."
+              compact
+            />
+          </PaneScroll>
+        ) : null}
+        {results.length > 0 ? (
+          <FlatList
+            data={results}
+            keyExtractor={(profile) => profile.id}
+            style={PANE_SCROLL}
+            contentContainerStyle={{ paddingTop: 12, paddingBottom: TAB_BAR_CONTENT_INSET, gap: 12 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            renderItem={({ item: profile }) => {
+              const relation = peopleRelation({
+                userId,
+                targetId: profile.id,
+                ...graph,
+              });
+              return (
+                <UserSearchResult
+                  profile={profile}
+                  relation={relation}
+                  busy={busyId === profile.id}
+                  onPrimary={() => onPrimary(profile, relation)}
+                />
+              );
+            }}
+          />
+        ) : null}
+      </View>
     </View>
+  );
+}
+
+function PaneScroll({
+  children,
+  refreshControl,
+}: {
+  children: ReactNode;
+  refreshControl?: ReactElement;
+}) {
+  return (
+    <ScrollView
+      style={PANE_SCROLL}
+      contentContainerStyle={PANE_CONTENT}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}>
+      {children}
+    </ScrollView>
   );
 }
