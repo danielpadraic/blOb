@@ -4,6 +4,7 @@ import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
+import type { WaveClipWindow } from '@/lib/waveClips';
 import type {
   Conversation,
   ConversationMember,
@@ -16,6 +17,9 @@ import type {
   Message,
   Reel,
   Story,
+  StoryComment,
+  StoryReaction,
+  StoryReactionType,
 } from '@/types/social';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
 
@@ -28,7 +32,9 @@ export const FRIENDSHIP_COLUMNS =
 export const FEED_EVENT_COLUMNS =
   'id, actor_id, event_type, target_type, target_id, challenge_id, metadata, visibility, created_at';
 export const STORY_COLUMNS =
-  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at';
+  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, sequence_id, sequence_index, clip_start_ms, clip_duration_ms';
+export const STORY_REACTION_COLUMNS = 'id, story_id, user_id, reaction_type, created_at';
+export const STORY_COMMENT_COLUMNS = 'id, story_id, user_id, body, created_at';
 export const REEL_COLUMNS =
   'id, user_id, video_url, thumbnail_url, caption, challenge_id, duration_ms, created_at';
 export const CONVERSATION_COLUMNS = 'id, is_group, challenge_id, created_at, updated_at';
@@ -70,6 +76,7 @@ export type CreateStoryInput = {
   challenge_id?: string | null;
   caption?: string | null;
   expires_at?: string;
+  clips?: WaveClipWindow[];
 };
 
 export type CreateReelInput = {
@@ -329,7 +336,13 @@ export function groupStories(input: {
     buckets.set(story.user_id, list);
   }
   for (const list of buckets.values()) {
-    list.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    list.sort((a, b) => {
+      const time = Date.parse(a.created_at) - Date.parse(b.created_at);
+      if (time !== 0) {
+        return time;
+      }
+      return (a.sequence_index ?? 0) - (b.sequence_index ?? 0);
+    });
   }
 
   const groups: StoryGroup[] = [];
@@ -691,19 +704,28 @@ export async function createFeedEvent(
 }
 
 export async function fetchActiveStories(): Promise<Story[]> {
-  const { data, error } = await supabase
+  const query = await supabase
     .from('stories')
     .select(STORY_COLUMNS)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
     .limit(80);
-  if (error) {
-    if (isMissingRelationError(error)) {
+  const result =
+    query.error && /sequence_id|clip_start_ms|schema cache/i.test(query.error.message)
+      ? await supabase
+          .from('stories')
+          .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at')
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(80)
+      : query;
+  if (result.error) {
+    if (isMissingRelationError(result.error)) {
       return [];
     }
-    throwIfError(error);
+    throwIfError(result.error);
   }
-  return ((data ?? []) as Story[]).filter((story) => isActiveStory(story));
+  return ((result.data ?? []) as Story[]).filter((story) => isActiveStory(story));
 }
 
 export async function fetchStory(id: string): Promise<Story | null> {
@@ -757,25 +779,48 @@ export async function fetchStoryChallengeOptions(
   return [...byId.values()];
 }
 
-export async function createStory(userId: string, input: CreateStoryInput): Promise<Story> {
+export async function createStory(userId: string, input: CreateStoryInput): Promise<Story[]> {
   const mediaUrl = input.media_url.trim();
   if (!mediaUrl) {
     throw new Error('Add a photo or video first.');
   }
-  const { data, error } = await supabase
-    .from('stories')
-    .insert({
-      user_id: userId,
-      media_url: mediaUrl,
-      media_type: input.media_type,
-      challenge_id: input.challenge_id ?? null,
-      caption: input.caption?.trim() || null,
-      expires_at: input.expires_at ?? addHours(new Date(), STORY_TTL_HOURS).toISOString(),
-    })
-    .select(STORY_COLUMNS)
-    .single();
+  const expiresAt = input.expires_at ?? addHours(new Date(), STORY_TTL_HOURS).toISOString();
+  const clips =
+    input.clips && input.clips.length > 0
+      ? input.clips
+      : [{ startMs: 0, durationMs: input.media_type === 'image' ? 15_000 : 0 }];
+  const sequenceId = clips.length > 1 ? (globalThis.crypto?.randomUUID?.() ?? `seq_${Date.now()}`) : null;
+  const rows = clips.map((clip, index) => ({
+    user_id: userId,
+    media_url: mediaUrl,
+    media_type: input.media_type,
+    challenge_id: input.challenge_id ?? null,
+    caption: index === 0 ? input.caption?.trim() || null : null,
+    expires_at: expiresAt,
+    sequence_id: sequenceId,
+    sequence_index: index,
+    clip_start_ms: clip.startMs,
+    clip_duration_ms: clip.durationMs || null,
+  }));
+  const { data, error } = await supabase.from('stories').insert(rows).select(STORY_COLUMNS);
+  if (error && /sequence_id|clip_start_ms|clip_duration_ms|schema cache/i.test(error.message)) {
+    const fallback = await supabase
+      .from('stories')
+      .insert({
+        user_id: userId,
+        media_url: mediaUrl,
+        media_type: input.media_type,
+        challenge_id: input.challenge_id ?? null,
+        caption: input.caption?.trim() || null,
+        expires_at: expiresAt,
+      })
+      .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at')
+      .single();
+    throwIfError(fallback.error);
+    return [fallback.data as Story];
+  }
   throwIfError(error);
-  return data as Story;
+  return ((data ?? []) as Story[]).sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0));
 }
 
 export async function viewStory(userId: string, storyId: string): Promise<void> {
@@ -1052,4 +1097,87 @@ export async function getOrCreateDirectConversation(
   });
   throwIfError(otherError);
   return conversation;
+}
+
+export async function fetchStoryReactions(storyId: string): Promise<StoryReaction[]> {
+  const { data, error } = await supabase
+    .from('story_reactions')
+    .select(STORY_REACTION_COLUMNS)
+    .eq('story_id', storyId);
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return [];
+    }
+    throwIfError(error);
+  }
+  return (data ?? []) as StoryReaction[];
+}
+
+export async function fetchStoryComments(storyId: string): Promise<StoryComment[]> {
+  const { data, error } = await supabase
+    .from('story_comments')
+    .select(STORY_COMMENT_COLUMNS)
+    .eq('story_id', storyId)
+    .order('created_at', { ascending: true })
+    .limit(80);
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return [];
+    }
+    throwIfError(error);
+  }
+  return (data ?? []) as StoryComment[];
+}
+
+export async function toggleStoryReaction(
+  userId: string,
+  storyId: string,
+  type: StoryReactionType,
+): Promise<void> {
+  const existing = await supabase
+    .from('story_reactions')
+    .select('id')
+    .eq('story_id', storyId)
+    .eq('user_id', userId)
+    .eq('reaction_type', type)
+    .maybeSingle();
+  if (existing.data?.id) {
+    const { error } = await supabase.from('story_reactions').delete().eq('id', existing.data.id);
+    throwIfError(error);
+    return;
+  }
+  const { error } = await supabase.from('story_reactions').insert({
+    story_id: storyId,
+    user_id: userId,
+    reaction_type: type,
+  });
+  throwIfError(error);
+}
+
+export async function createStoryComment(
+  userId: string,
+  storyId: string,
+  body: string,
+): Promise<StoryComment> {
+  const text = body.trim();
+  if (!text) {
+    throw new Error('Write a comment first.');
+  }
+  const { data, error } = await supabase
+    .from('story_comments')
+    .insert({ story_id: storyId, user_id: userId, body: text })
+    .select(STORY_COMMENT_COLUMNS)
+    .single();
+  throwIfError(error);
+  return data as StoryComment;
+}
+
+export async function notifyStoryShared(storyId: string, recipientId: string): Promise<void> {
+  const { error } = await supabase.rpc('notify_story_shared', {
+    p_story_id: storyId,
+    p_recipient_id: recipientId,
+  });
+  if (error && !isMissingRelationError(error)) {
+    throwIfError(error);
+  }
 }

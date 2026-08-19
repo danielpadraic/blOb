@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useEventListener } from 'expo';
 import { useRouter } from 'expo-router';
@@ -9,15 +9,26 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StoryRing } from '@/components/stories/StoryRing';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { useViewStory } from '@/hooks/useSocial';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  useCreateStoryComment,
+  useFriends,
+  useShareStory,
+  useStoryComments,
+  useStoryReactions,
+  useToggleStoryReaction,
+  useViewStory,
+} from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { challengeDetailHref } from '@/lib/routes';
-import { storyTimeLeft, type FeedChallengePreview, type StoryGroup } from '@/lib/social';
+import { personDisplayName, storyTimeLeft, type FeedChallengePreview, type StoryGroup } from '@/lib/social';
+import { WAVE_CLIP_MS } from '@/lib/waveClips';
+import { storyShareUrl } from '@/lib/waveShare';
 import { THEME } from '@/lib/theme';
-import type { Story } from '@/types/social';
-
-const IMAGE_MS = 5000;
+import type { Story, StoryReactionType } from '@/types/social';
+import { getErrorMessage } from '@/utils/errors';
 
 type StoryViewerProps = {
   groups: StoryGroup[];
@@ -39,6 +50,7 @@ export function StoryViewer({
   const [groupIndex, setGroupIndex] = useState(startGroupIndex);
   const [storyIndex, setStoryIndex] = useState(startStoryIndex);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [panel, setPanel] = useState<'comments' | 'share' | null>(null);
   const paused = useRef(false);
   const marked = useRef(new Set<string>());
   const groupsRef = useRef(groups);
@@ -49,9 +61,14 @@ export function StoryViewer({
   groupsRef.current = groups;
   groupIndexRef.current = groupIndex;
   storyIndexRef.current = storyIndex;
+  paused.current = panel != null;
 
   const group = groups[groupIndex];
   const story = group?.stories[storyIndex];
+  const holdMs =
+    story?.media_type === 'video'
+      ? Math.max(story.clip_duration_ms || WAVE_CLIP_MS, 400)
+      : WAVE_CLIP_MS;
 
   const goNext = useCallback(() => {
     const currentGroups = groupsRef.current;
@@ -88,12 +105,28 @@ export function StoryViewer({
       setStoryIndex(Math.max((prev?.stories.length ?? 1) - 1, 0));
       return;
     }
-    onClose();
-  }, [onClose]);
+  }, []);
+
+  const goNextGroup = useCallback(() => {
+    const currentGroups = groupsRef.current;
+    const currentGroupIndex = groupIndexRef.current;
+    if (currentGroupIndex + 1 < currentGroups.length) {
+      setGroupIndex(currentGroupIndex + 1);
+      setStoryIndex(0);
+    }
+  }, []);
+
+  const goPrevGroup = useCallback(() => {
+    const currentGroupIndex = groupIndexRef.current;
+    if (currentGroupIndex > 0) {
+      setGroupIndex(currentGroupIndex - 1);
+      setStoryIndex(0);
+    }
+  }, []);
 
   useEffect(() => {
     setVideoProgress(0);
-    paused.current = false;
+    setPanel(null);
   }, [story?.id]);
 
   useEffect(() => {
@@ -110,21 +143,32 @@ export function StoryViewer({
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        .activeOffsetY(24)
-        .failOffsetX([-28, 28])
+        .activeOffsetX([-24, 24])
+        .activeOffsetY([-24, 24])
         .onUpdate((event) => {
-          if (event.translationY > 0) {
+          if (Math.abs(event.translationY) > Math.abs(event.translationX) && event.translationY > 0) {
             translateY.value = event.translationY;
           }
         })
         .onEnd((event) => {
+          const absX = Math.abs(event.translationX);
+          const absY = Math.abs(event.translationY);
+          if (absX > 72 && absX > absY) {
+            translateY.value = withTiming(0);
+            if (event.translationX < 0) {
+              runOnJS(goNextGroup)();
+            } else {
+              runOnJS(goPrevGroup)();
+            }
+            return;
+          }
           if (event.translationY > 110) {
             runOnJS(onClose)();
             return;
           }
           translateY.value = withTiming(0);
         }),
-    [onClose, translateY],
+    [goNextGroup, goPrevGroup, onClose, translateY],
   );
 
   const sheetStyle = useAnimatedStyle(() => ({
@@ -148,7 +192,11 @@ export function StoryViewer({
                 active={index === storyIndex}
                 filled={index < storyIndex}
                 pausedRef={paused}
-                durationMs={IMAGE_MS}
+                durationMs={
+                  item.media_type === 'video'
+                    ? Math.max(item.clip_duration_ms || WAVE_CLIP_MS, 400)
+                    : WAVE_CLIP_MS
+                }
                 mediaType={item.media_type}
                 videoProgress={index === storyIndex ? videoProgress : 0}
                 storyId={item.id}
@@ -179,6 +227,8 @@ export function StoryViewer({
               <StoryVideo
                 key={story.id}
                 uri={story.media_url}
+                startMs={story.clip_start_ms ?? 0}
+                durationMs={holdMs}
                 pausedRef={paused}
                 onEnded={goNext}
                 onProgress={setVideoProgress}
@@ -193,26 +243,26 @@ export function StoryViewer({
             <Pressable
               accessibilityLabel={copy('wave.prev')}
               className="absolute bottom-0 left-0 top-0"
-              style={{ width: '32%' }}
+              style={{ width: '33%' }}
               delayLongPress={160}
               onLongPress={() => {
                 paused.current = true;
               }}
               onPressOut={() => {
-                paused.current = false;
+                paused.current = panel != null;
               }}
               onPress={goPrev}
             />
             <Pressable
               accessibilityLabel={copy('wave.next')}
               className="absolute bottom-0 right-0 top-0"
-              style={{ width: '68%' }}
+              style={{ width: '33%' }}
               delayLongPress={160}
               onLongPress={() => {
                 paused.current = true;
               }}
               onPressOut={() => {
-                paused.current = false;
+                paused.current = panel != null;
               }}
               onPress={goNext}
             />
@@ -224,9 +274,205 @@ export function StoryViewer({
             </AppText>
           ) : null}
           {challenge ? <ChallengeChip challenge={challenge} onClose={onClose} /> : null}
+          <WaveSocialBar storyId={story.id} onComments={() => setPanel('comments')} onShare={() => setPanel('share')} />
+          {panel === 'comments' ? <WaveComments storyId={story.id} onClose={() => setPanel(null)} /> : null}
+          {panel === 'share' ? <WaveShare storyId={story.id} onClose={() => setPanel(null)} /> : null}
         </View>
       </Animated.View>
     </GestureDetector>
+  );
+}
+
+function WaveSocialBar({
+  storyId,
+  onComments,
+  onShare,
+}: {
+  storyId: string;
+  onComments: () => void;
+  onShare: () => void;
+}) {
+  const { user } = useAuth();
+  const reactions = useStoryReactions(storyId);
+  const comments = useStoryComments(storyId);
+  const toggle = useToggleStoryReaction(storyId);
+  const list = reactions.data ?? [];
+
+  function count(type: StoryReactionType) {
+    return list.filter((row) => row.reaction_type === type).length;
+  }
+  function mine(type: StoryReactionType) {
+    return list.some((row) => row.reaction_type === type && row.user_id === user?.id);
+  }
+
+  return (
+    <View className="mt-3 flex-row items-center px-4" style={{ gap: 4 }}>
+      <ReactChip label="Like" icon={mine('like') ? GLYPH.like : GLYPH.likeOutline} count={count('like')} active={mine('like')} color="#D24A5A" onPress={() => toggle.mutate('like')} />
+      <ReactChip label="Love" icon={GLYPH.love} count={count('love')} active={mine('love')} color="#E86A17" onPress={() => toggle.mutate('love')} />
+      <ReactChip label="Fire" icon={GLYPH.fire} count={count('fire')} active={mine('fire')} color="#E86A17" onPress={() => toggle.mutate('fire')} />
+      <ReactChip label="Strong" icon={GLYPH.strong} count={count('strong')} active={mine('strong')} color="#72D9CB" onPress={() => toggle.mutate('strong')} />
+      <ReactChip label="Comment" icon={GLYPH.reply} count={comments.data?.length ?? 0} onPress={onComments} />
+      <View className="flex-1" />
+      <ReactChip label="Share" icon={GLYPH.share} onPress={onShare} />
+    </View>
+  );
+}
+
+function ReactChip({
+  label,
+  icon,
+  count = 0,
+  active,
+  color = 'rgba(255,255,255,0.82)',
+  onPress,
+}: {
+  label: string;
+  icon: (typeof GLYPH)[keyof typeof GLYPH];
+  count?: number;
+  active?: boolean;
+  color?: string;
+  onPress: () => void;
+}) {
+  const tint = active ? color : 'rgba(255,255,255,0.82)';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={count > 0 ? `${label} ${count}` : label}
+      onPress={onPress}
+      hitSlop={6}
+      className="h-11 flex-row items-center rounded-full px-1.5"
+      style={{ minHeight: 44 }}>
+      <Glyph name={icon} color={tint} size={18} />
+      {count > 0 ? (
+        <AppText className="ml-1 text-[12px] font-bold" style={{ color: tint }}>
+          {count}
+        </AppText>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function WaveComments({ storyId, onClose }: { storyId: string; onClose: () => void }) {
+  const comments = useStoryComments(storyId);
+  const create = useCreateStoryComment(storyId);
+  const [text, setText] = useState('');
+  return (
+    <View className="mx-4 mt-2 rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(16,19,18,0.92)', maxHeight: 240 }}>
+      <View className="flex-row items-center justify-between">
+        <AppText className="text-[13px] font-extrabold" style={{ color: '#fff' }}>
+          Comments
+        </AppText>
+        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close comments">
+          <AppText className="text-[16px] font-bold" style={{ color: '#fff' }}>
+            ×
+          </AppText>
+        </Pressable>
+      </View>
+      <ScrollView style={{ maxHeight: 140 }} className="mt-2">
+        {(comments.data ?? []).length === 0 ? (
+          <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            No comments yet.
+          </AppText>
+        ) : (
+          (comments.data ?? []).map((row) => (
+            <AppText key={row.id} className="mb-2 text-[13px] leading-5" style={{ color: '#fff' }}>
+              {row.body}
+            </AppText>
+          ))
+        )}
+      </ScrollView>
+      <View className="mt-2 flex-row items-center" style={{ gap: 8 }}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder="Write a comment"
+          placeholderTextColor="rgba(255,255,255,0.45)"
+          style={{
+            flex: 1,
+            minHeight: 44,
+            borderRadius: 14,
+            paddingHorizontal: 12,
+            color: '#fff',
+            backgroundColor: 'rgba(255,255,255,0.08)',
+          }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          disabled={!text.trim() || create.isPending}
+          onPress={() => {
+            const next = text.trim();
+            if (!next) {
+              return;
+            }
+            create.mutate(next, {
+              onSuccess: () => setText(''),
+              onError: (error) => Alert.alert('Couldn’t comment', getErrorMessage(error)),
+            });
+          }}
+          className="h-11 items-center justify-center rounded-full px-3"
+          style={{ backgroundColor: THEME.accent, minHeight: 44 }}>
+          <AppText className="text-[13px] font-bold" style={{ color: '#fff' }}>
+            Send
+          </AppText>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function WaveShare({ storyId, onClose }: { storyId: string; onClose: () => void }) {
+  const friends = useFriends();
+  const share = useShareStory();
+  const url = storyShareUrl(storyId);
+  return (
+    <View className="mx-4 mt-2 rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(16,19,18,0.92)', maxHeight: 260 }}>
+      <View className="flex-row items-center justify-between">
+        <AppText className="text-[13px] font-extrabold" style={{ color: '#fff' }}>
+          Send in DM
+        </AppText>
+        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button">
+          <AppText className="text-[16px] font-bold" style={{ color: '#fff' }}>
+            ×
+          </AppText>
+        </Pressable>
+      </View>
+      <ScrollView style={{ maxHeight: 200 }} className="mt-2">
+        {(friends.data ?? []).length === 0 ? (
+          <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Add friends first.
+          </AppText>
+        ) : (
+          (friends.data ?? []).map((row) => {
+            const id = row.profile?.id;
+            if (!id) {
+              return null;
+            }
+            const name = personDisplayName(row.profile);
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="button"
+                accessibilityLabel={`Send to ${name}`}
+                onPress={() =>
+                  share.mutate(
+                    { storyId, friendId: id, url },
+                    {
+                      onSuccess: onClose,
+                      onError: (error) => Alert.alert('Couldn’t send that', getErrorMessage(error)),
+                    },
+                  )
+                }
+                className="justify-center"
+                style={{ minHeight: 44 }}>
+                <AppText className="text-[15px] font-semibold" style={{ color: '#fff' }}>
+                  {name}
+                </AppText>
+              </Pressable>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -321,37 +567,57 @@ function StoryProgress({
 
 function StoryVideo({
   uri,
+  startMs,
+  durationMs,
   pausedRef,
   onEnded,
   onProgress,
 }: {
   uri: string;
+  startMs: number;
+  durationMs: number;
   pausedRef: { current: boolean };
   onEnded: () => void;
   onProgress: (value: number) => void;
 }) {
+  const startSec = Math.max(startMs, 0) / 1000;
+  const endSec = startSec + Math.max(durationMs, 400) / 1000;
+  const endedRef = useRef(false);
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
     instance.muted = false;
+    instance.currentTime = startSec;
     instance.play();
   });
 
-  useEventListener(player, 'playToEnd', onEnded);
+  useEventListener(player, 'playToEnd', () => {
+    if (!endedRef.current) {
+      endedRef.current = true;
+      onEnded();
+    }
+  });
 
   useEffect(() => {
+    endedRef.current = false;
+    player.currentTime = startSec;
+    player.play();
     const id = setInterval(() => {
-      const duration = player.duration;
-      if (duration > 0) {
-        onProgress(Math.max(0, Math.min(1, player.currentTime / duration)));
-      }
+      const t = player.currentTime;
+      const span = Math.max(endSec - startSec, 0.4);
+      onProgress(Math.max(0, Math.min(1, (t - startSec) / span)));
       if (pausedRef.current) {
         player.pause();
       } else if (!player.playing) {
         player.play();
       }
+      if (!endedRef.current && t >= endSec - 0.05) {
+        endedRef.current = true;
+        player.pause();
+        onEnded();
+      }
     }, 120);
     return () => clearInterval(id);
-  }, [onProgress, pausedRef, player]);
+  }, [endSec, onEnded, onProgress, pausedRef, player, startSec]);
 
   return (
     <VideoView

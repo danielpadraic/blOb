@@ -7,6 +7,7 @@ import { reportBadgeActivity } from '@/lib/badgeActivity';
 import {
   SOCIAL_PAGE_SIZE,
   acceptFriendRequest,
+  createStoryComment,
   createFeedEvent,
   createReel,
   createStory,
@@ -25,9 +26,12 @@ import {
   fetchReels,
   fetchStory,
   fetchStoryChallengeOptions,
+  fetchStoryComments,
+  fetchStoryReactions,
   fetchViewedStoryIds,
   groupStories,
   detectPeopleSearch,
+  notifyStoryShared,
   otherFriendshipUserId,
   searchPeople,
   followUser,
@@ -36,6 +40,7 @@ import {
   rejectFriendRequest,
   sendFriendRequest,
   sendMessage,
+  toggleStoryReaction,
   unfollowUser,
   viewStory,
   type ConversationPreview,
@@ -48,7 +53,7 @@ import {
   type FeedEventItem,
   type SendMessageInput,
 } from '@/lib/social';
-import type { Friendship, Message, Reel, Story } from '@/types/social';
+import type { Friendship, Message, Reel, Story, StoryComment, StoryReaction, StoryReactionType } from '@/types/social';
 
 export type {
   ConversationPreview,
@@ -80,6 +85,8 @@ export const socialKeys = {
   storyViews: (userId: string) => ['story-views', userId] as const,
   storyAuthors: (ids: string[]) => ['story-authors', ids] as const,
   storyChallengePreviews: (ids: string[]) => ['story-challenge-previews', ids] as const,
+  storyReactions: (storyId: string) => ['story-reactions', storyId] as const,
+  storyComments: (storyId: string) => ['story-comments', storyId] as const,
   reels: (limit: number) => ['reels', limit] as const,
   conversations: (userId: string) => ['conversations', userId] as const,
   conversation: (id: string) => ['conversation', id] as const,
@@ -679,17 +686,21 @@ export function useCreateStory() {
       const previous = queryClient.getQueryData<Story[]>(socialKeys.stories());
       if (user?.id) {
         const now = new Date();
-        const optimistic: Story = {
-          id: `optimistic-${now.getTime()}`,
+        const clips = input.clips?.length ? input.clips : [{ startMs: 0, durationMs: 15_000 }];
+        const optimistic = clips.map((clip, index) => ({
+          id: `optimistic-${now.getTime()}-${index}`,
           user_id: user.id,
           media_url: input.media_url,
           media_type: input.media_type,
           challenge_id: input.challenge_id ?? null,
-          caption: input.caption?.trim() || null,
+          caption: index === 0 ? input.caption?.trim() || null : null,
           expires_at: input.expires_at ?? new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
           created_at: now.toISOString(),
-        };
-        queryClient.setQueryData<Story[]>(socialKeys.stories(), [optimistic, ...(previous ?? [])]);
+          sequence_index: index,
+          clip_start_ms: clip.startMs,
+          clip_duration_ms: clip.durationMs,
+        })) as Story[];
+        queryClient.setQueryData<Story[]>(socialKeys.stories(), [...optimistic, ...(previous ?? [])]);
       }
       return { previous };
     },
@@ -735,6 +746,103 @@ export function useViewStory() {
       if (user?.id) {
         void queryClient.invalidateQueries({ queryKey: socialKeys.storyViews(user.id) });
       }
+    },
+  });
+}
+
+export function useStoryReactions(storyId?: string | null) {
+  return useQuery({
+    queryKey: socialKeys.storyReactions(storyId ?? ''),
+    enabled: Boolean(storyId),
+    queryFn: () => fetchStoryReactions(storyId!),
+  });
+}
+
+export function useStoryComments(storyId?: string | null) {
+  return useQuery({
+    queryKey: socialKeys.storyComments(storyId ?? ''),
+    enabled: Boolean(storyId),
+    queryFn: () => fetchStoryComments(storyId!),
+  });
+}
+
+export function useToggleStoryReaction(storyId?: string | null) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (type: StoryReactionType) => {
+      const userId = requireUserId(user?.id);
+      if (!storyId) {
+        throw new Error('Missing Wave.');
+      }
+      await toggleStoryReaction(userId, storyId, type);
+    },
+    onMutate: async (type) => {
+      if (!user?.id || !storyId) {
+        return;
+      }
+      const key = socialKeys.storyReactions(storyId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<StoryReaction[]>(key);
+      queryClient.setQueryData<StoryReaction[]>(key, (current) => {
+        const list = current ?? [];
+        const existing = list.find((row) => row.user_id === user.id && row.reaction_type === type);
+        if (existing) {
+          return list.filter((row) => row.id !== existing.id);
+        }
+        return [
+          ...list,
+          {
+            id: `optimistic-${type}`,
+            story_id: storyId,
+            user_id: user.id,
+            reaction_type: type,
+            created_at: new Date().toISOString(),
+          },
+        ];
+      });
+      return { previous, key };
+    },
+    onError: (_error, _type, context) => {
+      if (context?.previous && context.key) {
+        queryClient.setQueryData(context.key, context.previous);
+      }
+    },
+    onSettled: () => {
+      if (storyId) {
+        void queryClient.invalidateQueries({ queryKey: socialKeys.storyReactions(storyId) });
+      }
+    },
+  });
+}
+
+export function useCreateStoryComment(storyId?: string | null) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: string) => {
+      const userId = requireUserId(user?.id);
+      if (!storyId) {
+        throw new Error('Missing Wave.');
+      }
+      return createStoryComment(userId, storyId, body);
+    },
+    onSettled: () => {
+      if (storyId) {
+        void queryClient.invalidateQueries({ queryKey: socialKeys.storyComments(storyId) });
+      }
+    },
+  });
+}
+
+export function useShareStory() {
+  const startChat = useGetOrCreateConversation();
+  const send = useSendMessage();
+  return useMutation({
+    mutationFn: async (input: { storyId: string; friendId: string; url: string }) => {
+      const conversation = await startChat.mutateAsync(input.friendId);
+      await send.mutateAsync({ conversation_id: conversation.id, body: input.url });
+      await notifyStoryShared(input.storyId, input.friendId);
     },
   });
 }

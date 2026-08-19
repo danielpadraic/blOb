@@ -171,7 +171,10 @@ export function notificationHref(item: AppNotification): Href | null {
     item.type === 'profile_wall' ||
     item.type === 'post_comment' ||
     item.type === 'post_reaction' ||
-    item.type === 'post_reposted'
+    item.type === 'post_reposted' ||
+    item.type === 'story_reaction' ||
+    item.type === 'story_comment' ||
+    item.type === 'story_shared'
   ) {
     return '/feed';
   }
@@ -201,10 +204,12 @@ export function notificationGlyph(type: string, data?: NotificationData): string
     case 'friend_accepted':
     case 'follow':
       return '👋';
-    case 'post_comment':
+    case 'story_reaction':
+      return '❤️';
+    case 'story_comment':
       return '💬';
-    case 'post_reaction':
-      return data?.currency === 'bucks' ? '🔥' : '❤️';
+    case 'story_shared':
+      return '📤';
     case 'post_reposted':
       return '🔁';
     case 'coins_received':

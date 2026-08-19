@@ -21,13 +21,7 @@ import {
   useFriends,
   useStoryChallengeOptions,
 } from '@/hooks/useSocial';
-import {
-  cameraIsAvailable,
-  ensureCapturePermissions,
-  ensureLibraryPermission,
-  openAppSettings,
-  type MediaPermissionResult,
-} from '@/lib/mediaPermissions';
+import { cameraIsAvailable, ensureCapturePermissions, ensureLibraryPermission, openAppSettings, type MediaPermissionResult } from '@/lib/mediaPermissions';
 import {
   DEFAULT_POST_AUDIENCE,
   POST_AUDIENCE_OPTIONS,
@@ -36,6 +30,7 @@ import {
 import { copy } from '@/lib/copy';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
+import { mediaDurationMs, waveClipWindows } from '@/lib/waveClips';
 import { getErrorMessage } from '@/utils/errors';
 import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
 
@@ -86,6 +81,9 @@ export function CaptureStudio({
   );
 
   useEffect(() => {
+    if (mode === 'story') {
+      return;
+    }
     let cancelled = false;
     void (async () => {
       const permission = await ensureCapturePermissions(
@@ -109,7 +107,7 @@ export function CaptureStudio({
     return () => {
       cancelled = true;
     };
-  }, [captureKind]);
+  }, [captureKind, mode]);
 
   function close() {
     if (onClose) {
@@ -130,13 +128,13 @@ export function CaptureStudio({
       setDenied(permission);
       return;
     }
-    const videos = captureKind === 'video';
+    const videos = captureKind === 'video' || mode === 'story';
     const images = captureKind === 'photo' || mode === 'story';
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: videos && images ? ['images', 'videos'] : videos ? ['videos'] : ['images'],
       quality: 0.8,
       allowsEditing: false,
-      videoMaxDuration: maxDuration,
+      ...(mode === 'story' ? {} : { videoMaxDuration: maxDuration }),
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
@@ -150,7 +148,7 @@ export function CaptureStudio({
       mediaType: isVideo ? 'video' : 'image',
       mimeType: asset.mimeType ?? asset.file?.type,
       blob: asset.file ?? null,
-      durationMs: asset.duration != null ? Math.round(asset.duration) : null,
+      durationMs: mediaDurationMs(asset.duration),
     });
     setStep('preview');
   }
@@ -213,22 +211,27 @@ export function CaptureStudio({
           audienceUserIds: audience === 'specific' ? audienceUserIds : [],
         });
       } else {
-        const story = await createStory.mutateAsync({
+        const clips = waveClipWindows(draft.durationMs, draft.mediaType);
+        const stories = await createStory.mutateAsync({
           media_url: mediaUrl,
           media_type: draft.mediaType,
           caption: caption.trim() || null,
           challenge_id: challengeId,
+          clips,
         });
-        try {
-          await createFeedEvent.mutateAsync({
-            event_type: 'story_posted',
-            target_type: 'story',
-            target_id: story.id,
-            challenge_id: story.challenge_id,
-            metadata: { media_type: story.media_type },
-          });
-        } catch {
-          // Wave is live even if the feed card does not land.
+        const first = stories[0];
+        if (first) {
+          try {
+            await createFeedEvent.mutateAsync({
+              event_type: 'story_posted',
+              target_type: 'story',
+              target_id: first.id,
+              challenge_id: first.challenge_id,
+              metadata: { media_type: first.media_type, clip_count: stories.length },
+            });
+          } catch {
+            // Wave is live even if the feed card does not land.
+          }
         }
       }
       setProgress(100);
@@ -248,7 +251,7 @@ export function CaptureStudio({
         <InAppCamera
           capture={captureKind}
           maxDuration={maxDuration}
-          blocked={Boolean(denied && denied.kind !== 'library')}
+          blocked={mode === 'story' ? false : Boolean(denied && denied.kind !== 'library')}
           blockedReason={
             denied?.kind === 'microphone'
               ? 'Microphone is off.'
@@ -256,15 +259,17 @@ export function CaptureStudio({
                 ? 'Camera is off.'
                 : undefined
           }
-          webFallback={webFallback}
-          chromeInset
+          webFallback={mode === 'story' ? false : webFallback}
+          chromeInset={false}
+          allowModeToggle={mode === 'story'}
+          deniedTitle={mode === 'story' ? copy('wave.cameraNeed') : undefined}
           onCaptured={(next) => {
             setDraft(next);
             setStep('preview');
           }}
           onOpenGallery={() => void openLibrary()}
           onCancel={close}
-          onUnavailable={() => setWebFallback(true)}
+          onUnavailable={mode === 'story' ? undefined : () => setWebFallback(true)}
         />
         {libraryDenied ? (
           <View

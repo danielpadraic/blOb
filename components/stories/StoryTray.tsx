@@ -5,6 +5,7 @@ import { StoryRing } from '@/components/stories/StoryRing';
 import { AppText } from '@/components/ui/AppText';
 import { useStoryGroups } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
+import { primeCameraFromGesture } from '@/lib/cameraSession';
 import { STORY_CREATE_HREF, storyHref } from '@/lib/routes';
 import type { StoryGroup } from '@/lib/social';
 import { THEME } from '@/lib/theme';
@@ -15,6 +16,7 @@ export function StoryTray() {
 
   function openGroup(group: StoryGroup) {
     if (group.stories.length === 0) {
+      void primeCameraFromGesture('photo');
       router.push(STORY_CREATE_HREF);
       return;
     }
@@ -37,7 +39,10 @@ export function StoryTray() {
               group={group}
               seen={group.stories.length === 0 || (!group.isOwn && !unseen)}
               onPress={() => openGroup(group)}
-              onAdd={() => router.push(STORY_CREATE_HREF)}
+              onAdd={() => {
+                void primeCameraFromGesture('photo');
+                router.push(STORY_CREATE_HREF);
+              }}
             />
           );
         })}

@@ -9,6 +9,8 @@ import type {
   Reel,
   ReelTag,
   Story,
+  StoryComment,
+  StoryReaction,
   StoryView,
 } from '@/types/social';
 
@@ -25,6 +27,9 @@ export type {
   Reel,
   ReelTag,
   Story,
+  StoryComment,
+  StoryReaction,
+  StoryReactionType,
   StoryView,
 } from '@/types/social';
 
@@ -608,7 +613,10 @@ export type NotificationType =
   | 'message'
   | 'official_started'
   | 'proof_flagged'
-  | 'coin_grant';
+  | 'coin_grant'
+  | 'story_reaction'
+  | 'story_comment'
+  | 'story_shared';
 
 export type NotificationData = {
   challenge_id?: string;
@@ -922,6 +930,24 @@ export type Database = {
           Relationship<'stories_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
         ]
       >;
+      story_reactions: TableDef<
+        StoryReaction,
+        Partial<StoryReaction>,
+        Partial<StoryReaction>,
+        [
+          Relationship<'story_reactions_story_id_fkey', 'story_id', 'stories', 'id'>,
+          Relationship<'story_reactions_user_id_fkey', 'user_id', 'profiles', 'id'>,
+        ]
+      >;
+      story_comments: TableDef<
+        StoryComment,
+        Partial<StoryComment>,
+        Partial<StoryComment>,
+        [
+          Relationship<'story_comments_story_id_fkey', 'story_id', 'stories', 'id'>,
+          Relationship<'story_comments_user_id_fkey', 'user_id', 'profiles', 'id'>,
+        ]
+      >;
       story_views: TableDef<
         StoryView,
         Partial<StoryView>,
@@ -1156,6 +1182,10 @@ export type Database = {
       set_create_tour_opt_out: {
         Args: { p_opt_out: boolean };
         Returns: string | null;
+      };
+      notify_story_shared: {
+        Args: { p_story_id: string; p_recipient_id: string };
+        Returns: undefined;
       };
       mark_coin_balance_shown: {
         Args: Record<string, never>;

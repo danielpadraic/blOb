@@ -49,6 +49,28 @@ export type Story = {
   caption: string | null;
   expires_at: string;
   created_at: string;
+  sequence_id?: string | null;
+  sequence_index?: number | null;
+  clip_start_ms?: number | null;
+  clip_duration_ms?: number | null;
+};
+
+export type StoryReactionType = 'like' | 'love' | 'fire' | 'strong';
+
+export type StoryReaction = {
+  id: string;
+  story_id: string;
+  user_id: string;
+  reaction_type: StoryReactionType;
+  created_at: string;
+};
+
+export type StoryComment = {
+  id: string;
+  story_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
 };
 
 export type StoryView = {

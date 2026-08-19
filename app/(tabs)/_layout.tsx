@@ -21,6 +21,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
+import { primeCameraFromGesture } from '@/lib/cameraSession';
 import { THEME } from '@/lib/theme';
 
 export default function TabLayout() {
@@ -154,8 +155,10 @@ function TabLayoutInner() {
       return;
     }
     if (id === 'story') {
-      // Action id stays `story`; capture URL stays mode=story. User-facing name is Wave.
-      go(CAPTURE_STORY_HREF);
+      closeOverlays();
+      void primeCameraFromGesture('photo').then(() => {
+        setTimeout(() => router.push(CAPTURE_STORY_HREF), 60);
+      });
       return;
     }
     if (id === 'reel') {
@@ -176,7 +179,7 @@ function TabLayoutInner() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-      {isChallengeIdRoute(segments as string[]) ? null : (
+      {isChallengeIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
         <TabChromeHeader
           alertsOpen={alertsOpen}
           searchOpen={searchOpen}
@@ -236,7 +239,7 @@ function TabLayoutInner() {
         {onOnboarding ? null : <OfficialPitchHost />}
         </SocialSheetsHost>
       </View>
-      {onOnboarding ? null : (
+      {onOnboarding || pathname.includes('/capture') ? null : (
         <BlobTabBar
           composeOpen={sheetOpen}
           onToggleCompose={toggleSheet}

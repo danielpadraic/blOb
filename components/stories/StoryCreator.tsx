@@ -108,25 +108,28 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
         blob: draft.blob,
       });
       setProgress(88);
-      const story = await createStory.mutateAsync({
+      const stories = await createStory.mutateAsync({
         media_url: mediaUrl,
         media_type: draft.mediaType,
         caption: caption.trim() || null,
         challenge_id: challengeId,
       });
+      const story = stories[0];
       setProgress(100);
-      try {
-        await createFeedEvent.mutateAsync({
-          event_type: 'story_posted',
-          target_type: 'story',
-          target_id: story.id,
-          challenge_id: story.challenge_id,
-          metadata: { media_type: story.media_type },
-        });
-      } catch {
-        // The Wave is live even if the feed card does not land.
+      if (story) {
+        try {
+          await createFeedEvent.mutateAsync({
+            event_type: 'story_posted',
+            target_type: 'story',
+            target_id: story.id,
+            challenge_id: story.challenge_id,
+            metadata: { media_type: story.media_type },
+          });
+        } catch {
+          // The Wave is live even if the feed card does not land.
+        }
+        onPosted?.(story.id);
       }
-      onPosted?.(story.id);
       close();
     } catch (caught) {
       clearInterval(tick);

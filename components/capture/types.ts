@@ -2,12 +2,15 @@
 export type CaptureMode = 'story' | 'reel' | 'post';
 export type CaptureMedia = 'photo' | 'video';
 
-/** Wave (`story`) and Round (`reel`) always record video. Feed/proof stills default to photo. */
+/** Wave (`story`) defaults to photo; Round (`reel`) is video. Feed/proof stills default to photo. */
 export function captureKindFor(mode: CaptureMode, media?: CaptureMedia): CaptureMedia {
-  if (mode === 'story' || mode === 'reel') {
+  if (media === 'video' || media === 'photo') {
+    return media;
+  }
+  if (mode === 'reel') {
     return 'video';
   }
-  return media === 'video' ? 'video' : 'photo';
+  return 'photo';
 }
 
 /** Video proofs record. Check-in, selfies, screenshots, and stills are photo. */

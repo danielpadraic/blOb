@@ -22,7 +22,8 @@ export const CAPTURE_HREF = '/capture' as const;
 
 /** Query `mode` stays `story` | `reel` | `post` so capture URLs stay stable. User-facing names are Wave / Round / post. */
 export function captureHref(mode: 'story' | 'reel' | 'post' = 'story', media?: 'photo' | 'video') {
-  const resolved = mode === 'post' ? (media === 'video' ? 'video' : 'photo') : 'video';
+  const resolved =
+    media === 'video' || media === 'photo' ? media : mode === 'reel' ? 'video' : 'photo';
   return {
     pathname: '/capture' as const,
     params: { mode, media: resolved },

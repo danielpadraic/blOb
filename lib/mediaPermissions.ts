@@ -3,6 +3,8 @@ import { Camera, CameraView } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 
+import { cameraErrorKind, logCameraError } from '@/lib/cameraSession';
+
 export type MediaPermissionKind = 'camera' | 'microphone' | 'library';
 
 export type MediaPermissionResult =
@@ -29,14 +31,51 @@ export function permissionCopy(kind: MediaPermissionKind) {
 }
 
 export async function cameraIsAvailable(): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    return Boolean(
+      typeof navigator !== 'undefined' &&
+        navigator.mediaDevices &&
+        typeof navigator.mediaDevices.getUserMedia === 'function',
+    );
+  }
   try {
     return await CameraView.isAvailableAsync();
   } catch {
-    return Platform.OS !== 'web';
+    return true;
   }
 }
 
+export async function queryWebCameraPermission(): Promise<'granted' | 'denied' | 'prompt'> {
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined') {
+    return 'prompt';
+  }
+  try {
+    const status = await navigator.permissions.query({ name: 'camera' as PermissionName });
+    if (status.state === 'granted' || status.state === 'denied') {
+      return status.state;
+    }
+  } catch {
+    // Safari and some Chromium builds reject camera PermissionName.
+  }
+  return 'prompt';
+}
+
 export async function ensureCameraPermission(): Promise<MediaPermissionResult> {
+  if (Platform.OS === 'web') {
+    const queried = await queryWebCameraPermission();
+    if (queried === 'granted') {
+      return { ok: true };
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach((track) => track.stop());
+      return { ok: true };
+    } catch (error) {
+      logCameraError(error, 'ensureCameraPermission');
+      const kind = cameraErrorKind(error);
+      return { ok: false, kind: kind === 'missing' ? 'camera' : 'camera', canAskAgain: kind !== 'denied' };
+    }
+  }
   const current = await Camera.getCameraPermissionsAsync();
   if (current.granted) {
     return { ok: true };
@@ -89,6 +128,12 @@ export async function ensureCapturePermissions(kind: 'photo' | 'video'): Promise
 
 export async function openAppSettings(): Promise<void> {
   if (Platform.OS === 'web') {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach((track) => track.stop());
+    } catch (error) {
+      logCameraError(error, 'openAppSettings');
+    }
     return;
   }
   await Linking.openSettings();
