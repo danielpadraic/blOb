@@ -40,6 +40,19 @@ export function formatCash(amount: number | null | undefined): string {
   return `$${Number(amount ?? 0).toFixed(2)}`;
 }
 
+/** Home strip / compact CTAs: $1 or $10. Cents only when needed. */
+export function formatCashCompact(amount: number | null | undefined): string {
+  const value = Number(amount ?? 0);
+  if (!Number.isFinite(value)) {
+    return '$0';
+  }
+  const rounded = Math.round(value * 100) / 100;
+  if (Number.isInteger(rounded)) {
+    return `$${rounded}`;
+  }
+  return `$${rounded.toFixed(2)}`;
+}
+
 export function formatWallet(
   amount: number | null | undefined,
   currency?: string | null,

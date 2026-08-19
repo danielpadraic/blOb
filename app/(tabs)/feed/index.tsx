@@ -1,9 +1,7 @@
 import { View } from 'react-native';
 
-import { ChallengeRail } from '@/components/feed/ChallengeRail';
-import { FeaturedChallengeHero } from '@/components/feed/FeaturedChallengeHero';
+import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
-import { FeedHeader } from '@/components/feed/FeedHeader';
 import { FeedList } from '@/components/feed/FeedList';
 import { RecommendedProfiles } from '@/components/feed/RecommendedProfiles';
 import { ReelsRow } from '@/components/feed/ReelsRow';
@@ -43,8 +41,7 @@ export default function FeedScreen() {
 
   if (feed.error) {
     return (
-      <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
-        <FeedHeader />
+      <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4">
         <MascotState
           kind="error"
           title={copy('home.error', tone)}
@@ -56,7 +53,7 @@ export default function FeedScreen() {
   }
 
   return (
-    <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
+    <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4">
       <FeedList
         posts={posts}
         isLoading={feed.isLoading}
@@ -67,15 +64,9 @@ export default function FeedScreen() {
         composerPlaceholder={copy('home.composer', tone)}
         composing={createPost.isPending}
         commenting={createComment.isPending}
-        headerTop={
-          <View className="gap-3">
-            <FeaturedChallengeHero />
-            <ChallengeRail />
-          </View>
-        }
+        headerTop={<FeaturedOfficialStrip />}
         headerExtra={
-          <View className="gap-3">
-            <FeedHeader />
+          <View className="gap-2">
             <StoryTray />
             <ReelsRow />
             <RecommendedProfiles />

@@ -63,7 +63,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-official',
     placement: 'below',
     title: 'Featured Challenge',
-    body: 'Skin in the game. The card shows Joined or Not joined without opening it.',
+    body: 'This week’s Official. Join or log from the strip. Open it for the full challenge.',
   },
   {
     id: 'tabFeed',

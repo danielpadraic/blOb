@@ -7,6 +7,7 @@ import { QuickActionSheet, type QuickActionId } from '@/components/navigation/Qu
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
+import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { TourHost } from '@/components/tour/TourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
 import { TourProvider, useTour } from '@/components/tour/TourContext';
@@ -222,6 +223,7 @@ function TabLayoutInner() {
         />
         <WalletHost />
         <HealthLogPromptHost />
+        <OfficialPitchHost />
         </SocialSheetsHost>
       </View>
       <BlobTabBar
