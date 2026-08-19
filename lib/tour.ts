@@ -43,8 +43,8 @@ export const TOUR_STEPS: TourStep[] = [
     id: 'official',
     target: 'tour-official',
     href: '/feed',
-    title: 'Official',
-    body: 'Weekly $10 is skin in the game, not a fortune. Official days run on America/Chicago time.',
+    title: 'Featured Challenge',
+    body: 'This week’s Featured Challenge. Weekly $10 is skin in the game, not a fortune. Official days run on America/Chicago time.',
   },
   {
     id: 'create',

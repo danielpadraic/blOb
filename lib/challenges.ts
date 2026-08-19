@@ -38,6 +38,7 @@ import {
 import { formatCoins } from '@/utils/format';
 import { copy } from '@/lib/copy';
 import { parseOfficialDayWindows } from '@/lib/officialDays';
+import { OFFICIAL_WEEK_10_SLUG, pickFeaturedOfficialChallenge } from '@/lib/officialSeries';
 
 const JOINABLE_NOT_STARTED_STATUSES = ['open', 'upcoming', 'starting'] as const;
 
@@ -681,6 +682,66 @@ export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<
       return row.status === 'filling' || row.status === 'arming';
     });
   return sortOfficialFirst(rows);
+}
+
+export async function fetchFeaturedOfficialChallenge(userId?: string): Promise<Challenge | null> {
+  try {
+    await supabase.rpc('tick_official_series');
+  } catch (error) {
+    console.log('[blob:home] official tick skipped', error);
+  }
+
+  let joinable: Challenge[] = [];
+  const listed = await supabase.rpc('list_official_joinable');
+  if (!listed.error && listed.data) {
+    joinable = asChallengeRows(listed.data as unknown as ChallengeRow[])
+      .map(normalizeChallenge)
+      .filter(
+        (row) =>
+          row.is_official &&
+          row.series_id === OFFICIAL_WEEK_10_SLUG &&
+          (row.status === 'filling' || row.status === 'arming'),
+      );
+  } else {
+    console.log('[blob:home] official-joinable rpc skipped', listed.error?.message);
+    joinable = (
+      await selectChallengeList(
+        (query) =>
+          query
+            .eq('is_official', true as unknown as string)
+            .eq('series_id', OFFICIAL_WEEK_10_SLUG)
+            .in('status', ['filling', 'arming'])
+            .order('created_at', { ascending: true })
+            .limit(4),
+        'featured-official-joinable',
+      )
+    ).map(normalizeChallenge);
+  }
+
+  let liveJoined: Challenge | null = null;
+  if (userId) {
+    const joinedIds = await fetchJoinedChallengeIds(userId);
+    if (joinedIds.length > 0) {
+      const liveRows = await selectChallengeList(
+        (query) =>
+          query
+            .in('id', joinedIds)
+            .eq('is_official', true as unknown as string)
+            .eq('series_id', OFFICIAL_WEEK_10_SLUG)
+            .eq('status', 'live')
+            .order('starts_at', { ascending: false })
+            .limit(4),
+        'featured-official-live',
+      );
+      liveJoined = liveRows.map(normalizeChallenge)[0] ?? null;
+    }
+  }
+
+  return pickFeaturedOfficialChallenge({
+    liveJoined,
+    filling: joinable.find((row) => row.status === 'filling') ?? null,
+    arming: joinable.find((row) => row.status === 'arming') ?? null,
+  });
 }
 
 export type FriendChallengeProof = {

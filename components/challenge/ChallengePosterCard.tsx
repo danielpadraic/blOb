@@ -187,19 +187,22 @@ export function ChallengePosterCard({
   );
 }
 
-function OfficialFillingStats({
+export function OfficialFillingStats({
   challenge,
   nowMs,
+  showStartLine = true,
 }: {
   challenge: ChallengeWithStats;
   nowMs: number;
+  showStartLine?: boolean;
 }) {
   const guarantee = Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
-  const startLine =
-    needed > 0
+  const startLine = !showStartLine
+    ? null
+    : needed > 0
       ? officialStartNeededLabel(needed)
       : challenge.status === 'arming'
         ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))

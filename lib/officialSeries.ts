@@ -86,3 +86,21 @@ export function officialStartNeededLabel(needed: number): string | null {
   }
   return `Start: ${needed} more contestants needed`;
 }
+
+/** Home Featured Challenge: live week_10 if the viewer is in it, else filling, else arming. */
+export function pickFeaturedOfficialChallenge<T extends { status?: string | null }>(input: {
+  liveJoined: T | null;
+  filling: T | null;
+  arming: T | null;
+}): T | null {
+  if (input.liveJoined) {
+    return input.liveJoined;
+  }
+  if (input.filling) {
+    return input.filling;
+  }
+  if (input.arming) {
+    return input.arming;
+  }
+  return null;
+}

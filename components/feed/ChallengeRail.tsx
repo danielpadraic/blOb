@@ -2,11 +2,11 @@ import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeCarousel } from '@/components/challenge/ChallengeCarousel';
-import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-import { useFeedActiveChallenges, useMyChallengeProgress, useOfficialDiscoverChallenges } from '@/hooks/useChallenge';
+import { useFeedActiveChallenges, useMyChallengeProgress } from '@/hooks/useChallenge';
 import { copy } from '@/lib/copy';
+import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { challengeDetailHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
@@ -14,7 +14,6 @@ export function ChallengeRail() {
   const router = useRouter();
   const { user } = useAuth();
   const active = useFeedActiveChallenges();
-  const official = useOfficialDiscoverChallenges();
   const mine = useMyChallengeProgress();
 
   const progressById = new Map(
@@ -23,10 +22,9 @@ export function ChallengeRail() {
       { days: Number(row.days_completed ?? 0), status: row.status ?? 'joined' },
     ]),
   );
-  const activeRows = active.data ?? [];
-  const officialRows = official.data ?? [];
+  const activeRows = (active.data ?? []).filter((row) => !isOfficialSeriesChallenge(row));
 
-  if (activeRows.length === 0 && officialRows.length === 0) {
+  if (activeRows.length === 0) {
     return null;
   }
 
@@ -36,15 +34,6 @@ export function ChallengeRail() {
 
   return (
     <View>
-      <TourAnchor id="tour-official">
-      <ChallengeCarousel
-        title={copy('feed.railOfficial')}
-        challenges={officialRows}
-        currentUserId={user?.id}
-        progressById={progressById}
-        onPress={open}
-      />
-      </TourAnchor>
       <ChallengeCarousel
         title={copy('feed.railActive')}
         challenges={activeRows}

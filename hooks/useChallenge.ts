@@ -14,6 +14,7 @@ import {
   fetchJoinedLobbyChallenges,
   fetchLobbyChallenges,
   fetchLobbyFriendCounts,
+  fetchFeaturedOfficialChallenge,
   fetchOfficialDiscoverChallenges,
   insertUserChallenge,
   joinChallenge,
@@ -111,6 +112,22 @@ export function useOfficialDiscoverChallenges() {
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       await prepareLobby(user?.id);
       return withParticipantCounts(await fetchOfficialDiscoverChallenges(user?.id));
+    },
+  });
+}
+
+export function useFeaturedOfficialChallenge() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['featured-official', user?.id],
+    queryFn: async (): Promise<ChallengeWithStats | null> => {
+      await prepareLobby(user?.id);
+      const row = await fetchFeaturedOfficialChallenge(user?.id);
+      if (!row) {
+        return null;
+      }
+      const [withCount] = await withParticipantCounts([row]);
+      return withCount ?? null;
     },
   });
 }
@@ -309,18 +326,18 @@ export function useMyChallengeProgress() {
     queryKey: ['my-challenge-progress', user?.id],
     enabled: Boolean(user?.id),
     queryFn: async (): Promise<
-      Pick<ChallengeParticipant, 'challenge_id' | 'days_completed' | 'status'>[]
+      Pick<ChallengeParticipant, 'challenge_id' | 'days_completed' | 'status' | 'eliminated_at'>[]
     > => {
       const { data, error } = await supabase
         .from('challenge_participants')
-        .select('challenge_id, days_completed, status')
+        .select('challenge_id, days_completed, status, eliminated_at')
         .eq('user_id', user!.id);
       if (error) {
         throw new Error(getErrorMessage(error));
       }
       return (data ?? []) as Pick<
         ChallengeParticipant,
-        'challenge_id' | 'days_completed' | 'status'
+        'challenge_id' | 'days_completed' | 'status' | 'eliminated_at'
       >[];
     },
   });
@@ -481,6 +498,7 @@ export function useJoinChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['featured-official'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
       void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });

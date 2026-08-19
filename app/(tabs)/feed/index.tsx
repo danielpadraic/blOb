@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
-import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { ChallengeRail } from '@/components/feed/ChallengeRail';
+import { FeaturedChallengeHero } from '@/components/feed/FeaturedChallengeHero';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { FeedList } from '@/components/feed/FeedList';
@@ -13,6 +13,7 @@ import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
+import { useFeaturedOfficialChallenge } from '@/hooks/useChallenge';
 import {
   useCreateComment,
   useCreatePost,
@@ -27,6 +28,7 @@ export default function FeedScreen() {
   const tone = useCopyTone();
   const feed = useFeed();
   const stories = useActiveStories();
+  const featured = useFeaturedOfficialChallenge();
   const createPost = useCreatePost();
   const createComment = useCreateComment();
   const toggleReaction = useToggleReaction();
@@ -36,6 +38,7 @@ export default function FeedScreen() {
   function onRefresh() {
     void feed.refetch();
     void stories.refetch();
+    void featured.refetch();
   }
 
   if (feed.error) {
@@ -66,7 +69,7 @@ export default function FeedScreen() {
         commenting={createComment.isPending}
         headerTop={
           <View className="gap-3">
-            <OfficialPitchHost />
+            <FeaturedChallengeHero />
             <ChallengeRail />
           </View>
         }
