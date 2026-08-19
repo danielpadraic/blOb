@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
+import { officialLogDate } from '@/lib/officialDays';
+import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
@@ -9,7 +11,19 @@ import { getErrorMessage } from '@/utils/errors';
 
 export type LoggableChallenge = Pick<
   Challenge,
-  'id' | 'title' | 'is_official' | 'status' | 'starts_at' | 'ends_at' | 'is_unlimited' | 'frequency' | 'min_minutes'
+  | 'id'
+  | 'title'
+  | 'is_official'
+  | 'status'
+  | 'starts_at'
+  | 'ends_at'
+  | 'is_unlimited'
+  | 'frequency'
+  | 'min_minutes'
+  | 'series_id'
+  | 'timezone'
+  | 'days_required'
+  | 'day_windows'
 >;
 
 type ParticipationRow = Pick<
@@ -21,6 +35,8 @@ const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at';
 const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at';
 
 const CHALLENGE_SELECTS = [
+  'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
+  'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited',
   'id, title, is_official, status, starts_at, ends_at',
@@ -42,16 +58,19 @@ export function useLoggableChallenge() {
         return null;
       }
       const challengeIds = participations.map((row) => row.challenge_id);
-      const [challenges, loggedIds] = await Promise.all([
+      const [challenges, loggedRows] = await Promise.all([
         fetchChallenges(challengeIds),
-        fetchLoggedChallengeIds(user.id, date, challengeIds),
+        fetchLoggedDates(user.id, challengeIds),
       ]);
       const joinedAt = new Map(participations.map((row) => [row.challenge_id, row.joined_at]));
       const now = Date.now();
 
       const eligible = challenges
         .filter((challenge) => {
-          if (loggedIds.has(challenge.id)) {
+          const expected = isOfficialSeriesChallenge(challenge)
+            ? officialLogDate(challenge)
+            : date;
+          if (expected && loggedRows.get(challenge.id)?.has(expected)) {
             return false;
           }
           if (new Date(challenge.starts_at).getTime() > now) {
@@ -124,22 +143,27 @@ async function fetchChallenges(ids: string[]): Promise<LoggableChallenge[]> {
   return [];
 }
 
-async function fetchLoggedChallengeIds(
+async function fetchLoggedDates(
   userId: string,
-  date: string,
   challengeIds: string[],
-): Promise<Set<string>> {
+): Promise<Map<string, Set<string>>> {
+  const logged = new Map<string, Set<string>>();
   if (challengeIds.length === 0) {
-    return new Set();
+    return logged;
   }
   const { data, error } = await supabase
     .from('workout_submissions')
-    .select('challenge_id')
+    .select('challenge_id, submission_date')
     .eq('user_id', userId)
-    .eq('submission_date', date)
     .in('challenge_id', challengeIds);
   if (error) {
     throw new Error(getErrorMessage(error));
   }
-  return new Set((data ?? []).map((row) => row.challenge_id));
+  for (const row of data ?? []) {
+    const id = String(row.challenge_id);
+    const dates = logged.get(id) ?? new Set<string>();
+    dates.add(String(row.submission_date));
+    logged.set(id, dates);
+  }
+  return logged;
 }

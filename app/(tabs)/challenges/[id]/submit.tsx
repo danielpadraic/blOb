@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { ProofUploader } from '@/components/challenge/ProofUploader';
+import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -21,6 +22,7 @@ import {
   type ChallengeProof,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
+import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
@@ -75,7 +77,7 @@ export default function SubmitWorkoutScreen() {
   const challengeQuery = useChallenge(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
-  const today = useTodaySubmission(id);
+  const today = useTodaySubmission(id, challengeQuery.data);
   const submit = useSubmitWorkout();
   const submitHealth = useSubmitHealthWorkout();
 
@@ -83,9 +85,18 @@ export default function SubmitWorkoutScreen() {
   const [error, setError] = useState<string | null>(null);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
+
+  useEffect(() => {
+    if (!challenge || !isOfficialSeriesChallenge(challenge) || challenge.status !== 'live') {
+      return;
+    }
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [challenge]);
   const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
   const busy = submit.isPending || submitHealth.isPending;
@@ -313,8 +324,15 @@ export default function SubmitWorkoutScreen() {
         contentContainerClassName="px-5 pb-10 pt-2"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
+        {challenge && isOfficialSeriesChallenge(challenge) ? (
+          <View className="mb-4">
+            <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="page" />
+          </View>
+        ) : null}
         <AppText className="text-center text-sm text-muted">
-          Add {proofCountLabel}, then confirm. One log per UTC day.
+          {challenge && isOfficialSeriesChallenge(challenge)
+            ? 'Add every required proof for this Official day. One proof fills one day.'
+            : `Add ${proofCountLabel}, then confirm. One log per UTC day.`}
         </AppText>
         <AppText className="mt-1 text-center text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
 

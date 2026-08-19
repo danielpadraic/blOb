@@ -42,6 +42,7 @@ export function OfficialMoneyBoard({
         <Stat label={copy('board.guarantee')} value={money(guarantee)} />
       </View>
       <AppText className="mt-1 text-[12px] leading-5 text-muted">{officialBob('legalBoard')}</AppText>
+      <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalDays')}</AppText>
     </View>
   );
 }

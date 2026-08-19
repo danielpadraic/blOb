@@ -285,7 +285,7 @@ export const OFFICIAL_CHALLENGE = {
   description:
     'Show up every day. Thirty honest minutes. A picture before, a picture after, and HR proof — screenshot is enough.',
   rules:
-    'Complete 6 workouts of at least 30 minutes in 7 days. Each required day needs a pre-selfie, a post-selfie, and HR proof (a Fitness screenshot or an attached workout). If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. If nobody finishes and there are no valid days, the guarantee rolls into the next Official week.',
+    'Complete 6 workouts of at least 30 minutes in 7 days. Each required day needs a pre-selfie, a post-selfie, and HR proof (a Fitness screenshot or an attached workout). Official days end at 11:59 p.m. Central Time. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. If nobody finishes and there are no valid days, the guarantee rolls into the next Official week.',
   buyIn: DEFAULT_BUY_IN,
   daysRequired: DEFAULT_DAYS_REQUIRED,
   windowDays: 7,

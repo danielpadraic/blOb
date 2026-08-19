@@ -37,6 +37,7 @@ import {
 
 import { formatCoins } from '@/utils/format';
 import { copy } from '@/lib/copy';
+import { parseOfficialDayWindows } from '@/lib/officialDays';
 
 const JOINABLE_NOT_STARTED_STATUSES = ['open', 'upcoming', 'starting'] as const;
 
@@ -547,6 +548,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     cancelled_by: (row.cancelled_by as string | null) ?? null,
     series_id: row.series_id ? String(row.series_id) : null,
     armed_at: row.armed_at ? String(row.armed_at) : null,
+    day_windows: parseOfficialDayWindows(row.day_windows),
     created_at: String(row.created_at ?? now),
     updated_at: String(row.updated_at ?? now),
   };

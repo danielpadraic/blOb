@@ -12,6 +12,7 @@ const OFFICIAL_BOB = {
   legalPot: 'If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
   legalAllFinish: 'If everyone finishes, they split the pot — that even split returns your buy-in.',
   legalZero: 'If nobody finishes and there are no valid days, the guarantee rolls into the next Official week.',
+  legalDays: 'Official days end at 11:59 p.m. Central Time.',
   legalAge: '18+. Void where prohibited. Not medical advice.',
   geoBlocked: 'Sorry, this Challenge isn’t available in your State.',
   joinBob: 'This is so Future You does not negotiate with the couch.',

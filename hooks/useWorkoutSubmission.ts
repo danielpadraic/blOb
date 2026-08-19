@@ -14,7 +14,9 @@ import {
   resolveChallengeProofs,
 } from '@/lib/challengeProofs';
 import { supabase } from '@/lib/supabase';
-import type { ChallengeParticipant, ChallengeProof, ProofType, WorkoutSubmission } from '@/lib/types';
+import type { Challenge, ChallengeParticipant, ChallengeProof, ProofType, WorkoutSubmission } from '@/lib/types';
+import { officialLogDate } from '@/lib/officialDays';
+import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
 import { signedProofUrl } from '@/utils/upload';
@@ -113,15 +115,32 @@ async function fetchTodaySubmission(
   return result.data ? asSubmission(result.data as Record<string, unknown>) : null;
 }
 
-export function useTodaySubmission(challengeId: string | undefined) {
+type OfficialDateChallenge = Pick<
+  Challenge,
+  'is_official' | 'series_id' | 'status' | 'starts_at' | 'timezone' | 'days_required' | 'target_count' | 'day_windows'
+>;
+
+function submissionDateFor(challenge?: OfficialDateChallenge | null): string | null {
+  if (challenge && isOfficialSeriesChallenge(challenge)) {
+    return officialLogDate(challenge);
+  }
+  return utcDateStamp();
+}
+
+export function useTodaySubmission(
+  challengeId: string | undefined,
+  challenge?: OfficialDateChallenge | null,
+) {
   const { user } = useAuth();
-  const date = utcDateStamp();
+  const date = submissionDateFor(challenge);
+  const official = Boolean(challenge && isOfficialSeriesChallenge(challenge));
 
   return useQuery({
-    queryKey: submissionQueryKey(challengeId, user?.id, date),
-    enabled: Boolean(challengeId && user?.id),
+    queryKey: submissionQueryKey(challengeId, user?.id, date ?? 'none'),
+    enabled: Boolean(challengeId && user?.id && date),
+    refetchInterval: official ? 30_000 : false,
     queryFn: async (): Promise<WorkoutSubmissionView | null> => {
-      const row = await fetchTodaySubmission(challengeId!, user!.id, date);
+      const row = await fetchTodaySubmission(challengeId!, user!.id, date!);
       if (!row) {
         return null;
       }
@@ -350,12 +369,16 @@ export function useSubmitHealthWorkout() {
   });
 }
 
-export function usePeriodCompletions(challengeId: string | undefined) {
-  const date = utcDateStamp();
+export function usePeriodCompletions(
+  challengeId: string | undefined,
+  challenge?: OfficialDateChallenge | null,
+) {
+  const date = submissionDateFor(challenge);
   return useQuery({
-    queryKey: ['challenge-completions', challengeId, date],
-    enabled: Boolean(challengeId),
+    queryKey: ['challenge-completions', challengeId, date ?? 'none'],
+    enabled: Boolean(challengeId && date),
     queryFn: async (): Promise<Set<string>> => {
+      const stamp = date!;
       const challengeResult = await supabase
         .from('challenges')
         .select('proofs, proof_type, proof_requirements, challenge_type, tasks')
@@ -375,14 +398,14 @@ export function usePeriodCompletions(challengeId: string | undefined) {
         .from('workout_submissions')
         .select('user_id, proof_parts')
         .eq('challenge_id', challengeId!)
-        .eq('submission_date', date);
+        .eq('submission_date', stamp);
       if (withParts.error) {
         if (isMissingColumn(withParts.error.message)) {
           const fallback = await supabase
             .from('workout_submissions')
             .select('user_id')
             .eq('challenge_id', challengeId!)
-            .eq('submission_date', date);
+            .eq('submission_date', stamp);
           if (fallback.error) {
             throw new Error(getErrorMessage(fallback.error));
           }

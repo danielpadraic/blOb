@@ -330,6 +330,7 @@ export function InAppCamera({
             Flip
           </AppText>
         </Pressable>
+        </View>
       </View>
     </View>
   );

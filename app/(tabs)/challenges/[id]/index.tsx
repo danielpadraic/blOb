@@ -13,6 +13,7 @@ import { FeedList } from '@/components/feed/FeedList';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
+import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
@@ -74,6 +75,7 @@ import {
 import {
   armingCountdownLabel,
   isOfficialJoinable,
+  isOfficialSeriesChallenge,
   officialAlreadyStartedCopy,
 } from '@/lib/officialSeries';
 import { healthProofLines } from '@/lib/health/proofSummary';
@@ -119,7 +121,7 @@ export default function ChallengeDetailScreen() {
       profile: map.get(row.user_id) ?? row.profile,
     }));
   }, [boardProfiles.data, roster.data]);
-  const todaySubmission = useTodaySubmission(id);
+  const todaySubmission = useTodaySubmission(id, challengeQuery.data);
   const healthProofId = todaySubmission.data?.health_workout_id;
   const healthProofQuery = useQuery({
     queryKey: ['health-proof', healthProofId],
@@ -127,7 +129,7 @@ export default function ChallengeDetailScreen() {
     queryFn: () => fetchHealthWorkoutById(healthProofId!),
   });
   const loggedCount = useLoggedWorkoutCount(id);
-  const completions = usePeriodCompletions(id);
+  const completions = usePeriodCompletions(id, challengeQuery.data);
   const join = useJoinChallenge();
   const markJudging = useMarkChallengeJudging();
   const settle = useSettleChallenge();
@@ -238,14 +240,17 @@ export default function ChallengeDetailScreen() {
   const waitingToStart = Boolean(
     challenge && !hasChallengeStarted(challenge, new Date(nowMs)),
   );
+  const officialLiveClock = Boolean(
+    challenge && isOfficialSeriesChallenge(challenge) && challenge.status === 'live',
+  );
 
   useEffect(() => {
-    if (!judgingHold && !waitingToStart) {
+    if (!judgingHold && !waitingToStart && !officialLiveClock) {
       return;
     }
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [judgingHold, waitingToStart]);
+  }, [judgingHold, waitingToStart, officialLiveClock]);
 
   const scrollRef = useRef<ScrollView>(null);
   const lastFocusFetchAt = useRef(Date.now());
@@ -590,9 +595,13 @@ export default function ChallengeDetailScreen() {
                 </AppText>
               </ProfileLink>
             ) : null}
-            <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.78)' }} numberOfLines={1}>
-              {scheduleLine}
-            </AppText>
+            {isOfficialSeriesChallenge(challenge) ? (
+              <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="hero" />
+            ) : (
+              <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.78)' }} numberOfLines={1}>
+                {scheduleLine}
+              </AppText>
+            )}
             {wasCancelled ? (
               <AppText className="text-[15px] font-semibold" style={{ color: '#fff' }}>
                 {copy('challenge.cancelled')}
@@ -680,7 +689,8 @@ export default function ChallengeDetailScreen() {
               {officialBob('cardPromise')}
             </AppText>
             <AppText className="text-[14px] leading-5 text-charcoal">{officialBob('legalBoard')}</AppText>
-            <AppText className="mt-1 text-[13px] leading-5 text-muted">{officialBob('legalAllFinish')}</AppText>
+            <AppText className="mt-1 text-[13px] leading-5 text-muted">{officialBob('legalDays')}</AppText>
+            <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalAllFinish')}</AppText>
             <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalZero')}</AppText>
             <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
             <OfficialMoneyBoard challenge={challenge} finished={finishers} />

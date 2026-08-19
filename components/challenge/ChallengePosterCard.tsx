@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { isLiveCompetitorStatus, isPointsChallenge } from '@/lib/challenges';
@@ -10,6 +11,7 @@ import { formatWallet, isBucksChallenge, isSponsoredBucks } from '@/lib/currency
 import {
   armingCountdownLabel,
   isOfficialJoinable,
+  isOfficialSeriesChallenge,
   officialToStartAmount,
 } from '@/lib/officialSeries';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -49,14 +51,15 @@ export function ChallengePosterCard({
   participantStatus,
 }: ChallengePosterCardProps) {
   const officialJoinable = isOfficialJoinable(challenge);
+  const officialLive = isOfficialSeriesChallenge(challenge) && challenge.status === 'live';
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    if (!officialJoinable || challenge.status !== 'arming') {
+    if ((!officialJoinable || challenge.status !== 'arming') && !officialLive) {
       return;
     }
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [officialJoinable, challenge.status]);
+  }, [officialJoinable, officialLive, challenge.status]);
 
   const days = Math.max(Number(daysCompleted) || 0, 0);
   const competing = joined;
@@ -77,7 +80,7 @@ export function ChallengePosterCard({
       accessibilityLabel={challenge.title}
       style={{
         width: POSTER_WIDTH,
-        height: officialJoinable ? OFFICIAL_POSTER_HEIGHT : POSTER_HEIGHT,
+        height: officialJoinable || officialLive ? OFFICIAL_POSTER_HEIGHT : POSTER_HEIGHT,
         backgroundColor: THEME.surface,
         borderColor: THEME.border,
         borderWidth: 1,
@@ -111,7 +114,11 @@ export function ChallengePosterCard({
             <AppText className="mb-2 text-[11px] font-semibold text-charcoal" numberOfLines={1}>
               {timeLabel}
             </AppText>
-          ) : null}
+          ) : (
+            <AppText className="mb-2 text-[11px] leading-4 text-muted" numberOfLines={2}>
+              {copy('official.dayEndsCentral')}
+            </AppText>
+          )}
           <View className="flex-row flex-wrap" style={{ gap: 8 }}>
             <PosterStat
               label={copy('create.buyIn')}
@@ -130,6 +137,11 @@ export function ChallengePosterCard({
         </View>
       ) : (
         <View>
+          {officialLive ? (
+            <View className="mb-2">
+              <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="card" />
+            </View>
+          ) : null}
           <View className="flex-row items-center justify-between gap-2">
             <StakeAmount
               amount={challenge.buy_in_amount}
@@ -138,9 +150,11 @@ export function ChallengePosterCard({
               freeLabel={isSponsoredBucks(challenge) ? 'Free · $' : 'Free'}
               textClassName="text-[12px] font-semibold text-charcoal"
             />
-            <AppText className="shrink text-[11px] text-muted" numberOfLines={1}>
-              {timeLabel}
-            </AppText>
+            {officialLive ? null : (
+              <AppText className="shrink text-[11px] text-muted" numberOfLines={1}>
+                {timeLabel}
+              </AppText>
+            )}
             {competing ? (
               <AppText className="text-[11px] font-semibold text-charcoal" numberOfLines={1}>
                 {points ? progressCopy?.label ?? `${days} tasks` : `${days} log${days === 1 ? '' : 's'}`}

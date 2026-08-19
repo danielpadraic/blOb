@@ -321,6 +321,7 @@ export interface Challenge {
   cancelled_by?: string | null;
   series_id?: string | null;
   armed_at?: string | null;
+  day_windows?: Array<{ day: number; date: string; starts_at: string; ends_at: string }> | null;
   created_at: string;
   updated_at: string;
 }
