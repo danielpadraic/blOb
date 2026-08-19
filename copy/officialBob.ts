@@ -1,27 +1,39 @@
 import { interpolateCopy } from '@/lib/copy';
 
+export const OFFICIAL_DETAILS_LINES = [
+  'Thirty minutes of elevated heart rate. A picture before, a picture after, and proof of the activity.',
+  'If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
+  'Official days end at 11:59 p.m. Central Time.',
+  'A phone camera is required. Heart-rate proof is required (Watch, Fitness, or a screenshot).',
+  'Anyone in the challenge can anonymously flag a post that does not meet these rules. Flagged posts are reviewed.',
+  'Miss a day, post incorrect proof, or post no proof, and you are out.',
+  'Buy-ins are not refundable. You only get money back if you finish and are paid in the split.',
+  '18+. Void where prohibited. Not medical advice.',
+] as const;
+
 const OFFICIAL_BOB = {
   loginHeadline: 'A small promise. Then you move.',
   loginBody:
     'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. A buy-in is not a fortune. It is a promise with weight. Finish the week. Split the pot with everyone else who did.',
   loginCta: 'See this week’s challenge',
   loginSkip: 'Not now',
-  cardPromise: 'Skin in the game. Thirty minutes. A picture before, a picture after.',
-  cardSplit: 'If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
-  legalBoard: 'If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
-  legalPot: 'If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
-  legalAllFinish: 'If everyone finishes, they split the pot — that even split returns your buy-in.',
-  legalZero: 'If nobody finishes and there are no valid days, the guarantee rolls into the next Official week.',
-  legalDays: 'Official days end at 11:59 p.m. Central Time.',
-  legalAge: '18+. Void where prohibited. Not medical advice.',
+  cardPromise: OFFICIAL_DETAILS_LINES[0],
+  cardSplit: OFFICIAL_DETAILS_LINES[1],
+  legalBoard: OFFICIAL_DETAILS_LINES[1],
+  legalPot: OFFICIAL_DETAILS_LINES[1],
+  legalDays: OFFICIAL_DETAILS_LINES[2],
+  legalAge: OFFICIAL_DETAILS_LINES[7],
   proofCamera: 'A phone camera is required for this challenge.',
   proofHeart:
     'Heart-rate proof is required (Watch, Fitness, or a screenshot). If Apple Health was denied, turn it on in iPhone Settings → Health → blOb.',
-  detailsHardware:
-    'A phone camera is required. Heart-rate proof is required (Watch, Fitness, or a screenshot).',
+  detailsHardware: OFFICIAL_DETAILS_LINES[3],
+  detailsFlag: OFFICIAL_DETAILS_LINES[4],
+  detailsOut: OFFICIAL_DETAILS_LINES[5],
+  detailsRefund: OFFICIAL_DETAILS_LINES[6],
   geoBlocked: 'Sorry, this Challenge isn’t available in your State.',
   joinBob: 'This is so Future You does not negotiate with the couch.',
-  joinLegal: 'Buy-in is {amount}. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. This is not a guaranteed profit.',
+  joinLegal:
+    'Buy-in is {amount}. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. This is not a guaranteed profit.',
   missed:
     'You dropped. The stake stays with the people who didn’t. The workouts already happened. I do not take those back.',
   finished: 'You stayed. That is the whole sport.',
