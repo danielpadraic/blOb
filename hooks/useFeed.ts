@@ -409,21 +409,45 @@ async function fetchHostedChallengeIds(userId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.id);
 }
 
-async function fetchOfficialAnnouncementPosts(): Promise<PostWithMeta[]> {
-  const { data, error } = await supabase
-    .from('challenges')
-    .select('id, created_by')
-    .eq('is_official', true);
-  if (error || !data?.length) {
-    if (error) {
-      console.log('[blob:feed] official challenges lookup failed', error.message);
-    }
+async function fetchOfficialAuthorIds(): Promise<string[]> {
+  const { data, error } = await supabase.from('profiles').select('id').eq('is_official', true);
+  if (error) {
+    console.log('[blob:feed] official authors lookup failed', error.message);
     return [];
   }
-  const challengeIds = data.map((row) => row.id);
-  const hostIds = new Set(data.map((row) => row.created_by).filter(Boolean));
-  const posts = await queryPosts({ kind: 'ids', challengeIds });
-  return posts.filter((post) => hostIds.has(post.author_id) && asPostAudience(post.audience) === 'public');
+  return (data ?? []).map((row) => row.id).filter(Boolean);
+}
+
+async function fetchRecommendedCreatorIds(userId: string): Promise<string[]> {
+  const full = await supabase
+    .from('profiles')
+    .select('id, is_official, is_creator, profile_visibility')
+    .neq('id', userId)
+    .or('is_official.eq.true,is_creator.eq.true')
+    .limit(40);
+  if (!full.error && full.data) {
+    return (full.data as Array<{
+      id: string;
+      is_official?: boolean | null;
+      is_creator?: boolean | null;
+      profile_visibility?: string | null;
+    }>)
+      .filter((row) => {
+        if (row.is_official) {
+          return true;
+        }
+        if (!row.is_creator) {
+          return false;
+        }
+        const visibility = String(row.profile_visibility ?? 'public');
+        return visibility === 'public';
+      })
+      .map((row) => row.id);
+  }
+  if (full.error) {
+    console.log('[blob:feed] recommended creators lookup skipped', full.error.message);
+  }
+  return fetchOfficialAuthorIds();
 }
 
 async function fetchPosts(input: {
@@ -439,16 +463,22 @@ async function fetchPosts(input: {
     return [];
   }
 
-  const [joinedIds, hostedIds, friendIds, official, hiddenIds, mutedIds] = await Promise.all([
-    fetchJoinedChallengeIds(input.userId),
-    fetchHostedChallengeIds(input.userId),
-    fetchFriendIds(input.userId),
-    fetchOfficialAnnouncementPosts(),
-    fetchHiddenPostIds(input.userId),
-    fetchMutedUserIds(input.userId),
-  ]);
+  const [joinedIds, hostedIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds] =
+    await Promise.all([
+      fetchJoinedChallengeIds(input.userId),
+      fetchHostedChallengeIds(input.userId),
+      fetchFriendIds(input.userId),
+      fetchOfficialAuthorIds(),
+      fetchRecommendedCreatorIds(input.userId),
+      fetchHiddenPostIds(input.userId),
+      fetchMutedUserIds(input.userId),
+    ]);
   const challengeIds = [...new Set([...joinedIds, ...hostedIds])];
-  const authorIds = [...new Set([input.userId, ...friendIds])];
+  const challengeIdSet = new Set(challengeIds);
+  const official = new Set(officialIds);
+  const friends = new Set(friendIds);
+  const recommended = new Set(recommendedIds);
+  const authorIds = [...new Set([input.userId, ...friendIds, ...officialIds, ...recommendedIds])];
 
   const [challengePosts, people] = await Promise.all([
     queryPosts({ kind: 'ids', challengeIds }),
@@ -461,15 +491,24 @@ async function fetchPosts(input: {
 
   return hydrateAuthors(
     await withSocial(
-      dedupePosts([people, challengePosts, official])
+      dedupePosts([people, challengePosts])
         .filter((post) => {
           if (hidden.has(post.id)) {
             return false;
           }
-          if (post.author_id !== userId && muted.has(post.author_id)) {
+          if (post.author_id !== userId && muted.has(post.author_id) && !official.has(post.author_id)) {
             return false;
           }
-          return true;
+          if (official.has(post.author_id) || post.author_id === userId || friends.has(post.author_id)) {
+            return true;
+          }
+          if (post.challenge_id && challengeIdSet.has(post.challenge_id)) {
+            return true;
+          }
+          if (recommended.has(post.author_id)) {
+            return asPostAudience(post.audience) === 'public';
+          }
+          return false;
         })
         .slice(0, 50),
       userId,
