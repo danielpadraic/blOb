@@ -10,9 +10,8 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { BlobMascot } from '@/components/mascot/BlobMascot';
+import { BootScreen } from '@/components/ui/BootScreen';
 import { MascotState } from '@/components/mascot/MascotState';
-import { AppText } from '@/components/ui/AppText';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { WalletProvider } from '@/hooks/useWallet';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -51,6 +50,9 @@ export default function RootLayout() {
 function RootNavigator() {
   const { isLoading, isConfigured } = useAuth();
   const { isBootstrapping, path } = useMyProfile();
+  const pathname = usePathname();
+  const onOnboarding = pathname.startsWith('/onboarding');
+  const keepSetupMounted = path === 'setup' || (path === 'app' && onOnboarding);
 
   useEffect(() => {
     if (!isLoading && !isBootstrapping) {
@@ -91,7 +93,7 @@ function RootNavigator() {
         <Stack.Protected guard={path === 'auth'}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
-        <Stack.Protected guard={path === 'setup'}>
+        <Stack.Protected guard={keepSetupMounted}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
         <Stack.Screen name="index" />
@@ -104,6 +106,13 @@ function RootNavigator() {
         </Stack.Protected>
         <Stack.Screen name="+not-found" />
       </Stack>
+      {path === 'app' && onOnboarding ? (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
+          <BootScreen />
+        </View>
+      ) : null}
     </>
   );
 }
@@ -154,15 +163,4 @@ function PendingInviteRedirect({ ready }: { ready: boolean }) {
   }, [pathname, ready, router]);
 
   return null;
-}
-
-function BootScreen() {
-  return (
-    <View className="flex-1 items-center justify-center" style={{ backgroundColor: THEME.background }}>
-      <BlobMascot size={220} motion="pulse" />
-      <AppText className="mt-6" style={{ color: THEME.textMuted }}>
-        blOb is waking up…
-      </AppText>
-    </View>
-  );
 }

@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
+import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { SKILL_ATTESTATION } from '@/copy/legalDocs';
 import { acceptLegal } from '@/lib/legal';
+import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { isProfileNamed } from '@/utils/validators';
@@ -16,6 +19,8 @@ import type { Profile } from '@/lib/types';
 
 export default function LegalAcceptScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { profile, refetch } = useMyProfile();
   const [tos, setTos] = useState(false);
   const [privacy, setPrivacy] = useState(false);
@@ -33,16 +38,26 @@ export default function LegalAcceptScreen() {
     setError(null);
     try {
       await acceptLegal();
-      const next = await refetch();
-      const named = isProfileNamed((next.data as Profile | null | undefined) ?? profile);
-      if (named) {
-        router.replace('/');
-        return;
+      const acceptedAt = new Date().toISOString();
+      const patch: Partial<Profile> = {
+        tos_accepted_at: acceptedAt,
+        privacy_accepted_at: acceptedAt,
+        skill_attestation_at: acceptedAt,
+      };
+      if (user?.id) {
+        queryClient.setQueryData(['profile', user.id, 'self'], (current) =>
+          current && typeof current === 'object' ? { ...current, ...patch } : current,
+        );
       }
-      router.replace('/onboarding/profile-setup');
+      const named = isProfileNamed({ ...profile, ...patch } as Profile);
+      if (named) {
+        router.replace(TABS_HREF);
+      } else {
+        router.replace('/onboarding/profile-setup' as Href);
+      }
+      void refetch();
     } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
+      setError(getErrorMessage(err) || 'Couldn’t save that. Try again.');
       setBusy(false);
     }
   }

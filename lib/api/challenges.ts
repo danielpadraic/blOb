@@ -10,6 +10,7 @@ import type {
   PublishChallengeResult,
   RefundPreStartResult,
 } from '@/lib/types/challenge';
+import { getErrorMessage } from '@/utils/errors';
 
 const RPC_MESSAGES: Record<string, string> = {
   NOT_AUTHENTICATED: 'Sign in to continue.',
@@ -75,7 +76,15 @@ function rpcMessage(error: unknown): string {
       return label;
     }
   }
-  return trimmed || 'Something went sideways. Try again in a moment.';
+  if (
+    trimmed.toLowerCase().includes('does not exist') ||
+    trimmed.toLowerCase().includes('schema cache') ||
+    trimmed.toLowerCase().includes('pgrst') ||
+    trimmed.toLowerCase().includes('are_accepted_friends')
+  ) {
+    return 'Couldn’t complete that just now. Try again.';
+  }
+  return getErrorMessage(error);
 }
 
 function unwrap<T>(data: unknown, error: unknown): T {

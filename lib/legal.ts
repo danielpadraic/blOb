@@ -1,4 +1,5 @@
 import { LEGAL_PRIVACY_VERSION, LEGAL_TOS_VERSION, SKILL_ATTESTATION } from '@/copy/legalDocs';
+import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -30,4 +31,20 @@ export async function replayTutorial(): Promise<void> {
   if (error) {
     throw new Error(getErrorMessage(error));
   }
+}
+
+export async function setCreateTourOptOut(optOut: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_create_tour_opt_out', { p_opt_out: optOut });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  queryClient.setQueriesData({ queryKey: ['profile'] }, (current) => {
+    if (!current || typeof current !== 'object') {
+      return current;
+    }
+    return {
+      ...current,
+      create_tour_opt_out_at: optOut ? new Date().toISOString() : null,
+    };
+  });
 }

@@ -8,6 +8,7 @@ import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
 import { TourHost } from '@/components/tour/TourHost';
+import { CreateTourHost } from '@/components/tour/CreateTourHost';
 import { TourProvider, useTour } from '@/components/tour/TourContext';
 import { TabChromeHeader, isAlertsTab, isChallengeIdRoute } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
@@ -229,6 +230,7 @@ function TabLayoutInner() {
       />
       {profile && !profile.tutorial_completed_at ? <FirstRunTourLauncher /> : null}
       <TourHost onFinished={() => void refetch()} />
+      <CreateTourHost />
     </View>
   );
 }

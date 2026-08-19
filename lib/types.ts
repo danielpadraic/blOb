@@ -233,6 +233,7 @@ export interface Profile {
   tos_version?: string | null;
   privacy_version?: string | null;
   tutorial_completed_at?: string | null;
+  create_tour_opt_out_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1151,6 +1152,10 @@ export type Database = {
       replay_tutorial: {
         Args: Record<string, never>;
         Returns: undefined;
+      };
+      set_create_tour_opt_out: {
+        Args: { p_opt_out: boolean };
+        Returns: string | null;
       };
       mark_coin_balance_shown: {
         Args: Record<string, never>;

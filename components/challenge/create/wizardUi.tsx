@@ -9,6 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { BobPose, type BobPoseName } from '@/components/mascot/BobPose';
@@ -71,12 +72,14 @@ export const WizardFocusContext = createContext<WizardFocusApi | null>(null);
 export function FieldAnchor({ name, children }: { name: string; children: ReactNode }) {
   const focus = useContext(WizardFocusContext);
   return (
-    <View
-      collapsable={false}
-      ref={(node) => focus?.registerAnchor(name, node)}
-      onLayout={() => focus?.onAnchorLayout(name)}>
-      {children}
-    </View>
+    <TourAnchor id={`create-${name}`}>
+      <View
+        collapsable={false}
+        ref={(node) => focus?.registerAnchor(name, node)}
+        onLayout={() => focus?.onAnchorLayout(name)}>
+        {children}
+      </View>
+    </TourAnchor>
   );
 }
 

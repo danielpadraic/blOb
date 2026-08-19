@@ -154,6 +154,7 @@ export default function ChallengeDetailScreen() {
     [roster.data, user?.id],
   );
   const isJoined = Boolean(participation);
+  const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
   const competitorCount = useMemo(() => {
     if (!roster.data) {
       return Math.max(Number(challenge?.participant_count) || 0, isJoined ? 1 : 0);
@@ -184,17 +185,14 @@ export default function ChallengeDetailScreen() {
     if (!challenge || isJoined) {
       return null;
     }
+    if (isHost) {
+      return 'You’re already in this challenge.';
+    }
     if (challenge.status === 'settled' || challenge.status === 'judging' || challenge.status === 'cancelled_underfilled' || challenge.status === 'cancelled') {
       return 'This challenge is no longer accepting competitors.';
     }
     if (!isJoinWindowOpen(challenge)) {
-      if (challenge.series_id || challenge.is_official) {
-        return officialAlreadyStartedCopy();
-      }
-      if (challenge.starts_at && new Date() >= new Date(challenge.starts_at)) {
-        return 'Join closed when this challenge started.';
-      }
-      return 'This challenge is no longer accepting competitors.';
+      return officialAlreadyStartedCopy();
     }
     if (
       challenge.ends_at &&
@@ -215,11 +213,10 @@ export default function ChallengeDetailScreen() {
       return `You need ${formatWallet(buyIn, challenge.currency)} to buy in. You have ${formatWallet(wallet, challenge.currency)}.`;
     }
     return null;
-  }, [challenge, isJoined, profile]);
+  }, [challenge, isHost, isJoined, profile]);
 
-  const canJoin = Boolean(challenge) && !isJoined && !joinBlocked;
+  const canJoin = Boolean(challenge) && !isJoined && !isHost && !joinBlocked;
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
-  const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
   const wasCancelled = challenge?.status === 'cancelled';
 
   useEffect(() => {
@@ -335,7 +332,7 @@ export default function ChallengeDetailScreen() {
   }
 
   function onJoinPress() {
-    if (join.isPending) {
+    if (join.isPending || !canJoin || isHost) {
       return;
     }
     setActionError(null);
@@ -503,7 +500,7 @@ export default function ChallengeDetailScreen() {
   const showStickyCta =
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
-    (isJoined || challenge.status !== 'judging');
+    (isJoined || (!isHost && challenge.status !== 'judging'));
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
@@ -1087,7 +1084,7 @@ export default function ChallengeDetailScreen() {
       ) : null}
 
       <JoinConfirmModal
-        visible={confirmOpen}
+        visible={confirmOpen && canJoin}
         challenge={challenge}
         loading={join.isPending}
         error={actionError}

@@ -371,6 +371,19 @@ function humanize(raw: string): string {
   if (message.includes('lobby_full')) {
     return 'This challenge is full.';
   }
+  if (
+    message.includes('are_accepted_friends') ||
+    ((message.includes('function') || message.includes('rpc') || message.includes('could not find the')) &&
+      message.includes('does not exist'))
+  ) {
+    return 'Couldn’t complete that just now. Try again.';
+  }
+  if (message.includes('legal_required')) {
+    return 'Agree to the Terms, Privacy Policy, and skill statement to continue.';
+  }
+  if (message.includes('profile_missing')) {
+    return 'Finish creating your profile, then try again.';
+  }
   if (message.includes('not_joinable')) {
     return 'This challenge is not accepting competitors.';
   }

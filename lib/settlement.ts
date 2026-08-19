@@ -22,9 +22,18 @@ const JOINABLE_STATUSES: ChallengeStatus[] = [
   'upcoming',
   'open',
   'starting',
-  'in_progress',
   'filling',
   'arming',
+];
+
+const CLOSED_JOIN_STATUSES: ChallengeStatus[] = [
+  'live',
+  'in_progress',
+  'judging',
+  'settled',
+  'cancelled',
+  'cancelled_underfilled',
+  'distributing',
 ];
 
 export function isJoinableStatus(status: string | null | undefined): boolean {
@@ -43,25 +52,19 @@ export function isJoinWindowOpen(
   now = new Date(),
 ): boolean {
   const status = String(challenge.status ?? '');
-  if (challenge.series_id) {
+  if (challenge.series_id || challenge.is_official) {
     return status === 'filling' || status === 'arming';
   }
-  if (challenge.is_official) {
+  if (CLOSED_JOIN_STATUSES.includes(status as ChallengeStatus)) {
     return false;
   }
-  if (challenge.start_rule !== 'at_starts_at') {
-    if (challenge.official_started_at) {
-      return false;
-    }
-    return isJoinableStatus(status);
-  }
-  if (status !== 'open') {
+  if (challenge.official_started_at) {
     return false;
   }
   if (challenge.starts_at && now.getTime() >= new Date(challenge.starts_at).getTime()) {
     return false;
   }
-  return true;
+  return isJoinableStatus(status);
 }
 
 export function isSettledStatus(status: string | null | undefined): boolean {

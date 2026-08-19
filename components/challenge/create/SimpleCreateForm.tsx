@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -11,6 +12,7 @@ import { Stepper } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useCreateChallenge } from '@/hooks/useChallenge';
+import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
@@ -89,6 +91,7 @@ export function SimpleCreateForm() {
   const create = useCreateChallenge();
   const [draft, setDraft] = useState<SimpleChallengeDraft>(() => defaultSimpleDraft());
   const [error, setError] = useState<string | null>(null);
+  useCreateChallengeTour('simple');
 
   function patch(partial: Partial<SimpleChallengeDraft>) {
     setDraft((current) => ({ ...current, ...partial }));
@@ -135,6 +138,7 @@ export function SimpleCreateForm() {
       <View className="gap-5 pt-3">
         <AppText className="text-[22px] font-extrabold text-charcoal">{copy('create.screenTitle')}</AppText>
 
+        <TourAnchor id="create-simple-currency">
         <View className="gap-2">
           <SectionLabel>{copy('create.currency')}</SectionLabel>
           <SegmentedControl
@@ -142,7 +146,7 @@ export function SimpleCreateForm() {
             value={draft.currency}
             options={[
               { value: 'coins' as SimpleCurrency, label: copy('create.coins') },
-              { value: 'bucks' as SimpleCurrency, label: copy('create.bucks') },
+              { value: 'bucks' as SimpleCurrency, label: '$' },
             ]}
             onChange={(value) =>
               patch({
@@ -154,6 +158,7 @@ export function SimpleCreateForm() {
             }
           />
           {draft.currency === 'bucks' ? (
+            <TourAnchor id="create-simple-buyin">
             <View className="gap-2">
               <AppText className="text-sm text-muted">{copy('create.youFundPrize')}</AppText>
               <View className="flex-row items-center justify-between">
@@ -167,7 +172,9 @@ export function SimpleCreateForm() {
                 />
               </View>
             </View>
+            </TourAnchor>
           ) : (
+            <TourAnchor id="create-simple-buyin">
             <View className="flex-row items-center justify-between">
               <AppText className="text-sm font-semibold text-charcoal">{copy('create.buyIn')}</AppText>
               <Stepper
@@ -178,8 +185,10 @@ export function SimpleCreateForm() {
                 onChange={(buy_in) => patch({ buy_in })}
               />
             </View>
+            </TourAnchor>
           )}
         </View>
+        </TourAnchor>
 
         <View className="gap-2">
           <SectionLabel>{copy('create.type')}</SectionLabel>
@@ -221,6 +230,7 @@ export function SimpleCreateForm() {
           numberOfLines={1}
         />
 
+        <TourAnchor id="create-simple-start">
         <View className="gap-2">
           <SectionLabel>{copy('create.start')}</SectionLabel>
           <DateTimeField
@@ -229,7 +239,9 @@ export function SimpleCreateForm() {
             onChange={(starts_at) => patch({ starts_at })}
           />
         </View>
+        </TourAnchor>
 
+        <TourAnchor id="create-simple-duration">
         <View className="gap-2">
           <SectionLabel>{copy('create.duration')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
@@ -261,7 +273,9 @@ export function SimpleCreateForm() {
             </View>
           ) : null}
         </View>
+        </TourAnchor>
 
+        <TourAnchor id="create-simple-task">
         <Input
           label={copy('create.taskLabel')}
           placeholder={copy('create.taskPlaceholder')}
@@ -274,7 +288,9 @@ export function SimpleCreateForm() {
           }
           maxLength={80}
         />
+        </TourAnchor>
 
+        <TourAnchor id="create-simple-frequency">
         <View className="gap-2">
           <SectionLabel>{copy('create.frequency')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
@@ -305,7 +321,9 @@ export function SimpleCreateForm() {
             </AppText>
           )}
         </View>
+        </TourAnchor>
 
+        <TourAnchor id="create-simple-proof">
         <View className="gap-2">
           <SectionLabel>{copy('create.proofs')}</SectionLabel>
           <View className="gap-3">
@@ -377,7 +395,9 @@ export function SimpleCreateForm() {
           </View>
           <AppText className="text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
         </View>
+        </TourAnchor>
 
+        <TourAnchor id="create-simple-visibility">
         <View className="gap-2">
           <SectionLabel>{copy('create.visibility')}</SectionLabel>
           <SegmentedControl
@@ -428,6 +448,7 @@ export function SimpleCreateForm() {
             </Pressable>
           ) : null}
         </View>
+        </TourAnchor>
 
         {needed > 0 ? (
           <View className="gap-1">
@@ -446,6 +467,7 @@ export function SimpleCreateForm() {
         ) : null}
 
         <Button title={copy('create.submit')} loading={create.isPending} onPress={() => void onCreate()} />
+        <TourAnchor id="create-simple-advanced">
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/challenges/create?mode=advanced')}
@@ -454,6 +476,7 @@ export function SimpleCreateForm() {
             {copy('create.advanced')}
           </AppText>
         </Pressable>
+        </TourAnchor>
       </View>
     </Screen>
   );

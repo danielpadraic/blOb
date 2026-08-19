@@ -7,6 +7,7 @@ import { AppState, Platform, Pressable, ScrollView, Switch, View } from 'react-n
 
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTourOptional } from '@/components/tour/TourContext';
 import {
   ChoiceCard,
   ContinueDraftCard,
@@ -25,6 +26,7 @@ import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { useCreateChallenge } from '@/hooks/useChallenge';
+import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
 import {
   challengeDraftsQueryKey,
@@ -164,6 +166,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const [skillAck, setSkillAck] = useState(false);
   const [laneChosen, setLaneChosen] = useState(true);
   const [bobError, setBobError] = useState<{ field: string; line: string } | null>(null);
+  const tour = useTourOptional();
+  const setCreatePeek = tour?.setCreatePeek;
+  useCreateChallengeTour('advanced', !liveChallengeId);
+
+  useEffect(() => {
+    if (!setCreatePeek) {
+      return;
+    }
+    setCreatePeek((index) => setStep(index));
+    return () => setCreatePeek(null);
+  }, [setCreatePeek]);
 
   const {
     control,
@@ -1319,6 +1332,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             status={savedFlash ? 'Saved' : null}
             trailing={
               <View className="flex-row items-center gap-1">
+                <TourAnchor id="create-advanced-simple">
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.replace('/challenges/create')}
@@ -1327,6 +1341,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                     {copy('create.simple')}
                   </AppText>
                 </Pressable>
+                </TourAnchor>
                 <AppText className="mr-1 text-[13px] font-semibold text-muted">{copy('create.advanced')}</AppText>
                 {tutorialOn && bobTipOpen ? null : (
                   <Pressable
@@ -1489,6 +1504,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             />
           ) : null}
           {step === STEP_REVIEW ? (
+            <FieldAnchor name="review">
             <ReviewSlide
               values={values}
               contributionAmount={contributionAmount}
@@ -1496,6 +1512,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               skillAck={skillAck}
               onToggleSkillAck={() => setSkillAck((current) => !current)}
             />
+            </FieldAnchor>
           ) : null}
           </View>
         </ScrollView>

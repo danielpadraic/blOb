@@ -84,7 +84,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-tab-create',
     placement: 'above',
     title: '+',
-    body: 'Log, post, or create a Simple challenge. Advanced exists — don’t use it yet.',
+    body: 'Create a Simple or Advanced challenge.',
   },
   {
     id: 'tabFriends',

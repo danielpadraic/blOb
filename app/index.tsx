@@ -1,6 +1,7 @@
 import { Redirect } from 'expo-router';
 import type { Href } from 'expo-router';
 
+import { BootScreen } from '@/components/ui/BootScreen';
 import { useMyProfile } from '@/hooks/useProfile';
 import { TABS_HREF } from '@/lib/routes';
 
@@ -8,7 +9,7 @@ export default function Index() {
   const { path } = useMyProfile();
 
   if (path === 'boot') {
-    return null;
+    return <BootScreen />;
   }
 
   if (path === 'auth') {

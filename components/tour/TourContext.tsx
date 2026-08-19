@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { type LayoutRectangle, type ScrollView } from 'react-native';
 
+import type { CreateTourTrack } from '@/lib/createTour';
+
 export type TourRect = LayoutRectangle;
 
 type TourContextValue = {
@@ -16,8 +18,15 @@ type TourContextValue = {
   runId: number;
   epoch: number;
   targetId: string | null;
+  createActive: boolean;
+  createRunId: number;
+  createTrack: CreateTourTrack | null;
   start: () => void;
   stop: () => void;
+  startCreate: (track: CreateTourTrack) => void;
+  stopCreate: () => void;
+  peekCreateStep: (step: number) => void;
+  setCreatePeek: (fn: ((step: number) => void) | null) => void;
   setTargetId: (id: string | null) => void;
   bump: () => void;
   register: (id: string, rect: TourRect | null) => void;
@@ -33,9 +42,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [runId, setRunId] = useState(0);
   const [epoch, setEpoch] = useState(0);
   const [targetId, setTargetId] = useState<string | null>(null);
+  const [createActive, setCreateActive] = useState(false);
+  const [createRunId, setCreateRunId] = useState(0);
+  const [createTrack, setCreateTrack] = useState<CreateTourTrack | null>(null);
   const [version, setVersion] = useState(0);
   const rects = useRef(new Map<string, TourRect>());
   const homeScroll = useRef<ScrollView | null>(null);
+  const createPeek = useRef<((step: number) => void) | null>(null);
 
   const register = useCallback((id: string, rect: TourRect | null) => {
     if (!rect || rect.width < 1 || rect.height < 1) {
@@ -69,6 +82,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const start = useCallback(() => {
+    setCreateActive(false);
+    setCreateTrack(null);
     setActive(true);
     setRunId((current) => current + 1);
     setEpoch((current) => current + 1);
@@ -79,14 +94,43 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setTargetId(null);
   }, []);
 
+  const startCreate = useCallback((track: CreateTourTrack) => {
+    setActive(false);
+    setCreateTrack(track);
+    setCreateActive(true);
+    setCreateRunId((current) => current + 1);
+    setEpoch((current) => current + 1);
+  }, []);
+
+  const stopCreate = useCallback(() => {
+    setCreateActive(false);
+    setCreateTrack(null);
+    setTargetId(null);
+  }, []);
+
+  const setCreatePeek = useCallback((fn: ((step: number) => void) | null) => {
+    createPeek.current = fn;
+  }, []);
+
+  const peekCreateStep = useCallback((step: number) => {
+    createPeek.current?.(step);
+  }, []);
+
   const value = useMemo(
     () => ({
       active,
       runId,
       epoch,
       targetId,
+      createActive,
+      createRunId,
+      createTrack,
       start,
       stop,
+      startCreate,
+      stopCreate,
+      peekCreateStep,
+      setCreatePeek,
       setTargetId,
       bump,
       register,
@@ -94,7 +138,26 @@ export function TourProvider({ children }: { children: ReactNode }) {
       setHomeScroll,
       scrollHomeToTop,
     }),
-    [active, bump, epoch, rectFor, register, runId, scrollHomeToTop, setHomeScroll, start, stop, targetId],
+    [
+      active,
+      bump,
+      createActive,
+      createRunId,
+      createTrack,
+      epoch,
+      peekCreateStep,
+      rectFor,
+      register,
+      runId,
+      scrollHomeToTop,
+      setCreatePeek,
+      setHomeScroll,
+      start,
+      startCreate,
+      stop,
+      stopCreate,
+      targetId,
+    ],
   );
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;

@@ -13,7 +13,7 @@ import { useHealthConnection } from '@/hooks/useHealthConnection';
 import { useMyProfile, useUpdateProfile, useUsernameAvailability } from '@/hooks/useProfile';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { copy } from '@/lib/copy';
-import { replayTutorial } from '@/lib/legal';
+import { replayTutorial, setCreateTourOptOut } from '@/lib/legal';
 import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
 import { useTour } from '@/components/tour/TourContext';
 import { getErrorMessage, getPasswordUpdateMessage } from '@/utils/errors';
@@ -225,6 +225,21 @@ export default function AccountScreen() {
             style={{ minHeight: 44, justifyContent: 'center' }}>
             <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
               Replay first-run tour
+            </AppText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: !profile?.create_tour_opt_out_at }}
+            onPress={() => {
+              const nextOn = Boolean(profile?.create_tour_opt_out_at);
+              void setCreateTourOptOut(!nextOn)
+                .then(() => refetch())
+                .catch((error) => Alert.alert('Tour', getErrorMessage(error)));
+            }}
+            hitSlop={8}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              Challenge create tour · {profile?.create_tour_opt_out_at ? 'Off' : 'On'}
             </AppText>
           </Pressable>
         </View>
