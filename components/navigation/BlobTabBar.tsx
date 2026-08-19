@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ComposeTabButton } from '@/components/navigation/ComposeTabButton';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { Avatar } from '@/components/ui/Avatar';
 import { useMyProfile } from '@/hooks/useProfile';
 import { LOBBY_HREF } from '@/lib/routes';
@@ -64,6 +65,7 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
         zIndex: 80,
         elevation: 80,
       }}>
+      <TourAnchor id="tour-tabs">
       <View
         className="flex-row items-center"
         style={{
@@ -100,6 +102,7 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
         />
         <YouTabSlot selected={active === 'profile'} onPress={() => go('/profile')} />
       </View>
+      </TourAnchor>
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import { challengeDetailHref, storyHref } from '@/lib/routes';
+import { challengeDetailHref, conversationHref, storyHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
@@ -127,6 +127,13 @@ export function notificationHref(item: AppNotification): Href | null {
   if (data.href) {
     return data.href as Href;
   }
+  if (data.conversation_id || item.type === 'message') {
+    const conversationId = data.conversation_id;
+    if (conversationId) {
+      return conversationHref(conversationId);
+    }
+    return '/messages';
+  }
   if (data.story_id) {
     return storyHref(data.story_id);
   }
@@ -143,8 +150,11 @@ export function notificationHref(item: AppNotification): Href | null {
   if (item.type === 'profile_incomplete') {
     return '/profile/body-metrics';
   }
-  if (item.type === 'coins_received' || item.type === 'badge_unlocked' || item.type === 'payout_received') {
+  if (item.type === 'coins_received' || item.type === 'coin_grant' || item.type === 'badge_unlocked' || item.type === 'payout_received') {
     return '/profile';
+  }
+  if (item.type === 'proof_flagged' && data.post_id) {
+    return { pathname: '/feed/p/[id]', params: { id: data.post_id } };
   }
   if (data.callout_id) {
     return `/challenges/callout/${data.callout_id}`;
@@ -198,8 +208,15 @@ export function notificationGlyph(type: string, data?: NotificationData): string
     case 'post_reposted':
       return '🔁';
     case 'coins_received':
+    case 'coin_grant':
     case 'payout_received':
       return data?.currency === 'bucks' ? '💵' : '🪙';
+    case 'message':
+      return '💬';
+    case 'official_started':
+      return '🏁';
+    case 'proof_flagged':
+      return '⚠️';
     case 'callout_received':
     case 'callout_accepted':
       return '⚔️';

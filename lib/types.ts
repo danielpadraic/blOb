@@ -227,6 +227,12 @@ export interface Profile {
   allow_profile_posts?: boolean;
   profile_visibility?: 'public' | 'friends' | string | null;
   mute_mentions?: boolean;
+  tos_accepted_at?: string | null;
+  privacy_accepted_at?: string | null;
+  skill_attestation_at?: string | null;
+  tos_version?: string | null;
+  privacy_version?: string | null;
+  tutorial_completed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -597,7 +603,11 @@ export type NotificationType =
   | 'callout_disputed'
   | 'callout_cancelled'
   | 'badge_unlocked'
-  | 'challenge_cancelled';
+  | 'challenge_cancelled'
+  | 'message'
+  | 'official_started'
+  | 'proof_flagged'
+  | 'coin_grant';
 
 export type NotificationData = {
   challenge_id?: string;
@@ -614,6 +624,8 @@ export type NotificationData = {
   coin_reward?: number;
   href?: string;
   dedupe_key?: string;
+  conversation_id?: string;
+  grant_key?: string;
 };
 
 export interface AppNotification {
@@ -1123,6 +1135,22 @@ export type Database = {
       get_my_profile: {
         Args: Record<string, never>;
         Returns: Profile | null;
+      };
+      tick_user_grants: {
+        Args: Record<string, never>;
+        Returns: { ok: boolean; grants: unknown[]; streak: number };
+      };
+      accept_legal: {
+        Args: { p_tos: boolean; p_privacy: boolean; p_skill: boolean };
+        Returns: { ok: boolean; tos_version: string; privacy_version: string; accepted_at: string };
+      };
+      complete_tutorial: {
+        Args: Record<string, never>;
+        Returns: string | null;
+      };
+      replay_tutorial: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
       mark_coin_balance_shown: {
         Args: Record<string, never>;

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeCarousel } from '@/components/challenge/ChallengeCarousel';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeedActiveChallenges, useMyChallengeProgress, useOfficialDiscoverChallenges } from '@/hooks/useChallenge';
@@ -35,6 +36,7 @@ export function ChallengeRail() {
 
   return (
     <View>
+      <TourAnchor id="tour-official">
       <ChallengeCarousel
         title={copy('feed.railOfficial')}
         challenges={officialRows}
@@ -42,6 +44,7 @@ export function ChallengeRail() {
         progressById={progressById}
         onPress={open}
       />
+      </TourAnchor>
       <ChallengeCarousel
         title={copy('feed.railActive')}
         challenges={activeRows}

@@ -26,6 +26,7 @@ import { experienceLabel, goalsLabel, hasCompletedFitnessHistory } from '@/lib/f
 import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
+import { StreakBadgesRow } from '@/components/profile/StreakBadgesRow';
 
 const PHYSICAL_DISCLAIMER =
   'Private unless you share them. Used for Challenge recommendations and competition placement.';
@@ -78,6 +79,9 @@ export default function ProfileScreen() {
     <Screen scroll edges={TAB_ROOT_EDGES}>
       <AppHeader title="You" />
       <ProfileHeader profile={profile} />
+      <View className="mt-3">
+        <StreakBadgesRow userId={profile.id} />
+      </View>
 
       <View className="mt-3 flex-row flex-wrap gap-2">
         <Button title="Edit profile" size="sm" onPress={() => router.push('/profile/edit')} />

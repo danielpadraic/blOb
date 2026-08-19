@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { officialBob } from '@/copy/officialBob';
@@ -62,6 +63,7 @@ export function OfficialPitchHost() {
   }
 
   return (
+    <TourAnchor id="tour-official">
     <View>
       <View className="items-center pt-2">
         <BlobMascot variant="wave" size={180} motion="float" />
@@ -89,5 +91,6 @@ export function OfficialPitchHost() {
         <Button title={officialBob('loginSkip')} variant="ghost" onPress={dismiss} />
       </View>
     </View>
+    </TourAnchor>
   );
 }

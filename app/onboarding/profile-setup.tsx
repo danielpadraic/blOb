@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, ScrollView, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
+import type { Href } from 'expo-router';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
 import { BfpSliderCopy, MotivationToneChips } from '@/components/profile/MotivationToneChips';
@@ -53,6 +54,7 @@ import {
 } from '@/utils/units';
 import {
   PROFILE_STEP_FIELDS,
+  hasAcceptedLegal,
   parseOptionalNumber,
   profileSetupSchema,
   type ProfileSetupValues,
@@ -71,7 +73,7 @@ const GENDER_OPTIONS = [
 const STEP_COPY = [
   {
     title: 'Join the lobby',
-    body: 'We’ll set your name, training, and a starting wallet of 50 Coins.',
+    body: 'We’ll set your name, training, and a starting wallet of 100 Coins.',
   },
   {
     title: 'Training',
@@ -663,6 +665,10 @@ export function ProfileSetupWizard() {
 }
 
 export default function ProfileSetupScreen() {
+  const { profile, isFetched } = useMyProfile();
+  if (isFetched && !hasAcceptedLegal(profile)) {
+    return <Redirect href={'/onboarding/legal' as Href} />;
+  }
   return <ProfileSetupWizard />;
 }
 

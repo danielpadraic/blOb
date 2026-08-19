@@ -591,15 +591,21 @@ export function isGeneratedUsername(username: string | null | undefined): boolea
   return Boolean(username?.startsWith('blob_'));
 }
 
+export function isProfileNamed(profile: Profile | null | undefined): boolean {
+  if (!profile?.display_name?.trim()) {
+    return false;
+  }
+  return !isGeneratedUsername(profile.username);
+}
+
+export function hasAcceptedLegal(profile: Profile | null | undefined): boolean {
+  return Boolean(
+    profile?.tos_accepted_at &&
+      profile?.privacy_accepted_at &&
+      profile?.skill_attestation_at,
+  );
+}
+
 export function isProfileComplete(profile: Profile | null | undefined): boolean {
-  if (!profile) {
-    return false;
-  }
-  if (!profile.display_name?.trim()) {
-    return false;
-  }
-  if (isGeneratedUsername(profile.username)) {
-    return false;
-  }
-  return true;
+  return isProfileNamed(profile) && hasAcceptedLegal(profile);
 }

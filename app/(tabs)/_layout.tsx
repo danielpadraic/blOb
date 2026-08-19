@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tabs, useRouter, useSegments, type Href } from 'expo-router';
 import { View } from 'react-native';
 
@@ -7,26 +7,57 @@ import { QuickActionSheet, type QuickActionId } from '@/components/navigation/Qu
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
+import { TourHost } from '@/components/tour/TourHost';
+import { TourProvider, useTour } from '@/components/tour/TourContext';
 import { TabChromeHeader, isAlertsTab, isChallengeIdRoute } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { HealthLogPromptHost } from '@/components/health/HealthLogPrompt';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useMyProfile } from '@/hooks/useProfile';
+import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 export default function TabLayout() {
+  return (
+    <TourProvider>
+      <TabLayoutInner />
+    </TourProvider>
+  );
+}
+
+function FirstRunTourLauncher() {
+  const { profile } = useMyProfile();
+  const tour = useTour();
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current || !profile || profile.tutorial_completed_at) {
+      return;
+    }
+    started.current = true;
+    const handle = setTimeout(() => tour.start(), 450);
+    return () => clearTimeout(handle);
+  }, [profile, tour]);
+
+  return null;
+}
+
+function TabLayoutInner() {
   const router = useRouter();
   const segments = useSegments();
   const wallet = useWalletOptional();
+  const { profile, refetch } = useMyProfile();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const loggable = useLoggableChallenge();
   useNotificationsRealtime();
   usePushNotifications();
+  useTickUserGrants(true);
 
   const closeOverlays = useCallback(() => {
     setAlertsOpen(false);
@@ -187,6 +218,8 @@ export default function TabLayout() {
         onToggleCompose={toggleSheet}
         onTabPress={closeOverlays}
       />
+      {profile && !profile.tutorial_completed_at ? <FirstRunTourLauncher /> : null}
+      <TourHost onFinished={() => void refetch()} />
     </View>
   );
 }

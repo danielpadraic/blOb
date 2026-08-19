@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Pressable, ScrollView, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -11,6 +13,7 @@ import { useHealthConnection } from '@/hooks/useHealthConnection';
 import { useMyProfile, useUpdateProfile, useUsernameAvailability } from '@/hooks/useProfile';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { copy } from '@/lib/copy';
+import { replayTutorial } from '@/lib/legal';
 import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
 import { getErrorMessage, getPasswordUpdateMessage } from '@/utils/errors';
 import {
@@ -22,8 +25,9 @@ import {
 const PASSWORD_TIMEOUT_MS = 20000;
 
 export default function AccountScreen() {
+  const router = useRouter();
   const { user, updateEmail, updatePassword } = useAuth();
-  const { profile } = useMyProfile();
+  const { profile, refetch } = useMyProfile();
   const updateProfile = useUpdateProfile();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -181,6 +185,44 @@ export default function AccountScreen() {
           ) : null}
         </View>
         ) : null}
+        <View className="gap-2">
+          <AppText className="text-sm font-semibold text-charcoal">Legal</AppText>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push('/profile/legal/terms' as Href)}
+            hitSlop={8}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              Terms of Service and User Agreement
+            </AppText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push('/profile/legal/privacy' as Href)}
+            hitSlop={8}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              Privacy Policy
+            </AppText>
+          </Pressable>
+        </View>
+        <View className="gap-2">
+          <AppText className="text-sm font-semibold text-charcoal">Tour</AppText>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              void replayTutorial()
+                .then(() => refetch())
+                .then(() => router.replace('/feed'))
+                .catch((error) => Alert.alert('Tour', getErrorMessage(error)));
+            }}
+            hitSlop={8}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              Replay first-run tour
+            </AppText>
+          </Pressable>
+        </View>
         <View className="gap-2">
           <AppText className="text-sm font-semibold text-charcoal">Notifications</AppText>
           <AppText className="text-sm leading-5 text-muted">

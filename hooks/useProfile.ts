@@ -50,6 +50,12 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     timezone: profile.timezone ?? null,
     motivation_tone: asCopyTone(profile.motivation_tone),
     is_official: Boolean(profile.is_official),
+    tos_accepted_at: profile.tos_accepted_at ?? null,
+    privacy_accepted_at: profile.privacy_accepted_at ?? null,
+    skill_attestation_at: profile.skill_attestation_at ?? null,
+    tos_version: profile.tos_version ?? null,
+    privacy_version: profile.privacy_version ?? null,
+    tutorial_completed_at: profile.tutorial_completed_at ?? null,
   };
 }
 

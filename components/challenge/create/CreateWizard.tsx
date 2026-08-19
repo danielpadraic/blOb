@@ -6,6 +6,7 @@ import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { AppState, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import {
   ChoiceCard,
   ContinueDraftCard,
@@ -1292,6 +1293,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   const wizardBody = (
+    <TourAnchor id="tour-create">
     <View className="flex-1" style={{ backgroundColor: embedded ? THEME.background : undefined }}>
         {liveChallengeId ? (
           <View className="flex-1 items-center justify-center px-6">
@@ -1518,6 +1520,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           </WizardFocusContext.Provider>
         )}
       </View>
+    </TourAnchor>
   );
 
   if (embedded) {

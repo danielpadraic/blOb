@@ -19,6 +19,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useAcceptFriendRequest,
@@ -161,6 +162,7 @@ export default function FriendsScreen() {
     (requestsQuery.isRefetching && !requestsQuery.isLoading);
 
   return (
+    <TourAnchor id="tour-friends">
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
       <FriendsHeader
         friendCount={friends.length}
@@ -236,6 +238,7 @@ export default function FriendsScreen() {
         />
       ) : null}
     </Screen>
+    </TourAnchor>
   );
 }
 
