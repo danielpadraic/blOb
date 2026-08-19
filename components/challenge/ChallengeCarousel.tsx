@@ -1,7 +1,9 @@
 import { ScrollView, View } from 'react-native';
 
 import { ChallengeCard } from '@/components/challenge/ChallengeCard';
+import { type MenuAnchor } from '@/components/challenge/ChallengeOverflowMenu';
 import { AppText } from '@/components/ui/AppText';
+import { canCancelChallengeCard } from '@/lib/challengeCancel';
 import type { ChallengeWithStats } from '@/lib/types';
 
 export type CarouselSocialProof = {
@@ -17,6 +19,9 @@ type ChallengeCarouselProps = {
   progressById?: Map<string, { days: number; status: string }>;
   socialProofById?: Map<string, CarouselSocialProof>;
   onPress: (id: string) => void;
+  allowCancel?: boolean;
+  official?: boolean;
+  onOverflow?: (challenge: ChallengeWithStats, anchor: MenuAnchor) => void;
 };
 
 export function ChallengeCarousel({
@@ -26,6 +31,9 @@ export function ChallengeCarousel({
   progressById,
   socialProofById,
   onPress,
+  allowCancel = false,
+  official = false,
+  onOverflow,
 }: ChallengeCarouselProps) {
   if (challenges.length === 0) {
     return null;
@@ -44,6 +52,14 @@ export function ChallengeCarousel({
           const mine = progressById?.get(challenge.id);
           const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
           const joined = Boolean(mine);
+          const showOverflow =
+            allowCancel &&
+            Boolean(onOverflow) &&
+            canCancelChallengeCard({
+              challenge,
+              viewerId: currentUserId,
+              official,
+            });
           return (
             <ChallengeCard
               key={challenge.id}
@@ -55,6 +71,11 @@ export function ChallengeCarousel({
               socialProof={socialProofById?.get(challenge.id)}
               participantStatus={mine?.status}
               onPress={() => onPress(challenge.id)}
+              onOverflow={
+                showOverflow && onOverflow
+                  ? (anchor) => onOverflow(challenge, anchor)
+                  : undefined
+              }
             />
           );
         })}

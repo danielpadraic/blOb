@@ -1,31 +1,32 @@
-import type { ReactNode } from 'react';
-import { Platform, Pressable, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
 
 type ComposeTabButtonProps = {
-  onOpen: () => void;
+  open: boolean;
+  onPress: () => void;
   style?: StyleProp<ViewStyle>;
-  onPress?: (event: GestureResponderEvent) => void;
-  children?: ReactNode;
 };
 
-export function ComposeTabButton({ onOpen, style }: ComposeTabButtonProps) {
+export function ComposeTabButton({ open, onPress, style }: ComposeTabButtonProps) {
   return (
     <View style={[style, { alignItems: 'center', justifyContent: 'flex-start', overflow: 'visible' }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Quick actions"
-        onPress={onOpen}
-        className="items-center justify-start">
+        accessibilityState={{ expanded: open }}
+        onPress={onPress}
+        hitSlop={4}
+        className="items-center justify-start"
+        style={{ minWidth: 44, minHeight: 44 }}>
         <View
           className="items-center justify-center"
           style={{
             marginTop: -18,
             padding: 5,
             borderRadius: 24,
-            backgroundColor: THEME.accentBright,
+            backgroundColor: open ? THEME.accent : THEME.accentBright,
             ...(Platform.OS === 'web'
               ? { boxShadow: '0 8px 16px rgba(16, 19, 18, 0.22)' }
               : {
@@ -54,6 +55,7 @@ export function ComposeTabButton({ onOpen, style }: ComposeTabButtonProps) {
                 fontSize: 28,
                 lineHeight: 30,
                 marginTop: -2,
+                transform: [{ rotate: open ? '45deg' : '0deg' }],
               }}>
               +
             </AppText>

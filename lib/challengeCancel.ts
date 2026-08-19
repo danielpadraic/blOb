@@ -19,6 +19,13 @@ export function countOtherJoiners(
   return (rows ?? []).filter((row) => isOtherJoiner(row, hostId)).length;
 }
 
+export function estimatedOtherJoiners(participantCount?: number | null): number | null {
+  if (participantCount == null || !Number.isFinite(Number(participantCount))) {
+    return null;
+  }
+  return Math.max(0, Number(participantCount) - 1);
+}
+
 export function canCancelChallenge(input: {
   challenge: Pick<Challenge, 'status' | 'starts_at' | 'created_by'> | null | undefined;
   viewerId?: string | null;
@@ -49,4 +56,21 @@ export function canCancelChallenge(input: {
     return false;
   }
   return true;
+}
+
+export function canCancelChallengeCard(input: {
+  challenge: Pick<Challenge, 'status' | 'starts_at' | 'created_by'> & {
+    participant_count?: number | null;
+  };
+  viewerId?: string | null;
+  official?: boolean;
+}): boolean {
+  const others = estimatedOtherJoiners(input.challenge.participant_count);
+  return canCancelChallenge({
+    challenge: input.challenge,
+    viewerId: input.viewerId,
+    official: input.official,
+    otherJoiners: others ?? 0,
+    rosterReady: others != null || Boolean(input.official),
+  });
 }

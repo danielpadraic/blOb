@@ -7,6 +7,7 @@ import { payoutDisplayName, personalSettlementCopy } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
 import type { ChallengeSettlementView } from '@/lib/types';
 import { formatWallet } from '@/lib/currency';
+import { officialBob } from '@/copy/officialBob';
 import { formatDate } from '@/utils/format';
 
 type SettlementSummaryProps = {
@@ -16,6 +17,7 @@ type SettlementSummaryProps = {
   daysCompleted?: number | null;
   targetCount?: number | null;
   currency?: string | null;
+  official?: boolean;
 };
 
 export function SettlementSummary({
@@ -25,6 +27,7 @@ export function SettlementSummary({
   daysCompleted,
   targetCount,
   currency,
+  official = false,
 }: SettlementSummaryProps) {
   const mine = settlement.payouts.find((payout) => payout.user_id === userId);
   const personal = personalSettlementCopy({
@@ -34,6 +37,7 @@ export function SettlementSummary({
     targetCount,
     joined,
     currency,
+    official,
   });
   const pool = Number(settlement.settlement.prize_pool ?? 0);
   const paid = Number(settlement.settlement.distributed ?? 0);
@@ -91,7 +95,9 @@ export function SettlementSummary({
         </View>
         <AppText className="mt-3 text-sm leading-5 text-muted">
           {winners === 0
-            ? 'Nobody hit the finish line this round. The work still counted.'
+            ? official
+              ? officialBob('legalZero')
+              : 'Nobody hit the finish line this round. The work still counted.'
             : `Paid ${formatWallet(paid || pool, currency)} on ${formatDate(settlement.settlement.settled_at, 'MMM d')}.`}
         </AppText>
       </Card>

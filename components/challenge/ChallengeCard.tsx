@@ -2,9 +2,11 @@ import { type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import { Pressable, View } from 'react-native';
 
-import { ChallengePosterCard } from '@/components/challenge/ChallengePosterCard';
+import { ChallengePosterCard, POSTER_WIDTH } from '@/components/challenge/ChallengePosterCard';
+import { ChallengeOverflowButton, type MenuAnchor } from '@/components/challenge/ChallengeOverflowMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { copy } from '@/lib/copy';
+import { officialBob } from '@/copy/officialBob';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { Badge } from '@/components/ui/Badge';
 import { AppText } from '@/components/ui/AppText';
@@ -25,6 +27,7 @@ type ChallengeCardProps = {
   friendCount?: number;
   participantStatus?: string | null;
   socialProof?: { name: string; avatarUrl?: string | null; kind: 'hosting' | 'joined' };
+  onOverflow?: (anchor: MenuAnchor) => void;
 };
 
 const cardShell = {
@@ -133,6 +136,7 @@ export function ChallengeCard({
   friendCount = 0,
   participantStatus,
   socialProof,
+  onOverflow,
 }: ChallengeCardProps) {
   if (variant === 'rail') {
     return (
@@ -145,6 +149,7 @@ export function ChallengeCard({
         invited={invited}
         participantStatus={participantStatus}
         socialProof={socialProof}
+        onOverflow={onOverflow}
       />
     );
   }
@@ -265,6 +270,7 @@ function LobbyRailCard({
   invited = false,
   participantStatus,
   socialProof,
+  onOverflow,
 }: {
   challenge: ChallengeWithStats;
   myDays?: number | null;
@@ -274,18 +280,36 @@ function LobbyRailCard({
   invited?: boolean;
   participantStatus?: string | null;
   socialProof?: { name: string; avatarUrl?: string | null; kind: 'hosting' | 'joined' };
+  onOverflow?: (anchor: MenuAnchor) => void;
 }) {
   return (
     <View>
-      <ChallengePosterCard
-        challenge={challenge}
-        onPress={onPress}
-        joined={joined}
-        hosting={hosting}
-        invited={invited}
-        daysCompleted={myDays}
-        participantStatus={participantStatus}
-      />
+      <View>
+        <ChallengePosterCard
+          challenge={challenge}
+          onPress={onPress}
+          joined={joined}
+          hosting={hosting}
+          invited={invited}
+          daysCompleted={myDays}
+          participantStatus={participantStatus}
+        />
+        {onOverflow ? (
+          <View style={{ position: 'absolute', top: 0, right: 0, zIndex: 2 }}>
+            <ChallengeOverflowButton onPress={onOverflow} />
+          </View>
+        ) : null}
+      </View>
+      {challenge.is_official ? (
+        <View className="mt-2" style={{ maxWidth: POSTER_WIDTH }}>
+          <AppText className="text-[12px] font-semibold leading-4 text-charcoal">
+            {officialBob('cardPromise')}
+          </AppText>
+          <AppText className="mt-1 text-[11px] leading-4 text-muted">
+            {officialBob('cardSplit')}
+          </AppText>
+        </View>
+      ) : null}
       {socialProof ? (
         <View className="mt-2 flex-row items-center" style={{ minHeight: 44, maxWidth: 250 }}>
           <Avatar uri={socialProof.avatarUrl} name={socialProof.name} size={28} />

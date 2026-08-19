@@ -20,6 +20,7 @@ import { takePendingInviteToken } from '@/lib/challengeInvites';
 import { inviteHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { queryClient } from '@/lib/queryClient';
+import { paymentsProviderError } from '@/services/payments';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -65,6 +66,15 @@ function RootNavigator() {
           title="Supabase is not wired up"
           body="Copy .env.example to .env and add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY. Then run the SQL in supabase/schema.sql."
         />
+      </View>
+    );
+  }
+
+  const paymentsError = paymentsProviderError();
+  if (paymentsError) {
+    return (
+      <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+        <MascotState kind="error" title="Payments are not wired up" body={paymentsError} />
       </View>
     );
   }

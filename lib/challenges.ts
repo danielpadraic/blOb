@@ -1,4 +1,5 @@
-import { joinChallenge as joinChallengeRpc, publishChallenge } from '@/lib/api/challenges';
+import { getPaymentsProvider } from '@/services/payments';
+import { publishChallenge } from '@/lib/api/challenges';
 import {
   DISCOVER_CHALLENGE_STATUSES,
   LOBBY_CHALLENGE_STATUSES,
@@ -480,7 +481,12 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     frequency: normalizeFrequency(row.frequency),
     tasks: normalizeTasks(row.tasks),
     status,
-    starts_at: String(row.starts_at ?? row.created_at ?? now),
+    starts_at:
+      row.starts_at != null
+        ? String(row.starts_at)
+        : status === 'filling' || status === 'arming'
+          ? ''
+          : String(row.created_at ?? now),
     ends_at: Boolean(row.is_unlimited)
       ? null
       : row.ends_at
@@ -539,6 +545,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     start_rule: (row.start_rule as string | null) ?? null,
     cancelled_at: row.cancelled_at ? String(row.cancelled_at) : null,
     cancelled_by: (row.cancelled_by as string | null) ?? null,
+    series_id: row.series_id ? String(row.series_id) : null,
+    armed_at: row.armed_at ? String(row.armed_at) : null,
     created_at: String(row.created_at ?? now),
     updated_at: String(row.updated_at ?? now),
   };
@@ -636,29 +644,39 @@ export async function fetchCompetingChallenges(userId?: string): Promise<Challen
 }
 
 export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<Challenge[]> {
-  const listed = await selectChallengeList(
+  try {
+    await supabase.rpc('tick_official_series');
+  } catch (error) {
+    console.log('[blob:lobby] official tick skipped', error);
+  }
+
+  const listed = await supabase.rpc('list_official_joinable');
+  if (!listed.error && listed.data) {
+    const rows = asChallengeRows(listed.data as ChallengeRow[])
+      .map(normalizeChallenge)
+      .filter((row) => row.is_official && row.series_id && (row.status === 'filling' || row.status === 'arming'));
+    return sortOfficialFirst(rows);
+  }
+  console.log('[blob:lobby] official-joinable rpc skipped', listed.error?.message);
+
+  const fallback = await selectChallengeList(
     (query) =>
       query
         .eq('is_official', true as unknown as string)
-        .in('status', DISCOVER_CHALLENGE_STATUSES)
-        .order('starts_at', { ascending: true })
+        .in('status', ['filling', 'arming'])
+        .not('series_id', 'is', null)
+        .order('created_at', { ascending: true })
         .limit(LOBBY_PAGE_SIZE),
     'official-discover',
   );
   const joined = new Set(userId ? await fetchJoinedChallengeIds(userId) : []);
-  const rows = listed
+  const rows = fallback
     .map(normalizeChallenge)
     .filter((row) => {
-      if (!row.is_official || !isLiveOrUpcoming(row.status) || joined.has(row.id)) {
+      if (!row.is_official || !row.series_id || joined.has(row.id)) {
         return false;
       }
-      if (userId && row.created_by === userId) {
-        return false;
-      }
-      if (row.official_started_at) {
-        return false;
-      }
-      return true;
+      return row.status === 'filling' || row.status === 'arming';
     });
   return sortOfficialFirst(rows);
 }
@@ -931,14 +949,22 @@ export async function fetchChallengeShareState(id: string): Promise<ChallengeSha
 }
 
 export async function joinChallenge(challengeId: string): Promise<ChallengeParticipant> {
-  await joinChallengeRpc(challengeId);
-  const { maybeRequestPushPermission } = await import('@/lib/push');
-  void maybeRequestPushPermission();
   const { data: session } = await supabase.auth.getUser();
   const userId = session.user?.id;
   if (!userId) {
     throw new Error('You need to be signed in.');
   }
+  const charged = await getPaymentsProvider().chargeJoin({
+    userId,
+    challengeId,
+    amountCents: 0,
+    currency: 'coins',
+  });
+  if (!charged.ok) {
+    throw new Error(charged.message);
+  }
+  const { maybeRequestPushPermission } = await import('@/lib/push');
+  void maybeRequestPushPermission();
   const { data, error } = await supabase
     .from('challenge_participants')
     .select('id, challenge_id, user_id, status, days_completed, joined_at, completed_at, eliminated_at')
@@ -1121,7 +1147,15 @@ async function ensureCreatorParticipant(challengeId: string) {
   if (data) {
     return;
   }
-  await joinChallengeRpc(challengeId);
+  const charged = await getPaymentsProvider().chargeJoin({
+    userId,
+    challengeId,
+    amountCents: 0,
+    currency: 'coins',
+  });
+  if (!charged.ok) {
+    throw new Error(charged.message);
+  }
 }
 
 export async function insertUserChallenge(input: CreateChallengeInput): Promise<Challenge> {

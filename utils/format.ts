@@ -9,6 +9,8 @@ import {
   isSameDay,
 } from 'date-fns';
 
+import { armingCountdownLabel } from '@/lib/officialSeries';
+
 export function formatCoins(amount: number | null | undefined): string {
   const value = Number(amount ?? 0);
   return `${value.toFixed(2)} Coins`;
@@ -170,10 +172,19 @@ function compactCountdown(target: Date, now: Date): string {
 }
 
 function lobbyWaitOrStartLabel(challenge: {
-  starts_at: string;
+  starts_at?: string | null;
   start_mode?: string | null;
   min_participants?: number | null;
+  status?: string | null;
+  armed_at?: string | null;
 }): string | null {
+  const status = String(challenge.status ?? '');
+  if (status === 'filling') {
+    return null;
+  }
+  if (status === 'arming') {
+    return armingCountdownLabel(challenge.armed_at) ?? 'Starts soon';
+  }
   const mode = String(challenge.start_mode ?? '');
   if (mode === 'full_lobby' || mode === 'all_ready') {
     const min = Math.max(Number(challenge.min_participants) || 0, 0);
@@ -183,7 +194,7 @@ function lobbyWaitOrStartLabel(challenge: {
     return 'Waits for players';
   }
   const now = new Date();
-  const start = new Date(challenge.starts_at);
+  const start = new Date(challenge.starts_at ?? '');
   if (Number.isNaN(start.getTime()) || !isBefore(now, start)) {
     return null;
   }
@@ -196,13 +207,18 @@ function lobbyWaitOrStartLabel(challenge: {
 
 /** Open-card TIME: start/wait copy only. Never "Ends in …". */
 export function lobbyDiscoverTimeLabel(challenge: {
-  starts_at: string;
+  starts_at?: string | null;
   start_mode?: string | null;
   min_participants?: number | null;
   official_started_at?: string | null;
   status?: string | null;
+  armed_at?: string | null;
 }): string | null {
-  if (challenge.official_started_at || challenge.status === 'in_progress') {
+  if (
+    challenge.official_started_at ||
+    challenge.status === 'in_progress' ||
+    challenge.status === 'live'
+  ) {
     return null;
   }
   return lobbyWaitOrStartLabel(challenge);
@@ -210,18 +226,27 @@ export function lobbyDiscoverTimeLabel(challenge: {
 
 /** Joined-card TIME: countdown, wait-for-players, or days left. */
 export function lobbyTimeLabel(challenge: {
-  starts_at: string;
-  ends_at: string | null | undefined;
+  starts_at?: string | null;
+  ends_at?: string | null;
   is_unlimited?: boolean | null;
   start_mode?: string | null;
   min_participants?: number | null;
   official_started_at?: string | null;
   status?: string | null;
+  armed_at?: string | null;
 }): string {
+  const status = String(challenge.status ?? '');
+  if (status === 'filling') {
+    return '';
+  }
+  if (status === 'arming') {
+    return armingCountdownLabel(challenge.armed_at) ?? 'Starts soon';
+  }
   const startCopy = lobbyWaitOrStartLabel(challenge);
   const hasStarted =
     Boolean(challenge.official_started_at) ||
-    challenge.status === 'in_progress' ||
+    status === 'in_progress' ||
+    status === 'live' ||
     !startCopy;
 
   if (!hasStarted && startCopy) {
@@ -229,7 +254,7 @@ export function lobbyTimeLabel(challenge: {
   }
 
   if (challenge.is_unlimited || !challenge.ends_at) {
-    return 'Ongoing';
+    return status === 'filling' || status === 'arming' ? '' : 'Ongoing';
   }
   const now = new Date();
   const end = new Date(challenge.ends_at);

@@ -13,11 +13,12 @@ import { THEME, themeShadow } from '@/lib/theme';
 const HIT = 44;
 
 type BlobTabBarProps = {
-  onOpenCompose: () => void;
+  composeOpen?: boolean;
+  onToggleCompose: () => void;
   onTabPress?: () => void;
 };
 
-export function BlobTabBar({ onOpenCompose, onTabPress }: BlobTabBarProps) {
+export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }: BlobTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -88,13 +89,8 @@ export function BlobTabBar({ onOpenCompose, onTabPress }: BlobTabBarProps) {
           icon={{ ios: 'flag.fill', android: 'flag', web: 'flag' }}
           onPress={() => go(LOBBY_HREF)}
         />
-        <View style={{ flex: 1, minWidth: 0, overflow: 'visible' }}>
-          <ComposeTabButton
-            onOpen={() => {
-              onTabPress?.();
-              onOpenCompose();
-            }}
-          />
+        <View style={{ flex: 1, minWidth: 0, overflow: 'visible', zIndex: 90 }}>
+          <ComposeTabButton open={composeOpen} onPress={onToggleCompose} />
         </View>
         <TabSlot
           label="Friends"

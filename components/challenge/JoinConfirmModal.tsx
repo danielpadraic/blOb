@@ -12,6 +12,7 @@ import { THEME } from '@/lib/theme';
 import { formatWallet, formatWalletWithUsd, isBucksChallenge } from '@/lib/currency';
 import { formatUsd } from '@/utils/format';
 import { copy } from '@/lib/copy';
+import { officialBob } from '@/copy/officialBob';
 
 type JoinConfirmModalProps = {
   visible: boolean;
@@ -35,6 +36,32 @@ function acknowledgments(challenge: Challenge) {
   const ruleCopy = challengeRuleCopy(challenge);
 
   const prizeCopy = prizeStructureSummary(challenge);
+  if (challenge.is_official) {
+    const amount = isFree
+      ? 'free'
+      : bucks
+        ? formatWalletWithUsd(buyInAmount, 'bucks')
+        : formatWallet(buyInAmount, 'coins');
+    return [
+      {
+        id: 'buyin',
+        title: 'Buy-in',
+        body: officialBob('joinLegal', { amount }),
+      },
+      {
+        id: 'split',
+        title: officialBob('legalPot'),
+        body: `${officialBob('legalAllFinish')} ${officialBob('legalZero')}`,
+      },
+      {
+        id: 'proofs',
+        title: proofs.length === 1 ? 'Proof is required' : `${proofs.length} proofs, every log`,
+        body: honorOnly
+          ? 'Honor. Confirm to log.'
+          : `Each log needs: ${proofLabels}. ${copy('create.proofsHelper')}`,
+      },
+    ];
+  }
 
   return [
     {
@@ -155,7 +182,9 @@ export function JoinConfirmModal({
             {isFree ? 'Join this challenge?' : `Join for ${buyIn}?`}
           </AppText>
           <AppText className="mt-2 text-muted">
-            {bucks
+            {challenge.is_official
+              ? officialBob('joinBob')
+              : bucks
               ? isFree
                 ? 'This official challenge pays real money. Check every box. 1 Buck = $1 USD.'
                 : `Check every box. ${buyIn} leaves immediately. This cannot be reversed.`
@@ -206,6 +235,10 @@ export function JoinConfirmModal({
             })}
             </View>
           </ScrollView>
+
+          {challenge.is_official ? (
+            <AppText className="mt-4 text-[12px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
+          ) : null}
 
           <View className="mt-6 gap-3">
             {error ? (

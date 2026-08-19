@@ -14,6 +14,9 @@ export type ChallengeEscrowStatus =
   | 'open'
   | 'starting'
   | 'in_progress'
+  | 'filling'
+  | 'arming'
+  | 'live'
   | 'ended'
   | 'judging'
   | 'distributing'
@@ -239,6 +242,8 @@ export type Challenge = {
   distribution_mode: ChallengeDistributionMode | string | null;
   distribution_scheduled_at: string | null;
   distributed_at: string | null;
+  series_id?: string | null;
+  armed_at?: string | null;
   frequency: string | null;
   target_count: number | null;
   created_at: string;

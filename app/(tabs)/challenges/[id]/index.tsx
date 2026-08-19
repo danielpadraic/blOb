@@ -11,21 +11,16 @@ import { BucksTag } from '@/components/currency/BucksTag';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { FeedList } from '@/components/feed/FeedList';
 import { ProfileLink } from '@/components/profile/ProfileLink';
-import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
-import {
-  ChallengeMenuPopover,
-  ChallengeOverflowButton,
-  type MenuAnchor,
-} from '@/components/challenge/ChallengeOverflowMenu';
+import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
+import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
 import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
-import { WalletBar } from '@/components/wallet/WalletBar';
 import { BODY_METRICS_HREF, LOBBY_HREF } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +30,6 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  useCancelChallenge,
   useChallenge,
   useChallengeParticipants,
   useChallengeSettlement,
@@ -77,15 +71,19 @@ import {
   isJoinWindowOpen,
   payoutCountdownLabel,
 } from '@/lib/settlement';
-import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
+import {
+  armingCountdownLabel,
+  isOfficialJoinable,
+  officialAlreadyStartedCopy,
+} from '@/lib/officialSeries';
 import { healthProofLines } from '@/lib/health/proofSummary';
 import { fetchHealthWorkoutById } from '@/lib/health/remote';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
-import { isOfficialAccount } from '@/lib/official';
 import { formatWallet, isBucksChallenge, isSponsoredBucks, walletBalance } from '@/lib/currency';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import { copy } from '@/lib/copy';
+import { officialBob } from '@/copy/officialBob';
 import { CHALLENGE_STATUS_LABEL } from '@/lib/constants';
 import { getErrorMessage } from '@/utils/errors';
 import {
@@ -133,7 +131,6 @@ export default function ChallengeDetailScreen() {
   const join = useJoinChallenge();
   const markJudging = useMarkChallengeJudging();
   const settle = useSettleChallenge();
-  const cancelChallenge = useCancelChallenge();
   const settlementQuery = useChallengeSettlement(id);
   const feed = useFeed(id);
   const createPost = useCreatePost(id);
@@ -144,8 +141,6 @@ export default function ChallengeDetailScreen() {
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [cancelMenu, setCancelMenu] = useState<MenuAnchor | null>(null);
-  const [cancelOpen, setCancelOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [watchToast, setWatchToast] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -190,6 +185,9 @@ export default function ChallengeDetailScreen() {
       return 'This challenge is no longer accepting competitors.';
     }
     if (!isJoinWindowOpen(challenge)) {
+      if (challenge.series_id || challenge.is_official) {
+        return officialAlreadyStartedCopy();
+      }
       if (challenge.starts_at && new Date() >= new Date(challenge.starts_at)) {
         return 'Join closed when this challenge started.';
       }
@@ -220,15 +218,6 @@ export default function ChallengeDetailScreen() {
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
   const wasCancelled = challenge?.status === 'cancelled';
-  const showCancel =
-    Boolean(challenge) &&
-    canCancelChallenge({
-      challenge,
-      viewerId: user?.id,
-      official: isOfficialAccount(profile),
-      otherJoiners: countOtherJoiners(roster.data, challenge?.created_by),
-      rosterReady: roster.data != null,
-    });
 
   useEffect(() => {
     if (!needsBodyMetrics) {
@@ -299,6 +288,14 @@ export default function ChallengeDetailScreen() {
   if (challengeQuery.isLoading) {
     return (
       <Screen>
+        <Stack.Screen
+          options={{
+            title: 'Challenge',
+            headerBackVisible: false,
+            headerLeft: () => <StackBackButton />,
+            headerRight: () => <ChallengeDetailHeaderRight />,
+          }}
+        />
         <MascotState
           kind="loading"
           title="Loading challenge"
@@ -312,6 +309,14 @@ export default function ChallengeDetailScreen() {
     const blocked = String(challengeQuery.error?.message ?? '').includes(copy('geo.unavailable'));
     return (
       <Screen>
+        <Stack.Screen
+          options={{
+            title: 'Challenge',
+            headerBackVisible: false,
+            headerLeft: () => <StackBackButton />,
+            headerRight: () => <ChallengeDetailHeaderRight />,
+          }}
+        />
         <MascotState
           kind="error"
           title={blocked ? copy('geo.unavailable') : copy('challenge.notFound')}
@@ -384,22 +389,6 @@ export default function ChallengeDetailScreen() {
     setActionError(null);
     settle.mutate(id, {
       onSuccess: () => setSettleOpen(false),
-      onError: (error) => {
-        setActionError(getErrorMessage(error));
-      },
-    });
-  }
-
-  function onConfirmCancel() {
-    if (!id || cancelChallenge.isPending) {
-      return;
-    }
-    setActionError(null);
-    cancelChallenge.mutate(id, {
-      onSuccess: () => {
-        setCancelOpen(false);
-        router.replace({ pathname: '/challenges', params: { notice: 'cancelled' } });
-      },
       onError: (error) => {
         setActionError(getErrorMessage(error));
       },
@@ -484,9 +473,13 @@ export default function ChallengeDetailScreen() {
     periodCount: ruleCopy.count,
     taskCount: Math.max(challenge.tasks?.length ?? 0, 1),
   });
-  const prizeLine =
-    remainingNow <= 0 &&
-    (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0)
+  const prizeLine = challenge.is_official
+    ? remainingNow <= 0 &&
+      (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0)
+      ? officialBob('legalZero')
+      : officialBob('cardSplit')
+    : remainingNow <= 0 &&
+        (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0)
       ? 'Stakes forfeited, no refund.'
       : structure === 'equal_split' || !structure
         ? `${money(Number(challenge.prize_pool))} ÷ ${remainingNow} remaining if they finish.`
@@ -496,7 +489,11 @@ export default function ChallengeDetailScreen() {
     : daysCompleted / Math.max(isPoints ? Math.max(challenge.tasks.length, 1) : target, 1);
   const scheduleLine = isUnlimited
     ? 'Ongoing · Last man standing'
-    : `${challengeTimingLabel(challenge.starts_at, challenge.ends_at)} · ${formatDateRange(challenge.starts_at, challenge.ends_at)}`;
+    : isOfficialJoinable(challenge)
+      ? challenge.status === 'arming'
+        ? armingCountdownLabel(challenge.armed_at, new Date(nowMs)) ?? '7 days'
+        : '7 days · Open to join'
+      : `${challengeTimingLabel(challenge.starts_at, challenge.ends_at)} · ${formatDateRange(challenge.starts_at, challenge.ends_at)}`;
   const showStickyCta =
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
@@ -509,18 +506,7 @@ export default function ChallengeDetailScreen() {
           title: challenge.title,
           headerBackVisible: false,
           headerLeft: () => <StackBackButton />,
-          headerRight: () => (
-            <View className="flex-row items-center">
-              {showCancel ? (
-                <ChallengeOverflowButton
-                  onPress={(anchor) =>
-                    setCancelMenu((current) => (current ? null : anchor))
-                  }
-                />
-              ) : null}
-              <WalletBar />
-            </View>
-          ),
+          headerRight: () => <ChallengeDetailHeaderRight />,
         }}
       />
       <ScrollView
@@ -683,8 +669,23 @@ export default function ChallengeDetailScreen() {
               daysCompleted={daysCompleted}
               targetCount={target}
               currency={challenge.currency}
+              official={challenge.is_official}
             />
           </View>
+        ) : null}
+
+        {challenge.is_official ? (
+          <Card className="mt-4 gap-2">
+            <AppText className="text-[16px] font-extrabold leading-5 text-charcoal">
+              {officialBob('cardPromise')}
+            </AppText>
+            <AppText className="text-[14px] leading-5 text-charcoal">{officialBob('cardSplit')}</AppText>
+            <AppText className="mt-1 text-[13px] leading-5 text-muted">{officialBob('legalPot')}</AppText>
+            <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalAllFinish')}</AppText>
+            <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalZero')}</AppText>
+            <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
+            <OfficialMoneyBoard challenge={challenge} />
+          </Card>
         ) : null}
 
         {taskCopy ? (
@@ -959,7 +960,9 @@ export default function ChallengeDetailScreen() {
         }}>
         {isJoined ? (
           participation?.eliminated_at ? (
-            <AppText className="text-sm leading-5 text-muted">{copy('challenge.eliminated')}</AppText>
+            <AppText className="text-sm leading-5 text-muted">
+              {challenge.is_official ? officialBob('missed') : copy('challenge.eliminated')}
+            </AppText>
           ) : waitingToStart ? (
             <Button title={logTitle} size="lg" disabled />
           ) : logsClosed ? (
@@ -1090,22 +1093,6 @@ export default function ChallengeDetailScreen() {
         completerCount={finishers}
         onClose={() => setSettleOpen(false)}
         onConfirm={onConfirmSettle}
-      />
-      <ChallengeMenuPopover
-        anchor={cancelMenu}
-        onClose={() => setCancelMenu(null)}
-        onCancelPress={() => {
-          setActionError(null);
-          setCancelOpen(true);
-        }}
-      />
-      <CancelChallengeSheet
-        visible={cancelOpen}
-        challenge={challenge}
-        loading={cancelChallenge.isPending}
-        error={actionError}
-        onClose={() => setCancelOpen(false)}
-        onConfirm={onConfirmCancel}
       />
     </Screen>
   );

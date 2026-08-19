@@ -1,6 +1,7 @@
-import { closeChallengeForJudging, distributeChallenge } from '@/lib/api/challenges';
+import { closeChallengeForJudging } from '@/lib/api/challenges';
 import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
+import { getPaymentsProvider } from '@/services/payments';
 import type {
   Challenge,
   ChallengePayout,
@@ -11,12 +12,20 @@ import type {
   PublicProfile,
   WalletCurrency,
 } from '@/lib/types';
-import type { CloseChallengeForJudgingResult, DistributeChallengeResult } from '@/lib/types/challenge';
+import type { CloseChallengeForJudgingResult } from '@/lib/types/challenge';
 import { getErrorMessage } from '@/utils/errors';
 import { formatRelative } from '@/utils/format';
 import { formatWallet } from '@/lib/currency';
+import { officialBob } from '@/copy/officialBob';
 
-const JOINABLE_STATUSES: ChallengeStatus[] = ['upcoming', 'open', 'starting', 'in_progress'];
+const JOINABLE_STATUSES: ChallengeStatus[] = [
+  'upcoming',
+  'open',
+  'starting',
+  'in_progress',
+  'filling',
+  'arming',
+];
 
 export function isJoinableStatus(status: string | null | undefined): boolean {
   return JOINABLE_STATUSES.includes(status as ChallengeStatus);
@@ -29,11 +38,18 @@ export function isJoinWindowOpen(
     official_started_at?: string | null;
     start_rule?: string | null;
     is_official?: boolean | null;
+    series_id?: string | null;
   },
   now = new Date(),
 ): boolean {
   const status = String(challenge.status ?? '');
-  if (challenge.is_official || challenge.start_rule !== 'at_starts_at') {
+  if (challenge.series_id) {
+    return status === 'filling' || status === 'arming';
+  }
+  if (challenge.is_official) {
+    return false;
+  }
+  if (challenge.start_rule !== 'at_starts_at') {
     if (challenge.official_started_at) {
       return false;
     }
@@ -77,9 +93,17 @@ export function hasChallengeStarted(
   challenge: {
     starts_at?: string | null;
     official_started_at?: string | null;
+    status?: string | null;
   },
   now = new Date(),
 ): boolean {
+  const status = String(challenge.status ?? '');
+  if (status === 'filling' || status === 'arming') {
+    return false;
+  }
+  if (status === 'live') {
+    return true;
+  }
   const opens = challengeLoggingOpensAt(challenge);
   if (!opens) {
     return true;
@@ -122,6 +146,8 @@ export function isClosedForLogs(challenge: {
   eliminated?: boolean | null;
 }): boolean {
   if (
+    challenge.status === 'filling' ||
+    challenge.status === 'arming' ||
     challenge.status === 'judging' ||
     challenge.status === 'settled' ||
     challenge.status === 'cancelled' ||
@@ -304,9 +330,16 @@ export function personalSettlementCopy(input: {
   targetCount?: number | null;
   joined: boolean;
   currency?: WalletCurrency | string | null;
+  official?: boolean;
 }): string {
   if (!input.joined) {
     return 'You were not in this challenge.';
+  }
+  if (input.official) {
+    if (input.payout && Number(input.payout.amount) > 0) {
+      return `${officialBob('finished')} ${officialBob('finishedShare')}`;
+    }
+    return officialBob('stillWon');
   }
   if (input.payout && Number(input.payout.amount) > 0) {
     return `You earned ${formatWallet(input.payout.amount, input.currency)}.`;
@@ -444,9 +477,14 @@ export async function markChallengeJudging(
 }
 
 export async function settleChallenge(challengeId: string): Promise<ChallengeSettlementView> {
-  let result: DistributeChallengeResult;
+  const { data: session } = await supabase.auth.getUser();
+  const userId = session.user?.id ?? '';
   try {
-    result = await distributeChallenge(challengeId);
+    await getPaymentsProvider().payout({
+      userId,
+      amountCents: 0,
+      challengeId,
+    });
   } catch (error) {
     const message = getErrorMessage(error);
     if (message === 'Already paid out.') {
@@ -463,36 +501,20 @@ export async function settleChallenge(challengeId: string): Promise<ChallengeSet
     return existing;
   }
 
-  const slices = (result.distributed ?? [])
-    .map((row) => {
-      const userId = String(row.user_id ?? '');
-      if (!userId) {
-        return null;
-      }
-      return {
-        user_id: userId,
-        place: Number(row.place ?? 0),
-        score: 0,
-        amount: Number(row.amount ?? 0),
-        reason: 'distribute_win',
-      } satisfies ChallengePayout;
-    })
-    .filter((row): row is ChallengePayout => Boolean(row));
-
   return {
     already_settled: true,
     settlement: {
       id: challengeId,
       challenge_id: challengeId,
       settled_by: null,
-      prize_pool: Number(result.paid ?? 0),
-      distributed: Number(result.paid ?? slices.reduce((sum, row) => sum + row.amount, 0)),
+      prize_pool: 0,
+      distributed: 0,
       prize_structure: 'equal_split',
-      winner_count: Number(result.winner_count ?? slices.length),
-      settled_at: result.distributed_at ?? new Date().toISOString(),
-      slices,
+      winner_count: 0,
+      settled_at: new Date().toISOString(),
+      slices: [],
     },
-    payouts: await withPayoutProfiles(slices),
+    payouts: [],
   };
 }
 

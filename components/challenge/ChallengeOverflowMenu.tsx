@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
-import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 
@@ -28,7 +27,11 @@ export function ChallengeOverflowButton({
         });
       }}
       style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-      <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
+      <AppText
+        className="text-[22px] font-extrabold leading-7"
+        style={{ color: THEME.textPrimary }}>
+        ⋯
+      </AppText>
     </Pressable>
   );
 }
@@ -101,6 +104,7 @@ export function ChallengeMenuPopover({
         ]}>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={copy('challenge.cancel')}
           onPress={() => {
             onClose();
             onCancelPress();
@@ -123,8 +127,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    zIndex: 50,
-    elevation: 50,
+    zIndex: 80,
+    elevation: 80,
   },
   dismiss: {
     ...StyleSheet.absoluteFill,
@@ -132,8 +136,8 @@ const styles = StyleSheet.create({
   },
   popover: {
     position: 'absolute',
-    zIndex: 51,
-    elevation: 51,
+    zIndex: 81,
+    elevation: 81,
     borderRadius: 20,
     borderWidth: 1,
     paddingHorizontal: 4,

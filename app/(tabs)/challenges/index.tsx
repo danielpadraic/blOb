@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
+import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
 import { ChallengeCarousel, type CarouselSocialProof } from '@/components/challenge/ChallengeCarousel';
+import {
+  ChallengeMenuPopover,
+  type MenuAnchor,
+} from '@/components/challenge/ChallengeOverflowMenu';
 import { ContinueDraftCard } from '@/components/challenge/create/wizardUi';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
@@ -11,6 +16,7 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
+  useCancelChallenge,
   useCompetingChallenges,
   useFriendsDiscoverChallenges,
   useHostingChallenges,
@@ -19,11 +25,14 @@ import {
 } from '@/hooks/useChallenge';
 import { useChallengeDrafts, useDiscardChallengeDraft } from '@/hooks/useChallengeDraft';
 import { isVisibleDraft } from '@/lib/challengeDraft';
+import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
 import { AppText } from '@/components/ui/AppText';
 import { challengeDetailHref } from '@/lib/routes';
 import { asCopyTone, copy } from '@/lib/copy';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
+import { getErrorMessage } from '@/utils/errors';
+import type { ChallengeWithStats } from '@/lib/types';
 import { useQuery } from '@tanstack/react-query';
 
 function isLobbyParticipant(status: string | null | undefined) {
@@ -44,9 +53,16 @@ export default function ChallengesScreen() {
   const params = useLocalSearchParams<{ notice?: string }>();
   const notice = Array.isArray(params.notice) ? params.notice[0] : params.notice;
   const [toast, setToast] = useState<string | null>(null);
+  const [overflow, setOverflow] = useState<{
+    challenge: ChallengeWithStats;
+    anchor: MenuAnchor;
+  } | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<ChallengeWithStats | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const tone = asCopyTone(profile?.motivation_tone);
+  const cancelChallenge = useCancelChallenge();
   const hostingQuery = useHostingChallenges();
   const activeQuery = useCompetingChallenges();
   const officialQuery = useOfficialDiscoverChallenges();
@@ -231,6 +247,11 @@ export default function ChallengesScreen() {
             currentUserId={user?.id}
             progressById={progressById}
             onPress={openChallenge}
+            allowCancel
+            official={isOfficialAccount(profile)}
+            onOverflow={(challenge, anchor) =>
+              setOverflow((current) => (current ? null : { challenge, anchor }))
+            }
           />
           <ChallengeCarousel
             title={copy('lobby.railActive')}
@@ -270,6 +291,47 @@ export default function ChallengesScreen() {
             </AppText>
           </View>
         </View>
+      ) : null}
+      <ChallengeMenuPopover
+        anchor={overflow?.anchor ?? null}
+        onClose={() => setOverflow(null)}
+        onCancelPress={() => {
+          if (!overflow) {
+            return;
+          }
+          setCancelError(null);
+          setCancelTarget(overflow.challenge);
+        }}
+      />
+      {cancelTarget ? (
+        <CancelChallengeSheet
+          visible
+          challenge={cancelTarget}
+          loading={cancelChallenge.isPending}
+          error={cancelError}
+          onClose={() => {
+            if (cancelChallenge.isPending) {
+              return;
+            }
+            setCancelTarget(null);
+          }}
+          onConfirm={() => {
+            if (cancelChallenge.isPending) {
+              return;
+            }
+            setCancelError(null);
+            cancelChallenge.mutate(cancelTarget.id, {
+              onSuccess: () => {
+                setCancelTarget(null);
+                setToast(copy('challenge.cancelledToast'));
+                setTimeout(() => setToast(null), 2200);
+              },
+              onError: (error) => {
+                setCancelError(getErrorMessage(error));
+              },
+            });
+          }}
+        />
       ) : null}
     </Screen>
   );

@@ -3,7 +3,6 @@ import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { discardChallengeDraft } from '@/lib/challengeDraft';
 import { applyLaneForPublish } from '@/lib/challengeLane';
 import { ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
-import { cancelChallenge } from '@/lib/api/challenges';
 import {
   fetchChallengeById,
   fetchChallengeShareState,
@@ -40,7 +39,7 @@ import {
   extraHasMinMinutes,
 } from '@/lib/consistencyRules';
 import { copy } from '@/lib/copy';
-import { DEFAULT_MIN_MINUTES, OFFICIAL_CHALLENGE, OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
+import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 import type {
   Challenge,
@@ -50,17 +49,18 @@ import type {
   ChallengeWithStats,
   Profile,
 } from '@/lib/types';
+import { cancelProviderRef, getPaymentsProvider } from '@/services/payments';
 import { getErrorMessage } from '@/utils/errors';
 import { challengeCurrency, formatWallet, walletBalance } from '@/lib/currency';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchCurrentUserProfile } from '@/hooks/useProfile';
 import type { CreateChallengeValues } from '@/utils/validators';
 
-async function prepareLobby(userId: string | undefined) {
+async function prepareLobby(_userId?: string) {
   try {
-    await ensureOfficialChallenge(userId);
+    await supabase.rpc('tick_official_series');
   } catch (error) {
-    console.log('[blob:lobby] ensure official skipped', error);
+    console.log('[blob:lobby] official series tick skipped', error);
   }
   try {
     await syncChallengeStatuses();
@@ -490,63 +490,6 @@ export function useJoinChallenge() {
   });
 }
 
-async function ensureOfficialChallenge(userId: string | undefined) {
-  if (!userId) {
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from('challenges')
-    .select('id, title, is_official')
-    .eq('title', OFFICIAL_CHALLENGE_TITLE)
-    .limit(1);
-  if (error) {
-    console.log('[blob:lobby] official lookup failed', error.message);
-    return;
-  }
-  if ((data ?? []).length > 0) {
-    return;
-  }
-
-  const starts = new Date();
-  const ends = new Date(starts.getTime() + OFFICIAL_CHALLENGE.windowDays * 24 * 60 * 60 * 1000);
-  const { error: insertError } = await supabase.from('challenges').insert({
-    title: OFFICIAL_CHALLENGE.title,
-    description: OFFICIAL_CHALLENGE.description,
-    rules: OFFICIAL_CHALLENGE.rules,
-    is_official: true,
-    created_by: userId,
-    buy_in_amount: OFFICIAL_CHALLENGE.buyIn,
-    days_required: OFFICIAL_CHALLENGE.daysRequired,
-    min_minutes: OFFICIAL_CHALLENGE.minMinutes,
-    status: 'open',
-    starts_at: starts.toISOString(),
-    ends_at: ends.toISOString(),
-    category: 'fitness',
-    challenge_type: 'consistency',
-    visibility: 'public',
-    proof_requirements: [
-      { type: 'pre_selfie', required: true },
-      { type: 'post_selfie', required: true },
-      { type: 'hr_monitor', required: true },
-    ],
-    frequency: 'daily',
-    target_count: OFFICIAL_CHALLENGE.daysRequired,
-    tasks: [],
-    prize_structure: 'equal_split',
-    top_places_mode: null,
-    top_places_value: null,
-    top_places_distribution: null,
-    funding_model: 'participants',
-    creator_contribution: 0,
-    max_participants: null,
-    currency: 'coins',
-  });
-  if (insertError) {
-    console.log('[blob:lobby] official seed insert failed', insertError.message);
-  }
-}
-
 export function useCreateChallenge() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -761,7 +704,14 @@ export function useCancelChallenge() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (challengeId: string) => cancelChallenge(challengeId),
+    mutationFn: async (challengeId: string) => {
+      await getPaymentsProvider().refundJoin(
+        cancelProviderRef(challengeId),
+        0,
+        'challenge_cancel',
+      );
+      return { ok: true as const };
+    },
     onSuccess: (_result, challengeId) => {
       queryClient.setQueryData<ChallengeWithStats>(['challenge', challengeId], (current) =>
         current

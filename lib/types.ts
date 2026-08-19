@@ -61,6 +61,9 @@ export type ChallengeStatus =
   | 'open'
   | 'starting'
   | 'in_progress'
+  | 'filling'
+  | 'arming'
+  | 'live'
   | 'ended'
   | 'judging'
   | 'distributing'
@@ -316,6 +319,8 @@ export interface Challenge {
   start_rule?: string | null;
   cancelled_at?: string | null;
   cancelled_by?: string | null;
+  series_id?: string | null;
+  armed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1129,6 +1134,14 @@ export type Database = {
       join_challenge: {
         Args: { p_challenge_id: string };
         Returns: { ok: boolean; challenge_id: string; prize_pool: number };
+      };
+      tick_official_series: {
+        Args: Record<string, never>;
+        Returns: { ok: boolean };
+      };
+      list_official_joinable: {
+        Args: Record<string, never>;
+        Returns: Challenge[];
       };
       publish_challenge: {
         Args: { p_payload: Record<string, unknown> };

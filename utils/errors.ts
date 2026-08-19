@@ -444,5 +444,15 @@ function humanize(raw: string): string {
     return copy('error.preferenceSave');
   }
 
+  if (
+    message.includes('stripe') ||
+    message.includes('paymentintent') ||
+    message.includes('payment_intent') ||
+    message.includes('postgrest') ||
+    message.includes('pgrst')
+  ) {
+    return 'Something went sideways. Try again in a moment.';
+  }
+
   return raw;
 }

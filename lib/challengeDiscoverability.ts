@@ -2,8 +2,16 @@ import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 
 export type ChallengeDiscoverability = 'invite_only' | 'friends_of_friends';
 
-const LIVE_OR_UPCOMING = ['open', 'upcoming', 'starting', 'in_progress'] as const;
-const JOINABLE_NOT_STARTED = ['open', 'upcoming', 'starting'] as const;
+const LIVE_OR_UPCOMING = [
+  'open',
+  'upcoming',
+  'starting',
+  'in_progress',
+  'filling',
+  'arming',
+  'live',
+] as const;
+const JOINABLE_NOT_STARTED = ['open', 'upcoming', 'starting', 'filling', 'arming'] as const;
 
 export function isPrivateVisibility(visibility: string | null | undefined): boolean {
   const value = String(visibility ?? '').toLowerCase();

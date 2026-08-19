@@ -15,8 +15,7 @@ export { COLORS, THEME } from '@/lib/theme';
 
 export const APP_NAME = 'blOb';
 
-export const OFFICIAL_CHALLENGE_TITLE =
-  'Weekly Fitness Consistency Challenge';
+export const OFFICIAL_CHALLENGE_TITLE = 'Weekly $10 Guarantee';
 
 export const SEED_CREDITS = 50;
 export const DEFAULT_BUY_IN = 10;
@@ -297,6 +296,9 @@ export const CHALLENGE_STATUS_LABEL: Record<string, string> = {
   upcoming: 'Upcoming',
   open: 'Open',
   starting: 'Starting',
+  filling: 'Filling',
+  arming: 'Arming',
+  live: 'Live',
   in_progress: 'In progress',
   judging: 'Judging',
   settled: 'Settled',
@@ -308,6 +310,9 @@ export const LOBBY_CHALLENGE_STATUSES = [
   'open',
   'starting',
   'upcoming',
+  'filling',
+  'arming',
+  'live',
   'in_progress',
   'judging',
   'settled',

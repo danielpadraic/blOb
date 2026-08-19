@@ -12,6 +12,7 @@ import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { HealthLogPromptHost } from '@/components/health/HealthLogPrompt';
+import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
@@ -66,8 +67,15 @@ export default function TabLayout() {
     setSearchOpen(true);
   }
 
-  function openSheet() {
-    closeOverlays();
+  function toggleSheet() {
+    if (sheetOpen) {
+      setSheetOpen(false);
+      return;
+    }
+    setAlertsOpen(false);
+    setSearchOpen(false);
+    closeSocialSheets();
+    wallet?.closeAll();
     setSheetOpen(true);
   }
 
@@ -173,9 +181,14 @@ export default function TabLayout() {
         />
         <WalletHost />
         <HealthLogPromptHost />
+        <OfficialPitchHost />
         </SocialSheetsHost>
       </View>
-      <BlobTabBar onOpenCompose={openSheet} onTabPress={closeOverlays} />
+      <BlobTabBar
+        composeOpen={sheetOpen}
+        onToggleCompose={toggleSheet}
+        onTabPress={closeOverlays}
+      />
     </View>
   );
 }

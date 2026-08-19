@@ -196,6 +196,11 @@ const STRINGS = {
   'board.donePeriod': 'done this period',
   'board.dropped': 'Dropped',
   'board.liveShare': 'Live share {amount}',
+  'board.guarantee': 'Guarantee',
+  'board.pot': 'Pot',
+  'board.toStart': 'To start (1.5×)',
+  'board.joined': 'Joined',
+  'board.yourShare': 'Your share if you finish',
   'proof.flag': 'Flag proof',
   'proof.flagged': 'Flagged',
   'money.realUsd': 'This is real money, 1:1 with USD.',
@@ -286,13 +291,17 @@ export type CopyKey = keyof typeof STRINGS;
 
 type CopyNode = string | { readonly [K in CopyTone]: string };
 
-function interpolate(template: string, vars?: Record<string, string | number>): string {
+export function interpolateCopy(template: string, vars?: Record<string, string | number>): string {
   if (!vars) {
     return template;
   }
   return template.replace(/\{(\w+)\}/g, (_, name: string) =>
     vars[name] == null ? `{${name}}` : String(vars[name]),
   );
+}
+
+function interpolate(template: string, vars?: Record<string, string | number>): string {
+  return interpolateCopy(template, vars);
 }
 
 export function asCopyTone(value: unknown): CopyTone {
