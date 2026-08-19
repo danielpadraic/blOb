@@ -7,7 +7,6 @@ import { payoutDisplayName, personalSettlementCopy } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
 import type { ChallengeSettlementView } from '@/lib/types';
 import { formatWallet } from '@/lib/currency';
-import { officialBob } from '@/copy/officialBob';
 import { formatDate } from '@/utils/format';
 
 type SettlementSummaryProps = {
@@ -95,9 +94,7 @@ export function SettlementSummary({
         </View>
         <AppText className="mt-3 text-sm leading-5 text-muted">
           {winners === 0
-            ? official
-              ? officialBob('legalZero')
-              : 'Nobody hit the finish line this round. The work still counted.'
+            ? 'Nobody hit the finish line this round. The work still counted.'
             : `Paid ${formatWallet(paid || pool, currency)} on ${formatDate(settlement.settlement.settled_at, 'MMM d')}.`}
         </AppText>
       </Card>

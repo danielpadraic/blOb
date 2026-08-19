@@ -21,10 +21,114 @@ export type ChallengeProofPart = {
 export const SIMPLE_PROOF_CAP = 4;
 
 export const BEFORE_AFTER_HR_PRESET: Array<{ name: string; method: ChallengeProofMethod }> = [
-  { name: 'Pre-selfie', method: 'photo' },
-  { name: 'Post-selfie', method: 'photo' },
-  { name: 'Heart rate', method: 'hr' },
+  { name: 'Post a pre-workout selfie.', method: 'photo' },
+  { name: 'Post a post-workout selfie.', method: 'photo' },
+  { name: 'Share proof of at least 30-minutes of elevated heart rate.', method: 'hr' },
 ];
+
+export const PRE_WORKOUT_SELFIE_SENTENCE = 'Post a pre-workout selfie.';
+export const POST_WORKOUT_SELFIE_SENTENCE = 'Post a post-workout selfie.';
+
+export function heartRateProofSentence(minutes = 30): string {
+  const n = Math.max(Math.round(Number(minutes) || 30), 1);
+  return `Share proof of at least ${n}-minutes of elevated heart rate.`;
+}
+
+export function defaultSentenceForMethod(method: ChallengeProofMethod, minutes = 30): string {
+  if (method === 'hr') {
+    return heartRateProofSentence(minutes);
+  }
+  if (method === 'video') {
+    return 'Post a video of the work.';
+  }
+  if (method === 'checkin') {
+    return 'Write a check-in of what you completed.';
+  }
+  if (method === 'honor') {
+    return 'Confirm on your honor that you did the work.';
+  }
+  return 'Post a photo of the work.';
+}
+
+const SHORT_PROOF_LABELS = new Set([
+  'photo',
+  'proof',
+  'video',
+  'check-in',
+  'checkin',
+  'honor',
+  'heart rate',
+  'hr',
+  'pre-selfie',
+  'post-selfie',
+  'pre-workout',
+  'post-workout',
+  'screenshot',
+  'selfie',
+]);
+
+export function isShortProofLabel(name: string): boolean {
+  const normalized = name.trim().toLowerCase().replace(/\.$/, '');
+  if (!normalized) {
+    return true;
+  }
+  if (SHORT_PROOF_LABELS.has(normalized)) {
+    return true;
+  }
+  const words = normalized.split(/\s+/);
+  return words.length <= 2 && !/^(post|share|write|confirm)\b/.test(normalized);
+}
+
+export function ensureProofSentence(proof: ChallengeProof, minutes = 30): ChallengeProof {
+  const name = proof.name.trim();
+  const lower = name.toLowerCase();
+  if (proof.method === 'hr' || /\bhr\b/.test(lower) || lower.includes('heart rate') || lower.includes('heart-rate')) {
+    return { ...proof, method: 'hr', name: heartRateProofSentence(minutes) };
+  }
+  if (lower.includes('pre-workout') || lower.includes('pre-selfie') || (lower.includes('pre') && lower.includes('selfie'))) {
+    return { ...proof, name: PRE_WORKOUT_SELFIE_SENTENCE };
+  }
+  if (lower.includes('post-workout') || lower.includes('post-selfie') || (lower.includes('post') && lower.includes('selfie'))) {
+    return { ...proof, name: POST_WORKOUT_SELFIE_SENTENCE };
+  }
+  if (isShortProofLabel(name)) {
+    return { ...proof, name: defaultSentenceForMethod(proof.method, minutes) };
+  }
+  return { ...proof, name: name.endsWith('.') ? name : `${name}.` };
+}
+
+export function proofNameForMethodChange(proof: ChallengeProof, method: ChallengeProofMethod, minutes = 30): string {
+  const previousDefault = defaultSentenceForMethod(proof.method, minutes);
+  if (!proof.name.trim() || isShortProofLabel(proof.name) || proof.name.trim() === previousDefault) {
+    return defaultSentenceForMethod(method, minutes);
+  }
+  return ensureProofSentence({ ...proof, method }, minutes).name;
+}
+
+export function signupProofLines(challenge: {
+  is_official?: boolean | null;
+  series_id?: string | null;
+  category?: string | null;
+  min_minutes?: number | string | null;
+  proofs?: unknown;
+  proof_type?: unknown;
+  proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
+  challenge_type?: string | null;
+  tasks?: unknown;
+}): string[] {
+  const minutes = Math.max(Math.round(Number(challenge.min_minutes) || 30), 1);
+  const officialFitness =
+    Boolean(challenge.is_official) && String(challenge.category ?? 'fitness').toLowerCase() === 'fitness';
+  if (challenge.series_id === 'week_10' || officialFitness) {
+    return [PRE_WORKOUT_SELFIE_SENTENCE, POST_WORKOUT_SELFIE_SENTENCE, heartRateProofSentence(30)];
+  }
+  const listed = resolveChallengeProofs({
+    proofs: challenge.proofs,
+    proof_type: challenge.proof_type,
+    proof_requirements: challenge.proof_requirements,
+  });
+  return listed.map((proof) => ensureProofSentence(proof, minutes).name);
+}
 
 export function newProofId(): string {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -34,9 +138,8 @@ export function makeProof(name: string, method: ChallengeProofMethod): Challenge
   return { id: newProofId(), name, method };
 }
 
-export function defaultChallengeProofs(task = ''): ChallengeProof[] {
-  const name = task.trim() || copy('create.proofFallback');
-  return [makeProof(name, 'photo')];
+export function defaultChallengeProofs(_task = ''): ChallengeProof[] {
+  return [makeProof(defaultSentenceForMethod('photo'), 'photo')];
 }
 
 export function isChallengeProofMethod(value: unknown): value is ChallengeProofMethod {
@@ -59,9 +162,8 @@ export function methodLabel(method: ChallengeProofMethod): string {
   return copy('create.proofPhoto');
 }
 
-export function proofDisplayName(proof: ChallengeProof): string {
-  const name = proof.name.trim();
-  return name || methodLabel(proof.method);
+export function proofDisplayName(proof: ChallengeProof, minutes = 30): string {
+  return ensureProofSentence(proof, minutes).name;
 }
 
 export function firstProofMethod(proofs: ChallengeProof[]): ChallengeProofMethod {
@@ -99,24 +201,27 @@ export function methodFromLegacyType(type: string): ChallengeProofMethod {
 
 export function nameFromLegacyType(type: string): string {
   if (type === 'pre_selfie') {
-    return 'Pre-selfie';
+    return PRE_WORKOUT_SELFIE_SENTENCE;
   }
   if (type === 'post_selfie') {
-    return 'Post-selfie';
+    return POST_WORKOUT_SELFIE_SENTENCE;
   }
   if (type === 'hr_monitor') {
-    return 'Heart rate';
+    return heartRateProofSentence(30);
   }
   if (type === 'video') {
-    return copy('create.proofVideo');
+    return defaultSentenceForMethod('video');
   }
   if (type === 'text_note' || type === 'link') {
-    return copy('create.proofCheckin');
+    return defaultSentenceForMethod('checkin');
   }
-  if (type === 'photo' || type === 'screenshot') {
-    return copy('create.proofPhoto');
+  if (type === 'photo') {
+    return defaultSentenceForMethod('photo');
   }
-  return '';
+  if (type === 'screenshot') {
+    return 'Post a screenshot of the work.';
+  }
+  return defaultSentenceForMethod(methodFromLegacyType(type));
 }
 
 export function captureTypeForMethod(method: ChallengeProofMethod): ProofType {
@@ -161,7 +266,7 @@ export function proofRequirementsFrom(proofs: ChallengeProof[]): Array<{ type: P
 
 export function namedProofsFromLegacyTypes(types: string[]): ChallengeProof[] {
   const list = types.filter(Boolean).map((type) => makeProof(nameFromLegacyType(type), methodFromLegacyType(type)));
-  return list.length > 0 ? list : [makeProof(copy('create.proofHonor'), 'honor')];
+  return list.length > 0 ? list : [makeProof(defaultSentenceForMethod('honor'), 'honor')];
 }
 
 export function parseChallengeProofs(value: unknown): ChallengeProof[] {
@@ -183,7 +288,8 @@ export function parseChallengeProofs(value: unknown): ChallengeProof[] {
 }
 
 export function proofsFromProofType(proofType: unknown): ChallengeProof[] {
-  return [makeProof('', methodFromProofType(proofType))];
+  const method = methodFromProofType(proofType);
+  return [makeProof(defaultSentenceForMethod(method), method)];
 }
 
 export function resolveChallengeProofs(input: {
@@ -191,7 +297,7 @@ export function resolveChallengeProofs(input: {
   proof_type?: unknown;
   proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
 }): ChallengeProof[] {
-  const listed = parseChallengeProofs(input.proofs);
+  const listed = parseChallengeProofs(input.proofs).map((proof) => ensureProofSentence(proof));
   if (listed.length > 0) {
     return listed;
   }

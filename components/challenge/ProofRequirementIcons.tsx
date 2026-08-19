@@ -4,7 +4,6 @@ import { Pressable, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { officialBob } from '@/copy/officialBob';
-import { requiredChallengeProofs } from '@/lib/challenges';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Challenge } from '@/lib/types';
 
@@ -21,11 +20,7 @@ export function officialFitnessProofIcons(challenge: Pick<
   if (category !== 'fitness') {
     return { camera: false, heart: false };
   }
-  const proofs = requiredChallengeProofs(challenge);
-  return {
-    camera: proofs.some((proof) => proof.method === 'photo' || proof.method === 'video'),
-    heart: proofs.some((proof) => proof.method === 'hr'),
-  };
+  return { camera: true, heart: true };
 }
 
 type ProofRequirementIconsProps = {
@@ -49,7 +44,13 @@ export function ProofRequirementIcons({ challenge, tint = 'light' }: ProofRequir
 
   return (
     <View style={{ zIndex: 8 }}>
-      <View className="flex-row items-center" style={{ gap: 4 }}>
+      <View className="flex-row items-center" style={{ gap: 6 }}>
+        <AppText
+          className="text-[13px] font-semibold"
+          style={{ color }}
+          numberOfLines={1}>
+          Required:
+        </AppText>
         {icons.camera ? (
           <ProofIconButton
             label="Camera proof"

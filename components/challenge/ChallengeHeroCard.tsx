@@ -84,8 +84,14 @@ export function ChallengeHeroCard({
         {challenge.title}
       </AppText>
       {official ? (
-        <View className="flex-row items-center" style={{ minHeight: 28 }}>
-          <BlobMascot variant="logo" size={92} />
+        <View className="flex-row items-center" style={{ gap: 8, minHeight: 28, flexWrap: 'nowrap' }}>
+          <AppText
+            className="text-[13px] font-semibold"
+            numberOfLines={1}
+            style={{ color: 'rgba(255,255,255,0.86)' }}>
+            Sponsored by
+          </AppText>
+          <BlobMascot variant="logo" size={72} />
         </View>
       ) : host ? (
         <ProfileLink username={host.username} userId={host.id}>

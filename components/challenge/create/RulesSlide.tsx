@@ -216,7 +216,7 @@ export function RulesSlide({
                   <ProofPicker
                     label="Proof for this task"
                     selected={task.proofs ?? []}
-                    hint="These attach when someone logs this task. Keep it honest and simple."
+                    hint="Say the action. 'Photo' is not enough."
                     onToggle={(type) => toggleTaskProof(index, type)}
                   />
                 </Card>
@@ -490,7 +490,7 @@ function ProofPicker({
   selected,
   error,
   optional,
-  hint = 'These attach every time someone logs this rule. Keep it honest and simple.',
+  hint = "Say the action. 'Photo' is not enough.",
   onToggle,
 }: {
   label: string;

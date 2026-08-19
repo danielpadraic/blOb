@@ -221,42 +221,42 @@ export const PROOF_META: Record<
   { label: string; helper: string; short: string }
 > = {
   pre_selfie: {
-    label: 'Pre-workout selfie',
+    label: 'Post a pre-workout selfie.',
     helper: 'Face + gym or kit, before you start.',
     short: 'Pre-selfie',
   },
   post_selfie: {
-    label: 'Post-workout selfie',
+    label: 'Post a post-workout selfie.',
     helper: 'Same spot after you finish. Sweat is the point.',
     short: 'Post-selfie',
   },
   hr_monitor: {
-    label: 'Heart-rate proof',
+    label: 'Share proof of at least 30-minutes of elevated heart rate.',
     helper: 'Fitness or watch screenshot covering at least 30 minutes. A Watch is optional.',
     short: 'Heart rate',
   },
   photo: {
-    label: 'Photo',
+    label: 'Post a photo of the work.',
     helper: 'A clear photo of the work, the page, or the result.',
     short: 'Photo',
   },
   screenshot: {
-    label: 'Screenshot',
+    label: 'Post a screenshot of the work.',
     helper: 'A screen capture that shows you did the thing.',
     short: 'Screenshot',
   },
   text_note: {
-    label: 'Text note',
+    label: 'Write a check-in of what you completed.',
     helper: 'A short written log of what you completed.',
     short: 'Note',
   },
   link: {
-    label: 'Link',
+    label: 'Share a link that proves you did the work.',
     helper: 'A URL to the proof — Strava, repo, doc, clip, whatever is honest.',
     short: 'Link',
   },
   video: {
-    label: 'Video',
+    label: 'Post a video of the work.',
     helper: 'A short clip of the activity or result.',
     short: 'Video',
   },
@@ -283,9 +283,9 @@ export function isVideoProof(type: string): boolean {
 export const OFFICIAL_CHALLENGE = {
   title: OFFICIAL_CHALLENGE_TITLE,
   description:
-    'Show up every day. Thirty honest minutes. A picture before, a picture after, and HR proof — screenshot is enough.',
+    'Show up every day. Thirty honest minutes. A picture before, a picture after, and heart-rate proof — screenshot is enough.',
   rules:
-    'Complete 6 workouts of at least 30 minutes in 7 days. Each required day needs a pre-selfie, a post-selfie, and HR proof (a Fitness screenshot or an attached workout). Official days end at 11:59 p.m. Central Time. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. If nobody finishes and there are no valid days, the guarantee rolls into the next Official week.',
+    'Complete 6 workouts of at least 30 minutes in 7 days. Each required day needs a pre-workout selfie, a post-workout selfie, and proof of at least 30-minutes of elevated heart rate. Official days end at 11:59 p.m. Central Time. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
   buyIn: DEFAULT_BUY_IN,
   daysRequired: DEFAULT_DAYS_REQUIRED,
   windowDays: 7,

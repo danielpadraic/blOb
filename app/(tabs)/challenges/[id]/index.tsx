@@ -43,7 +43,7 @@ import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { useWallet } from '@/hooks/useWallet';
 import { useLoggedWorkoutCount, usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
-import { methodLabel, proofDisplayName } from '@/lib/challengeProofs';
+import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import {
   challengeTargetCount,
@@ -475,20 +475,16 @@ export default function ChallengeDetailScreen() {
         }
       : null);
 
-  const taskCopy = (challenge.task?.trim() || challenge.description?.trim()) || '';
+  const signupLines = signupProofLines(challenge);
   const hideBuyIn = isBucksChallenge(challenge) || Boolean(challenge.host_funded);
   const remainingNow = competitorCount;
   const goalLabel = challengeGoalLabel(challenge, {
     daysCompleted,
     taskCount: Math.max(challenge.tasks?.length ?? 0, 1),
   });
-  const prizeLine = challenge.is_official
-    ? remainingNow <= 0 &&
-      (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0)
-      ? officialBob('legalZero')
-      : officialBob('cardSplit')
-    : remainingNow <= 0 &&
-        (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0)
+  const prizeLine =
+    remainingNow <= 0 &&
+    (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0)
       ? 'Stakes forfeited, no refund.'
       : structure === 'equal_split' || !structure
         ? `${money(Number(challenge.prize_pool))} ÷ ${remainingNow} remaining if they finish.`
@@ -586,15 +582,25 @@ export default function ChallengeDetailScreen() {
           </>
         ) : null}
 
-        {taskCopy ? (
+        {signupLines.length > 0 || isPoints ? (
           <Card className="mt-4">
-            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-              Task
-            </AppText>
-            <AppText className="mt-1 text-[13px] font-semibold text-muted">
+            <AppText
+              className="text-[11px] font-semibold uppercase tracking-widest"
+              style={{ color: THEME.textPrimary }}>
               What you’re signing up for
             </AppText>
-            <AppText className="mt-2 leading-6 text-ink">{taskCopy}</AppText>
+            {signupLines.length > 0 ? (
+              <View className="mt-2 gap-2">
+                {signupLines.map((line, index) => (
+                  <AppText
+                    key={`${index}-${line}`}
+                    className="text-[14px] leading-6"
+                    style={{ color: THEME.textPrimary }}>
+                    {line}
+                  </AppText>
+                ))}
+              </View>
+            ) : null}
             {isPoints ? (
               <View className="mt-3 gap-2.5">
                 {challenge.tasks.map((task, index) => (
@@ -616,34 +622,6 @@ export default function ChallengeDetailScreen() {
                 ))}
               </View>
             ) : null}
-          </Card>
-        ) : isPoints ? (
-          <Card className="mt-4">
-            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-              Task
-            </AppText>
-            <AppText className="mt-1 text-[13px] font-semibold text-muted">
-              What you’re signing up for
-            </AppText>
-            <View className="mt-3 gap-2.5">
-              {challenge.tasks.map((task, index) => (
-                <View key={task.id} className="flex-row gap-3">
-                  <View
-                    className="h-6 w-6 items-center justify-center rounded-full"
-                    style={{ backgroundColor: THEME.accentSoft }}>
-                    <AppText className="text-[12px] font-bold" style={{ color: THEME.accent }}>
-                      {index + 1}
-                    </AppText>
-                  </View>
-                  <View className="flex-1">
-                    <AppText className="font-semibold text-charcoal">{task.title}</AppText>
-                    <AppText className="text-[13px] leading-5 text-muted">
-                      {task.points} pts{task.proof_required ? ' · proof required' : ''}
-                    </AppText>
-                  </View>
-                </View>
-              ))}
-            </View>
           </Card>
         ) : null}
 
@@ -714,6 +692,7 @@ export default function ChallengeDetailScreen() {
           )}
         </Card>
 
+        {challenge.is_official ? null : (
         <Card className="mt-4">
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Rules
@@ -747,6 +726,7 @@ export default function ChallengeDetailScreen() {
             </Pressable>
           ) : null}
         </Card>
+        )}
 
         {wasCancelled || challenge.is_official ? null : (
         <Card className="mt-4">

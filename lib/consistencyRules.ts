@@ -16,7 +16,7 @@ export type ExtraRuleKind = (typeof EXTRA_RULE_KINDS)[number];
 
 export const EXTRA_RULE_PRESETS: { kind: Exclude<ExtraRuleKind, 'custom'>; text: string }[] = [
   { kind: 'separate_days', text: 'Logs must be on separate calendar days' },
-  { kind: 'min_minutes', text: 'Minimum 30 minutes elevated heart rate per log' },
+  { kind: 'min_minutes', text: 'Share proof of at least 30-minutes of elevated heart rate.' },
 ];
 
 export type ExtraRule = {

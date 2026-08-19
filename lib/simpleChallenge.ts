@@ -7,6 +7,8 @@ import {
   BEFORE_AFTER_HR_PRESET,
   SIMPLE_PROOF_CAP,
   defaultChallengeProofs,
+  defaultSentenceForMethod,
+  ensureProofSentence,
   firstProofMethod,
   makeProof,
   proofRequirementsFrom,
@@ -123,6 +125,13 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
   };
 }
 
+function withProofSentences(draft: SimpleChallengeDraft): SimpleChallengeDraft {
+  return {
+    ...draft,
+    proofs: (draft.proofs ?? []).map((item) => ensureProofSentence(item)),
+  };
+}
+
 const SIMPLE_DRAFT_KEY = 'blob.simpleCreateDraft';
 const SIMPLE_DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
 let simpleDraftMemory: { draft: SimpleChallengeDraft; savedAt: number } | null = null;
@@ -147,15 +156,16 @@ export function readPersistedSimpleDraft(): SimpleChallengeDraft | null {
     if (raw) {
       const parsed = JSON.parse(raw) as { draft?: SimpleChallengeDraft; savedAt?: number };
       if (parsed?.draft && typeof parsed.savedAt === 'number' && isFreshSimpleDraft(parsed.savedAt)) {
-        simpleDraftMemory = { draft: parsed.draft, savedAt: parsed.savedAt };
-        return parsed.draft;
+        const draft = withProofSentences(parsed.draft);
+        simpleDraftMemory = { draft, savedAt: parsed.savedAt };
+        return draft;
       }
     }
   } catch {
     // Ignore unavailable storage.
   }
   if (simpleDraftMemory && isFreshSimpleDraft(simpleDraftMemory.savedAt)) {
-    return simpleDraftMemory.draft;
+    return withProofSentences(simpleDraftMemory.draft);
   }
   return null;
 }
@@ -235,7 +245,7 @@ export function addSimpleProof(proofs: ChallengeProof[]): ChallengeProof[] {
   if (proofs.length >= SIMPLE_PROOF_CAP) {
     return proofs;
   }
-  return [...proofs, makeProof(copy('create.proofFallback'), 'photo')];
+  return [...proofs, makeProof(defaultSentenceForMethod('photo'), 'photo')];
 }
 
 export function removeSimpleProof(proofs: ChallengeProof[], id: string): ChallengeProof[] {
@@ -247,18 +257,15 @@ export function removeSimpleProof(proofs: ChallengeProof[], id: string): Challen
 
 export function syncProofNameWithTask(
   proofs: ChallengeProof[],
-  previousTask: string,
-  nextTask: string,
+  _previousTask: string,
+  _nextTask: string,
 ): ChallengeProof[] {
-  const previousDefault = previousTask.trim() || copy('create.proofFallback');
-  const nextDefault = nextTask.trim() || copy('create.proofFallback');
   return proofs.map((item, index) => {
     if (index !== 0) {
       return item;
     }
-    const name = item.name.trim();
-    if (!name || name === previousDefault) {
-      return { ...item, name: nextDefault };
+    if (!item.name.trim() || item.name.trim() === copy('create.proofFallback')) {
+      return { ...item, name: defaultSentenceForMethod(item.method) };
     }
     return item;
   });
@@ -272,7 +279,9 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const invite = draft.visibility === 'invite';
   const buyIn = bucks ? 0 : Math.max(Math.floor(draft.buy_in) || 0, 0);
   const hostBudget = bucks ? Math.max(Math.floor(draft.host_budget) || 0, 0) : 0;
-  const proofs = draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs(draft.task);
+  const proofs = (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
+    ensureProofSentence(item),
+  );
   const legacyTypes = proofRequirementsFrom(proofs).map((item) => item.type);
 
   return {

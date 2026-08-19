@@ -46,7 +46,7 @@ import {
   type SimpleFrequency,
   type SimpleVisibility,
 } from '@/lib/simpleChallenge';
-import { SIMPLE_PROOF_CAP, type ChallengeProofMethod } from '@/lib/challengeProofs';
+import { SIMPLE_PROOF_CAP, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
@@ -444,7 +444,7 @@ export function SimpleCreateForm() {
                           ),
                         })
                       }
-                      maxLength={40}
+                      maxLength={90}
                     />
                   </View>
                   {draft.proofs.length > 1 ? (
@@ -469,7 +469,11 @@ export function SimpleCreateForm() {
                         patch({
                           proofs: draft.proofs.map((row) =>
                             row.id === proof.id
-                              ? { ...row, method: item.value as ChallengeProofMethod }
+                              ? {
+                                  ...row,
+                                  method: item.value as ChallengeProofMethod,
+                                  name: proofNameForMethodChange(row, item.value as ChallengeProofMethod),
+                                }
                               : row,
                           ),
                         })

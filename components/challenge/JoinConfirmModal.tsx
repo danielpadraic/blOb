@@ -47,7 +47,7 @@ function acknowledgments(challenge: Challenge) {
       {
         id: 'split',
         title: officialBob('legalBoard'),
-        body: `${officialBob('legalAllFinish')} ${officialBob('legalZero')} ${officialBob('legalDays')}`,
+        body: `${officialBob('legalAllFinish')} ${officialBob('legalDays')}`,
       },
       {
         id: 'proofs',
