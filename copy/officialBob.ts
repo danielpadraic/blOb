@@ -12,7 +12,7 @@ export const OFFICIAL_DETAILS_LINES = [
 ] as const;
 
 const BOB_PITCH =
-  'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. The couch will still be there. You do not have to be. Finish the week. Split the pot with everyone else who did. Make friends, support each other, and do it again.';
+  'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. The couch will still be there. You do not have to be. Finish the week. Split the pot with everyone else who did. Make money, make friends, support each other, and do it again.';
 
 const OFFICIAL_BOB = {
   loginHeadline: 'A small promise. Then you move.',
