@@ -23,7 +23,6 @@ import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useAcceptFriendRequest,
-  useConversations,
   useFollowing,
   useFriendRequests,
   useFriends,
@@ -35,7 +34,7 @@ import {
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
-import { conversationHref, MESSAGES_HREF } from '@/lib/routes';
+import { conversationHref } from '@/lib/routes';
 import {
   detectPeopleSearch,
   otherFriendshipUserId,
@@ -70,8 +69,6 @@ export default function FriendsScreen() {
   const acceptRequest = useAcceptFriendRequest();
   const rejectRequest = useRejectFriendRequest();
   const startChat = useGetOrCreateConversation();
-  const conversations = useConversations();
-  const unreadMessages = (conversations.data ?? []).filter((row) => row.unread).length;
 
   const friends = friendsQuery.data ?? [];
   const incoming = requestsQuery.data?.incoming ?? [];
@@ -167,9 +164,6 @@ export default function FriendsScreen() {
       <FriendsHeader
         friendCount={friends.length}
         requestCount={requestCount}
-        unreadMessages={unreadMessages}
-        onPressSearch={goFind}
-        onPressMessages={() => router.push(MESSAGES_HREF)}
       />
       <SegmentedControl
         value={segment}
