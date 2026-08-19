@@ -1,33 +1,22 @@
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-
-function isAuthCancelled(error: unknown): boolean {
-  if (typeof error === 'object' && error && 'code' in error) {
-    const code = String(error.code).toLowerCase();
-    if (code.includes('cancel')) {
-      return true;
-    }
-  }
-  if (error instanceof Error) {
-    return error.message.toLowerCase().includes('cancel');
-  }
-  return false;
-}
+import { isAuthCancelled } from '@/components/auth/AuthShell';
 
 type SocialAuthProps = {
   onError: (message: string) => void;
   busy?: boolean;
 };
 
+/** Google only. Apple is not offered on unauthenticated entry. */
 export function SocialAuth({ onError, busy }: SocialAuthProps) {
-  const { signInWithApple, signInWithGoogle } = useAuth();
+  const { signInWithGoogle } = useAuth();
 
-  async function run(action: () => Promise<void>) {
+  async function run() {
     try {
-      await action();
+      await signInWithGoogle();
     } catch (error) {
       if (isAuthCancelled(error)) {
         return;
@@ -47,25 +36,8 @@ export function SocialAuth({ onError, busy }: SocialAuthProps) {
         variant="ghost"
         size="lg"
         disabled={busy}
-        onPress={() => void run(signInWithGoogle)}
+        onPress={() => void run()}
       />
-      {Platform.OS === 'ios' ? (
-        <Button
-          title="Continue with Apple"
-          variant="secondary"
-          size="lg"
-          disabled={busy}
-          onPress={() => void run(signInWithApple)}
-        />
-      ) : (
-        <Button
-          title="Continue with Apple"
-          variant="ghost"
-          size="lg"
-          disabled={busy}
-          onPress={() => void run(signInWithApple)}
-        />
-      )}
     </View>
   );
 }

@@ -10,10 +10,11 @@ type InputProps = TextInputProps & {
   error?: string;
   hint?: string;
   className?: string;
+  inverted?: boolean;
 };
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, hint, className, onFocus, onBlur, style, ...props },
+  { label, error, hint, className, inverted, onFocus, onBlur, style, ...props },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
@@ -21,7 +22,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   return (
     <View className="w-full gap-1.5">
       {label ? (
-        <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
+        <AppText
+          className={inverted ? 'text-sm font-semibold' : 'text-sm font-semibold text-charcoal'}
+          style={inverted ? { color: '#FFFFFF' } : undefined}>
+          {label}
+        </AppText>
       ) : null}
       <TextInput
         ref={ref}

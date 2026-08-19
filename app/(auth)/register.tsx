@@ -1,22 +1,32 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { BlobMascot } from '@/components/mascot/BlobMascot';
-import { AuthDivider, SocialAuth } from '@/components/ui/SocialAuth';
+import {
+  AuthBackButton,
+  AuthEmailButton,
+  AuthGateIntro,
+  AuthGoogleButton,
+  AuthOrDivider,
+  AuthOutlineButton,
+  AuthShell,
+  isAuthCancelled,
+} from '@/components/auth/AuthShell';
+import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Screen } from '@/components/ui/Screen';
-import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
+import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { registerSchema, type RegisterValues } from '@/utils/validators';
 
 export default function RegisterScreen() {
-  const { signUp } = useAuth();
+  const router = useRouter();
+  const { signUp, signInWithGoogle } = useAuth();
+  const [emailStep, setEmailStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const {
@@ -41,79 +51,130 @@ export default function RegisterScreen() {
     }
   });
 
+  async function runGoogle() {
+    setFormError(null);
+    setInfo(null);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      if (isAuthCancelled(error)) {
+        return;
+      }
+      setFormError(
+        error instanceof Error ? error.message : 'That sign-in didn’t finish. Please try again.',
+      );
+    }
+  }
+
+  function openEmail() {
+    setFormError(null);
+    setInfo(null);
+    setEmailStep(true);
+  }
+
   return (
-    <Screen scroll>
-      <View className="items-center pt-6">
-        <BlobMascot size={180} motion="float" />
-        <AppText className="mt-6 text-3xl font-bold text-charcoal">Join the lobby</AppText>
-        <AppText className="mt-2 text-center text-muted">
-          Next, we’ll set your name, training, and a starting wallet of 50 Coins.
-        </AppText>
-      </View>
-
-      <View className="mt-8">
-        <SocialAuth busy={isSubmitting} onError={setFormError} />
-        <AuthDivider />
-      </View>
-
-      <View className="gap-4">
-        <Controller
-          control={control}
-          name="email"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label="Email"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.email?.message}
+    <AuthShell>
+      {emailStep ? (
+        <View className="mt-8 gap-4">
+          <AuthBackButton onPress={() => setEmailStep(false)} />
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Email"
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                keyboardAppearance="dark"
+                inverted
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.email?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Password"
+                secureTextEntry
+                autoComplete="new-password"
+                keyboardAppearance="dark"
+                inverted
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.password?.message}
+                hint={copy('account.passwordHint')}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="confirmPassword"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Confirm password"
+                secureTextEntry
+                autoComplete="new-password"
+                keyboardAppearance="dark"
+                inverted
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.confirmPassword?.message}
+              />
+            )}
+          />
+          {formError ? (
+            <AppText className="text-sm" style={{ color: '#E8A0A0' }}>
+              {formError}
+            </AppText>
+          ) : null}
+          {info ? (
+            <AppText className="text-sm" style={{ color: THEME.accentBright }}>
+              {info}
+            </AppText>
+          ) : null}
+          <Button title="Create an Account" onPress={onSubmit} loading={isSubmitting} size="lg" />
+          <View className="mt-2 flex-row justify-center gap-1">
+            <AppText style={{ color: 'rgba(255,255,255,0.55)' }}>Already competing?</AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={copy('auth.signIn')}
+              onPress={() => router.replace('/(auth)/login')}
+              hitSlop={8}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <AppText className="font-semibold" style={{ color: THEME.accent }}>
+                {copy('auth.signIn')}
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <>
+          <AuthGateIntro />
+          <View className="mt-6 gap-3">
+            {formError ? (
+              <AppText className="text-center text-sm" style={{ color: '#E8A0A0' }}>
+                {formError}
+              </AppText>
+            ) : null}
+            <AuthEmailButton disabled={isSubmitting} onPress={openEmail} />
+            <AuthGoogleButton disabled={isSubmitting} onPress={() => void runGoogle()} />
+            <AuthOrDivider />
+            <AuthOutlineButton
+              title="Create an Account"
+              disabled={isSubmitting}
+              onPress={openEmail}
             />
-          )}
-        />
-        <Controller
-          control={control}
-          name="password"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label="Password"
-              secureTextEntry
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.password?.message}
-              hint={copy('account.passwordHint')}
-            />
-          )}
-        />
-        <Controller
-          control={control}
-          name="confirmPassword"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label="Confirm password"
-              secureTextEntry
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.confirmPassword?.message}
-            />
-          )}
-        />
-        {formError ? (
-          <AppText className="text-sm text-coral-dark">{formError}</AppText>
-        ) : null}
-        {info ? <AppText className="text-sm text-mint-dark">{info}</AppText> : null}
-        <Button title={copy('auth.createAccount')} onPress={onSubmit} loading={isSubmitting} size="lg" />
-      </View>
-
-      <View className="mt-6 flex-row justify-center gap-1">
-        <AppText className="text-muted">Already competing?</AppText>
-        <Link href="/(auth)/login">
-          <AppText className="font-semibold text-coral">{copy('auth.signIn')}</AppText>
-        </Link>
-      </View>
-    </Screen>
+          </View>
+        </>
+      )}
+    </AuthShell>
   );
 }

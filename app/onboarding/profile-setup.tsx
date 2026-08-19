@@ -70,8 +70,8 @@ const GENDER_OPTIONS = [
 
 const STEP_COPY = [
   {
-    title: 'Profile',
-    body: 'How you show up on blOb.',
+    title: 'Join the lobby',
+    body: 'We’ll set your name, training, and a starting wallet of 50 Coins.',
   },
   {
     title: 'Training',
