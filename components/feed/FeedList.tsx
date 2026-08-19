@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { Platform, RefreshControl, ScrollView, View } from 'react-native';
 
 import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
@@ -8,7 +8,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
-import { THEME } from '@/lib/theme';
+import { TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
 type FeedListProps = {
@@ -140,7 +140,13 @@ export function FeedList({
     <ScrollView
       ref={scrollRef}
       className="flex-1"
-      contentContainerClassName="gap-3 pb-8"
+      style={
+        Platform.OS === 'web'
+          ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden' } as object)
+          : { flex: 1 }
+      }
+      contentContainerClassName="gap-3"
+      contentContainerStyle={{ paddingBottom: TAB_BAR_CONTENT_INSET, flexGrow: 0 }}
       refreshControl={
         onRefresh ? (
           <RefreshControl

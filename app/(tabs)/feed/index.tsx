@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 
+import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { ChallengeRail } from '@/components/feed/ChallengeRail';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedHeader } from '@/components/feed/FeedHeader';
@@ -64,16 +65,17 @@ export default function FeedScreen() {
         composing={createPost.isPending}
         commenting={createComment.isPending}
         headerTop={
-          <View>
-            <FeedHeader />
-            <StoryTray />
+          <View className="gap-3">
+            <OfficialPitchHost />
+            <ChallengeRail />
           </View>
         }
         headerExtra={
           <View className="gap-3">
+            <FeedHeader />
+            <StoryTray />
             <ReelsRow />
             <RecommendedProfiles />
-            <ChallengeRail />
           </View>
         }
         empty={<FeedEmptyState compact />}

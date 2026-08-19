@@ -12,7 +12,6 @@ import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { HealthLogPromptHost } from '@/components/health/HealthLogPrompt';
-import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
@@ -181,7 +180,6 @@ export default function TabLayout() {
         />
         <WalletHost />
         <HealthLogPromptHost />
-        <OfficialPitchHost />
         </SocialSheetsHost>
       </View>
       <BlobTabBar

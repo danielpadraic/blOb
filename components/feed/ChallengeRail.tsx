@@ -36,15 +36,15 @@ export function ChallengeRail() {
   return (
     <View>
       <ChallengeCarousel
-        title={copy('feed.railActive')}
-        challenges={activeRows}
+        title={copy('feed.railOfficial')}
+        challenges={officialRows}
         currentUserId={user?.id}
         progressById={progressById}
         onPress={open}
       />
       <ChallengeCarousel
-        title={copy('feed.railOfficial')}
-        challenges={officialRows}
+        title={copy('feed.railActive')}
+        challenges={activeRows}
         currentUserId={user?.id}
         progressById={progressById}
         onPress={open}
