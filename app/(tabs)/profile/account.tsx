@@ -15,6 +15,7 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { copy } from '@/lib/copy';
 import { replayTutorial } from '@/lib/legal';
 import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
+import { useTour } from '@/components/tour/TourContext';
 import { getErrorMessage, getPasswordUpdateMessage } from '@/utils/errors';
 import {
   getPushPermissionState,
@@ -26,6 +27,7 @@ const PASSWORD_TIMEOUT_MS = 20000;
 
 export default function AccountScreen() {
   const router = useRouter();
+  const tour = useTour();
   const { user, updateEmail, updatePassword } = useAuth();
   const { profile, refetch } = useMyProfile();
   const updateProfile = useUpdateProfile();
@@ -213,7 +215,10 @@ export default function AccountScreen() {
             onPress={() => {
               void replayTutorial()
                 .then(() => refetch())
-                .then(() => router.replace('/feed'))
+                .then(() => {
+                  router.replace('/feed');
+                  setTimeout(() => tour.start(), 400);
+                })
                 .catch((error) => Alert.alert('Tour', getErrorMessage(error)));
             }}
             hitSlop={8}

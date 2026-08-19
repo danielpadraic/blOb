@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -10,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
 import { THEME } from '@/lib/theme';
-import { formatBucks, formatCoins } from '@/utils/format';
+import { formatCoins } from '@/utils/format';
 
 export function WalletBar() {
   const { profile } = useMyProfile();
@@ -101,19 +102,23 @@ export function WalletBar() {
         paddingHorizontal: 10,
       }}
       hitSlop={6}>
-      <View className="flex-row items-center">
-        <CurrencyMark currency="coins" size={18} />
-        <AppText className="ml-1.5 text-[12px] font-extrabold text-charcoal">
-          {official ? copy('official.infinity') : formatCoins(displayCoins).replace(' Coins', '')}
-        </AppText>
-      </View>
+      <TourAnchor id="tour-coins">
+        <View className="flex-row items-center" style={{ minHeight: 28 }}>
+          <CurrencyMark currency="coins" size={18} />
+          <AppText className="ml-1.5 text-[12px] font-extrabold text-charcoal">
+            {official ? copy('official.infinity') : formatCoins(displayCoins).replace(' Coins', '')}
+          </AppText>
+        </View>
+      </TourAnchor>
       <AppText className="mx-1.5 text-[12px] font-extrabold text-muted">·</AppText>
-      <View className="flex-row items-center">
-        <CurrencyMark currency="bucks" size={18} />
-        <AppText className="ml-1 text-[12px] font-extrabold" style={{ color: '#1B7A4A' }}>
-          {formatBucks(bucks).replace(' Bucks', '')}
-        </AppText>
-      </View>
+      <TourAnchor id="tour-money">
+        <View className="flex-row items-center" style={{ minHeight: 28 }}>
+          <CurrencyMark currency="bucks" size={18} accessibilityLabel="$" />
+          <AppText className="ml-1 text-[12px] font-extrabold" style={{ color: '#1B7A4A' }}>
+            {`$${Number(bucks).toFixed(2)}`}
+          </AppText>
+        </View>
+      </TourAnchor>
     </Pressable>
   );
 }

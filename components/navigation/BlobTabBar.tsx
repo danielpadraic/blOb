@@ -65,7 +65,6 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
         zIndex: 80,
         elevation: 80,
       }}>
-      <TourAnchor id="tour-tabs">
       <View
         className="flex-row items-center"
         style={{
@@ -79,30 +78,37 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
           overflow: 'visible',
           ...themeShadow('bar'),
         }}>
-        <TabSlot
-          label="Home"
-          selected={active === 'feed'}
-          icon={{ ios: 'house.fill', android: 'home', web: 'home' }}
-          onPress={() => go('/feed')}
-        />
-        <TabSlot
-          label="Lobby"
-          selected={active === 'challenges'}
-          icon={{ ios: 'flag.fill', android: 'flag', web: 'flag' }}
-          onPress={() => go(LOBBY_HREF)}
-        />
+        <TourAnchor id="tour-tab-feed" style={{ flex: 1 }}>
+          <TabSlot
+            label="Home"
+            selected={active === 'feed'}
+            icon={{ ios: 'house.fill', android: 'home', web: 'home' }}
+            onPress={() => go('/feed')}
+          />
+        </TourAnchor>
+        <TourAnchor id="tour-tab-lobby" style={{ flex: 1 }}>
+          <TabSlot
+            label="Lobby"
+            selected={active === 'challenges'}
+            icon={{ ios: 'flag.fill', android: 'flag', web: 'flag' }}
+            onPress={() => go(LOBBY_HREF)}
+          />
+        </TourAnchor>
         <View style={{ flex: 1, minWidth: 0, overflow: 'visible', zIndex: 90 }}>
           <ComposeTabButton open={composeOpen} onPress={onToggleCompose} />
         </View>
-        <TabSlot
-          label="Friends"
-          selected={active === 'friends'}
-          icon={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
-          onPress={() => go('/friends')}
-        />
-        <YouTabSlot selected={active === 'profile'} onPress={() => go('/profile')} />
+        <TourAnchor id="tour-tab-friends" style={{ flex: 1 }}>
+          <TabSlot
+            label="Friends"
+            selected={active === 'friends'}
+            icon={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
+            onPress={() => go('/friends')}
+          />
+        </TourAnchor>
+        <TourAnchor id="tour-tab-you" style={{ flex: 1 }}>
+          <YouTabSlot selected={active === 'profile'} onPress={() => go('/profile')} />
+        </TourAnchor>
       </View>
-      </TourAnchor>
     </View>
   );
 }
@@ -127,7 +133,7 @@ function TabSlot({
       onPress={onPress}
       hitSlop={4}
       style={{
-        flex: 1,
+        width: '100%',
         minWidth: HIT,
         minHeight: HIT,
         alignItems: 'center',
@@ -149,7 +155,7 @@ function YouTabSlot({ selected, onPress }: { selected: boolean; onPress: () => v
       onPress={onPress}
       hitSlop={4}
       style={{
-        flex: 1,
+        width: '100%',
         minWidth: HIT,
         minHeight: HIT,
         alignItems: 'center',

@@ -1,70 +1,110 @@
-import type { Href } from 'expo-router';
-
 export type TourStepId =
-  | 'wallet'
-  | 'header'
-  | 'tabs'
+  | 'coins'
+  | 'money'
+  | 'search'
+  | 'dm'
+  | 'bell'
   | 'official'
-  | 'create'
-  | 'friends'
+  | 'tabFeed'
+  | 'tabLobby'
+  | 'tabCreate'
+  | 'tabFriends'
+  | 'tabYou'
   | 'goal';
+
+export type TourPlacement = 'below' | 'above' | 'center-low';
 
 export type TourStep = {
   id: TourStepId;
   target: string | null;
-  href?: Href;
+  placement: TourPlacement;
   title: string;
   body: string;
 };
 
 export const TOUR_STEPS: TourStep[] = [
   {
-    id: 'wallet',
-    target: 'tour-wallet',
-    href: '/feed',
-    title: 'Wallet',
-    body: 'Coins are rewards for showing up. Bucks are real-money stakes for Official and paid challenges. They are not interchangeable.',
+    id: 'coins',
+    target: 'tour-coins',
+    placement: 'below',
+    title: 'Coins',
+    body: 'Rewards for showing up — login, streaks, firsts. Not for Official buy-in.',
   },
   {
-    id: 'header',
-    target: 'tour-header',
-    href: '/feed',
-    title: 'Search, DMs, bell',
-    body: 'Search people and challenges. DMs are one-to-one. The bell is your inbox — friend requests, messages, and coin grants land there.',
+    id: 'money',
+    target: 'tour-money',
+    placement: 'below',
+    title: 'Real money',
+    body: '1:1 with $. Official and paid challenges. Not interchangeable with coins.',
   },
   {
-    id: 'tabs',
-    target: 'tour-tabs',
-    href: '/feed',
-    title: 'The bar',
-    body: 'Feed, Lobby, +, Friends, You. + is where you log, post, or create. You is your profile and settings.',
+    id: 'search',
+    target: 'tour-search',
+    placement: 'below',
+    title: 'Search',
+    body: 'Find people and challenges.',
+  },
+  {
+    id: 'dm',
+    target: 'tour-dm',
+    placement: 'below',
+    title: 'DMs',
+    body: 'One-to-one messages.',
+  },
+  {
+    id: 'bell',
+    target: 'tour-bell',
+    placement: 'below',
+    title: 'Bell',
+    body: 'Friend requests, messages, and coin grants land here.',
   },
   {
     id: 'official',
     target: 'tour-official',
-    href: '/feed',
+    placement: 'below',
     title: 'Featured Challenge',
-    body: 'This week’s Featured Challenge. Weekly $10 is skin in the game, not a fortune. Official days run on America/Chicago time.',
+    body: 'Skin in the game. The card shows Joined or Not joined without opening it.',
   },
   {
-    id: 'create',
-    target: 'tour-create',
-    href: '/challenges/create',
-    title: 'Create',
-    body: 'Start with Simple: public toggle, coins or bucks, start, duration, task, and proof. Advanced is there for everything else. You do not have to use it.',
+    id: 'tabFeed',
+    target: 'tour-tab-feed',
+    placement: 'above',
+    title: 'Feed',
+    body: 'Home. Friends, posts, and this week’s challenge.',
   },
   {
-    id: 'friends',
-    target: 'tour-friends',
-    href: '/friends',
+    id: 'tabLobby',
+    target: 'tour-tab-lobby',
+    placement: 'above',
+    title: 'Lobby',
+    body: 'Challenges you host, join, and Official.',
+  },
+  {
+    id: 'tabCreate',
+    target: 'tour-tab-create',
+    placement: 'above',
+    title: '+',
+    body: 'Log, post, or create a Simple challenge. Advanced exists — don’t use it yet.',
+  },
+  {
+    id: 'tabFriends',
+    target: 'tour-tab-friends',
+    placement: 'above',
     title: 'Friends',
     body: 'Send a request. They approve. Bob is already a friend.',
   },
   {
+    id: 'tabYou',
+    target: 'tour-tab-you',
+    placement: 'above',
+    title: 'You',
+    body: 'Profile and settings. Replay this tour from Settings anytime.',
+  },
+  {
     id: 'goal',
-    target: null,
-    href: '/feed',
+    target: 'tour-official',
+    placement: 'center-low',
     title: 'Why we are here',
-    body: 'We are here so you actually do the thing you already meant to do.',
+    body: 'So you actually do the thing you already meant to do.',
   },
 ];

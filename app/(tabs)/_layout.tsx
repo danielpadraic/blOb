@@ -32,16 +32,25 @@ export default function TabLayout() {
 function FirstRunTourLauncher() {
   const { profile } = useMyProfile();
   const tour = useTour();
+  const router = useRouter();
   const started = useRef(false);
+  const start = tour.start;
+  const active = tour.active;
 
   useEffect(() => {
-    if (started.current || !profile || profile.tutorial_completed_at) {
+    if (active || !profile || profile.tutorial_completed_at) {
       return;
     }
-    started.current = true;
-    const handle = setTimeout(() => tour.start(), 450);
+    router.navigate('/feed');
+    const handle = setTimeout(() => {
+      if (started.current) {
+        return;
+      }
+      started.current = true;
+      start();
+    }, 450);
     return () => clearTimeout(handle);
-  }, [profile, tour]);
+  }, [active, profile?.id, profile?.tutorial_completed_at, router, start]);
 
   return null;
 }

@@ -7,24 +7,35 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { type LayoutRectangle } from 'react-native';
+import { type LayoutRectangle, type ScrollView } from 'react-native';
 
 export type TourRect = LayoutRectangle;
 
 type TourContextValue = {
   active: boolean;
+  runId: number;
+  epoch: number;
+  targetId: string | null;
   start: () => void;
   stop: () => void;
+  setTargetId: (id: string | null) => void;
+  bump: () => void;
   register: (id: string, rect: TourRect | null) => void;
   rectFor: (id: string | null) => TourRect | null;
+  setHomeScroll: (node: ScrollView | null) => void;
+  scrollHomeToTop: () => void;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
 
 export function TourProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState(false);
+  const [runId, setRunId] = useState(0);
+  const [epoch, setEpoch] = useState(0);
+  const [targetId, setTargetId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const rects = useRef(new Map<string, TourRect>());
+  const homeScroll = useRef<ScrollView | null>(null);
 
   const register = useCallback((id: string, rect: TourRect | null) => {
     if (!rect || rect.width < 1 || rect.height < 1) {
@@ -45,15 +56,45 @@ export function TourProvider({ children }: { children: ReactNode }) {
     [version],
   );
 
+  const bump = useCallback(() => {
+    setEpoch((current) => current + 1);
+  }, []);
+
+  const setHomeScroll = useCallback((node: ScrollView | null) => {
+    homeScroll.current = node;
+  }, []);
+
+  const scrollHomeToTop = useCallback(() => {
+    homeScroll.current?.scrollTo({ y: 0, animated: true });
+  }, []);
+
+  const start = useCallback(() => {
+    setActive(true);
+    setRunId((current) => current + 1);
+    setEpoch((current) => current + 1);
+  }, []);
+
+  const stop = useCallback(() => {
+    setActive(false);
+    setTargetId(null);
+  }, []);
+
   const value = useMemo(
     () => ({
       active,
-      start: () => setActive(true),
-      stop: () => setActive(false),
+      runId,
+      epoch,
+      targetId,
+      start,
+      stop,
+      setTargetId,
+      bump,
       register,
       rectFor,
+      setHomeScroll,
+      scrollHomeToTop,
     }),
-    [active, register, rectFor],
+    [active, bump, epoch, rectFor, register, runId, scrollHomeToTop, setHomeScroll, start, stop, targetId],
   );
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;

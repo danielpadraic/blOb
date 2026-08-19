@@ -5,6 +5,7 @@ import { Platform, RefreshControl, ScrollView, View } from 'react-native';
 import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
 import { MascotState } from '@/components/mascot/MascotState';
+import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
@@ -64,6 +65,7 @@ export function FeedList({
   onComment,
 }: FeedListProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const tour = useTourOptional();
   const tone = useCopyTone();
 
   if (error) {
@@ -138,7 +140,10 @@ export function FeedList({
 
   return (
     <ScrollView
-      ref={scrollRef}
+      ref={(node) => {
+        scrollRef.current = node;
+        tour?.setHomeScroll(node);
+      }}
       className="flex-1"
       style={
         Platform.OS === 'web'

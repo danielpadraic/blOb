@@ -94,43 +94,45 @@ export function TabChromeHeader({
         borderBottomWidth: 1,
         borderBottomColor: THEME.border,
       }}>
-      <TourAnchor id="tour-header">
-        <View className="flex-row items-center px-4 pb-2.5 pt-2">
+      <View className="flex-row items-center px-4 pb-2.5 pt-2">
           <BlobMascot variant="logo" size={56} />
-          <HeaderIcon
-            label={searchOpen ? 'Close search' : 'Search'}
-            active={searchOpen}
-            onPress={onToggleSearch}>
-            <Glyph name={GLYPH.search} color={searchOpen ? THEME.accent : THEME.textPrimary} size={20} />
-          </HeaderIcon>
-          <View className="flex-1" />
-          <TourAnchor id="tour-wallet">
-            <WalletBar />
+          <TourAnchor id="tour-search">
+            <HeaderIcon
+              label={searchOpen ? 'Close search' : 'Search'}
+              active={searchOpen}
+              onPress={onToggleSearch}>
+              <Glyph name={GLYPH.search} color={searchOpen ? THEME.accent : THEME.textPrimary} size={20} />
+            </HeaderIcon>
           </TourAnchor>
-          <HeaderIcon
-            label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
-            onPress={() => {
-              wallet?.closeAll();
-              router.push(MESSAGES_HREF);
-            }}>
-            <Glyph name={GLYPH.reply} color={THEME.textPrimary} size={20} />
-            {unreadMessages > 0 ? <UnreadDot count={unreadMessages} /> : null}
-          </HeaderIcon>
-          <HeaderIcon
-            label={
-              alertsOpen
-                ? 'Close alerts'
-                : unreadCount > 0
-                  ? `Alerts, ${unreadCount} unread`
-                  : 'Alerts'
-            }
-            active={alertsOpen}
-            onPress={onToggleAlerts}>
-            <Glyph name={GLYPH.bell} color={alertsOpen ? THEME.accent : THEME.textPrimary} size={20} />
-            {unreadCount > 0 ? <UnreadDot count={unreadCount} /> : null}
-          </HeaderIcon>
+          <View className="flex-1" />
+          <WalletBar />
+          <TourAnchor id="tour-dm">
+            <HeaderIcon
+              label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
+              onPress={() => {
+                wallet?.closeAll();
+                router.push(MESSAGES_HREF);
+              }}>
+              <Glyph name={GLYPH.reply} color={THEME.textPrimary} size={20} />
+              {unreadMessages > 0 ? <UnreadDot count={unreadMessages} /> : null}
+            </HeaderIcon>
+          </TourAnchor>
+          <TourAnchor id="tour-bell">
+            <HeaderIcon
+              label={
+                alertsOpen
+                  ? 'Close alerts'
+                  : unreadCount > 0
+                    ? `Alerts, ${unreadCount} unread`
+                    : 'Alerts'
+              }
+              active={alertsOpen}
+              onPress={onToggleAlerts}>
+              <Glyph name={GLYPH.bell} color={alertsOpen ? THEME.accent : THEME.textPrimary} size={20} />
+              {unreadCount > 0 ? <UnreadDot count={unreadCount} /> : null}
+            </HeaderIcon>
+          </TourAnchor>
         </View>
-      </TourAnchor>
     </View>
   );
 }
