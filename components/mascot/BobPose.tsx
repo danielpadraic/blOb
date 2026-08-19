@@ -10,14 +10,16 @@ export type BobPoseName =
   | 'heart'
   | 'thumbsUp';
 
+const WAVE = require('@/assets/login/blob-login.png');
+
 const SOURCES: Record<BobPoseName, number> = {
-  wave: require('@/assets/mascot/bob-wave.png'),
-  point: require('@/assets/mascot/bob-point.png'),
-  clap: require('@/assets/mascot/bob-clap.png'),
-  celebrate: require('@/assets/mascot/bob-celebrate.png'),
-  trophy: require('@/assets/mascot/bob-trophy.png'),
-  heart: require('@/assets/mascot/bob-heart.png'),
-  thumbsUp: require('@/assets/mascot/bob-thumbs-up.png'),
+  wave: WAVE,
+  point: WAVE,
+  clap: WAVE,
+  celebrate: WAVE,
+  trophy: WAVE,
+  heart: WAVE,
+  thumbsUp: WAVE,
 };
 
 const LABELS: Record<BobPoseName, string> = {
@@ -49,7 +51,7 @@ export function BobPose({ pose, size = 72 }: BobPoseProps) {
         contentFit="contain"
         contentPosition="center"
         cachePolicy="memory-disk"
-        recyclingKey={`bob-${pose}-alpha`}
+        recyclingKey="bob-3d-wave"
         transition={0}
       />
     </View>

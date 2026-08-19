@@ -58,7 +58,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/mascot/blob-wave.png",
+          "image": "./assets/login/blob-login.png",
           "resizeMode": "contain",
           "backgroundColor": "#F7F7F5"
         }

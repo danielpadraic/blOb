@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 
@@ -24,9 +24,38 @@ const PILLARS: Array<{
   { label: 'Stay Consistent', icon: ICON_STREAK, color: '#F08A3A', bottom: 18, right: 0 },
 ];
 
+const glowStyle =
+  Platform.OS === 'web'
+    ? {
+        position: 'absolute' as const,
+        left: '50%' as const,
+        top: 42,
+        width: 220,
+        height: 220,
+        marginLeft: -110,
+        borderRadius: 110,
+        backgroundColor: 'rgba(44, 155, 137, 0.5)',
+        filter: 'blur(42px)',
+      }
+    : {
+        position: 'absolute' as const,
+        left: '50%' as const,
+        top: 78,
+        width: 36,
+        height: 36,
+        marginLeft: -18,
+        borderRadius: 18,
+        backgroundColor: '#2C9B89',
+        shadowColor: '#2C9B89',
+        shadowOpacity: 0.95,
+        shadowRadius: 48,
+        shadowOffset: { width: 0, height: 0 },
+      };
+
 export function LoginHero() {
   return (
     <View style={{ height: 312, width: '100%' }}>
+      <View pointerEvents="none" style={glowStyle} />
       <Image
         source={BOB}
         style={{
@@ -38,6 +67,9 @@ export function LoginHero() {
           marginLeft: -98,
         }}
         contentFit="contain"
+        contentPosition="center"
+        cachePolicy="memory-disk"
+        recyclingKey="bob-3d-wave"
         accessibilityLabel="Bob"
       />
       {PILLARS.map((pillar) => (

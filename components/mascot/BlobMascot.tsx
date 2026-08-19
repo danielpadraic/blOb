@@ -11,8 +11,10 @@ import Animated, {
 
 import { cn } from '@/utils/cn';
 
-const wave = require('@/assets/mascot/bob-wave.png');
+const wave = require('@/assets/login/blob-login.png');
 const logo = require('@/assets/mascot/blob-logo.png');
+
+const WORDMARK_MAX = 32;
 
 type MascotVariant = 'wave' | 'logo';
 type Motion = 'none' | 'pulse' | 'float';
@@ -60,7 +62,8 @@ export function BlobMascot({
     transform: [{ scale: scale.value }, { translateY: translateY.value }],
   }));
 
-  const height = variant === 'logo' ? size * 0.55 : size;
+  const useWordmark = variant === 'logo' || size <= WORDMARK_MAX;
+  const height = useWordmark ? size * 0.55 : size;
 
   return (
     <Animated.View
@@ -70,12 +73,12 @@ export function BlobMascot({
       ]}
       className={cn('items-center justify-center bg-transparent', className)}>
       <Image
-        source={variant === 'logo' ? logo : wave}
+        source={useWordmark ? logo : wave}
         style={{ width: size, height, backgroundColor: 'transparent' }}
         contentFit="contain"
         contentPosition="center"
         cachePolicy="memory-disk"
-        recyclingKey={variant === 'logo' ? 'blob-logo-transparent' : 'bob-wave-transparent'}
+        recyclingKey={useWordmark ? 'blob-logo-transparent' : 'bob-3d-wave'}
         transition={0}
       />
     </Animated.View>
