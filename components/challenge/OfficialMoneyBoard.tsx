@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
-import { officialBob } from '@/copy/officialBob';
 import { copy } from '@/lib/copy';
 import {
   armingCountdownLabel,
@@ -86,8 +85,6 @@ export function OfficialMoneyBoard({
           <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
         </View>
       )}
-      <AppText className="mt-1 text-[12px] leading-5 text-muted">{officialBob('legalBoard')}</AppText>
-      <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalDays')}</AppText>
     </View>
   );
 }

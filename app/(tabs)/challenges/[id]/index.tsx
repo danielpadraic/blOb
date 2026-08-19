@@ -3,17 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BucksTag } from '@/components/currency/BucksTag';
-import { BuckUsdAmount, CurrencyMark } from '@/components/currency/CurrencyMark';
 import { FeedList } from '@/components/feed/FeedList';
-import { ProfileLink } from '@/components/profile/ProfileLink';
+import { ChallengeDetailsCard } from '@/components/challenge/ChallengeDetailsCard';
+import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
-import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
@@ -26,7 +22,6 @@ import { BODY_METRICS_HREF, LOBBY_HREF } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { ProgressRing } from '@/components/ui/ProgressRing';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
@@ -46,6 +41,7 @@ import {
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
+import { useWallet } from '@/hooks/useWallet';
 import { useLoggedWorkoutCount, usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { methodLabel, proofDisplayName } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -73,7 +69,6 @@ import {
   payoutCountdownLabel,
 } from '@/lib/settlement';
 import {
-  armingCountdownLabel,
   isOfficialJoinable,
   isOfficialSeriesChallenge,
   officialAlreadyStartedCopy,
@@ -81,32 +76,31 @@ import {
 import { healthProofLines } from '@/lib/health/proofSummary';
 import { fetchHealthWorkoutById } from '@/lib/health/remote';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
-import { formatWallet, isBucksChallenge, isSponsoredBucks, walletBalance } from '@/lib/currency';
+import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
+import { challengeGoalLabel } from '@/lib/challengeGoal';
+import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { shareOfficialChallenge } from '@/lib/officialShare';
-import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
+import { tabBarLift, THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
-import { CHALLENGE_STATUS_LABEL } from '@/lib/constants';
 import { getErrorMessage } from '@/utils/errors';
-import {
-  challengeTimingLabel,
-  formatDateRange,
-} from '@/utils/format';
 
 const BODY_METRICS_JOIN_COPY =
   'Missing: physical details. Official Challenges need them for matching — they stay private.';
 
 export default function ChallengeDetailScreen() {
-  const params = useLocalSearchParams<{ id: string; returnTo?: string; logged?: string }>();
+  const params = useLocalSearchParams<{ id: string; returnTo?: string; logged?: string; funded?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
+  const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   useDismissTo(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
   const { user } = useAuth();
-  const { profile } = useMyProfile();
+  const { profile, refetch: refetchProfile } = useMyProfile();
+  const wallet = useWallet();
   const challengeQuery = useChallenge(id);
   const hostQuery = useProfile(challengeQuery.data?.created_by ?? undefined);
   const roster = useChallengeParticipants(id);
@@ -208,16 +202,37 @@ export default function ChallengeDetailScreen() {
       return BODY_METRICS_JOIN_COPY;
     }
     const buyIn = Number(challenge.buy_in_amount) || 0;
-    const wallet = walletBalance(profile, challenge.currency);
-    if (buyIn > 0 && profile && wallet < buyIn) {
-      return `You need ${formatWallet(buyIn, challenge.currency)} to buy in. You have ${formatWallet(wallet, challenge.currency)}.`;
+    const held = walletBalance(profile, challenge.currency);
+    if (buyIn > 0 && profile && held < buyIn && !isBucksChallenge(challenge)) {
+      return `You need ${formatWallet(buyIn, challenge.currency)} to buy in. You have ${formatWallet(held, challenge.currency)}.`;
     }
     return null;
   }, [challenge, isHost, isJoined, profile]);
 
-  const canJoin = Boolean(challenge) && !isJoined && !isHost && !joinBlocked;
+  const canJoinBase = Boolean(challenge) && !isJoined && !isHost && !joinBlocked;
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
+  const joinCta = bucksJoinCta({
+    currency: challenge?.currency,
+    buyIn: Math.max(Number(challenge?.buy_in_amount) || 0, 0),
+    wallet: walletBalance(profile, challenge?.currency),
+    hasProfile: Boolean(profile),
+  });
+  const needsTopUp =
+    Boolean(challenge) &&
+    joinCta.needsTopUp &&
+    !isJoined &&
+    !isHost &&
+    !needsBodyMetrics &&
+    !joinBlocked;
+  const canJoin = canJoinBase && !joinCta.needsTopUp;
   const wasCancelled = challenge?.status === 'cancelled';
+
+  useEffect(() => {
+    if (fundedParam !== '1') {
+      return;
+    }
+    void refetchProfile();
+  }, [fundedParam, refetchProfile]);
 
   useEffect(() => {
     if (!needsBodyMetrics) {
@@ -428,7 +443,8 @@ export default function ChallengeDetailScreen() {
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const isFreeEntry = buyInAmount <= 0;
   const bucks = isBucksChallenge(challenge);
-  const money = (amount: number) => formatWallet(amount, challenge.currency);
+  const money = (amount: number) =>
+    bucks ? formatCash(amount) : formatWallet(amount, challenge.currency);
   const structure = challenge.prize_structure;
   const logsClosed = isClosedForLogs({
     ...challenge,
@@ -467,13 +483,8 @@ export default function ChallengeDetailScreen() {
   const taskCopy = (challenge.task?.trim() || challenge.description?.trim()) || '';
   const hideBuyIn = isBucksChallenge(challenge) || Boolean(challenge.host_funded);
   const remainingNow = competitorCount;
-  const goalLabel = heroGoalLabel({
+  const goalLabel = challengeGoalLabel(challenge, {
     daysCompleted,
-    target,
-    isPoints,
-    isUnlimited,
-    period: ruleCopy.period,
-    periodCount: ruleCopy.count,
     taskCount: Math.max(challenge.tasks?.length ?? 0, 1),
   });
   const prizeLine = challenge.is_official
@@ -490,13 +501,6 @@ export default function ChallengeDetailScreen() {
   const progressRatio = isUnlimited
     ? 1
     : daysCompleted / Math.max(isPoints ? Math.max(challenge.tasks.length, 1) : target, 1);
-  const scheduleLine = isUnlimited
-    ? 'Ongoing · Last man standing'
-    : isOfficialJoinable(challenge)
-      ? challenge.status === 'arming'
-        ? armingCountdownLabel(challenge.armed_at, new Date(nowMs)) ?? '7 days'
-        : '7 days · Open to join'
-      : `${challengeTimingLabel(challenge.starts_at, challenge.ends_at)} · ${formatDateRange(challenge.starts_at, challenge.ends_at)}`;
   const showStickyCta =
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
@@ -524,161 +528,36 @@ export default function ChallengeDetailScreen() {
           />
         }
         showsVerticalScrollIndicator={false}>
-        <LinearGradient
-          colors={['#2C9B89', '#10201D']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            marginTop: 8,
-            borderRadius: 24,
-            overflow: 'hidden',
-            ...themeShadow('card'),
-          }}>
-          {challenge.cover_image_url ? (
-            <Image
-              source={{ uri: challenge.cover_image_url }}
-              style={{
-                position: 'absolute',
-                top: 0,
-                right: 0,
-                bottom: 0,
-                left: 0,
-                opacity: 0.18,
-              }}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              accessibilityLabel={`${challenge.title} cover`}
-            />
-          ) : null}
-          <View className="gap-3 p-4">
-            <View className="flex-row flex-wrap gap-1.5">
-              {isBucksChallenge(challenge) && !isOfficialJoinable(challenge) ? (
-                <BucksTag challenge={challenge} />
-              ) : null}
-              {challenge.is_official ? (
-                <HeroChip
-                  label={isSponsoredBucks(challenge) ? 'Sponsored' : 'Official'}
-                  dark
-                />
-              ) : null}
-              {challenge.visibility === 'private' || challenge.visibility === 'invite' ? (
-                <HeroChip label="Private" />
-              ) : (
-                <HeroChip label="Public" />
-              )}
-              {isHost && !isJoined ? <HeroChip label="Hosting" dark /> : null}
-              {isJoined ? <HeroChip label="Joined" mint /> : null}
-              {inviteOnly && !isHost && !isJoined ? <HeroChip label="Invited" /> : null}
-              <HeroChip label={isPoints ? 'Points' : 'Consistency'} mint />
-              {isUnlimited ? <HeroChip label="Last man standing" dark /> : null}
-              <HeroChip
-                label={
-                  showJudgingUi
-                    ? 'Judging'
-                    : (CHALLENGE_STATUS_LABEL[challenge.status] ?? challenge.status)
-                }
+        <View style={{ marginTop: 8 }}>
+          <ChallengeHeroCard
+            challenge={challenge}
+            host={hostQuery.data}
+            viewerId={user?.id}
+            joined={isJoined}
+            hosting={isHost && !isJoined}
+            invited={inviteOnly && !isHost && !isJoined}
+            showNotJoined={!isJoined && !isHost}
+            goalLabel={goalLabel}
+            daysCompleted={daysCompleted}
+            progressRatio={progressRatio}
+            nowMs={nowMs}
+            showProgressRing={isJoined}
+            cancelled={wasCancelled}
+            onInvite={() => setInviteOpen(true)}>
+            {isHost &&
+            !inviteOnly &&
+            !isOfficialJoinable(challenge) &&
+            challenge.status !== 'settled' &&
+            !wasCancelled ? (
+              <Button
+                title="Invite someone"
+                variant="outline"
+                size="sm"
+                onPress={() => setInviteOpen(true)}
               />
-            </View>
-            <AppText
-              className="text-[24px] font-extrabold leading-7"
-              style={{ color: '#fff' }}
-              numberOfLines={2}>
-              {challenge.title}
-            </AppText>
-            {hostQuery.data ? (
-              <ProfileLink username={hostQuery.data.username} userId={hostQuery.data.id}>
-                <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.78)' }}>
-                  Hosted by{' '}
-                  <AppText className="font-semibold" style={{ color: '#fff' }}>
-                    {hostQuery.data.display_name ?? hostQuery.data.username}
-                  </AppText>
-                </AppText>
-              </ProfileLink>
             ) : null}
-            {isOfficialSeriesChallenge(challenge) ? (
-              <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="hero" />
-            ) : (
-              <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.78)' }} numberOfLines={1}>
-                {scheduleLine}
-              </AppText>
-            )}
-            {wasCancelled ? (
-              <AppText className="text-[15px] font-semibold" style={{ color: '#fff' }}>
-                {copy('challenge.cancelled')}
-              </AppText>
-            ) : null}
-            <View className="flex-row items-center justify-between gap-3">
-              <View className="min-w-0 flex-1">
-                {wasCancelled ? null : (
-                  <>
-                <AppText
-                  className="text-[11px] font-semibold uppercase"
-                  style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.6 }}>
-                  Current pool
-                </AppText>
-                <View className="mt-1 flex-row items-center">
-                  {isOfficialJoinable(challenge) ? (
-                    <BuckUsdAmount
-                      amount={Number(challenge.prize_pool)}
-                      size={18}
-                      textClassName="text-[22px] font-extrabold"
-                      color="#fff"
-                    />
-                  ) : (
-                    <>
-                      <CurrencyMark currency={challenge.currency} size={18} />
-                      <AppText className="ml-1.5 text-[22px] font-extrabold" style={{ color: '#fff' }}>
-                        {money(Number(challenge.prize_pool))}
-                      </AppText>
-                    </>
-                  )}
-                </View>
-                  </>
-                )}
-                {isHost && !inviteOnly && challenge.status !== 'settled' && !wasCancelled ? (
-                  <View className="mt-3 self-start">
-                    <Button
-                      title="Invite someone"
-                      variant="outline"
-                      size="sm"
-                      onPress={() => setInviteOpen(true)}
-                    />
-                  </View>
-                ) : null}
-              </View>
-              {wasCancelled ? null : isJoined ? (
-                <View className="items-center">
-                  <ProgressRing
-                    progress={progressRatio}
-                    size={72}
-                    strokeWidth={7}
-                    label={`${daysCompleted}`}
-                    caption={isPoints ? 'tasks' : 'logs'}
-                    labelClassName="text-[16px] font-extrabold text-white"
-                    color="#72D9CB"
-                  />
-                  <AppText
-                    className="mt-1 text-[12px] font-semibold"
-                    style={{ color: '#fff' }}
-                    numberOfLines={1}>
-                    {goalLabel}
-                  </AppText>
-                </View>
-              ) : (
-                <View className="items-end">
-                  <AppText
-                    className="text-[11px] font-semibold uppercase"
-                    style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.6 }}>
-                    Goal
-                  </AppText>
-                  <AppText className="mt-1 text-[15px] font-bold" style={{ color: '#fff' }}>
-                    {goalLabel}
-                  </AppText>
-                </View>
-              )}
-            </View>
-          </View>
-        </LinearGradient>
+          </ChallengeHeroCard>
+        </View>
 
         {receipt ? (
           <View className="mt-4">
@@ -695,21 +574,18 @@ export default function ChallengeDetailScreen() {
         ) : null}
 
         {challenge.is_official ? (
-          <Card className="mt-4 gap-2">
-            <AppText className="text-[16px] font-extrabold leading-5 text-charcoal">
-              {officialBob('cardPromise')}
-            </AppText>
-            <AppText className="text-[14px] leading-5 text-charcoal">{officialBob('legalBoard')}</AppText>
-            <AppText className="mt-1 text-[13px] leading-5 text-muted">{officialBob('legalDays')}</AppText>
-            <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalAllFinish')}</AppText>
-            <AppText className="text-[13px] leading-5 text-muted">{officialBob('legalZero')}</AppText>
-            <AppText className="text-[12px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
-            <OfficialMoneyBoard
-              challenge={challenge}
-              finished={finishers}
-              onInvite={() => setInviteOpen(true)}
-            />
-          </Card>
+          <>
+            <ChallengeDetailsCard challenge={challenge} />
+            {isOfficialJoinable(challenge) ? null : (
+              <View className="mt-4">
+                <OfficialMoneyBoard
+                  challenge={challenge}
+                  finished={finishers}
+                  onInvite={() => setInviteOpen(true)}
+                />
+              </View>
+            )}
+          </>
         ) : null}
 
         {taskCopy ? (
@@ -792,9 +668,7 @@ export default function ChallengeDetailScreen() {
               </AppText>
               <AppText className="mt-1 text-xl font-bold text-charcoal">
                 {isFreeEntry
-                  ? isSponsoredBucks(challenge)
-                    ? 'Free · pays Bucks'
-                    : 'Free'
+                  ? 'Free'
                   : money(buyInAmount)}
               </AppText>
             </View>
@@ -804,7 +678,11 @@ export default function ChallengeDetailScreen() {
               {isPoints ? 'Task points' : isUnlimited ? 'Stay eligible' : 'To finish'}
             </AppText>
             <AppText className="mt-1 text-xl font-bold text-charcoal">
-              {isPoints ? `${totalTaskPoints(challenge.tasks)} pts` : ruleCopy.cadenceLabel}
+              {isPoints
+                ? `${totalTaskPoints(challenge.tasks)} pts`
+                : challenge.is_official
+                  ? challengeGoalLabel(challenge)
+                  : ruleCopy.cadenceLabel}
             </AppText>
             {isPoints || isUnlimited || !ruleCopy.totalHint ? null : (
               <AppText className="mt-1 text-xs leading-4 text-muted">{ruleCopy.totalHint}</AppText>
@@ -872,7 +750,7 @@ export default function ChallengeDetailScreen() {
           ) : null}
         </Card>
 
-        {wasCancelled ? null : (
+        {wasCancelled || challenge.is_official ? null : (
         <Card className="mt-4">
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Prize
@@ -1053,9 +931,7 @@ export default function ChallengeDetailScreen() {
             ) : (
               <AppText className="text-sm leading-5 text-muted" numberOfLines={1}>
                 {isFreeEntry
-                  ? bucks
-                    ? 'Joining is free. The prize is still paid in real-money Bucks.'
-                    : 'Joining is free. It does not take Coins from your wallet.'
+                  ? 'Joining is free. It does not take money from your wallet.'
                   : `Joining takes ${money(buyInAmount)} right now and adds it to the prize pool.`}
               </AppText>
             )}
@@ -1070,13 +946,19 @@ export default function ChallengeDetailScreen() {
               />
             ) : canJoin ? (
               <Button
-                title={isFreeEntry ? 'Join free' : `Join for ${money(buyInAmount)}`}
+                title={isFreeEntry ? 'Join free' : joinCta.joinLabel}
                 size="lg"
                 loading={join.isPending}
                 onPress={onJoinPress}
               />
-            ) : joinBlocked ? (
-              <Button title="Unavailable" size="lg" disabled />
+            ) : needsTopUp ? (
+              <Button
+                title={joinCta.topUpLabel}
+                size="lg"
+                onPress={() =>
+                  wallet.openTopUp({ amount: joinCta.shortfall, returnChallengeId: challenge.id })
+                }
+              />
             ) : null}
           </View>
         )}
@@ -1137,61 +1019,4 @@ function RuleLine({ text }: { text: string }) {
       <AppText className="flex-1 leading-6 text-ink">{text}</AppText>
     </View>
   );
-}
-
-function HeroChip({
-  label,
-  dark,
-  mint,
-}: {
-  label: string;
-  dark?: boolean;
-  mint?: boolean;
-}) {
-  return (
-    <View
-      className="self-start rounded-full px-2 py-1"
-      style={{
-        backgroundColor: dark
-          ? THEME.primary
-          : mint
-            ? 'rgba(114, 217, 203, 0.28)'
-            : 'rgba(255, 255, 255, 0.16)',
-      }}>
-      <AppText
-        className="text-[10px] font-extrabold uppercase"
-        style={{ color: '#fff', letterSpacing: 0.4, lineHeight: 12 }}>
-        {label}
-      </AppText>
-    </View>
-  );
-}
-
-function heroGoalLabel({
-  daysCompleted,
-  target,
-  isPoints,
-  isUnlimited,
-  period,
-  periodCount,
-  taskCount,
-}: {
-  daysCompleted: number;
-  target: number;
-  isPoints: boolean;
-  isUnlimited: boolean;
-  period: string | null;
-  periodCount: number;
-  taskCount: number;
-}) {
-  if (isUnlimited) {
-    return `${daysCompleted} logs`;
-  }
-  if (isPoints) {
-    return `${daysCompleted} of ${taskCount} tasks`;
-  }
-  if (period === 'daily' && periodCount > 1) {
-    return `${periodCount} / day`;
-  }
-  return `${daysCompleted} of ${Math.max(target, 1)} days`;
 }

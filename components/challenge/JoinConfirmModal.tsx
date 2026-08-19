@@ -9,7 +9,7 @@ import { proofDisplayName } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
-import { formatWallet, formatWalletWithUsd, isBucksChallenge } from '@/lib/currency';
+import { formatCash, formatWallet, isBucksChallenge } from '@/lib/currency';
 import { formatUsd } from '@/utils/format';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
@@ -26,7 +26,7 @@ type JoinConfirmModalProps = {
 function acknowledgments(challenge: Challenge) {
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
-  const buyIn = bucks ? formatWalletWithUsd(buyInAmount, 'bucks') : formatWallet(buyInAmount, 'coins');
+  const buyIn = bucks ? formatCash(buyInAmount) : formatWallet(buyInAmount, 'coins');
   const isFree = buyInAmount <= 0;
   const proofs = requiredChallengeProofs(challenge);
   const proofLabels = proofs.map((proof) => proofDisplayName(proof)).join(', ');
@@ -37,11 +37,7 @@ function acknowledgments(challenge: Challenge) {
 
   const prizeCopy = prizeStructureSummary(challenge);
   if (challenge.is_official) {
-    const amount = isFree
-      ? 'free'
-      : bucks
-        ? formatWalletWithUsd(buyInAmount, 'bucks')
-        : formatWallet(buyInAmount, 'coins');
+    const amount = isFree ? 'free' : bucks ? formatCash(buyInAmount) : formatWallet(buyInAmount, 'coins');
     return [
       {
         id: 'buyin',
@@ -146,7 +142,7 @@ export function JoinConfirmModal({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
-  const buyIn = bucks ? formatWalletWithUsd(buyInAmount, 'bucks') : formatWallet(buyInAmount, 'coins');
+  const buyIn = bucks ? formatCash(buyInAmount) : formatWallet(buyInAmount, 'coins');
   const isFree = buyInAmount <= 0;
   const items = acknowledgments(challenge);
   const allChecked = items.every((item) => checked[item.id]);

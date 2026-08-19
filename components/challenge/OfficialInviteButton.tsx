@@ -9,9 +9,14 @@ type OfficialInviteButtonProps = {
   challengeId: string;
   challengeTitle?: string;
   onOpenPicker?: () => void;
+  tone?: 'card' | 'hero';
 };
 
-export function OfficialInviteButton({ challengeId, onOpenPicker }: OfficialInviteButtonProps) {
+export function OfficialInviteButton({
+  challengeId,
+  onOpenPicker,
+  tone = 'card',
+}: OfficialInviteButtonProps) {
   async function share() {
     try {
       const result = await shareOfficialChallenge(challengeId);
@@ -42,13 +47,17 @@ export function OfficialInviteButton({ challengeId, onOpenPicker }: OfficialInvi
         marginTop: 8,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: THEME.border,
-        backgroundColor: THEME.surface,
+        borderColor: tone === 'hero' ? 'rgba(255,255,255,0.35)' : THEME.border,
+        backgroundColor: tone === 'hero' ? 'rgba(255,255,255,0.12)' : THEME.surface,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 12,
       }}>
-      <AppText className="text-[13px] font-semibold text-charcoal">Invite a friend</AppText>
+      <AppText
+        className="text-[13px] font-semibold"
+        style={{ color: tone === 'hero' ? '#fff' : THEME.textPrimary }}>
+        Invite
+      </AppText>
     </Pressable>
   );
 }

@@ -14,6 +14,11 @@ const OFFICIAL_BOB = {
   legalZero: 'If nobody finishes and there are no valid days, the guarantee rolls into the next Official week.',
   legalDays: 'Official days end at 11:59 p.m. Central Time.',
   legalAge: '18+. Void where prohibited. Not medical advice.',
+  proofCamera: 'A phone camera is required for this challenge.',
+  proofHeart:
+    'Heart-rate proof is required (Watch, Fitness, or a screenshot). If Apple Health was denied, turn it on in iPhone Settings → Health → blOb.',
+  detailsHardware:
+    'A phone camera is required. Heart-rate proof is required (Watch, Fitness, or a screenshot).',
   geoBlocked: 'Sorry, this Challenge isn’t available in your State.',
   joinBob: 'This is so Future You does not negotiate with the couch.',
   joinLegal: 'Buy-in is {amount}. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. This is not a guaranteed profit.',

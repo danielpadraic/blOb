@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import { BadgeUnlockModal } from '@/components/wallet/BadgeUnlockModal';
 import { SendCoinsSheet } from '@/components/wallet/SendCoinsSheet';
+import { TopUpSheet } from '@/components/wallet/TopUpSheet';
 import { WalletSheet } from '@/components/wallet/WalletSheet';
 import { AppText } from '@/components/ui/AppText';
 import { useWallet } from '@/hooks/useWallet';
@@ -14,6 +15,7 @@ export function WalletHost() {
     <>
       <WalletSheet />
       <SendCoinsSheet />
+      <TopUpSheet />
       <BadgeUnlockModal />
       {sentToast ? (
         <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 96, zIndex: 80 }}>

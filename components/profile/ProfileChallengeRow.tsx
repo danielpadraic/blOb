@@ -1,8 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
-import { BucksTag } from '@/components/currency/BucksTag';
-import { Badge } from '@/components/ui/Badge';
+import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
@@ -10,7 +9,7 @@ import { CHALLENGE_STATUS_LABEL } from '@/lib/constants';
 import type { ProfileChallenge } from '@/hooks/usePublicProfile';
 import { challengeTargetCount, isPointsChallenge } from '@/lib/challenges';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
-import { isBucksChallenge, isSponsoredBucks } from '@/lib/currency';
+import { challengeCardTags } from '@/lib/challengeTags';
 
 export function ProfileChallengeRow({ item }: { item: ProfileChallenge }) {
   const router = useRouter();
@@ -33,20 +32,13 @@ export function ProfileChallengeRow({ item }: { item: ProfileChallenge }) {
         borderColor: THEME.border,
         borderRadius: THEME.radius,
       }}>
-      <View className="flex-row items-center gap-1.5">
+      <View className="flex-row flex-wrap items-center gap-1.5">
         <Glyph
           name={item.participation ? GLYPH.check : GLYPH.flag}
           color={THEME.accent}
           size={13}
         />
-        {isBucksChallenge(item.challenge) ? <BucksTag challenge={item.challenge} compact /> : null}
-        {item.challenge.is_official ? (
-          <Badge
-            label={isSponsoredBucks(item.challenge) ? 'Sponsored' : 'Official'}
-            tone="charcoal"
-            className="px-1.5 py-0.5"
-          />
-        ) : null}
+        <ChallengeTagRow tags={challengeCardTags({ challenge: item.challenge })} />
         <AppText className="text-[11px] font-semibold text-muted">{status}</AppText>
       </View>
       <AppText className="mt-1 text-[14px] font-bold text-charcoal" numberOfLines={1}>
@@ -57,7 +49,7 @@ export function ProfileChallengeRow({ item }: { item: ProfileChallenge }) {
           amount={item.challenge.buy_in_amount}
           currency={item.challenge.currency}
           size={13}
-          freeLabel={isSponsoredBucks(item.challenge) ? 'Free · $' : 'Free'}
+          freeLabel="Free"
           textClassName="text-[11px] font-semibold text-muted"
         />
         {item.participation ? (

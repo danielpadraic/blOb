@@ -113,8 +113,7 @@ export function WalletBar() {
       <AppText className="mx-1.5 text-[12px] font-extrabold text-muted">·</AppText>
       <TourAnchor id="tour-money">
         <View className="flex-row items-center" style={{ minHeight: 28 }}>
-          <CurrencyMark currency="bucks" size={18} accessibilityLabel="$" />
-          <AppText className="ml-1 text-[12px] font-extrabold" style={{ color: '#1B7A4A' }}>
+          <AppText className="ml-1.5 text-[12px] font-extrabold" style={{ color: '#1B7A4A' }}>
             {`$${Number(bucks).toFixed(2)}`}
           </AppText>
         </View>

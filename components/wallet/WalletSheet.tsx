@@ -23,7 +23,7 @@ const EARN_WAYS = [
 export function WalletSheet() {
   const router = useRouter();
   const { profile } = useMyProfile();
-  const { sheetOpen, closeWallet, openSend } = useWallet();
+  const { sheetOpen, closeWallet, openSend, openTopUp } = useWallet();
 
   if (!profile || !sheetOpen) {
     return null;
@@ -76,6 +76,13 @@ export function WalletSheet() {
             </View>
 
             <View className="mt-4 gap-2">
+              <Button
+                title="Add $1.00"
+                onPress={() => {
+                  closeWallet();
+                  openTopUp({ amount: 1 });
+                }}
+              />
               <Button title="Browse challenges" onPress={() => go('/challenges')} />
               <Button
                 title="Send Coins or Bucks"

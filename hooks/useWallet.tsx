@@ -5,6 +5,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { setBadgeUnlockListener } from '@/lib/badgeActivity';
 import type { NewBadge } from '@/lib/badges';
 import type { BadgeDefinition } from '@/lib/types';
+import type { TopUpRequest } from '@/lib/topUp';
 
 export type BadgeUnlock = NewBadge & {
   definition?: BadgeDefinition;
@@ -13,10 +14,13 @@ export type BadgeUnlock = NewBadge & {
 type WalletContextValue = {
   sheetOpen: boolean;
   sendOpen: boolean;
+  topUp: TopUpRequest | null;
   openWallet: () => void;
   closeWallet: () => void;
   openSend: () => void;
   closeSend: () => void;
+  openTopUp: (request: TopUpRequest) => void;
+  closeTopUp: () => void;
   closeAll: () => void;
   sentToast: string | null;
   showSentToast: (message: string) => void;
@@ -31,6 +35,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const catalog = useBadgeCatalog();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [topUp, setTopUp] = useState<TopUpRequest | null>(null);
   const [sentToast, setSentToast] = useState<string | null>(null);
   const [queue, setQueue] = useState<BadgeUnlock[]>([]);
 
@@ -56,18 +61,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const openWallet = useCallback(() => {
     if (profile) {
       setSendOpen(false);
+      setTopUp(null);
       setSheetOpen(true);
     }
   }, [profile]);
 
   const openSend = useCallback(() => {
     setSheetOpen(false);
+    setTopUp(null);
     setSendOpen(true);
+  }, []);
+
+  const openTopUp = useCallback((request: TopUpRequest) => {
+    setSheetOpen(false);
+    setSendOpen(false);
+    setTopUp(request);
   }, []);
 
   const closeAll = useCallback(() => {
     setSheetOpen(false);
     setSendOpen(false);
+    setTopUp(null);
   }, []);
 
   const showSentToast = useCallback((message: string) => {
@@ -86,17 +100,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     () => ({
       sheetOpen,
       sendOpen,
+      topUp,
       openWallet,
       closeWallet: () => setSheetOpen(false),
       openSend,
       closeSend: () => setSendOpen(false),
+      openTopUp,
+      closeTopUp: () => setTopUp(null),
       closeAll,
       sentToast,
       showSentToast,
       unlocks: queue,
       dismissUnlock: () => setQueue((current) => current.slice(1)),
     }),
-    [closeAll, openSend, openWallet, queue, sendOpen, sentToast, showSentToast, sheetOpen],
+    [closeAll, openSend, openTopUp, openWallet, queue, sendOpen, sentToast, showSentToast, sheetOpen, topUp],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

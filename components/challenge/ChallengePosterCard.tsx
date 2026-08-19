@@ -2,14 +2,15 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { BuckUsdAmount, StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { isLiveCompetitorStatus, isPointsChallenge } from '@/lib/challenges';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
+import { challengeCardTags } from '@/lib/challengeTags';
 import { copy } from '@/lib/copy';
-import { isBucksChallenge, isSponsoredBucks } from '@/lib/currency';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
@@ -89,17 +90,14 @@ export function ChallengePosterCard({
 
   const header = (
     <View>
-      <View className="flex-row flex-wrap items-center" style={{ gap: 4 }}>
-        {challenge.is_official ? (
-          <Tag label={isSponsoredBucks(challenge) ? 'Sponsored' : 'Official'} dark />
-        ) : null}
-        {competing ? <Tag label="Joined" mint /> : null}
-        {hosting && !joined ? <Tag label="Hosting" dark /> : null}
-        {invited && !joined && !hosting ? <Tag label="Invited" mint /> : null}
-        {officialJoinable ? null : <Tag label={visibilityLabel(challenge.visibility)} />}
-        {officialJoinable ? null : <Tag label={isBucksChallenge(challenge) ? 'Bucks' : 'Coins'} />}
-        {officialJoinable ? null : <Tag label={points ? 'Points' : 'Consistency'} />}
-      </View>
+      <ChallengeTagRow
+        tags={challengeCardTags({
+          challenge,
+          hosting: hosting && !joined,
+          joined: competing,
+          invited: invited && !joined && !hosting,
+        })}
+      />
       <AppText
         className="mt-2 text-[15px] font-extrabold leading-5 text-charcoal"
         numberOfLines={2}>
@@ -140,7 +138,7 @@ export function ChallengePosterCard({
               amount={challenge.buy_in_amount}
               currency={challenge.currency}
               size={13}
-              freeLabel={isSponsoredBucks(challenge) ? 'Free · $' : 'Free'}
+              freeLabel="Free"
               textClassName="text-[12px] font-semibold text-charcoal"
             />
             {officialLive ? null : (
@@ -191,10 +189,12 @@ export function OfficialFillingStats({
   challenge,
   nowMs,
   showStartLine = true,
+  tone = 'card',
 }: {
   challenge: ChallengeWithStats;
   nowMs: number;
   showStartLine?: boolean;
+  tone?: 'card' | 'hero';
 }) {
   const guarantee = Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
@@ -207,29 +207,42 @@ export function OfficialFillingStats({
       : challenge.status === 'arming'
         ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
         : null;
+  const hero = tone === 'hero';
+  const amountClass = hero
+    ? 'text-[12px] font-extrabold'
+    : 'text-[12px] font-extrabold text-charcoal';
+  const amountColor = hero ? '#fff' : undefined;
+  const labelColor = hero ? 'rgba(255,255,255,0.62)' : undefined;
 
   return (
     <View>
       <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-        <PosterStat label={copy('create.buyIn')} value={<BuckUsdAmount amount={buyIn} />} />
-        <PosterStat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} />} />
-        <PosterStat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} />} />
+        <PosterStat
+          label={copy('create.buyIn')}
+          value={<BuckUsdAmount amount={buyIn} textClassName={amountClass} color={amountColor} />}
+          labelColor={labelColor}
+        />
+        <PosterStat
+          label={copy('board.guarantee')}
+          value={<BuckUsdAmount amount={guarantee} textClassName={amountClass} color={amountColor} />}
+          labelColor={labelColor}
+        />
+        <PosterStat
+          label={copy('board.pot')}
+          value={<BuckUsdAmount amount={pot} textClassName={amountClass} color={amountColor} />}
+          labelColor={labelColor}
+        />
       </View>
       {startLine ? (
-        <AppText className="mt-2 text-[11px] leading-4 text-muted" numberOfLines={2}>
+        <AppText
+          className="mt-2 text-[11px] leading-4"
+          style={{ color: hero ? 'rgba(255,255,255,0.78)' : THEME.textMuted }}
+          numberOfLines={2}>
           {startLine}
         </AppText>
       ) : null}
     </View>
   );
-}
-
-function visibilityLabel(value: string | null | undefined) {
-  const visibility = String(value ?? 'public').toLowerCase();
-  if (visibility === 'private' || visibility === 'invite') {
-    return 'Private';
-  }
-  return 'Public';
 }
 
 function posterStatus({
@@ -252,10 +265,20 @@ function posterStatus({
   return `${remaining} remaining · tap to view`;
 }
 
-function PosterStat({ label, value }: { label: string; value: ReactNode }) {
+function PosterStat({
+  label,
+  value,
+  labelColor,
+}: {
+  label: string;
+  value: ReactNode;
+  labelColor?: string;
+}) {
   return (
     <View style={{ width: '47%' }}>
-      <AppText className="text-[9px] font-semibold uppercase tracking-wide text-muted">
+      <AppText
+        className="text-[9px] font-semibold uppercase tracking-wide"
+        style={{ color: labelColor ?? THEME.textMuted }}>
         {label}
       </AppText>
       {typeof value === 'string' ? (
@@ -265,36 +288,6 @@ function PosterStat({ label, value }: { label: string; value: ReactNode }) {
       ) : (
         <View className="mt-0.5">{value}</View>
       )}
-    </View>
-  );
-}
-
-function Tag({
-  label,
-  dark,
-  mint,
-}: {
-  label: string;
-  dark?: boolean;
-  mint?: boolean;
-}) {
-  return (
-    <View
-      className="self-start rounded-full"
-      style={{
-        backgroundColor: dark ? THEME.primary : mint ? THEME.accentSoft : THEME.surface2,
-        paddingHorizontal: 7,
-        paddingVertical: 3,
-      }}>
-      <AppText
-        className="text-[9px] font-extrabold uppercase"
-        style={{
-          color: dark ? THEME.primaryForeground : mint ? THEME.accent : THEME.textMuted,
-          letterSpacing: 0.4,
-          lineHeight: 11,
-        }}>
-        {label}
-      </AppText>
     </View>
   );
 }

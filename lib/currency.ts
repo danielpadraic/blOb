@@ -35,6 +35,11 @@ export function formatWalletNumber(amount: number | null | undefined): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+/** Cash on challenge cards: $1.00 only. Never “Bucks” or a buck icon. */
+export function formatCash(amount: number | null | undefined): string {
+  return `$${Number(amount ?? 0).toFixed(2)}`;
+}
+
 export function formatWallet(
   amount: number | null | undefined,
   currency?: string | null,

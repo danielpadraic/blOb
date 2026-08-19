@@ -2,31 +2,32 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
+import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
-import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
-import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
-import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
-import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
-import { officialBob } from '@/copy/officialBob';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeaturedOfficialChallenge, useJoinChallenge, useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useWallet } from '@/hooks/useWallet';
 import { useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
+import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { isLiveCompetitorStatus } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
+import { walletBalance } from '@/lib/currency';
+import { bucksJoinCta } from '@/lib/joinCta';
 import { isOfficialJoinable, isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
 import { isClosedForLogs } from '@/lib/settlement';
-import { THEME, themeShadow } from '@/lib/theme';
+import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
 export function FeaturedChallengeHero() {
   const router = useRouter();
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const wallet = useWallet();
   const featured = useFeaturedOfficialChallenge();
   const mine = useMyChallengeProgress();
   const join = useJoinChallenge();
@@ -41,6 +42,12 @@ export function FeaturedChallengeHero() {
   const live = Boolean(challenge && isOfficialSeriesChallenge(challenge) && challenge.status === 'live');
   const todaySubmission = useTodaySubmission(joined && live ? challenge?.id : undefined, challenge);
   const buyIn = Math.max(Number(challenge?.buy_in_amount) || 0, 0);
+  const cta = bucksJoinCta({
+    currency: challenge?.currency,
+    buyIn,
+    wallet: walletBalance(profile, challenge?.currency),
+    hasProfile: Boolean(profile),
+  });
 
   useEffect(() => {
     if (!joinable && !live) {
@@ -89,6 +96,10 @@ export function FeaturedChallengeHero() {
       router.push(BODY_METRICS_HREF);
       return;
     }
+    if (cta.needsTopUp) {
+      wallet.openTopUp({ amount: cta.shortfall, returnChallengeId: card.id });
+      return;
+    }
     setActionError(null);
     setConfirmOpen(true);
   }
@@ -109,7 +120,9 @@ export function FeaturedChallengeHero() {
       : copy('feed.openChallenge')
     : needsBodyMetrics
       ? 'Add body metrics'
-      : 'Join';
+      : cta.needsTopUp
+        ? cta.topUpLabel
+        : cta.joinLabel;
 
   return (
     <View className="items-center">
@@ -117,54 +130,21 @@ export function FeaturedChallengeHero() {
         {copy('feed.featuredChallenge')}
       </AppText>
       <TourAnchor id="tour-official">
-        <View
-          className="mt-2.5 w-full"
-          style={{
-            backgroundColor: THEME.surface,
-            borderColor: THEME.border,
-            borderWidth: 1,
-            borderRadius: THEME.radius,
-            padding: 16,
-            ...themeShadow('card'),
-          }}>
-          <Pressable
-            onPress={openDetail}
-            accessibilityRole="button"
-            accessibilityLabel={card.title}>
-            <StatusPill joined={joined} />
-            <AppText className="mt-2 text-[18px] font-extrabold leading-6 text-charcoal">
-              {card.title}
-            </AppText>
-            <View className="mt-3">
-              <OfficialFillingStats challenge={card} nowMs={nowMs} showStartLine={joinable} />
-            </View>
-            {live && joined ? (
-              <View className="mt-3">
-                <OfficialDayClock challenge={card} now={new Date(nowMs)} variant="card" />
-              </View>
-            ) : null}
-          </Pressable>
-          {card.status === 'filling' ? (
-            <OfficialInviteButton challengeId={card.id} challengeTitle={card.title} />
-          ) : null}
-          {live && !joined ? null : (
-            <HeroCta
-              title={primaryLabel}
-              buyIn={joined || needsBodyMetrics ? null : buyIn}
-              loading={join.isPending}
-              onPress={onPrimary}
-            />
-          )}
+        <View className="mt-2.5 w-full">
+          <ChallengeHeroCard
+            challenge={card}
+            viewerId={user?.id}
+            joined={joined}
+            showNotJoined
+            goalLabel={challengeGoalLabel(card)}
+            nowMs={nowMs}
+            onOpen={openDetail}>
+            {live && !joined ? null : (
+              <HeroCta title={primaryLabel} loading={join.isPending} onPress={onPrimary} />
+            )}
+          </ChallengeHeroCard>
         </View>
       </TourAnchor>
-      <View className="mt-3 w-full">
-        <AppText className="text-center text-[13px] font-semibold leading-5 text-charcoal">
-          {officialBob('cardPromise')}
-        </AppText>
-        <AppText className="mt-1 text-center text-[12px] leading-5 text-muted">
-          {officialBob('cardSplit')}
-        </AppText>
-      </View>
       <JoinConfirmModal
         visible={confirmOpen}
         challenge={card}
@@ -179,68 +159,34 @@ export function FeaturedChallengeHero() {
   );
 }
 
-function StatusPill({ joined }: { joined: boolean }) {
-  return (
-    <View
-      className="self-start rounded-full"
-      style={{
-        backgroundColor: joined ? THEME.accentSoft : THEME.surface2,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-      }}>
-      <AppText
-        className="text-[11px] font-extrabold uppercase"
-        style={{
-          color: joined ? THEME.accent : THEME.textMuted,
-          letterSpacing: 0.4,
-        }}>
-        {joined ? `✓  ${copy('feed.youreIn')}` : copy('feed.notJoined')}
-      </AppText>
-    </View>
-  );
-}
-
 function HeroCta({
   title,
-  buyIn,
   loading,
   onPress,
 }: {
   title: string;
-  buyIn: number | null;
   loading?: boolean;
   onPress: () => void;
 }) {
-  const joinWithAmount = buyIn != null && buyIn > 0;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={joinWithAmount ? `Join $${buyIn.toFixed(2)}` : title}
+      accessibilityLabel={title}
       disabled={loading}
       onPress={onPress}
       style={{
         minHeight: 48,
-        marginTop: 12,
+        marginTop: 4,
         borderRadius: 14,
         backgroundColor: THEME.primary,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 16,
         opacity: loading ? 0.38 : 1,
-        flexDirection: 'row',
-        gap: 6,
       }}>
       <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
         {title}
       </AppText>
-      {joinWithAmount ? (
-        <BuckUsdAmount
-          amount={buyIn}
-          size={16}
-          color={THEME.primaryForeground}
-          textClassName="text-[15px] font-semibold"
-        />
-      ) : null}
     </Pressable>
   );
 }

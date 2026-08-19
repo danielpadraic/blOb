@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
-import { asWalletCurrency, formatWalletNumber } from '@/lib/currency';
+import { asWalletCurrency, formatCash, formatWalletNumber } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 
 const COIN = require('@/assets/currency/blob-coin.png');
@@ -65,6 +65,9 @@ export function StakeAmount({
   if (value <= 0 && !zeroAsNumber) {
     return <AppText className={textClassName}>{freeLabel}</AppText>;
   }
+  if (asWalletCurrency(currency) === 'bucks') {
+    return <AppText className={textClassName}>{formatCash(value)}</AppText>;
+  }
   return (
     <View className="flex-row items-center">
       <CurrencyMark currency={currency} size={size} />
@@ -82,20 +85,16 @@ type BuckUsdAmountProps = {
   color?: string;
 };
 
-/** Buck icon + $0.00. Never prints the word Bucks. */
+/** Cash amount as $0.00. Never prints Bucks and never shows the buck icon. */
 export function BuckUsdAmount({
   amount,
-  size = 14,
   textClassName = 'text-[12px] font-extrabold text-charcoal',
   color,
 }: BuckUsdAmountProps) {
   const value = Number(amount ?? 0);
   return (
-    <View className="flex-row items-center">
-      <CurrencyMark currency="bucks" size={size} accessibilityLabel="$" />
-      <AppText className={`ml-0.5 ${textClassName}`} style={color ? { color } : undefined}>
-        {`$${value.toFixed(2)}`}
-      </AppText>
-    </View>
+    <AppText className={textClassName} style={color ? { color } : undefined}>
+      {formatCash(value)}
+    </AppText>
   );
 }

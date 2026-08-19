@@ -1,8 +1,10 @@
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
+import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
+import { challengeCardTags } from '@/lib/challengeTags';
 import { CHALLENGE_STATUS_LABEL } from '@/lib/constants';
 import type { FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
@@ -49,11 +51,12 @@ export function ChallengeFeedCard({ challenge, joined, won, onPress }: Challenge
       )}
       <View className="min-w-0 flex-1 justify-center px-3 py-2">
         <View className="flex-row flex-wrap items-center gap-1">
-          {challenge.is_official ? (
-            <Tag label="Official" dark />
-          ) : null}
-          {joined ? <Tag label="You’re in" mint /> : null}
-          {won ? <Tag label="Win" mint /> : null}
+          <ChallengeTagRow
+            tags={[
+              ...challengeCardTags({ challenge, joined }),
+              ...(won ? [{ kind: 'live' as const, label: 'Win' }] : []),
+            ]}
+          />
         </View>
         <AppText className="mt-1 text-[14px] font-extrabold leading-4 text-charcoal" numberOfLines={2}>
           {challenge.title}
@@ -70,21 +73,5 @@ export function ChallengeFeedCard({ challenge, joined, won, onPress }: Challenge
         </View>
       </View>
     </Pressable>
-  );
-}
-
-function Tag({ label, dark, mint }: { label: string; dark?: boolean; mint?: boolean }) {
-  return (
-    <View
-      className="rounded-full px-1.5 py-0.5"
-      style={{
-        backgroundColor: dark ? THEME.primary : mint ? THEME.accentSoft : THEME.surface,
-      }}>
-      <AppText
-        className="text-[9px] font-extrabold uppercase"
-        style={{ color: dark ? THEME.primaryForeground : THEME.accent, letterSpacing: 0.3 }}>
-        {label}
-      </AppText>
-    </View>
   );
 }
