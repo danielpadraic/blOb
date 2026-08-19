@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, useWindowDimensions, View, type LayoutRectangle } from 'react-native';
+import { Platform, Pressable, useWindowDimensions, View, type LayoutRectangle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
@@ -64,20 +64,35 @@ export function CoachMarkOverlay({
 
   return (
     <View
-      pointerEvents="box-none"
+      pointerEvents="auto"
       style={{
-        position: 'absolute',
+        position: Platform.OS === 'web' ? 'fixed' : 'absolute',
         top: 0,
         right: 0,
         bottom: 0,
         left: 0,
-        zIndex: 400,
-        elevation: 400,
+        zIndex: 4000,
+        elevation: 4000,
+        ...(Platform.OS === 'web' ? ({ isolation: 'isolate' } as object) : null),
       }}>
       <DimWithHole hole={hole} />
       {hole ? (
         <View
           pointerEvents="auto"
+          style={{
+            position: 'absolute',
+            top: hole.y,
+            left: hole.x,
+            width: hole.width,
+            height: hole.height,
+            borderRadius: holeRadius(hole),
+            backgroundColor: Platform.OS === 'web' ? 'rgba(247, 247, 245, 0.02)' : 'transparent',
+          }}
+        />
+      ) : null}
+      {hole ? (
+        <View
+          pointerEvents="none"
           style={{
             position: 'absolute',
             top: hole.y,
@@ -104,6 +119,8 @@ export function CoachMarkOverlay({
           top: pos.top,
           left: pos.left,
           width: tooltipW,
+          zIndex: 2,
+          elevation: 8,
           backgroundColor: THEME.surface,
           borderRadius: 18,
           borderWidth: 1,

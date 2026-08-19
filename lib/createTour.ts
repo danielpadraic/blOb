@@ -47,14 +47,14 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-type',
     placement: 'below',
     title: 'Type',
-    body: 'What kind of work. Any Exercise is fine.',
+    body: 'What kind of work, and Any Exercise is fine.',
   },
   {
     id: 'simple-start',
     target: 'create-simple-start',
     placement: 'below',
     title: 'Start',
-    body: 'When logging opens.',
+    body: 'Choose the starting date and time of your challenge.',
   },
   {
     id: 'simple-duration',
@@ -89,14 +89,14 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-visibility',
     placement: 'below',
     title: 'Who can join',
-    body: 'Public is listed. Friends stay quieter.',
+    body: 'Share your challenge publicly, with just your friends, or by invite only.',
   },
   {
     id: 'simple-advanced',
     target: 'create-simple-advanced',
     placement: 'above',
     title: 'Advanced',
-    body: 'Caps, misses, judging, and invite-only.',
+    body: 'Craft more detailed challenges in the Advanced creation menu.',
   },
 ];
 
@@ -155,7 +155,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: GOAL,
     title: 'Visibility',
-    body: 'Public, friends, or invite-only.',
+    body: 'Share your challenge publicly, with just your friends, or by invite only.',
   },
   {
     id: 'adv-scoring',
@@ -171,7 +171,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: DURATION,
     title: 'Start',
-    body: 'When logging opens.',
+    body: 'Choose the starting date and time of your challenge.',
   },
   {
     id: 'adv-end',

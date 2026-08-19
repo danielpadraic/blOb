@@ -198,7 +198,7 @@ export function SimpleCreateForm() {
       }}
       onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
       contentPaddingBottom={tour?.createActive ? 220 : undefined}>
-      <View className="gap-5 pt-1">
+      <View className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'}>
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
           <StackBackButton fallback={returnTo === 'feed' ? TABS_HREF : LOBBY_HREF} />
           <AppText className="flex-1 text-[22px] font-extrabold text-charcoal">

@@ -1327,7 +1327,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
 
   const wizardBody = (
     <TourAnchor id="tour-create">
-    <View className="flex-1" style={{ backgroundColor: embedded ? THEME.background : undefined }}>
+    <View
+      className="flex-1"
+      pointerEvents={tour?.createActive && !liveChallengeId ? 'none' : 'auto'}
+      style={{ backgroundColor: embedded ? THEME.background : undefined }}>
         {liveChallengeId ? (
           <View className="flex-1 items-center justify-center px-6">
             <AppText className="text-center text-2xl font-bold text-charcoal">
@@ -1404,7 +1407,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}>
-          <View ref={contentRef} collapsable={false} className="gap-3">
+          <View
+            ref={contentRef}
+            collapsable={false}
+            className="gap-3"
+            pointerEvents={tour?.createActive ? 'none' : 'auto'}>
           {step === STEP_LANE ? (
             <LaneSlide
               selected={laneChosen ? normalizeUserChallengeLane(values.challenge_lane) : null}

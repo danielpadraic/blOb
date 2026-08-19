@@ -2,6 +2,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 
+import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import {
   defaultChallengeStart,
@@ -23,6 +24,7 @@ type DateTimeFieldProps = {
 export function DateTimeField({ label, value, error, minimumDate, onChange }: DateTimeFieldProps) {
   const [mode, setMode] = useState<'date' | 'time' | null>(null);
   const date = parseScheduleDate(value) ?? defaultChallengeStart();
+  const tourLocked = Boolean(useTourOptional()?.createActive);
 
   function commit(next: Date) {
     const resolved = new Date(next);
@@ -57,7 +59,7 @@ export function DateTimeField({ label, value, error, minimumDate, onChange }: Da
 
   if (Platform.OS === 'web') {
     return (
-      <View className="gap-1.5">
+      <View className="gap-1.5" pointerEvents={tourLocked ? 'none' : 'auto'}>
         {label ? <AppText className="text-sm font-semibold text-charcoal">{label}</AppText> : null}
         <View
           className="min-h-[52px] justify-center px-4"
@@ -66,26 +68,33 @@ export function DateTimeField({ label, value, error, minimumDate, onChange }: Da
             borderWidth: 1,
             borderColor: error ? THEME.danger : THEME.border,
             borderRadius: THEME.radiusSm,
+            zIndex: 0,
           }}>
-          <input
-            type="datetime-local"
-            value={toLocalInputValue(value)}
-            min={minimumDate ? toLocalInputValue(minimumDate.toISOString()) : undefined}
-            onChange={(event) => {
-              const iso = fromLocalInputValue(event.target.value);
-              if (iso) {
-                onChange(iso);
-              }
-            }}
-            style={{
-              width: '100%',
-              border: 'none',
-              background: 'transparent',
-              color: THEME.textPrimary,
-              fontSize: 16,
-              outline: 'none',
-            }}
-          />
+          {tourLocked ? (
+            <AppText className="text-[16px] text-charcoal">{formatScheduleDateTime(value)}</AppText>
+          ) : (
+            <input
+              type="datetime-local"
+              value={toLocalInputValue(value)}
+              min={minimumDate ? toLocalInputValue(minimumDate.toISOString()) : undefined}
+              onChange={(event) => {
+                const iso = fromLocalInputValue(event.target.value);
+                if (iso) {
+                  onChange(iso);
+                }
+              }}
+              style={{
+                width: '100%',
+                border: 'none',
+                background: 'transparent',
+                color: THEME.textPrimary,
+                fontSize: 16,
+                outline: 'none',
+                position: 'relative',
+                zIndex: 0,
+              }}
+            />
+          )}
         </View>
         {error ? <AppText className="text-sm text-coral-dark">{error}</AppText> : null}
       </View>
@@ -99,6 +108,7 @@ export function DateTimeField({ label, value, error, minimumDate, onChange }: Da
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={label ? `${label} date` : 'Date and time'}
+          disabled={tourLocked}
           onPress={() => setMode('date')}
           className="min-h-[52px] flex-1 justify-center px-4"
           style={{
@@ -112,7 +122,7 @@ export function DateTimeField({ label, value, error, minimumDate, onChange }: Da
           </AppText>
         </Pressable>
       </View>
-      {mode ? (
+      {mode && !tourLocked ? (
         <DateTimePicker
           value={date}
           mode={mode}
@@ -121,7 +131,7 @@ export function DateTimeField({ label, value, error, minimumDate, onChange }: Da
           onChange={onNativeChange}
         />
       ) : null}
-      {Platform.OS === 'ios' && mode ? (
+      {Platform.OS === 'ios' && mode && !tourLocked ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => setMode(mode === 'date' ? 'time' : null)}
