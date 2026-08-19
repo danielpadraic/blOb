@@ -11,10 +11,12 @@ export const OFFICIAL_DETAILS_LINES = [
   '18+. Void where prohibited. Not medical advice.',
 ] as const;
 
+const BOB_PITCH =
+  'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. The couch will still be there. You do not have to be. Finish the week. Split the pot with everyone else who did. Make friends, support each other, and do it again.';
+
 const OFFICIAL_BOB = {
   loginHeadline: 'A small promise. Then you move.',
-  loginBody:
-    'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. A buy-in is not a fortune. It is a promise with weight. Finish the week. Split the pot with everyone else who did.',
+  loginBody: BOB_PITCH,
   loginCta: 'See this week’s challenge',
   loginSkip: 'Not now',
   cardPromise: OFFICIAL_DETAILS_LINES[0],
@@ -31,7 +33,7 @@ const OFFICIAL_BOB = {
   detailsOut: OFFICIAL_DETAILS_LINES[5],
   detailsRefund: OFFICIAL_DETAILS_LINES[6],
   geoBlocked: 'Sorry, this Challenge isn’t available in your State.',
-  joinBob: 'This is so Future You does not negotiate with the couch.',
+  joinBob: BOB_PITCH,
   joinLegal:
     'Buy-in is {amount}. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. This is not a guaranteed profit.',
   missed:
