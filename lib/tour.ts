@@ -77,7 +77,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-tab-lobby',
     placement: 'above',
     title: 'Lobby',
-    body: 'Challenges you host, join, and Official.',
+    body: 'View challenges hosted by you or others, challenges you have joined, or Official challenges hosted by',
   },
   {
     id: 'tabCreate',

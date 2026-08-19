@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
+import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay';
 import { useTour } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
@@ -85,7 +86,7 @@ export function TourHost({ onFinished }: TourHostProps) {
       index={index}
       total={TOUR_STEPS.length}
       title={step.title}
-      body={step.body}
+      body={step.id === 'tabLobby' ? <LobbyTourBody /> : step.body}
       titleAccessory={
         step.id === 'coins' ? (
           <CurrencyMark currency="coins" size={16} />
@@ -116,5 +117,28 @@ export function TourHost({ onFinished }: TourHostProps) {
         </Pressable>
       }
     />
+  );
+}
+
+function LobbyTourBody() {
+  const logoH = 72 * 0.55;
+  return (
+    <AppText
+      className="mt-2 text-[13px] leading-5 text-muted"
+      accessibilityLabel="View challenges hosted by you or others, challenges you have joined, or Official challenges hosted by blOb.">
+      View challenges hosted by you or others, challenges you have joined, or Official challenges hosted by{' '}
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{
+          width: 72,
+          height: logoH,
+          transform: [{ translateY: Platform.OS === 'ios' ? 3 : 5 }],
+          ...(Platform.OS === 'web' ? ({ display: 'inline-flex' } as object) : null),
+        }}>
+        <BlobMascot variant="logo" size={72} />
+      </View>
+      .
+    </AppText>
   );
 }

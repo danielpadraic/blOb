@@ -18,7 +18,7 @@ type CoachMarkOverlayProps = {
   index: number;
   total: number;
   title: string;
-  body: string;
+  body: ReactNode;
   titleAccessory?: ReactNode;
   nextLabel: string;
   backDisabled?: boolean;
@@ -145,7 +145,11 @@ export function CoachMarkOverlay({
             </View>
           </View>
         </View>
-        <AppText className="mt-2 text-[13px] leading-5 text-muted">{body}</AppText>
+        {typeof body === 'string' ? (
+          <AppText className="mt-2 text-[13px] leading-5 text-muted">{body}</AppText>
+        ) : (
+          body
+        )}
         <View className="mt-3 flex-row" style={{ gap: 8 }}>
           <TourBtn label="Back" muted disabled={backDisabled} onPress={onBack} />
           <TourBtn label={nextLabel} onPress={onNext} />
