@@ -5,9 +5,15 @@ import * as WebBrowser from 'expo-web-browser';
 export type TopUpRequest = {
   amount: number;
   returnChallengeId?: string;
+  returnCreate?: boolean;
 };
 
-export function topUpReturnUrl(challengeId: string): string {
+export function topUpReturnUrl(challengeId?: string, returnCreate?: boolean): string {
+  if (returnCreate || !challengeId) {
+    return Linking.createURL('challenges/create', {
+      queryParams: { funded: '1' },
+    });
+  }
   return Linking.createURL(`challenges/${challengeId}`, {
     queryParams: { funded: '1' },
   });
@@ -15,7 +21,8 @@ export function topUpReturnUrl(challengeId: string): string {
 
 export async function startWebCardTopUp(input: {
   amount: number;
-  challengeId: string;
+  challengeId?: string;
+  returnCreate?: boolean;
   userId: string;
 }): Promise<'success' | 'cancel' | 'unavailable'> {
   const paymentLink = process.env.EXPO_PUBLIC_STRIPE_PAYMENT_LINK?.trim();
@@ -24,7 +31,7 @@ export async function startWebCardTopUp(input: {
   }
   const join = paymentLink.includes('?') ? '&' : '?';
   const url = `${paymentLink}${join}client_reference_id=${encodeURIComponent(input.userId)}`;
-  const returnUrl = topUpReturnUrl(input.challengeId);
+  const returnUrl = topUpReturnUrl(input.challengeId, input.returnCreate);
   if (Platform.OS === 'web') {
     window.location.assign(url);
     return 'success';

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -17,6 +17,7 @@ import { useCreateChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useWalletOptional } from '@/hooks/useWallet';
 import {
   SIMPLE_CUSTOM_PERIODS,
   SIMPLE_DURATION_CHIPS,
@@ -25,9 +26,12 @@ import {
   SIMPLE_TYPES,
   addSimpleProof,
   applyBeforeAfterHrPreset,
+  clearPersistedSimpleDraft,
   customFrequencyCopy,
   defaultSimpleDraft,
   durationDaysOf,
+  persistSimpleDraft,
+  readPersistedSimpleDraft,
   removeSimpleProof,
   requiredCheckinsOf,
   simpleDraftToCreateValues,
@@ -42,7 +46,7 @@ import {
   type SimpleVisibility,
 } from '@/lib/simpleChallenge';
 import { SIMPLE_PROOF_CAP, type ChallengeProofMethod } from '@/lib/challengeProofs';
-import { formatWallet, walletBalance } from '@/lib/currency';
+import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -93,20 +97,43 @@ function SectionLabel({ children }: { children: string }) {
 
 export function SimpleCreateForm() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const params = useLocalSearchParams<{ returnTo?: string; funded?: string }>();
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const funded = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const { user } = useAuth();
-  const { profile } = useMyProfile();
+  const { profile, refetch, isFetched } = useMyProfile();
+  const walletSheet = useWalletOptional();
   const create = useCreateChallenge();
-  const [draft, setDraft] = useState<SimpleChallengeDraft>(() => defaultSimpleDraft());
+  const [draft, setDraft] = useState<SimpleChallengeDraft>(() => {
+    const stored = readPersistedSimpleDraft();
+    if (!stored) {
+      return defaultSimpleDraft();
+    }
+    const base = defaultSimpleDraft();
+    const start = new Date(stored.starts_at);
+    const starts_at =
+      Number.isNaN(start.getTime()) || start.getTime() <= Date.now() ? base.starts_at : stored.starts_at;
+    return { ...base, ...stored, starts_at };
+  });
   const [error, setError] = useState<string | null>(null);
   useDismissTo(returnTo === 'feed' ? TABS_HREF : LOBBY_HREF);
   useCreateChallengeTour('simple');
 
   function patch(partial: Partial<SimpleChallengeDraft>) {
-    setDraft((current) => ({ ...current, ...partial }));
+    setDraft((current) => {
+      const next = { ...current, ...partial };
+      persistSimpleDraft(next);
+      return next;
+    });
     setError(null);
   }
+
+  useEffect(() => {
+    if (funded !== '1' && draft.currency !== 'bucks') {
+      return;
+    }
+    void refetch();
+  }, [draft.currency, funded, refetch]);
 
   const days = durationDaysOf(draft);
   const checkins = requiredCheckinsOf(draft);
@@ -114,8 +141,13 @@ export function SimpleCreateForm() {
   const hostCost = draft.currency === 'bucks' ? Math.max(draft.host_budget, 0) : 0;
   const creatorBuyIn = draft.currency === 'coins' ? Math.max(draft.buy_in, 0) : 0;
   const needed = hostCost + creatorBuyIn;
+  const poolShortfall =
+    isFetched && draft.currency === 'bucks' && hostCost > 0 ? Math.max(hostCost - wallet, 0) : 0;
 
   const costHint = useMemo(() => {
+    if (draft.currency === 'bucks') {
+      return null;
+    }
     if (needed <= 0) {
       return null;
     }
@@ -131,12 +163,17 @@ export function SimpleCreateForm() {
       setError(issue);
       return;
     }
+    if (poolShortfall > 0) {
+      setError(`You need ${formatCash(poolShortfall)} more to fund this pool.`);
+      return;
+    }
     if (!user) {
       setError(copy('create.signIn'));
       return;
     }
     try {
       const challenge = await create.mutateAsync(simpleDraftToCreateValues(draft));
+      clearPersistedSimpleDraft();
       router.replace(`/challenges/${challenge.id}`);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -175,17 +212,34 @@ export function SimpleCreateForm() {
           {draft.currency === 'bucks' ? (
             <TourAnchor id="create-simple-buyin">
             <View className="gap-2">
-              <AppText className="text-sm text-muted">{copy('create.youFundPrize')}</AppText>
               <View className="flex-row items-center justify-between">
-                <AppText className="text-sm font-semibold text-charcoal">{copy('create.hostPrize')}</AppText>
+                <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
+                  {copy('create.totalPrizePool')}
+                </AppText>
                 <Stepper
-                  accessibilityLabel={copy('create.hostPrize')}
+                  accessibilityLabel={copy('create.totalPrizePool')}
                   value={draft.host_budget}
-                  min={1}
+                  min={0}
                   max={10_000}
+                  formatValue={formatCash}
                   onChange={(host_budget) => patch({ host_budget })}
                 />
               </View>
+              <AppText className="text-[13px] leading-5 text-muted">{copy('create.realMoneyFund')}</AppText>
+              {poolShortfall > 0 ? (
+                <View className="gap-2">
+                  <AppText className="text-sm text-coral-dark">
+                    You need {formatCash(poolShortfall)} more to fund this pool.
+                  </AppText>
+                  <Button
+                    title={`Add ${formatCash(poolShortfall)}`}
+                    onPress={() => {
+                      persistSimpleDraft(draft);
+                      walletSheet?.openTopUp({ amount: poolShortfall, returnCreate: true });
+                    }}
+                  />
+                </View>
+              ) : null}
             </View>
             </TourAnchor>
           ) : (
@@ -499,7 +553,12 @@ export function SimpleCreateForm() {
           <AppText className="text-sm text-coral-dark">{costHint}</AppText>
         ) : null}
 
-        <Button title={copy('create.submit')} loading={create.isPending} onPress={() => void onCreate()} />
+        <Button
+          title={copy('create.submit')}
+          loading={create.isPending}
+          disabled={poolShortfall > 0}
+          onPress={() => void onCreate()}
+        />
         <TourAnchor id="create-simple-advanced">
         <Pressable
           accessibilityRole="button"

@@ -155,6 +155,8 @@ const STRINGS = {
   'create.bucks': 'Bucks',
   'create.youFundPrize': 'You fund the prize.',
   'create.hostPrize': 'Host prize',
+  'create.totalPrizePool': 'Total prize pool',
+  'create.realMoneyFund': 'For challenges with real money, you fund this amount.',
   'create.buyIn': 'Buy-in',
   'create.type': 'Type',
   'create.titleLabel': 'Title',

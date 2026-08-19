@@ -123,6 +123,52 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
   };
 }
 
+const SIMPLE_DRAFT_KEY = 'blob.simpleCreateDraft';
+const SIMPLE_DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
+let simpleDraftMemory: { draft: SimpleChallengeDraft; savedAt: number } | null = null;
+
+function isFreshSimpleDraft(savedAt: number): boolean {
+  return Date.now() - savedAt < SIMPLE_DRAFT_TTL_MS;
+}
+
+export function persistSimpleDraft(draft: SimpleChallengeDraft) {
+  const payload = { draft, savedAt: Date.now() };
+  simpleDraftMemory = payload;
+  try {
+    sessionStorage.setItem(SIMPLE_DRAFT_KEY, JSON.stringify(payload));
+  } catch {
+    // Native / private mode — memory is enough for this session.
+  }
+}
+
+export function readPersistedSimpleDraft(): SimpleChallengeDraft | null {
+  try {
+    const raw = sessionStorage.getItem(SIMPLE_DRAFT_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { draft?: SimpleChallengeDraft; savedAt?: number };
+      if (parsed?.draft && typeof parsed.savedAt === 'number' && isFreshSimpleDraft(parsed.savedAt)) {
+        simpleDraftMemory = { draft: parsed.draft, savedAt: parsed.savedAt };
+        return parsed.draft;
+      }
+    }
+  } catch {
+    // Ignore unavailable storage.
+  }
+  if (simpleDraftMemory && isFreshSimpleDraft(simpleDraftMemory.savedAt)) {
+    return simpleDraftMemory.draft;
+  }
+  return null;
+}
+
+export function clearPersistedSimpleDraft() {
+  simpleDraftMemory = null;
+  try {
+    sessionStorage.removeItem(SIMPLE_DRAFT_KEY);
+  } catch {
+    // Ignore unavailable storage.
+  }
+}
+
 export function durationDaysOf(draft: SimpleChallengeDraft): number {
   if (draft.duration_preset === 'custom') {
     return Math.max(Math.floor(draft.duration_days) || 1, 1);
@@ -282,9 +328,6 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
 }
 
 export function validateSimpleDraft(draft: SimpleChallengeDraft): string | null {
-  if (draft.currency === 'bucks' && Math.floor(draft.host_budget) < 1) {
-    return copy('create.setHostPrize');
-  }
   if (!draft.title.trim() || draft.title.trim().length < 3) {
     return copy('create.needTitle');
   }

@@ -47,7 +47,8 @@ export function TopUpSheet() {
     try {
       const result = await startWebCardTopUp({
         amount: topUp.amount,
-        challengeId: topUp.returnChallengeId ?? '',
+        challengeId: topUp.returnChallengeId,
+        returnCreate: topUp.returnCreate,
         userId: user.id,
       });
       if (result === 'cancel') {
@@ -60,6 +61,9 @@ export function TopUpSheet() {
       await refetch();
       const challengeId = topUp.returnChallengeId;
       closeTopUp();
+      if (topUp.returnCreate) {
+        return;
+      }
       if (challengeId) {
         router.replace(challengeDetailHref(challengeId, 'feed'));
       }
@@ -83,7 +87,9 @@ export function TopUpSheet() {
           <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
           <AppText className="mt-3 text-lg font-bold text-charcoal">Add {amountLabel}</AppText>
           <AppText className="mt-1 text-center text-[13px] leading-5 text-muted">
-            Pay with card. This adds {amountLabel} to your wallet, then brings you back to the challenge.
+            {topUp.returnCreate
+              ? `Pay with card. This adds ${amountLabel} to your wallet, then brings you back to Create.`
+              : `Pay with card. This adds ${amountLabel} to your wallet, then brings you back to the challenge.`}
           </AppText>
         </View>
         <View className="gap-3">

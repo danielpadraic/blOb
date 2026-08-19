@@ -36,7 +36,7 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-buyin',
     placement: 'below',
     title: 'Buy-in',
-    body: 'What each competitor pays to enter. 0 is free.',
+    body: 'Coins: what each competitor pays. $: Total prize pool you fund, shown as $1.00.',
   },
   {
     id: 'simple-type',

@@ -10,6 +10,7 @@ type StepperProps = {
   max?: number;
   step?: number;
   accessibilityLabel?: string;
+  formatValue?: (value: number) => string;
 };
 
 export function Stepper({
@@ -19,6 +20,7 @@ export function Stepper({
   max = 10_000,
   step = 1,
   accessibilityLabel,
+  formatValue,
 }: StepperProps) {
   const safe = Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
 
@@ -48,8 +50,8 @@ export function Stepper({
         style={{ backgroundColor: THEME.background }}>
         <AppText className="text-[18px] font-bold text-charcoal">−</AppText>
       </Pressable>
-      <AppText className="min-w-[56px] text-center text-[16px] font-extrabold text-charcoal">
-        {safe}
+      <AppText className="min-w-[72px] text-center text-[16px] font-extrabold text-charcoal">
+        {formatValue ? formatValue(safe) : String(safe)}
       </AppText>
       <Pressable
         accessibilityRole="button"
