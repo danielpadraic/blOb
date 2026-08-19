@@ -75,6 +75,8 @@ function asResult(
     status: (row.status as WorkoutSubmission['status']) ?? 'pending_review',
     task_ids: Array.isArray(row.task_ids) ? row.task_ids.map(String) : [],
     proof_parts: (row.proof_parts as Record<string, ChallengeProofPart> | null) ?? parts,
+    proof_kind: (row.proof_kind as WorkoutSubmission['proof_kind']) ?? null,
+    health_workout_id: (row.health_workout_id as string | null) ?? null,
     created_at: String(row.created_at ?? new Date().toISOString()),
     days_completed: daysCompleted,
     media_urls: mediaUrls,

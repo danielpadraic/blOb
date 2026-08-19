@@ -33,7 +33,7 @@ export function WalletBalances({ profile }: WalletBalancesProps) {
           <AppText className="ml-1.5 text-[11px] font-semibold text-muted">Coins</AppText>
         </View>
         <AppText className="text-[15px] font-extrabold text-charcoal">
-          {official ? copy('official.badge') : formatCoins(coins).replace(' Coins', '')}
+          {official ? copy('official.infinity') : formatCoins(coins).replace(' Coins', '')}
         </AppText>
       </View>
 

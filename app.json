@@ -12,12 +12,20 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.blob.mobile",
       "usesAppleSignIn": true,
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.background-delivery": true
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Take a check-in photo or Story for your Challenge.",
         "NSMicrophoneUsageDescription": "Record a short Story or Reel with sound for your Challenge.",
         "NSPhotoLibraryUsageDescription": "Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins.",
         "NSUserNotificationsUsageDescription": "Alerts for friend requests, Challenge invites, and check-ins.",
-        "UIBackgroundModes": ["remote-notification"]
+        "NSHealthShareUsageDescription": "blOb reads workouts and heart rate so you can use them as challenge proof.",
+        "NSHealthUpdateUsageDescription": "blOb starts your challenge workout on Apple Watch.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -33,7 +41,11 @@
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
         "READ_MEDIA_VISUAL_USER_SELECTED",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_DISTANCE"
       ]
     },
     "web": {
@@ -81,6 +93,26 @@
           "color": "#2C9B89",
           "defaultChannel": "alerts",
           "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "blOb reads workouts and heart rate so you can use them as challenge proof.",
+          "healthUpdatePermission": "blOb starts your challenge workout on Apple Watch.",
+          "isClinicalDataEnabled": false
+        }
+      ],
+      "react-native-health-connect",
+      "./plugins/withHealthConnectAndroid",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
+          }
         }
       ]
     ],

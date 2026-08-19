@@ -10,7 +10,9 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
-import { useSubmitWorkout, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
+import { useAuth } from '@/hooks/useAuth';
+import { useSubmitHealthWorkout, useSubmitWorkout, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
+import type { HealthWorkout } from '@/services/health/types';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   captureTypeForMethod,
@@ -69,8 +71,10 @@ export default function SubmitWorkoutScreen() {
   const router = useRouter();
   const challengeQuery = useChallenge(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
+  const { user } = useAuth();
   const today = useTodaySubmission(id);
   const submit = useSubmitWorkout();
+  const submitHealth = useSubmitHealthWorkout();
 
   const [drafts, setDrafts] = useState<Record<string, SlotDraft>>({});
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +85,7 @@ export default function SubmitWorkoutScreen() {
   const proofSteps = requiredChallengeProofs(challenge);
   const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
-  const busy = submit.isPending;
+  const busy = submit.isPending || submitHealth.isPending;
   const proofCountLabel =
     proofSteps.length === 1 ? '1 proof' : `${proofSteps.length} proofs`;
 
@@ -150,6 +154,19 @@ export default function SubmitWorkoutScreen() {
     } catch (caught) {
       setError(getErrorMessage(caught));
     }
+  }
+
+  async function onAttachHealth(workout: HealthWorkout) {
+    if (!id || busy) {
+      return;
+    }
+    if (today.data) {
+      router.replace(`/challenges/${id}?logged=1`);
+      return;
+    }
+    setError(null);
+    await submitHealth.mutateAsync({ challengeId: id, workout });
+    router.replace(`/challenges/${id}?logged=1`);
   }
 
   if (challengeQuery.isLoading || participationLoading || today.isLoading) {
@@ -244,6 +261,17 @@ export default function SubmitWorkoutScreen() {
           fill
           autoOpen
           locked={busy}
+          health={{
+            challengeId: id ?? challenge.id,
+            challengeTitle: challenge.title,
+            minMinutes: challenge.min_minutes,
+            frequency: challenge.frequency,
+            startsAt: challenge.starts_at,
+            userId: user?.id,
+            attaching: submitHealth.isPending,
+            challenge,
+            onAttach: onAttachHealth,
+          }}
           onPicked={(uri, mimeType) => {
             onMedia(activeProof.id, uri, mimeType);
             setCaptureId(null);
@@ -292,6 +320,17 @@ export default function SubmitWorkoutScreen() {
                   uri={drafts[proof.id]?.uri}
                   compact
                   locked={busy}
+                  health={{
+                    challengeId: id ?? challenge.id,
+                    challengeTitle: challenge.title,
+                    minMinutes: challenge.min_minutes,
+                    frequency: challenge.frequency,
+                    startsAt: challenge.starts_at,
+                    userId: user?.id,
+                    attaching: submitHealth.isPending,
+                    challenge,
+                    onAttach: onAttachHealth,
+                  }}
                   onRequestOpen={() => setCaptureId(proof.id)}
                   onPicked={(uri, mimeType) => onMedia(proof.id, uri, mimeType)}
                 />

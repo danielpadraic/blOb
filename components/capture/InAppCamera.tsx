@@ -5,6 +5,7 @@ import { CameraView, type CameraType } from 'expo-camera';
 import { lastCameraFacing, rememberCameraFacing } from '@/components/capture/cameraFacing';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { copy } from '@/lib/copy';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
 import { openAppSettings } from '@/lib/mediaPermissions';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
@@ -21,6 +22,8 @@ type InAppCameraProps = {
   onOpenGallery: () => void;
   onCancel: () => void;
   onUnavailable: () => void;
+  onUseWorkout?: () => void;
+  onStartWatch?: () => void;
 };
 
 export function InAppCamera({
@@ -34,6 +37,8 @@ export function InAppCamera({
   onOpenGallery,
   onCancel,
   onUnavailable,
+  onUseWorkout,
+  onStartWatch,
 }: InAppCameraProps) {
   const cameraRef = useRef<CameraView>(null);
   const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing());
@@ -215,7 +220,46 @@ export function InAppCamera({
         ) : (
           <View />
         )}
-        <View style={{ width: 64 }} />
+        {onUseWorkout || onStartWatch ? (
+          <View className="items-end" style={{ gap: 8, maxWidth: 168 }}>
+            {onUseWorkout ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy('health.chip')}
+                onPress={onUseWorkout}
+                className="items-center justify-center rounded-full px-3"
+                style={{
+                  minHeight: 44,
+                  backgroundColor: 'rgba(16,19,18,0.72)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.35)',
+                }}>
+                <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
+                  {copy('health.chip')}
+                </AppText>
+              </Pressable>
+            ) : null}
+            {onStartWatch ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy('health.startWatch')}
+                onPress={onStartWatch}
+                className="items-center justify-center rounded-full px-3"
+                style={{
+                  minHeight: 44,
+                  backgroundColor: 'rgba(16,19,18,0.72)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.35)',
+                }}>
+                <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
+                  {copy('health.startWatch')}
+                </AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <View style={{ width: 64 }} />
+        )}
       </View>
 
       <View

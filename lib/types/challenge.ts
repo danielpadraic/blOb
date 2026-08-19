@@ -35,9 +35,11 @@ export type WalletLedgerEntryType =
   | 'join_escrow'
   | 'creator_fund_escrow'
   | 'refund_pre_start'
+  | 'challenge_cancel_refund'
   | 'distribute_win'
   | 'eliminate_forfeit'
-  | 'adjustment';
+  | 'adjustment'
+  | 'official_grant';
 
 export type PublishChallengePayload = {
   title?: string;

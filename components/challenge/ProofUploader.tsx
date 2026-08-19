@@ -5,8 +5,10 @@ import { Platform, Pressable, View } from 'react-native';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
 import { captureKindForProof } from '@/components/capture/types';
+import { HealthWorkoutSheet } from '@/components/challenge/HealthWorkoutSheet';
 import { AppText } from '@/components/ui/AppText';
 import { proofMeta } from '@/lib/constants';
+import { copy } from '@/lib/copy';
 import {
   cameraIsAvailable,
   ensureCapturePermissions,
@@ -15,6 +17,9 @@ import {
 } from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
 import type { ProofType } from '@/lib/types';
+import { useStartOnWatch } from '@/hooks/useStartOnWatch';
+import { getHealthProvider, type HealthWorkout } from '@/services/health';
+import type { Challenge } from '@/lib/types';
 
 type ProofUploaderProps = {
   type: ProofType;
@@ -23,6 +28,31 @@ type ProofUploaderProps = {
   compact?: boolean;
   autoOpen?: boolean;
   fill?: boolean;
+  health?: {
+    challengeId: string;
+    challengeTitle: string;
+    minMinutes?: number | null;
+    frequency?: string | null;
+    startsAt?: string | null;
+    userId?: string;
+    attaching?: boolean;
+    challenge?: Pick<
+      Challenge,
+      | 'id'
+      | 'title'
+      | 'task'
+      | 'description'
+      | 'rules'
+      | 'min_minutes'
+      | 'frequency'
+      | 'proofs'
+      | 'proof_type'
+      | 'proof_requirements'
+      | 'challenge_type'
+      | 'tasks'
+    >;
+    onAttach: (workout: HealthWorkout) => Promise<void>;
+  };
   onPicked: (uri: string, mimeType?: string | null) => void;
   onCancel?: () => void;
   onRequestOpen?: () => void;
@@ -35,6 +65,7 @@ export function ProofUploader({
   compact = false,
   autoOpen = false,
   fill = false,
+  health,
   onPicked,
   onCancel,
   onRequestOpen,
@@ -47,6 +78,20 @@ export function ProofUploader({
   const [blockedReason, setBlockedReason] = useState<string | undefined>();
   const [webFallback, setWebFallback] = useState(false);
   const [libraryDenied, setLibraryDenied] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const healthChip = Boolean(health && getHealthProvider()?.isAvailable());
+  const watch = useStartOnWatch(
+    health?.challenge ??
+      (health
+        ? {
+            id: health.challengeId,
+            title: health.challengeTitle,
+            min_minutes: health.minMinutes,
+            frequency: health.frequency,
+          }
+        : null),
+  );
 
   useEffect(() => {
     if (autoOpen && !uri && !locked) {
@@ -129,7 +174,66 @@ export function ProofUploader({
           onOpenGallery={() => void openLibrary()}
           onCancel={closeCamera}
           onUnavailable={() => setWebFallback(true)}
+          onUseWorkout={healthChip ? () => setHealthOpen(true) : undefined}
+          onStartWatch={
+            watch.visible
+              ? () => {
+                  void watch.start().then((result) => {
+                    if (result === 'ok') {
+                      setToast(copy('health.startedWatch'));
+                    } else if (result === 'denied' || result === 'failed') {
+                      setToast(copy('health.startWatchFail'));
+                    }
+                    if (result !== 'cancelled') {
+                      setTimeout(
+                        () =>
+                          setToast((current) =>
+                            current === copy('health.startedWatch') ||
+                            current === copy('health.startWatchFail')
+                              ? null
+                              : current,
+                          ),
+                        2200,
+                      );
+                    }
+                  });
+                }
+              : undefined
+          }
         />
+        {health && healthOpen ? (
+          <HealthWorkoutSheet
+            visible
+            challengeId={health.challengeId}
+            challengeTitle={health.challengeTitle}
+            minMinutes={health.minMinutes}
+            frequency={health.frequency}
+            startsAt={health.startsAt}
+            userId={health.userId}
+            attaching={health.attaching}
+            onClose={() => setHealthOpen(false)}
+            onDenied={() => {
+              setHealthOpen(false);
+              setToast(copy('health.permissionDenied'));
+              setTimeout(() => setToast((current) => (current === copy('health.permissionDenied') ? null : current)), 2200);
+            }}
+            onAttach={health.onAttach}
+          />
+        ) : null}
+        {toast ? (
+          <View
+            pointerEvents="none"
+            className="absolute left-4 right-4 items-center"
+            style={{ bottom: fill ? 108 : 28 }}>
+            <View
+              className="px-4 py-2.5"
+              style={{ backgroundColor: 'rgba(16,19,18,0.88)', borderRadius: 16 }}>
+              <AppText className="text-[13px] font-semibold" style={{ color: '#fff' }}>
+                {toast}
+              </AppText>
+            </View>
+          </View>
+        ) : null}
         {libraryDenied ? (
           <View
             className="absolute left-4 right-4 flex-row items-center justify-between rounded-2xl px-3 py-2"

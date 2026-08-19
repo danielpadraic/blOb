@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
+import { logHealthWorkout } from '@/lib/challenges/logHealthWorkout';
 import { logWorkout } from '@/lib/challenges/logWorkout';
+import { upsertHealthWorkout, workoutNotes } from '@/lib/health/remote';
+import { getHealthProvider } from '@/services/health';
+import type { HealthWorkout } from '@/services/health/types';
+import { copy } from '@/lib/copy';
 import {
   logHasEveryProof,
   parseProofParts,
@@ -24,7 +29,7 @@ export type WorkoutSubmissionView = WorkoutSubmission & {
 };
 
 const SUBMISSION_COLUMNS =
-  'id, challenge_id, user_id, submission_date, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, status, created_at, proof_parts';
+  'id, challenge_id, user_id, submission_date, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, status, created_at, proof_parts, proof_kind, health_workout_id';
 
 function submissionQueryKey(challengeId: string | undefined, userId: string | undefined, date: string) {
   return ['workout-submission', challengeId, userId, date] as const;
@@ -54,6 +59,8 @@ function asSubmission(row: Record<string, unknown>): WorkoutSubmission {
     status: (row.status as WorkoutSubmission['status']) ?? 'pending_review',
     task_ids: Array.isArray(row.task_ids) ? row.task_ids.map(String) : [],
     proof_parts: parseProofParts(row.proof_parts),
+    proof_kind: (row.proof_kind as WorkoutSubmission['proof_kind']) ?? null,
+    health_workout_id: (row.health_workout_id as string | null) ?? null,
     created_at: String(row.created_at ?? new Date().toISOString()),
   };
 }
@@ -205,6 +212,93 @@ export function useSubmitWorkout() {
         ...(await withDisplayUrls(logged)),
         days_completed: logged.days_completed,
       };
+    },
+    onSuccess: (data, input) => {
+      queryClient.setQueryData(submissionQueryKey(input.challengeId, user?.id, date), data);
+      if (typeof data.days_completed === 'number' && user) {
+        queryClient.setQueryData<ChallengeParticipant>(
+          ['my-participation', input.challengeId, user.id],
+          (current) =>
+            current
+              ? { ...current, days_completed: data.days_completed ?? current.days_completed }
+              : current,
+        );
+        queryClient.setQueryData<number>(
+          ['logged-workout-days', input.challengeId, user.id],
+          data.days_completed,
+        );
+        queryClient.setQueryData<ProgressRow[]>(['my-challenge-progress', user.id], (current) =>
+          (current ?? []).map((row) =>
+            row.challenge_id === input.challengeId
+              ? { ...row, days_completed: data.days_completed ?? row.days_completed }
+              : row,
+          ),
+        );
+      }
+      void queryClient.invalidateQueries({ queryKey: ['feed', input.challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['feed', 'global'] });
+      void reportBadgeActivity();
+    },
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: submissionQueryKey(input.challengeId, user?.id, date),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['challenge-participants', input.challengeId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['my-participation', input.challengeId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['logged-workout-days', input.challengeId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['challenge-completions', input.challengeId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge', input.challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+      void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
+    },
+  });
+}
+
+type SubmitHealthWorkoutInput = {
+  challengeId: string;
+  workout: HealthWorkout;
+};
+
+export function useSubmitHealthWorkout() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const date = utcDateStamp();
+
+  return useMutation({
+    mutationFn: async (input: SubmitHealthWorkoutInput): Promise<WorkoutSubmissionView> => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      try {
+        const provider = getHealthProvider();
+        const enriched = provider?.enrichHeartRate
+          ? await provider.enrichHeartRate(input.workout)
+          : input.workout;
+        const healthWorkoutId = await upsertHealthWorkout(user.id, enriched);
+        const logged = await logHealthWorkout({
+          challengeId: input.challengeId,
+          healthWorkoutId,
+          notes: workoutNotes(enriched),
+        });
+        return {
+          ...(await withDisplayUrls(logged)),
+          days_completed: logged.days_completed,
+        };
+      } catch (error) {
+        if (error instanceof Error && error.message === 'health_schema_missing') {
+          throw new Error(copy('health.attachFailed'));
+        }
+        throw error;
+      }
     },
     onSuccess: (data, input) => {
       queryClient.setQueryData(submissionQueryKey(input.challengeId, user?.id, date), data);

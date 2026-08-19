@@ -314,6 +314,8 @@ export interface Challenge {
   payout_mode?: PayoutMode | string | null;
   timezone?: string | null;
   start_rule?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -377,6 +379,8 @@ export interface ChallengeSettlementView {
   payouts: ChallengePayoutWithProfile[];
 }
 
+export type WorkoutProofKind = 'camera' | 'health_workout' | string;
+
 export interface WorkoutSubmission {
   id: string;
   challenge_id: string;
@@ -389,6 +393,51 @@ export interface WorkoutSubmission {
   status: SubmissionStatus;
   task_ids?: string[];
   proof_parts?: Record<string, ChallengeProofPart> | null;
+  proof_kind?: WorkoutProofKind | null;
+  health_workout_id?: string | null;
+  created_at: string;
+}
+
+export interface HealthConnection {
+  id: string;
+  user_id: string;
+  provider: 'apple_health' | 'health_connect' | string;
+  status: 'connected' | 'disconnected' | string;
+  last_synced_at: string | null;
+  hk_workout_anchor?: string | null;
+  last_error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HealthWorkoutRecord {
+  id: string;
+  user_id: string;
+  provider: 'apple_health' | 'health_connect' | string;
+  provider_workout_id: string;
+  activity_type: string;
+  activity_label: string;
+  started_at: string;
+  ended_at: string;
+  duration_sec: number;
+  calories_kcal: number | null;
+  distance_m: number | null;
+  hr_avg: number | null;
+  hr_max: number | null;
+  source_bundle: string | null;
+  confidence: string;
+  raw_summary: Record<string, unknown>;
+  dismissed_at?: string | null;
+  created_at: string;
+}
+
+export interface HealthWorkoutStart {
+  id: string;
+  user_id: string;
+  challenge_id: string;
+  started_at: string;
+  activity_type: string | null;
+  goal_seconds: number | null;
   created_at: string;
 }
 
@@ -788,6 +837,33 @@ export type Database = {
             'id'
           >,
           Relationship<'workout_submissions_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<
+            'workout_submissions_health_workout_id_fkey',
+            'health_workout_id',
+            'health_workouts',
+            'id'
+          >,
+        ]
+      >;
+      health_connections: TableDef<
+        HealthConnection,
+        Partial<HealthConnection>,
+        Partial<HealthConnection>,
+        [Relationship<'health_connections_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      health_workouts: TableDef<
+        HealthWorkoutRecord,
+        Partial<HealthWorkoutRecord>,
+        Partial<HealthWorkoutRecord>,
+        [Relationship<'health_workouts_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      health_workout_starts: TableDef<
+        HealthWorkoutStart,
+        Partial<HealthWorkoutStart>,
+        Partial<HealthWorkoutStart>,
+        [
+          Relationship<'health_workout_starts_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'health_workout_starts_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
         ]
       >;
       follows: TableDef<
@@ -1118,6 +1194,19 @@ export type Database = {
           p_proof_parts?: unknown;
         };
         Returns: WorkoutSubmission & { days_completed: number };
+      };
+      log_health_workout: {
+        Args: {
+          p_challenge_id: string;
+          p_health_workout_id: string;
+          p_submission_date?: string;
+          p_notes?: string | null;
+        };
+        Returns: WorkoutSubmission & { days_completed: number };
+      };
+      cancel_challenge: {
+        Args: { p_challenge_id: string };
+        Returns: { ok: boolean };
       };
       mark_challenge_judging: {
         Args: { p_challenge_id: string };

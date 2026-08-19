@@ -151,6 +151,9 @@ function humanize(raw: string): string {
   if (message.includes('invalid recipient') || message.includes('isn’t on the map') || message.includes('isnt on the map')) {
     return 'That person isn’t a valid recipient.';
   }
+  if (message.includes('forbidden')) {
+    return 'You can’t send to that person.';
+  }
   if (message.includes('insufficient bucks')) {
     return 'Insufficient Bucks';
   }
@@ -274,10 +277,17 @@ function humanize(raw: string): string {
     return 'Add all three proofs to log today.';
   }
   if (
-    (message.includes('log_workout') || message.includes('mark_challenge_judging')) &&
+    (message.includes('log_workout') ||
+      message.includes('log_health_workout') ||
+      message.includes('mark_challenge_judging')) &&
     (message.includes('does not exist') || message.includes('could not find') || message.includes('404'))
   ) {
-    return 'Couldn’t reach the log service. Try again.';
+    return message.includes('log_health_workout')
+      ? copy('health.attachFailed')
+      : 'Couldn’t reach the log service. Try again.';
+  }
+  if (message.includes('health_schema_missing')) {
+    return copy('health.attachFailed');
   }
   if (message.includes('couldn’t publish the photos') || message.includes('could not publish the photos')) {
     return 'Your workout is logged, but we couldn’t attach the photos to the post.';
@@ -409,7 +419,16 @@ function humanize(raw: string): string {
   ) {
     return copy('error.notEnoughPeople');
   }
-  if (message.includes('cancel')) {
+  if (message.includes('already_cancelled') || message.includes('already cancelled')) {
+    return 'This challenge was already cancelled.';
+  }
+  if (message.includes('cancel_challenge') || message.includes('cannot cancel')) {
+    return 'You can’t cancel this challenge.';
+  }
+  if (message.includes('sign-in was cancelled') || message.includes('auth cancelled')) {
+    return 'Sign-in was cancelled.';
+  }
+  if (message.includes('cancel') && (message.includes('sign') || message.includes('oauth') || message.includes('auth'))) {
     return 'Sign-in was cancelled.';
   }
   if (message.includes('permission') || message.includes('denied')) {

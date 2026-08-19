@@ -537,6 +537,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     payout_mode: (row.payout_mode as string | null) ?? null,
     timezone: (row.timezone as string | null) ?? null,
     start_rule: (row.start_rule as string | null) ?? null,
+    cancelled_at: row.cancelled_at ? String(row.cancelled_at) : null,
+    cancelled_by: (row.cancelled_by as string | null) ?? null,
     created_at: String(row.created_at ?? now),
     updated_at: String(row.updated_at ?? now),
   };

@@ -121,7 +121,12 @@ export function isClosedForLogs(challenge: {
   is_unlimited?: boolean | null;
   eliminated?: boolean | null;
 }): boolean {
-  if (challenge.status === 'judging' || challenge.status === 'settled') {
+  if (
+    challenge.status === 'judging' ||
+    challenge.status === 'settled' ||
+    challenge.status === 'cancelled' ||
+    challenge.status === 'cancelled_underfilled'
+  ) {
     return true;
   }
   if (challenge.eliminated) {

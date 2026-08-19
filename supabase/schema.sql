@@ -296,7 +296,9 @@ create table public.challenges (
   min_minutes int not null default 30,
   proof_requirements jsonb not null default '[{"type":"pre_selfie","required":true},{"type":"post_selfie","required":true},{"type":"hr_monitor","required":true}]',
   proofs jsonb not null default '[]'::jsonb,
-  status text not null default 'upcoming' check (status in ('upcoming','open','in_progress','judging','settled')),
+  status text not null default 'upcoming' check (status in ('upcoming','open','in_progress','judging','settled','cancelled_underfilled','cancelled')),
+  cancelled_at timestamptz,
+  cancelled_by uuid references public.profiles(id),
   starts_at timestamptz not null,
   ends_at timestamptz,
   prize_pool numeric(12,2) default 0, -- calculated from buy-ins
@@ -340,6 +342,8 @@ comment on column public.challenges.creator_contribution is 'Coins the creator p
 comment on column public.challenges.max_participants is 'Join cap. Null means unlimited.';
 comment on column public.challenges.is_unlimited is 'Last-man-standing: no end date. Continues until one eligible participant remains.';
 comment on column public.challenges.ends_at is 'End of a fixed window. Null when is_unlimited.';
+comment on column public.challenges.cancelled_at is 'Set by cancel_challenge. Row is never deleted.';
+comment on column public.challenges.cancelled_by is 'profiles.id of the host or official who cancelled.';
 
 create trigger challenges_set_updated_at
   before update on public.challenges
@@ -651,8 +655,12 @@ begin
     raise exception 'Invalid recipient' using errcode = 'P0002';
   end if;
 
+  if public.users_blocked(v_sender, p_to_user_id) then
+    raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+
   v_amount := round(coalesce(p_amount, 0), 2);
-  if v_amount < 0.01 then
+  if v_amount <= 0 then
     raise exception 'Send at least 0.01 Coins' using errcode = 'P0001';
   end if;
 
@@ -677,11 +685,10 @@ begin
   from public.profiles
   where id = v_sender;
 
-  if v_balance is null then
-    raise exception 'Finish setting up your profile before you send Coins' using errcode = 'P0001';
-  end if;
-
   if not v_official then
+    if v_balance is null then
+      raise exception 'Finish setting up your profile before you send Coins' using errcode = 'P0001';
+    end if;
     if v_amount > 10000 then
       raise exception 'Keep a transfer at 10,000 Coins or less' using errcode = 'P0001';
     end if;
@@ -699,23 +706,31 @@ begin
 
   if v_official then
     insert into public.wallet_ledger (
-      user_id, currency, amount, entry_type, reason, metadata, ref_type, ref_id
+      user_id, currency, amount, entry_type, reason, metadata, ref_type, ref_id, created_at
     )
     values (
       p_to_user_id,
       'coins',
       v_amount,
-      'credit',
-      'official_send',
-      jsonb_build_object('sender_id', v_sender, 'transfer_id', v_transfer.id),
+      'official_grant',
+      'official_grant',
+      jsonb_build_object(
+        'sender_id', v_sender,
+        'transfer_id', v_transfer.id,
+        'created_at', v_transfer.created_at
+      ),
       'coin_transfer',
-      v_transfer.id::text
+      v_transfer.id::text,
+      v_transfer.created_at
     );
   end if;
 
   return v_transfer;
 end;
 $$;
+
+comment on function public.send_coins(uuid, numeric, text) is
+  'Peer Coin send. Official senders skip debit and balance. Recipient credit is real. Ledger official_grant. ∞ is not cash.';
 
 grant execute on function public.send_coins(uuid, numeric, text) to authenticated;
 
@@ -1198,6 +1213,76 @@ $$;
 grant execute on function public.settle_challenge(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- health_connections / health_workouts (Apple Health + Health Connect proof)
+-- ---------------------------------------------------------------------------
+
+create table public.health_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  provider text not null,
+  status text not null,
+  last_synced_at timestamptz,
+  hk_workout_anchor text,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, provider),
+  constraint health_connections_provider_check check (provider in ('apple_health', 'health_connect')),
+  constraint health_connections_status_check check (status in ('connected', 'disconnected'))
+);
+
+create table public.health_workouts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  provider text not null,
+  provider_workout_id text not null,
+  activity_type text not null,
+  activity_label text not null,
+  started_at timestamptz not null,
+  ended_at timestamptz not null,
+  duration_sec int not null,
+  calories_kcal numeric,
+  distance_m numeric,
+  hr_avg numeric,
+  hr_max numeric,
+  source_bundle text,
+  confidence text not null,
+  raw_summary jsonb not null default '{}'::jsonb,
+  dismissed_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (user_id, provider, provider_workout_id),
+  constraint health_workouts_provider_check check (provider in ('apple_health', 'health_connect')),
+  constraint health_workouts_confidence_check check (confidence in ('watch', 'phone', 'manual', 'unknown')),
+  constraint health_workouts_duration_check check (duration_sec >= 0)
+);
+
+comment on table public.health_connections is 'Owner-only Health connection flag (Apple Health or Health Connect). Disconnect stops future reads; existing proofs stay.';
+comment on table public.health_workouts is 'Owner-only workout summaries used as challenge proof. No HR time series.';
+comment on column public.health_workouts.raw_summary is 'Small summary only. Never store heart-rate samples.';
+comment on column public.health_connections.hk_workout_anchor is 'Serialized HKQueryAnchor for incremental workout sync. Apple Health only.';
+comment on column public.health_connections.last_error is 'User-facing sync failure. Never store HealthKit / PostgREST strings.';
+comment on column public.health_workouts.dismissed_at is 'User dismissed the next-open prompt for this workout. Never nag again.';
+
+create index health_connections_user_idx on public.health_connections (user_id);
+create index health_workouts_user_started_idx on public.health_workouts (user_id, started_at desc);
+
+create table public.health_workout_starts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  challenge_id uuid not null references public.challenges(id) on delete cascade,
+  started_at timestamptz not null,
+  activity_type text,
+  goal_seconds int,
+  created_at timestamptz not null default now()
+);
+
+create index health_workout_starts_user_challenge_idx
+  on public.health_workout_starts (user_id, challenge_id, started_at desc);
+
+comment on table public.health_workout_starts is
+  'Owner-only Start on Watch taps. Matching prefers health_workouts.started_at >= this. No proof until confirm.';
+
+-- ---------------------------------------------------------------------------
 -- workout_submissions
 -- ---------------------------------------------------------------------------
 
@@ -1213,6 +1298,8 @@ create table public.workout_submissions (
   status text default 'pending_review' check (status in ('pending_review','approved','rejected')),
   task_ids jsonb not null default '[]'::jsonb,
   proof_parts jsonb not null default '{}'::jsonb,
+  proof_kind text,
+  health_workout_id uuid references public.health_workouts(id),
   created_at timestamptz default now(),
   unique(challenge_id, user_id, submission_date)
 );
@@ -1222,6 +1309,10 @@ comment on column public.workout_submissions.task_ids is
   'Points challenges: task ids completed in this log. Empty for consistency / three-proof days.';
 comment on column public.workout_submissions.proof_parts is
   'Parts for this log, keyed by challenge proof id.';
+comment on column public.workout_submissions.proof_kind is
+  'camera | health_workout | existing values. Null camera rows stay valid.';
+comment on column public.workout_submissions.health_workout_id is
+  'Optional Health workout used as this day’s proof. Readable with the submission.';
 
 create index workout_submissions_user_date_idx on public.workout_submissions (user_id, submission_date desc);
 create index workout_submissions_challenge_status_idx on public.workout_submissions (challenge_id, status);
@@ -1485,6 +1576,291 @@ $$;
 
 grant execute on function public.refresh_participant_progress(uuid, uuid) to authenticated;
 grant execute on function public.log_workout(uuid, date, text, text, text, text, jsonb) to authenticated;
+
+create or replace function public.log_health_workout(
+  p_challenge_id uuid,
+  p_health_workout_id uuid,
+  p_submission_date date default (timezone('utc', now()))::date,
+  p_notes text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  ch public.challenges%rowtype;
+  part public.challenge_participants%rowtype;
+  hw public.health_workouts%rowtype;
+  v_uid uuid := auth.uid();
+  v_id uuid;
+  v_days int;
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated' using errcode = '42501';
+  end if;
+
+  if p_submission_date is null then
+    p_submission_date := (timezone('utc', now()))::date;
+  end if;
+
+  select * into hw
+  from public.health_workouts
+  where id = p_health_workout_id
+    and user_id = v_uid
+  for update;
+
+  if not found then
+    raise exception 'That workout is not available.';
+  end if;
+
+  select * into ch
+  from public.challenges
+  where id = p_challenge_id
+  for update;
+
+  if not found then
+    raise exception 'Challenge not found' using errcode = 'P0002';
+  end if;
+
+  if ch.starts_at is not null and now() < ch.starts_at then
+    raise exception 'NOT_STARTED';
+  end if;
+
+  if ch.official_started_at is not null and now() < ch.official_started_at then
+    raise exception 'NOT_STARTED';
+  end if;
+
+  if ch.status in ('judging', 'settled') then
+    raise exception 'Logging is closed for this challenge.';
+  end if;
+
+  if coalesce(ch.is_unlimited, false) = false
+     and ch.ends_at is not null
+     and now() >= ch.ends_at then
+    raise exception 'Logging is closed for this challenge.';
+  end if;
+
+  select * into part
+  from public.challenge_participants
+  where challenge_id = p_challenge_id
+    and user_id = v_uid
+  for update;
+
+  if not found then
+    raise exception 'Join the challenge before you log a workout.';
+  end if;
+
+  if coalesce(part.status, 'joined') = 'withdrawn' then
+    raise exception 'Join the challenge before you log a workout.';
+  end if;
+
+  if part.eliminated_at is not null then
+    raise exception 'You have been eliminated from this challenge.';
+  end if;
+
+  if exists (
+    select 1
+    from public.workout_submissions s
+    where s.challenge_id = p_challenge_id
+      and s.user_id = v_uid
+      and s.submission_date = p_submission_date
+  ) then
+    raise exception 'You’ve already logged a workout for today.';
+  end if;
+
+  insert into public.workout_submissions (
+    challenge_id,
+    user_id,
+    submission_date,
+    pre_selfie_url,
+    post_selfie_url,
+    hr_monitor_url,
+    notes,
+    status,
+    task_ids,
+    proof_parts,
+    proof_kind,
+    health_workout_id
+  ) values (
+    p_challenge_id,
+    v_uid,
+    p_submission_date,
+    null,
+    null,
+    null,
+    coalesce(p_notes, hw.activity_label),
+    'pending_review',
+    '[]'::jsonb,
+    '{}'::jsonb,
+    'health_workout',
+    hw.id
+  )
+  returning id into v_id;
+
+  v_days := public.refresh_participant_progress(p_challenge_id, v_uid);
+
+  return (
+    select jsonb_build_object(
+      'id', s.id,
+      'challenge_id', s.challenge_id,
+      'user_id', s.user_id,
+      'submission_date', s.submission_date,
+      'pre_selfie_url', s.pre_selfie_url,
+      'post_selfie_url', s.post_selfie_url,
+      'hr_monitor_url', s.hr_monitor_url,
+      'notes', s.notes,
+      'status', s.status,
+      'created_at', s.created_at,
+      'task_ids', s.task_ids,
+      'proof_parts', s.proof_parts,
+      'proof_kind', s.proof_kind,
+      'health_workout_id', s.health_workout_id,
+      'days_completed', v_days
+    )
+    from public.workout_submissions s
+    where s.id = v_id
+  );
+exception
+  when unique_violation then
+    raise exception 'You’ve already logged a workout for today.';
+end;
+$$;
+
+grant execute on function public.log_health_workout(uuid, uuid, date, text) to authenticated;
+
+create or replace function public.cancel_challenge(p_challenge_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_c public.challenges%rowtype;
+  v_official boolean := false;
+  v_others int := 0;
+  v_p record;
+  v_host_amt numeric := 0;
+  v_refunded uuid[] := '{}';
+  v_host_coin_back boolean := false;
+  v_notified_host boolean := false;
+  v_body text;
+  v_paid boolean;
+begin
+  if v_uid is null then
+    raise exception 'NOT_AUTHENTICATED' using errcode = '42501';
+  end if;
+
+  select * into v_c from public.challenges where id = p_challenge_id for update;
+  if not found then
+    raise exception 'CHALLENGE_NOT_FOUND' using errcode = 'P0002';
+  end if;
+  if v_c.status = 'settled' then
+    raise exception 'ALREADY_SETTLED';
+  end if;
+  if v_c.status in ('cancelled', 'cancelled_underfilled') then
+    raise exception 'ALREADY_CANCELLED';
+  end if;
+
+  select coalesce(is_official, false) into v_official from public.profiles where id = v_uid;
+  if not v_official then
+    if v_c.created_by is distinct from v_uid then
+      raise exception 'FORBIDDEN' using errcode = '42501';
+    end if;
+    if v_c.starts_at is null or v_c.starts_at <= now() then
+      raise exception 'FORBIDDEN' using errcode = '42501';
+    end if;
+    select count(*) into v_others
+    from public.challenge_participants
+    where challenge_id = p_challenge_id
+      and user_id is distinct from v_c.created_by
+      and coalesce(status, 'joined') is distinct from 'refunded_pre_start';
+    if coalesce(v_others, 0) > 0 then
+      raise exception 'FORBIDDEN' using errcode = '42501';
+    end if;
+  end if;
+
+  for v_p in
+    select * from public.challenge_participants where challenge_id = p_challenge_id for update
+  loop
+    if coalesce(v_p.buy_in_paid, 0) > 0
+       and coalesce(v_p.currency, v_c.currency, 'coins') = 'coins'
+       and coalesce(v_p.status, 'joined') is distinct from 'refunded_pre_start' then
+      update public.profiles set coins = coins + v_p.buy_in_paid where id = v_p.user_id;
+      update public.challenges set prize_pool = greatest(prize_pool - v_p.buy_in_paid, 0) where id = p_challenge_id;
+      insert into public.wallet_ledger (
+        user_id, challenge_id, currency, amount, entry_type, reason, metadata, ref_type, ref_id
+      ) values (
+        v_p.user_id, p_challenge_id, 'coins', v_p.buy_in_paid,
+        'challenge_cancel_refund', 'challenge_cancel_refund',
+        jsonb_build_object('kind', 'buy_in'), 'challenge', p_challenge_id::text
+      );
+      v_refunded := array_append(v_refunded, v_p.user_id);
+      if v_p.user_id = v_c.created_by then
+        v_host_coin_back := true;
+      end if;
+    end if;
+  end loop;
+
+  select * into v_c from public.challenges where id = p_challenge_id;
+  v_host_amt := least(
+    greatest(coalesce(v_c.host_budget, v_c.creator_contribution, 0), 0),
+    greatest(coalesce(v_c.prize_pool, 0), 0)
+  );
+  if v_host_amt > 0 and v_c.created_by is not null then
+    if coalesce(v_c.currency, 'coins') = 'coins' then
+      update public.profiles set coins = coins + v_host_amt where id = v_c.created_by;
+      v_host_coin_back := true;
+    else
+      update public.profiles set bucks = bucks + v_host_amt where id = v_c.created_by;
+    end if;
+    update public.challenges set prize_pool = greatest(prize_pool - v_host_amt, 0) where id = p_challenge_id;
+    insert into public.wallet_ledger (
+      user_id, challenge_id, currency, amount, entry_type, reason, metadata, ref_type, ref_id
+    ) values (
+      v_c.created_by, p_challenge_id, coalesce(v_c.currency, 'coins'), v_host_amt,
+      'challenge_cancel_refund', 'challenge_cancel_host_release',
+      jsonb_build_object('kind', 'host_escrow'), 'challenge', p_challenge_id::text
+    );
+  end if;
+
+  update public.challenges
+  set status = 'cancelled', cancelled_at = now(), cancelled_by = v_uid, updated_at = now()
+  where id = p_challenge_id;
+
+  for v_p in select * from public.challenge_participants where challenge_id = p_challenge_id
+  loop
+    v_paid := v_p.user_id = any (v_refunded) or (v_p.user_id = v_c.created_by and v_host_coin_back);
+    v_body := 'This challenge was cancelled.';
+    if v_paid then
+      v_body := v_body || ' Your coins were returned.';
+    end if;
+    perform public.notify_user(
+      v_p.user_id, v_uid, 'challenge_cancelled', v_c.title, v_body,
+      jsonb_build_object('challenge_id', p_challenge_id, 'refunded', v_paid)
+    );
+    if v_p.user_id = v_c.created_by then
+      v_notified_host := true;
+    end if;
+  end loop;
+
+  if v_official and v_c.created_by is not null and v_c.created_by is distinct from v_uid and not v_notified_host then
+    v_body := 'This challenge was cancelled.';
+    if v_host_coin_back then
+      v_body := v_body || ' Your coins were returned.';
+    end if;
+    perform public.notify_user(
+      v_c.created_by, v_uid, 'challenge_cancelled', v_c.title, v_body,
+      jsonb_build_object('challenge_id', p_challenge_id, 'refunded', v_host_coin_back)
+    );
+  end if;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+grant execute on function public.cancel_challenge(uuid) to authenticated;
 
 create or replace function public.mark_challenge_judging(p_challenge_id uuid)
 returns public.challenges
@@ -2100,16 +2476,20 @@ as $$
 declare
   v_name text;
   v_amount text;
+  v_noun text;
+  v_body text;
 begin
   v_name := public.profile_display_name(new.sender_id);
   v_amount := to_char(coalesce(new.amount, 0), 'FM999999990.00');
+  v_noun := case when public.normalize_wallet_currency(new.currency) = 'bucks' then 'Bucks' else 'Coins' end;
+  v_body := v_name || ' sent you ' || v_amount || ' ' || v_noun || '.';
   perform public.notify_user(
     new.recipient_id,
     new.sender_id,
     'coins_received',
-    'You received Coins',
-    v_name || ' sent you ' || v_amount || ' Coins.',
-    jsonb_build_object('amount', new.amount, 'transfer_id', new.id)
+    v_body,
+    null,
+    jsonb_build_object('amount', new.amount, 'transfer_id', new.id, 'currency', coalesce(new.currency, 'coins'))
   );
   return new;
 exception when others then
@@ -2222,6 +2602,9 @@ alter table public.challenge_participants enable row level security;
 alter table public.challenge_settlements enable row level security;
 alter table public.challenge_payouts enable row level security;
 alter table public.workout_submissions enable row level security;
+alter table public.health_connections enable row level security;
+alter table public.health_workouts enable row level security;
+alter table public.health_workout_starts enable row level security;
 alter table public.follows enable row level security;
 alter table public.posts enable row level security;
 alter table public.comments enable row level security;
@@ -2376,6 +2759,27 @@ create policy "Owners can update their pending proofs"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+create policy "Owners manage their health connections"
+  on public.health_connections
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Owners manage their health workouts"
+  on public.health_workouts
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Owners manage their workout starts"
+  on public.health_workout_starts
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- posts: anyone can read; only participants can insert challenge posts
 create policy "Posts are readable"
   on public.posts for select
@@ -2478,6 +2882,9 @@ grant execute on function public.mark_notifications_read(uuid[]) to authenticate
 grant execute on function public.invite_to_challenge(uuid, uuid) to authenticated;
 
 grant select, insert, update on public.workout_submissions to authenticated;
+grant select, insert, update, delete on public.health_connections to authenticated;
+grant select, insert, update, delete on public.health_workouts to authenticated;
+grant select, insert on public.health_workout_starts to authenticated;
 
 grant select, insert, delete on public.follows to authenticated;
 

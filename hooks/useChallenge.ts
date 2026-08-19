@@ -3,6 +3,7 @@ import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { discardChallengeDraft } from '@/lib/challengeDraft';
 import { applyLaneForPublish } from '@/lib/challengeLane';
 import { ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
+import { cancelChallenge } from '@/lib/api/challenges';
 import {
   fetchChallengeById,
   fetchChallengeShareState,
@@ -752,6 +753,37 @@ export function useMarkChallengeJudging() {
       void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
       void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
+    },
+  });
+}
+
+export function useCancelChallenge() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (challengeId: string) => cancelChallenge(challengeId),
+    onSuccess: (_result, challengeId) => {
+      queryClient.setQueryData<ChallengeWithStats>(['challenge', challengeId], (current) =>
+        current
+          ? {
+              ...current,
+              status: 'cancelled',
+              cancelled_at: new Date().toISOString(),
+            }
+          : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }

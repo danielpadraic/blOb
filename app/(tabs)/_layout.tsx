@@ -11,6 +11,7 @@ import { TabChromeHeader, isAlertsTab, isChallengeIdRoute } from '@/components/w
 import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
+import { HealthLogPromptHost } from '@/components/health/HealthLogPrompt';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
@@ -171,6 +172,7 @@ export default function TabLayout() {
           onAction={onAction}
         />
         <WalletHost />
+        <HealthLogPromptHost />
         </SocialSheetsHost>
       </View>
       <BlobTabBar onOpenCompose={openSheet} onTabPress={closeOverlays} />

@@ -49,6 +49,7 @@ const RPC_MESSAGES: Record<string, string> = {
   INVITE_REVOKED: 'That invite is no longer valid.',
   NO_REFUND_AFTER_START: 'Refunds are not allowed after the official start.',
   FORBIDDEN: 'You can’t do that.',
+  ALREADY_CANCELLED: 'This challenge was already cancelled.',
   NOT_A_PARTICIPANT: 'That person is not in this challenge.',
   NOT_STARTED: 'This challenge hasn’t started yet.',
   LMS_NOT_FINISHED: 'Last Man Standing is not down to one person yet.',
@@ -203,4 +204,9 @@ export async function closeChallengeForJudging(
 export async function distributeChallenge(id: string): Promise<DistributeChallengeResult> {
   const { data, error } = await supabase.rpc('distribute_challenge', { p_challenge_id: id });
   return unwrap<DistributeChallengeResult>(data, error);
+}
+
+export async function cancelChallenge(id: string): Promise<{ ok: boolean }> {
+  const { data, error } = await supabase.rpc('cancel_challenge', { p_challenge_id: id });
+  return unwrap<{ ok: boolean }>(data, error);
 }

@@ -9,7 +9,7 @@ import { getErrorMessage } from '@/utils/errors';
 
 export type LoggableChallenge = Pick<
   Challenge,
-  'id' | 'title' | 'is_official' | 'status' | 'starts_at' | 'ends_at' | 'is_unlimited'
+  'id' | 'title' | 'is_official' | 'status' | 'starts_at' | 'ends_at' | 'is_unlimited' | 'frequency' | 'min_minutes'
 >;
 
 type ParticipationRow = Pick<
@@ -21,6 +21,7 @@ const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at';
 const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at';
 
 const CHALLENGE_SELECTS = [
+  'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited',
   'id, title, is_official, status, starts_at, ends_at',
 ] as const;
@@ -59,6 +60,11 @@ export function useLoggableChallenge() {
           return !isClosedForLogs(challenge);
         })
         .sort((a, b) => {
+          const aDue = a.ends_at ? new Date(a.ends_at).getTime() : Number.POSITIVE_INFINITY;
+          const bDue = b.ends_at ? new Date(b.ends_at).getTime() : Number.POSITIVE_INFINITY;
+          if (aDue !== bDue) {
+            return aDue - bDue;
+          }
           if (a.is_official !== b.is_official) {
             return a.is_official ? -1 : 1;
           }
@@ -111,6 +117,8 @@ async function fetchChallenges(ids: string[]): Promise<LoggableChallenge[]> {
       ...row,
       is_official: Boolean(row.is_official),
       is_unlimited: Boolean(row.is_unlimited),
+      frequency: row.frequency ?? null,
+      min_minutes: Number(row.min_minutes ?? 0),
     }));
   }
   return [];

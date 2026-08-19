@@ -11,10 +11,16 @@ import { BucksTag } from '@/components/currency/BucksTag';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { FeedList } from '@/components/feed/FeedList';
 import { ProfileLink } from '@/components/profile/ProfileLink';
-import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
+import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
+import {
+  ChallengeMenuPopover,
+  ChallengeOverflowButton,
+  type MenuAnchor,
+} from '@/components/challenge/ChallengeOverflowMenu';
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
+import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -29,6 +35,7 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  useCancelChallenge,
   useChallenge,
   useChallengeParticipants,
   useChallengeSettlement,
@@ -43,6 +50,7 @@ import {
   useToggleReaction,
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
+import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { useLoggedWorkoutCount, usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { methodLabel, proofDisplayName } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -69,7 +77,11 @@ import {
   isJoinWindowOpen,
   payoutCountdownLabel,
 } from '@/lib/settlement';
+import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
+import { healthProofLines } from '@/lib/health/proofSummary';
+import { fetchHealthWorkoutById } from '@/lib/health/remote';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
+import { isOfficialAccount } from '@/lib/official';
 import { formatWallet, isBucksChallenge, isSponsoredBucks, walletBalance } from '@/lib/currency';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
@@ -85,9 +97,10 @@ const BODY_METRICS_JOIN_COPY =
   'Missing: physical details. Official Challenges need them for matching — they stay private.';
 
 export default function ChallengeDetailScreen() {
-  const params = useLocalSearchParams<{ id: string; returnTo?: string }>();
+  const params = useLocalSearchParams<{ id: string; returnTo?: string; logged?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   useDismissTo(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
@@ -109,11 +122,18 @@ export default function ChallengeDetailScreen() {
     }));
   }, [boardProfiles.data, roster.data]);
   const todaySubmission = useTodaySubmission(id);
+  const healthProofId = todaySubmission.data?.health_workout_id;
+  const healthProofQuery = useQuery({
+    queryKey: ['health-proof', healthProofId],
+    enabled: Boolean(healthProofId) && todaySubmission.data?.proof_kind === 'health_workout',
+    queryFn: () => fetchHealthWorkoutById(healthProofId!),
+  });
   const loggedCount = useLoggedWorkoutCount(id);
   const completions = usePeriodCompletions(id);
   const join = useJoinChallenge();
   const markJudging = useMarkChallengeJudging();
   const settle = useSettleChallenge();
+  const cancelChallenge = useCancelChallenge();
   const settlementQuery = useChallengeSettlement(id);
   const feed = useFeed(id);
   const createPost = useCreatePost(id);
@@ -124,7 +144,10 @@ export default function ChallengeDetailScreen() {
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [cancelMenu, setCancelMenu] = useState<MenuAnchor | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [watchToast, setWatchToast] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const challenge = challengeQuery.data;
@@ -141,6 +164,19 @@ export default function ChallengeDetailScreen() {
   }, [challenge?.participant_count, isJoined, roster.data]);
   const daysRequired = challengeTargetCount(challenge);
   const loggedToday = Boolean(todaySubmission.data);
+  const healthProofLinesView = useMemo(() => {
+    const row = healthProofQuery.data;
+    if (!row) {
+      return null;
+    }
+    return healthProofLines({
+      activityLabel: row.activity_label,
+      durationSec: row.duration_sec,
+      confidence: row.confidence,
+      hrAvg: row.hr_avg,
+      caloriesKcal: row.calories_kcal,
+    });
+  }, [healthProofQuery.data]);
   const daysCompleted = Math.max(
     Number(participation?.days_completed ?? 0),
     loggedCount.data ?? 0,
@@ -183,6 +219,16 @@ export default function ChallengeDetailScreen() {
   const canJoin = Boolean(challenge) && !isJoined && !joinBlocked;
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
+  const wasCancelled = challenge?.status === 'cancelled';
+  const showCancel =
+    Boolean(challenge) &&
+    canCancelChallenge({
+      challenge,
+      viewerId: user?.id,
+      official: isOfficialAccount(profile),
+      otherJoiners: countOtherJoiners(roster.data, challenge?.created_by),
+      rosterReady: roster.data != null,
+    });
 
   useEffect(() => {
     if (!needsBodyMetrics) {
@@ -190,6 +236,7 @@ export default function ChallengeDetailScreen() {
     }
     void supabase.rpc('notify_my_profile_gate', { p_missing: 'physical details' });
   }, [needsBodyMetrics]);
+  const watch = useStartOnWatch(challenge);
   const inviteOnly = isInviteOnlyChallenge(challenge);
   const windowEnded = Boolean(challenge && hasChallengeEnded(challenge, new Date(nowMs)));
   const judgingHold =
@@ -211,6 +258,7 @@ export default function ChallengeDetailScreen() {
     return () => clearInterval(timer);
   }, [judgingHold, waitingToStart]);
 
+  const scrollRef = useRef<ScrollView>(null);
   const lastFocusFetchAt = useRef(Date.now());
   const refetchChallenge = useRef(challengeQuery.refetch);
   const refetchRoster = useRef(roster.refetch);
@@ -226,6 +274,9 @@ export default function ChallengeDetailScreen() {
       if (!id) {
         return;
       }
+      if (loggedParam) {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      }
       const now = Date.now();
       if (now - lastFocusFetchAt.current < 8000) {
         return;
@@ -233,7 +284,7 @@ export default function ChallengeDetailScreen() {
       lastFocusFetchAt.current = now;
       void refetchChallenge.current();
       void refetchRoster.current();
-    }, [id]),
+    }, [id, loggedParam]),
   );
 
   const refreshing =
@@ -333,6 +384,22 @@ export default function ChallengeDetailScreen() {
     setActionError(null);
     settle.mutate(id, {
       onSuccess: () => setSettleOpen(false),
+      onError: (error) => {
+        setActionError(getErrorMessage(error));
+      },
+    });
+  }
+
+  function onConfirmCancel() {
+    if (!id || cancelChallenge.isPending) {
+      return;
+    }
+    setActionError(null);
+    cancelChallenge.mutate(id, {
+      onSuccess: () => {
+        setCancelOpen(false);
+        router.replace({ pathname: '/challenges', params: { notice: 'cancelled' } });
+      },
       onError: (error) => {
         setActionError(getErrorMessage(error));
       },
@@ -442,10 +509,22 @@ export default function ChallengeDetailScreen() {
           title: challenge.title,
           headerBackVisible: false,
           headerLeft: () => <StackBackButton />,
-          headerRight: () => <WalletBar />,
+          headerRight: () => (
+            <View className="flex-row items-center">
+              {showCancel ? (
+                <ChallengeOverflowButton
+                  onPress={(anchor) =>
+                    setCancelMenu((current) => (current ? null : anchor))
+                  }
+                />
+              ) : null}
+              <WalletBar />
+            </View>
+          ),
         }}
       />
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerClassName="px-4 pb-4"
         refreshControl={
@@ -528,8 +607,15 @@ export default function ChallengeDetailScreen() {
             <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.78)' }} numberOfLines={1}>
               {scheduleLine}
             </AppText>
+            {wasCancelled ? (
+              <AppText className="text-[15px] font-semibold" style={{ color: '#fff' }}>
+                {copy('challenge.cancelled')}
+              </AppText>
+            ) : null}
             <View className="flex-row items-center justify-between gap-3">
               <View className="min-w-0 flex-1">
+                {wasCancelled ? null : (
+                  <>
                 <AppText
                   className="text-[11px] font-semibold uppercase"
                   style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.6 }}>
@@ -541,7 +627,9 @@ export default function ChallengeDetailScreen() {
                     {money(Number(challenge.prize_pool))}
                   </AppText>
                 </View>
-                {isHost && !inviteOnly && challenge.status !== 'settled' ? (
+                  </>
+                )}
+                {isHost && !inviteOnly && challenge.status !== 'settled' && !wasCancelled ? (
                   <View className="mt-3 self-start">
                     <Button
                       title="Invite someone"
@@ -552,7 +640,7 @@ export default function ChallengeDetailScreen() {
                   </View>
                 ) : null}
               </View>
-              {isJoined ? (
+              {wasCancelled ? null : isJoined ? (
                 <View className="items-center">
                   <ProgressRing
                     progress={progressRatio}
@@ -759,6 +847,7 @@ export default function ChallengeDetailScreen() {
           ) : null}
         </Card>
 
+        {wasCancelled ? null : (
         <Card className="mt-4">
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Prize
@@ -767,8 +856,9 @@ export default function ChallengeDetailScreen() {
             {prizeLine}
           </AppText>
         </Card>
+        )}
 
-        {isHost && inviteOnly && challenge.status !== 'settled' ? (
+        {isHost && inviteOnly && challenge.status !== 'settled' && !wasCancelled ? (
           <ChallengeInvitesCard
             challengeId={challenge.id}
             onInvitePerson={() => setInviteOpen(true)}
@@ -877,13 +967,55 @@ export default function ChallengeDetailScreen() {
           ) : todaySubmission.isLoading ? (
             <Button title="Checking today’s log" size="lg" loading disabled />
           ) : loggedToday ? (
-            <Button title="You’re good today" size="lg" variant="outline" disabled />
+            <View className="gap-2">
+              {healthProofLinesView ? (
+                <View>
+                  <AppText className="text-[13px] font-semibold text-charcoal">
+                    {healthProofLinesView.primary}
+                  </AppText>
+                  {healthProofLinesView.secondary ? (
+                    <AppText className="mt-0.5 text-[12px] text-muted">
+                      {healthProofLinesView.secondary}
+                    </AppText>
+                  ) : null}
+                </View>
+              ) : null}
+              <Button title="You’re good today" size="lg" variant="outline" disabled />
+            </View>
           ) : (
-            <Button
-              title={logTitle}
-              size="lg"
-              onPress={() => router.push(`/challenges/${id}/submit`)}
-            />
+            <View className="gap-2">
+              <Button
+                title={logTitle}
+                size="lg"
+                onPress={() => router.push(`/challenges/${id}/submit`)}
+              />
+              {watch.visible ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={copy('health.startWatch')}
+                  disabled={watch.busy}
+                  onPress={() => {
+                    void watch.start().then((result) => {
+                      if (result === 'ok') {
+                        setWatchToast(copy('health.startedWatch'));
+                      } else if (result === 'denied' || result === 'failed') {
+                        setWatchToast(copy('health.startWatchFail'));
+                      }
+                      if (result !== 'cancelled') {
+                        setTimeout(() => setWatchToast(null), 2400);
+                      }
+                    });
+                  }}
+                  style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                  <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+                    {copy('health.startWatch')}
+                  </AppText>
+                </Pressable>
+              ) : null}
+              {watchToast ? (
+                <AppText className="text-center text-sm text-muted">{watchToast}</AppText>
+              ) : null}
+            </View>
           )
         ) : (
           <View className="gap-2">
@@ -958,6 +1090,22 @@ export default function ChallengeDetailScreen() {
         completerCount={finishers}
         onClose={() => setSettleOpen(false)}
         onConfirm={onConfirmSettle}
+      />
+      <ChallengeMenuPopover
+        anchor={cancelMenu}
+        onClose={() => setCancelMenu(null)}
+        onCancelPress={() => {
+          setActionError(null);
+          setCancelOpen(true);
+        }}
+      />
+      <CancelChallengeSheet
+        visible={cancelOpen}
+        challenge={challenge}
+        loading={cancelChallenge.isPending}
+        error={actionError}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={onConfirmCancel}
       />
     </Screen>
   );

@@ -1,4 +1,7 @@
-import { Pressable, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
@@ -30,12 +33,23 @@ type ActionRow = {
   hint?: string;
 };
 
+const ROW_MIN = 44;
+const LIST_PAD = 20;
+const DISMISS_Y = 88;
+
 export function QuickActionSheet({
   visible,
   loggable,
   onClose,
   onAction,
 }: QuickActionSheetProps) {
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMax = Math.round(windowHeight * 0.7);
+  const translateY = useSharedValue(0);
+  const [handleH, setHandleH] = useState(72);
+  const [listH, setListH] = useState(0);
+  const [contentH, setContentH] = useState(0);
+
   const rows: ActionRow[] = [
     ...(loggable
       ? [
@@ -56,59 +70,117 @@ export function QuickActionSheet({
     { id: 'coins', glyph: '🪙', label: 'Send Coins or Bucks' },
   ];
 
+  const listMax = Math.max(ROW_MIN + LIST_PAD, sheetMax - handleH);
+  const canScroll = contentH > listH + 1;
+
+  useEffect(() => {
+    if (!visible) {
+      translateY.value = 0;
+    }
+  }, [translateY, visible]);
+
+  const handlePan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(8)
+        .failOffsetX([-24, 24])
+        .onUpdate((event) => {
+          translateY.value = Math.max(0, event.translationY);
+        })
+        .onEnd((event) => {
+          if (event.translationY > DISMISS_Y || event.velocityY > 900) {
+            runOnJS(onClose)();
+            return;
+          }
+          translateY.value = withTiming(0, { duration: 180 });
+        }),
+    [onClose, translateY],
+  );
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   return (
     <ChromeOverlay visible={visible} onClose={onClose}>
-      <View
-        className="px-5 pt-4"
-        style={{
-          backgroundColor: THEME.surface,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          paddingBottom: 16,
-          maxHeight: '100%',
-        }}>
-        <View className="mb-4 items-center">
-          <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
-          <AppText className="mt-3 text-lg font-bold text-charcoal">Quick actions</AppText>
-        </View>
-
-        <View
-          className="overflow-hidden"
-          style={{
-            borderRadius: THEME.radius,
-            borderWidth: 1,
-            borderColor: THEME.border,
+      <Animated.View
+        style={[
+          {
             backgroundColor: THEME.surface,
-          }}>
-          {rows.map((row, index) => (
-            <Pressable
-              key={row.id}
-              accessibilityRole="button"
-              accessibilityLabel={row.label}
-              onPress={() => onAction(row.id)}
-              className="flex-row items-center px-4 py-3.5"
-              style={{
-                borderTopWidth: index === 0 ? 0 : 1,
-                borderTopColor: THEME.border,
-              }}>
-              <View
-                className="h-10 w-10 items-center justify-center rounded-full"
-                style={{ backgroundColor: THEME.surface2 }}>
-                <AppText className="text-[18px]">{row.glyph}</AppText>
-              </View>
-              <View className="ml-3 flex-1">
-                <AppText className="font-semibold text-charcoal">{row.label}</AppText>
-                {row.hint ? (
-                  <AppText className="mt-0.5 text-sm text-muted" numberOfLines={1}>
-                    {row.hint}
-                  </AppText>
-                ) : null}
-              </View>
-              <AppText className="text-muted">›</AppText>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingHorizontal: 20,
+            paddingTop: 4,
+            maxHeight: sheetMax,
+            flexShrink: 1,
+            width: '100%',
+          },
+          sheetStyle,
+        ]}>
+        <GestureDetector gesture={handlePan}>
+          <View
+            onLayout={(event) => setHandleH(event.nativeEvent.layout.height)}
+            style={{ alignItems: 'center', minHeight: ROW_MIN, paddingBottom: 12, paddingTop: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close quick actions"
+            accessibilityHint="Drag down to close">
+            <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+            <AppText className="mt-3 text-lg font-bold text-charcoal">Quick actions</AppText>
+          </View>
+        </GestureDetector>
+
+        <ScrollView
+          style={{ maxHeight: listMax, flexShrink: 1 }}
+          contentContainerStyle={{ paddingBottom: LIST_PAD, flexGrow: 0 }}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={canScroll}
+          scrollEnabled={canScroll}
+          bounces={canScroll}
+          alwaysBounceVertical={false}
+          overScrollMode={canScroll ? 'auto' : 'never'}
+          onLayout={(event) => setListH(event.nativeEvent.layout.height)}
+          onContentSizeChange={(_w, h) => setContentH(h)}>
+          <View
+            style={{
+              borderRadius: THEME.radius,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              backgroundColor: THEME.surface,
+              overflow: 'hidden',
+            }}>
+            {rows.map((row, index) => (
+              <Pressable
+                key={row.id}
+                accessibilityRole="button"
+                accessibilityLabel={row.label}
+                onPress={() => onAction(row.id)}
+                className="flex-row items-center px-4"
+                style={{
+                  minHeight: ROW_MIN,
+                  paddingVertical: 12,
+                  borderTopWidth: index === 0 ? 0 : 1,
+                  borderTopColor: THEME.border,
+                }}>
+                <View
+                  className="h-10 w-10 items-center justify-center rounded-full"
+                  style={{ backgroundColor: THEME.surface2 }}>
+                  <AppText className="text-[18px]">{row.glyph}</AppText>
+                </View>
+                <View className="ml-3 flex-1">
+                  <AppText className="font-semibold text-charcoal">{row.label}</AppText>
+                  {row.hint ? (
+                    <AppText className="mt-0.5 text-sm text-muted" numberOfLines={1}>
+                      {row.hint}
+                    </AppText>
+                  ) : null}
+                </View>
+                <AppText className="text-muted">›</AppText>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+      </Animated.View>
     </ChromeOverlay>
   );
 }

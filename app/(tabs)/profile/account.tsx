@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { useAuth } from '@/hooks/useAuth';
+import { useHealthConnection } from '@/hooks/useHealthConnection';
 import { useMyProfile, useUpdateProfile, useUsernameAvailability } from '@/hooks/useProfile';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { copy } from '@/lib/copy';
-import { THEME } from '@/lib/theme';
+import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
 import { getErrorMessage, getPasswordUpdateMessage } from '@/utils/errors';
 import {
   getPushPermissionState,
@@ -34,16 +36,19 @@ export default function AccountScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<'username' | 'email' | 'password' | null>(null);
   const [pushState, setPushState] = useState<PushPermissionState>('undetermined');
+  const [healthSheet, setHealthSheet] = useState(false);
+  const health = useHealthConnection();
 
   useEffect(() => {
     void getPushPermissionState().then(setPushState);
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') {
         void getPushPermissionState().then(setPushState);
+        void health.refetch();
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [health.refetch]);
 
   const availability = useUsernameAvailability(username, profile?.username);
 
@@ -126,7 +131,14 @@ export default function AccountScreen() {
         : 'lowercase, unique, 3–24 characters';
 
   return (
-    <Screen scroll edges={TAB_ROOT_EDGES} scrollRef={scrollRef}>
+    <Screen padded={false} edges={TAB_ROOT_EDGES}>
+      <ScrollView
+        ref={scrollRef}
+        className="flex-1"
+        contentContainerClassName="grow px-4"
+        contentContainerStyle={{ paddingBottom: 24 + TAB_BAR_PEEK }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
       <AppText className="mb-4 text-[22px] font-extrabold text-charcoal">Account</AppText>
       {notice ? (
         <AppText className="mb-4 text-sm font-semibold" style={{ color: THEME.accent }}>
@@ -134,6 +146,41 @@ export default function AccountScreen() {
         </AppText>
       ) : null}
       <View className="gap-5">
+        {health.showRow ? (
+        <View className="gap-2">
+          <AppText className="text-sm font-semibold text-charcoal">{health.title}</AppText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={health.title}
+            disabled={health.connecting || health.disconnecting || health.status === 'unavailable'}
+            onPress={() => {
+              if (health.status === 'unavailable') {
+                return;
+              }
+              if (health.status === 'connected') {
+                setHealthSheet(true);
+                return;
+              }
+              void health.connect().then((row) => {
+                if (row.status === 'not_connected') {
+                  Alert.alert(health.title, copy('health.permissionDenied'));
+                }
+              });
+            }}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-sm leading-5 text-muted">{health.subtitle}</AppText>
+            {health.lastSyncedLabel ? (
+              <AppText className="mt-0.5 text-[12px] leading-5 text-muted">{health.lastSyncedLabel}</AppText>
+            ) : null}
+          </Pressable>
+          {health.helper ? (
+            <AppText className="text-[12px] leading-5 text-muted">{health.helper}</AppText>
+          ) : null}
+          {health.lastError ? (
+            <AppText className="text-[12px] leading-5 text-muted">{health.lastError}</AppText>
+          ) : null}
+        </View>
+        ) : null}
         <View className="gap-2">
           <AppText className="text-sm font-semibold text-charcoal">Notifications</AppText>
           <AppText className="text-sm leading-5 text-muted">
@@ -221,6 +268,33 @@ export default function AccountScreen() {
           />
         </View>
       </View>
+      </ScrollView>
+      <ChromeOverlay visible={healthSheet} onClose={() => setHealthSheet(false)} align="end">
+        <View
+          className="px-5 pt-4"
+          style={{
+            backgroundColor: THEME.surface,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            paddingBottom: 20,
+          }}>
+          <View className="mb-3 items-center">
+            <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+          </View>
+          <AppText className="text-center text-sm leading-5 text-muted">{copy('health.disconnect')}</AppText>
+          <View className="mt-5 gap-3">
+            <Button
+              title={copy('health.disconnectAction')}
+              size="lg"
+              loading={health.disconnecting}
+              onPress={() => {
+                void health.disconnect().then(() => setHealthSheet(false));
+              }}
+            />
+            <Button title="Cancel" size="lg" variant="ghost" onPress={() => setHealthSheet(false)} />
+          </View>
+        </View>
+      </ChromeOverlay>
     </Screen>
   );
 }

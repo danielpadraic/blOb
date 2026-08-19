@@ -38,6 +38,7 @@ function personName(profile: PublicProfile): string {
 
 export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
   const { profile } = useMyProfile();
+  const { showSentToast } = useWallet();
   const transfer = useTransferCoins();
   const suggestions = useCoinRecipientSuggestions();
 
@@ -59,7 +60,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
   const amountIssue = transferAmountError(amount, wallet, currency, { unlimited: officialCoins });
   const recipientName = recipient ? personName(recipient) : '';
   const noun = currencyNoun(currency);
-  const acks = currency === 'bucks' ? BUCKS_ACKS : COIN_ACKS;
+  const acks = currency === 'bucks' ? BUCKS_ACKS : officialCoins ? OFFICIAL_COIN_ACKS : COIN_ACKS;
   const allChecked = acks.every((item) => checked[item.id]);
 
   const results = useMemo(() => {
@@ -81,7 +82,10 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
   }
 
   async function confirm() {
-    if (!recipient || !allChecked || amountIssue || transfer.isPending) {
+    if (!recipient || !allChecked || amount <= 0 || transfer.isPending) {
+      return;
+    }
+    if (!officialCoins && amountIssue) {
       return;
     }
     setError(null);
@@ -92,6 +96,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
         currency,
         note: currency === 'coins' ? note : null,
       });
+      showSentToast(copy('wallet.sent', 'neutral', { amount: amountLabel }));
       onClose();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : `Couldn’t send those ${noun}.`);
@@ -320,7 +325,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
               title={`Send ${amountLabel}`}
               size="lg"
               loading={transfer.isPending}
-              disabled={!allChecked}
+              disabled={!allChecked || amount <= 0}
               onPress={() => void confirm()}
             />
             <Button
@@ -354,6 +359,25 @@ export default function SendFundsScreen() {
 
   return null;
 }
+
+const OFFICIAL_COIN_ACKS = [
+  {
+    id: 'amount',
+    title: copy('money.leavesNow'),
+    body: (amount: string, name: string) =>
+      `${amount} will be credited to ${name} the moment you confirm. Official Coins are not cash.`,
+  },
+  {
+    id: 'immediate',
+    title: copy('money.immediate'),
+    body: () => 'There is no hold, delay, or pending state. Coins move as soon as you confirm.',
+  },
+  {
+    id: 'irreversible',
+    title: copy('money.irreversible'),
+    body: () => 'Peer Coin sends cannot be undone. Double-check the recipient and amount.',
+  },
+] as const;
 
 const COIN_ACKS = [
   {

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { ChallengeCarousel, type CarouselSocialProof } from '@/components/challenge/ChallengeCarousel';
@@ -19,7 +19,8 @@ import {
 } from '@/hooks/useChallenge';
 import { useChallengeDrafts, useDiscardChallengeDraft } from '@/hooks/useChallengeDraft';
 import { isVisibleDraft } from '@/lib/challengeDraft';
-import { THEME } from '@/lib/theme';
+import { THEME, themeShadow } from '@/lib/theme';
+import { AppText } from '@/components/ui/AppText';
 import { challengeDetailHref } from '@/lib/routes';
 import { asCopyTone, copy } from '@/lib/copy';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
@@ -40,6 +41,9 @@ function matchesSearch(title: string, query: string) {
 
 export default function ChallengesScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ notice?: string }>();
+  const notice = Array.isArray(params.notice) ? params.notice[0] : params.notice;
+  const [toast, setToast] = useState<string | null>(null);
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const tone = asCopyTone(profile?.motivation_tone);
@@ -51,6 +55,16 @@ export default function ChallengesScreen() {
   const draftsQuery = useChallengeDrafts();
   const discardDraft = useDiscardChallengeDraft();
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (notice !== 'cancelled') {
+      return;
+    }
+    setToast(copy('challenge.cancelledToast'));
+    router.setParams({ notice: undefined });
+    const timer = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(timer);
+  }, [notice, router]);
 
   const drafts = (draftsQuery.data ?? []).filter(isVisibleDraft);
   const search = query.trim();
@@ -242,6 +256,21 @@ export default function ChallengesScreen() {
           />
         </ScrollView>
       )}
+      {toast ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 16 }}>
+          <View
+            className="mx-8 items-center px-4 py-2.5"
+            style={{
+              backgroundColor: THEME.primary,
+              borderRadius: 16,
+              ...themeShadow('card'),
+            }}>
+            <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
+              {toast}
+            </AppText>
+          </View>
+        </View>
+      ) : null}
     </Screen>
   );
 }
