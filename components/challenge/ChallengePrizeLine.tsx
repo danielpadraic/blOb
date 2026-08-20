@@ -1,9 +1,9 @@
 import { View } from 'react-native';
 
-import { CurrencyMark } from '@/components/currency/CurrencyMark';
+import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { prizeDistributionLabel } from '@/lib/challenges';
-import { formatCash, formatWalletNumber, isBucksChallenge } from '@/lib/currency';
+import { formatCash, isBucksChallenge } from '@/lib/currency';
 import type { Challenge } from '@/lib/types';
 
 export function ChallengePrizeLine({
@@ -31,8 +31,13 @@ export function ChallengePrizeLine({
   }
   return (
     <View className="flex-row flex-wrap items-center" style={{ gap: 6 }}>
-      <AppText className={textClassName}>{formatWalletNumber(amount)}</AppText>
-      <CurrencyMark currency="coins" size={18} />
+      <StakeAmount
+        amount={amount}
+        currency={challenge.currency}
+        size={18}
+        zeroAsNumber
+        textClassName={textClassName}
+      />
       <AppText className={textClassName}>· {distribution}</AppText>
     </View>
   );

@@ -12,7 +12,7 @@ import { proofDisplayName } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
-import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
+import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
@@ -32,7 +32,7 @@ const DISMISS_Y = 88;
 function acknowledgments(challenge: Challenge) {
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
-  const buyIn = bucks ? formatCash(buyInAmount) : formatWallet(buyInAmount, 'coins');
+  const buyIn = formatWalletAmount(buyInAmount, challenge.currency);
   const isFree = buyInAmount <= 0;
   const proofs = requiredChallengeProofs(challenge);
   const proofLabels = proofs.map((proof) => proofDisplayName(proof)).join(', ');
@@ -131,7 +131,7 @@ export function JoinConfirmModal({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
-  const buyIn = bucks ? formatCash(buyInAmount) : formatWallet(buyInAmount, 'coins');
+  const buyIn = formatWalletAmount(buyInAmount, challenge.currency);
   const isFree = buyInAmount <= 0;
   const items = acknowledgments(challenge);
   const allChecked = items.length === 0 || items.every((item) => checked[item.id]);

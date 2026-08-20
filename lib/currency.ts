@@ -53,6 +53,16 @@ export function formatCashCompact(amount: number | null | undefined): string {
   return `$${rounded.toFixed(2)}`;
 }
 
+/** Amount without the word “Coins.” Cash: $10.00. Coins: 10.00. */
+export function formatWalletAmount(
+  amount: number | null | undefined,
+  currency?: string | null,
+): string {
+  return asWalletCurrency(currency) === 'bucks'
+    ? formatCash(amount)
+    : Number(amount ?? 0).toFixed(2);
+}
+
 export function formatWallet(
   amount: number | null | undefined,
   currency?: string | null,

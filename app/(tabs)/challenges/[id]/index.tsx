@@ -19,6 +19,7 @@ import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { JoinCtaButton, JOIN_CTA_HEIGHT } from '@/components/challenge/JoinCtaButton';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
+import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { BODY_METRICS_HREF, LOBBY_HREF } from '@/lib/routes';
@@ -78,7 +79,7 @@ import {
 import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { heroRingDays } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
-import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
+import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
@@ -195,7 +196,7 @@ export default function ChallengeDetailScreen() {
     const buyIn = Number(challenge.buy_in_amount) || 0;
     const held = walletBalance(profile, challenge.currency);
     if (buyIn > 0 && profile && held < buyIn && !isBucksChallenge(challenge)) {
-      return `You need ${formatWallet(buyIn, challenge.currency)} to join. You have ${formatWallet(held, challenge.currency)}.`;
+      return `You need ${formatWalletAmount(buyIn, challenge.currency)} to join. You have ${formatWalletAmount(held, challenge.currency)}.`;
     }
     return null;
   }, [challenge, isHost, isJoined, profile]);
@@ -419,10 +420,7 @@ export default function ChallengeDetailScreen() {
       ? 'Proof for every check-in'
       : `${proofSteps.length} proofs every check-in`;
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
-  const isFreeEntry = buyInAmount <= 0;
   const bucks = isBucksChallenge(challenge);
-  const money = (amount: number) =>
-    bucks ? formatCash(amount) : formatWallet(amount, challenge.currency);
   const logsClosed = isClosedForLogs({
     ...challenge,
     eliminated: Boolean(participation?.eliminated_at),
@@ -665,11 +663,15 @@ export default function ChallengeDetailScreen() {
                 textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
                 Entry fee
               </FieldNoteLabel>
-              <AppText className="mt-1 text-xl font-bold text-charcoal">
-                {isFreeEntry
-                  ? 'Free'
-                  : money(buyInAmount)}
-              </AppText>
+              <View className="mt-1">
+                <StakeAmount
+                  amount={buyInAmount}
+                  currency={challenge.currency}
+                  size={18}
+                  freeLabel="Free"
+                  textClassName="text-xl font-bold text-charcoal"
+                />
+              </View>
             </View>
           )}
           <View>

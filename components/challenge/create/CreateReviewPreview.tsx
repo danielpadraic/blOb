@@ -4,6 +4,7 @@ import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
+import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { signupProofLines } from '@/lib/challengeProofs';
@@ -11,7 +12,6 @@ import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { isPointsChallenge } from '@/lib/challenges';
-import { formatCash, formatWallet, isBucksChallenge } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { previewFromValues } from '@/lib/challengeTemplates';
 import { THEME } from '@/lib/theme';
@@ -178,13 +178,15 @@ export function CreateReviewPreview({
           textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
           Entry fee
         </FieldNoteLabel>
-        <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
-          {Number(challenge.buy_in_amount) > 0
-            ? isBucksChallenge(challenge)
-              ? formatCash(challenge.buy_in_amount)
-              : formatWallet(challenge.buy_in_amount, challenge.currency)
-            : 'Free'}
-        </AppText>
+        <View className="mt-2">
+          <StakeAmount
+            amount={challenge.buy_in_amount}
+            currency={challenge.currency}
+            size={18}
+            freeLabel="Free"
+            textClassName="text-[17px] font-semibold leading-6 text-charcoal"
+          />
+        </View>
       </Card>
 
       <ChallengeLeaderboard challenge={challenge} roster={[]} completedUserIds={new Set()} />

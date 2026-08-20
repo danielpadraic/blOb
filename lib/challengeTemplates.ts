@@ -18,7 +18,7 @@ import {
 } from '@/lib/consistencyRules';
 import { persistTasksForPublish, minMinutesForPublish, namedProofsForPublish } from '@/lib/challengeCreatePublish';
 import { laneReviewLine, normalizeUserChallengeLane } from '@/lib/challengeLane';
-import { formatWallet } from '@/lib/currency';
+import { formatWalletAmount } from '@/lib/currency';
 import { emptyChallengeTask, createChallengeSchema, type CreateChallengeValues } from '@/utils/validators';
 
 const FITNESS_PROOFS: ProofType[] = ['pre_selfie', 'post_selfie', 'hr_monitor'];
@@ -442,7 +442,7 @@ export function wizardMeans(
         currency: values.currency,
       });
     case 7: {
-      const entry = buyIn > 0 ? `Entry fee is ${formatWallet(buyIn, values.currency)} per competitor.` : 'Competitors enter free.';
+      const entry = buyIn > 0 ? `Entry fee is ${formatWalletAmount(buyIn, values.currency)} per competitor.` : 'Competitors enter free.';
       const cap =
         values.participant_cap === 'limited'
           ? `Max ${Math.max(Number(values.max_participants) || 0, 0)} competitors.`
@@ -499,11 +499,11 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
 
   const entry =
     values.participant_cap === 'limited'
-      ? `${buyIn > 0 ? `${formatWallet(buyIn, values.currency)} to enter` : 'Free to enter'}. Max ${Math.max(
+      ? `${buyIn > 0 ? `${formatWalletAmount(buyIn, values.currency)} to enter` : 'Free to enter'}. Max ${Math.max(
           Number(values.max_participants) || 0,
           0,
         )} competitors.`
-      : `${buyIn > 0 ? `${formatWallet(buyIn, values.currency)} to enter` : 'Free to enter'}. Unlimited competitors.`;
+      : `${buyIn > 0 ? `${formatWalletAmount(buyIn, values.currency)} to enter` : 'Free to enter'}. Unlimited competitors.`;
 
   return [
     { title: 'Who it’s for', body: `${values.title.trim()}\n${(values.description ?? '').trim()}\n${vis}` },
@@ -581,7 +581,7 @@ export function challengeContractRows(values: CreateChallengeValues): { label: s
     { label: 'Type', body: `${typeLabel} / ${challengeCategoryLabel(values.category)}` },
     { label: 'Rules', body: rules || 'Set what competitors must check in.' },
     { label: 'Schedule', body: schedule },
-    { label: 'Entry', body: buyIn > 0 ? formatWallet(buyIn, lane === 'private' ? values.currency : 'coins') : 'Free' },
+    { label: 'Entry', body: buyIn > 0 ? formatWalletAmount(buyIn, lane === 'private' ? values.currency : 'coins') : 'Free' },
     { label: 'Prize structure', body: shortPrizeLabel(values) },
     { label: 'Visibility', body: visibility },
     { label: 'Competitors', body: competitors },
@@ -664,7 +664,7 @@ export function coinFlowLines(values: CreateChallengeValues): { label: string; b
   const buyIn = Math.max(Number(values.buy_in) || 0, 0);
   const contribution =
     values.funding_model === 'participants' ? 0 : Math.max(Number(values.creator_contribution) || 0, 0);
-  const money = (amount: number) => formatWallet(amount, values.currency);
+  const money = (amount: number) => formatWalletAmount(amount, values.currency);
   const noun = values.currency === 'bucks' ? '$' : 'Coins';
   const lines: { label: string; body: string }[] = [];
 

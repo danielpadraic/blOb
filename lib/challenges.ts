@@ -27,7 +27,7 @@ import type {
   TopPlacesMode,
 } from '@/lib/types';
 import { getCreateChallengeMessage, getErrorMessage, getStartUpdateMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
-import { challengeCurrency, formatWallet } from '@/lib/currency';
+import { challengeCurrency, formatWalletAmount } from '@/lib/currency';
 import { applyLaneForPublish, isInviteOnlyChallenge } from '@/lib/challengeLane';
 import {
   isInviteOnlyDiscoverable,
@@ -35,7 +35,6 @@ import {
   isLiveOrUpcoming,
 } from '@/lib/challengeDiscoverability';
 
-import { formatCoins } from '@/utils/format';
 import { copy } from '@/lib/copy';
 import { parseOfficialDayWindows } from '@/lib/officialDays';
 import { OFFICIAL_WEEK_10_SLUG, pickFeaturedOfficialChallenge } from '@/lib/officialSeries';
@@ -393,7 +392,7 @@ export function fundingModelSummary(config: {
   const model = normalizeFundingModel(config.funding_model);
   const contribution = Math.max(Number(config.creator_contribution) || 0, 0);
   const buyIn = Math.max(Number(config.buy_in_amount) || 0, 0);
-  const money = (amount: number) => formatWallet(amount, config.currency);
+  const money = (amount: number) => formatWalletAmount(amount, config.currency);
 
   if (model === 'creator') {
     return buyIn > 0

@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
-import { asWalletCurrency, formatCash, formatWalletNumber } from '@/lib/currency';
+import { asWalletCurrency, formatCash } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 
 const COIN = require('@/assets/currency/blob-coin.png');
@@ -69,11 +69,11 @@ export function StakeAmount({
     return <AppText className={textClassName}>{formatCash(value)}</AppText>;
   }
   return (
-    <View className="flex-row items-center">
-      <CurrencyMark currency={currency} size={size} />
-      <AppText className={`ml-0.5 ${textClassName}`}>
-        {value <= 0 ? '0' : formatWalletNumber(value)}
+    <View className="flex-row items-center" style={{ gap: 6 }}>
+      <AppText className={textClassName}>
+        {value <= 0 ? '0.00' : value.toFixed(2)}
       </AppText>
+      <CurrencyMark currency={currency} size={size} />
     </View>
   );
 }
