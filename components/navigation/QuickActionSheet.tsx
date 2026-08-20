@@ -67,7 +67,7 @@ export function QuickActionSheet({
     { id: 'post', glyph: '✍️', label: 'New Post' },
     { id: 'story', glyph: '📷', label: copy('wave.noun') },
     { id: 'reel', glyph: '🎬', label: copy('round.noun') },
-    { id: 'coins', glyph: '🪙', label: 'Send Coins or Bucks' },
+    { id: 'coins', glyph: '🪙', label: 'Send Coins or $' },
   ];
 
   const listMax = Math.max(ROW_MIN + LIST_PAD, sheetMax - handleH);

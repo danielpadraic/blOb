@@ -220,7 +220,7 @@ export function ChallengeCard({
         </View>
 
         <View className="mt-1.5 flex-row items-start gap-2">
-          <MetaCol label="Buy-in">
+          <MetaCol label="Entry fee">
             <StakeAmount
               amount={challenge.buy_in_amount}
               currency={challenge.currency}
@@ -229,7 +229,7 @@ export function ChallengeCard({
               textClassName="text-[12px] font-semibold text-charcoal"
             />
           </MetaCol>
-          <MetaCol label="Pool">
+          <MetaCol label="Prize">
             <StakeAmount
               amount={challenge.prize_pool}
               currency={challenge.currency}

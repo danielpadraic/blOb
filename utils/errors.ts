@@ -27,7 +27,7 @@ const CREATE_RPC_MESSAGES: Record<string, string> = {
   INSUFFICIENT_FUNDS: 'Not enough Coins/$ to fund this prize.',
   START_IN_PAST: 'Start time has to be in the future.',
   OFFICIAL_NOT_ALLOWED: 'Official competitions are hosted by blOb.',
-  PRIVATE_NO_PLAYER_BUY_IN: 'Private challenges can’t charge competitors a buy-in for the prize.',
+  PRIVATE_NO_PLAYER_BUY_IN: 'Private challenges can’t charge competitors an entry fee for the prize.',
 };
 
 export function getCreateChallengeMessage(error: unknown): string {
@@ -224,7 +224,7 @@ function humanize(raw: string): string {
     return 'You can’t send to that person.';
   }
   if (message.includes('insufficient bucks')) {
-    return 'Insufficient Bucks';
+    return 'Insufficient $';
   }
   if (message.includes('insufficient credits') || message.includes('enough coins') || message.includes('insufficient coins')) {
     return 'Insufficient Coins';
@@ -408,7 +408,7 @@ function humanize(raw: string): string {
     return 'Give the challenge a title before you publish.';
   }
   if (message.includes('invalid_currency') || message.includes('pick blob coins or blob bucks')) {
-    return 'Pick Blob Coins or Blob Bucks.';
+    return 'Pick Blob Coins or $.';
   }
   if (message.includes('lane_required') || message.includes('choose coin challenge or private challenge')) {
     return 'Choose Coin Challenge or Private Challenge.';
@@ -417,10 +417,10 @@ function humanize(raw: string): string {
     return 'Official competitions are hosted by blOb.';
   }
   if (message.includes('private_no_player_buy_in') || message.includes('private challenges can’t charge') || message.includes('private challenges can\'t charge')) {
-    return 'Private challenges can’t charge competitors a buy-in for the prize.';
+    return 'Private challenges can’t charge competitors an entry fee for the prize.';
   }
   if (message.includes('insufficient_funds') || message.includes('insufficient credits') || message.includes('insufficient bucks')) {
-    return 'Not enough Coins/Bucks to fund this prize.';
+    return 'Not enough Coins or $ to fund this prize.';
   }
   if (message.includes('no_refund_after_start')) {
     return 'Refunds are not allowed after the official start.';

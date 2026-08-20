@@ -28,7 +28,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-coins',
     placement: 'below',
     title: 'Coins',
-    body: 'Rewards for showing up — login, streaks, firsts. Not for Official buy-in.',
+    body: 'Rewards for showing up — login, streaks, firsts. Not for Official entry fees.',
   },
   {
     id: 'money',

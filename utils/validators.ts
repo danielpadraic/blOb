@@ -282,7 +282,7 @@ export const createChallengeSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['buy_in'],
-        message: `Keep the entry fee at 10,000 ${values.currency === 'bucks' ? 'Bucks' : 'Coins'} or less`,
+        message: `Keep the entry fee at 10,000 ${values.currency === 'bucks' ? 'USD' : 'Coins'} or less`,
       });
     }
 
@@ -290,7 +290,7 @@ export const createChallengeSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['currency'],
-        message: 'Coin Challenges use Coins, not Bucks.',
+        message: 'Coin Challenges use Coins, not $.',
       });
     }
 
@@ -298,7 +298,7 @@ export const createChallengeSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['buy_in'],
-        message: 'Private challenges can’t charge competitors a buy-in for the prize.',
+        message: 'Private challenges can’t charge competitors an entry fee for the prize.',
       });
     }
 
@@ -315,13 +315,13 @@ export const createChallengeSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['creator_contribution'],
-          message: `Put in at least 1 ${values.currency === 'bucks' ? 'Buck' : 'Coin'} to fund the pool`,
+          message: `Put in at least 1 ${values.currency === 'bucks' ? 'USD' : 'Coin'} to fund the prize`,
         });
       } else if (contribution > 10_000) {
         ctx.addIssue({
           code: 'custom',
           path: ['creator_contribution'],
-          message: `Keep your contribution at 10,000 ${values.currency === 'bucks' ? 'Bucks' : 'Coins'} or less`,
+          message: `Keep your contribution at 10,000 ${values.currency === 'bucks' ? 'USD' : 'Coins'} or less`,
         });
       }
     }
@@ -427,7 +427,7 @@ export const createChallengeSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['prize_structure'],
-          message: 'The last person standing wins the entire prize pool',
+          message: 'The last person standing wins the entire prize',
         });
       }
     } else {

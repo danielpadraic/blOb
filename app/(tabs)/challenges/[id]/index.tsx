@@ -212,7 +212,7 @@ export default function ChallengeDetailScreen() {
     const buyIn = Number(challenge.buy_in_amount) || 0;
     const held = walletBalance(profile, challenge.currency);
     if (buyIn > 0 && profile && held < buyIn && !isBucksChallenge(challenge)) {
-      return `You need ${formatWallet(buyIn, challenge.currency)} to buy in. You have ${formatWallet(held, challenge.currency)}.`;
+      return `You need ${formatWallet(buyIn, challenge.currency)} to join. You have ${formatWallet(held, challenge.currency)}.`;
     }
     return null;
   }, [challenge, isHost, isJoined, profile]);
@@ -646,7 +646,7 @@ export default function ChallengeDetailScreen() {
             <View>
               <View className="flex-row items-center" style={{ marginLeft: -8 }}>
                 <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-                  Buy-in
+                  Entry fee
                 </AppText>
                 <FieldNoteButton note="buyIn" />
               </View>
@@ -770,7 +770,7 @@ export default function ChallengeDetailScreen() {
               <AppText className="font-semibold text-charcoal">Judging</AppText>
               <AppText className="text-sm leading-5 text-muted">
                 {gateOpen
-                  ? `The 1 hour hold is done. Distribute ${bucks ? 'Bucks' : 'Coins'} to completers. This can only happen once.`
+                  ? `The 1 hour hold is done. Distribute ${bucks ? '$' : 'Coins'} to completers. This can only happen once.`
                   : `Results locked · payout after 1h hold${
                       payoutAt
                         ? ` · ${payoutCountdownLabel(payoutAt, new Date(nowMs))} left`

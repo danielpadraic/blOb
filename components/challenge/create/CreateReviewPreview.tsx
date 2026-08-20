@@ -176,7 +176,7 @@ export function CreateReviewPreview({
       <Card>
         <View className="flex-row items-center" style={{ marginLeft: -8 }}>
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-            Buy-in
+            Entry fee
           </AppText>
           <FieldNoteButton note="buyIn" />
         </View>

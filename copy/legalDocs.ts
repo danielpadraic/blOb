@@ -41,11 +41,11 @@ export const LEGAL_DOCS: Record<
         ],
       },
       {
-        heading: '4. Coins and Bucks',
+        heading: '4. Coins and real money',
         body: [
-          'Coins are in-app rewards for showing up. They have no cash value, are not legal tender, and are not interchangeable with Bucks.',
-          'Bucks are real-money stakes used for Official and other paid challenges. Bucks are not a bank deposit. Available balances and withdrawals are subject to identity checks, payment-processor rules, and applicable law.',
-          'Official prize pots are not credited as Coins. Coin grants never move Official pot money.',
+          'Coins are in-app rewards for showing up. They have no cash value, are not legal tender, and are not interchangeable with real-money balances.',
+          'Real-money balances are used for Official and other paid challenges. They are not a bank deposit. Available balances and withdrawals are subject to identity checks, payment-processor rules, and applicable law.',
+          'Official prizes are not credited as Coins. Coin grants never move Official prize money.',
         ],
       },
       {
@@ -119,7 +119,7 @@ export const LEGAL_DOCS: Record<
           'Profile data you choose to add: photo, bio, training preferences, and fitness history.',
           'Body metrics you choose to add: gender, height, weight, body-fat estimate, and related fields. These stay private. Completing a fitness profile does not publish them.',
           'Usage data: challenges you create or join, proofs you submit, messages, friend relationships, notifications, and device tokens used to deliver alerts.',
-          'Payment data needed for Bucks and Official stakes is handled by our payment and identity vendors. We do not store full card numbers.',
+          'Payment data needed for real-money and Official stakes is handled by our payment and identity vendors. We do not store full card numbers.',
         ],
       },
       {

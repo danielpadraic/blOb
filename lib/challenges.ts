@@ -342,24 +342,24 @@ export function prizeDistributionLabel(config: PrizeStructureConfig): string {
   }
   const structure = normalizePrizeStructure(config.prize_structure);
   if (structure === 'winner_take_all') {
-    return 'Winner takes all';
+    return 'Winner take all';
   }
   if (structure === 'top_places') {
     return config.top_places_distribution === 'scaled' ? 'Top places scaled' : 'Top places';
   }
-  return 'Even split';
+  return 'Prize split evenly';
 }
 
 export function prizeStructureSummary(config: PrizeStructureConfig): string {
   if (config.is_unlimited) {
-    return 'The last person still meeting the requirement wins the entire prize pool.';
+    return 'The last person still meeting the requirement wins the entire prize.';
   }
   const structure = normalizePrizeStructure(config.prize_structure);
   if (structure === 'winner_take_all') {
-    return 'One winner takes the entire prize pool.';
+    return 'One winner takes the entire prize.';
   }
   if (structure !== 'top_places') {
-    return 'Everyone who successfully completes the challenge splits the prize pool evenly.';
+    return 'Everyone who successfully completes the challenge splits the prize evenly.';
   }
 
   const raw = Number(config.top_places_value);
@@ -372,9 +372,9 @@ export function prizeStructureSummary(config: PrizeStructureConfig): string {
       : `Top ${value || '—'}% of finishers`;
 
   if (scaled) {
-    return `${who} share the pool on a sliding scale — 1st place earns the most, then 2nd, and so on.`;
+    return `${who} share the prize on a sliding scale — 1st place earns the most, then 2nd, and so on.`;
   }
-  return `${who} will split the pool evenly.`;
+  return `${who} will split the prize evenly.`;
 }
 
 export function normalizeFundingModel(value: unknown): FundingModel {
@@ -397,13 +397,13 @@ export function fundingModelSummary(config: {
 
   if (model === 'creator') {
     return buyIn > 0
-      ? `The creator funds the pool with ${money(contribution)}. Competitors also pay ${money(buyIn)} to enter.`
-      : `The creator funds the entire prize pool with ${money(contribution)}. Competitors enter free.`;
+      ? `The creator funds the prize with ${money(contribution)}. Competitors also pay ${money(buyIn)} to enter.`
+      : `The creator funds the entire prize with ${money(contribution)}. Competitors enter free.`;
   }
   if (model === 'hybrid') {
-    return `The creator puts in ${money(contribution)} and each competitor pays ${money(buyIn)}. Both go into the prize pool.`;
+    return `The creator puts in ${money(contribution)} and each competitor pays ${money(buyIn)}. Both go into the prize.`;
   }
-  return `The prize pool is funded only by competitor buy-ins of ${money(buyIn)} each.`;
+  return `The prize is funded only by competitor entry fees of ${money(buyIn)} each.`;
 }
 
 export function isUnlimitedChallenge(

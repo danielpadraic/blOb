@@ -33,7 +33,7 @@ const GOAL_TYPE_TIPS: Record<ChallengeCategory, WizardBobTip> = {
   },
   productivity: {
     pose: 'point',
-    tagline: 'Work and habits with skin in the game.',
+    tagline: 'Work and habits you actually keep.',
     example: 'a friendly sales streak with a coworker, or wake up by 6 a.m. every weekday for a month.',
   },
   education: {
@@ -105,7 +105,7 @@ const STEP_TIPS: Record<number, WizardBobTip[]> = {
     { pose: 'point', tagline: 'You can’t end a timed challenge early.' },
   ],
   5: [
-    { pose: 'point', tagline: 'Blobs who complete the goal share the pot.' },
+    { pose: 'point', tagline: 'Blobs who complete the goal share the prize.' },
     { pose: 'point', tagline: 'Winner take all pays the top.' },
   ],
   6: [{ pose: 'point', tagline: 'Who puts money in—the host, the competitors, or both?' }],
@@ -138,7 +138,7 @@ export function wizardBobTips(
     return [
       {
         pose: 'point',
-        tagline: 'You fund the prize in Coins or Bucks. Competitors are not charged a buy-in.',
+        tagline: 'You fund the prize in Coins or $. Competitors are not charged an entry fee.',
       },
     ];
   }
@@ -146,7 +146,7 @@ export function wizardBobTips(
     return [
       {
         pose: 'point',
-        tagline: 'Invite-only. No competitor buy-in for the pool. Set a competitor cap if you want one.',
+        tagline: 'Invite-only. No competitor entry fee for the prize. Set a competitor cap if you want one.',
       },
     ];
   }
@@ -177,9 +177,9 @@ const FIELD_OOPS: Record<string, string> = {
   prize_structure: 'pick how the prize is split.',
   top_places_mode: 'pick percent or a count for top places.',
   top_places_value: 'say how many places share the prize.',
-  top_places_distribution: 'pick how those places split the pot.',
+  top_places_distribution: 'pick how those places split the prize.',
   funding_model: 'who puts money in—the host, the competitors, or both?',
-  creator_contribution: 'add how much you’re putting in the pool.',
+  creator_contribution: 'add how much you’re putting in the prize.',
   currency: 'pick Free or Coins.',
   buy_in: 'set a Coin amount to enter, or pick Free.',
   participant_cap: 'pick a competitor cap or leave it unlimited.',
@@ -191,8 +191,8 @@ const FIELD_OOPS: Record<string, string> = {
   min_minutes: 'set a minimum minutes per log.',
   cover_image_url: 'that cover needs a full http(s) link.',
   rules_video_url: 'that video needs a full http(s) link.',
-  bucks: 'check all three Bucks confirmations before we publish.',
-  wallet: 'you don’t have enough in your wallet to fund this pool.',
+  bucks: 'check all three $ confirmations before we publish.',
+  wallet: 'you don’t have enough in your wallet to fund this prize.',
   skill: 'confirm this is a contest of personal effort and skill.',
   publish: 'we couldn’t publish this challenge. Check the red note and try again.',
 };

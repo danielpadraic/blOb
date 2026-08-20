@@ -90,7 +90,7 @@ export function buildProfileBadges(input: BadgeInput): ProfileBadge[] {
     {
       id: 'buck-earner',
       label: input.bucksEarned >= 50 ? 'High roller' : 'Cash winner',
-      hint: 'Lifetime Bucks from real-money prizes.',
+      hint: 'Lifetime $ from real-money prizes.',
       glyph: GLYPH.crown,
       tone: 'green',
       earned: input.bucksEarned >= 10,

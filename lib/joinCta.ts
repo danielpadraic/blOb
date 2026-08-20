@@ -18,7 +18,11 @@ export function bucksJoinCta(input: {
   return {
     needsTopUp: cashBuyIn && buyIn > 0 && input.hasProfile && shortfall > 0,
     shortfall,
-    joinLabel: buyIn > 0 ? (cashBuyIn ? `Join ${formatCash(buyIn)}` : `Join ${buyIn.toFixed(2)}`) : 'Join',
+    joinLabel: buyIn > 0
+      ? cashBuyIn
+        ? `Join ${formatCash(buyIn)}`
+        : `Join ${Number.isInteger(buyIn) ? String(buyIn) : buyIn.toFixed(2)}`
+      : 'Join',
     topUpLabel: `Add ${formatCash(shortfall > 0 ? shortfall : buyIn)} to join`,
   };
 }

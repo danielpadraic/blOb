@@ -164,7 +164,7 @@ export function ChallengeHeroCard({
               adjustsFontSizeToFit
               minimumFontScale={0.8}
               style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
-              Current pool
+              Prize
             </AppText>
             <View className="mt-1 flex-row items-center" style={{ gap: 6, minWidth: 0 }}>
               {bucks ? (

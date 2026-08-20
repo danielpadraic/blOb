@@ -82,7 +82,7 @@ export function SettleConfirmModal({
           </AppText>
           {unlimited && !judging ? (
             <AppText className="mt-3 text-sm leading-5 text-muted">
-              Last remaining eligible person takes the pool.
+              Last remaining eligible person takes the prize.
             </AppText>
           ) : null}
 
@@ -113,7 +113,7 @@ export function SettleConfirmModal({
               <AppText className="flex-1 font-semibold leading-5 text-charcoal">
                 {judging
                   ? 'I understand results lock now, and payout waits one hour after the end.'
-                  : 'I understand winners are paid from the prize pool and this cannot be undone.'}
+                  : 'I understand winners are paid from the prize and this cannot be undone.'}
               </AppText>
             </View>
           </Pressable>

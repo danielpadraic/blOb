@@ -1,5 +1,5 @@
 import type { Challenge, Profile, WalletCurrency } from '@/lib/types';
-import { formatBucks, formatCoins, formatUsd } from '@/utils/format';
+import { formatCoins, formatUsd } from '@/utils/format';
 
 export function asWalletCurrency(value: string | null | undefined): WalletCurrency {
   return value === 'bucks' ? 'bucks' : 'coins';
@@ -57,7 +57,7 @@ export function formatWallet(
   amount: number | null | undefined,
   currency?: string | null,
 ): string {
-  return asWalletCurrency(currency) === 'bucks' ? formatBucks(amount) : formatCoins(amount);
+  return asWalletCurrency(currency) === 'bucks' ? formatCash(amount) : formatCoins(amount);
 }
 
 export function formatWalletWithUsd(
@@ -86,7 +86,7 @@ export function walletBalance(
 
 export function currencyNoun(currency?: string | null, plural = true): string {
   if (asWalletCurrency(currency) === 'bucks') {
-    return plural ? 'Bucks' : 'Buck';
+    return 'USD';
   }
   return plural ? 'Coins' : 'Coin';
 }

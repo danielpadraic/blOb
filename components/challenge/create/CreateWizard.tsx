@@ -1664,7 +1664,7 @@ function LaneSlide({
             'Prize: Coins (and status)',
             'Can be public in the Lobby',
           ]}
-          footer="No real-money buy-in."
+          footer="No real-money entry fee."
           onPress={() => onPick('coins')}
         />
         <ChoiceCard
@@ -1672,8 +1672,8 @@ function LaneSlide({
           title="Private Challenge"
           body="Invite-only. You fund the prize."
           bullets={[
-            'Competitors do not pay into the prize pool',
-            'You fund Coins or Bucks (or partner products later)',
+            'Competitors do not pay into the prize',
+            'You fund Coins or $ (or partner products later)',
             'Only invited people can join',
           ]}
           footer="Not listed in public discovery."
@@ -1767,8 +1767,8 @@ function StartSlide({
               title={challenge.title}
               body={
                 challenge.relation === 'hosted'
-                  ? 'Copies your setup. New id, empty prize pool, no competitors.'
-                  : 'Copies the setup you joined. New id, empty prize pool, no competitors.'
+                  ? 'Copies your setup. New id, empty prize, no competitors.'
+                  : 'Copies the setup you joined. New id, empty prize, no competitors.'
               }
               onPress={() => onPickPrevious(challenge)}
             />
@@ -2200,7 +2200,7 @@ function PrizeSlide({
               title={item.label}
               body={
                 isUnlimited
-                  ? 'The last person still meeting the requirement wins the entire prize pool.'
+                  ? 'The last person still meeting the requirement wins the entire prize.'
                   : item.helper
               }
               onPress={() => onPrizeChange(item.value)}
@@ -2238,8 +2238,8 @@ function PrizeSlide({
                 error={errors.top_places_value?.message}
                 hint={
                   topPlacesMode === 'count'
-                    ? 'e.g. 3 means 1st, 2nd, and 3rd share the pool.'
-                    : 'e.g. 10 means the top 10% of finishers share the pool.'
+                    ? 'e.g. 3 means 1st, 2nd, and 3rd share the prize.'
+                    : 'e.g. 10 means the top 10% of finishers share the prize.'
                 }
               />
             )}
@@ -2292,7 +2292,7 @@ function FundingSlide({
   onCurrencyChange: (next: CreateChallengeValues['currency']) => void;
 }) {
   const isPrivateLane = normalizeUserChallengeLane(challengeLane) === 'private';
-  const noun = currency === 'bucks' ? 'Bucks' : 'Coins';
+  const noun = currency === 'bucks' ? '$' : 'Coins';
   const models = isPrivateLane
     ? FUNDING_MODELS.filter((item) => item.value === 'creator')
     : FUNDING_MODELS;
@@ -2304,7 +2304,7 @@ function FundingSlide({
         error={errors.funding_model?.message}
         hint={
           isPrivateLane
-            ? 'Competitors are not charged a buy-in. Put Coins or Bucks in from your wallet, or hold for partner products later.'
+            ? 'Competitors are not charged an entry fee. Put Coins or $ in from your wallet, or hold for partner products later.'
             : 'Coin challenges pay in Coins only.'
         }>
         <View className="gap-2">
@@ -2315,7 +2315,7 @@ function FundingSlide({
               title={item.label}
               body={
                 isPrivateLane && item.value === 'creator'
-                  ? 'You pay the prize pool up front. Competitors enter free.'
+                  ? 'You pay the prize up front. Competitors enter free.'
                   : item.helper
               }
               onPress={() => onFundingChange(item.value)}
@@ -2326,7 +2326,7 @@ function FundingSlide({
               selected={false}
               disabled
               title="Partner product (soon)"
-              body="Catalog prizes land in a later packet. For now, fund Coins or Bucks yourself."
+              body="Catalog prizes land in a later packet. For now, fund Coins or $ yourself."
               onPress={() => {}}
             />
           ) : null}
@@ -2342,7 +2342,7 @@ function FundingSlide({
               value={currency === 'bucks' ? 'bucks' : 'coins'}
               options={[
                 { value: 'coins', label: 'Coins' },
-                { value: 'bucks', label: 'Bucks' },
+                { value: 'bucks', label: '$' },
               ]}
               onChange={onCurrencyChange}
             />
@@ -2413,7 +2413,7 @@ function EntrySlide({
   const lane = normalizeUserChallengeLane(challengeLane);
   const isPrivateLane = lane === 'private';
   const isFree = isPrivateLane || entryTab === 'free';
-  const amountLabel = entryTab === 'bucks' ? 'Buy-in (Bucks)' : 'Buy-in (Coins)';
+  const amountLabel = entryTab === 'bucks' ? 'Entry fee ($)' : 'Entry fee (Coins)';
   const buyInOptions =
     isPrivateLane
       ? ([{ value: 'free', label: 'Free' }] as const)
@@ -2427,7 +2427,7 @@ function EntrySlide({
       {isPrivateLane ? (
         <FieldLabel label="Entry">
           <AppText className="text-sm leading-5 text-muted">
-            Competitors are not charged a buy-in for the prize. You fund the pool on Funding.
+            Competitors are not charged an entry fee for the prize. You fund the prize on Funding.
           </AppText>
         </FieldLabel>
       ) : (
@@ -2519,7 +2519,7 @@ function EntrySlide({
               onChangeText={onChange}
               onBlur={onBlur}
               error={errors.min_participants?.message}
-              hint="If fewer people have joined at start, it cancels and coin buy-ins refund."
+              hint="If fewer people have joined at start, it cancels and coin entry fees refund."
             />
           )}
         />

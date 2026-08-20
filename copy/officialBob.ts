@@ -2,17 +2,17 @@ import { interpolateCopy } from '@/lib/copy';
 
 export const OFFICIAL_DETAILS_LINES = [
   'Thirty minutes of elevated heart rate. A picture before, a picture after, and proof of the activity.',
-  'If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
+  'If 10+ finish (or everyone), prize split evenly. If fewer, they split the $10 prize.',
   'Official days end at 11:59 p.m. Central Time.',
   'A phone camera is required. Heart-rate proof is required (Watch, Fitness, or a screenshot).',
   'Anyone in the challenge can anonymously flag a post that does not meet these rules. Flagged posts are reviewed.',
   'Miss a day, forget to post, post incorrect proof, or post no proof, and you are out. Join the next challenge and try again.',
-  'Buy-ins are not refundable. You only get money back if you finish and are paid in the split.',
+  'Entry fees are not refundable. Finishers are paid from the prize.',
   '18+. Void where prohibited. Not medical advice.',
 ] as const;
 
 const BOB_PITCH =
-  'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. The couch will still be there. You do not have to be. Finish the week. Split the pot with everyone else who did. Make money, make friends, support each other, and do it again.';
+  'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. The couch will still be there. You do not have to be. Finish the week. Split the prize with everyone else who did. Make money, make friends, support each other, and do it again.';
 
 const OFFICIAL_BOB = {
   loginHeadline: 'A small promise. Then you move.',
@@ -35,7 +35,7 @@ const OFFICIAL_BOB = {
   geoBlocked: 'Sorry, this Challenge isn’t available in your State.',
   joinBob: BOB_PITCH,
   joinLegal:
-    'Buy-in is {amount}. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee. This is not a guaranteed profit.',
+    'Entry fee is {amount}. If 10+ finish (or everyone), prize split evenly. If fewer, they split the $10 prize. This is not a guaranteed profit.',
   missed:
     'You dropped. The stake stays with the people who didn’t. The workouts already happened. I do not take those back.',
   finished: 'You stayed. That is the whole sport.',

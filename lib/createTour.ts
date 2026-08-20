@@ -37,10 +37,10 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     id: 'simple-buyin',
     target: 'create-simple-buyin',
     placement: 'below',
-    title: 'Buy-in',
+    title: 'Entry fee',
     body: 'Each person pays this to join.',
-    titleBucks: 'Prize',
-    bodyBucks: 'You fund this prize pool.',
+    titleBucks: 'Total prize',
+    bodyBucks: 'You fund this prize.',
   },
   {
     id: 'simple-type',
@@ -195,7 +195,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: PRIZE,
     title: 'Payout',
-    body: 'How the prize pool splits.',
+    body: 'How the prize splits.',
   },
   {
     id: 'adv-funding',
@@ -203,7 +203,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: FUNDING,
     title: 'Funding',
-    body: 'Who puts money in the pool.',
+    body: 'Who puts money in the prize.',
   },
   {
     id: 'adv-currency',
@@ -218,7 +218,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-buy_in',
     placement: 'below',
     wizardStep: ENTRY,
-    title: 'Buy-in',
+    title: 'Entry fee',
     body: 'What each competitor pays to enter.',
   },
   {

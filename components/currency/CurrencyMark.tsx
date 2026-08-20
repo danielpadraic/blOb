@@ -22,7 +22,7 @@ export function CurrencyMark({
   accessibilityLabel,
 }: CurrencyMarkProps) {
   const kind = asWalletCurrency(currency);
-  const label = accessibilityLabel ?? (kind === 'bucks' ? 'Blob Bucks' : 'Blob Coins');
+  const label = accessibilityLabel ?? (kind === 'bucks' ? 'US dollars' : 'Blob Coins');
   return (
     <View className="flex-row items-center">
       <Image
@@ -37,7 +37,7 @@ export function CurrencyMark({
         <AppText
           className="ml-1.5 text-[12px] font-bold"
           style={{ color: kind === 'bucks' ? '#1B7A4A' : THEME.primary }}>
-          {kind === 'bucks' ? 'Bucks' : 'Coins'}
+          {kind === 'bucks' ? '$' : 'Coins'}
         </AppText>
       ) : null}
     </View>

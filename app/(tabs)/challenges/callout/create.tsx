@@ -28,12 +28,11 @@ import { normalizeCoinAmount, transferAmountError } from '@/lib/coins';
 import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile, WalletCurrency } from '@/lib/types';
-import { formatUsd } from '@/utils/format';
 import { copy } from '@/lib/copy';
 
 const CURRENCY_OPTIONS = [
   { value: 'coins', label: 'Coins' },
-  { value: 'bucks', label: 'Bucks $' },
+  { value: 'bucks', label: '$' },
 ] as const;
 
 const DEADLINES: { id: CalloutDeadlinePreset; label: string }[] = [
@@ -193,7 +192,7 @@ export default function CreateCalloutScreen() {
           onChangeText={setAmountDraft}
           placeholder="10"
           keyboardType="decimal-pad"
-          hint={`Each of you puts in this amount. Pot is ${formatWallet(amount * 2, currency)}. You have ${formatWallet(wallet, currency)}.`}
+          hint={`Each of you puts in this amount. Prize is ${formatWallet(amount * 2, currency)}. You have ${formatWallet(wallet, currency)}.`}
           error={amountDraft.trim() && amountIssue ? amountIssue : undefined}
         />
         <Input
@@ -238,7 +237,7 @@ export default function CreateCalloutScreen() {
 
           <AppText className="mt-5 mb-3 text-muted">
             {currency === 'bucks'
-              ? `Check all three. Real money. 1 Buck = ${formatUsd(1)}.`
+              ? 'Check all three. Real money. 1:1 with USD.'
               : 'Check all three before you send the call-out.'}
           </AppText>
           <View className="gap-3">
@@ -337,11 +336,11 @@ const BUCKS_ACKS = [
   {
     id: 'amount',
     title: copy('money.realUsd'),
-    body: (amount: string) => `${amount} each. 1 Blob Buck equals ${formatUsd(1)}.`,
+    body: (amount: string) => `${amount} each. 1:1 with USD.`,
   },
   {
     id: 'hold',
-    title: 'Bucks are deducted when they accept',
+    title: '$ is deducted when they accept',
     body: () =>
       'When they accept, both stakes leave immediately and stay held until you both agree on a winner or both cancel.',
   },

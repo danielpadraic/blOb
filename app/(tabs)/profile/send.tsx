@@ -23,13 +23,12 @@ import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '
 import { isOfficialAccount } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile, WalletCurrency } from '@/lib/types';
-import { formatUsd } from '@/utils/format';
 
 type Step = 'pick' | 'amount' | 'confirm';
 
 const CURRENCY_OPTIONS = [
   { value: 'coins', label: 'Coins' },
-  { value: 'bucks', label: 'Bucks $' },
+  { value: 'bucks', label: '$' },
 ] as const;
 
 function personName(profile: PublicProfile): string {
@@ -113,7 +112,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
         <View className="min-w-0 flex-1 pr-3">
           <AppText className="mb-1 text-[22px] font-bold text-charcoal">Send</AppText>
           <AppText className="mb-1 text-muted">
-            Choose Coins or Bucks, then pick a recipient. Transfers are final.
+            Choose Coins or $, then pick a recipient. Transfers are final.
           </AppText>
         </View>
         <Pressable
@@ -220,7 +219,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
               officialCoins
                 ? copy('official.badge')
                 : `You have ${formatWallet(wallet, currency)}${
-                    currency === 'bucks' ? ` · 1 Buck = ${formatUsd(1)}` : ''
+                    currency === 'bucks' ? ` · 1:1 with USD` : ''
                   }`
             }
             error={amountDraft.trim() && amountIssue ? amountIssue : undefined}
@@ -403,17 +402,17 @@ const BUCKS_ACKS = [
     id: 'amount',
     title: copy('money.realUsd'),
     body: (amount: string, name: string) =>
-      `${amount} will go to ${name}. 1 Blob Buck equals ${formatUsd(1)}.`,
+      `${amount} will go to ${name}. 1:1 with USD.`,
   },
   {
     id: 'immediate',
     title: 'The amount is deducted immediately',
-    body: () => 'There is no hold. Bucks leave your wallet the moment you confirm.',
+    body: () => 'There is no hold. $ leaves your wallet the moment you confirm.',
   },
   {
     id: 'irreversible',
     title: copy('money.irreversible'),
-    body: () => 'Peer Bucks sends cannot be undone. Double-check the recipient and amount.',
+    body: () => 'Peer $ sends cannot be undone. Double-check the recipient and amount.',
   },
 ] as const;
 

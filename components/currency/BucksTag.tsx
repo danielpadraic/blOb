@@ -16,7 +16,7 @@ export function BucksTag({ challenge, compact }: BucksTagProps) {
       className="flex-row items-center self-start rounded-full px-2 py-0.5"
       style={{ backgroundColor: '#1B7A4A' }}>
       <AppText className="text-[11px] font-bold" style={{ color: '#F4FFF6' }}>
-        {compact ? '$' : sponsored ? '$ Sponsored' : '$ Bucks'}
+        {compact ? '$' : sponsored ? '$ Sponsored' : '$'}
       </AppText>
     </View>
   );

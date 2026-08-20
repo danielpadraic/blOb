@@ -18,7 +18,7 @@ export function formatCoins(amount: number | null | undefined): string {
 
 export function formatBucks(amount: number | null | undefined): string {
   const value = Number(amount ?? 0);
-  return `${value.toFixed(2)} Bucks`;
+  return `$${value.toFixed(2)}`;
 }
 
 export function formatUsd(amount: number | null | undefined): string {

@@ -163,18 +163,18 @@ export const CHALLENGE_VISIBILITY = [
 export const PRIZE_STRUCTURES = [
   {
     value: 'equal_split',
-    label: 'Even split',
-    helper: 'Everyone who successfully finishes splits the prize pool evenly. This is how the official weekly challenge works.',
+    label: 'Prize split evenly',
+    helper: 'Everyone who successfully finishes splits the prize evenly. This is how the official weekly challenge works.',
   },
   {
     value: 'winner_take_all',
-    label: 'Winner takes all',
-    helper: 'A single winner receives the entire prize pool.',
+    label: 'Winner take all',
+    helper: 'A single winner receives the entire prize.',
   },
   {
     value: 'top_places',
     label: 'Top places',
-    helper: 'Only the top percent or top number of finishers share the pool — evenly, or scaled so 1st earns the most.',
+    helper: 'Only the top percent or top number of finishers share the prize — evenly, or scaled so 1st earns the most.',
   },
 ] as const satisfies readonly { value: PrizeStructure; label: string; helper: string }[];
 
@@ -187,7 +187,7 @@ export const TOP_PLACES_DISTRIBUTIONS = [
   {
     value: 'even',
     label: 'Evenly',
-    helper: 'Those top places split the pool the same amount each.',
+    helper: 'Those top places split the prize the same amount each.',
   },
   {
     value: 'scaled',
@@ -200,17 +200,17 @@ export const FUNDING_MODELS = [
   {
     value: 'participants',
     label: 'Competitor funded',
-    helper: 'Only competitors pay a buy-in. Those Coins become the prize pool. This is the default.',
+    helper: 'Only competitors pay an entry fee. Those Coins become the prize. This is the default.',
   },
   {
     value: 'creator',
     label: 'Creator funded',
-    helper: 'You pay the prize pool up front from your Coins. Competitors can enter free, or pay a small optional fee.',
+    helper: 'You pay the prize up front from your Coins. Competitors can enter free, or pay a small optional fee.',
   },
   {
     value: 'hybrid',
     label: 'Hybrid',
-    helper: 'You put in a base amount, and competitors also pay a buy-in. Both go into the pool.',
+    helper: 'You put in a base amount, and competitors also pay an entry fee. Both go into the prize.',
   },
 ] as const satisfies readonly { value: FundingModel; label: string; helper: string }[];
 
@@ -285,7 +285,7 @@ export const OFFICIAL_CHALLENGE = {
   description:
     'Show up every day. Thirty honest minutes. A picture before, a picture after, and heart-rate proof — screenshot is enough.',
   rules:
-    'Complete 6 workouts of at least 30 minutes in 7 days. Each required day needs a pre-workout selfie, a post-workout selfie, and proof of at least 30-minutes of elevated heart rate. Official days end at 11:59 p.m. Central Time. If 10+ finish (or everyone), they split the pot. If fewer, they split the guarantee.',
+    'Complete 6 workouts of at least 30 minutes in 7 days. Each required day needs a pre-workout selfie, a post-workout selfie, and proof of at least 30-minutes of elevated heart rate. Official days end at 11:59 p.m. Central Time. If 10+ finish (or everyone), prize split evenly. If fewer, they split the $10 prize.',
   buyIn: DEFAULT_BUY_IN,
   daysRequired: DEFAULT_DAYS_REQUIRED,
   windowDays: 7,

@@ -146,14 +146,14 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
     id: 'weekly_consistency',
     title: 'Weekly Consistency',
     eyebrow: '7 days · equal split',
-    blurb: 'Show up six times this week. Everyone who finishes splits the pool.',
+    blurb: 'Show up six times this week. Everyone who finishes splits the prize.',
     means:
       'A 7-day fitness streak. Competitors log 6 days with pre/post selfies and heart-rate proof. Completers split the prize evenly.',
     values: values({
       ...DEFAULT_CREATE_VALUES,
       title: 'Weekly Consistency Challenge',
       description:
-        'For anyone who wants a honest week of training. Win by completing 6 sessions in 7 days — finishers split the pool.',
+        'For anyone who wants a honest week of training. Win by completing 6 sessions in 7 days — finishers split the prize.',
       category: 'fitness',
       challenge_type: 'consistency',
       visibility: 'public',
@@ -170,14 +170,14 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       creator_contribution: '0',
       participant_cap: 'unlimited',
       rules:
-        'Complete 6 workouts of at least 30 minutes in 7 days. Each log needs a pre-selfie, a post-selfie, and a heart-rate screenshot. Miss the target and you get 0.00 Coins. Finishers split the prize pool evenly.',
+        'Complete 6 workouts of at least 30 minutes in 7 days. Each log needs a pre-selfie, a post-selfie, and a heart-rate screenshot. Miss the target and you get 0.00 Coins. Finishers split the prize evenly.',
     }),
   },
   {
     id: 'last_man_standing',
     title: 'Last Man Standing',
     eyebrow: '∞ · winner takes all',
-    blurb: 'No end date. Miss a week and you’re out. Last person standing takes the pool.',
+    blurb: 'No end date. Miss a week and you’re out. Last person standing takes the prize.',
     means:
       'Unlimited duration. Stay eligible with 5 logs every week. Miss a week and you’re eliminated. The last person still in wins everything.',
     values: values({
@@ -201,7 +201,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       creator_contribution: '0',
       participant_cap: 'unlimited',
       rules:
-        'No end date. Log 5 honest sessions every week to stay eligible. Miss a week and you’re out. The last person still standing wins the entire prize pool.',
+        'No end date. Log 5 honest sessions every week to stay eligible. Miss a week and you’re out. The last person still standing wins the entire prize.',
     }),
   },
   {
@@ -233,21 +233,21 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       participant_cap: 'limited',
       max_participants: '8',
       rules:
-        'Household only — keep it kind. Log a photo of the activity you agreed on. Everyone who hits 8 logs in 14 days splits the pool. You fund the prize; competitors enter free.',
+        'Household only — keep it kind. Log a photo of the activity you agreed on. Everyone who hits 8 logs in 14 days splits the prize. You fund the prize; competitors enter free.',
     }),
   },
   {
     id: 'office',
     title: 'Office / Team',
     eyebrow: '30 days · top 3',
-    blurb: 'Work-hours friendly. You seed the pool, the team buys in, top 3 share it.',
+    blurb: 'Work-hours friendly. You seed the prize, the team pays an entry fee, top 3 share it.',
     means:
-      'Private 30-day team challenge. Three logs a week. You put in a base, competitors buy in, and the top 3 share the pool on a sliding scale.',
+      'Private 30-day team challenge. Three logs a week. You put in a base, competitors pay an entry fee, and the top 3 share the prize on a sliding scale.',
     values: values({
       ...DEFAULT_CREATE_VALUES,
       title: 'Office team challenge',
       description:
-        'For your team or office crew. A win is three honest sessions a week for 30 days. Top 3 take the pool.',
+        'For your team or office crew. A win is three honest sessions a week for 30 days. Top 3 take the prize.',
       category: 'fitness',
       challenge_type: 'consistency',
       visibility: 'private',
@@ -268,7 +268,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       participant_cap: 'limited',
       max_participants: '24',
       rules:
-        'Three honest sessions a week for 30 days. Photo proof. Work-hours friendly — no 5am club required. You seed the pool; everyone also buys in. Top 3 share it on a sliding scale (1st earns the most).',
+        'Three honest sessions a week for 30 days. Photo proof. Work-hours friendly — no 5am club required. You seed the prize; everyone also pays an entry fee. Top 3 share it on a sliding scale (1st earns the most).',
     }),
   },
   {
@@ -277,7 +277,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
     eyebrow: 'Points · winner takes all',
     blurb: 'A scored task list. Highest total wins the whole pool.',
     means:
-      '14-day points challenge. Competitors complete scored tasks with proof. Highest point total takes the entire prize pool.',
+      '14-day points challenge. Competitors complete scored tasks with proof. Highest point total takes the entire prize.',
     values: values({
       ...DEFAULT_CREATE_VALUES,
       title: 'Skill Showdown',
@@ -302,7 +302,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       creator_contribution: '0',
       participant_cap: 'unlimited',
       rules:
-        'Complete the scored tasks before the window closes. Attach proof when a task asks for it. Highest point total wins the entire prize pool.',
+        'Complete the scored tasks before the window closes. Attach proof when a task asks for it. Highest point total wins the entire prize.',
     }),
   },
   {
@@ -442,7 +442,7 @@ export function wizardMeans(
         currency: values.currency,
       });
     case 7: {
-      const entry = buyIn > 0 ? `Buy-in is ${formatWallet(buyIn, values.currency)} per competitor.` : 'Competitors enter free.';
+      const entry = buyIn > 0 ? `Entry fee is ${formatWallet(buyIn, values.currency)} per competitor.` : 'Competitors enter free.';
       const cap =
         values.participant_cap === 'limited'
           ? `Max ${Math.max(Number(values.max_participants) || 0, 0)} competitors.`
@@ -665,30 +665,30 @@ export function coinFlowLines(values: CreateChallengeValues): { label: string; b
   const contribution =
     values.funding_model === 'participants' ? 0 : Math.max(Number(values.creator_contribution) || 0, 0);
   const money = (amount: number) => formatWallet(amount, values.currency);
-  const noun = values.currency === 'bucks' ? 'Bucks' : 'Coins';
+  const noun = values.currency === 'bucks' ? '$' : 'Coins';
   const lines: { label: string; body: string }[] = [];
 
   if (contribution > 0) {
     lines.push({
       label: 'You, on publish',
-      body: `${money(contribution)} leave your wallet and start the prize pool.`,
+      body: `${money(contribution)} leave your wallet and start the prize.`,
     });
   } else {
     lines.push({
       label: 'You, on publish',
-      body: `0.00 ${noun}. The pool starts empty until people join.`,
+      body: `0.00 ${noun}. The prize starts empty until people join.`,
     });
   }
 
   if (buyIn > 0) {
     lines.push({
       label: 'Each competitor',
-      body: `${money(buyIn)} moves from their wallet into the prize pool. Not refundable.`,
+      body: `${money(buyIn)} moves from their wallet into the prize. Not refundable.`,
     });
   } else {
     lines.push({
       label: 'Each competitor',
-      body: `Enters free. They don’t add ${noun} to the pool.`,
+      body: `Enters free. They don’t add ${noun} to the prize.`,
     });
   }
 

@@ -107,7 +107,7 @@ export function laneReviewLine(input: {
   visibility?: string | null;
 }): string {
   if (normalizeUserChallengeLane(input.challenge_lane) === 'private') {
-    return 'Invite-only. You are funding the prize. Competitors are not charged a buy-in for the pool.';
+    return 'Invite-only. You are funding the prize. Competitors are not charged an entry fee.';
   }
   const listed = input.visibility === 'private' ? 'Unlisted' : 'Public';
   return `Competitors compete for Coins. ${listed} in Lobby.`;

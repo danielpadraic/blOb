@@ -44,14 +44,14 @@ export function JoinBar({
       <View className="flex-row items-end justify-between">
         <View>
           <AppText className="text-xs uppercase tracking-widest text-muted">
-            {isFree ? 'Entry' : 'Buy-in'}
+            {isFree ? 'Entry' : 'Entry fee'}
           </AppText>
           <AppText className="text-2xl font-bold text-charcoal">
             {isFree ? 'Free' : money(buyInAmount)}
           </AppText>
         </View>
         <View className="items-end">
-          <AppText className="text-xs uppercase tracking-widest text-muted">On the line</AppText>
+          <AppText className="text-xs uppercase tracking-widest text-muted">Prize</AppText>
           <AppText className="text-lg font-semibold text-coral">{money(challenge.prize_pool)}</AppText>
         </View>
       </View>
@@ -61,7 +61,7 @@ export function JoinBar({
         <AppText className="text-sm text-muted">
           {isFree
             ? 'Joining is free. It does not take money from your wallet.'
-            : `${money(buyInAmount)} moves into the prize pool the moment you join.`}
+            : `${money(buyInAmount)} moves into the prize the moment you join.`}
         </AppText>
       )}
       <Button

@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
-import { formatBucks, formatCoins, formatUsd } from '@/utils/format';
+import { formatCoins, formatUsd } from '@/utils/format';
 
 type ProfileEarningsProps = {
   coins: number;
@@ -52,11 +52,11 @@ export function ProfileEarnings({ coins, bucks }: ProfileEarningsProps) {
               <AppText
                 className="ml-1.5 text-[10px] font-semibold uppercase tracking-widest"
                 style={{ color: '#C8E6C9' }}>
-                Bucks
+                $
               </AppText>
             </View>
             <AppText className="mt-2 text-[20px] font-bold" style={{ color: '#F4FFF6' }}>
-              {formatBucks(bucks).replace(' Bucks', '')}
+              {Number(bucks).toFixed(2)}
             </AppText>
             <AppText className="mt-0.5 text-[11px]" style={{ color: 'rgba(244,255,246,0.7)' }}>
               {formatUsd(bucks)} earned

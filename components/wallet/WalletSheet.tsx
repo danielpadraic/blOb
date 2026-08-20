@@ -17,7 +17,7 @@ const EARN_WAYS = [
   { icon: GLYPH.star, title: 'Unlock badges', body: 'Milestones grant bonus Coins.' },
   { icon: GLYPH.streak, title: 'Log your days', body: 'Proofs stack toward streak badges.' },
   { icon: GLYPH.flag, title: 'Host a challenge', body: 'Create one and earn the Host title.' },
-  { icon: GLYPH.swords, title: 'Win a call-out', body: '1-on-1 pots pay in the stake currency.' },
+  { icon: GLYPH.swords, title: 'Win a call-out', body: '1-on-1 prizes pay in the stake currency.' },
 ] as const;
 
 export function WalletSheet() {

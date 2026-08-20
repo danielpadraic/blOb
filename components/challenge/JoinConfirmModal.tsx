@@ -14,7 +14,6 @@ import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
 import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { bucksJoinCta } from '@/lib/joinCta';
-import { formatUsd } from '@/utils/format';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -56,20 +55,20 @@ function acknowledgments(challenge: Challenge) {
           : 'Joining is free'
         : bucks
           ? 'Real money leaves your wallet now'
-          : 'The buy-in leaves your wallet now',
+          : 'The entry fee leaves your wallet now',
       body: isFree
         ? bucks
-          ? 'Confirming does not take Bucks from your wallet. This official challenge still pays the prize in Bucks (1 Buck = $1 USD).'
-          : 'Confirming does not take Coins from your wallet. The prize pool is already funded.'
+          ? 'Confirming does not take money from your wallet. This official challenge still pays the prize in $ (1:1 with USD).'
+          : 'Confirming does not take Coins from your wallet. The prize is already funded.'
         : bucks
-          ? `${buyIn} will be deducted immediately. 1 Buck = ${formatUsd(1)}. This cannot be reversed.`
+          ? `${buyIn} will be deducted immediately. 1:1 with USD. This cannot be reversed.`
           : `${buyIn} will be taken from your Coins the moment you confirm. If you don’t finish, you do not get it back.`,
     },
     {
       id: 'split',
-      title: unlimited ? 'Last person standing wins everything' : 'How the prize pool is paid out',
+      title: unlimited ? 'Last person standing wins everything' : 'How the prize is paid out',
       body: unlimited
-        ? `${lastManStandingRequirement(challenge)} The last remaining eligible person takes the entire prize pool.`
+        ? `${lastManStandingRequirement(challenge)} The last remaining eligible person takes the entire prize.`
         : prizeCopy,
     },
     {
@@ -149,10 +148,10 @@ export function JoinConfirmModal({
       ? cta.topUpLabel
       : isFree
         ? 'Confirm and join free'
-        : `Confirm and pay ${buyIn}`
+        : `Pay ${buyIn} entry`
     : isFree
       ? 'Confirm and join free'
-      : `Confirm and pay ${buyIn}`;
+      : `Pay ${buyIn} entry`;
 
   useEffect(() => {
     if (!visible) {
@@ -250,7 +249,7 @@ export function JoinConfirmModal({
           <AppText className="mt-2 text-muted">
             {bucks
               ? isFree
-                ? 'This official challenge pays real money. Check every box. 1 Buck = $1 USD.'
+                ? 'This official challenge pays real money. Check every box. 1:1 with USD.'
                 : `Check every box. ${buyIn} leaves immediately. This cannot be reversed.`
               : isFree
                 ? 'Check all three. Joining is free and does not take Coins from your wallet.'

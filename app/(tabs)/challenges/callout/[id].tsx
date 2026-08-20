@@ -24,7 +24,7 @@ import { calloutStatusLabel } from '@/lib/callouts';
 import { formatWallet, formatWalletWithUsd } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
-import { formatDate, formatUsd } from '@/utils/format';
+import { formatDate } from '@/utils/format';
 
 export default function CalloutDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -103,7 +103,7 @@ export default function CalloutDetailScreen() {
         {bucks ? (
           <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: '#1B7A4A' }}>
             <AppText className="text-[11px] font-bold" style={{ color: '#F4FFF6' }}>
-              $ Bucks
+              $
             </AppText>
           </View>
         ) : null}
@@ -151,12 +151,12 @@ export default function CalloutDetailScreen() {
                 {
                   id: 'amount',
                   title: `${stakeLabel} is the real-money stake`,
-                  body: `1 Blob Buck equals ${formatUsd(1)}. The pot stays in Bucks.`,
+                  body: `1:1 with USD. The prize stays in $.`,
                 },
                 {
                   id: 'immediate',
                   title: 'Both stakes leave now',
-                  body: 'Accepting deducts your Bucks and theirs immediately. They stay held.',
+                  body: 'Accepting deducts your $ and theirs immediately. They stay held.',
                 },
                 {
                   id: 'irreversible',
@@ -229,7 +229,7 @@ export default function CalloutDetailScreen() {
             </AppText>
           ) : (
             <AppText className="text-sm leading-5 text-muted">
-              Who won? You both have to name the same person before the pot is released.
+              Who won? You both have to name the same person before the prize is released.
             </AppText>
           )}
           <Button
