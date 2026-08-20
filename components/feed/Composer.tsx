@@ -6,6 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 
 import { MentionField } from '@/components/feed/MentionField';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
+import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -23,7 +24,7 @@ import {
   type PostAudience,
 } from '@/lib/postAudience';
 import { captureHref } from '@/lib/routes';
-import { personDisplayName } from '@/lib/social';
+import { personDisplayName, type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import type { MentionDoc } from '@/lib/mentions';
 import { wallHostLabel } from '@/lib/profileWall';
@@ -47,6 +48,10 @@ type ComposerProps = {
   placeholder?: string;
   submitting?: boolean;
   autoFocus?: boolean;
+  initialText?: string;
+  attachedChallenge?: FeedChallengePreview | null;
+  audienceOptions?: { value: PostAudience; label: string }[];
+  defaultAudience?: PostAudience;
   quote?: { postId: string; snapshot: QuoteSnapshot; audience?: string | null } | null;
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
   onSubmit: (input: ComposeInput) => Promise<unknown> | void;
@@ -56,6 +61,10 @@ export function Composer({
   placeholder,
   submitting,
   autoFocus,
+  initialText,
+  attachedChallenge,
+  audienceOptions,
+  defaultAudience,
   quote,
   wallHost,
   onSubmit,
@@ -65,17 +74,20 @@ export function Composer({
   const resolvedPlaceholder = placeholder ?? copy('home.composer', asCopyTone(profile?.motivation_tone));
   const router = useRouter();
   const friends = useFriends();
-  const [doc, setDoc] = useState<MentionDoc>({ text: '', chips: [] });
+  const [doc, setDoc] = useState<MentionDoc>({ text: initialText ?? '', chips: [] });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState('');
-  const [audience, setAudience] = useState<PostAudience>(wallHost ? 'public' : DEFAULT_POST_AUDIENCE);
+  const audienceChoices = audienceOptions ?? POST_AUDIENCE_OPTIONS;
+  const [audience, setAudience] = useState<PostAudience>(
+    defaultAudience ?? (wallHost ? 'public' : DEFAULT_POST_AUDIENCE),
+  );
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
 
   const busy = Boolean(submitting || uploading);
   const canPost =
-    Boolean(doc.text.trim() || attachments.length > 0 || quote) &&
+    Boolean(doc.text.trim() || attachments.length > 0 || quote || attachedChallenge) &&
     (audience !== 'specific' || audienceUserIds.length > 0);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
@@ -171,6 +183,7 @@ export function Composer({
         wallHostId: wallHost?.id ?? null,
         quotedPostId: quote?.postId ?? null,
         quoteSnapshot: quote?.snapshot ?? null,
+        challengeId: attachedChallenge?.id ?? null,
       });
       setDoc({ text: '', chips: [] });
       setAttachments([]);
@@ -227,6 +240,12 @@ export function Composer({
         </View>
       ) : null}
 
+      {attachedChallenge && !quote ? (
+        <View className="mt-2" pointerEvents="none">
+          <ChallengeFeedCard challenge={attachedChallenge} />
+        </View>
+      ) : null}
+
       {attachments.length > 0 && !quote ? (
         <View className="mt-2 flex-row flex-wrap gap-1.5">
           {attachments.map((attachment) => (
@@ -246,7 +265,7 @@ export function Composer({
         style={{ borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 8 }}>
         <SegmentedControl
           value={audience}
-          options={POST_AUDIENCE_OPTIONS}
+          options={audienceChoices}
           onChange={setAudience}
           accessibilityLabel="Post audience"
         />

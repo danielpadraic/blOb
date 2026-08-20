@@ -3,12 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 import { useAuth } from '@/hooks/useAuth';
+import { challengeInviteMessage } from '@/lib/challengeFeedPost';
 import {
   fetchNotifications,
   fetchUnreadNotificationCount,
   inviteToChallenge,
   markNotificationsRead,
 } from '@/lib/notifications';
+import { getOrCreateDirectConversation, sendMessage } from '@/lib/social';
 import { maybeRequestPushPermission, PUSH_PROMPT_TYPES } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification } from '@/lib/types';
@@ -171,7 +173,8 @@ export function useMarkNotificationsRead() {
   });
 }
 
-export function useInviteToChallenge(challengeId: string | undefined) {
+export function useInviteToChallenge(challengeId: string | undefined, challengeTitle?: string) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -179,15 +182,29 @@ export function useInviteToChallenge(challengeId: string | undefined) {
       if (!challengeId) {
         throw new Error('Challenge not found.');
       }
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
       const ids = [...new Set((Array.isArray(inviteeIds) ? inviteeIds : [inviteeIds]).filter(Boolean))];
       if (ids.length === 0) {
         throw new Error('Pick someone to invite.');
       }
       const sent: string[] = [];
       const failed: { id: string; error: unknown }[] = [];
+      const title = challengeTitle?.trim() || 'this challenge';
+      const body = challengeInviteMessage(title, challengeId);
       for (const inviteeId of ids) {
         try {
           await inviteToChallenge(challengeId, inviteeId);
+          try {
+            const conversation = await getOrCreateDirectConversation(user.id, inviteeId);
+            await sendMessage(user.id, {
+              conversation_id: conversation.id,
+              body,
+            });
+          } catch (dmError) {
+            console.log('[blob:invite] dm skipped', dmError);
+          }
           sent.push(inviteeId);
         } catch (error) {
           failed.push({ id: inviteeId, error });
@@ -201,6 +218,9 @@ export function useInviteToChallenge(challengeId: string | undefined) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['challenge-invites', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      if (user?.id) {
+        void queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
+      }
     },
   });
 }

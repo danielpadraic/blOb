@@ -3,6 +3,7 @@ import { Alert, Linking, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
+import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { MentionText } from '@/components/feed/MentionText';
@@ -15,7 +16,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { useChallengeShareState } from '@/hooks/useChallenge';
+import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
 import { PROOF_META } from '@/lib/constants';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
@@ -127,14 +128,13 @@ export function PostCard({
             <PostBody
               content={content}
               mentions={post.mentions}
-              challengeId={post.challenge_id}
               expanded={expanded}
               canExpand={canExpand}
               onToggle={() => setExpanded((value) => !value)}
             />
-          ) : post.challenge_id && !quote ? (
-            <ChallengeShareFooter challengeId={post.challenge_id} />
           ) : null}
+
+          {post.challenge_id ? <ChallengeShareCard challengeId={post.challenge_id} /> : null}
 
           {quote ? (
             <QuoteEmbed
@@ -280,63 +280,50 @@ function GeoUnavailable() {
   );
 }
 
-function ChallengeShareFooter({ challengeId }: { challengeId: string }) {
+function ChallengeShareCard({ challengeId }: { challengeId: string }) {
+  const router = useRouter();
   const share = useChallengeShareState(challengeId);
+  const preview = useChallengeFeedPreview(challengeId);
   if (share.data?.reason === 'geo') {
     return <GeoUnavailable />;
   }
-  if (share.data?.reason !== 'ok') {
+  if (share.data?.reason === 'hidden') {
     return null;
   }
-  return <ChallengeTitleLink challengeId={challengeId} title={share.data.title} />;
+  if (preview.data) {
+    return (
+      <ChallengeFeedCard
+        challenge={preview.data}
+        onPress={() => router.push(challengeDetailHref(challengeId, 'feed'))}
+      />
+    );
+  }
+  if (share.data?.reason === 'ok') {
+    return <ChallengeTitleLink challengeId={challengeId} title={share.data.title} />;
+  }
+  return null;
 }
 
 function PostBody({
   content,
   mentions,
-  challengeId,
   expanded,
   canExpand,
   onToggle,
 }: {
   content: string;
   mentions?: PostWithMeta['mentions'];
-  challengeId: string | null;
   expanded: boolean;
   canExpand: boolean;
   onToggle: () => void;
 }) {
-  const share = useChallengeShareState(challengeId);
-  const title = share.data?.reason === 'ok' ? share.data.title : null;
-  const geoBlocked = share.data?.reason === 'geo';
-  const hidden = share.data?.reason === 'hidden';
-  const matchIndex = title ? content.indexOf(title) : -1;
-
   return (
     <View>
-      {challengeId && title && matchIndex >= 0 ? (
-        <AppText
-          className="text-[14px] leading-[20px] text-ink"
-          numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}>
-          {content.slice(0, matchIndex)}
-          <ChallengeTitleLink challengeId={challengeId} title={title} />
-          {content.slice(matchIndex + title.length)}
-        </AppText>
-      ) : (
-        <>
-          <MentionText
-            content={content}
-            mentions={mentions}
-            numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}
-          />
-          {geoBlocked ? <GeoUnavailable /> : null}
-          {challengeId && !geoBlocked && !hidden && share.data?.reason === 'ok' ? (
-            <View className="mt-1">
-              <ChallengeTitleLink challengeId={challengeId} title={title} />
-            </View>
-          ) : null}
-        </>
-      )}
+      <MentionText
+        content={content}
+        mentions={mentions}
+        numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}
+      />
       {canExpand ? (
         <Pressable accessibilityRole="button" hitSlop={6} onPress={onToggle}>
           <AppText className="mt-0.5 text-[13px] font-semibold" style={{ color: THEME.accent }}>

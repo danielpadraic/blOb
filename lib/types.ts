@@ -498,6 +498,7 @@ export type ComposeInput = {
   wallHostId?: string | null;
   quotedPostId?: string | null;
   quoteSnapshot?: QuoteSnapshot | null;
+  challengeId?: string | null;
 };
 
 export type PostMention = {

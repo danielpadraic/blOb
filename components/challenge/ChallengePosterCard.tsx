@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
@@ -100,7 +101,9 @@ export function ChallengePosterCard({
       />
       <AppText
         className="mt-2 text-[15px] font-extrabold leading-5 text-charcoal"
-        numberOfLines={2}>
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}>
         {challenge.title}
       </AppText>
     </View>
@@ -108,16 +111,45 @@ export function ChallengePosterCard({
 
   if (officialJoinable) {
     return (
-      <View style={cardStyle}>
+      <LinearGradient
+        colors={['#2C9B89', '#10201D']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          width: POSTER_WIDTH,
+          minHeight: OFFICIAL_POSTER_HEIGHT,
+          borderRadius: POSTER_RADIUS,
+          overflow: 'hidden',
+          padding: 12,
+          justifyContent: 'space-between',
+          ...themeShadow('card'),
+        }}>
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
           accessibilityLabel={challenge.title}>
-          {header}
-          <OfficialFillingStats challenge={challenge} nowMs={nowMs} />
+          <ChallengeTagRow
+            tags={challengeCardTags({
+              challenge,
+              hosting: hosting && !joined,
+              joined: competing,
+              invited: invited && !joined && !hosting,
+            })}
+          />
+          <AppText
+            className="mt-2 text-[15px] font-extrabold leading-5"
+            style={{ color: '#fff' }}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}>
+            {challenge.title}
+          </AppText>
+          <View className="mt-3">
+            <OfficialFillingStats challenge={challenge} nowMs={nowMs} tone="hero" />
+          </View>
         </Pressable>
-        <OfficialInviteButton challengeId={challenge.id} challengeTitle={challenge.title} />
-      </View>
+        <OfficialInviteButton challengeId={challenge.id} challengeTitle={challenge.title} tone="hero" />
+      </LinearGradient>
     );
   }
 
@@ -260,7 +292,7 @@ function posterStatus({
     return `You · ${logs} log${logs === 1 ? '' : 's'} · ${dropped ? 'dropped' : 'still in'}`;
   }
   if (remaining <= 0) {
-    return 'No one remaining';
+    return 'Settled';
   }
   return `${remaining} remaining · tap to view`;
 }

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { discardChallengeDraft } from '@/lib/challengeDraft';
+import { announceCreatedChallenge } from '@/lib/challengeFeedPost';
 import { applyLaneForPublish } from '@/lib/challengeLane';
 import { ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
@@ -41,6 +42,7 @@ import {
 } from '@/lib/consistencyRules';
 import { copy } from '@/lib/copy';
 import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
+import { fetchChallengePreviewsByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type {
   Challenge,
@@ -215,6 +217,18 @@ export function useChallengeShareState(id: string | null | undefined) {
     enabled: Boolean(id),
     staleTime: 60_000,
     queryFn: () => fetchChallengeShareState(id!),
+  });
+}
+
+export function useChallengeFeedPreview(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ['challenge-feed-preview', id],
+    enabled: Boolean(id),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const rows = await fetchChallengePreviewsByIds([id!]);
+      return rows[0] ?? null;
+    },
   });
 }
 
@@ -580,7 +594,7 @@ export function useCreateChallenge() {
           ? values.challenge_proofs
           : namedProofsFromLegacyTypes(values.proofs);
 
-      return insertUserChallenge({
+      const challenge = await insertUserChallenge({
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
         rules: rulesText || null,
@@ -646,6 +660,15 @@ export function useCreateChallenge() {
         start_rule: 'at_starts_at',
         discoverability: values.discoverability ?? null,
       });
+      await announceCreatedChallenge({
+        authorId: user.id,
+        challengeId: challenge.id,
+        title: challenge.title,
+        visibility: challenge.visibility ?? lane.visibility,
+        challenge_lane: challenge.challenge_lane ?? lane.challenge_lane,
+        is_official: challenge.is_official,
+      });
+      return challenge;
     },
     onSuccess: (challenge, values) => {
       const joined = values.creator_participating === true;
@@ -673,6 +696,7 @@ export function useCreateChallenge() {
       void queryClient.refetchQueries({ queryKey: ['lobby-joined'] });
       void queryClient.invalidateQueries({ queryKey: ['reusable-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void reportBadgeActivity();
     },
   });

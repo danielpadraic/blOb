@@ -151,7 +151,8 @@ export default function ChallengeDetailScreen() {
     inviteHost?.open({
       challengeId: challenge.id,
       challengeTitle: challenge.title,
-      shareLink: isOfficialJoinable(challenge) || isHost,
+      allowSendToPeople: isOfficialJoinable(challenge) || isHost,
+      defaultAudience: challenge.visibility === 'friends' ? 'friends' : 'public',
     });
   }
   const competitorCount = useMemo(() => {
@@ -534,13 +535,11 @@ export default function ChallengeDetailScreen() {
             showProgressRing={isJoined}
             cancelled={wasCancelled}
             onInvite={openInvite}>
-            {isHost &&
-            !inviteOnly &&
+            {!wasCancelled &&
             !isOfficialJoinable(challenge) &&
-            challenge.status !== 'settled' &&
-            !wasCancelled ? (
+            challenge.status !== 'settled' ? (
               <Button
-                title="Invite someone"
+                title="Share"
                 variant="outline"
                 size="sm"
                 onPress={openInvite}

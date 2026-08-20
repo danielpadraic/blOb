@@ -9,7 +9,6 @@ type OfficialInviteButtonProps = {
   challengeTitle?: string;
   onOpenPicker?: () => void;
   tone?: 'card' | 'hero';
-  shareLink?: boolean;
 };
 
 export function OfficialInviteButton({
@@ -17,7 +16,6 @@ export function OfficialInviteButton({
   challengeTitle,
   onOpenPicker,
   tone = 'card',
-  shareLink = true,
 }: OfficialInviteButtonProps) {
   const host = useInviteHost();
 
@@ -28,20 +26,21 @@ export function OfficialInviteButton({
       return;
     }
     if (!host) {
-      Alert.alert('Couldn’t invite', 'Open this challenge and tap Invite again.');
+      Alert.alert('Couldn’t share', 'Open this challenge and tap Share again.');
       return;
     }
     host.open({
       challengeId,
       challengeTitle: challengeTitle?.trim() || 'this challenge',
-      shareLink,
+      allowSendToPeople: true,
+      defaultAudience: 'public',
     });
   }
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Invite a friend"
+      accessibilityLabel="Share"
       onPress={(event) => onPress(event)}
       style={{
         minHeight: 44,
@@ -57,7 +56,7 @@ export function OfficialInviteButton({
       <AppText
         className="text-[13px] font-semibold"
         style={{ color: tone === 'hero' ? '#fff' : THEME.textPrimary }}>
-        Invite
+        Share
       </AppText>
     </Pressable>
   );

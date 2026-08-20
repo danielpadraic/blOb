@@ -750,7 +750,8 @@ export function useCreatePost(challengeId?: string | null) {
       const audience = input.audience ?? DEFAULT_POST_AUDIENCE;
       const audience_user_ids = audience === 'specific' ? (input.audienceUserIds ?? []) : [];
       const quoted_post_id = input.quotedPostId ?? null;
-      if (!content && media_urls.length === 0 && !quoted_post_id) {
+      const attachedId = input.challengeId ?? challengeId ?? null;
+      if (!content && media_urls.length === 0 && !quoted_post_id && !attachedId) {
         throw new Error('Write something, or attach a photo first.');
       }
       if (audience === 'specific' && audience_user_ids.length === 0) {
@@ -762,7 +763,7 @@ export function useCreatePost(challengeId?: string | null) {
       }
       const payload = postInsertPayload(schema, {
         author_id: user.id,
-        challenge_id: challengeId ?? null,
+        challenge_id: attachedId,
         content: content || null,
         media_urls,
         audience,
@@ -798,7 +799,7 @@ export function useCreatePost(challengeId?: string | null) {
         const optimistic: PostWithMeta = {
           id: `optimistic-${Date.now()}`,
           author_id: user.id,
-          challenge_id: challengeId ?? null,
+          challenge_id: input.challengeId ?? challengeId ?? null,
           content: input.content.trim() || null,
           media_urls: input.mediaUrls ?? [],
           audience: input.audience ?? DEFAULT_POST_AUDIENCE,

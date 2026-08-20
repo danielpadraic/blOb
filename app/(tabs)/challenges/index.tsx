@@ -8,6 +8,7 @@ import {
   ChallengeMenuPopover,
   type MenuAnchor,
 } from '@/components/challenge/ChallengeOverflowMenu';
+import { remainingFromChallenge } from '@/components/challenge/ChallengePosterCard';
 import { ContinueDraftCard } from '@/components/challenge/create/wizardUi';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
@@ -25,6 +26,7 @@ import {
 } from '@/hooks/useChallenge';
 import { useChallengeDrafts, useDiscardChallengeDraft } from '@/hooks/useChallengeDraft';
 import { isVisibleDraft } from '@/lib/challengeDraft';
+import { isJoinableNotStarted } from '@/lib/challengeDiscoverability';
 import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
 import { AppText } from '@/components/ui/AppText';
@@ -46,6 +48,19 @@ function matchesSearch(title: string, query: string) {
     return true;
   }
   return title.toLowerCase().includes(needle);
+}
+
+function isLobbyDiscoverCard(challenge: ChallengeWithStats, joined: boolean) {
+  if (joined) {
+    return true;
+  }
+  if (!isJoinableNotStarted(challenge.status)) {
+    return false;
+  }
+  if (challenge.status === 'filling' || challenge.status === 'arming') {
+    return true;
+  }
+  return remainingFromChallenge(challenge) > 0;
 }
 
 export default function ChallengesScreen() {
@@ -86,8 +101,27 @@ export default function ChallengesScreen() {
   const search = query.trim();
   const hosting = (hostingQuery.data ?? []).filter((row) => matchesSearch(row.title, search));
   const active = (activeQuery.data ?? []).filter((row) => matchesSearch(row.title, search));
-  const official = (officialQuery.data ?? []).filter((row) => matchesSearch(row.title, search));
-  const friends = (friendsQuery.data ?? []).filter((row) => matchesSearch(row.challenge.title, search));
+  const progressById = useMemo(() => {
+    const map = new Map<string, { days: number; status: string }>();
+    for (const row of mine.data ?? []) {
+      if (!isLobbyParticipant(row.status)) {
+        continue;
+      }
+      map.set(row.challenge_id, {
+        days: Number(row.days_completed ?? 0),
+        status: row.status ?? 'joined',
+      });
+    }
+    return map;
+  }, [mine.data]);
+  const official = (officialQuery.data ?? []).filter(
+    (row) => matchesSearch(row.title, search) && isLobbyDiscoverCard(row, Boolean(progressById.get(row.id))),
+  );
+  const friends = (friendsQuery.data ?? []).filter(
+    (row) =>
+      matchesSearch(row.challenge.title, search) &&
+      isLobbyDiscoverCard(row.challenge, Boolean(progressById.get(row.challenge.id))),
+  );
   const friendIds = useMemo(
     () => [...new Set(friends.map((row) => row.friendId))],
     [friends],
@@ -110,19 +144,6 @@ export default function ChallengesScreen() {
     }
     return map;
   }, [friendProfiles.data, friends]);
-  const progressById = useMemo(() => {
-    const map = new Map<string, { days: number; status: string }>();
-    for (const row of mine.data ?? []) {
-      if (!isLobbyParticipant(row.status)) {
-        continue;
-      }
-      map.set(row.challenge_id, {
-        days: Number(row.days_completed ?? 0),
-        status: row.status ?? 'joined',
-      });
-    }
-    return map;
-  }, [mine.data]);
 
   const loading =
     (hostingQuery.isPending && !hostingQuery.data) &&

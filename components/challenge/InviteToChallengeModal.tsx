@@ -18,8 +18,6 @@ type InviteToChallengeModalProps = {
   challengeId: string;
   challengeTitle: string;
   onClose: () => void;
-  onShareLink?: () => void;
-  shareBusy?: boolean;
   onSent?: (names: string[]) => void;
 };
 
@@ -32,12 +30,10 @@ export function InviteToChallengeModal({
   challengeId,
   challengeTitle,
   onClose,
-  onShareLink,
-  shareBusy = false,
   onSent,
 }: InviteToChallengeModalProps) {
   const router = useRouter();
-  const invite = useInviteToChallenge(challengeId);
+  const invite = useInviteToChallenge(challengeId, challengeTitle);
   const friends = useFriends();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -135,21 +131,10 @@ export function InviteToChallengeModal({
         <View className="mb-3 items-center">
           <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
         </View>
-        <AppText className="text-xl font-bold text-charcoal">Invite to {challengeTitle}</AppText>
+        <AppText className="text-xl font-bold text-charcoal">Send to people</AppText>
         <AppText className="mt-1 mb-4 text-muted">
-          Pick friends. They’ll get a notification — they still join themselves.
+          Pick friends. They get a message and a notification — they still join themselves.
         </AppText>
-        {onShareLink ? (
-          <View className="mb-4">
-            <Button
-              title="Share link"
-              size="lg"
-              variant="outline"
-              loading={shareBusy}
-              onPress={onShareLink}
-            />
-          </View>
-        ) : null}
         {emptyFriends ? (
           <View className="mb-2">
             <AppText className="text-[15px] font-semibold text-charcoal">Add a friend first</AppText>
