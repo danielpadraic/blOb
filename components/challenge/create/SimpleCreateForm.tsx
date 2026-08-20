@@ -17,7 +17,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Stepper } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
-import { useCreateChallenge } from '@/hooks/useChallenge';
+import { useCreateChallenge, useChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -38,6 +38,7 @@ import {
   persistSimpleDraft,
   readPersistedSimpleDraft,
   removeSimpleProof,
+  simpleDraftFromChallenge,
   simpleDraftToCreateValues,
   syncProofNameWithTask,
   validateSimpleDraft,
@@ -49,6 +50,7 @@ import {
   type SimpleFrequency,
   type SimpleVisibility,
 } from '@/lib/simpleChallenge';
+import { canHostQuickEdit } from '@/lib/challengeStart';
 import { formatChallengeEndLine } from '@/lib/challengeSchedule';
 import { SIMPLE_PROOF_CAP, ensureProofSentence, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
@@ -102,14 +104,21 @@ function SectionLabel({ children }: { children: string }) {
 
 export function SimpleCreateForm() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string; funded?: string }>();
+  const params = useLocalSearchParams<{ returnTo?: string; funded?: string; editId?: string }>();
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const funded = Array.isArray(params.funded) ? params.funded[0] : params.funded;
+  const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const { user } = useAuth();
   const { profile, refetch, isFetched } = useMyProfile();
   const walletSheet = useWalletOptional();
   const create = useCreateChallenge();
+  const update = useUpdateUserChallenge();
+  const editing = useChallenge(editId);
+  const originalStart = editing.data?.starts_at ?? null;
   const [draft, setDraft] = useState<SimpleChallengeDraft>(() => {
+    if (editId) {
+      return defaultSimpleDraft();
+    }
     const stored = readPersistedSimpleDraft();
     if (!stored) {
       return defaultSimpleDraft();
@@ -118,13 +127,14 @@ export function SimpleCreateForm() {
     const start = new Date(stored.starts_at);
     const starts_at =
       Number.isNaN(start.getTime()) || start.getTime() <= Date.now() ? base.starts_at : stored.starts_at;
-    return { ...base, ...stored, extra_tasks: stored.extra_tasks ?? [], starts_at };
+    return { ...base, ...stored, extra_tasks: stored.extra_tasks ?? [], starts_at, min_participants: stored.min_participants ?? 2 };
   });
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'form' | 'review'>('form');
   const [focusSection, setFocusSection] = useState<string | null>(null);
   const sectionRefs = useRef<Record<string, View | null>>({});
   const contentRef = useRef<View>(null);
+  const hydratedEdit = useRef(false);
   useDismissTo(returnTo === 'feed' ? TABS_HREF : LOBBY_HREF);
   useCreateChallengeTour('simple');
   const tour = useTourOptional();
@@ -137,11 +147,25 @@ export function SimpleCreateForm() {
   function patch(partial: Partial<SimpleChallengeDraft>) {
     setDraft((current) => {
       const next = { ...current, ...partial };
-      persistSimpleDraft(next);
+      if (!editId) {
+        persistSimpleDraft(next);
+      }
       return next;
     });
     setError(null);
   }
+
+  useEffect(() => {
+    if (!editId || !editing.data || hydratedEdit.current) {
+      return;
+    }
+    if (!canHostQuickEdit({ challenge: editing.data, viewerId: user?.id })) {
+      setError(copy('challenge.notStarted'));
+      return;
+    }
+    hydratedEdit.current = true;
+    setDraft(simpleDraftFromChallenge(editing.data));
+  }, [editId, editing.data, user?.id]);
 
   useEffect(() => {
     if (funded !== '1' && draft.currency !== 'bucks') {
@@ -199,7 +223,7 @@ export function SimpleCreateForm() {
   }, [view, focusSection]);
 
   function formIssue(): string | null {
-    return validateSimpleDraft(draft) ?? costHint;
+    return validateSimpleDraft(draft, { allowStart: originalStart }) ?? (editId ? null : costHint);
   }
 
   function onReview() {
@@ -208,7 +232,7 @@ export function SimpleCreateForm() {
       setError(issue);
       return;
     }
-    if (poolShortfall > 0) {
+    if (!editId && poolShortfall > 0) {
       setError(`Add ${formatCash(poolShortfall)}`);
       return;
     }
@@ -239,12 +263,12 @@ export function SimpleCreateForm() {
   }
 
   async function onCreate() {
-    const issue = validateSimpleDraft(draft) ?? costHint;
+    const issue = validateSimpleDraft(draft, { allowStart: originalStart }) ?? (editId ? null : costHint);
     if (issue) {
       setError(issue);
       return;
     }
-    if (poolShortfall > 0) {
+    if (!editId && poolShortfall > 0) {
       setError(`Add ${formatCash(poolShortfall)}`);
       return;
     }
@@ -253,6 +277,14 @@ export function SimpleCreateForm() {
       return;
     }
     try {
+      if (editId) {
+        const challenge = await update.mutateAsync({
+          challengeId: editId,
+          values: simpleDraftToCreateValues(draft),
+        });
+        router.replace(`/challenges/${challenge.id}`);
+        return;
+      }
       const challenge = await create.mutateAsync(simpleDraftToCreateValues(draft));
       clearPersistedSimpleDraft();
       router.replace(`/challenges/${challenge.id}`);
@@ -277,7 +309,7 @@ export function SimpleCreateForm() {
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
           <StackBackButton fallback={returnTo === 'feed' ? TABS_HREF : LOBBY_HREF} />
           <AppText className="flex-1 text-[22px] font-extrabold text-charcoal">
-            {copy('create.screenTitle')}
+            {editId ? copy('create.editTitle') : copy('create.screenTitle')}
           </AppText>
         </View>
 
@@ -285,7 +317,7 @@ export function SimpleCreateForm() {
           <>
             <CreateReviewPreview values={simpleDraftToCreateValues(draft)} onEdit={onEditFromReview} />
             {error ? <AppText className="text-sm text-coral-dark">{error}</AppText> : null}
-            {needed > 0 ? (
+            {!editId && needed > 0 ? (
               <View className="gap-1">
                 {draft.currency === 'bucks' ? (
                   <AppText className="text-[13px] text-muted">{copy('money.realUsd')}</AppText>
@@ -295,9 +327,9 @@ export function SimpleCreateForm() {
               </View>
             ) : null}
             <Button
-              title={copy('create.publish')}
-              loading={create.isPending}
-              disabled={poolShortfall > 0}
+              title={editId ? copy('create.save') : copy('create.publish')}
+              loading={editId ? update.isPending : create.isPending}
+              disabled={!editId && poolShortfall > 0}
               onPress={() => void onCreate()}
             />
             <Button title="Back" variant="outline" onPress={() => setView('form')} />
@@ -451,9 +483,22 @@ export function SimpleCreateForm() {
           <SectionLabel>{copy('create.start')}</SectionLabel>
           <DateTimeField
             value={draft.starts_at}
-            minimumDate={new Date()}
+            minimumDate={editId ? undefined : new Date()}
             onChange={(starts_at) => patch({ starts_at })}
           />
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <AppText className="text-sm font-semibold text-charcoal">{copy('create.minToStart')}</AppText>
+              <AppText className="mt-0.5 text-[13px] leading-5 text-muted">{copy('create.minToStartHint')}</AppText>
+            </View>
+            <Stepper
+              accessibilityLabel={copy('create.minToStart')}
+              value={Math.max(draft.min_participants || 2, 2)}
+              min={2}
+              max={99}
+              onChange={(min_participants) => patch({ min_participants })}
+            />
+          </View>
         </View>
         </TourAnchor>
 
@@ -763,10 +808,11 @@ export function SimpleCreateForm() {
 
         <Button
           title={error ? 'Try again' : focusSection ? copy('create.backToReview') : copy('create.review')}
-          disabled={poolShortfall > 0}
+          disabled={!editId && poolShortfall > 0}
           onPress={() => onReview()}
         />
         <TourAnchor id="create-simple-advanced">
+        {editId ? null : (
         <Pressable
           accessibilityRole="button"
           onPress={() =>
@@ -780,6 +826,7 @@ export function SimpleCreateForm() {
             {copy('create.advanced')}
           </AppText>
         </Pressable>
+        )}
         </TourAnchor>
         </>
         ) : null}

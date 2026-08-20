@@ -33,6 +33,7 @@ const RPC_MESSAGES: Record<string, string> = {
   START_IN_PAST: 'Start time has to be in the future.',
   CHALLENGE_NOT_FOUND: 'Challenge not found.',
   ALREADY_STARTED: 'This challenge already started.',
+  DURATION_TOO_SHORT: 'Duration has to stay at least 1 day.',
   NOT_JOINABLE: 'This challenge is not accepting competitors.',
   BODY_METRICS_REQUIRED: 'Add body metrics first to join Official Fitness Challenges.',
   ALREADY_JOINED: 'You already joined this challenge.',

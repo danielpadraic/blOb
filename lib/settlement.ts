@@ -49,19 +49,12 @@ export function isJoinWindowOpen(
     is_official?: boolean | null;
     series_id?: string | null;
   },
-  now = new Date(),
 ): boolean {
   const status = String(challenge.status ?? '');
   if (challenge.series_id || challenge.is_official) {
     return status === 'filling' || status === 'arming';
   }
   if (CLOSED_JOIN_STATUSES.includes(status as ChallengeStatus)) {
-    return false;
-  }
-  if (challenge.official_started_at) {
-    return false;
-  }
-  if (challenge.starts_at && now.getTime() >= new Date(challenge.starts_at).getTime()) {
     return false;
   }
   return isJoinableStatus(status);
@@ -98,20 +91,9 @@ export function hasChallengeStarted(
     official_started_at?: string | null;
     status?: string | null;
   },
-  now = new Date(),
+  _now = new Date(),
 ): boolean {
-  const status = String(challenge.status ?? '');
-  if (status === 'filling' || status === 'arming') {
-    return false;
-  }
-  if (status === 'live') {
-    return true;
-  }
-  const opens = challengeLoggingOpensAt(challenge);
-  if (!opens) {
-    return true;
-  }
-  return now.getTime() >= opens.getTime();
+  return String(challenge.status ?? '') === 'live';
 }
 
 export function loggingOpensHelper(
@@ -148,14 +130,7 @@ export function isClosedForLogs(challenge: {
   is_unlimited?: boolean | null;
   eliminated?: boolean | null;
 }): boolean {
-  if (
-    challenge.status === 'filling' ||
-    challenge.status === 'arming' ||
-    challenge.status === 'judging' ||
-    challenge.status === 'settled' ||
-    challenge.status === 'cancelled' ||
-    challenge.status === 'cancelled_underfilled'
-  ) {
+  if (String(challenge.status ?? '') !== 'live') {
     return true;
   }
   if (challenge.eliminated) {

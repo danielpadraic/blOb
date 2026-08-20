@@ -19,6 +19,9 @@ import {
   fetchOfficialDiscoverChallenges,
   insertUserChallenge,
   joinChallenge,
+  nudgeChallengeStart,
+  resolveStartRoll,
+  updateUserChallenge,
   withParticipantCounts,
   type FriendChallengeProof,
 } from '@/lib/challenges';
@@ -684,6 +687,118 @@ export function useCreateChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void reportBadgeActivity();
+    },
+  });
+}
+
+function invalidateChallengeCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  challengeId: string,
+  userId?: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+  void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+  void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
+  void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+  void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
+  void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+  void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
+  void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
+  void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+  void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
+  void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
+  void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  if (userId) {
+    void queryClient.invalidateQueries({ queryKey: ['profile', userId] });
+  }
+}
+
+export function useResolveStartRoll() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ challengeId, keep }: { challengeId: string; keep: boolean }) =>
+      resolveStartRoll(challengeId, keep),
+    onSuccess: (challenge) => {
+      queryClient.setQueryData<ChallengeWithStats>(['challenge', challenge.id], (current) =>
+        current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },
+      );
+      invalidateChallengeCaches(queryClient, challenge.id, user?.id);
+    },
+  });
+}
+
+export function useNudgeChallengeStart() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (challengeId: string) => nudgeChallengeStart(challengeId),
+    onSuccess: (challenge) => {
+      queryClient.setQueryData<ChallengeWithStats>(['challenge', challenge.id], (current) =>
+        current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },
+      );
+      invalidateChallengeCaches(queryClient, challenge.id, user?.id);
+    },
+  });
+}
+
+export function useUpdateUserChallenge() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      values,
+    }: {
+      challengeId: string;
+      values: CreateChallengeValues;
+    }): Promise<Challenge> => {
+      const unlimited = values.duration_type === 'unlimited';
+      const schedule = ensureSchedule(values);
+      const isPoints = !unlimited && values.challenge_type === 'points';
+      const targetCount = deriveFinishTarget(values);
+      const namedProofs = namedProofsForPublish(values);
+      return updateUserChallenge(challengeId, {
+        title: values.title.trim(),
+        description: values.description?.trim() ? values.description.trim() : null,
+        rules: composeChallengeRules(values) || null,
+        starts_at: schedule.starts_at,
+        ends_at: unlimited ? null : schedule.ends_at,
+        is_unlimited: unlimited,
+        min_participants: Math.max(Number(values.min_participants) || 2, 2),
+        days_required: targetCount,
+        target_count: targetCount,
+        min_minutes: minMinutesForPublish(values),
+        frequency: isPoints ? 'once' : values.frequency,
+        proofs: isPoints ? [] : namedProofs,
+        proof_requirements: isPoints
+          ? []
+          : namedProofs.length > 0
+            ? proofRequirementsFrom(namedProofs)
+            : values.proofs.map((type) => ({ type, required: true })),
+        tasks: persistTasksForPublish(values, isPoints),
+        rules_list: buildRulesStructured(values),
+        visibility: values.visibility,
+        discoverability: values.discoverability ?? null,
+        task: values.task?.trim() || values.rule_activity.trim() || null,
+        length_value: unlimited ? null : Number(schedule.duration_value) || Number(schedule.duration_days),
+        length_unit: unlimited ? null : schedule.duration_unit,
+        required_checkins: Number(values.required_checkins) || targetCount,
+        misses_allowed: Math.max(Number(values.misses_allowed) || 0, 0),
+        proof_type: values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),
+        cover_image_url: values.cover_image_url?.trim() || null,
+        rules_video_url: values.rules_video_url?.trim() || null,
+      });
+    },
+    onSuccess: (challenge) => {
+      queryClient.setQueryData<ChallengeWithStats>(['challenge', challenge.id], (current) =>
+        current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },
+      );
+      invalidateChallengeCaches(queryClient, challenge.id, user?.id);
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }

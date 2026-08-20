@@ -521,7 +521,10 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     creator_contribution: Number(row.creator_contribution ?? 0),
     max_participants:
       row.max_participants == null ? null : Number(row.max_participants),
-    min_participants: Number(row.min_participants ?? 1),
+    min_participants: Math.max(Number(row.min_participants ?? 2), 2),
+    start_roll_pending: Boolean(row.start_roll_pending),
+    start_roll_keep_days: row.start_roll_keep_days == null ? null : Number(row.start_roll_keep_days),
+    start_roll_shift_days: Number(row.start_roll_shift_days ?? 0),
     is_unlimited: Boolean(row.is_unlimited),
     start_mode: (row.start_mode as string | null) ?? null,
     start_within_value: row.start_within_value == null ? null : Number(row.start_within_value),
@@ -1326,4 +1329,39 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     }
   }
   return fetchChallengeById(result.challenge_id);
+}
+
+export async function resolveStartRoll(challengeId: string, keep: boolean): Promise<Challenge> {
+  const { data, error } = await supabase.rpc('resolve_start_roll', {
+    p_challenge_id: challengeId,
+    p_keep: keep,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  return normalizeChallenge((data ?? {}) as ChallengeRow);
+}
+
+export async function nudgeChallengeStart(challengeId: string): Promise<Challenge> {
+  const { data, error } = await supabase.rpc('nudge_challenge_start', {
+    p_challenge_id: challengeId,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  return normalizeChallenge((data ?? {}) as ChallengeRow);
+}
+
+export async function updateUserChallenge(
+  challengeId: string,
+  payload: Record<string, unknown>,
+): Promise<Challenge> {
+  const { data, error } = await supabase.rpc('update_user_challenge', {
+    p_challenge_id: challengeId,
+    p_payload: payload,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  return normalizeChallenge((data ?? {}) as ChallengeRow);
 }

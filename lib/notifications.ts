@@ -253,6 +253,8 @@ export function notificationGlyph(type: string, data?: NotificationData): string
       return '💬';
     case 'official_started':
       return '🏁';
+    case 'start_rolled':
+      return '📅';
     case 'proof_flagged':
       return '⚠️';
     case 'callout_received':

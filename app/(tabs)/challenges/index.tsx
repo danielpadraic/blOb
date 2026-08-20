@@ -316,13 +316,21 @@ export default function ChallengesScreen() {
       <ChallengeMenuPopover
         anchor={overflow?.anchor ?? null}
         onClose={() => setOverflow(null)}
-        onCancelPress={() => {
-          if (!overflow) {
-            return;
-          }
-          setCancelError(null);
-          setCancelTarget(overflow.challenge);
-        }}
+        actions={
+          overflow
+            ? [
+                {
+                  key: 'cancel',
+                  label: copy('challenge.cancel'),
+                  danger: true,
+                  onPress: () => {
+                    setCancelError(null);
+                    setCancelTarget(overflow.challenge);
+                  },
+                },
+              ]
+            : []
+        }
       />
       {cancelTarget ? (
         <CancelChallengeSheet

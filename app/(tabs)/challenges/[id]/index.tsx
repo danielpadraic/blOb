@@ -67,6 +67,7 @@ import {
   isDistributeGateOpen,
   isJoinWindowOpen,
   payoutCountdownLabel,
+  startsInLabel,
 } from '@/lib/settlement';
 import {
   isOfficialJoinable,
@@ -76,6 +77,7 @@ import {
 import { healthProofLines } from '@/lib/health/proofSummary';
 import { fetchHealthWorkoutById } from '@/lib/health/remote';
 import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
+import { startMovedBody } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -883,7 +885,13 @@ export default function ChallengeDetailScreen() {
               {challenge.is_official ? officialBob('missed') : copy('challenge.eliminated')}
             </AppText>
           ) : waitingToStart ? (
-            <Button title={logTitle} size="lg" disabled />
+            <AppText className="text-sm leading-5 text-muted">
+              {challenge.start_roll_pending
+                ? startMovedBody(challenge)
+                : startsInLabel(challenge, new Date(nowMs)) ??
+                  userStartNeededLabel(challenge) ??
+                  copy('challenge.waitingToStart')}
+            </AppText>
           ) : logsClosed ? (
             <Button title={copy('challenge.logClosed')} size="lg" disabled />
           ) : todaySubmission.isLoading || periodCheckin.isLoading ? (

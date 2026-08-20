@@ -2519,7 +2519,7 @@ function EntrySlide({
               onChangeText={onChange}
               onBlur={onBlur}
               error={errors.min_participants?.message}
-              hint="If fewer people have joined at start, it cancels and coin entry fees refund."
+              hint="If fewer people have joined at start, it waits and the start moves to the next day."
             />
           )}
         />

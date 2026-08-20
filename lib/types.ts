@@ -296,6 +296,9 @@ export interface Challenge {
   creator_contribution: number;
   max_participants: number | null;
   min_participants?: number | null;
+  start_roll_pending?: boolean | null;
+  start_roll_keep_days?: number | null;
+  start_roll_shift_days?: number | null;
   is_unlimited: boolean;
   start_mode?: string | null;
   start_within_value?: number | null;
@@ -623,7 +626,8 @@ export type NotificationType =
   | 'coin_grant'
   | 'story_reaction'
   | 'story_comment'
-  | 'story_shared';
+  | 'story_shared'
+  | 'start_rolled';
 
 export type NotificationData = {
   challenge_id?: string;
@@ -642,6 +646,9 @@ export type NotificationData = {
   dedupe_key?: string;
   conversation_id?: string;
   grant_key?: string;
+  starts_at?: string;
+  keep_days?: number;
+  can_shorten?: boolean;
 };
 
 export interface AppNotification {
@@ -1247,6 +1254,22 @@ export type Database = {
       tick_official_series: {
         Args: Record<string, never>;
         Returns: { ok: boolean };
+      };
+      tick_user_challenge_starts: {
+        Args: Record<string, never>;
+        Returns: { ok: boolean; went_live?: number; rolled?: number };
+      };
+      nudge_challenge_start: {
+        Args: { p_challenge_id: string };
+        Returns: Challenge;
+      };
+      resolve_start_roll: {
+        Args: { p_challenge_id: string; p_keep: boolean };
+        Returns: Challenge;
+      };
+      update_user_challenge: {
+        Args: { p_challenge_id: string; p_payload: Record<string, unknown> };
+        Returns: Challenge;
       };
       list_official_joinable: {
         Args: Record<string, never>;

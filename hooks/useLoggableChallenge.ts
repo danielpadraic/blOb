@@ -81,6 +81,9 @@ export function useLoggableChallenge() {
           if (new Date(challenge.starts_at).getTime() > now) {
             return false;
           }
+          if (String(challenge.status ?? '') !== 'live') {
+            return false;
+          }
           return !isClosedForLogs(challenge);
         })
         .sort((a, b) => {

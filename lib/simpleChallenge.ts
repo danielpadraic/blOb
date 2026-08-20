@@ -1,5 +1,5 @@
 import { defaultChallengeStart, endsAtFromStartAndDays } from '@/lib/challengeSchedule';
-import type { ChallengeCategory } from '@/lib/types';
+import type { Challenge, ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
 import {
   BEFORE_AFTER_HR_PRESET,
@@ -11,11 +11,13 @@ import {
   makeProof,
   proofRequirementsFrom,
   proofTypeFromMethod,
+  resolveChallengeProofs,
   type ChallengeProof,
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
 import { resolveDiscoverability } from '@/lib/challengeDiscoverability';
-import { filledExtraTasks } from '@/lib/challengeCreatePublish';
+import { extraTasksFromStored, filledExtraTasks } from '@/lib/challengeCreatePublish';
+import { isUnlimitedChallenge, normalizeFrequency, normalizeTasks } from '@/lib/challenges';
 import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
 import type { ExtraCreateTask } from '@/utils/validators';
 import { emptyExtraCreateTask } from '@/utils/validators';
@@ -105,6 +107,7 @@ export type SimpleChallengeDraft = {
   extra_tasks: ExtraCreateTask[];
   visibility: SimpleVisibility;
   friends_of_friends: boolean;
+  min_participants: number;
 };
 
 export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
@@ -127,6 +130,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     extra_tasks: [],
     visibility: 'public',
     friends_of_friends: true,
+    min_participants: 2,
   };
 }
 
@@ -390,7 +394,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     creator_contribution: String(hostBudget),
     participant_cap: 'unlimited',
     max_participants: '',
-    min_participants: '2',
+    min_participants: String(Math.max(Number(draft.min_participants) || 2, 2)),
     misses_allowed: '0',
     proof_review: 'auto',
     proof_type: proofTypeFromMethod(firstProofMethod(proofs)) as CreateChallengeValues['proof_type'],
@@ -414,7 +418,63 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   return values;
 }
 
-export function validateSimpleDraft(draft: SimpleChallengeDraft): string | null {
+export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeDraft {
+  const unlimited = isUnlimitedChallenge(challenge);
+  let days = Math.max(Number(challenge.length_value) || 0, 0);
+  if (!unlimited && challenge.starts_at && challenge.ends_at) {
+    const start = Date.parse(challenge.starts_at);
+    const end = Date.parse(challenge.ends_at);
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      days = Math.max(1, Math.round((end - start) / (24 * 60 * 60 * 1000)));
+    }
+  }
+  days = Math.min(365, Math.max(days || 7, 1));
+  const duration_preset: SimpleDurationPreset = days === 1 || days === 7 || days === 30 ? days : 'custom';
+  const freq = normalizeFrequency(challenge.frequency);
+  const frequency: SimpleFrequency =
+    freq === 'once' || freq === 'daily' || freq === '3x_week' ? freq : 'custom';
+  const type =
+    SIMPLE_TYPES.find((item) => item.activity === String(challenge.task ?? '').toLowerCase()) ??
+    SIMPLE_TYPES.find((item) => item.category === challenge.category) ??
+    SIMPLE_TYPES.find((item) => item.value === 'custom') ??
+    SIMPLE_TYPES[0];
+  const visibility: SimpleVisibility =
+    challenge.visibility === 'friends'
+      ? 'friends'
+      : challenge.visibility === 'invite' || challenge.visibility === 'private'
+        ? 'invite'
+        : 'public';
+  return {
+    currency: challenge.currency === 'bucks' ? 'bucks' : 'coins',
+    buy_in: Math.max(Number(challenge.buy_in_amount) || 0, 0),
+    host_budget: Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0),
+    type: type.value,
+    title: challenge.title,
+    description: challenge.description ?? '',
+    starts_at: challenge.starts_at,
+    duration_preset,
+    duration_days: days,
+    task: challenge.task ?? '',
+    frequency,
+    custom_checkins: Math.max(Number(challenge.required_checkins ?? challenge.target_count) || days, 1),
+    custom_period: 'duration',
+    proofs: resolveChallengeProofs({
+      proofs: challenge.proofs,
+      proof_type: challenge.proof_type,
+      proof_requirements: challenge.proof_requirements,
+      min_minutes: challenge.min_minutes,
+    }),
+    extra_tasks: extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task),
+    visibility,
+    friends_of_friends: challenge.discoverability === 'friends_of_friends',
+    min_participants: Math.max(Number(challenge.min_participants) || 2, 2),
+  };
+}
+
+export function validateSimpleDraft(
+  draft: SimpleChallengeDraft,
+  options?: { allowStart?: string | null },
+): string | null {
   if (!draft.title.trim() || draft.title.trim().length < 3) {
     return copy('create.needTitle');
   }
@@ -422,8 +482,14 @@ export function validateSimpleDraft(draft: SimpleChallengeDraft): string | null 
     return copy('create.needStart');
   }
   const start = new Date(draft.starts_at);
-  if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) {
+  const startOk =
+    !Number.isNaN(start.getTime()) &&
+    (start.getTime() > Date.now() || Boolean(options?.allowStart && draft.starts_at === options.allowStart));
+  if (!startOk) {
     return copy('create.startFuture');
+  }
+  if (Math.max(Number(draft.min_participants) || 0, 0) < 2) {
+    return copy('create.minToStartHint');
   }
   if (durationDaysOf(draft) < 1) {
     return copy('create.needDuration');

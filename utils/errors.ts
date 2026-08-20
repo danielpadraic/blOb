@@ -510,6 +510,12 @@ function humanize(raw: string): string {
     return 'That sign-in didn’t finish. Please try again.';
   }
   if (
+    message.includes('DURATION_TOO_SHORT') ||
+    message.includes('duration has to stay')
+  ) {
+    return 'Duration has to stay at least 1 day.';
+  }
+  if (
     message.includes('not enough people') ||
     message.includes('underfill') ||
     message.includes('cancelled_underfilled')

@@ -2,10 +2,16 @@ import { useRef, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
-import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 
 export type MenuAnchor = { x: number; y: number; width: number; height: number };
+
+export type ChallengeOverflowAction = {
+  key: string;
+  label: string;
+  danger?: boolean;
+  onPress: () => void;
+};
 
 export function ChallengeOverflowButton({
   onPress,
@@ -39,16 +45,16 @@ export function ChallengeOverflowButton({
 export function ChallengeMenuPopover({
   anchor,
   onClose,
-  onCancelPress,
+  actions,
 }: {
   anchor: MenuAnchor | null;
   onClose: () => void;
-  onCancelPress: () => void;
+  actions: ChallengeOverflowAction[];
 }) {
   const hostRef = useRef<View>(null);
   const [host, setHost] = useState<MenuAnchor | null>(null);
 
-  if (!anchor) {
+  if (!anchor || actions.length === 0) {
     return null;
   }
 
@@ -64,7 +70,7 @@ export function ChallengeMenuPopover({
   const hostW = host?.width || windowSize.width;
   const hostH = host?.height || windowSize.height;
   const popW = 188;
-  const popH = 52;
+  const popH = 8 + actions.length * 44;
   const gap = 6;
   const localX = anchor.x - hostX;
   const localY = anchor.y - hostY;
@@ -102,19 +108,24 @@ export function ChallengeMenuPopover({
             ...themeShadow('card'),
           },
         ]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={copy('challenge.cancel')}
-          onPress={() => {
-            onClose();
-            onCancelPress();
-          }}
-          className="justify-center px-3"
-          style={{ minHeight: 44 }}>
-          <AppText className="text-[14px] font-semibold" style={{ color: THEME.danger }}>
-            {copy('challenge.cancel')}
-          </AppText>
-        </Pressable>
+        {actions.map((action) => (
+          <Pressable
+            key={action.key}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            onPress={() => {
+              onClose();
+              action.onPress();
+            }}
+            className="justify-center px-3"
+            style={{ minHeight: 44 }}>
+            <AppText
+              className="text-[14px] font-semibold"
+              style={{ color: action.danger ? THEME.danger : THEME.textPrimary }}>
+              {action.label}
+            </AppText>
+          </Pressable>
+        ))}
       </View>
     </View>
   );

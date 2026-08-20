@@ -7,10 +7,8 @@ import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
-import {
-  useMarkNotificationsRead,
-  useNotifications,
-} from '@/hooks/useNotifications';
+import { useMarkNotificationsRead, useNotifications } from '@/hooks/useNotifications';
+import { useResolveStartRoll } from '@/hooks/useChallenge';
 import { isCoinGrantAlert, isPersonAlert, notificationGlyph, notificationHref } from '@/lib/notifications';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
@@ -60,6 +58,7 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const router = useRouter();
   const list = useNotifications();
   const markRead = useMarkNotificationsRead();
+  const resolveRoll = useResolveStartRoll();
   const tone = useCopyTone();
   const items = list.data ?? [];
   const unreadCount = items.filter((item) => !item.read_at).length;
@@ -124,7 +123,20 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
                 {row.label}
               </AppText>
             ) : (
-              <NotificationRow item={row.item} onPress={() => onOpen(row.item)} />
+              <NotificationRow
+                item={row.item}
+                onPress={() => onOpen(row.item)}
+                onResolveStart={(keep) => {
+                  const challengeId = row.item.data?.challenge_id;
+                  if (!challengeId || resolveRoll.isPending) {
+                    return;
+                  }
+                  if (!row.item.read_at) {
+                    markRead.mutate([row.item.id]);
+                  }
+                  resolveRoll.mutate({ challengeId, keep });
+                }}
+              />
             )
           }
         />
@@ -165,11 +177,16 @@ function NotificationArt({ item }: { item: AppNotification }) {
 function NotificationRow({
   item,
   onPress,
+  onResolveStart,
 }: {
   item: AppNotification;
   onPress: () => void;
+  onResolveStart?: (keep: boolean) => void;
 }) {
   const unread = !item.read_at;
+  const keepDays = Math.max(Number(item.data?.keep_days) || 0, 1);
+  const showRoll = item.type === 'start_rolled' && Boolean(item.data?.challenge_id) && onResolveStart;
+  const canShorten = item.data?.can_shorten !== false;
   return (
     <Pressable
       accessibilityRole="button"
@@ -195,6 +212,42 @@ function NotificationRow({
           <AppText className="mt-0.5 text-sm leading-5 text-muted" numberOfLines={2}>
             {item.body}
           </AppText>
+        ) : null}
+        {showRoll ? (
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            <Pressable
+              accessibilityRole="button"
+              onPress={(event) => {
+                event.stopPropagation();
+                onResolveStart(true);
+              }}
+              className="rounded-full px-3"
+              style={{ minHeight: 36, justifyContent: 'center', backgroundColor: THEME.primary }}>
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
+                {copy('challenge.keepDays', 'neutral', { n: keepDays })}
+              </AppText>
+            </Pressable>
+            {canShorten ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onResolveStart(false);
+                }}
+                className="rounded-full px-3"
+                style={{
+                  minHeight: 36,
+                  justifyContent: 'center',
+                  backgroundColor: THEME.surface,
+                  borderWidth: 1,
+                  borderColor: THEME.border,
+                }}>
+                <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
+                  {copy('challenge.shortenDay')}
+                </AppText>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
       </View>
       {unread ? (
