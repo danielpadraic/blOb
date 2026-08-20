@@ -200,9 +200,20 @@ export function useUsernameAvailability(
 }
 
 function omitOptionalPreferences<
-  T extends { motivation_tone?: unknown; mute_mentions?: unknown; timezone?: unknown },
->(row: T): Omit<T, 'motivation_tone' | 'mute_mentions' | 'timezone'> {
-  const { motivation_tone: _tone, mute_mentions: _mute, timezone: _tz, ...rest } = row;
+  T extends {
+    motivation_tone?: unknown;
+    mute_mentions?: unknown;
+    timezone?: unknown;
+    default_post_audience?: unknown;
+  },
+>(row: T): Omit<T, 'motivation_tone' | 'mute_mentions' | 'timezone' | 'default_post_audience'> {
+  const {
+    motivation_tone: _tone,
+    mute_mentions: _mute,
+    timezone: _tz,
+    default_post_audience: _audience,
+    ...rest
+  } = row;
   return rest;
 }
 

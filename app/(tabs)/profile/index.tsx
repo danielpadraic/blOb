@@ -27,9 +27,9 @@ import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
 import { StreakBadgesRow } from '@/components/profile/StreakBadgesRow';
+import { PrivacySettingsCard } from '@/components/profile/PrivacySettingsCard';
 
-const PHYSICAL_DISCLAIMER =
-  'Private unless you share them. Used for Challenge recommendations and competition placement.';
+const PHYSICAL_DISCLAIMER = 'Always private. Used for Challenge recommendations and competition placement.';
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -104,6 +104,8 @@ export default function ProfileScreen() {
           <WalletBalances profile={profile} />
         </Pressable>
         <Button title="Send Coins or Bucks" variant="outline" onPress={() => wallet?.openSend()} />
+
+        <PrivacySettingsCard />
 
         {hasCompletedBodyMetrics(profile) ? (
           <Card padded={false}>

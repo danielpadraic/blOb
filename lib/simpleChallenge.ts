@@ -15,6 +15,7 @@ import {
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
 import { resolveDiscoverability } from '@/lib/challengeDiscoverability';
+import { challengeRulesSentence, challengeUsesHonorProof } from '@/lib/challengeRuleCopy';
 import { copy } from '@/lib/copy';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -42,12 +43,12 @@ export const SIMPLE_TYPES: {
   category: ChallengeCategory;
   activity: string;
 }[] = [
-  { value: 'any_exercise', label: 'Any Exercise', icon: '', category: 'fitness', activity: 'any_exercise' },
+  { value: 'any_exercise', label: 'Any Exercise', icon: '', category: 'fitness', activity: 'any exercise' },
   { value: 'running', label: 'Running', icon: '🏃', category: 'fitness', activity: 'running' },
   { value: 'lifting', label: 'Lifting', icon: '🏋', category: 'fitness', activity: 'lifting' },
   { value: 'steps', label: 'Steps', icon: '👟', category: 'fitness', activity: 'walking' },
   { value: 'cycling', label: 'Cycling', icon: '🚴', category: 'fitness', activity: 'cycling' },
-  { value: 'hiit', label: 'HIIT', icon: '⚡', category: 'fitness', activity: 'hiit' },
+  { value: 'hiit', label: 'HIIT', icon: '⚡', category: 'fitness', activity: 'HIIT' },
   { value: 'sports', label: 'Sports', icon: '🏆', category: 'sports', activity: 'workout' },
   { value: 'productivity', label: 'Focus', icon: '🎯', category: 'productivity', activity: 'check-in' },
   { value: 'custom', label: 'Custom', icon: '✦', category: 'other', activity: 'custom' },
@@ -219,7 +220,66 @@ export function customFrequencyCopy(n: number, period: SimpleCustomPeriod): stri
   if (period === 'month') {
     return `${count} each month`;
   }
-  return `${count} each duration of challenge`;
+  return `${count} over the whole challenge`;
+}
+
+export function frequencyHintOf(draft: SimpleChallengeDraft): string {
+  if (draft.frequency === 'once') {
+    return 'The task once for the whole challenge.';
+  }
+  if (draft.frequency === 'daily') {
+    return 'The task once each day.';
+  }
+  if (draft.frequency === '3x_week') {
+    return 'The task three times each week.';
+  }
+  return customFrequencyCopy(draft.custom_checkins, draft.custom_period);
+}
+
+function publishFrequencyOf(draft: SimpleChallengeDraft): CreateChallengeValues['frequency'] {
+  if (draft.frequency === 'once') {
+    return 'once';
+  }
+  if (draft.frequency === '3x_week') {
+    return '3x_week';
+  }
+  if (draft.frequency === 'custom') {
+    if (draft.custom_period === 'day' && draft.custom_checkins === 1) {
+      return 'daily';
+    }
+    if (draft.custom_period === 'week' && draft.custom_checkins === 1) {
+      return 'weekly';
+    }
+    if (draft.custom_period === 'week' && draft.custom_checkins === 3) {
+      return '3x_week';
+    }
+    if (draft.custom_period === 'month') {
+      return 'monthly';
+    }
+    return 'custom';
+  }
+  return 'daily';
+}
+
+function publishCadenceOf(draft: SimpleChallengeDraft): string {
+  if (draft.frequency === 'custom') {
+    if (draft.custom_period === 'day' && draft.custom_checkins === 1) {
+      return 'daily';
+    }
+    if (draft.custom_period === 'week' && draft.custom_checkins === 1) {
+      return 'weekly';
+    }
+    if (draft.custom_period === 'week' && draft.custom_checkins === 3) {
+      return '3x_week';
+    }
+    if (draft.custom_period === 'month') {
+      return 'monthly';
+    }
+    if (draft.custom_period === 'duration') {
+      return draft.custom_checkins <= 1 ? 'once' : 'custom';
+    }
+  }
+  return publishFrequencyOf(draft);
 }
 
 export function endsAtOf(draft: SimpleChallengeDraft): string {
@@ -303,7 +363,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     duration_unit: 'days',
     duration_days: String(days),
     target_count: String(required),
-    frequency: draft.frequency === 'once' ? 'once' : draft.frequency === '3x_week' ? '3x_week' : draft.frequency === 'custom' ? 'custom' : 'daily',
+    frequency: publishFrequencyOf(draft),
     rule_activity: type.activity,
     extra_rules: [],
     proofs: legacyTypes,
@@ -329,7 +389,11 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     min_minutes: '1',
     cover_image_url: '',
     rules_video_url: '',
-    rules: draft.task.trim(),
+    rules: challengeRulesSentence(
+      draft.task.trim(),
+      publishCadenceOf(draft),
+      challengeUsesHonorProof({ proofs }),
+    ),
   };
 }
 

@@ -231,6 +231,7 @@ export interface Profile {
   is_creator?: boolean;
   allow_profile_posts?: boolean;
   profile_visibility?: 'public' | 'friends' | string | null;
+  default_post_audience?: 'public' | 'friends' | string | null;
   mute_mentions?: boolean;
   tos_accepted_at?: string | null;
   privacy_accepted_at?: string | null;
@@ -702,6 +703,7 @@ export type ProfileUpdate = Partial<
     | 'motivation_tone'
     | 'allow_profile_posts'
     | 'profile_visibility'
+    | 'default_post_audience'
     | 'mute_mentions'
   >
 >;

@@ -29,6 +29,8 @@ export const GLYPH = {
   swords: { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' },
   person: { ios: 'person.fill', android: 'person', web: 'person' },
   people: { ios: 'person.2.fill', android: 'group', web: 'group' },
+  globe: { ios: 'globe', android: 'public', web: 'public' },
+  video: { ios: 'video.fill', android: 'videocam', web: 'videocam' },
   anyExercise: { ios: 'figure.mixed.cardio', android: 'accessibility', web: 'accessibility' },
   sparkle: { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' },
   leaf: { ios: 'leaf.fill', android: 'eco', web: 'eco' },

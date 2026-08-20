@@ -163,7 +163,7 @@ export const CHALLENGE_VISIBILITY = [
 export const PRIZE_STRUCTURES = [
   {
     value: 'equal_split',
-    label: 'Split equally among completers',
+    label: 'Even split',
     helper: 'Everyone who successfully finishes splits the prize pool evenly. This is how the official weekly challenge works.',
   },
   {

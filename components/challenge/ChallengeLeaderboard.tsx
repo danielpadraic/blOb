@@ -3,9 +3,9 @@ import { Platform, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
+import { StakeAmount } from '@/components/currency/CurrencyMark';
 import type { Challenge, ChallengeParticipantWithProfile } from '@/lib/types';
 import { isLiveCompetitorStatus } from '@/lib/challenges';
-import { formatCash } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { utcDateStamp } from '@/utils/dates';
@@ -56,9 +56,6 @@ export function ChallengeLeaderboard({
   const remainingCount = remaining.length;
   const pot = Number(challenge.prize_pool) || 0;
   const share = remainingCount > 0 ? pot / remainingCount : 0;
-  const shareLine = copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish', 'neutral', {
-    amount: formatCash(share),
-  });
   const empty = remaining.length === 0 && dropped.length === 0;
 
   return (
@@ -71,7 +68,18 @@ export function ChallengeLeaderboard({
         <Stat label={copy('board.caughtUp')} value={String(completed.length)} />
         <Stat label={copy('board.dropped')} value={String(dropped.length)} />
       </View>
-      <AppText className="text-sm font-semibold text-charcoal">{shareLine}</AppText>
+      <View className="flex-row flex-wrap items-center" style={{ gap: 6 }}>
+        <AppText className="text-sm font-semibold text-charcoal">
+          {copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish')}
+        </AppText>
+        <StakeAmount
+          amount={share}
+          currency={challenge.currency}
+          size={16}
+          textClassName="text-sm font-semibold text-charcoal"
+          zeroAsNumber
+        />
+      </View>
       {empty ? (
         <AppText className="text-sm text-muted">No one on the board yet.</AppText>
       ) : (

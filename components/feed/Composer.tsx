@@ -1,30 +1,29 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { MentionField } from '@/components/feed/MentionField';
+import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Avatar } from '@/components/ui/Avatar';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
-import { useFriends } from '@/hooks/useSocial';
 import { asCopyTone, copy } from '@/lib/copy';
 import {
-  DEFAULT_POST_AUDIENCE,
-  POST_AUDIENCE_OPTIONS,
+  asDefaultPostAudience,
   type PostAudience,
 } from '@/lib/postAudience';
 import { captureHref } from '@/lib/routes';
-import { personDisplayName, type FeedChallengePreview } from '@/lib/social';
+import { type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import type { MentionDoc } from '@/lib/mentions';
 import { wallHostLabel } from '@/lib/profileWall';
@@ -52,6 +51,7 @@ type ComposerProps = {
   attachedChallenge?: FeedChallengePreview | null;
   audienceOptions?: { value: PostAudience; label: string }[];
   defaultAudience?: PostAudience;
+  hideAudience?: boolean;
   quote?: { postId: string; snapshot: QuoteSnapshot; audience?: string | null } | null;
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
   onSubmit: (input: ComposeInput) => Promise<unknown> | void;
@@ -65,6 +65,7 @@ export function Composer({
   attachedChallenge,
   audienceOptions,
   defaultAudience,
+  hideAudience,
   quote,
   wallHost,
   onSubmit,
@@ -73,17 +74,25 @@ export function Composer({
   const { profile } = useMyProfile();
   const resolvedPlaceholder = placeholder ?? copy('home.composer', asCopyTone(profile?.motivation_tone));
   const router = useRouter();
-  const friends = useFriends();
+  const social = useSocialSheetsOptional();
+  const profileDefault = asDefaultPostAudience(profile?.default_post_audience);
   const [doc, setDoc] = useState<MentionDoc>({ text: initialText ?? '', chips: [] });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState('');
-  const audienceChoices = audienceOptions ?? POST_AUDIENCE_OPTIONS;
+  const allowPublic = !audienceOptions || audienceOptions.some((item) => item.value === 'public');
   const [audience, setAudience] = useState<PostAudience>(
-    defaultAudience ?? (wallHost ? 'public' : DEFAULT_POST_AUDIENCE),
+    hideAudience ? 'public' : (defaultAudience ?? (wallHost ? 'public' : profileDefault)),
   );
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (hideAudience || defaultAudience || wallHost) {
+      return;
+    }
+    setAudience(profileDefault);
+  }, [defaultAudience, hideAudience, profileDefault, wallHost]);
 
   const busy = Boolean(submitting || uploading);
   const canPost =
@@ -174,11 +183,12 @@ export function Composer({
           throw new Error(copy('wall.closed'));
         }
       }
+      const postAudience = hideAudience ? 'public' : audience;
       await onSubmit({
         content: doc.text.trim(),
         mediaUrls,
-        audience,
-        audienceUserIds: audience === 'specific' ? audienceUserIds : [],
+        audience: postAudience,
+        audienceUserIds: postAudience === 'specific' ? audienceUserIds : [],
         mentionedUserIds: doc.chips.map((chip) => chip.userId),
         wallHostId: wallHost?.id ?? null,
         quotedPostId: quote?.postId ?? null,
@@ -187,7 +197,7 @@ export function Composer({
       });
       setDoc({ text: '', chips: [] });
       setAttachments([]);
-      setAudience(wallHost ? 'public' : DEFAULT_POST_AUDIENCE);
+      setAudience(hideAudience ? 'public' : wallHost ? 'public' : profileDefault);
       setAudienceUserIds([]);
     } catch (error) {
       if (getErrorMessage(error) === copy('wall.closed')) {
@@ -208,30 +218,84 @@ export function Composer({
           size={36}
           radius={14}
         />
-        <View className="min-w-0 flex-1">
-          {wallHost ? (
-            <AppText className="mb-1 text-[12px] font-semibold" style={{ color: THEME.accent }}>
-              {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
-            </AppText>
+        <View
+          className="min-w-0 flex-1 flex-row items-center"
+          style={{
+            backgroundColor: THEME.background,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            borderRadius: 18,
+            paddingLeft: 10,
+            paddingRight: 4,
+            minHeight: 40,
+          }}>
+          <View className="min-w-0 flex-1">
+            {wallHost ? (
+              <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
+                {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
+              </AppText>
+            ) : null}
+            <MentionField
+              placeholder={resolvedPlaceholder}
+              autoFocus={autoFocus}
+              compact
+              audience={audience}
+              audienceUserIds={audienceUserIds}
+              onChange={setDoc}
+              onSubmit={() => void handleSubmit()}
+              accessibilityLabel="Write a post"
+            />
+          </View>
+          {hideAudience ? null : (
+            <AudienceIconButton
+              audience={audience}
+              onPress={() =>
+                social?.openAudience({
+                  audience,
+                  audienceUserIds,
+                  allowPublic,
+                  onSave: (next, ids) => {
+                    setAudience(next);
+                    setAudienceUserIds(ids);
+                  },
+                })
+              }
+            />
+          )}
+          {!quote ? (
+            <>
+              <ComposerIcon
+                glyph={GLYPH.camera}
+                label="Photo"
+                onPress={() => router.push(captureHref('post', 'photo'))}
+              />
+              <ComposerIcon
+                glyph={GLYPH.video}
+                label="Video"
+                onPress={() => router.push(captureHref('post', 'video'))}
+              />
+              <ComposerIcon glyph={GLYPH.attach} label="Other" onPress={onOther} />
+            </>
           ) : null}
-          <MentionField
-            placeholder={resolvedPlaceholder}
-            autoFocus={autoFocus}
-            audience={audience}
-            audienceUserIds={audienceUserIds}
-            onChange={setDoc}
-            onSubmit={() => void handleSubmit()}
-            accessibilityLabel="Write a post"
-          />
         </View>
-        <Button
-          title="Post"
-          size="sm"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Post"
           onPress={() => void handleSubmit()}
-          loading={busy}
-          disabled={!canPost}
-          style={{ height: 36, minWidth: 64, borderRadius: 10 }}
-        />
+          disabled={!canPost || busy}
+          className="items-center justify-center"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            backgroundColor: canPost && !busy ? THEME.primary : THEME.border,
+          }}>
+          <Glyph
+            name={GLYPH.send}
+            color={canPost && !busy ? THEME.primaryForeground : THEME.textMuted}
+            size={16}
+          />
+        </Pressable>
       </View>
 
       {quote ? (
@@ -258,59 +322,6 @@ export function Composer({
             />
           ))}
         </View>
-      ) : null}
-
-      <View
-        className="mt-2"
-        style={{ borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 8 }}>
-        <SegmentedControl
-          value={audience}
-          options={audienceChoices}
-          onChange={setAudience}
-          accessibilityLabel="Post audience"
-        />
-        {audience === 'specific' ? (
-          <View className="mt-2 gap-1.5">
-            <AppText className="text-[12px] text-muted">Who can see this</AppText>
-            {(friends.data ?? []).length === 0 ? (
-              <AppText className="text-[12px] text-muted">Add friends first.</AppText>
-            ) : (
-              <ChipRow>
-                {(friends.data ?? []).map((row) => {
-                  const id = row.profile?.id;
-                  if (!id) {
-                    return null;
-                  }
-                  const selected = audienceUserIds.includes(id);
-                  return (
-                    <Chip
-                      key={id}
-                      label={personDisplayName(row.profile)}
-                      selected={selected}
-                      onPress={() =>
-                        setAudienceUserIds((current) =>
-                          selected ? current.filter((item) => item !== id) : [...current, id],
-                        )
-                      }
-                    />
-                  );
-                })}
-              </ChipRow>
-            )}
-          </View>
-        ) : null}
-      </View>
-
-      {!quote ? (
-      <View
-        className="mt-2 flex-row items-center"
-        style={{ borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 8 }}>
-        <AttachButton glyph="📷" label="Photo" onPress={() => router.push(captureHref('post', 'photo'))} />
-        <View style={{ width: 1, height: 16, backgroundColor: THEME.border }} />
-        <AttachButton glyph="🎥" label="Video" onPress={() => router.push(captureHref('post', 'video'))} />
-        <View style={{ width: 1, height: 16, backgroundColor: THEME.border }} />
-        <AttachButton glyph="📎" label="Other" onPress={onOther} />
-      </View>
       ) : null}
 
       {linkOpen ? (
@@ -344,12 +355,12 @@ export function Composer({
   );
 }
 
-function AttachButton({
+function ComposerIcon({
   glyph,
   label,
   onPress,
 }: {
-  glyph: string;
+  glyph: (typeof GLYPH)[keyof typeof GLYPH];
   label: string;
   onPress: () => void;
 }) {
@@ -358,10 +369,10 @@ function AttachButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      hitSlop={6}
-      className="h-8 flex-1 flex-row items-center justify-center rounded-full px-1.5">
-      <AppText className="text-[13px]">{glyph}</AppText>
-      <AppText className="ml-1 text-[12px] font-semibold text-muted">{label}</AppText>
+      hitSlop={4}
+      className="items-center justify-center"
+      style={{ width: 28, height: 32 }}>
+      <Glyph name={glyph} color={THEME.textMuted} size={15} />
     </Pressable>
   );
 }

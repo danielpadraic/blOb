@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
+import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { MentionText } from '@/components/feed/MentionText';
@@ -17,11 +18,12 @@ import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
+import { useUpdatePostAudience } from '@/hooks/useFeed';
 import { PROOF_META } from '@/lib/constants';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { challengeDetailHref } from '@/lib/routes';
-import { audienceLabel, asPostAudience } from '@/lib/postAudience';
+import { asPostAudience } from '@/lib/postAudience';
 import { supabase } from '@/lib/supabase';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
@@ -36,6 +38,7 @@ const BODY_COLLAPSE_CHARS = 160;
 type PostCardProps = {
   post: PostWithMeta;
   currentUserId?: string;
+  hideAudience?: boolean;
   onReact: (type: ReactionType, commentId?: string | null) => void;
   onComment?: (
     content: string,
@@ -49,6 +52,7 @@ type PostCardProps = {
 export function PostCard({
   post,
   currentUserId,
+  hideAudience,
   onReact,
   onComment,
   commenting,
@@ -59,6 +63,7 @@ export function PostCard({
   const social = useSocialSheetsOptional();
   const router = useRouter();
   const moreRef = useRef<View>(null);
+  const updateAudience = useUpdatePostAudience();
 
   const name = post.author?.display_name ?? post.author?.username ?? 'blob';
   const handle = post.author?.username ?? 'blob';
@@ -96,7 +101,7 @@ export function PostCard({
                 </View>
               </ProfileLink>
               <AppText className="text-[11px] leading-4 text-muted" numberOfLines={1}>
-                @{handle} · {formatFeedTime(post.created_at)} · {audienceLabel(audience)}
+                @{handle} · {formatFeedTime(post.created_at)}
                 {post.wall_host
                   ? ` · ${copy('wall.onHost', 'neutral', {
                       name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
@@ -104,6 +109,26 @@ export function PostCard({
                   : ''}
               </AppText>
             </View>
+            {hideAudience ? null : currentUserId && currentUserId === post.author_id ? (
+              <AudienceIconButton
+                audience={audience}
+                onPress={() =>
+                  social?.openAudience({
+                    audience,
+                    audienceUserIds: post.audience_user_ids ?? [],
+                    onSave: async (next, ids) => {
+                      await updateAudience.mutateAsync({
+                        postId: post.id,
+                        audience: next,
+                        audienceUserIds: ids,
+                      });
+                    },
+                  })
+                }
+              />
+            ) : (
+              <AudienceIconButton audience={audience} />
+            )}
             {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
               <ProofFlagButton postId={post.id} />
             ) : null}

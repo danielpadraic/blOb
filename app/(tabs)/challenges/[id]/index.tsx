@@ -10,6 +10,7 @@ import { ChallengeDetailsCard } from '@/components/challenge/ChallengeDetailsCar
 import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
+import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
@@ -50,7 +51,6 @@ import {
   isPointsChallenge,
   isUnlimitedChallenge,
   lastManStandingRequirement,
-  prizeStructureSummary,
   requiredChallengeProofs,
   totalTaskPoints,
 } from '@/lib/challenges';
@@ -431,13 +431,11 @@ export default function ChallengeDetailScreen() {
     proofSteps.length === 1
       ? 'Proof for every log'
       : `${proofSteps.length} proofs every log`;
-  const prizeCopy = prizeStructureSummary(challenge);
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const isFreeEntry = buyInAmount <= 0;
   const bucks = isBucksChallenge(challenge);
   const money = (amount: number) =>
     bucks ? formatCash(amount) : formatWallet(amount, challenge.currency);
-  const structure = challenge.prize_structure;
   const logsClosed = isClosedForLogs({
     ...challenge,
     eliminated: Boolean(participation?.eliminated_at),
@@ -479,13 +477,9 @@ export default function ChallengeDetailScreen() {
     daysCompleted,
     taskCount: Math.max(challenge.tasks?.length ?? 0, 1),
   });
-  const prizeLine =
+  const prizeForfeited =
     remainingNow <= 0 &&
-    (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0)
-      ? 'Stakes forfeited, no refund.'
-      : structure === 'equal_split' || !structure
-        ? `${money(Number(challenge.prize_pool))} ÷ ${remainingNow} remaining if they finish.`
-        : prizeCopy;
+    (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0);
   const progressRatio = isUnlimited
     ? 1
     : daysCompleted / Math.max(isPoints ? Math.max(challenge.tasks.length, 1) : target, 1);
@@ -654,9 +648,9 @@ export default function ChallengeDetailScreen() {
                 ? `${totalTaskPoints(challenge.tasks)} pts`
                 : challenge.is_official
                   ? challengeGoalLabel(challenge)
-                  : ruleCopy.cadenceLabel}
+                  : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}
             </AppText>
-            {isPoints || isUnlimited || !ruleCopy.totalHint ? null : (
+          {isPoints || isUnlimited || challenge.is_official || !ruleCopy.totalHint ? null : (
               <AppText className="mt-1 text-xs leading-4 text-muted">{ruleCopy.totalHint}</AppText>
             )}
           </View>
@@ -729,9 +723,15 @@ export default function ChallengeDetailScreen() {
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Prize
           </AppText>
-          <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
-            {prizeLine}
-          </AppText>
+          {prizeForfeited ? (
+            <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
+              Stakes forfeited, no refund.
+            </AppText>
+          ) : (
+            <View className="mt-2">
+              <ChallengePrizeLine challenge={challenge} />
+            </View>
+          )}
         </Card>
         )}
 
@@ -812,6 +812,7 @@ export default function ChallengeDetailScreen() {
               : 'Join the challenge to post in this feed.'
           }
           composerPlaceholder="How’s the work going?"
+          hideAudience
           canCompose={isJoined && !participation?.eliminated_at}
           composing={createPost.isPending}
           commenting={createComment.isPending}

@@ -29,6 +29,7 @@ type FeedListProps = {
   headerExtra?: ReactNode;
   empty?: ReactNode;
   highlightPostId?: string;
+  hideAudience?: boolean;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -58,6 +59,7 @@ export function FeedList({
   headerExtra,
   empty,
   highlightPostId,
+  hideAudience,
   onRefresh,
   onRetry,
   onCompose,
@@ -89,6 +91,7 @@ export function FeedList({
         <Composer
           placeholder={composerPlaceholder}
           submitting={composing}
+          hideAudience={hideAudience}
           onSubmit={async (input) => {
             await onCompose(input);
             scrollRef.current?.scrollTo({ y: 0 });
@@ -118,6 +121,7 @@ export function FeedList({
               key={post.id}
               post={post}
               currentUserId={currentUserId}
+              hideAudience={hideAudience}
               commenting={commenting}
               highlighted={highlightPostId === post.id}
               onReact={(type, commentId) => onReact(post, type, commentId)}

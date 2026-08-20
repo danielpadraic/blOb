@@ -6,29 +6,27 @@ import { useRouter } from 'expo-router';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
 import { captureKindFor, type CapturedMedia, type CaptureMode } from '@/components/capture/types';
+import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
+import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreatePost } from '@/hooks/useFeed';
+import { useMyProfile } from '@/hooks/useProfile';
 import {
   useCreateFeedEvent,
   useCreateReel,
   useCreateStory,
-  useFriends,
   useStoryChallengeOptions,
 } from '@/hooks/useSocial';
 import { cameraIsAvailable, ensureCapturePermissions, ensureLibraryPermission, openAppSettings, type MediaPermissionResult } from '@/lib/mediaPermissions';
 import {
-  DEFAULT_POST_AUDIENCE,
-  POST_AUDIENCE_OPTIONS,
+  asDefaultPostAudience,
   type PostAudience,
 } from '@/lib/postAudience';
 import { copy } from '@/lib/copy';
-import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { mediaDurationMs, waveClipWindows } from '@/lib/waveClips';
 import { getErrorMessage } from '@/utils/errors';
@@ -51,13 +49,14 @@ export function CaptureStudio({
 }: CaptureStudioProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { profile } = useMyProfile();
+  const social = useSocialSheetsOptional();
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const createStory = useCreateStory();
   const createReel = useCreateReel();
   const createPost = useCreatePost(challengeId);
   const createFeedEvent = useCreateFeedEvent();
   const challenges = useStoryChallengeOptions();
-  const friends = useFriends();
 
   const mode = initialMode;
   const captureKind = captureKindFor(mode, initialMedia);
@@ -66,7 +65,9 @@ export function CaptureStudio({
   const [step, setStep] = useState<'camera' | 'preview'>('camera');
   const [draft, setDraft] = useState<CapturedMedia | null>(null);
   const [caption, setCaption] = useState('');
-  const [audience, setAudience] = useState<PostAudience>(DEFAULT_POST_AUDIENCE);
+  const [audience, setAudience] = useState<PostAudience>(
+    asDefaultPostAudience(profile?.default_post_audience),
+  );
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
   const [denied, setDenied] = useState<Extract<MediaPermissionResult, { ok: false }> | null>(null);
   const [webFallback, setWebFallback] = useState(false);
@@ -380,41 +381,21 @@ export function CaptureStudio({
         </View>
       ) : null}
 
-      <View className="gap-2">
-        <AppText className="text-sm font-semibold text-charcoal">Audience</AppText>
-        <SegmentedControl
-          value={audience}
-          options={POST_AUDIENCE_OPTIONS}
-          onChange={setAudience}
-          accessibilityLabel="Post audience"
+      <View className="flex-row items-center justify-between">
+        <AppText className="text-sm font-semibold text-charcoal">Who can see this</AppText>
+        <AudienceIconButton
+          audience={audience}
+          onPress={() =>
+            social?.openAudience({
+              audience,
+              audienceUserIds,
+              onSave: (next, ids) => {
+                setAudience(next);
+                setAudienceUserIds(ids);
+              },
+            })
+          }
         />
-        {audience === 'specific' ? (
-          (friends.data ?? []).length === 0 ? (
-            <AppText className="text-[12px] text-muted">Add friends first.</AppText>
-          ) : (
-            <ChipRow>
-              {(friends.data ?? []).map((row) => {
-                const id = row.profile?.id;
-                if (!id) {
-                  return null;
-                }
-                const selected = audienceUserIds.includes(id);
-                return (
-                  <Chip
-                    key={id}
-                    label={personDisplayName(row.profile)}
-                    selected={selected}
-                    onPress={() =>
-                      setAudienceUserIds((current) =>
-                        selected ? current.filter((item) => item !== id) : [...current, id],
-                      )
-                    }
-                  />
-                );
-              })}
-            </ChipRow>
-          )
-        ) : null}
       </View>
 
       {progress > 0 ? (

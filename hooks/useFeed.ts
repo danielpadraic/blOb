@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
-import { asPostAudience, DEFAULT_POST_AUDIENCE } from '@/lib/postAudience';
+import { asPostAudience, DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
 import { resolvePostsSchema, type PostsSchema } from '@/lib/postsSelect';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -834,6 +834,53 @@ export function useCreatePost(challengeId?: string | null) {
       void queryClient.invalidateQueries({ queryKey: ['feed-events'] });
       void queryClient.invalidateQueries({ queryKey: ['feed', 'author'] });
       void reportBadgeActivity();
+    },
+  });
+}
+
+export function useUpdatePostAudience() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: {
+      postId: string;
+      audience: PostAudience;
+      audienceUserIds?: string[];
+    }) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      const audience = input.audience;
+      const audience_user_ids = audience === 'specific' ? (input.audienceUserIds ?? []) : [];
+      if (audience === 'specific' && audience_user_ids.length === 0) {
+        throw new Error('Pick at least one person.');
+      }
+      const { error } = await supabase
+        .from('posts')
+        .update({ audience, audience_user_ids })
+        .eq('id', input.postId)
+        .eq('author_id', user.id);
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+      return input;
+    },
+    onSuccess: (input) => {
+      queryClient.setQueriesData<PostWithMeta[]>({ queryKey: ['feed'] }, (current) =>
+        current?.map((post) =>
+          post.id === input.postId
+            ? {
+                ...post,
+                audience: input.audience,
+                audience_user_ids: input.audience === 'specific' ? (input.audienceUserIds ?? []) : [],
+              }
+            : post,
+        ),
+      );
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }

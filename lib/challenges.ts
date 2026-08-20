@@ -335,6 +335,20 @@ export type PrizeStructureConfig = {
   is_unlimited?: boolean | null;
 };
 
+export function prizeDistributionLabel(config: PrizeStructureConfig): string {
+  if (config.is_unlimited) {
+    return 'Last standing';
+  }
+  const structure = normalizePrizeStructure(config.prize_structure);
+  if (structure === 'winner_take_all') {
+    return 'Winner takes all';
+  }
+  if (structure === 'top_places') {
+    return config.top_places_distribution === 'scaled' ? 'Top places scaled' : 'Top places';
+  }
+  return 'Even split';
+}
+
 export function prizeStructureSummary(config: PrizeStructureConfig): string {
   if (config.is_unlimited) {
     return 'The last person still meeting the requirement wins the entire prize pool.';

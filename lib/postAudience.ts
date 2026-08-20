@@ -1,4 +1,5 @@
 export type PostAudience = 'public' | 'friends' | 'specific';
+export type DefaultPostAudience = 'public' | 'friends';
 
 export const POST_AUDIENCE_OPTIONS = [
   { value: 'specific' as const, label: 'Specific' },
@@ -15,6 +16,10 @@ export function asPostAudience(value: unknown): PostAudience {
   return 'public';
 }
 
+export function asDefaultPostAudience(value: unknown): DefaultPostAudience {
+  return value === 'public' ? 'public' : 'friends';
+}
+
 export function audienceLabel(audience: PostAudience): string {
   if (audience === 'specific') {
     return 'Specific people';
@@ -23,4 +28,8 @@ export function audienceLabel(audience: PostAudience): string {
     return 'Friends';
   }
   return 'Public';
+}
+
+export function audienceGlyph(audience: PostAudience | DefaultPostAudience) {
+  return audience === 'public' ? 'globe' : 'people';
 }

@@ -21,6 +21,7 @@ import { AppText } from '@/components/ui/AppText';
 type MentionFieldProps = {
   placeholder?: string;
   autoFocus?: boolean;
+  compact?: boolean;
   audience: PostAudience | string;
   audienceUserIds: string[];
   excludeIds?: string[];
@@ -32,6 +33,7 @@ type MentionFieldProps = {
 export function MentionField({
   placeholder,
   autoFocus,
+  compact,
   audience,
   audienceUserIds,
   excludeIds,
@@ -98,7 +100,7 @@ export function MentionField({
       <View
         className="flex-row flex-wrap items-center"
         style={{
-          minHeight: 44,
+          minHeight: compact ? 32 : 44,
           borderWidth: 0,
         }}>
         {parts.map((part) =>
@@ -126,9 +128,9 @@ export function MentionField({
               onSubmitEditing={onSubmit}
               style={{
                 flexGrow: 1,
-                minWidth: 96,
-                minHeight: 36,
-                paddingVertical: 6,
+                minWidth: 72,
+                minHeight: compact ? 32 : 36,
+                paddingVertical: compact ? 4 : 6,
                 color: THEME.textPrimary,
                 fontSize: 14,
               }}
@@ -140,6 +142,7 @@ export function MentionField({
           ),
         )}
       </View>
+      {compact ? null : (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Mention someone"
@@ -153,6 +156,7 @@ export function MentionField({
           @
         </AppText>
       </Pressable>
+      )}
       {open ? (
         <View
           className="mt-1"

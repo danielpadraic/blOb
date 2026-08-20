@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
+import { AudienceSheet, type AudienceDraft } from '@/components/feed/AudienceSheet';
 import { Composer } from '@/components/feed/Composer';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Avatar } from '@/components/ui/Avatar';
@@ -63,12 +64,14 @@ type OverflowPanel = 'menu' | 'share' | 'report' | 'send';
 type Sheet =
   | { kind: 'overflow'; post: PostWithMeta; anchor: WindowRect; panel: OverflowPanel }
   | { kind: 'quote'; post: PostWithMeta }
-  | { kind: 'profile'; userId: string; muted: boolean; anchor: WindowRect };
+  | { kind: 'profile'; userId: string; muted: boolean; anchor: WindowRect }
+  | { kind: 'audience'; draft: AudienceDraft };
 
 type SocialSheetsValue = {
   toggleOverflow: (post: PostWithMeta, anchor: WindowRect) => void;
   toggleProfileMenu: (userId: string, anchor: WindowRect) => void;
   openShare: (post: PostWithMeta, anchor: WindowRect) => void;
+  openAudience: (draft: AudienceDraft) => void;
   isOpenFor: (postId: string) => boolean;
   isMuted: (userId: string) => boolean;
   isHidden: (postId: string) => boolean;
@@ -142,16 +145,21 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
     setSheet({ kind: 'overflow', post, anchor, panel: 'share' });
   }, []);
 
+  const openAudience = useCallback((draft: AudienceDraft) => {
+    setSheet({ kind: 'audience', draft });
+  }, []);
+
   const value = useMemo<SocialSheetsValue>(
     () => ({
       toggleOverflow,
       toggleProfileMenu,
       openShare,
+      openAudience,
       isOpenFor: (postId) => sheet?.kind === 'overflow' && sheet.post.id === postId,
       isMuted: (userId) => muted.has(userId),
       isHidden: (postId) => hidden.has(postId),
     }),
-    [hidden, muted, openShare, sheet, toggleOverflow, toggleProfileMenu],
+    [hidden, muted, openAudience, openShare, sheet, toggleOverflow, toggleProfileMenu],
   );
 
   return (
@@ -215,6 +223,9 @@ function SheetView({
   }
   if (sheet.kind === 'quote') {
     return <QuoteSheet post={sheet.post} onClose={onClose} />;
+  }
+  if (sheet.kind === 'audience') {
+    return <AudienceSheet draft={sheet.draft} onClose={onClose} />;
   }
   return (
     <AnchoredPopover anchor={sheet.anchor} onClose={onClose}>

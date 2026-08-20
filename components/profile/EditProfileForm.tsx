@@ -462,18 +462,6 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
               value={tone}
               onChange={(next) => setValue('motivation_tone', next, { shouldDirty: true })}
             />
-            <AppText className="text-[13px] font-semibold text-charcoal">{copy('wall.visibility')}</AppText>
-            <SegmentedControl
-              value={watch('profile_visibility')}
-              options={[
-                { value: 'public', label: 'Public' },
-                { value: 'friends', label: 'Friends' },
-              ]}
-              onChange={(next) =>
-                setValue('profile_visibility', next, { shouldDirty: true })
-              }
-              accessibilityLabel={copy('wall.visibility')}
-            />
             <SettingToggle
               label={copy('wall.allow')}
               value={watch('allow_profile_posts')}

@@ -1,3 +1,4 @@
+import { resolveChallengeProofs } from '@/lib/challengeProofs';
 import {
   asRulePeriod,
   parseRulesStructured,
@@ -23,6 +24,10 @@ type RuleChallenge = {
   min_minutes?: number | null;
   category?: string | null;
   tasks?: unknown[] | null;
+  task?: string | null;
+  proofs?: unknown;
+  proof_type?: unknown;
+  proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
 };
 
 export type ChallengeRuleCopy = {
@@ -33,6 +38,7 @@ export type ChallengeRuleCopy = {
   totalHint: string | null;
   period: ChallengeFrequency | null;
   count: number;
+  toFinish: string | null;
 };
 
 export type JoinedProgressCopy = {
@@ -43,6 +49,96 @@ export type JoinedProgressCopy = {
 function periodChip(period: ChallengeFrequency): string {
   if (period === 'once') return 'once';
   return periodNoun(period) ?? 'week';
+}
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  any_exercise: 'any exercise',
+  hiit: 'HIIT',
+};
+
+/** Snake_case IDs never appear in UI. */
+export function humanizeActivity(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (ACTIVITY_LABELS[trimmed]) {
+    return ACTIVITY_LABELS[trimmed];
+  }
+  if (!trimmed.includes('_')) {
+    return trimmed;
+  }
+  return trimmed
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.toLowerCase())
+    .join(' ');
+}
+
+export function challengeTaskTitle(challenge: RuleChallenge): string {
+  const task = humanizeActivity(challenge.task);
+  if (task) {
+    return task;
+  }
+  if (Array.isArray(challenge.tasks) && challenge.tasks.length === 1) {
+    const row = challenge.tasks[0];
+    if (row && typeof row === 'object') {
+      const title = humanizeActivity(String((row as { title?: unknown }).title ?? ''));
+      if (title) {
+        return title;
+      }
+    }
+  }
+  const rules = (challenge.rules ?? '').trim();
+  if (
+    rules &&
+    !rules.includes('\n') &&
+    !/^complete\s/i.test(rules) &&
+    !/competitors must/i.test(rules) &&
+    !/\d+\s*\/\s*(day|week|month)/i.test(rules) &&
+    rules.length <= 80
+  ) {
+    return humanizeActivity(rules);
+  }
+  return '';
+}
+
+export function challengeUsesHonorProof(challenge: {
+  proofs?: unknown;
+  proof_type?: unknown;
+  proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
+}): boolean {
+  const proofs = resolveChallengeProofs(challenge);
+  return proofs.length > 0 && proofs.every((proof) => proof.method === 'honor');
+}
+
+function frequencyClause(frequency: string | null | undefined): string {
+  if (frequency === 'once') {
+    return 'once during the challenge';
+  }
+  if (frequency === 'weekly' || frequency === 'week') {
+    return 'each week of the challenge';
+  }
+  if (frequency === 'monthly' || frequency === 'month') {
+    return 'each month of the challenge';
+  }
+  if (frequency === '3x_week') {
+    return 'three times each week of the challenge';
+  }
+  return 'each day of the challenge';
+}
+
+export function challengeRulesSentence(
+  task: string,
+  frequency: string | null | undefined,
+  honor: boolean,
+): string {
+  const title = humanizeActivity(task) || 'the task';
+  const cadence = frequencyClause(frequency);
+  if (honor) {
+    return `Complete “${title}” ${cadence}. Proof is on your honor.`;
+  }
+  return `Complete “${title}” ${cadence} and submit the required proof.`;
 }
 
 function readStructured(raw: unknown): RulesStructured | null {
@@ -61,7 +157,7 @@ export function formatPrimaryRuleSentence(
   unlimited = false,
 ): string {
   const count = Math.max(Number(primary.count) || 1, 1);
-  const activity = pluralizeActivity(primary.activity || 'workout', count);
+  const activity = pluralizeActivity(humanizeActivity(primary.activity) || 'workout', count);
   if (primary.period === 'once') {
     return `Competitors must log ${count} ${activity} once during the challenge.`;
   }
@@ -174,7 +270,7 @@ function cadenceParts(
   const noun = periodChip(period);
   const label = period === 'once' ? `${count} once` : `${count} / ${noun}`;
   const activityLabel = activity?.trim()
-    ? pluralizeActivity(activity, count)
+    ? pluralizeActivity(humanizeActivity(activity) || activity, count)
     : count === 1
       ? 'log'
       : 'logs';
@@ -227,32 +323,53 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
       : freq
         ? perPeriodCount(challenge, freq, storedTarget)
         : storedTarget;
-  const activity = structured?.primary?.activity ?? fromSentence?.activity ?? null;
+  const activity = humanizeActivity(structured?.primary?.activity ?? fromSentence?.activity ?? null);
   const cadence = freq
     ? cadenceParts(perCount, freq, activity)
     : { cadenceLabel: `${storedTarget} logs`, cadenceLong: `${storedTarget} logs` };
 
   const totalHint =
-    !unlimited && freq && freq !== 'once' && storedTarget > perCount
+    !unlimited && freq && freq !== 'once' && freq !== 'daily' && storedTarget > perCount
       ? `About ${storedTarget} logs over the full window if every ${periodChip(freq)} is completed`
       : null;
 
-  const extras = mergeExtras(split.primary, [
+  const taskTitle = challengeTaskTitle(challenge);
+  const honor = challengeUsesHonorProof(challenge);
+  const generated =
+    taskTitle && challenge.challenge_type !== 'points'
+      ? challengeRulesSentence(taskTitle, challenge.frequency ?? freq, honor)
+      : null;
+
+  const extras = mergeExtras(generated ?? split.primary, [
     split.extras,
     structured?.extras.map((item) => item.text) ?? [],
     extrasFromPayload(challenge.rules_list),
     extrasFromPayload(challenge.rules_structured),
-  ]);
+  ]).filter(
+    (line) =>
+      !/\d+\s*\/\s*(day|week|month)/i.test(line) &&
+      !/any_exercise/i.test(line) &&
+      !/competitors must log/i.test(line),
+  );
 
-  const primary = rulesText
-    ? split.primary
-    : structured?.primary
-      ? formatPrimaryRuleSentence(structured.primary, unlimited)
-      : extras.length > 0
-        ? null
-        : freq && freq !== 'daily'
-          ? `Competitors must log ${cadence.cadenceLong} for the duration of the challenge.`
-          : `Complete ${storedTarget} log${storedTarget === 1 ? '' : 's'} in this challenge.`;
+  const storedLooksBroken =
+    Boolean(split.primary) &&
+    (/_/.test(split.primary) ||
+      /\d+\s*\/\s*(day|week|month)/i.test(split.primary) ||
+      /competitors must log/i.test(split.primary) ||
+      /any_exercise/i.test(split.primary));
+
+  const primary = generated
+    ? generated
+    : rulesText && !storedLooksBroken
+      ? split.primary
+      : structured?.primary
+        ? formatPrimaryRuleSentence(structured.primary, unlimited)
+        : extras.length > 0
+          ? null
+          : freq && freq !== 'daily'
+            ? `Competitors must log ${cadence.cadenceLong} for the duration of the challenge.`
+            : `Complete ${storedTarget} log${storedTarget === 1 ? '' : 's'} in this challenge.`;
 
   return {
     primary,
@@ -262,6 +379,7 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
     totalHint,
     period: freq,
     count: perCount,
+    toFinish: taskTitle || null,
   };
 }
 

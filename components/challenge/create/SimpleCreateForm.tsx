@@ -30,12 +30,11 @@ import {
   clearPersistedSimpleDraft,
   customFrequencyCopy,
   defaultSimpleDraft,
-  durationDaysOf,
   endsAtOf,
+  frequencyHintOf,
   persistSimpleDraft,
   readPersistedSimpleDraft,
   removeSimpleProof,
-  requiredCheckinsOf,
   simpleDraftToCreateValues,
   syncProofNameWithTask,
   validateSimpleDraft,
@@ -144,8 +143,6 @@ export function SimpleCreateForm() {
     void refetch();
   }, [draft.currency, funded, refetch]);
 
-  const days = durationDaysOf(draft);
-  const checkins = requiredCheckinsOf(draft);
   const endLine = formatChallengeEndLine(endsAtOf(draft));
   const wallet = walletBalance(profile, draft.currency);
   const hostCost = draft.currency === 'bucks' ? Math.max(draft.host_budget, 0) : 0;
@@ -425,9 +422,7 @@ export function SimpleCreateForm() {
               </View>
             </View>
           ) : (
-            <AppText className="text-[12px] text-muted">
-              {checkins} · {days}
-            </AppText>
+            <AppText className="text-[12px] leading-5 text-muted">{frequencyHintOf(draft)}</AppText>
           )}
         </View>
         </TourAnchor>
