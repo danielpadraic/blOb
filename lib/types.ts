@@ -647,6 +647,7 @@ export interface AppNotification {
   data: NotificationData;
   read_at: string | null;
   created_at: string;
+  actor?: PublicProfile | null;
 }
 
 export interface ChallengeInvite {

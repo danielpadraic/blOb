@@ -145,7 +145,8 @@ export default function PublicProfileScreen() {
     }
     return isPublicChallenge(item);
   });
-  const friendCount = friendsQuery.data?.length ?? 0;
+  const friendRows = (friendsQuery.data ?? []).filter((row) => row.profile);
+  const friendCount = friendRows.length;
   const relation = friendship.data;
   const canPost = canPostOnProfile({
     viewerId: user?.id,
@@ -324,7 +325,7 @@ export default function PublicProfileScreen() {
             <AppText className="py-4 text-center text-[14px] text-muted">{copy('friends.empty', tone)}</AppText>
           ) : (
             <View className="flex-row flex-wrap" style={{ marginHorizontal: -4 }}>
-              {(friendsQuery.data ?? []).map((row) => {
+              {friendRows.map((row) => {
                 const friend = row.profile;
                 if (!friend) {
                   return null;

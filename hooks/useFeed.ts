@@ -353,6 +353,55 @@ function dedupePosts(groups: PostWithMeta[][]): PostWithMeta[] {
   );
 }
 
+/** Same visibility as Home for one author: public, friends-if-accepted, official exception. */
+function viewerCanSeeProfilePost(
+  post: PostWithMeta,
+  input: {
+    viewerId?: string;
+    profileId: string;
+    friendsWithAuthor: boolean;
+    officialAuthor: boolean;
+    hidden: Set<string>;
+  },
+): boolean {
+  if (input.hidden.has(post.id)) {
+    return false;
+  }
+  if (post.wall_removed_at) {
+    return false;
+  }
+  if (post.wall_host_id && post.wall_host_id !== input.profileId) {
+    return false;
+  }
+  if (input.viewerId && post.author_id === input.viewerId) {
+    return true;
+  }
+  if (input.officialAuthor && post.author_id === input.profileId) {
+    return true;
+  }
+  if (input.friendsWithAuthor && post.author_id === input.profileId) {
+    return true;
+  }
+  if (post.wall_host_id === input.profileId) {
+    return true;
+  }
+  const audience = asPostAudience(post.audience);
+  if (audience === 'public') {
+    return true;
+  }
+  if (audience === 'friends' && input.friendsWithAuthor) {
+    return true;
+  }
+  if (
+    audience === 'specific' &&
+    input.viewerId &&
+    (post.audience_user_ids ?? []).includes(input.viewerId)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 async function fetchHiddenPostIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase.from('post_hides').select('post_id').eq('user_id', userId);
   if (error) {
@@ -592,26 +641,35 @@ export function useAuthorFeed(authorId?: string | null) {
     queryKey: ['feed', 'author', authorId, user?.id],
     enabled: Boolean(authorId),
     queryFn: async (): Promise<PostWithMeta[]> => {
+      const profileId = authorId!;
       const schema = await resolvePostsSchema();
-      let rows: PostWithMeta[];
-      try {
-        rows = schema.hasWall
-          ? await queryPosts({ kind: 'wall', hostId: authorId! })
-          : await queryPosts({ kind: 'authors', authorIds: [authorId!] });
-      } catch {
-        rows = await queryPosts({ kind: 'authors', authorIds: [authorId!] });
+      const authored = await queryPosts({ kind: 'authors', authorIds: [profileId] });
+      let wall: PostWithMeta[] = [];
+      if (schema.hasWall) {
+        try {
+          wall = await queryPosts({ kind: 'wall', hostId: profileId });
+        } catch {
+          wall = [];
+        }
       }
-      const hidden = user?.id ? new Set(await fetchHiddenPostIds(user.id)) : new Set<string>();
-      const mine = Boolean(user?.id && user.id === authorId);
-      const visible = rows.filter((post) => {
-        if (hidden.has(post.id)) {
-          return false;
-        }
-        if (post.wall_host_id === authorId) {
-          return !post.wall_removed_at;
-        }
-        return mine || asPostAudience(post.audience) === 'public';
-      });
+      const rows = dedupePosts([authored, wall]);
+      const [hiddenIds, friendIds, officialIds] = await Promise.all([
+        user?.id ? fetchHiddenPostIds(user.id) : Promise.resolve([] as string[]),
+        user?.id ? fetchFriendIds(user.id) : Promise.resolve([] as string[]),
+        fetchOfficialAuthorIds(),
+      ]);
+      const hidden = new Set(hiddenIds);
+      const friends = new Set(friendIds);
+      const official = new Set(officialIds);
+      const visible = rows.filter((post) =>
+        viewerCanSeeProfilePost(post, {
+          viewerId: user?.id,
+          profileId,
+          friendsWithAuthor: friends.has(profileId),
+          officialAuthor: official.has(profileId),
+          hidden,
+        }),
+      );
       return hydrateAuthors(await withSocial(visible, user?.id));
     },
   });

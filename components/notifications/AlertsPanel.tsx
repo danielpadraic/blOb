@@ -3,13 +3,16 @@ import { FlatList, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
 
+import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
+import { Avatar } from '@/components/ui/Avatar';
 import {
   useMarkNotificationsRead,
   useNotifications,
 } from '@/hooks/useNotifications';
-import { notificationGlyph, notificationHref } from '@/lib/notifications';
+import { isCoinGrantAlert, isPersonAlert, notificationGlyph, notificationHref } from '@/lib/notifications';
+import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import type { AppNotification } from '@/lib/types';
@@ -130,6 +133,35 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   );
 }
 
+function NotificationArt({ item }: { item: AppNotification }) {
+  if (isCoinGrantAlert(item)) {
+    return (
+      <View className="h-10 w-10 items-center justify-center">
+        <CurrencyMark
+          currency={item.data?.currency === 'bucks' ? 'bucks' : 'coins'}
+          size={36}
+        />
+      </View>
+    );
+  }
+  if (isPersonAlert(item) && item.actor) {
+    return (
+      <Avatar
+        uri={item.actor.avatar_url}
+        name={personDisplayName(item.actor)}
+        size={40}
+      />
+    );
+  }
+  return (
+    <View
+      className="h-10 w-10 items-center justify-center rounded-full"
+      style={{ backgroundColor: THEME.surface2 }}>
+      <AppText className="text-[18px]">{notificationGlyph(item.type, item.data)}</AppText>
+    </View>
+  );
+}
+
 function NotificationRow({
   item,
   onPress,
@@ -149,11 +181,7 @@ function NotificationRow({
         borderWidth: 1,
         borderColor: THEME.border,
       }}>
-      <View
-        className="h-10 w-10 items-center justify-center rounded-full"
-        style={{ backgroundColor: THEME.surface2 }}>
-        <AppText className="text-[18px]">{notificationGlyph(item.type, item.data)}</AppText>
-      </View>
+      <NotificationArt item={item} />
       <View className="ml-3 flex-1">
         <View className="flex-row items-center justify-between gap-2">
           <AppText

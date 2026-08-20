@@ -1,4 +1,5 @@
 import { challengeDetailHref, conversationHref, storyHref } from '@/lib/routes';
+import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
@@ -31,7 +32,39 @@ export async function fetchNotifications(): Promise<AppNotification[]> {
     }
     throw new Error(getErrorMessage(error));
   }
-  return ((data ?? []) as AppNotification[]).map(asNotification);
+  const rows = ((data ?? []) as AppNotification[]).map(asNotification);
+  const actorIds = [...new Set(rows.map((row) => row.actor_id).filter(Boolean))] as string[];
+  if (actorIds.length === 0) {
+    return rows;
+  }
+  try {
+    const actors = await fetchPublicProfilesByIds(actorIds);
+    const byId = new Map(actors.map((profile) => [profile.id, profile]));
+    return rows.map((row) => ({
+      ...row,
+      actor: row.actor_id ? byId.get(row.actor_id) ?? null : null,
+    }));
+  } catch (error) {
+    console.log('[blob:notifications] actor hydrate skipped', getErrorMessage(error));
+    return rows;
+  }
+}
+
+export function isCoinGrantAlert(item: AppNotification): boolean {
+  if (item.type === 'coin_grant' || item.type === 'badge_unlocked') {
+    return true;
+  }
+  if (item.type === 'coins_received') {
+    return item.data?.currency !== 'bucks';
+  }
+  if (item.data?.grant_key) {
+    return item.data?.currency !== 'bucks';
+  }
+  return false;
+}
+
+export function isPersonAlert(item: AppNotification): boolean {
+  return Boolean(item.actor_id) && !isCoinGrantAlert(item);
 }
 
 export async function fetchUnreadNotificationCount(): Promise<number> {
