@@ -16,7 +16,7 @@ export type ExtraRuleKind = (typeof EXTRA_RULE_KINDS)[number];
 
 export const EXTRA_RULE_PRESETS: { kind: Exclude<ExtraRuleKind, 'custom'>; text: string }[] = [
   { kind: 'separate_days', text: 'Logs must be on separate calendar days' },
-  { kind: 'min_minutes', text: 'Share proof of at least 30-minutes of elevated heart rate.' },
+  { kind: 'min_minutes', text: 'Share proof of at least 30 minutes of elevated heart rate.' },
 ];
 
 export type ExtraRule = {
@@ -131,7 +131,8 @@ export function hasDefinedRules(
     | 'duration_type'
     | 'extra_rules'
     | 'challenge_type'
-  >,
+  > &
+    Partial<Pick<CreateChallengeValues, 'task' | 'extra_tasks' | 'proofs' | 'challenge_proofs'>>,
 ): boolean {
   if ((values.rules ?? '').trim().length > 0) {
     return true;
@@ -149,12 +150,15 @@ export function composeChallengeRules(
   values: Pick<
     CreateChallengeValues,
     'target_count' | 'rule_activity' | 'frequency' | 'duration_type' | 'extra_rules' | 'challenge_type'
-  >,
+  > &
+    Partial<Pick<CreateChallengeValues, 'task' | 'extra_tasks' | 'proofs' | 'challenge_proofs' | 'rules'>>,
 ): string {
   if (values.challenge_type === 'points' && values.duration_type !== 'unlimited') {
     return extraRuleLines(values).join('\n\n');
   }
-  return [consistencyRuleSentence(values), ...extraRuleLines(values)].filter(Boolean).join('\n\n');
+  const { challengeRulesFromCreateValues } = require('./challengeRuleCopy') as typeof import('./challengeRuleCopy');
+  const english = challengeRulesFromCreateValues(values);
+  return [english, ...extraRuleLines(values)].filter(Boolean).join('\n\n');
 }
 
 export function periodCountInDuration(durationDays: number, frequency: ChallengeFrequency): number {

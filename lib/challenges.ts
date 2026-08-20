@@ -302,6 +302,7 @@ export function normalizeTasks(value: unknown): ChallengeTask[] {
       points: Number(row.points ?? 0),
       proof_required: Boolean(row.proof_required),
       proof_types: proofTypes,
+      once: Boolean(row.once),
     };
   });
 }

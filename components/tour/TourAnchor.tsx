@@ -62,7 +62,7 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
   }, [id, report, tour?.active, tour?.createActive, tour?.targetId]);
 
   return (
-    <View ref={viewRef} collapsable={false} onLayout={onLayout} style={style}>
+    <View ref={viewRef} collapsable={false} nativeID={id} onLayout={onLayout} style={style}>
       {children}
     </View>
   );

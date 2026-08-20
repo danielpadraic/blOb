@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
+import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
+import { ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
@@ -47,7 +49,7 @@ import {
   type SimpleVisibility,
 } from '@/lib/simpleChallenge';
 import { formatChallengeEndLine } from '@/lib/challengeSchedule';
-import { SIMPLE_PROOF_CAP, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
+import { SIMPLE_PROOF_CAP, ensureProofSentence, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
@@ -115,9 +117,13 @@ export function SimpleCreateForm() {
     const start = new Date(stored.starts_at);
     const starts_at =
       Number.isNaN(start.getTime()) || start.getTime() <= Date.now() ? base.starts_at : stored.starts_at;
-    return { ...base, ...stored, starts_at };
+    return { ...base, ...stored, extra_tasks: stored.extra_tasks ?? [], starts_at };
   });
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'form' | 'review'>('form');
+  const [focusSection, setFocusSection] = useState<string | null>(null);
+  const sectionRefs = useRef<Record<string, View | null>>({});
+  const contentRef = useRef<View>(null);
   useDismissTo(returnTo === 'feed' ? TABS_HREF : LOBBY_HREF);
   useCreateChallengeTour('simple');
   const tour = useTourOptional();
@@ -164,6 +170,73 @@ export function SimpleCreateForm() {
     return null;
   }, [draft.currency, needed, wallet]);
 
+  function scrollToSection(id: string) {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    const node = sectionRefs.current[id];
+    const scroll = scrollRef.current;
+    const content = contentRef.current;
+    if (!node || !scroll) {
+      return;
+    }
+    const run = (y: number) => scroll.scrollTo({ y: Math.max(y - 16, 0), animated: true });
+    if (content && typeof node.measureLayout === 'function') {
+      node.measureLayout(content as never, (_x, y) => run(y), () => run(0));
+      return;
+    }
+    run(0);
+  }
+
+  useEffect(() => {
+    if (view !== 'form' || !focusSection) {
+      return;
+    }
+    const handle = requestAnimationFrame(() => scrollToSection(focusSection));
+    return () => cancelAnimationFrame(handle);
+  }, [view, focusSection]);
+
+  function formIssue(): string | null {
+    return validateSimpleDraft(draft) ?? costHint;
+  }
+
+  function onReview() {
+    const issue = formIssue();
+    if (issue) {
+      setError(issue);
+      return;
+    }
+    if (poolShortfall > 0) {
+      setError(`Add ${formatCash(poolShortfall)}`);
+      return;
+    }
+    setError(null);
+    setFocusSection(null);
+    setView('review');
+  }
+
+  function onEditFromReview(key: CreateReviewEditKey) {
+    const section =
+      key === 'title'
+        ? 'create-simple-title'
+        : key === 'task'
+          ? 'create-simple-task'
+          : key === 'proofs'
+            ? 'create-simple-proof'
+            : key === 'duration'
+              ? 'create-simple-duration'
+              : key === 'frequency'
+                ? 'create-simple-frequency'
+                : key === 'visibility'
+                  ? 'create-simple-visibility'
+                  : key === 'prize'
+                    ? 'create-simple-buyin'
+                    : 'create-simple-start';
+    setFocusSection(section);
+    setView('form');
+  }
+
   async function onCreate() {
     const issue = validateSimpleDraft(draft) ?? costHint;
     if (issue) {
@@ -198,13 +271,39 @@ export function SimpleCreateForm() {
       }}
       onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
       contentPaddingBottom={tour?.createActive ? 220 : undefined}>
-      <View className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'}>
+      <View ref={contentRef} className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'} collapsable={false}>
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
           <StackBackButton fallback={returnTo === 'feed' ? TABS_HREF : LOBBY_HREF} />
           <AppText className="flex-1 text-[22px] font-extrabold text-charcoal">
             {copy('create.screenTitle')}
           </AppText>
         </View>
+
+        {view === 'review' ? (
+          <>
+            <CreateReviewPreview values={simpleDraftToCreateValues(draft)} onEdit={onEditFromReview} />
+            {error ? <AppText className="text-sm text-coral-dark">{error}</AppText> : null}
+            {needed > 0 ? (
+              <View className="gap-1">
+                {draft.currency === 'bucks' ? (
+                  <AppText className="text-[13px] text-muted">{copy('money.realUsd')}</AppText>
+                ) : null}
+                <AppText className="text-[13px] text-muted">{copy('money.leavesNow')}</AppText>
+                <AppText className="text-[13px] text-muted">{copy('money.irreversible')}</AppText>
+              </View>
+            ) : null}
+            <Button
+              title={copy('create.publish')}
+              loading={create.isPending}
+              disabled={poolShortfall > 0}
+              onPress={() => void onCreate()}
+            />
+            <Button title="Back" variant="outline" onPress={() => setView('form')} />
+          </>
+        ) : null}
+
+        {view === 'form' ? (
+        <>
 
         <TourAnchor id="create-simple-currency">
         <View className="gap-2">
@@ -227,7 +326,13 @@ export function SimpleCreateForm() {
           />
           {draft.currency === 'bucks' ? (
             <TourAnchor id="create-simple-buyin">
-            <View className="gap-2">
+            <View
+              className="gap-2"
+              collapsable={false}
+              nativeID="create-simple-buyin"
+              ref={(node) => {
+                sectionRefs.current['create-simple-buyin'] = node;
+              }}>
               <View className="flex-row items-center justify-between">
                 <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
                   {copy('create.totalPrizePool')}
@@ -260,7 +365,13 @@ export function SimpleCreateForm() {
             </TourAnchor>
           ) : (
             <TourAnchor id="create-simple-buyin">
-            <View className="flex-row items-center justify-between">
+            <View
+              className="flex-row items-center justify-between"
+              collapsable={false}
+              nativeID="create-simple-buyin"
+              ref={(node) => {
+                sectionRefs.current['create-simple-buyin'] = node;
+              }}>
               <AppText className="text-sm font-semibold text-charcoal">{copy('create.buyIn')}</AppText>
               <Stepper
                 accessibilityLabel={copy('create.buyIn')}
@@ -301,6 +412,13 @@ export function SimpleCreateForm() {
         </View>
         </TourAnchor>
 
+        <TourAnchor id="create-simple-title">
+        <View
+          collapsable={false}
+          nativeID="create-simple-title"
+          ref={(node) => {
+            sectionRefs.current['create-simple-title'] = node;
+          }}>
         <Input
           label={copy('create.titleLabel')}
           placeholder={copy('create.titlePlaceholder')}
@@ -308,6 +426,8 @@ export function SimpleCreateForm() {
           onChangeText={(title) => patch({ title })}
           maxLength={80}
         />
+        </View>
+        </TourAnchor>
 
         <Input
           label={copy('create.descriptionLabel')}
@@ -319,7 +439,13 @@ export function SimpleCreateForm() {
         />
 
         <TourAnchor id="create-simple-start">
-        <View className="gap-2">
+        <View
+          className="gap-2"
+          collapsable={false}
+          nativeID="create-simple-start"
+          ref={(node) => {
+            sectionRefs.current['create-simple-start'] = node;
+          }}>
           <SectionLabel>{copy('create.start')}</SectionLabel>
           <DateTimeField
             value={draft.starts_at}
@@ -330,7 +456,13 @@ export function SimpleCreateForm() {
         </TourAnchor>
 
         <TourAnchor id="create-simple-duration">
-        <View className="gap-2">
+        <View
+          className="gap-2"
+          collapsable={false}
+          nativeID="create-simple-duration"
+          ref={(node) => {
+            sectionRefs.current['create-simple-duration'] = node;
+          }}>
           <SectionLabel>{copy('create.duration')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_DURATION_CHIPS.map((item) => (
@@ -367,6 +499,13 @@ export function SimpleCreateForm() {
         </TourAnchor>
 
         <TourAnchor id="create-simple-task">
+        <View
+          className="gap-3"
+          collapsable={false}
+          nativeID="create-simple-task"
+          ref={(node) => {
+            sectionRefs.current['create-simple-task'] = node;
+          }}>
         <Input
           label={copy('create.taskLabel')}
           placeholder={copy('create.taskPlaceholder')}
@@ -379,10 +518,21 @@ export function SimpleCreateForm() {
           }
           maxLength={80}
         />
+        <ExtraTasksEditor
+          tasks={draft.extra_tasks ?? []}
+          onChange={(extra_tasks) => patch({ extra_tasks })}
+        />
+        </View>
         </TourAnchor>
 
         <TourAnchor id="create-simple-frequency">
-        <View className="gap-2">
+        <View
+          className="gap-2"
+          collapsable={false}
+          nativeID="create-simple-frequency"
+          ref={(node) => {
+            sectionRefs.current['create-simple-frequency'] = node;
+          }}>
           <SectionLabel>{copy('create.frequency')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_FREQUENCY_CHIPS.map((item) => (
@@ -428,7 +578,13 @@ export function SimpleCreateForm() {
         </TourAnchor>
 
         <TourAnchor id="create-simple-proof">
-        <View className="gap-2">
+        <View
+          className="gap-2"
+          collapsable={false}
+          nativeID="create-simple-proof"
+          ref={(node) => {
+            sectionRefs.current['create-simple-proof'] = node;
+          }}>
           <SectionLabel>{copy('create.proofs')}</SectionLabel>
           <View className="gap-3">
             {draft.proofs.map((proof) => (
@@ -470,11 +626,20 @@ export function SimpleCreateForm() {
                         patch({
                           proofs: draft.proofs.map((row) =>
                             row.id === proof.id
-                              ? {
-                                  ...row,
-                                  method: item.value as ChallengeProofMethod,
-                                  name: proofNameForMethodChange(row, item.value as ChallengeProofMethod),
-                                }
+                              ? ensureProofSentence(
+                                  {
+                                    ...row,
+                                    method: item.value as ChallengeProofMethod,
+                                    minutes:
+                                      item.value === 'hr' ? Math.max(row.minutes || 30, 1) : row.minutes,
+                                    name: proofNameForMethodChange(
+                                      row,
+                                      item.value as ChallengeProofMethod,
+                                      item.value === 'hr' ? Math.max(row.minutes || 30, 1) : 30,
+                                    ),
+                                  },
+                                  item.value === 'hr' ? Math.max(row.minutes || 30, 1) : 30,
+                                )
                               : row,
                           ),
                         })
@@ -482,6 +647,20 @@ export function SimpleCreateForm() {
                     />
                   ))}
                 </View>
+                {proof.method === 'hr' ? (
+                  <HeartRateMinutesRow
+                    value={proof.minutes || 30}
+                    onChange={(minutes) =>
+                      patch({
+                        proofs: draft.proofs.map((row) =>
+                          row.id === proof.id
+                            ? ensureProofSentence({ ...row, method: 'hr', minutes }, minutes)
+                            : row,
+                        ),
+                      })
+                    }
+                  />
+                ) : null}
               </View>
             ))}
           </View>
@@ -506,7 +685,13 @@ export function SimpleCreateForm() {
         </TourAnchor>
 
         <TourAnchor id="create-simple-visibility">
-        <View className="gap-2">
+        <View
+          className="gap-2"
+          collapsable={false}
+          nativeID="create-simple-visibility"
+          ref={(node) => {
+            sectionRefs.current['create-simple-visibility'] = node;
+          }}>
           <SectionLabel>{copy('create.visibility')}</SectionLabel>
           <SegmentedControl
             accessibilityLabel={copy('create.visibility')}
@@ -575,10 +760,9 @@ export function SimpleCreateForm() {
         ) : null}
 
         <Button
-          title={error ? 'Try again' : copy('create.submit')}
-          loading={create.isPending}
+          title={error ? 'Try again' : focusSection ? copy('create.backToReview') : copy('create.review')}
           disabled={poolShortfall > 0}
-          onPress={() => void onCreate()}
+          onPress={() => onReview()}
         />
         <TourAnchor id="create-simple-advanced">
         <Pressable
@@ -595,6 +779,8 @@ export function SimpleCreateForm() {
           </AppText>
         </Pressable>
         </TourAnchor>
+        </>
+        ) : null}
       </View>
     </Screen>
   );

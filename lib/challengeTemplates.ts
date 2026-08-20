@@ -11,12 +11,12 @@ import {
   composeChallengeRules,
   consistencyRuleSentence,
   deriveFinishTarget,
-  extraHasMinMinutes,
   extraRuleLines,
   emptyExtraRule,
   buildRulesStructured,
   type ExtraRule,
 } from '@/lib/consistencyRules';
+import { persistTasksForPublish, minMinutesForPublish, namedProofsForPublish } from '@/lib/challengeCreatePublish';
 import { laneReviewLine, normalizeUserChallengeLane } from '@/lib/challengeLane';
 import { formatWallet } from '@/lib/currency';
 import { emptyChallengeTask, createChallengeSchema, type CreateChallengeValues } from '@/utils/validators';
@@ -45,7 +45,7 @@ export function wizardStepIndex(key: CreateWizardStepKey): number {
 export const CREATE_STEP_FIELDS: Record<number, readonly (keyof CreateChallengeValues)[]> = {
   0: ['challenge_lane'],
   1: [],
-  2: ['title', 'description', 'category', 'visibility', 'task'],
+  2: ['title', 'description', 'category', 'visibility', 'task', 'extra_tasks'],
   3: ['challenge_type'],
   4: ['duration_type', 'duration_days', 'starts_at', 'ends_at', 'end_mode', 'duration_value', 'duration_unit', 'frequency', 'target_count'],
   5: ['prize_structure', 'top_places_mode', 'top_places_value', 'top_places_distribution'],
@@ -111,8 +111,9 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   target_count: '6',
   frequency: 'weekly',
   rule_activity: 'workout',
-  extra_rules: [],
-  proofs: [...FITNESS_PROOFS],
+    extra_rules: [],
+    extra_tasks: [],
+    proofs: [...FITNESS_PROOFS],
   tasks: [emptyChallengeTask()],
   prize_structure: 'equal_split',
   top_places_mode: 'percent',
@@ -330,6 +331,7 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
           title: typeof item?.title === 'string' ? item.title : '',
           points: item?.points != null ? String(item.points) : '10',
           proof_required: Boolean(item?.proof_required),
+          once: Boolean(item?.once),
           proofs:
             Array.isArray(item?.proofs) && item.proofs.length > 0
               ? [...item.proofs]
@@ -344,12 +346,22 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
         proofs: [...(item.proofs ?? [])],
       }))
     : [];
+  const extra_tasks = Array.isArray(source?.extra_tasks)
+    ? source.extra_tasks.map((item) => ({
+        id: item?.id || `xtask-${Math.random().toString(36).slice(2, 8)}`,
+        title: typeof item?.title === 'string' ? item.title : '',
+        once: Boolean(item?.once),
+        proof_method: item?.proof_method ?? 'photo',
+        hr_minutes: Math.max(Math.round(Number(item?.hr_minutes) || 30), 1),
+      }))
+    : [];
   return {
     ...DEFAULT_CREATE_VALUES,
     ...source,
     proofs: proofs.length > 0 ? proofs : [...DEFAULT_CREATE_VALUES.proofs],
     tasks,
     extra_rules,
+    extra_tasks,
     rule_activity: source?.rule_activity?.trim() || DEFAULT_CREATE_VALUES.rule_activity,
   };
 }
@@ -584,16 +596,9 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
   const unlimited = isUnlimitedDraft(values);
   const points = isPointsDraft(values);
   const schedule = ensureSchedule(values);
-  const tasks = Array.isArray(values?.tasks) ? values.tasks : [];
-  const proofs = Array.isArray(values?.proofs) ? values.proofs : [];
   const title = typeof values?.title === 'string' ? values.title : '';
-  const parsedTasks = tasks.map((task, index) => ({
-    id: task?.id || `preview-${index}`,
-    title: String(task?.title ?? '').trim() || `Task ${index + 1}`,
-    points: Number(task?.points) || 0,
-    proof_required: Boolean(task?.proof_required) || (task?.proofs?.length ?? 0) > 0,
-    proof_types: (task?.proofs?.length ? task.proofs : task?.proof_required ? ['photo'] : []) as string[],
-  }));
+  const persistTasks = persistTasksForPublish(values, points);
+  const namedProofs = namedProofsForPublish(values);
   const target = deriveFinishTarget(values);
   const cap =
     values.participant_cap === 'limited' && Number(values.max_participants) > 0
@@ -612,13 +617,19 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     created_by: null,
     buy_in_amount: buyIn,
     days_required: target,
-    min_minutes: extraHasMinMinutes(values)
-      ? 30
-      : Math.max(Number(values.min_minutes) || (values.category === 'fitness' ? 30 : 1), 1),
-    proof_requirements: proofs.map((type) => ({ type, required: true })),
+    min_minutes: minMinutesForPublish(values),
+    proof_requirements: namedProofs.length
+      ? namedProofs
+          .map((proof) => {
+            const type = proof.method === 'hr' ? 'hr_monitor' : proof.method === 'checkin' ? 'text_note' : proof.method === 'video' ? 'video' : proof.method === 'honor' ? null : 'photo';
+            return type ? { type: type as ProofType, required: true as const } : null;
+          })
+          .filter((item): item is { type: ProofType; required: true } => item != null)
+      : (Array.isArray(values.proofs) ? values.proofs : []).map((type) => ({ type, required: true })),
+    proofs: namedProofs,
     target_count: target,
     frequency: points ? 'once' : values.frequency,
-    tasks: points ? parsedTasks : [],
+    tasks: persistTasks,
     status: 'open',
     starts_at: schedule.starts_at,
     ends_at: unlimited ? null : schedule.ends_at,
@@ -641,6 +652,7 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     cover_image_url: values.cover_image_url?.trim() || null,
     rules_video_url: values.rules_video_url?.trim() || null,
     rules_list: buildRulesStructured(values),
+    task: values.task?.trim() || null,
     created_at: schedule.starts_at,
     updated_at: schedule.starts_at,
     participant_count: 0,

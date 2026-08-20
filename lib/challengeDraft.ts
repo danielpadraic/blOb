@@ -24,7 +24,8 @@ import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
 import { MAX_CHALLENGE_DURATION_DAYS, asDurationUnit, asEndMode, ensureSchedule } from '@/lib/challengeSchedule';
-import { emptyChallengeTask, type CreateChallengeValues } from '@/utils/validators';
+import { extraTasksFromStored } from '@/lib/challengeCreatePublish';
+import { emptyChallengeTask, emptyExtraCreateTask, type CreateChallengeValues, type ExtraCreateTask } from '@/utils/validators';
 
 export type ChallengeDraft = {
   id: string | null;
@@ -146,6 +147,7 @@ function emptyValues(): CreateChallengeValues {
     ...DEFAULT_CREATE_VALUES,
     proofs: [...DEFAULT_CREATE_VALUES.proofs],
     extra_rules: DEFAULT_CREATE_VALUES.extra_rules.map((item) => ({ ...item, proofs: [...item.proofs] })),
+    extra_tasks: [],
     tasks: DEFAULT_CREATE_VALUES.tasks.map((task) => ({
       ...task,
       id: emptyChallengeTask().id,
@@ -209,6 +211,37 @@ function asOptionalProofs(value: unknown): CreateChallengeValues['proofs'] {
   });
 }
 
+function asExtraTasks(value: unknown): ExtraCreateTask[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+    const row = item as Record<string, unknown>;
+    const title = asString(row.title, '').trim();
+    if (!title) {
+      return [];
+    }
+    const method = row.proof_method;
+    const proof_method =
+      method === 'photo' || method === 'video' || method === 'checkin' || method === 'honor' || method === 'hr'
+        ? method
+        : 'photo';
+    return [
+      {
+        ...emptyExtraCreateTask(),
+        id: asString(row.id, emptyExtraCreateTask().id),
+        title,
+        once: Boolean(row.once),
+        proof_method,
+        hr_minutes: Math.max(Math.round(Number(row.hr_minutes) || 30), 1),
+      },
+    ];
+  });
+}
+
 function asTasks(value: unknown): CreateChallengeValues['tasks'] {
   if (!Array.isArray(value) || value.length === 0) {
     return DEFAULT_CREATE_VALUES.tasks.map((task) => ({ ...task, id: emptyChallengeTask().id }));
@@ -222,6 +255,7 @@ function asTasks(value: unknown): CreateChallengeValues['tasks'] {
       title: asString(task.title, ''),
       points: asString(task.points, '10'),
       proof_required: proofRequired,
+      once: Boolean(task.once),
       proofs: proofs.length > 0 ? proofs : proofRequired ? (['photo'] as CreateChallengeValues['proofs']) : [],
     };
   });
@@ -265,6 +299,7 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       })(),
       proofs: asProofs(row.proofs ?? row.proof_requirements),
       tasks: asTasks(row.tasks),
+      extra_tasks: asExtraTasks(row.extra_tasks),
       prize_structure: normalizePrizeStructure(row.prize_structure),
       top_places_mode: normalizeTopPlacesMode(row.top_places_mode) ?? DEFAULT_CREATE_VALUES.top_places_mode,
       top_places_value: asString(row.top_places_value, DEFAULT_CREATE_VALUES.top_places_value),
@@ -374,6 +409,10 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     frequency: normalizeFrequency(primary?.period ?? challenge.frequency),
     rule_activity: primary?.activity?.trim() || DEFAULT_CREATE_VALUES.rule_activity,
     extra_rules: extraRulesFromStructured(structured),
+    extra_tasks:
+      challenge.challenge_type === 'points'
+        ? []
+        : extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task),
     proofs: proofs.length > 0 ? proofs : challenge.challenge_type === 'points' ? ['photo'] : [...DEFAULT_CREATE_VALUES.proofs],
     tasks: tasks.length > 0 ? tasks : [emptyChallengeTask()],
     prize_structure: normalizePrizeStructure(challenge.prize_structure),

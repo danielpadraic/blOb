@@ -9,6 +9,7 @@ export type ChallengeProof = {
   id: string;
   name: string;
   method: ChallengeProofMethod;
+  minutes?: number;
 };
 
 export type ChallengeProofPart = {
@@ -20,18 +21,30 @@ export type ChallengeProofPart = {
 
 export const SIMPLE_PROOF_CAP = 4;
 
-export const BEFORE_AFTER_HR_PRESET: Array<{ name: string; method: ChallengeProofMethod }> = [
+export const BEFORE_AFTER_HR_PRESET: Array<{ name: string; method: ChallengeProofMethod; minutes?: number }> = [
   { name: 'Post a pre-workout selfie.', method: 'photo' },
   { name: 'Post a post-workout selfie.', method: 'photo' },
-  { name: 'Share proof of at least 30-minutes of elevated heart rate.', method: 'hr' },
+  { name: 'Share proof of at least 30 minutes of elevated heart rate.', method: 'hr', minutes: 30 },
 ];
 
 export const PRE_WORKOUT_SELFIE_SENTENCE = 'Post a pre-workout selfie.';
 export const POST_WORKOUT_SELFIE_SENTENCE = 'Post a post-workout selfie.';
 
+export function heartRateMinutesLabel(minutes: number): string {
+  const n = Math.max(Math.round(Number(minutes) || 30), 1);
+  return n === 1 ? '1 minute' : `${n} minutes`;
+}
+
 export function heartRateProofSentence(minutes = 30): string {
   const n = Math.max(Math.round(Number(minutes) || 30), 1);
-  return `Share proof of at least ${n}-minutes of elevated heart rate.`;
+  return `Share proof of at least ${heartRateMinutesLabel(n)} of elevated heart rate.`;
+}
+
+export function proofHeartRateMinutes(proof: Pick<ChallengeProof, 'method' | 'minutes'>, fallback = 30): number {
+  if (proof.method !== 'hr') {
+    return Math.max(Math.round(Number(fallback) || 30), 1);
+  }
+  return Math.max(Math.round(Number(proof.minutes) || Number(fallback) || 30), 1);
 }
 
 export function defaultSentenceForMethod(method: ChallengeProofMethod, minutes = 30): string {
@@ -82,8 +95,9 @@ export function isShortProofLabel(name: string): boolean {
 export function ensureProofSentence(proof: ChallengeProof, minutes = 30): ChallengeProof {
   const name = proof.name.trim();
   const lower = name.toLowerCase();
+  const hrMinutes = proofHeartRateMinutes({ method: 'hr', minutes: proof.minutes }, minutes);
   if (proof.method === 'hr' || /\bhr\b/.test(lower) || lower.includes('heart rate') || lower.includes('heart-rate')) {
-    return { ...proof, method: 'hr', name: heartRateProofSentence(minutes) };
+    return { ...proof, method: 'hr', minutes: hrMinutes, name: heartRateProofSentence(hrMinutes) };
   }
   if (lower.includes('pre-workout') || lower.includes('pre-selfie') || (lower.includes('pre') && lower.includes('selfie'))) {
     return { ...proof, name: PRE_WORKOUT_SELFIE_SENTENCE };
@@ -114,6 +128,7 @@ export function signupProofLines(challenge: {
   proof_type?: unknown;
   proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
   challenge_type?: string | null;
+  task?: string | null;
   tasks?: unknown;
 }): string[] {
   const minutes = Math.max(Math.round(Number(challenge.min_minutes) || 30), 1);
@@ -127,15 +142,49 @@ export function signupProofLines(challenge: {
     proof_type: challenge.proof_type,
     proof_requirements: challenge.proof_requirements,
   });
-  return listed.map((proof) => ensureProofSentence(proof, minutes).name);
+  const lines = listed.map((proof) => ensureProofSentence(proof, proofHeartRateMinutes(proof, minutes)).name);
+  const primary = String(challenge.task ?? '')
+    .trim()
+    .toLowerCase();
+  if (!Array.isArray(challenge.tasks)) {
+    return lines;
+  }
+  for (const raw of challenge.tasks) {
+    if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const row = raw as {
+      title?: unknown;
+      once?: unknown;
+      proof_required?: unknown;
+      proof_types?: unknown;
+    };
+    const title = String(row.title ?? '').trim();
+    if (!title || title.toLowerCase() === primary) {
+      continue;
+    }
+    const types = Array.isArray(row.proof_types)
+      ? row.proof_types.map((item) => String(item))
+      : [];
+    const honor = row.proof_required === false || types.length === 0;
+    if (honor) {
+      lines.push(`Complete “${title}” on your honor.`);
+      continue;
+    }
+    const method = methodFromProofType(types[0]);
+    const sentence = defaultSentenceForMethod(method, minutes);
+    lines.push(row.once ? `Once, for “${title}”: ${sentence}` : `For “${title}”: ${sentence}`);
+  }
+  return lines;
 }
 
 export function newProofId(): string {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function makeProof(name: string, method: ChallengeProofMethod): ChallengeProof {
-  return { id: newProofId(), name, method };
+export function makeProof(name: string, method: ChallengeProofMethod, minutes?: number): ChallengeProof {
+  const hrMinutes = method === 'hr' ? Math.max(Math.round(Number(minutes) || 30), 1) : undefined;
+  return { id: newProofId(), name, method, minutes: hrMinutes };
 }
 
 export function defaultChallengeProofs(_task = ''): ChallengeProof[] {
@@ -282,7 +331,12 @@ export function parseChallengeProofs(value: unknown): ChallengeProof[] {
     const method = isChallengeProofMethod(row.method) ? row.method : methodFromProofType(row.method ?? row.type);
     const id = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : newProofId();
     const name = typeof row.name === 'string' ? row.name : '';
-    parsed.push({ id, name, method });
+    const rawMinutes = row.minutes ?? row.min_minutes;
+    const minutes =
+      method === 'hr'
+        ? Math.max(Math.round(Number(rawMinutes) || 30), 1)
+        : undefined;
+    parsed.push({ id, name, method, minutes });
   }
   return parsed;
 }
@@ -296,8 +350,12 @@ export function resolveChallengeProofs(input: {
   proofs?: unknown;
   proof_type?: unknown;
   proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
+  min_minutes?: number | string | null;
 }): ChallengeProof[] {
-  const listed = parseChallengeProofs(input.proofs).map((proof) => ensureProofSentence(proof));
+  const minutes = Math.max(Math.round(Number(input.min_minutes) || 30), 1);
+  const listed = parseChallengeProofs(input.proofs).map((proof) =>
+    ensureProofSentence(proof, proofHeartRateMinutes(proof, minutes)),
+  );
   if (listed.length > 0) {
     return listed;
   }

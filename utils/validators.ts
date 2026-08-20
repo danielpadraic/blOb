@@ -153,6 +153,7 @@ export const createChallengeTaskSchema = z.object({
   points: z.string(),
   proof_required: z.boolean(),
   proofs: z.array(z.enum(CREATE_PROOF_TYPES)),
+  once: z.boolean().optional(),
 });
 
 export function emptyChallengeTask(): z.infer<typeof createChallengeTaskSchema> {
@@ -162,6 +163,27 @@ export function emptyChallengeTask(): z.infer<typeof createChallengeTaskSchema> 
     points: '10',
     proof_required: true,
     proofs: ['photo'],
+    once: false,
+  };
+}
+
+export const extraCreateTaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  once: z.boolean(),
+  proof_method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr']).nullable(),
+  hr_minutes: z.number().int().min(1).max(600),
+});
+
+export type ExtraCreateTask = z.infer<typeof extraCreateTaskSchema>;
+
+export function emptyExtraCreateTask(): ExtraCreateTask {
+  return {
+    id: `xtask-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    title: '',
+    once: false,
+    proof_method: 'photo',
+    hr_minutes: 30,
   };
 }
 
@@ -216,6 +238,7 @@ export const createChallengeSchema = z
     rules_video_url: z.string().trim().optional().or(z.literal('')),
     rule_activity: z.string().trim().max(40, 'Keep the activity name under 40 characters'),
     extra_rules: z.array(extraRuleSchema),
+    extra_tasks: z.array(extraCreateTaskSchema).optional(),
     task: z.string().trim().max(80).optional().or(z.literal('')),
     min_participants: z.string().optional(),
     misses_allowed: z.string().optional(),
@@ -226,6 +249,7 @@ export const createChallengeSchema = z
           id: z.string(),
           name: z.string(),
           method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr']),
+          minutes: z.number().int().min(1).max(600).optional(),
         }),
       )
       .optional(),

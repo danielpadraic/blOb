@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { Controller, type UseFormReturn } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
+import { HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
 import { FieldAnchor, FieldLabel } from '@/components/challenge/create/wizardUi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -17,6 +18,7 @@ import {
   type ExtraRuleKind,
 } from '@/lib/consistencyRules';
 import { CREATE_PROOF_TYPES, proofMeta } from '@/lib/constants';
+import { heartRateProofSentence } from '@/lib/challengeProofs';
 import { THEME } from '@/lib/theme';
 import type { ChallengeFrequency, ProofType } from '@/lib/types';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -70,6 +72,12 @@ export function RulesSlide({
     const current = getValues('proofs');
     const next = current.includes(type) ? current.filter((item) => item !== type) : [...current, type];
     setValue('proofs', next, { shouldValidate: true, shouldDirty: true });
+    if (type === 'hr_monitor' && next.includes('hr_monitor')) {
+      const minutes = Math.max(Number(getValues('min_minutes')) || 30, 1);
+      if (minutes < 1) {
+        setValue('min_minutes', '30', { shouldDirty: true });
+      }
+    }
   }
 
   function toggleTaskProof(index: number, type: ProofType) {
@@ -341,6 +349,24 @@ export function RulesSlide({
               onToggle={toggleProof}
             />
           </FieldAnchor>
+          {values.proofs.includes('hr_monitor') ? (
+            <FieldAnchor name="min_minutes">
+              <HeartRateMinutesRow
+                value={Math.max(Number(values.min_minutes) || 30, 1)}
+                onChange={(minutes) => {
+                  setValue('min_minutes', String(minutes), { shouldDirty: true, shouldValidate: true });
+                  const extras = getValues('extra_rules') ?? [];
+                  setValue(
+                    'extra_rules',
+                    extras.map((rule) =>
+                      rule.kind === 'min_minutes' ? { ...rule, text: heartRateProofSentence(minutes) } : rule,
+                    ),
+                    { shouldDirty: true },
+                  );
+                }}
+              />
+            </FieldAnchor>
+          ) : null}
         </>
       )}
 

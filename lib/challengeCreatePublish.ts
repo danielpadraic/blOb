@@ -1,0 +1,159 @@
+import {
+  defaultSentenceForMethod,
+  ensureProofSentence,
+  makeProof,
+  namedProofsFromLegacyTypes,
+  proofHeartRateMinutes,
+  proofRequirementsFrom,
+  methodFromProofType,
+  type ChallengeProof,
+} from '@/lib/challengeProofs';
+import { extraHasMinMinutes } from '@/lib/consistencyRules';
+import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
+import type { ChallengeTask } from '@/lib/types';
+import type { CreateChallengeValues, ExtraCreateTask } from '@/utils/validators';
+import { emptyExtraCreateTask } from '@/utils/validators';
+
+function extraTaskProofType(method: ExtraCreateTask['proof_method']): string | undefined {
+  if (!method || method === 'honor') {
+    return undefined;
+  }
+  if (method === 'hr') {
+    return 'hr_monitor';
+  }
+  if (method === 'checkin') {
+    return 'text_note';
+  }
+  return method;
+}
+
+export function filledExtraTasks(values: Pick<CreateChallengeValues, 'extra_tasks'>): ExtraCreateTask[] {
+  return (values.extra_tasks ?? [])
+    .map((item) => ({
+      ...item,
+      title: item.title.trim(),
+      hr_minutes: Math.max(Math.round(Number(item.hr_minutes) || DEFAULT_MIN_MINUTES), 1),
+    }))
+    .filter((item) => item.title.length > 0);
+}
+
+export function extraTaskNamedProofs(tasks: ExtraCreateTask[]): ChallengeProof[] {
+  return tasks.flatMap((task) => {
+    if (task.once || !task.proof_method || task.proof_method === 'honor') {
+      return [];
+    }
+    const minutes = Math.max(Math.round(Number(task.hr_minutes) || DEFAULT_MIN_MINUTES), 1);
+    return [
+      ensureProofSentence(
+        makeProof(defaultSentenceForMethod(task.proof_method, minutes), task.proof_method, minutes),
+        minutes,
+      ),
+    ];
+  });
+}
+
+export function namedProofsForPublish(values: CreateChallengeValues): ChallengeProof[] {
+  const base =
+    values.challenge_proofs && values.challenge_proofs.length > 0
+      ? values.challenge_proofs.map((proof) =>
+          ensureProofSentence(proof, proofHeartRateMinutes(proof, Number(values.min_minutes) || DEFAULT_MIN_MINUTES)),
+        )
+      : namedProofsFromLegacyTypes(values.proofs);
+  return [...base, ...extraTaskNamedProofs(filledExtraTasks(values))];
+}
+
+export function persistTasksForPublish(values: CreateChallengeValues, isPoints: boolean): ChallengeTask[] {
+  if (isPoints) {
+    return values.tasks.map((task) => {
+      const proofs = task.proofs?.length ? task.proofs : task.proof_required ? ['photo'] : [];
+      return {
+        id: task.id,
+        title: task.title.trim(),
+        points: Number(task.points),
+        proof_required: proofs.length > 0,
+        proof_types: proofs.length > 0 ? proofs : undefined,
+        once: Boolean(task.once),
+      };
+    });
+  }
+  const extra = filledExtraTasks(values);
+  const primary = values.task?.trim() || '';
+  const rows: ChallengeTask[] = [];
+  if (primary) {
+    const types = proofRequirementsFrom(
+      values.challenge_proofs && values.challenge_proofs.length > 0
+        ? values.challenge_proofs
+        : namedProofsFromLegacyTypes(values.proofs),
+    ).map((item) => item.type);
+    rows.push({
+      id: 'primary',
+      title: primary,
+      points: 0,
+      proof_required: types.length > 0,
+      proof_types: types.length > 0 ? types : undefined,
+      once: false,
+    });
+  }
+  for (const task of extra) {
+    const type = extraTaskProofType(task.proof_method);
+    rows.push({
+      id: task.id,
+      title: task.title,
+      points: 0,
+      proof_required: Boolean(type),
+      proof_types: type ? [type] : undefined,
+      once: task.once,
+    });
+  }
+  return rows;
+}
+
+export function minMinutesForPublish(values: CreateChallengeValues): number {
+  const named = namedProofsForPublish(values);
+  const fromProofs = named.filter((proof) => proof.method === 'hr').map((proof) => proofHeartRateMinutes(proof, DEFAULT_MIN_MINUTES));
+  const fromExtra = filledExtraTasks(values)
+    .filter((task) => task.proof_method === 'hr')
+    .map((task) => Math.max(Math.round(Number(task.hr_minutes) || DEFAULT_MIN_MINUTES), 1));
+  const stepper = Number(values.min_minutes);
+  const hasHr =
+    fromProofs.length > 0 ||
+    fromExtra.length > 0 ||
+    (values.proofs ?? []).includes('hr_monitor') ||
+    extraHasMinMinutes(values);
+  if (hasHr) {
+    const candidates = [...fromProofs, ...fromExtra, Number.isFinite(stepper) && stepper >= 1 ? stepper : DEFAULT_MIN_MINUTES];
+    return Math.max(...candidates, 1);
+  }
+  if (Number.isFinite(stepper) && stepper >= 1) {
+    return stepper;
+  }
+  return values.category === 'fitness' ? DEFAULT_MIN_MINUTES : 1;
+}
+
+export function extraTasksFromStored(tasks: ChallengeTask[], primaryTask: string | null | undefined): ExtraCreateTask[] {
+  const primary = (primaryTask ?? '').trim().toLowerCase();
+  return tasks.flatMap((task) => {
+    const title = task.title.trim();
+    if (!title) {
+      return [];
+    }
+    if (primary && title.toLowerCase() === primary) {
+      return [];
+    }
+    const type = String(task.proof_types?.[0] ?? '');
+    const method = type ? methodFromProofType(type) : task.proof_required ? 'photo' : 'honor';
+    const proof_method: ExtraCreateTask['proof_method'] =
+      method === 'honor' || !task.proof_required ? 'honor' : method;
+    const row = emptyExtraCreateTask();
+    return [
+      {
+        ...row,
+        id: task.id || row.id,
+        title,
+        once: Boolean(task.once),
+        proof_method,
+        hr_minutes: DEFAULT_MIN_MINUTES,
+      },
+    ];
+  });
+}

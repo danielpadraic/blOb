@@ -24,10 +24,14 @@ import {
 } from '@/lib/challenges';
 import {
   firstProofMethod,
-  namedProofsFromLegacyTypes,
   proofRequirementsFrom,
   proofTypeFromMethod,
 } from '@/lib/challengeProofs';
+import {
+  minMinutesForPublish,
+  namedProofsForPublish,
+  persistTasksForPublish,
+} from '@/lib/challengeCreatePublish';
 import {
   fetchChallengeSettlement,
   markChallengeJudging,
@@ -38,10 +42,8 @@ import {
   buildRulesStructured,
   composeChallengeRules,
   deriveFinishTarget,
-  extraHasMinMinutes,
 } from '@/lib/consistencyRules';
 import { copy } from '@/lib/copy';
-import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
 import { fetchChallengePreviewsByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -540,18 +542,7 @@ export function useCreateChallenge() {
       const targetCount = deriveFinishTarget(values);
       const rulesText = composeChallengeRules(values);
       const rulesStructured = buildRulesStructured(values);
-      const tasks = isPoints
-        ? values.tasks.map((task) => {
-            const proofs = task.proofs?.length ? task.proofs : task.proof_required ? ['photo'] : [];
-            return {
-              id: task.id,
-              title: task.title.trim(),
-              points: Number(task.points),
-              proof_required: proofs.length > 0,
-              proof_types: proofs.length > 0 ? proofs : undefined,
-            };
-          })
-        : [];
+      const tasks = persistTasksForPublish(values, isPoints);
       const contribution =
         values.funding_model === 'participants'
           ? 0
@@ -559,9 +550,7 @@ export function useCreateChallenge() {
       const maxParticipants =
         values.participant_cap === 'limited' ? Number(values.max_participants) : null;
 
-      const minMinutes = extraHasMinMinutes(values)
-        ? 30
-        : Math.max(Number(values.min_minutes) || (values.category === 'fitness' ? DEFAULT_MIN_MINUTES : 1), 1);
+      const minMinutes = minMinutesForPublish(values);
       const cover = values.cover_image_url?.trim() || null;
       const video = values.rules_video_url?.trim() || null;
 
@@ -589,10 +578,7 @@ export function useCreateChallenge() {
         );
       }
 
-      const namedProofs =
-        values.challenge_proofs && values.challenge_proofs.length > 0
-          ? values.challenge_proofs
-          : namedProofsFromLegacyTypes(values.proofs);
+      const namedProofs = namedProofsForPublish(values);
 
       const challenge = await insertUserChallenge({
         title: values.title.trim(),

@@ -231,7 +231,7 @@ export const PROOF_META: Record<
     short: 'Post-selfie',
   },
   hr_monitor: {
-    label: 'Share proof of at least 30-minutes of elevated heart rate.',
+    label: 'Share proof of at least 30 minutes of elevated heart rate.',
     helper: 'Fitness or watch screenshot covering at least 30 minutes. A Watch is optional.',
     short: 'Heart rate',
   },

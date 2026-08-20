@@ -15,7 +15,11 @@ import {
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
 import { resolveDiscoverability } from '@/lib/challengeDiscoverability';
-import { challengeRulesSentence, challengeUsesHonorProof } from '@/lib/challengeRuleCopy';
+import { filledExtraTasks } from '@/lib/challengeCreatePublish';
+import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
+import type { ExtraCreateTask } from '@/utils/validators';
+import { emptyExtraCreateTask } from '@/utils/validators';
+import { challengeRulesFromCreateValues } from '@/lib/challengeRuleCopy';
 import { copy } from '@/lib/copy';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -98,6 +102,7 @@ export type SimpleChallengeDraft = {
   custom_checkins: number;
   custom_period: SimpleCustomPeriod;
   proofs: ChallengeProof[];
+  extra_tasks: ExtraCreateTask[];
   visibility: SimpleVisibility;
   friends_of_friends: boolean;
 };
@@ -119,6 +124,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     custom_checkins: 7,
     custom_period: 'week',
     proofs: defaultChallengeProofs(),
+    extra_tasks: [],
     visibility: 'public',
     friends_of_friends: true,
   };
@@ -127,7 +133,8 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
 function withProofSentences(draft: SimpleChallengeDraft): SimpleChallengeDraft {
   return {
     ...draft,
-    proofs: (draft.proofs ?? []).map((item) => ensureProofSentence(item)),
+    extra_tasks: Array.isArray(draft.extra_tasks) ? draft.extra_tasks : [],
+    proofs: (draft.proofs ?? []).map((item) => ensureProofSentence(item, item.minutes ?? 30)),
   };
 }
 
@@ -224,11 +231,14 @@ export function customFrequencyCopy(n: number, period: SimpleCustomPeriod): stri
 }
 
 export function frequencyHintOf(draft: SimpleChallengeDraft): string {
+  const extra = filledExtraTasks(draft);
   if (draft.frequency === 'once') {
     return 'The task once for the whole challenge.';
   }
   if (draft.frequency === 'daily') {
-    return 'The task once each day.';
+    return extra.length > 0
+      ? 'Every task, every day, unless a task is marked Once.'
+      : 'The task once each day.';
   }
   if (draft.frequency === '3x_week') {
     return 'The task three times each week.';
@@ -295,7 +305,7 @@ export function deviceTimezone(): string {
 }
 
 export function applyBeforeAfterHrPreset(): ChallengeProof[] {
-  return BEFORE_AFTER_HR_PRESET.map((item) => makeProof(item.name, item.method));
+  return BEFORE_AFTER_HR_PRESET.map((item) => makeProof(item.name, item.method, item.minutes));
 }
 
 export function addSimpleProof(proofs: ChallengeProof[]): ChallengeProof[] {
@@ -336,12 +346,17 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const invite = draft.visibility === 'invite';
   const buyIn = bucks ? 0 : Math.max(Math.floor(draft.buy_in) || 0, 0);
   const hostBudget = bucks ? Math.max(Math.floor(draft.host_budget) || 0, 0) : 0;
+  const extra_tasks = filledExtraTasks(draft);
   const proofs = (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
-    ensureProofSentence(item),
+    ensureProofSentence(item, item.minutes ?? DEFAULT_MIN_MINUTES),
   );
   const legacyTypes = proofRequirementsFrom(proofs).map((item) => item.type);
-
-  return {
+  const hrMinutes = [
+    ...proofs.filter((item) => item.method === 'hr').map((item) => item.minutes ?? DEFAULT_MIN_MINUTES),
+    ...extra_tasks.filter((item) => item.proof_method === 'hr').map((item) => item.hr_minutes),
+  ];
+  const minMinutes = hrMinutes.length > 0 ? Math.max(...hrMinutes, 1) : DEFAULT_MIN_MINUTES;
+  const values: CreateChallengeValues = {
     ...DEFAULT_CREATE_VALUES,
     title: draft.title.trim(),
     description: draft.description.trim(),
@@ -366,6 +381,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     frequency: publishFrequencyOf(draft),
     rule_activity: type.activity,
     extra_rules: [],
+    extra_tasks,
     proofs: legacyTypes,
     challenge_proofs: proofs,
     tasks: DEFAULT_CREATE_VALUES.tasks,
@@ -386,15 +402,16 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     format: 'consistency',
     currency: bucks ? 'bucks' : 'coins',
     creator_participating: true,
-    min_minutes: '1',
+    min_minutes: String(minMinutes),
     cover_image_url: '',
     rules_video_url: '',
-    rules: challengeRulesSentence(
-      draft.task.trim(),
-      publishCadenceOf(draft),
-      challengeUsesHonorProof({ proofs }),
-    ),
+    rules: '',
   };
+  values.rules = challengeRulesFromCreateValues({
+    ...values,
+    frequency: publishCadenceOf(draft),
+  });
+  return values;
 }
 
 export function validateSimpleDraft(draft: SimpleChallengeDraft): string | null {
@@ -413,6 +430,9 @@ export function validateSimpleDraft(draft: SimpleChallengeDraft): string | null 
   }
   if (!draft.task.trim()) {
     return copy('create.needTask');
+  }
+  if ((draft.extra_tasks ?? []).some((item) => !item.title.trim())) {
+    return copy('create.needExtraTask');
   }
   if (draft.frequency === 'custom' && requiredCheckinsOf(draft) < 1) {
     return copy('create.needCheckins');

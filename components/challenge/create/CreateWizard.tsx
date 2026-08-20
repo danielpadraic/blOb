@@ -19,6 +19,8 @@ import {
   type WizardFocusApi,
 } from '@/components/challenge/create/wizardUi';
 import { RulesSlide } from '@/components/challenge/create/RulesSlide';
+import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
+import { ExtraTasksEditor } from '@/components/challenge/create/ExtraTasksEditor';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -52,7 +54,6 @@ import {
   CHALLENGE_TEMPLATES,
   CREATE_STEP_FIELDS,
   CREATE_WIZARD_STEPS,
-  challengeContractRows,
   cloneTemplateValues,
   coinFlowLines,
   DEFAULT_CREATE_VALUES,
@@ -156,6 +157,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const discardDraft = useDiscardChallengeDraft();
   const reusable = useReusableChallenges();
   const [step, setStep] = useState(STEP_GOAL);
+  const [reviewReturn, setReviewReturn] = useState(false);
   const [startPath, setStartPath] = useState<CreateStartPath>('scratch');
   const [templateId, setTemplateId] = useState<ChallengeTemplateId | null>(null);
   const [sourceChallengeId, setSourceChallengeId] = useState<string | null>(null);
@@ -1141,6 +1143,27 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     setStep(index);
   }
 
+  function editFromReview(key: CreateReviewEditKey) {
+    const mapping: Record<CreateReviewEditKey, { step: number; field: string }> = {
+      title: { step: STEP_GOAL, field: 'title' },
+      task: { step: STEP_GOAL, field: 'task' },
+      proofs: { step: STEP_RULES, field: 'proofs' },
+      duration: { step: STEP_DURATION, field: 'duration_days' },
+      frequency: { step: STEP_DURATION, field: 'frequency' },
+      visibility: { step: STEP_GOAL, field: 'visibility' },
+      prize: { step: STEP_PRIZE, field: 'prize_structure' },
+      start: { step: STEP_DURATION, field: 'starts_at' },
+    };
+    const target = mapping[key];
+    setReviewReturn(true);
+    pendingAnchor.current = target.field;
+    if (target.step !== step) {
+      setStep(target.step);
+      return;
+    }
+    requestAnimationFrame(() => scrollToAnchor(target.field));
+  }
+
   async function goNext() {
     setFormError(null);
     clearBobError();
@@ -1150,6 +1173,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
     if (step === STEP_START && !hasStartChoice()) {
       showBobIssue({ field: 'start', step: STEP_START });
+      return;
+    }
+    if (reviewReturn && !lastStep) {
+      syncComposedRules();
+      const issue = (step === STEP_ENTRY ? coinEntryIssue(step) : null) ?? applyStepErrors(step);
+      if (issue) {
+        showBobIssue(issue);
+        return;
+      }
+      setReviewReturn(false);
+      setStep(STEP_REVIEW);
       return;
     }
     if (!lastStep) {
@@ -1188,6 +1222,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   function goBack() {
     setFormError(null);
     clearBobError();
+    if (reviewReturn && step !== STEP_REVIEW) {
+      setReviewReturn(false);
+      setStep(STEP_REVIEW);
+      return;
+    }
     if (step <= STEP_GOAL) {
       leaveWizard();
       return;
@@ -1438,8 +1477,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               category={values.category}
               visibility={values.visibility}
               challengeLane={values.challenge_lane}
+              extraTasks={values.extra_tasks ?? []}
+              isPoints={isPoints}
               onCategoryChange={onCategoryChange}
               onVisibilityChange={(value) => setValue('visibility', value, { shouldValidate: true })}
+              onExtraTasksChange={(extra_tasks) => setValue('extra_tasks', extra_tasks, { shouldDirty: true })}
             />
           ) : null}
           {step === STEP_TYPE ? (
@@ -1539,6 +1581,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               contributionShort={contributionShort}
               skillAck={skillAck}
               onToggleSkillAck={() => setSkillAck((current) => !current)}
+              onEdit={editFromReview}
             />
             </FieldAnchor>
           ) : null}
@@ -1555,7 +1598,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             </View>
             <View className="flex-1">
               <Button
-                title={lastStep ? 'Publish' : 'Next'}
+                title={
+                  lastStep
+                    ? 'Publish'
+                    : reviewReturn
+                      ? copy('create.backToReview')
+                      : 'Next'
+                }
                 loading={lastStep && publishing}
                 onPress={() => void goNext()}
               />
@@ -1734,16 +1783,22 @@ function GoalSlide({
   category,
   visibility,
   challengeLane,
+  extraTasks,
+  isPoints,
   onCategoryChange,
   onVisibilityChange,
+  onExtraTasksChange,
 }: {
   control: ReturnType<typeof useForm<CreateChallengeValues>>['control'];
   errors: ReturnType<typeof useForm<CreateChallengeValues>>['formState']['errors'];
   category: CreateChallengeValues['category'];
   visibility: CreateChallengeValues['visibility'];
   challengeLane: CreateChallengeValues['challenge_lane'];
+  extraTasks: CreateChallengeValues['extra_tasks'];
+  isPoints: boolean;
   onCategoryChange: (next: CreateChallengeValues['category']) => void;
   onVisibilityChange: (next: CreateChallengeValues['visibility']) => void;
+  onExtraTasksChange: (next: NonNullable<CreateChallengeValues['extra_tasks']>) => void;
 }) {
   const isPrivateLane = normalizeUserChallengeLane(challengeLane) === 'private';
   return (
@@ -1819,6 +1874,11 @@ function GoalSlide({
             />
           )}
         />
+        {isPoints ? null : (
+          <View className="mt-3">
+            <ExtraTasksEditor tasks={extraTasks ?? []} onChange={onExtraTasksChange} />
+          </View>
+        )}
       </FieldAnchor>
       <FieldAnchor name="visibility">
       {isPrivateLane ? (
@@ -2525,26 +2585,18 @@ function ReviewSlide({
   contributionShort,
   skillAck,
   onToggleSkillAck,
+  onEdit,
 }: {
   values: CreateChallengeValues;
   contributionAmount: number;
   contributionShort: string | null;
   skillAck: boolean;
   onToggleSkillAck: () => void;
+  onEdit: (key: CreateReviewEditKey) => void;
 }) {
-  const rows = challengeContractRows(values);
   return (
     <View className="gap-4">
-      <Card className="gap-3">
-        {rows.map((row) => (
-          <View key={row.label} className="gap-0.5">
-            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-              {row.label}
-            </AppText>
-            <AppText className="text-[15px] leading-6 text-charcoal">{row.body}</AppText>
-          </View>
-        ))}
-      </Card>
+      <CreateReviewPreview values={values} onEdit={onEdit} />
       {contributionShort ? (
         <FieldAnchor name="wallet">
         <AppText className="text-sm leading-5 text-coral-dark">{contributionShort}</AppText>

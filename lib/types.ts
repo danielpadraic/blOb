@@ -186,6 +186,7 @@ export interface ChallengeProof {
   id: string;
   name: string;
   method: ChallengeProofMethod;
+  minutes?: number;
 }
 
 export interface ChallengeProofPart {
@@ -200,6 +201,7 @@ export interface ChallengeTask {
   points: number;
   proof_required: boolean;
   proof_types?: string[];
+  once?: boolean;
 }
 
 /** Extends auth.users. Credits are owner-private. */
