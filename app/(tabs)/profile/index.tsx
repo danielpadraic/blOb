@@ -2,7 +2,7 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
-import { WalletBalances } from '@/components/currency/WalletBalances';
+import { SendWalletButton, WalletBalances } from '@/components/currency/WalletBalances';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -103,7 +103,7 @@ export default function ProfileScreen() {
         <Pressable accessibilityRole="button" onPress={wallet?.openWallet}>
           <WalletBalances profile={profile} />
         </Pressable>
-        <Button title="Send Coins or Bucks" variant="outline" onPress={() => wallet?.openSend()} />
+        <SendWalletButton onPress={() => wallet?.openSend()} />
 
         <PrivacySettingsCard />
 

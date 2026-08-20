@@ -1,12 +1,13 @@
-import { View } from 'react-native';
+import { type ReactNode } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { copy } from '@/lib/copy';
+import { formatCash } from '@/lib/currency';
 import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
-import { formatBucks, formatCoins, formatUsd } from '@/utils/format';
 
 type WalletBalancesProps = {
   profile: Pick<Profile, 'coins' | 'bucks' | 'credits' | 'is_official'>;
@@ -19,46 +20,57 @@ export function WalletBalances({ profile }: WalletBalancesProps) {
 
   return (
     <View className="flex-row gap-2">
-      <View
-        className="flex-1 flex-row items-center justify-between px-3 py-3"
-        style={{
-          backgroundColor: THEME.surface,
-          borderColor: THEME.border,
-          borderWidth: 1,
-          borderRadius: THEME.radius,
-          ...themeShadow('card'),
-        }}>
-        <View className="flex-row items-center">
-          <CurrencyMark currency="coins" size={22} />
-          <AppText className="ml-1.5 text-[11px] font-semibold text-muted">Coins</AppText>
-        </View>
-        <AppText className="text-[15px] font-extrabold text-charcoal">
-          {official ? copy('official.infinity') : formatCoins(coins).replace(' Coins', '')}
+      <Tile>
+        <CurrencyMark currency="coins" size={22} />
+        <AppText className="ml-1.5 text-[15px] font-extrabold text-charcoal">
+          {official ? copy('official.infinity') : Number(coins).toFixed(2)}
         </AppText>
-      </View>
+      </Tile>
+      <Tile>
+        <CurrencyMark currency="bucks" size={22} />
+        <AppText className="ml-1.5 text-[15px] font-extrabold" style={{ color: '#1B7A4A' }}>
+          {formatCash(bucks)}
+        </AppText>
+      </Tile>
+    </View>
+  );
+}
 
-      <View
-        className="flex-1 flex-row items-center justify-between px-3 py-3"
-        style={{
-          backgroundColor: THEME.surface,
-          borderColor: THEME.border,
-          borderWidth: 1,
-          borderRadius: THEME.radius,
-          ...themeShadow('card'),
-        }}>
-        <View className="flex-row items-center">
-          <CurrencyMark currency="bucks" size={22} />
-          <View className="ml-1.5">
-            <AppText className="text-[11px] font-semibold text-muted">Bucks</AppText>
-            <AppText className="text-[9px] text-muted">
-              1 = {formatUsd(1).replace(' USD', '')}
-            </AppText>
-          </View>
-        </View>
-        <AppText className="text-[15px] font-extrabold" style={{ color: '#1B7A4A' }}>
-          {formatBucks(bucks).replace(' Bucks', '')}
-        </AppText>
-      </View>
+export function SendWalletButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Send"
+      onPress={onPress}
+      className="w-full flex-row items-center justify-center"
+      style={{
+        minHeight: 48,
+        borderRadius: THEME.radius,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        backgroundColor: THEME.surface,
+        gap: 8,
+      }}>
+      <AppText className="text-[16px] font-semibold text-charcoal">Send</AppText>
+      <CurrencyMark currency="coins" size={18} />
+      <AppText className="text-[16px] font-semibold text-muted">or</AppText>
+      <CurrencyMark currency="bucks" size={18} />
+    </Pressable>
+  );
+}
+
+function Tile({ children }: { children: ReactNode }) {
+  return (
+    <View
+      className="flex-1 flex-row items-center justify-center px-3 py-3"
+      style={{
+        backgroundColor: THEME.surface,
+        borderColor: THEME.border,
+        borderWidth: 1,
+        borderRadius: THEME.radius,
+        ...themeShadow('card'),
+      }}>
+      {children}
     </View>
   );
 }

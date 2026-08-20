@@ -1,7 +1,7 @@
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { WalletBalances } from '@/components/currency/WalletBalances';
+import { SendWalletButton, WalletBalances } from '@/components/currency/WalletBalances';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -84,9 +84,7 @@ export function WalletSheet() {
                 }}
               />
               <Button title="Browse challenges" onPress={() => go('/challenges')} />
-              <Button
-                title="Send Coins or Bucks"
-                variant="outline"
+              <SendWalletButton
                 onPress={() => {
                   closeWallet();
                   openSend();
