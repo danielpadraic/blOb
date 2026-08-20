@@ -4,23 +4,71 @@ import { Pressable, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { officialBob } from '@/copy/officialBob';
+import { methodFromProofType, parseChallengeProofs } from '@/lib/challengeProofs';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Challenge } from '@/lib/types';
 
 type ProofKind = 'camera' | 'heart';
 
+function isCameraType(value: string): boolean {
+  return value === 'photo' || value === 'video' || value === 'pre_selfie' || value === 'post_selfie';
+}
+
+function isHeartType(value: string): boolean {
+  return value === 'hr' || value === 'hr_monitor';
+}
+
 export function officialFitnessProofIcons(challenge: Pick<
   Challenge,
   'is_official' | 'category' | 'proofs' | 'proof_type' | 'proof_requirements' | 'challenge_type' | 'tasks'
 >): { camera: boolean; heart: boolean } {
-  if (!challenge.is_official) {
-    return { camera: false, heart: false };
+  if (challenge.is_official) {
+    const category = String(challenge.category ?? 'fitness').toLowerCase();
+    if (category === 'fitness') {
+      return { camera: true, heart: true };
+    }
   }
-  const category = String(challenge.category ?? 'fitness').toLowerCase();
-  if (category !== 'fitness') {
-    return { camera: false, heart: false };
+
+  let camera = false;
+  let heart = false;
+  for (const proof of parseChallengeProofs(challenge.proofs)) {
+    if (proof.method === 'photo' || proof.method === 'video') {
+      camera = true;
+    }
+    if (proof.method === 'hr') {
+      heart = true;
+    }
   }
-  return { camera: true, heart: true };
+  if (challenge.proof_type) {
+    const proofType = methodFromProofType(challenge.proof_type);
+    if (proofType === 'photo' || proofType === 'video') {
+      camera = true;
+    }
+    if (proofType === 'hr') {
+      heart = true;
+    }
+  }
+  for (const item of challenge.proof_requirements ?? []) {
+    const type = String(item.type ?? '').toLowerCase();
+    if (isCameraType(type)) {
+      camera = true;
+    }
+    if (isHeartType(type)) {
+      heart = true;
+    }
+  }
+  for (const task of challenge.tasks ?? []) {
+    for (const type of task.proof_types ?? []) {
+      const value = String(type).toLowerCase();
+      if (isCameraType(value) || value === 'photo' || value === 'video') {
+        camera = true;
+      }
+      if (isHeartType(value)) {
+        heart = true;
+      }
+    }
+  }
+  return { camera, heart };
 }
 
 type ProofRequirementIconsProps = {

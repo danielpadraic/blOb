@@ -9,11 +9,12 @@ import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButto
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { ProfileLink } from '@/components/profile/ProfileLink';
+import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { formatCash, formatWallet, isBucksChallenge } from '@/lib/currency';
+import { formatCash, isBucksChallenge } from '@/lib/currency';
 import { isOfficialJoinable } from '@/lib/officialSeries';
 import { themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -72,7 +73,7 @@ export function ChallengeHeroCard({
   });
   const subtitle = challengeGoalSubtitle(challenge);
   const pool = Number(challenge.prize_pool) || 0;
-  const poolLabel = isBucksChallenge(challenge) ? formatCash(pool) : formatWallet(pool, challenge.currency);
+  const bucks = isBucksChallenge(challenge);
 
   const summary = (
     <View className="gap-3">
@@ -93,7 +94,8 @@ export function ChallengeHeroCard({
           </AppText>
           <BlobMascot variant="logo" size={72} />
         </View>
-      ) : host ? (
+      ) : null}
+      {host && !official ? (
         <ProfileLink username={host.username} userId={host.id}>
           <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.78)' }}>
             Hosted by{' '}
@@ -103,7 +105,7 @@ export function ChallengeHeroCard({
           </AppText>
         </ProfileLink>
       ) : null}
-      {official ? <ProofRequirementIcons challenge={challenge} tint="light" /> : null}
+      <ProofRequirementIcons challenge={challenge} tint="light" />
       {cancelled ? (
         <AppText className="text-[15px] font-semibold" style={{ color: '#fff' }}>
           Cancelled
@@ -118,7 +120,6 @@ export function ChallengeHeroCard({
                 size={72}
                 strokeWidth={7}
                 label={`${daysCompleted}`}
-                caption={challenge.challenge_type === 'points' ? 'tasks' : 'logs'}
                 labelClassName="text-[16px] font-extrabold text-white"
                 color="#72D9CB"
               />
@@ -164,9 +165,26 @@ export function ChallengeHeroCard({
               style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
               Current pool
             </AppText>
-            <AppText className="mt-1 text-[22px] font-extrabold" style={{ color: '#fff' }} numberOfLines={1}>
-              {poolLabel}
-            </AppText>
+            <View className="mt-1 flex-row items-center" style={{ gap: 6, minWidth: 0 }}>
+              {bucks ? (
+                <AppText
+                  className="text-[22px] font-extrabold"
+                  style={{ color: '#fff' }}
+                  numberOfLines={1}>
+                  {formatCash(pool)}
+                </AppText>
+              ) : (
+                <>
+                  <CurrencyMark currency="coins" size={22} />
+                  <AppText
+                    className="text-[22px] font-extrabold"
+                    style={{ color: '#fff' }}
+                    numberOfLines={1}>
+                    {pool.toFixed(2)}
+                  </AppText>
+                </>
+              )}
+            </View>
           </View>
           {showProgressRing && joined ? (
             <View className="items-center">
@@ -175,7 +193,6 @@ export function ChallengeHeroCard({
                 size={72}
                 strokeWidth={7}
                 label={`${daysCompleted}`}
-                caption={challenge.challenge_type === 'points' ? 'tasks' : 'logs'}
                 labelClassName="text-[16px] font-extrabold text-white"
                 color="#72D9CB"
               />
