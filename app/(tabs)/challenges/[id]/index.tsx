@@ -316,7 +316,7 @@ export default function ChallengeDetailScreen() {
     );
   }
 
-  if (challengeQuery.error || !challenge) {
+  if (!challenge) {
     const blocked = String(challengeQuery.error?.message ?? '').includes(copy('geo.unavailable'));
     return (
       <Screen>

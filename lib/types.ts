@@ -1268,6 +1268,10 @@ export type Database = {
         Args: Record<string, never>;
         Returns: { ok: boolean; went_live?: number; rolled?: number };
       };
+      tick_one_user_challenge_start: {
+        Args: { p_id: string };
+        Returns: { ok: boolean; action?: string };
+      };
       nudge_challenge_start: {
         Args: { p_challenge_id: string };
         Returns: Challenge;

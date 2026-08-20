@@ -150,7 +150,7 @@ const STRINGS = {
   'challenge.shortenDay': 'Shorten by 1 day',
   'challenge.startMovedLater': 'Not now',
   'challenge.pickStart': 'Pick a start date',
-  'error.startUpdate': 'Couldn’t update the start. Try again.',
+  'error.startUpdate': 'Couldn’t update the start.',
   'challenge.startTomorrow': 'Start tomorrow',
   'challenge.editChallenge': 'Edit challenge',
   'challenge.waitingToStart': 'Waiting to start.',

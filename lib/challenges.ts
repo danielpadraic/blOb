@@ -988,16 +988,21 @@ export async function fetchChallengeById(id: string): Promise<Challenge> {
   let lastError: string | null = null;
 
   for (const columns of LOBBY_SELECTS) {
-    const { data, error } = await challengeList().select(columns).eq('id', id).maybeSingle();
-    if (error) {
-      lastError = error.message;
-      console.log('[blob:challenge] select failed', { columns, message: error.message });
-      continue;
+    try {
+      const { data, error } = await challengeList().select(columns).eq('id', id).maybeSingle();
+      if (error) {
+        lastError = error.message;
+        console.log('[blob:challenge] select failed', { columns, message: error.message });
+        continue;
+      }
+      if (!data) {
+        continue;
+      }
+      return normalizeChallenge(data);
+    } catch (caught) {
+      lastError = caught instanceof Error ? caught.message : String(caught ?? '');
+      console.log('[blob:challenge] select threw', { columns, message: lastError });
     }
-    if (!data) {
-      continue;
-    }
-    return normalizeChallenge(data);
   }
 
   const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: id });
@@ -1330,6 +1335,43 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
   return fetchChallengeById(result.challenge_id);
 }
 
+const START_WRITE_COLUMNS =
+  'id, starts_at, ends_at, status, length_value, length_unit, days_required, target_count, required_checkins, start_roll_pending, start_roll_keep_days, start_roll_shift_days';
+
+function startWritePatch(challengeId: string, data: unknown): Challenge {
+  const row = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  return {
+    id: challengeId,
+    starts_at: row.starts_at != null ? String(row.starts_at) : '',
+    ends_at: row.ends_at == null ? null : String(row.ends_at),
+    length_value: row.length_value == null ? null : Number(row.length_value),
+    length_unit: row.length_unit == null ? null : String(row.length_unit),
+    days_required: row.days_required == null ? undefined : Number(row.days_required),
+    target_count: row.target_count == null ? undefined : Number(row.target_count),
+    required_checkins: row.required_checkins == null ? null : Number(row.required_checkins),
+    start_roll_pending: Boolean(row.start_roll_pending),
+    start_roll_keep_days: row.start_roll_keep_days == null ? null : Number(row.start_roll_keep_days),
+    start_roll_shift_days: Number(row.start_roll_shift_days ?? 0),
+  } as Challenge;
+}
+
+async function hydrateStartWrite(challengeId: string, patch: Challenge): Promise<Challenge> {
+  try {
+    const { data, error } = await supabase
+      .from('challenges')
+      .select(START_WRITE_COLUMNS)
+      .eq('id', challengeId)
+      .maybeSingle();
+    if (error || !data) {
+      return patch;
+    }
+    return { ...patch, ...(data as object) } as Challenge;
+  } catch (caught) {
+    logPostgrestError('start-write-hydrate', caught);
+    return patch;
+  }
+}
+
 export async function applyChallengeStart(
   challengeId: string,
   startsAt: string,
@@ -1345,12 +1387,7 @@ export async function applyChallengeStart(
     logPostgrestError('start-roll', error);
     throw new Error(getStartUpdateMessage(error));
   }
-  try {
-    return await fetchChallengeById(challengeId);
-  } catch (caught) {
-    logPostgrestError('start-roll-refetch', caught);
-    throw new Error(getStartUpdateMessage(caught));
-  }
+  return hydrateStartWrite(challengeId, startWritePatch(challengeId, data));
 }
 
 export async function resolveStartRoll(challengeId: string, keep: boolean): Promise<Challenge> {
@@ -1367,12 +1404,7 @@ export async function nudgeChallengeStart(challengeId: string): Promise<Challeng
     logPostgrestError('start-nudge', error);
     throw new Error(getStartUpdateMessage(error));
   }
-  try {
-    return await fetchChallengeById(challengeId);
-  } catch (caught) {
-    logPostgrestError('start-nudge-refetch', caught);
-    throw new Error(getStartUpdateMessage(caught));
-  }
+  return hydrateStartWrite(challengeId, startWritePatch(challengeId, data));
 }
 
 export async function updateUserChallenge(

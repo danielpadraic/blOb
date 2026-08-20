@@ -717,8 +717,14 @@ function invalidateChallengeCaches(
   queryClient: ReturnType<typeof useQueryClient>,
   challengeId: string,
   userId?: string,
+  options?: { refetchChallenge?: boolean },
 ) {
-  void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+  if (options?.refetchChallenge === false) {
+    void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId], refetchType: 'none' });
+  } else {
+    void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+    void queryClient.refetchQueries({ queryKey: ['challenge', challengeId] });
+  }
   void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
   void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
   void queryClient.invalidateQueries({ queryKey: ['challenges'] });
@@ -738,7 +744,6 @@ function invalidateChallengeCaches(
   void queryClient.invalidateQueries({ queryKey: ['completed-task-ids', challengeId] });
   void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
   void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
-  void queryClient.refetchQueries({ queryKey: ['challenge', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['challenge-participants', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['my-participation', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['submitted-checkins', challengeId] });
@@ -770,7 +775,7 @@ export function useResolveStartRoll() {
         current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },
       );
       resetChallengeProgressCaches(queryClient, challenge.id, user?.id);
-      invalidateChallengeCaches(queryClient, challenge.id, user?.id);
+      invalidateChallengeCaches(queryClient, challenge.id, user?.id, { refetchChallenge: false });
     },
   });
 }
@@ -786,7 +791,7 @@ export function useNudgeChallengeStart() {
         current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },
       );
       resetChallengeProgressCaches(queryClient, challenge.id, user?.id);
-      invalidateChallengeCaches(queryClient, challenge.id, user?.id);
+      invalidateChallengeCaches(queryClient, challenge.id, user?.id, { refetchChallenge: false });
     },
   });
 }
