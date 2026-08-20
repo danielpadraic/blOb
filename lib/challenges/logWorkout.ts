@@ -44,6 +44,14 @@ function throwMapped(error: { message?: string; code?: string; details?: string 
   if (upper.includes('NOT_STARTED')) {
     throw new Error('This challenge hasn’t started yet.');
   }
+  if (
+    upper.includes('42804') ||
+    upper.includes('22P02') ||
+    upper.includes('PGRST') ||
+    (upper.includes('TASK_IDS') && upper.includes('JSONB'))
+  ) {
+    throw new Error('Couldn’t submit this check-in. Try again.');
+  }
   throw new Error(getErrorMessage(error));
 }
 
@@ -210,6 +218,7 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     p_post_selfie_url: slots.post || uploaded.find((item) => item.type === 'post_selfie')?.url || '',
     p_hr_monitor_url: slots.hr || uploaded.find((item) => item.type === 'hr_monitor')?.url || '',
     p_notes: notes,
+    p_task_ids: [],
     p_proof_parts: parts,
     p_health_workout_id: healthWorkoutId,
   });

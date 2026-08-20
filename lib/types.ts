@@ -1356,7 +1356,7 @@ export type Database = {
           p_post_selfie_url?: string;
           p_hr_monitor_url?: string;
           p_notes?: string | null;
-          p_task_ids?: unknown;
+          p_task_ids?: string[];
           p_proof_parts?: unknown;
           p_health_workout_id?: string | null;
         };
