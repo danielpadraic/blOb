@@ -109,7 +109,7 @@ export function PostCard({
                   : ''}
               </AppText>
             </View>
-            {hideAudience ? null : currentUserId && currentUserId === post.author_id ? (
+            {hideAudience || post.checkin_id ? null : currentUserId && currentUserId === post.author_id ? (
               <AudienceIconButton
                 audience={audience}
                 onPress={() =>

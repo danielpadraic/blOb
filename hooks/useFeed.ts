@@ -74,6 +74,9 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
   if (hideDeleted) {
     query = query.is('deleted_at', null);
   }
+  if (select.includes('checkin_id') && scope.kind !== 'challenge') {
+    query = query.is('checkin_id', null);
+  }
   return scope.kind === 'challenge'
     ? query.eq('challenge_id', scope.challengeId)
     : scope.kind === 'ids'

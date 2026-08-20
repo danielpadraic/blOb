@@ -6,6 +6,7 @@ import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
+import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -24,7 +25,10 @@ export type LoggableChallenge = Pick<
   | 'timezone'
   | 'days_required'
   | 'day_windows'
->;
+> & {
+  checkinPhase?: CheckinPhase;
+  ctaTitle?: string;
+};
 
 type ParticipationRow = Pick<
   ChallengeParticipant,
@@ -58,9 +62,10 @@ export function useLoggableChallenge() {
         return null;
       }
       const challengeIds = participations.map((row) => row.challenge_id);
-      const [challenges, loggedRows] = await Promise.all([
+      const [challenges, loggedRows, checkinRows] = await Promise.all([
         fetchChallenges(challengeIds),
         fetchLoggedDates(user.id, challengeIds),
+        fetchCheckinPhases(user.id, challengeIds),
       ]);
       const joinedAt = new Map(participations.map((row) => [row.challenge_id, row.joined_at]));
       const now = Date.now();
@@ -92,7 +97,19 @@ export function useLoggableChallenge() {
           return new Date(bJoined).getTime() - new Date(aJoined).getTime();
         });
 
-      return eligible[0] ?? null;
+      const first = eligible[0];
+      if (!first) {
+        return null;
+      }
+      const expected = isOfficialSeriesChallenge(first) ? officialLogDate(first) : date;
+      const phase = expected
+        ? checkinRows.get(`${first.id}:${expected}`) ?? 'none'
+        : 'none';
+      return {
+        ...first,
+        checkinPhase: phase,
+        ctaTitle: checkinCtaTitle(phase),
+      };
     },
   });
 }
@@ -141,6 +158,40 @@ async function fetchChallenges(ids: string[]): Promise<LoggableChallenge[]> {
     }));
   }
   return [];
+}
+
+async function fetchCheckinPhases(
+  userId: string,
+  challengeIds: string[],
+): Promise<Map<string, CheckinPhase>> {
+  const phases = new Map<string, CheckinPhase>();
+  if (challengeIds.length === 0) {
+    return phases;
+  }
+  const result = await supabase
+    .from('challenge_checkins')
+    .select('challenge_id, period_key, status')
+    .eq('user_id', userId)
+    .in('challenge_id', challengeIds);
+  if (result.error) {
+    const text = result.error.message.toLowerCase();
+    if (
+      text.includes('does not exist') ||
+      text.includes('schema cache') ||
+      text.includes('42p01') ||
+      text.includes('pgrst')
+    ) {
+      return phases;
+    }
+    throw new Error(getErrorMessage(result.error));
+  }
+  for (const row of result.data ?? []) {
+    const status = row.status;
+    const phase: CheckinPhase =
+      status === 'in_progress' || status === 'ready' || status === 'submitted' ? status : 'in_progress';
+    phases.set(`${String(row.challenge_id)}:${String(row.period_key)}`, phase);
+  }
+  return phases;
 }
 
 async function fetchLoggedDates(

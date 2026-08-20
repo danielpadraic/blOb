@@ -26,7 +26,7 @@ export function HealthLogPromptHost() {
       const challengeId = await prompt.accept();
       setConfirm(false);
       if (challengeId) {
-        router.replace(`/challenges/${challengeId}?logged=1`);
+        router.push(`/challenges/${challengeId}/submit`);
       }
     } catch (caught) {
       setError(getErrorMessage(caught));

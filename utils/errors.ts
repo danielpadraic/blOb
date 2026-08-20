@@ -327,13 +327,16 @@ function humanize(raw: string): string {
   if (message.includes('calendar day to log')) {
     return 'Pick a calendar day to check in.';
   }
+  if (message.includes('begin check-in first')) {
+    return 'Begin check-in first.';
+  }
   if (message.includes('already submitted')) {
     return 'Already checked in today. Come back tomorrow.';
   }
   if (message.includes('not_started') || message.includes('hasn’t started yet') || message.includes('hasnt started yet')) {
     return 'This challenge hasn’t started yet.';
   }
-  if (message.includes('logging is closed')) {
+  if (message.includes('logging is closed') || message.includes('check-in is closed')) {
     return 'Check-in is closed for this challenge.';
   }
   if (message.includes('eliminated from this challenge')) {

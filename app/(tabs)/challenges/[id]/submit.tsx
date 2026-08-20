@@ -1,24 +1,28 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { ProofUploader } from '@/components/challenge/ProofUploader';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Button } from '@/components/ui/Button';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
-import { useSubmitHealthWorkout, useSubmitWorkout, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
+import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
+import { useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import type { HealthWorkout } from '@/services/health/types';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import {
+  beginCameraProof,
   captureTypeForMethod,
   partSatisfies,
   proofDisplayName,
+  proofsAreHonorOnly,
   type ChallengeProof,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
@@ -39,7 +43,7 @@ type SlotDraft = {
 function LoggedState({ onBack }: { onBack: () => void }) {
   return (
     <Screen padded={false} edges={['left', 'right', 'bottom']}>
-      <Stack.Screen options={{ title: 'Checked in' }} />
+      <Stack.Screen options={{ title: copy('checkin.checkedIn') }} />
       <View className="flex-1 px-5 pt-6">
         <View
           className="rounded-blob px-4 py-4"
@@ -48,7 +52,7 @@ function LoggedState({ onBack }: { onBack: () => void }) {
             Checked in today
           </AppText>
           <AppText className="mt-2 text-center text-sm leading-5 text-muted">
-            Come back tomorrow for the next proof set. One check-in per UTC day.
+            Come back tomorrow for the next proof set.
           </AppText>
         </View>
         <View className="mt-6">
@@ -78,8 +82,9 @@ export default function SubmitWorkoutScreen() {
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
   const today = useTodaySubmission(id, challengeQuery.data);
-  const submit = useSubmitWorkout();
-  const submitHealth = useSubmitHealthWorkout();
+  const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
+  const saveProof = useSaveCheckinProof(id);
+  const submitCheckin = useSubmitCheckin(id);
 
   const [drafts, setDrafts] = useState<Record<string, SlotDraft>>({});
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +94,8 @@ export default function SubmitWorkoutScreen() {
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
+  const phase = today.data ? 'submitted' : (checkinQuery.data?.phase ?? 'none');
+  const honorOnly = proofsAreHonorOnly(proofSteps);
 
   useEffect(() => {
     if (!challenge || !isOfficialSeriesChallenge(challenge) || challenge.status !== 'live') {
@@ -97,11 +104,34 @@ export default function SubmitWorkoutScreen() {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [challenge]);
+
+  useEffect(() => {
+    const parts = checkinQuery.data?.proof_parts;
+    if (!parts) {
+      return;
+    }
+    const steps = requiredChallengeProofs(challenge);
+    setDrafts((current) => {
+      const next = { ...current };
+      for (const proof of steps) {
+        const part = parts[proof.id];
+        if (!part) {
+          continue;
+        }
+        next[proof.id] = {
+          uri: part.healthWorkoutId ? `health:${part.healthWorkoutId}` : part.url ?? current[proof.id]?.uri,
+          mimeType: current[proof.id]?.mimeType,
+          text: part.text ?? current[proof.id]?.text,
+        };
+      }
+      return next;
+    });
+  }, [challenge, checkinQuery.data?.id, checkinQuery.data?.proof_parts, checkinQuery.data?.updated_at]);
+
   const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
-  const busy = submit.isPending || submitHealth.isPending;
-  const proofCountLabel =
-    proofSteps.length === 1 ? '1 proof' : `${proofSteps.length} proofs`;
+  const busy = saveProof.isPending || submitCheckin.isPending;
+  const firstCamera = beginCameraProof(proofSteps);
 
   function onMedia(proofId: string, uri: string, mimeType?: string | null) {
     if (busy) {
@@ -119,51 +149,68 @@ export default function SubmitWorkoutScreen() {
     setError(null);
   }
 
-  async function onConfirm() {
-    if (!id || !allReady || busy) {
+  async function persistProof(proof: ChallengeProof, draft?: SlotDraft) {
+    if (!id) {
       return;
     }
     setError(null);
     try {
-      const images: Array<{
-        type: ReturnType<typeof captureTypeForMethod>;
-        uri: string;
-        mimeType?: string | null;
-        proofId: string;
-        text?: string | null;
-      }> = [];
+      await saveProof.mutateAsync({
+        challengeId: id,
+        proof,
+        uri: draft?.uri,
+        mimeType: draft?.mimeType,
+        text: draft?.text,
+      });
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+      throw caught;
+    }
+  }
+
+  async function onCaptured(proof: ChallengeProof, uri: string, mimeType?: string | null) {
+    onMedia(proof.id, uri, mimeType);
+    setCaptureId(null);
+    setSkippedAuto(true);
+    try {
+      await persistProof(proof, { uri, mimeType });
+    } catch {
+      return;
+    }
+  }
+
+  async function onBeginHonor() {
+    if (!id || busy) {
+      return;
+    }
+    setError(null);
+    try {
+      await saveProof.mutateAsync({ challengeId: id });
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+    }
+  }
+
+  async function onSubmit() {
+    if (!id || !allReady || busy || phase === 'submitted') {
+      return;
+    }
+    setError(null);
+    try {
+      const savedParts = checkinQuery.data?.proof_parts ?? {};
       for (const proof of proofSteps) {
+        if (partSatisfies(proof, savedParts[proof.id])) {
+          continue;
+        }
         if (proof.method === 'honor') {
           continue;
         }
-        if (proof.method === 'checkin') {
-          const text = drafts[proof.id]?.text?.trim() ?? '';
-          if (!text) {
-            continue;
-          }
-          images.push({ type: captureTypeForMethod(proof.method), uri: text, text, proofId: proof.id });
-          continue;
-        }
-        const draft = drafts[proof.id];
-        if (!draft?.uri?.trim()) {
-          continue;
-        }
-        images.push({
-          type: captureTypeForMethod(proof.method),
-          uri: draft.uri.trim(),
-          mimeType: draft.mimeType,
-          proofId: proof.id,
-        });
+        await persistProof(proof, drafts[proof.id]);
       }
-      if (!allReady) {
-        setError(`Add all ${proofCountLabel} to check in today.`);
-        return;
+      if (phase === 'none' && honorOnly) {
+        await saveProof.mutateAsync({ challengeId: id });
       }
-      await submit.mutateAsync({
-        challengeId: id,
-        images,
-        required: proofSteps,
-      });
+      await submitCheckin.mutateAsync();
       router.back();
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -174,7 +221,7 @@ export default function SubmitWorkoutScreen() {
     if (!id || busy) {
       return;
     }
-    if (today.data) {
+    if (phase === 'submitted') {
       router.replace(`/challenges/${id}?logged=1`);
       return;
     }
@@ -187,19 +234,14 @@ export default function SubmitWorkoutScreen() {
           ? await provider.enrichHeartRate(workout)
           : workout;
         const healthWorkoutId = await upsertHealthWorkout(user.id, enriched);
-        onMedia(hrProof.id, `health:${healthWorkoutId}`);
-        setCaptureId(null);
-        setSkippedAuto(true);
+        await onCaptured(hrProof, `health:${healthWorkoutId}`);
       } catch (caught) {
         setError(getErrorMessage(caught));
       }
-      return;
     }
-    await submitHealth.mutateAsync({ challengeId: id, workout });
-    router.replace(`/challenges/${id}?logged=1`);
   }
 
-  if (challengeQuery.isLoading || participationLoading || today.isLoading) {
+  if (challengeQuery.isLoading || participationLoading || today.isLoading || checkinQuery.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState kind="loading" title="Opening today’s check-in" body="Checking what you still owe." />
@@ -221,7 +263,7 @@ export default function SubmitWorkoutScreen() {
     );
   }
 
-  if (today.data && !busy) {
+  if (phase === 'submitted' && !busy) {
     return <LoggedState onBack={() => router.back()} />;
   }
 
@@ -271,15 +313,9 @@ export default function SubmitWorkoutScreen() {
   }
 
   const missing = proofSteps.filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id])));
-  const firstCamera = proofSteps.find(
-    (proof) =>
-      (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') &&
-      !drafts[proof.id]?.uri?.trim(),
-  );
-  const activeCaptureId =
-    captureId ?? (!skippedAuto && filledCount === proofSteps.filter((proof) => proof.method === 'honor').length
-      ? firstCamera?.id ?? null
-      : null);
+  const shouldAutoOpen =
+    phase === 'none' && !skippedAuto && !honorOnly && Boolean(firstCamera) && !drafts[firstCamera?.id ?? '']?.uri;
+  const activeCaptureId = captureId ?? (shouldAutoOpen ? firstCamera?.id ?? null : null);
   const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;
 
   if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr')) {
@@ -298,27 +334,31 @@ export default function SubmitWorkoutScreen() {
             frequency: challenge.frequency,
             startsAt: challenge.starts_at,
             userId: user?.id,
-            attaching: submitHealth.isPending,
+            attaching: saveProof.isPending,
             challenge,
             onAttach: onAttachHealth,
           }}
           onPicked={(uri, mimeType) => {
-            onMedia(activeProof.id, uri, mimeType);
-            setCaptureId(null);
-            setSkippedAuto(true);
+            void onCaptured(activeProof, uri, mimeType);
           }}
           onCancel={() => {
             setCaptureId(null);
             setSkippedAuto(true);
+            if (phase === 'none') {
+              router.back();
+            }
           }}
         />
       </Screen>
     );
   }
 
+  const screenTitle =
+    phase === 'ready' ? copy('checkin.submit') : phase === 'in_progress' ? copy('checkin.continue') : copy('checkin.begin');
+
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
-      <Stack.Screen options={{ title: 'Check in' }} />
+      <Stack.Screen options={{ title: screenTitle }} />
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-10 pt-2"
@@ -329,52 +369,79 @@ export default function SubmitWorkoutScreen() {
             <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="page" />
           </View>
         ) : null}
-        <AppText className="text-center text-sm text-muted">
-          {challenge && isOfficialSeriesChallenge(challenge)
-            ? 'Add every required proof for this Official day. One proof fills one day.'
-            : `Add ${proofCountLabel}, then confirm. One check-in per UTC day.`}
-        </AppText>
-        <AppText className="mt-1 text-center text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
+        <AppText className="text-center text-sm text-muted">{copy('checkin.emptyBob')}</AppText>
+        {isOfficialSeriesChallenge(challenge) && (phase === 'in_progress' || phase === 'ready') ? (
+          <AppText className="mt-2 text-center text-[13px] font-semibold" style={{ color: THEME.accent }}>
+            {copy('checkin.submitBanner')}
+          </AppText>
+        ) : null}
 
-        <View className="mt-5 gap-6">
-          {proofSteps.map((proof) => (
-            <View key={proof.id}>
-              <AppText className="mb-2 text-[15px] font-bold text-charcoal">
-                {proofDisplayName(proof)}
-              </AppText>
-              {proof.method === 'honor' ? (
-                <AppText className="text-sm text-muted">Honor. Confirm to check in.</AppText>
-              ) : proof.method === 'checkin' ? (
-                <Input
-                  placeholder="What did you do?"
-                  value={drafts[proof.id]?.text ?? ''}
-                  onChangeText={(value) => onText(proof.id, value)}
-                  editable={!busy}
-                />
-              ) : (
-                <ProofUploader
-                  type={captureTypeForMethod(proof.method)}
-                  uri={drafts[proof.id]?.uri}
-                  compact
-                  locked={busy}
-                  health={{
-                    challengeId: id ?? challenge.id,
-                    challengeTitle: challenge.title,
-                    minMinutes: challenge.min_minutes,
-                    frequency: challenge.frequency,
-                    startsAt: challenge.starts_at,
-                    userId: user?.id,
-                    attaching: submitHealth.isPending,
-                    challenge,
-                    onAttach: onAttachHealth,
-                  }}
-                  onRequestOpen={() => setCaptureId(proof.id)}
-                  onPicked={(uri, mimeType) => onMedia(proof.id, uri, mimeType)}
-                />
-              )}
-            </View>
-          ))}
-        </View>
+        {honorOnly && phase === 'none' ? (
+          <View className="mt-8">
+            <Button
+              title={copy('checkin.imStarting')}
+              size="lg"
+              loading={busy}
+              disabled={busy}
+              onPress={() => void onBeginHonor()}
+            />
+          </View>
+        ) : (
+          <View className="mt-5 gap-4">
+            {proofSteps.map((proof) => {
+              const done = partSatisfies(proof, slotPart(proof, drafts[proof.id]));
+              return (
+                <View
+                  key={proof.id}
+                  className="rounded-blob border px-3 py-3"
+                  style={{ borderColor: THEME.border, backgroundColor: THEME.surface }}>
+                  <View className="mb-2 flex-row items-center" style={{ gap: 8 }}>
+                    <View
+                      className="h-6 w-6 items-center justify-center rounded-full"
+                      style={{
+                        backgroundColor: done ? THEME.accentSoft : THEME.surface2,
+                        borderWidth: 1,
+                        borderColor: done ? THEME.accent : THEME.border,
+                      }}>
+                      {done ? <Glyph name={GLYPH.check} color={THEME.accent} size={14} /> : null}
+                    </View>
+                    <AppText className="flex-1 text-[15px] font-bold text-charcoal">
+                      {proofDisplayName(proof)}
+                    </AppText>
+                  </View>
+                  {proof.method === 'honor' ? (
+                    <AppText className="text-sm text-muted">Honor. Confirm to check in.</AppText>
+                  ) : proof.method === 'checkin' ? (
+                    <Input
+                      placeholder="What did you do?"
+                      value={drafts[proof.id]?.text ?? ''}
+                      onChangeText={(value) => onText(proof.id, value)}
+                      onBlur={() => {
+                        const text = drafts[proof.id]?.text?.trim() ?? '';
+                        if (text && !done) {
+                          void persistProof(proof, { text });
+                        }
+                      }}
+                      editable={!busy && phase !== 'submitted'}
+                    />
+                  ) : done ? (
+                    <AppText className="text-sm text-muted">Attached.</AppText>
+                  ) : (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${proofDisplayName(proof)}`}
+                      onPress={() => setCaptureId(proof.id)}
+                      style={{ minHeight: 44, justifyContent: 'center' }}>
+                      <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+                        Add this proof
+                      </AppText>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {missing.length > 0 && filledCount > 0 ? (
           <AppText className="mt-4 text-sm leading-5 text-muted">
@@ -387,13 +454,15 @@ export default function SubmitWorkoutScreen() {
         ) : null}
 
         <View className="mt-6">
-          <Button
-            title={allReady ? 'Confirm' : `Add ${proofCountLabel}`}
-            size="lg"
-            loading={busy}
-            disabled={!allReady || busy}
-            onPress={() => void onConfirm()}
-          />
+          {allReady && phase !== 'submitted' && phase !== 'none' ? (
+            <Button
+              title={copy('checkin.submit')}
+              size="lg"
+              loading={busy}
+              disabled={busy}
+              onPress={() => void onSubmit()}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </Screen>

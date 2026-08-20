@@ -11,6 +11,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeaturedOfficialChallenge, useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
+import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { isLiveCompetitorStatus } from '@/lib/challenges';
@@ -43,6 +44,7 @@ export function FeaturedOfficialStrip() {
   const live = Boolean(challenge && isOfficialSeriesChallenge(challenge) && challenge.status === 'live');
   const arming = challenge?.status === 'arming';
   const todaySubmission = useTodaySubmission(joined && live ? challenge?.id : undefined, challenge);
+  const periodCheckin = usePeriodCheckin(joined && live ? challenge?.id : undefined, challenge);
   const buyIn = Math.max(Number(challenge?.buy_in_amount) || 0, 0);
   const guarantee = Math.max(Number(challenge?.host_budget ?? challenge?.creator_contribution) || 0, 0);
 
@@ -54,6 +56,8 @@ export function FeaturedOfficialStrip() {
     return () => clearInterval(timer);
   }, [joinable, live]);
 
+  const submitted = Boolean(todaySubmission.data) || periodCheckin.data?.phase === 'submitted';
+  const checkinPhase = submitted ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
   const logDue = useMemo(() => {
     if (!challenge || !joined || !live || participation?.eliminated_at) {
       return false;
@@ -61,11 +65,20 @@ export function FeaturedOfficialStrip() {
     if (isClosedForLogs({ ...challenge, eliminated: Boolean(participation?.eliminated_at) })) {
       return false;
     }
-    if (todaySubmission.isLoading || todaySubmission.data) {
+    if (todaySubmission.isLoading || periodCheckin.isLoading || submitted) {
       return false;
     }
     return true;
-  }, [challenge, joined, live, participation?.eliminated_at, todaySubmission.data, todaySubmission.isLoading]);
+  }, [
+    challenge,
+    joined,
+    live,
+    participation?.eliminated_at,
+    todaySubmission.data,
+    todaySubmission.isLoading,
+    periodCheckin.isLoading,
+    submitted,
+  ]);
 
   if (!challenge) {
     return null;
@@ -91,9 +104,9 @@ export function FeaturedOfficialStrip() {
   let metaDone = false;
   if (joined && live) {
     if (logDue) {
-      meta = 'Check in';
-    } else if (todaySubmission.data) {
-      meta = 'Checked in';
+      meta = checkinPhase === 'ready' ? copy('checkin.submit') : checkinPhase === 'in_progress' ? copy('checkin.continue') : copy('checkin.begin');
+    } else if (submitted) {
+      meta = copy('checkin.checkedIn');
       metaDone = true;
     }
   } else if (arming) {
@@ -104,7 +117,15 @@ export function FeaturedOfficialStrip() {
 
   const showJoin = !joined && joinable;
   const showLog = joined && logDue;
-  const ctaLabel = showJoin ? `Join ${formatCashCompact(buyIn || 1)}` : showLog ? 'Check in' : null;
+  const ctaLabel = showJoin
+    ? `Join ${formatCashCompact(buyIn || 1)}`
+    : showLog
+      ? checkinPhase === 'ready'
+        ? copy('checkin.submit')
+        : checkinPhase === 'in_progress'
+          ? copy('checkin.continue')
+          : copy('checkin.begin')
+      : null;
 
   function openDetail() {
     router.push(challengeDetailHref(card.id, 'feed'));

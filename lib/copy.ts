@@ -331,6 +331,13 @@ const STRINGS = {
   'health.startedWatch': 'Started on your Watch.',
   'health.noWatch': 'Start a workout in Fitness, then come back.',
   'health.startWatchFail': 'Use the camera, or start a workout in Fitness.',
+  'checkin.begin': 'Begin check-in',
+  'checkin.continue': 'Continue check-in',
+  'checkin.submit': 'Submit',
+  'checkin.checkedIn': 'Checked in',
+  'checkin.imStarting': 'I’m starting',
+  'checkin.emptyBob': 'Start now. Finish when the work is done.',
+  'checkin.submitBanner': 'You started. Submit before 11:59 p.m. Central.',
 } as const;
 
 export type CopyKey = keyof typeof STRINGS;

@@ -56,7 +56,7 @@ export function QuickActionSheet({
           {
             id: 'log' as const,
             glyph: '✅',
-            label: 'Check in',
+            label: loggable.ctaTitle ?? copy('checkin.begin'),
             hint: loggable.title,
           },
         ]

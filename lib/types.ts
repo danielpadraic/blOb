@@ -193,6 +193,7 @@ export interface ChallengeProofPart {
   method: ChallengeProofMethod;
   url?: string | null;
   text?: string | null;
+  healthWorkoutId?: string | null;
 }
 
 export interface ChallengeTask {
@@ -489,6 +490,8 @@ export interface Post {
   deleted_at?: string | null;
   wall_host_id?: string | null;
   wall_removed_at?: string | null;
+  checkin_id?: string | null;
+  checkin_stage?: string | null;
   created_at: string;
 }
 
@@ -883,6 +886,42 @@ export type Database = {
         Partial<HealthConnection>,
         Partial<HealthConnection>,
         [Relationship<'health_connections_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      challenge_checkins: TableDef<
+        {
+          id: string;
+          user_id: string;
+          challenge_id: string;
+          period_key: string;
+          status: 'in_progress' | 'ready' | 'submitted';
+          proof_parts: Record<string, unknown>;
+          pre_selfie_url: string | null;
+          post_selfie_url: string | null;
+          hr_monitor_url: string | null;
+          notes: string | null;
+          health_workout_id: string | null;
+          workout_submission_id: string | null;
+          started_at: string;
+          submitted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        },
+        Partial<{
+          user_id: string;
+          challenge_id: string;
+          period_key: string;
+          status: 'in_progress' | 'ready' | 'submitted';
+          proof_parts: Record<string, unknown>;
+        }>,
+        Partial<{
+          status: 'in_progress' | 'ready' | 'submitted';
+          proof_parts: Record<string, unknown>;
+          submitted_at: string | null;
+        }>,
+        [
+          Relationship<'challenge_checkins_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'challenge_checkins_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+        ]
       >;
       health_workouts: TableDef<
         HealthWorkoutRecord,
@@ -1287,6 +1326,19 @@ export type Database = {
           p_notes?: string | null;
         };
         Returns: WorkoutSubmission & { days_completed: number };
+      };
+      save_checkin_proof: {
+        Args: {
+          p_challenge_id: string;
+          p_proof_id?: string | null;
+          p_proof_part?: unknown;
+          p_health_workout_id?: string | null;
+        };
+        Returns: Record<string, unknown>;
+      };
+      submit_checkin: {
+        Args: { p_challenge_id: string };
+        Returns: Record<string, unknown>;
       };
       cancel_challenge: {
         Args: { p_challenge_id: string };

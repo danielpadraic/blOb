@@ -42,6 +42,7 @@ import {
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
+import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useLoggedWorkoutCount, usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -115,6 +116,7 @@ export default function ChallengeDetailScreen() {
     }));
   }, [boardProfiles.data, roster.data]);
   const todaySubmission = useTodaySubmission(id, challengeQuery.data);
+  const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
   const healthProofId = todaySubmission.data?.health_workout_id;
   const healthProofQuery = useQuery({
     queryKey: ['health-proof', healthProofId],
@@ -164,7 +166,8 @@ export default function ChallengeDetailScreen() {
     return countLiveCompetitors(roster.data);
   }, [challenge?.participant_count, isJoined, roster.data]);
   const daysRequired = challengeTargetCount(challenge);
-  const loggedToday = Boolean(todaySubmission.data);
+  const loggedToday = Boolean(todaySubmission.data) || periodCheckin.data?.phase === 'submitted';
+  const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
   const healthProofLinesView = useMemo(() => {
     const row = healthProofQuery.data;
     if (!row) {
@@ -417,6 +420,7 @@ export default function ChallengeDetailScreen() {
       challengeQuery.refetch(),
       feed.refetch(),
       todaySubmission.refetch(),
+      periodCheckin.refetch(),
       loggedCount.refetch(),
       roster.refetch(),
       settlementQuery.refetch(),
@@ -428,7 +432,7 @@ export default function ChallengeDetailScreen() {
   const isUnlimited = isUnlimitedChallenge(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
   const target = daysRequired;
-  const logTitle = 'Check in';
+  const logTitle = periodCheckin.data?.ctaTitle ?? copy('checkin.begin');
   const proofHeadline =
     proofSteps.length === 1
       ? 'Proof for every check-in'
@@ -545,6 +549,20 @@ export default function ChallengeDetailScreen() {
             ) : null}
           </ChallengeHeroCard>
         </View>
+
+        {isJoined &&
+        !loggedToday &&
+        (checkinPhase === 'in_progress' || checkinPhase === 'ready') &&
+        isOfficialSeriesChallenge(challenge) &&
+        challenge.status === 'live' ? (
+          <View
+            className="mt-4 rounded-blob px-4 py-3"
+            style={{ backgroundColor: THEME.accentSoft }}>
+            <AppText className="text-[14px] font-semibold" style={{ color: THEME.accent }}>
+              {copy('checkin.submitBanner')}
+            </AppText>
+          </View>
+        ) : null}
 
         {receipt ? (
           <View className="mt-4">
@@ -827,7 +845,7 @@ export default function ChallengeDetailScreen() {
             isJoined
               ? participation?.eliminated_at
                 ? 'You’re out, but you can still watch the check-ins.'
-                : 'You’re in. Be the first to post a check-in here.'
+                : copy('checkin.emptyBob')
               : 'Join the challenge to post in this feed.'
           }
           composerPlaceholder="How’s the work going?"
@@ -868,7 +886,7 @@ export default function ChallengeDetailScreen() {
             <Button title={logTitle} size="lg" disabled />
           ) : logsClosed ? (
             <Button title={copy('challenge.logClosed')} size="lg" disabled />
-          ) : todaySubmission.isLoading ? (
+          ) : todaySubmission.isLoading || periodCheckin.isLoading ? (
             <Button title="Checking today’s check-in" size="lg" loading disabled />
           ) : loggedToday ? (
             <View className="gap-2">
@@ -884,7 +902,7 @@ export default function ChallengeDetailScreen() {
                   ) : null}
                 </View>
               ) : null}
-              <Button title="Checked in" size="lg" variant="outline" disabled />
+              <Button title={copy('checkin.checkedIn')} size="lg" variant="outline" disabled />
             </View>
           ) : (
             <View className="gap-2">

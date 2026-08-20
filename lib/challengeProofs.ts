@@ -219,6 +219,56 @@ export function firstProofMethod(proofs: ChallengeProof[]): ChallengeProofMethod
   return proofs[0]?.method ?? 'photo';
 }
 
+export function isPreWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): boolean {
+  const lower = proof.name.trim().toLowerCase();
+  return (
+    proof.id === 'pre' ||
+    lower.includes('pre-workout') ||
+    lower.includes('pre-selfie') ||
+    (lower.includes('pre') && lower.includes('selfie'))
+  );
+}
+
+export function isPostWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): boolean {
+  const lower = proof.name.trim().toLowerCase();
+  return (
+    proof.id === 'post' ||
+    lower.includes('post-workout') ||
+    lower.includes('post-selfie') ||
+    (lower.includes('post') && lower.includes('selfie'))
+  );
+}
+
+export function beginCameraProof(proofs: ChallengeProof[]): ChallengeProof | null {
+  const pre = proofs.find(
+    (proof) =>
+      isPreWorkoutProof(proof) &&
+      (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr'),
+  );
+  if (pre) {
+    return pre;
+  }
+  return (
+    proofs.find(
+      (proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr',
+    ) ?? null
+  );
+}
+
+export function proofsAreHonorOnly(proofs: ChallengeProof[]): boolean {
+  return proofs.length > 0 && proofs.every((proof) => proof.method === 'honor');
+}
+
+export function checkinProofsReady(
+  proofs: ChallengeProof[],
+  parts: Record<string, ChallengeProofPart> | null | undefined,
+): boolean {
+  if (proofs.length === 0) {
+    return true;
+  }
+  return proofs.every((proof) => partSatisfies(proof, parts?.[proof.id]));
+}
+
 /** Stored on challenges.proof_type for old rows. */
 export function proofTypeFromMethod(method: ChallengeProofMethod): string {
   if (method === 'checkin') {
