@@ -18,6 +18,8 @@ const STRINGS = {
   'profile.toneGentle': 'Gentle',
   'profile.toneNeutral': 'Neutral',
   'profile.toneHonest': 'Honest',
+  'profile.encouragementLabel': 'How should Bob nudge you?',
+  'profile.encouragementHelp': 'Alerts from Bob when you check in, miss, or come back. Separate from how the app talks to you.',
   'error.uploadPhoto': 'Couldn’t upload photo. Try again.',
   'error.preferenceSave': 'Couldn’t save that preference. You can set it later.',
   'error.notEnoughPeople': 'Not enough people joined.',

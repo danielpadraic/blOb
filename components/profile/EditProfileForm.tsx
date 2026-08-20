@@ -84,6 +84,7 @@ type EditValues = {
   weight_unit: WeightUnit;
   body_fat_pct: number;
   motivation_tone: CopyTone;
+  encouragement_tone: CopyTone;
   allow_profile_posts: boolean;
   mute_mentions: boolean;
   profile_visibility: 'public' | 'friends';
@@ -287,6 +288,9 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
     if (dirty.motivation_tone) {
       patch.motivation_tone = asCopyTone(values.motivation_tone);
     }
+    if (dirty.encouragement_tone) {
+      patch.encouragement_tone = asCopyTone(values.encouragement_tone);
+    }
     if (dirty.allow_profile_posts) {
       patch.allow_profile_posts = values.allow_profile_posts;
     }
@@ -461,6 +465,11 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
             <MotivationToneChips
               value={tone}
               onChange={(next) => setValue('motivation_tone', next, { shouldDirty: true })}
+            />
+            <MotivationToneChips
+              value={watch('encouragement_tone')}
+              label={copy('profile.encouragementLabel')}
+              onChange={(next) => setValue('encouragement_tone', next, { shouldDirty: true })}
             />
             <SettingToggle
               label={copy('wall.allow')}
@@ -841,6 +850,7 @@ function buildDefaults(profile?: Profile | null): EditValues {
     body_fat_pct:
       profile?.body_fat_pct != null ? clampBodyFat(Number(profile.body_fat_pct)) : BODY_FAT_DEFAULT,
     motivation_tone: asCopyTone(profile?.motivation_tone),
+    encouragement_tone: asCopyTone(profile?.encouragement_tone),
     allow_profile_posts: profile?.allow_profile_posts !== false,
     mute_mentions: Boolean(profile?.mute_mentions),
     profile_visibility: profile?.profile_visibility === 'friends' ? 'friends' : 'public',

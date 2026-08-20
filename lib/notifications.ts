@@ -51,6 +51,9 @@ export async function fetchNotifications(): Promise<AppNotification[]> {
 }
 
 export function isCoinGrantAlert(item: AppNotification): boolean {
+  if (item.type === 'bob_encouragement') {
+    return false;
+  }
   if (item.type === 'coin_grant' || item.type === 'badge_unlocked') {
     return true;
   }
@@ -157,6 +160,15 @@ export async function inviteToChallenge(
 
 export function notificationHref(item: AppNotification): Href | null {
   const data = item.data ?? {};
+  if (item.type === 'bob_encouragement') {
+    if (data.href) {
+      return data.href as Href;
+    }
+    if (data.challenge_id) {
+      return challengeDetailHref(data.challenge_id, 'lobby');
+    }
+    return '/feed';
+  }
   if (data.href) {
     return data.href as Href;
   }
@@ -281,6 +293,8 @@ export function notificationGlyph(type: string, data?: NotificationData): string
       return '↩️';
     case 'profile_incomplete':
       return '📋';
+    case 'bob_encouragement':
+      return '👋';
     default:
       return '🔔';
   }

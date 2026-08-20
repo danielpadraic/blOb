@@ -230,6 +230,7 @@ export interface Profile {
   last_shown_coin_balance?: number | null;
   timezone?: string | null;
   motivation_tone?: 'gentle' | 'neutral' | 'honest' | null;
+  encouragement_tone?: 'gentle' | 'neutral' | 'honest' | null;
   is_official?: boolean;
   is_creator?: boolean;
   allow_profile_posts?: boolean;
@@ -627,7 +628,8 @@ export type NotificationType =
   | 'story_reaction'
   | 'story_comment'
   | 'story_shared'
-  | 'start_rolled';
+  | 'start_rolled'
+  | 'bob_encouragement';
 
 export type NotificationData = {
   challenge_id?: string;
@@ -649,6 +651,8 @@ export type NotificationData = {
   starts_at?: string;
   keep_days?: number;
   can_shorten?: boolean;
+  category?: string;
+  line_index?: number;
 };
 
 export interface AppNotification {
@@ -713,6 +717,7 @@ export type ProfileUpdate = Partial<
     | 'skill_tags'
     | 'show_fitness_stats_publicly'
     | 'motivation_tone'
+    | 'encouragement_tone'
     | 'allow_profile_posts'
     | 'profile_visibility'
     | 'default_post_audience'
@@ -1218,6 +1223,10 @@ export type Database = {
       tick_user_grants: {
         Args: Record<string, never>;
         Returns: { ok: boolean; grants: unknown[]; streak: number };
+      };
+      notify_bob_on_open_self: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
       accept_legal: {
         Args: { p_tos: boolean; p_privacy: boolean; p_skill: boolean };

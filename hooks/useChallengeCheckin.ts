@@ -211,6 +211,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }

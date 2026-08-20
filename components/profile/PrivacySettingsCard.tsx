@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
-import { copy } from '@/lib/copy';
+import { asCopyTone, copy, type CopyTone } from '@/lib/copy';
 import { asDefaultPostAudience } from '@/lib/postAudience';
 import { THEME } from '@/lib/theme';
 
@@ -13,10 +13,29 @@ export function PrivacySettingsCard() {
   const update = useUpdateProfile();
   const postAudience = asDefaultPostAudience(profile?.default_post_audience);
   const profileVisibility = profile?.profile_visibility === 'friends' ? 'friends' : 'public';
+  const encouragement = asCopyTone(profile?.encouragement_tone);
 
   return (
     <Card className="gap-4">
       <AppText className="text-[16px] font-extrabold text-charcoal">{copy('privacy.title')}</AppText>
+      <View className="gap-2">
+        <AppText className="text-[13px] font-semibold text-charcoal">
+          {copy('profile.encouragementLabel')}
+        </AppText>
+        <SegmentedControl
+          value={encouragement}
+          options={[
+            { value: 'gentle' as CopyTone, label: copy('profile.toneGentle') },
+            { value: 'neutral' as CopyTone, label: copy('profile.toneNeutral') },
+            { value: 'honest' as CopyTone, label: copy('profile.toneHonest') },
+          ]}
+          onChange={(next) => update.mutate({ encouragement_tone: next })}
+          accessibilityLabel={copy('profile.encouragementLabel')}
+        />
+        <AppText className="text-[12px] leading-5 text-muted">
+          {copy('profile.encouragementHelp')}
+        </AppText>
+      </View>
       <View className="gap-2">
         <AppText className="text-[13px] font-semibold text-charcoal">{copy('privacy.posts')}</AppText>
         <SegmentedControl

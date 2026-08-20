@@ -12,14 +12,18 @@ import {
 export function MotivationToneChips({
   value,
   onChange,
+  label,
 }: {
   value?: string | null;
   onChange: (tone: CopyTone) => void;
+  label?: string;
 }) {
   const selected = asCopyTone(value);
   return (
     <View className="gap-2">
-      <AppText className="text-sm font-semibold text-charcoal">{copy('profile.toneLabel')}</AppText>
+      <AppText className="text-sm font-semibold text-charcoal">
+        {label ?? copy('profile.toneLabel')}
+      </AppText>
       <ChipRow>
         {COPY_TONE_OPTIONS.map((option) => (
           <Chip

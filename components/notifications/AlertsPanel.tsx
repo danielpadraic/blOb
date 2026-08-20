@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
+import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
@@ -151,6 +152,13 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
 }
 
 function NotificationArt({ item }: { item: AppNotification }) {
+  if (item.type === 'bob_encouragement') {
+    return (
+      <View className="h-10 w-10 items-center justify-center">
+        <BlobMascot variant="wave" size={40} />
+      </View>
+    );
+  }
   if (isCoinGrantAlert(item)) {
     return (
       <View className="h-10 w-10 items-center justify-center">
@@ -208,7 +216,7 @@ function NotificationRow({
         <View className="flex-row items-center justify-between gap-2">
           <AppText
             className={`flex-1 text-charcoal ${unread ? 'font-bold' : 'font-medium'}`}
-            numberOfLines={2}>
+            numberOfLines={item.type === 'bob_encouragement' ? 4 : 2}>
             {item.title}
           </AppText>
           <AppText className="text-[11px] text-muted">{formatFeedTime(item.created_at)}</AppText>

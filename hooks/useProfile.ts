@@ -49,6 +49,7 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     fitness_profile: profile.fitness_profile ?? null,
     timezone: profile.timezone ?? null,
     motivation_tone: asCopyTone(profile.motivation_tone),
+    encouragement_tone: asCopyTone(profile.encouragement_tone),
     is_official: Boolean(profile.is_official),
     tos_accepted_at: profile.tos_accepted_at ?? null,
     privacy_accepted_at: profile.privacy_accepted_at ?? null,
@@ -202,13 +203,20 @@ export function useUsernameAvailability(
 function omitOptionalPreferences<
   T extends {
     motivation_tone?: unknown;
+    encouragement_tone?: unknown;
     mute_mentions?: unknown;
     timezone?: unknown;
     default_post_audience?: unknown;
   },
->(row: T): Omit<T, 'motivation_tone' | 'mute_mentions' | 'timezone' | 'default_post_audience'> {
+>(
+  row: T,
+): Omit<
+  T,
+  'motivation_tone' | 'encouragement_tone' | 'mute_mentions' | 'timezone' | 'default_post_audience'
+> {
   const {
     motivation_tone: _tone,
+    encouragement_tone: _nudge,
     mute_mentions: _mute,
     timezone: _tz,
     default_post_audience: _audience,
@@ -285,6 +293,7 @@ export function useCompleteProfile() {
         skill_tags: patch.skill_tags ?? [],
         show_fitness_stats_publicly: patch.show_fitness_stats_publicly ?? false,
         motivation_tone: patch.motivation_tone ?? 'neutral',
+        encouragement_tone: patch.encouragement_tone ?? 'neutral',
       };
 
       const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' });
