@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
+import { FieldNoteButton } from '@/components/challenge/FieldNote';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
@@ -64,12 +65,15 @@ export function OfficialMoneyBoard({
       {filling ? (
         <>
           <View className="flex-row" style={{ gap: 8 }}>
-            <Stat label={copy('create.buyIn')} value={<BuckUsdAmount amount={buyIn} size={16} />} />
+            <Stat label={copy('create.buyIn')} value={<BuckUsdAmount amount={buyIn} size={16} />} note="buyIn" />
             <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
-            <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} />
+            <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} note="pot" />
           </View>
           {startLine ? (
-            <AppText className="mt-1 text-[12px] leading-5 text-muted">{startLine}</AppText>
+            <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+              <AppText className="min-w-0 flex-1 text-[12px] leading-5 text-muted">{startLine}</AppText>
+              <FieldNoteButton note="startNeeded" />
+            </View>
           ) : null}
           <OfficialInviteButton
             challengeId={challenge.id}
@@ -81,7 +85,7 @@ export function OfficialMoneyBoard({
         <View className="flex-row" style={{ gap: 6 }}>
           <Stat label={copy('board.joined')} value={String(joined)} />
           <Stat label={copy('board.finished')} value={String(Math.max(finished, 0))} />
-          <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} />
+          <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} note="pot" />
           <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
         </View>
       )}
@@ -89,17 +93,28 @@ export function OfficialMoneyBoard({
   );
 }
 
-function Stat({ label, value }: { label: string; value: ReactNode }) {
+function Stat({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: ReactNode;
+  note?: 'pot' | 'buyIn';
+}) {
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
-      <AppText
-        className="text-[9px] font-semibold uppercase text-muted"
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
-        style={{ letterSpacing: 0.2 }}>
-        {label}
-      </AppText>
+      <View className="flex-row items-center" style={note ? { minHeight: 44, marginVertical: -10 } : undefined}>
+        <AppText
+          className="min-w-0 flex-1 text-[9px] font-semibold uppercase text-muted"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          style={{ letterSpacing: 0.2 }}>
+          {label}
+        </AppText>
+        {note ? <FieldNoteButton note={note} /> : null}
+      </View>
       {typeof value === 'string' ? (
         <AppText className="mt-0.5 text-[13px] font-extrabold text-charcoal" numberOfLines={1}>
           {value}

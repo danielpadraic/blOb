@@ -642,6 +642,7 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     funding_model: values.funding_model,
     creator_contribution: contribution,
     max_participants: cap,
+    min_participants: Math.max(Number(values.min_participants) || 2, 2),
     is_unlimited: unlimited,
     category: values.category,
     challenge_type: unlimited ? 'consistency' : values.challenge_type,

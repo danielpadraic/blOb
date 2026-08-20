@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
+import { FieldNoteButton } from '@/components/challenge/FieldNote';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
@@ -184,6 +185,7 @@ export function ChallengeHeroCard({
                   </AppText>
                 </>
               )}
+              <FieldNoteButton note="pot" tint="light" />
             </View>
           </View>
           {showProgressRing && joined ? (

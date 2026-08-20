@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Platform, View } from 'react-native';
 
+import { FieldNoteButton } from '@/components/challenge/FieldNote';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
@@ -60,15 +61,18 @@ export function ChallengeLeaderboard({
 
   return (
     <Card className="gap-3">
-      <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-        Board
-      </AppText>
+      <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+        <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          Board
+        </AppText>
+        <FieldNoteButton note="board" />
+      </View>
       <View className="flex-row" style={{ gap: 8 }}>
         <Stat label={copy('board.remaining')} value={String(remainingCount)} />
         <Stat label={copy('board.caughtUp')} value={String(completed.length)} />
         <Stat label={copy('board.dropped')} value={String(dropped.length)} />
       </View>
-      <View className="flex-row flex-wrap items-center" style={{ gap: 6 }}>
+      <View className="flex-row flex-wrap items-center" style={{ gap: 2 }}>
         <AppText className="text-sm font-semibold text-charcoal">
           {copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish')}
         </AppText>
@@ -79,6 +83,7 @@ export function ChallengeLeaderboard({
           textClassName="text-sm font-semibold text-charcoal"
           zeroAsNumber
         />
+        <FieldNoteButton note="share" />
       </View>
       {empty ? (
         <AppText className="text-sm text-muted">No one on the board yet.</AppText>

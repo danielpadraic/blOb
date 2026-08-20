@@ -1,13 +1,17 @@
 import { Pressable, View } from 'react-native';
 
 import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
+import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
+import { FieldNoteButton } from '@/components/challenge/FieldNote';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
+import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { isPointsChallenge } from '@/lib/challenges';
+import { formatCash, formatWallet, isBucksChallenge } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { previewFromValues } from '@/lib/challengeTemplates';
 import { THEME } from '@/lib/theme';
@@ -51,6 +55,7 @@ export function CreateReviewPreview({
   const isPoints = isPointsChallenge(challenge);
   const extraTasks = (challenge.tasks ?? []).filter((task) => task.id !== 'primary');
   const showTasks = isPoints || extraTasks.length > 0 || (challenge.tasks?.length ?? 0) > 1;
+  const startNeeded = userStartNeededLabel(challenge);
 
   return (
     <View className="gap-4">
@@ -155,15 +160,47 @@ export function CreateReviewPreview({
 
       <Card>
         <View className="flex-row items-start justify-between gap-3">
-          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-            Prize
-          </AppText>
+          <View className="flex-1 flex-row items-center" style={{ marginLeft: -8 }}>
+            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+              Prize
+            </AppText>
+            <FieldNoteButton note="pot" />
+          </View>
           <EditLink onPress={() => onEdit('prize')} />
         </View>
         <View className="mt-2">
           <ChallengePrizeLine challenge={challenge} />
         </View>
       </Card>
+
+      <Card>
+        <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Buy-in
+          </AppText>
+          <FieldNoteButton note="buyIn" />
+        </View>
+        <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
+          {Number(challenge.buy_in_amount) > 0
+            ? isBucksChallenge(challenge)
+              ? formatCash(challenge.buy_in_amount)
+              : formatWallet(challenge.buy_in_amount, challenge.currency)
+            : 'Free'}
+        </AppText>
+      </Card>
+
+      <ChallengeLeaderboard challenge={challenge} roster={[]} completedUserIds={new Set()} />
+
+      {startNeeded ? (
+        <Card>
+          <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+            <AppText className="min-w-0 flex-1 leading-6 text-charcoal">
+              {startNeeded}
+            </AppText>
+            <FieldNoteButton note="startNeeded" />
+          </View>
+        </Card>
+      ) : null}
 
       <Card>
         <View className="flex-row items-start justify-between gap-3">

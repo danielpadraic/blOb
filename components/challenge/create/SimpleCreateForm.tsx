@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { DateTimeField } from '@/components/challenge/create/DateTimeField';
+import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
+import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
@@ -261,6 +262,7 @@ export function SimpleCreateForm() {
   }
 
   return (
+    <ChallengeNotesProvider>
     <Screen
       scroll
       padded
@@ -783,6 +785,7 @@ export function SimpleCreateForm() {
         ) : null}
       </View>
     </Screen>
+    </ChallengeNotesProvider>
   );
 }
 

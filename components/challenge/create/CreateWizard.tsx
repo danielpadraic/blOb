@@ -21,6 +21,7 @@ import {
 import { RulesSlide } from '@/components/challenge/create/RulesSlide';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { ExtraTasksEditor } from '@/components/challenge/create/ExtraTasksEditor';
+import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -1363,7 +1364,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   const wizardBody = (
-    <TourAnchor id="tour-create">
+    <ChallengeNotesProvider>
+    <TourAnchor id="tour-create" style={{ flex: 1 }}>
     <View
       className="flex-1"
       pointerEvents={tour?.createActive && !liveChallengeId ? 'none' : 'auto'}
@@ -1615,6 +1617,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         )}
       </View>
     </TourAnchor>
+    </ChallengeNotesProvider>
   );
 
   if (embedded) {

@@ -213,6 +213,20 @@ const STRINGS = {
   'board.dropped': 'Dropped',
   'board.yourShareIfFinish': 'Your share if you finish:',
   'board.shareIfFinish': 'Share if you finish:',
+  'note.potTitle': 'Prize',
+  'note.pot':
+    'This shows what’s in the pot now. It goes up as people buy in. On publish it may be only your amount, or $0 until the first join.',
+  'note.buyInTitle': 'Buy-in',
+  'note.buyIn': 'Each person pays this to join. It does not change.',
+  'note.boardTitle': 'Board',
+  'note.board':
+    'Empty until people join and log. Remaining are still in. Caught Up have finished today’s required proof. Dropped missed or were removed.',
+  'note.shareTitle': 'Share if you finish',
+  'note.share':
+    'An estimate from the current pot and how many are still in. It changes when people join or drop.',
+  'note.startTitle': 'Start',
+  'note.startNeeded':
+    'Starts when enough people have joined. This number will fall as people buy in.',
   'board.liveShare': 'Live share {amount}',
   'board.guarantee': 'Guarantee',
   'board.pot': 'Pot',

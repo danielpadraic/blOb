@@ -11,6 +11,7 @@ import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
+import { FieldNoteButton, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
@@ -73,6 +74,7 @@ import {
 } from '@/lib/officialSeries';
 import { healthProofLines } from '@/lib/health/proofSummary';
 import { fetchHealthWorkoutById } from '@/lib/health/remote';
+import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -472,6 +474,7 @@ export default function ChallengeDetailScreen() {
 
   const signupLines = signupProofLines(challenge);
   const hideBuyIn = isBucksChallenge(challenge) || Boolean(challenge.host_funded);
+  const startNeeded = userStartNeededLabel(challenge);
   const remainingNow = competitorCount;
   const goalLabel = challengeGoalLabel(challenge, {
     daysCompleted,
@@ -491,6 +494,7 @@ export default function ChallengeDetailScreen() {
   const stickyBlock = showStickyCta ? 62 : 0;
 
   return (
+    <ChallengeNotesProvider>
     <Screen padded={false} edges={['left', 'right']}>
       <Stack.Screen
         options={{
@@ -623,15 +627,29 @@ export default function ChallengeDetailScreen() {
           />
         </View>
 
+        {startNeeded ? (
+          <Card className="mt-4">
+            <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+              <AppText className="min-w-0 flex-1 leading-6 text-charcoal">
+                {startNeeded}
+              </AppText>
+              <FieldNoteButton note="startNeeded" />
+            </View>
+          </Card>
+        ) : null}
+
         <Card className="mt-4 gap-3">
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Mechanics
           </AppText>
           {hideBuyIn ? null : (
             <View>
-              <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-                Buy-in
-              </AppText>
+              <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+                <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                  Buy-in
+                </AppText>
+                <FieldNoteButton note="buyIn" />
+              </View>
               <AppText className="mt-1 text-xl font-bold text-charcoal">
                 {isFreeEntry
                   ? 'Free'
@@ -720,9 +738,12 @@ export default function ChallengeDetailScreen() {
 
         {wasCancelled || challenge.is_official ? null : (
         <Card className="mt-4">
-          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-            Prize
-          </AppText>
+          <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+              Prize
+            </AppText>
+            <FieldNoteButton note="pot" />
+          </View>
           {prizeForfeited ? (
             <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
               Stakes forfeited, no refund.
@@ -951,6 +972,7 @@ export default function ChallengeDetailScreen() {
         onConfirm={onConfirmSettle}
       />
     </Screen>
+    </ChallengeNotesProvider>
   );
 }
 
