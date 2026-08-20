@@ -5,6 +5,75 @@ export function getErrorMessage(error: unknown): string {
   return humanize(raw);
 }
 
+export function logPostgrestError(scope: string, error: unknown) {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  console.log(`[blob:${scope}]`, {
+    code: record?.code ?? null,
+    message: record?.message ?? (error instanceof Error ? error.message : String(error ?? '')),
+    details: record?.details ?? null,
+    hint: record?.hint ?? null,
+  });
+}
+
+const CREATE_RPC_MESSAGES: Record<string, string> = {
+  NOT_AUTHENTICATED: 'Sign in to continue.',
+  TITLE_REQUIRED: 'Give the challenge a title before you publish.',
+  INVALID_CURRENCY: 'Pick Blob Coins or $.',
+  MAX_PARTICIPANTS_MIN_1: 'Max competitors must be at least 1.',
+  LMS_REQUIRES_CONSISTENCY: 'Last Man Standing only works with a consistency challenge.',
+  FULL_LOBBY_REQUIRES_MAX: 'A full-lobby start needs a max number of competitors.',
+  PROFILE_NOT_FOUND: 'Finish setting up your profile first.',
+  NEGATIVE_AMOUNT: 'Amounts can’t be negative.',
+  INSUFFICIENT_FUNDS: 'Not enough Coins/$ to fund this prize.',
+  START_IN_PAST: 'Start time has to be in the future.',
+  OFFICIAL_NOT_ALLOWED: 'Official competitions are hosted by blOb.',
+  PRIVATE_NO_PLAYER_BUY_IN: 'Private challenges can’t charge competitors a buy-in for the prize.',
+};
+
+export function getCreateChallengeMessage(error: unknown): string {
+  logPostgrestError('create', error);
+  const raw = extractRawMessage(error);
+  if (raw.startsWith('Couldn’t create this challenge')) {
+    return raw;
+  }
+  const trimmed = raw.trim();
+  const upper = trimmed.toUpperCase();
+  if (CREATE_RPC_MESSAGES[trimmed]) {
+    return CREATE_RPC_MESSAGES[trimmed];
+  }
+  for (const [key, label] of Object.entries(CREATE_RPC_MESSAGES)) {
+    if (upper.includes(key)) {
+      return label;
+    }
+  }
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.includes('insufficient') ||
+    lower.includes('not enough') ||
+    (lower.includes('you need') && (lower.includes('fund') || lower.includes('wallet')))
+  ) {
+    return trimmed;
+  }
+  if (
+    lower.includes('start_in_past') ||
+    (lower.includes('start') && (lower.includes('future') || lower.includes('past')))
+  ) {
+    return 'Start time has to be in the future.';
+  }
+  if (
+    lower.includes('42501') ||
+    lower.includes('row-level security') ||
+    lower.includes('rls') ||
+    (lower.includes('permission denied') && lower.includes('challenges'))
+  ) {
+    return 'Couldn’t create this challenge. You don’t have permission.';
+  }
+  if (!trimmed) {
+    return 'Couldn’t create this challenge. Try again.';
+  }
+  return `Couldn’t create this challenge. ${trimmed}`;
+}
+
 /** Missing column / schema-cache miss (PGRST204, 42703). */
 export function isUnknownColumnError(error: unknown): boolean {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
@@ -463,11 +532,16 @@ function humanize(raw: string): string {
   if (
     message.includes('stripe') ||
     message.includes('paymentintent') ||
-    message.includes('payment_intent') ||
-    message.includes('postgrest') ||
-    message.includes('pgrst')
+    message.includes('payment_intent')
   ) {
     return 'Something went sideways. Try again in a moment.';
+  }
+  if (message.includes('postgrest') || message.includes('pgrst')) {
+    const cleaned = raw.replace(/\bPGRST\d+\b/gi, '').replace(/^[:\s.,-]+/, '').trim();
+    if (cleaned.length > 12) {
+      return cleaned;
+    }
+    return 'Couldn’t complete that just now. Try again.';
   }
 
   return raw;

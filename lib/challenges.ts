@@ -26,7 +26,7 @@ import type {
   TopPlacesDistribution,
   TopPlacesMode,
 } from '@/lib/types';
-import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+import { getCreateChallengeMessage, getErrorMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
 import { challengeCurrency, formatWallet } from '@/lib/currency';
 import { applyLaneForPublish, isInviteOnlyChallenge } from '@/lib/challengeLane';
 import {
@@ -1217,11 +1217,24 @@ async function ensureCreatorParticipant(challengeId: string) {
     currency: 'coins',
   });
   if (!charged.ok) {
+    const message = charged.message.toLowerCase();
+    if (message.includes('already joined') || message.includes('already_joined')) {
+      return;
+    }
     throw new Error(charged.message);
   }
 }
 
 export async function insertUserChallenge(input: CreateChallengeInput): Promise<Challenge> {
+  try {
+    return await insertUserChallengeInner(input);
+  } catch (error) {
+    logPostgrestError('create', error);
+    throw new Error(getCreateChallengeMessage(error));
+  }
+}
+
+async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Challenge> {
   const lane = applyLaneForPublish({
     challenge_lane: input.challenge_lane,
     visibility: input.visibility,
@@ -1229,7 +1242,7 @@ export async function insertUserChallenge(input: CreateChallengeInput): Promise<
     buy_in_amount: input.buy_in_amount,
     host_funded: input.host_funded,
   });
-  const participating = input.creator_participating === true;
+  const participating = input.creator_participating !== false;
   const result = await publishChallenge({
     title: input.title,
     description: input.description,

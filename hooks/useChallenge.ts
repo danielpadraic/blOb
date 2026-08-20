@@ -52,7 +52,7 @@ import type {
 } from '@/lib/types';
 import { cancelProviderRef, getPaymentsProvider } from '@/services/payments';
 import { getErrorMessage } from '@/utils/errors';
-import { challengeCurrency, formatWallet, walletBalance } from '@/lib/currency';
+import { challengeCurrency, formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchCurrentUserProfile } from '@/hooks/useProfile';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -567,6 +567,9 @@ export function useCreateChallenge() {
         values.creator_participating === true ? Math.max(Number(lane.buy_in_amount) || 0, 0) : 0;
       const needed = contribution + creatorBuyIn;
       if (needed > 0 && currentWallet < needed) {
+        if (lane.currency === 'bucks') {
+          throw new Error(`Add ${formatCash(needed - currentWallet)}`);
+        }
         throw new Error(
           `You need ${formatWallet(needed, lane.currency)} to fund this pool. You have ${formatWallet(currentWallet, lane.currency)}.`,
         );

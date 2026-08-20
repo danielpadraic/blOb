@@ -51,7 +51,7 @@ import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
+import { getCreateChallengeMessage } from '@/utils/errors';
 
 function IconChip({
   icon,
@@ -171,7 +171,7 @@ export function SimpleCreateForm() {
       return;
     }
     if (poolShortfall > 0) {
-      setError(`You need ${formatCash(poolShortfall)} more to fund this pool.`);
+      setError(`Add ${formatCash(poolShortfall)}`);
       return;
     }
     if (!user) {
@@ -183,7 +183,7 @@ export function SimpleCreateForm() {
       clearPersistedSimpleDraft();
       router.replace(`/challenges/${challenge.id}`);
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(getCreateChallengeMessage(err));
     }
   }
 
@@ -245,7 +245,7 @@ export function SimpleCreateForm() {
               {poolShortfall > 0 ? (
                 <View className="gap-2">
                   <AppText className="text-sm text-coral-dark">
-                    You need {formatCash(poolShortfall)} more to fund this pool.
+                    Add {formatCash(poolShortfall)}
                   </AppText>
                   <Button
                     title={`Add ${formatCash(poolShortfall)}`}
@@ -574,7 +574,7 @@ export function SimpleCreateForm() {
         ) : null}
 
         <Button
-          title={copy('create.submit')}
+          title={error ? 'Try again' : copy('create.submit')}
           loading={create.isPending}
           disabled={poolShortfall > 0}
           onPress={() => void onCreate()}

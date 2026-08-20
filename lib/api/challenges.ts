@@ -10,7 +10,7 @@ import type {
   PublishChallengeResult,
   RefundPreStartResult,
 } from '@/lib/types/challenge';
-import { getErrorMessage } from '@/utils/errors';
+import { getCreateChallengeMessage, getErrorMessage, logPostgrestError } from '@/utils/errors';
 
 const RPC_MESSAGES: Record<string, string> = {
   NOT_AUTHENTICATED: 'Sign in to continue.',
@@ -30,7 +30,7 @@ const RPC_MESSAGES: Record<string, string> = {
   LANE_REQUIRED: 'Choose Coin Challenge or Private Challenge.',
   OFFICIAL_NOT_ALLOWED: 'Official competitions are hosted by blOb.',
   PRIVATE_NO_PLAYER_BUY_IN: 'Private challenges can’t charge competitors a buy-in for the prize. You fund the prize.',
-  INSUFFICIENT_FUNDS: 'Not enough Coins/Bucks to fund this prize.',
+  START_IN_PAST: 'Start time has to be in the future.',
   CHALLENGE_NOT_FOUND: 'Challenge not found.',
   ALREADY_STARTED: 'This challenge already started.',
   NOT_JOINABLE: 'This challenge is not accepting competitors.',
@@ -76,14 +76,6 @@ function rpcMessage(error: unknown): string {
       return label;
     }
   }
-  if (
-    trimmed.toLowerCase().includes('does not exist') ||
-    trimmed.toLowerCase().includes('schema cache') ||
-    trimmed.toLowerCase().includes('pgrst') ||
-    trimmed.toLowerCase().includes('are_accepted_friends')
-  ) {
-    return 'Couldn’t complete that just now. Try again.';
-  }
   return getErrorMessage(error);
 }
 
@@ -111,19 +103,13 @@ export async function publishChallenge(
 ): Promise<PublishChallengeResult> {
   const json = asJson(payload);
   if (draftId) {
-    const withDraft = await supabase.rpc('publish_challenge', {
-      p_payload: json,
-      p_draft_id: draftId,
-    });
-    if (!withDraft.error) {
-      return unwrap<PublishChallengeResult>(withDraft.data, withDraft.error);
-    }
-    const message = String(withDraft.error.message ?? '');
-    if (!isMissingRpc(message) && !message.toLowerCase().includes('p_draft_id')) {
-      throw new Error(rpcMessage(withDraft.error));
-    }
+    json.draft_id = draftId;
   }
   const { data, error } = await supabase.rpc('publish_challenge', { p_payload: json });
+  if (error) {
+    logPostgrestError('create', error);
+    throw new Error(getCreateChallengeMessage(error));
+  }
   return unwrap<PublishChallengeResult>(data, error);
 }
 

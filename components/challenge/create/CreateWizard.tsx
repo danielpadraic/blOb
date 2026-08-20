@@ -92,7 +92,7 @@ import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { copy } from '@/lib/copy';
 import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
-import { getErrorMessage } from '@/utils/errors';
+import { getCreateChallengeMessage, getErrorMessage } from '@/utils/errors';
 import { formatWallet, walletBalance } from '@/lib/currency';
 import { uploadChallengeCover } from '@/utils/upload';
 import {
@@ -1248,7 +1248,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         scrollRef.current?.scrollTo({ y: 0 });
       } catch (error) {
         skipSaveRef.current = false;
-        const message = getErrorMessage(error) || 'Couldn’t publish this challenge.';
+        const message = getCreateChallengeMessage(error);
         setFormError(message);
         showBobIssue({ field: 'publish', step: STEP_REVIEW }, `Oops — ${message}`);
       }
