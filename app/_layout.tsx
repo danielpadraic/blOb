@@ -11,6 +11,8 @@ import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
+import { BlobMascot } from '@/components/mascot/BlobMascot';
+import { AppText } from '@/components/ui/AppText';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { WalletProvider } from '@/hooks/useWallet';
@@ -107,8 +109,8 @@ function RootNavigator() {
   }
 
   // Session + profile check must always resolve. A missing profile is onboarding, not a hang.
-  if (blocking && !bootExpired) {
-    return <BootScreen />;
+  if (blocking && !bootExpired && path === 'boot') {
+    return <BootSplash />;
   }
 
   return (
@@ -132,6 +134,17 @@ function RootNavigator() {
         <Stack.Screen name="+not-found" />
       </Stack>
     </>
+  );
+}
+
+function BootSplash() {
+  return (
+    <View className="flex-1 items-center justify-center" style={{ backgroundColor: THEME.background }}>
+      <BlobMascot size={220} motion="pulse" />
+      <AppText className="mt-6" style={{ color: THEME.textMuted }}>
+        blOb is waking up…
+      </AppText>
+    </View>
   );
 }
 

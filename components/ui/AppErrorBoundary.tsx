@@ -5,9 +5,12 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { THEME } from '@/lib/theme';
 
 function reloadApp(retry: () => Promise<void>) {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    window.location.reload();
-    return;
+  if (Platform.OS === 'web' && typeof globalThis !== 'undefined' && 'location' in globalThis) {
+    const loc = (globalThis as { location?: { reload?: () => void } }).location;
+    if (typeof loc?.reload === 'function') {
+      loc.reload();
+      return;
+    }
   }
   void retry();
 }
