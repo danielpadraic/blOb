@@ -8,11 +8,7 @@ import { upsertHealthWorkout, workoutNotes } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
 import type { HealthWorkout } from '@/services/health/types';
 import { copy } from '@/lib/copy';
-import {
-  logHasEveryProof,
-  parseProofParts,
-  resolveChallengeProofs,
-} from '@/lib/challengeProofs';
+import { parseProofParts } from '@/lib/challengeProofs';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant, ChallengeProof, ProofType, WorkoutSubmission } from '@/lib/types';
 import { officialLogDate } from '@/lib/officialDays';
@@ -381,7 +377,6 @@ export function usePeriodCompletions(
 ) {
   const date = submissionDateFor(challenge);
   const live = String(challenge?.status ?? '') === 'live';
-  const official = Boolean(challenge && isOfficialSeriesChallenge(challenge));
   return useQuery({
     queryKey: ['challenge-completions', challengeId, date ?? 'none', live ? 'live' : 'not-live'],
     enabled: Boolean(challengeId && date && challenge),
@@ -389,62 +384,22 @@ export function usePeriodCompletions(
       if (!live) {
         return new Set();
       }
-      const stamp = date!;
-      if (!official) {
-        const submitted = await supabase
-          .from('challenge_checkins')
-          .select('user_id')
-          .eq('challenge_id', challengeId!)
-          .eq('period_key', stamp)
-          .not('submitted_at', 'is', null);
-        if (submitted.error) {
-          if (isMissingColumn(submitted.error.message)) {
-            return new Set();
-          }
-          throw new Error(getErrorMessage(submitted.error));
-        }
-        return new Set(
-          (submitted.data ?? []).map((row) => String((row as { user_id: string }).user_id)),
-        );
-      }
-      const challengeResult = await supabase
-        .from('challenges')
-        .select('proofs, proof_type, proof_requirements, challenge_type, tasks')
-        .eq('id', challengeId!)
-        .maybeSingle();
-      if (challengeResult.error) {
-        throw new Error(getErrorMessage(challengeResult.error));
-      }
-      const proofs = resolveChallengeProofs({
-        proofs: (challengeResult.data as { proofs?: unknown } | null)?.proofs,
-        proof_type: (challengeResult.data as { proof_type?: unknown } | null)?.proof_type,
-        proof_requirements: (challengeResult.data as { proof_requirements?: Array<{ type?: string; required?: boolean }> } | null)
-          ?.proof_requirements,
-      });
-
-      const withParts = await supabase
-        .from('workout_submissions')
-        .select('user_id, proof_parts')
+      const submitted = await supabase
+        .from('challenge_checkins')
+        .select('user_id')
         .eq('challenge_id', challengeId!)
-        .eq('submission_date', stamp);
-      if (withParts.error) {
-        if (isMissingColumn(withParts.error.message)) {
-          const fallback = await supabase
-            .from('workout_submissions')
-            .select('user_id')
-            .eq('challenge_id', challengeId!)
-            .eq('submission_date', stamp);
-          if (fallback.error) {
-            throw new Error(getErrorMessage(fallback.error));
-          }
-          return new Set((fallback.data ?? []).map((row) => String((row as { user_id: string }).user_id)));
+        .eq('period_key', date!)
+        .eq('status', 'submitted')
+        .not('submitted_at', 'is', null);
+      if (submitted.error) {
+        if (isMissingColumn(submitted.error.message)) {
+          return new Set();
         }
-        throw new Error(getErrorMessage(withParts.error));
+        throw new Error(getErrorMessage(submitted.error));
       }
-      const complete = (withParts.data ?? []).filter((row) =>
-        logHasEveryProof(proofs, parseProofParts((row as { proof_parts?: unknown }).proof_parts)),
+      return new Set(
+        (submitted.data ?? []).map((row) => String((row as { user_id: string }).user_id)),
       );
-      return new Set(complete.map((row) => String((row as { user_id: string }).user_id)));
     },
   });
 }

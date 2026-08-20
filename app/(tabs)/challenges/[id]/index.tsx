@@ -43,7 +43,7 @@ import {
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
-import { usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
+import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import {
@@ -114,7 +114,6 @@ export default function ChallengeDetailScreen() {
       profile: map.get(row.user_id) ?? row.profile,
     }));
   }, [boardProfiles.data, roster.data]);
-  const todaySubmission = useTodaySubmission(id, challengeQuery.data);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
   const submittedCheckins = useSubmittedCheckinCount(id, challengeQuery.data);
   const completions = usePeriodCompletions(id, challengeQuery.data);
@@ -159,7 +158,7 @@ export default function ChallengeDetailScreen() {
     return countLiveCompetitors(roster.data);
   }, [challenge?.participant_count, isJoined, roster.data]);
   const daysRequired = challengeTargetCount(challenge);
-  const loggedToday = Boolean(todaySubmission.data) || periodCheckin.data?.phase === 'submitted';
+  const loggedToday = periodCheckin.data?.phase === 'submitted';
   const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
   const daysCompleted = heroRingDays({
     status: challengeQuery.data?.status,
@@ -289,8 +288,9 @@ export default function ChallengeDetailScreen() {
       (challengeQuery.isRefetching ||
       feed.isRefetching ||
       roster.isFetching ||
-      todaySubmission.isRefetching ||
+      periodCheckin.isRefetching ||
       submittedCheckins.isRefetching ||
+      completions.isRefetching ||
       settlementQuery.isRefetching) &&
     !challengeQuery.isLoading;
 
@@ -399,9 +399,9 @@ export default function ChallengeDetailScreen() {
     await Promise.all([
       challengeQuery.refetch(),
       feed.refetch(),
-      todaySubmission.refetch(),
       periodCheckin.refetch(),
       submittedCheckins.refetch(),
+      completions.refetch(),
       roster.refetch(),
       settlementQuery.refetch(),
     ]);
@@ -899,7 +899,7 @@ export default function ChallengeDetailScreen() {
               />
             )}
           </View>
-        ) : todaySubmission.isLoading || periodCheckin.isLoading ? (
+        ) : periodCheckin.isLoading ? (
           <Button title="Checking today’s check-in" size="lg" loading disabled />
         ) : (
           <View className="gap-2">

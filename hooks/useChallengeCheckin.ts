@@ -132,13 +132,8 @@ export function useSubmittedCheckinCount(
         .select('id', { count: 'exact', head: true })
         .eq('challenge_id', challengeId!)
         .eq('user_id', user!.id)
+        .eq('status', 'submitted')
         .not('submitted_at', 'is', null);
-      if (challenge?.starts_at) {
-        query = query.gte('submitted_at', challenge.starts_at);
-      }
-      if (challenge?.ends_at) {
-        query = query.lt('submitted_at', challenge.ends_at);
-      }
       const { count, error } = await query;
       if (error) {
         if (isMissingRelation(error.message)) {

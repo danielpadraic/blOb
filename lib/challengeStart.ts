@@ -17,16 +17,10 @@ export function isChallengeLive(status: string | null | undefined): boolean {
 }
 
 export function heroRingActive(status: string | null | undefined): boolean {
-  const value = String(status ?? '');
-  return (
-    value === 'live' ||
-    value === 'judging' ||
-    value === 'settled' ||
-    value === 'distributing'
-  );
+  return String(status ?? '') === 'live';
 }
 
-/** Hero ring: submitted check-ins only while live (or after, for judging/settled). */
+/** Hero ring: submitted check-ins only while live. Not live → 0. */
 export function heroRingDays(input: {
   status?: string | null;
   submitted?: number | null;

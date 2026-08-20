@@ -14,7 +14,6 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
-import { useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import type { HealthWorkout } from '@/services/health/types';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import {
@@ -81,7 +80,6 @@ export default function SubmitWorkoutScreen() {
   const challengeQuery = useChallenge(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
-  const today = useTodaySubmission(id, challengeQuery.data);
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
   const saveProof = useSaveCheckinProof(id);
   const submitCheckin = useSubmitCheckin(id);
@@ -94,7 +92,7 @@ export default function SubmitWorkoutScreen() {
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
-  const phase = today.data ? 'submitted' : (checkinQuery.data?.phase ?? 'none');
+  const phase = checkinQuery.data?.phase ?? 'none';
   const honorOnly = proofsAreHonorOnly(proofSteps);
 
   useEffect(() => {
@@ -241,7 +239,7 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
-  if (challengeQuery.isLoading || participationLoading || today.isLoading || checkinQuery.isLoading) {
+  if (challengeQuery.isLoading || participationLoading || checkinQuery.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState kind="loading" title="Opening today’s check-in" body="Checking what you still owe." />
