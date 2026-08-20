@@ -24,6 +24,7 @@ import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Stepper } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { useCreateChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
@@ -77,15 +78,14 @@ import { wizardBobOops, wizardBobTips, wizardEntryTabTipIndex, wizardGoalTypeTip
 import { composeChallengeRules, hasDefinedRules } from '@/lib/consistencyRules';
 import { applyLaneToFormValues, normalizeUserChallengeLane, type UserChallengeLane } from '@/lib/challengeLane';
 import {
+  endsAtFromStartAndDays,
   ensureSchedule,
+  formatChallengeEndLine,
   inOneHour,
-  parseScheduleDate,
-  scheduleSummary,
+  MAX_CHALLENGE_DURATION_DAYS,
   startPresetFor,
   tomorrowMorning,
   withFreshSchedule,
-  type ChallengeDurationUnit,
-  type ChallengeEndMode,
 } from '@/lib/challengeSchedule';
 import { THEME } from '@/lib/theme';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
@@ -817,13 +817,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
 
   function applySchedule(patch: Partial<CreateChallengeValues>) {
     const current = getValues();
-    const switchingToLength = patch.end_mode === 'length' && current.end_mode === 'date';
     const merged = {
       ...current,
       ...patch,
-      ...(switchingToLength
-        ? { duration_value: current.duration_days, duration_unit: 'days' as const }
-        : null),
+      end_mode: 'length' as const,
+      duration_unit: 'days' as const,
     };
     const next = ensureSchedule(merged);
     setValue('starts_at', next.starts_at, { shouldValidate: true });
@@ -1458,14 +1456,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             errors={errors}
             isUnlimited={isUnlimited}
             startsAt={values.starts_at}
-            endsAt={values.ends_at}
-            endMode={values.end_mode === 'date' ? 'date' : 'length'}
-            durationValue={values.duration_value || values.duration_days || '7'}
-            durationUnit={
-              values.duration_unit === 'weeks' || values.duration_unit === 'months'
-                ? values.duration_unit
-                : 'days'
-            }
+            durationDays={values.duration_value || values.duration_days || '7'}
             frequency={values.frequency}
               onDurationTypeChange={onDurationTypeChange}
               onFrequencyChange={onFrequencyChange}
@@ -1903,78 +1894,47 @@ function isDurationPreset(value: string): boolean {
 }
 
 function DurationLengthPicker({
-  durationValue,
-  durationUnit,
-  control,
+  durationDays,
   onChange,
 }: {
-  durationValue: string;
-  durationUnit: ChallengeDurationUnit;
-  control: ReturnType<typeof useForm<CreateChallengeValues>>['control'];
-  onChange: (value: string, unit: ChallengeDurationUnit) => void;
+  durationDays: string;
+  onChange: (days: string) => void;
 }) {
-  const [customPicked, setCustomPicked] = useState(
-    () => durationUnit !== 'days' || !isDurationPreset(durationValue),
-  );
-  const customSelected = customPicked || durationUnit !== 'days' || !isDurationPreset(durationValue);
+  const [customPicked, setCustomPicked] = useState(() => !isDurationPreset(durationDays));
+  const customSelected = customPicked || !isDurationPreset(durationDays);
+  const days = Math.max(Math.floor(Number(durationDays) || 7), 1);
 
   return (
     <View className="gap-3">
       <ChipRow>
-        {(['days', 'weeks', 'months'] as const).map((unit) => (
+        {DURATION_PRESETS.map((preset) => (
           <Chip
-            key={unit}
-            label={unit}
-            selected={durationUnit === unit}
+            key={preset}
+            label={preset === 1 ? '1 day' : `${preset} days`}
+            selected={!customSelected && Number(durationDays) === preset}
             onPress={() => {
-              setCustomPicked(unit !== 'days' || !isDurationPreset(durationValue));
-              onChange(durationValue || '7', unit);
+              setCustomPicked(false);
+              onChange(String(preset));
             }}
           />
         ))}
-      </ChipRow>
-      {durationUnit === 'days' ? (
-        <ChipRow>
-          {DURATION_PRESETS.map((days) => (
-            <Chip
-              key={days}
-              label={`${days} days`}
-              selected={!customSelected && Number(durationValue) === days}
-              onPress={() => {
-                setCustomPicked(false);
-                onChange(String(days), 'days');
-              }}
-            />
-          ))}
-          <Chip
-            label="Custom"
-            selected={customSelected}
-            onPress={() => setCustomPicked(true)}
-          />
-        </ChipRow>
-      ) : null}
-      {customSelected || durationUnit !== 'days' ? (
-        <Controller
-          control={control}
-          name="duration_value"
-          render={({ field: { onChange: onFieldChange, onBlur, value, ref } }) => (
-            <Input
-              ref={ref}
-              label={`How many ${durationUnit}`}
-              placeholder={durationUnit === 'weeks' ? '2' : durationUnit === 'months' ? '1' : '21'}
-              keyboardType="number-pad"
-              value={value}
-              onChangeText={(text) => {
-                onFieldChange(text);
-                const amount = Number(text);
-                if (Number.isFinite(amount) && amount >= 1) {
-                  onChange(text, durationUnit);
-                }
-              }}
-              onBlur={onBlur}
-            />
-          )}
+        <Chip
+          label="Custom"
+          selected={customSelected}
+          onPress={() => setCustomPicked(true)}
         />
+      </ChipRow>
+      {customSelected ? (
+        <View className="flex-row items-center justify-between">
+          <AppText className="text-sm font-semibold text-charcoal">Days</AppText>
+          <Stepper
+            accessibilityLabel="Days"
+            value={days}
+            min={1}
+            max={MAX_CHALLENGE_DURATION_DAYS}
+            onChange={(next) => onChange(String(next))}
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -1985,10 +1945,7 @@ function DurationSlide({
   errors,
   isUnlimited,
   startsAt,
-  endsAt,
-  endMode,
-  durationValue,
-  durationUnit,
+  durationDays,
   frequency,
   onDurationTypeChange,
   onFrequencyChange,
@@ -1998,17 +1955,16 @@ function DurationSlide({
   errors: ReturnType<typeof useForm<CreateChallengeValues>>['formState']['errors'];
   isUnlimited: boolean;
   startsAt: string;
-  endsAt: string;
-  endMode: ChallengeEndMode;
-  durationValue: string;
-  durationUnit: ChallengeDurationUnit;
+  durationDays: string;
   frequency: ChallengeFrequency;
   onDurationTypeChange: (next: CreateChallengeValues['duration_type']) => void;
   onFrequencyChange: (next: ChallengeFrequency) => void;
   onScheduleChange: (patch: Partial<CreateChallengeValues>) => void;
 }) {
   const startPreset = startPresetFor(startsAt);
-  const startDate = parseScheduleDate(startsAt);
+  const endLine = formatChallengeEndLine(
+    endsAtFromStartAndDays(startsAt, Number(durationDays) || 7),
+  );
 
   return (
     <View className="gap-3">
@@ -2044,59 +2000,33 @@ function DurationSlide({
         </FieldLabel>
       </FieldAnchor>
 
-      <FieldAnchor name="end_mode">
-        <FieldLabel label="End" error={errors.end_mode?.message ?? errors.ends_at?.message}>
-          <View className="gap-3">
-            <SegmentedControl
-              accessibilityLabel="End mode"
-              value={endMode}
-              options={[
-                { value: 'date', label: 'End date' },
-                { value: 'length', label: 'Length' },
-              ]}
-              onChange={(value) => onScheduleChange({ end_mode: value })}
-            />
-            {endMode === 'date' ? (
-              <FieldAnchor name="ends_at">
-                <DateTimeField
-                  value={endsAt}
-                  minimumDate={startDate ?? undefined}
-                  error={errors.ends_at?.message}
-                  onChange={(iso) => onScheduleChange({ end_mode: 'date', ends_at: iso })}
-                />
-              </FieldAnchor>
-            ) : (
-              <FieldAnchor name="duration_value">
-                <FieldLabel
-                  label="Length"
-                  error={errors.duration_value?.message ?? errors.duration_days?.message}
-                  hint="Default is 7 days. Up to 365 days.">
-                  <DurationLengthPicker
-                    durationValue={durationValue}
-                    durationUnit={durationUnit}
-                    control={control}
-                    onChange={(value, unit) =>
-                      onScheduleChange({
-                        end_mode: 'length',
-                        duration_value: value,
-                        duration_unit: unit,
-                      })
-                    }
-                  />
-                </FieldLabel>
-              </FieldAnchor>
-            )}
-          </View>
-        </FieldLabel>
-      </FieldAnchor>
-
-      <AppText className="text-sm leading-5 text-muted">
-        {scheduleSummary(startsAt, endsAt)}
-      </AppText>
-
+      {!isUnlimited ? (
+        <FieldAnchor name="duration_value">
+          <FieldLabel
+            label="Duration"
+            error={errors.duration_value?.message ?? errors.duration_days?.message}>
+            <View className="gap-3">
+              <DurationLengthPicker
+                durationDays={durationDays}
+                onChange={(value) =>
+                  onScheduleChange({
+                    end_mode: 'length',
+                    duration_value: value,
+                    duration_days: value,
+                    duration_unit: 'days',
+                  })
+                }
+              />
+              {endLine ? (
+                <AppText className="text-[13px] leading-5 text-muted">{endLine}</AppText>
+              ) : null}
+            </View>
+          </FieldLabel>
+        </FieldAnchor>
+      ) : null}
       <FieldAnchor name="duration_type">
       <FieldLabel
-        label="Duration"
+        label="Schedule"
         error={errors.duration_type?.message}>
         <View className="gap-2">
           <ChoiceCard

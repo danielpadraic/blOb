@@ -374,13 +374,13 @@ export const createChallengeSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['ends_at'],
-        message: 'Set when this challenge starts and ends.',
+        message: 'End is the start plus the duration in days.',
       });
     } else if (Number.isFinite(start) && end <= start) {
       ctx.addIssue({
         code: 'custom',
         path: ['ends_at'],
-        message: 'End must be after the start.',
+        message: 'Duration must put the end after the start.',
       });
     }
 

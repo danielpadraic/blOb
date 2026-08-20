@@ -1,6 +1,4 @@
-import { addDays } from 'date-fns';
-
-import { defaultChallengeStart } from '@/lib/challengeSchedule';
+import { defaultChallengeStart, endsAtFromStartAndDays } from '@/lib/challengeSchedule';
 import type { ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
 import {
@@ -225,8 +223,7 @@ export function customFrequencyCopy(n: number, period: SimpleCustomPeriod): stri
 }
 
 export function endsAtOf(draft: SimpleChallengeDraft): string {
-  const start = new Date(draft.starts_at);
-  return addDays(start, durationDaysOf(draft)).toISOString();
+  return endsAtFromStartAndDays(draft.starts_at, durationDaysOf(draft));
 }
 
 export function deviceTimezone(): string {

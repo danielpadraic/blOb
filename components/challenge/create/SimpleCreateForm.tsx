@@ -31,6 +31,7 @@ import {
   customFrequencyCopy,
   defaultSimpleDraft,
   durationDaysOf,
+  endsAtOf,
   persistSimpleDraft,
   readPersistedSimpleDraft,
   removeSimpleProof,
@@ -46,6 +47,7 @@ import {
   type SimpleFrequency,
   type SimpleVisibility,
 } from '@/lib/simpleChallenge';
+import { formatChallengeEndLine } from '@/lib/challengeSchedule';
 import { SIMPLE_PROOF_CAP, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
@@ -144,6 +146,7 @@ export function SimpleCreateForm() {
 
   const days = durationDaysOf(draft);
   const checkins = requiredCheckinsOf(draft);
+  const endLine = formatChallengeEndLine(endsAtOf(draft));
   const wallet = walletBalance(profile, draft.currency);
   const hostCost = draft.currency === 'bucks' ? Math.max(draft.host_budget, 0) : 0;
   const creatorBuyIn = draft.currency === 'coins' ? Math.max(draft.buy_in, 0) : 0;
@@ -359,6 +362,9 @@ export function SimpleCreateForm() {
                 onChange={(duration_days) => patch({ duration_days })}
               />
             </View>
+          ) : null}
+          {endLine ? (
+            <AppText className="text-[13px] leading-5 text-muted">{endLine}</AppText>
           ) : null}
         </View>
         </TourAnchor>

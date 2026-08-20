@@ -125,6 +125,36 @@ export function defaultSchedule(now = new Date()): Pick<
   };
 }
 
+export function durationDaysFromValues(values: {
+  duration_value?: string | number | null;
+  duration_days?: string | number | null;
+  duration_unit?: unknown;
+  starts_at?: string | null;
+}): number {
+  const unit = asDurationUnit(values.duration_unit);
+  const amount = Math.max(Number(values.duration_value ?? values.duration_days) || 7, 1);
+  if (unit === 'days') {
+    return Math.min(Math.max(Math.floor(amount) || 1, 1), MAX_CHALLENGE_DURATION_DAYS);
+  }
+  const start = parseScheduleDate(values.starts_at) ?? defaultChallengeStart();
+  return Math.min(Math.max(challengeLengthDays(start, amount, unit), 1), MAX_CHALLENGE_DURATION_DAYS);
+}
+
+/** ends_at = starts_at + N calendar days, same clock time. */
+export function endsAtFromStartAndDays(startsAt: string | null | undefined, days: number): string {
+  const start = parseScheduleDate(startsAt) ?? defaultChallengeStart();
+  const n = Math.min(Math.max(Math.floor(days) || 1, 1), MAX_CHALLENGE_DURATION_DAYS);
+  return addDays(start, n).toISOString();
+}
+
+export function formatChallengeEndLine(iso: string | null | undefined): string | null {
+  const date = parseScheduleDate(iso);
+  if (!date) {
+    return null;
+  }
+  return `Ends ${format(date, 'EEEE, MMM d, yyyy')} at ${format(date, 'h:mm a')}.`;
+}
+
 export function ensureSchedule(
   values: Partial<CreateChallengeValues>,
   now = new Date(),
@@ -133,24 +163,14 @@ export function ensureSchedule(
   'starts_at' | 'ends_at' | 'end_mode' | 'duration_value' | 'duration_unit' | 'duration_days'
 > {
   const start = parseScheduleDate(values.starts_at) ?? defaultChallengeStart(now);
-  const mode = asEndMode(values.end_mode);
-  const unit = asDurationUnit(values.duration_unit);
-  const amount = Math.max(Number(values.duration_value ?? values.duration_days) || 7, 1);
-  let end = parseScheduleDate(values.ends_at);
-  if (mode === 'length' || !end) {
-    end = addChallengeLength(start, amount, unit);
-  }
-  if (end.getTime() <= start.getTime()) {
-    end = addDays(start, 7);
-  }
-  end = clampChallengeEnd(start, end);
-  const days = Math.max(differenceInCalendarDays(end, start), 1);
+  const days = durationDaysFromValues({ ...values, starts_at: start.toISOString() });
+  const end = addDays(start, days);
   return {
     starts_at: start.toISOString(),
     ends_at: end.toISOString(),
-    end_mode: mode,
-    duration_value: String(amount),
-    duration_unit: unit,
+    end_mode: 'length',
+    duration_value: String(days),
+    duration_unit: 'days',
     duration_days: String(days),
   };
 }
@@ -161,7 +181,12 @@ export function endsFromLength(
   unit: ChallengeDurationUnit,
 ): string {
   const start = parseScheduleDate(startsAt) ?? defaultChallengeStart();
-  return clampChallengeEnd(start, addChallengeLength(start, Number(value) || 7, unit)).toISOString();
+  const days = durationDaysFromValues({
+    starts_at: start.toISOString(),
+    duration_value: value,
+    duration_unit: unit,
+  });
+  return endsAtFromStartAndDays(start.toISOString(), days);
 }
 
 export function scheduleRangeLabel(startsAt: string, endsAt: string): string {

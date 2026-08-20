@@ -175,18 +175,18 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
   },
   {
     id: 'adv-end',
-    target: 'create-end_mode',
+    target: 'create-duration_value',
     placement: 'below',
     wizardStep: DURATION,
-    title: 'End',
-    body: 'An end date or a length from the start.',
+    title: 'Duration',
+    body: 'How long it runs. End is the start plus those days.',
   },
   {
     id: 'adv-duration',
     target: 'create-duration_type',
     placement: 'below',
     wizardStep: DURATION,
-    title: 'Duration',
+    title: 'Schedule',
     body: 'Fixed dates, then judging and payout.',
   },
   {

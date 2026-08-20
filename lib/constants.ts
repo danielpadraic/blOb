@@ -214,7 +214,7 @@ export const FUNDING_MODELS = [
   },
 ] as const satisfies readonly { value: FundingModel; label: string; helper: string }[];
 
-export const DURATION_PRESETS = [7, 14, 30] as const;
+export const DURATION_PRESETS = [1, 7, 30] as const;
 
 export const PROOF_META: Record<
   ProofType,
