@@ -16,6 +16,27 @@ export function isChallengeLive(status: string | null | undefined): boolean {
   return String(status ?? '') === 'live';
 }
 
+export function heroRingActive(status: string | null | undefined): boolean {
+  const value = String(status ?? '');
+  return (
+    value === 'live' ||
+    value === 'judging' ||
+    value === 'settled' ||
+    value === 'distributing'
+  );
+}
+
+/** Hero ring: submitted check-ins only while live (or after, for judging/settled). */
+export function heroRingDays(input: {
+  status?: string | null;
+  submitted?: number | null;
+}): number {
+  if (!heroRingActive(input.status)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(Number(input.submitted) || 0));
+}
+
 export function canHostQuickEdit(input: {
   challenge: Pick<Challenge, 'status' | 'created_by' | 'is_official' | 'series_id'> | null | undefined;
   viewerId?: string | null;

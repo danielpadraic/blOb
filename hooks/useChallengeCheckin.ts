@@ -9,6 +9,7 @@ import {
 } from '@/lib/challengeCheckin';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
 import { parseProofParts } from '@/lib/challengeProofs';
+import { heroRingActive } from '@/lib/challengeStart';
 import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
 import { officialLogDate } from '@/lib/officialDays';
@@ -107,6 +108,49 @@ function asView(row: ChallengeCheckin | null): ChallengeCheckinView {
   };
 }
 
+export function useSubmittedCheckinCount(
+  challengeId: string | undefined,
+  challenge?: {
+    status?: string | null;
+    starts_at?: string | null;
+    ends_at?: string | null;
+  } | null,
+) {
+  const { user } = useAuth();
+  const liveWindow = heroRingActive(challenge?.status);
+  const windowKey = liveWindow ? (challenge?.starts_at ?? 'live') : 'not-live';
+
+  return useQuery({
+    queryKey: ['submitted-checkins', challengeId, user?.id, windowKey],
+    enabled: Boolean(challengeId && user?.id),
+    queryFn: async (): Promise<number> => {
+      if (!liveWindow) {
+        return 0;
+      }
+      let query = supabase
+        .from('challenge_checkins')
+        .select('id', { count: 'exact', head: true })
+        .eq('challenge_id', challengeId!)
+        .eq('user_id', user!.id)
+        .not('submitted_at', 'is', null);
+      if (challenge?.starts_at) {
+        query = query.gte('submitted_at', challenge.starts_at);
+      }
+      if (challenge?.ends_at) {
+        query = query.lt('submitted_at', challenge.ends_at);
+      }
+      const { count, error } = await query;
+      if (error) {
+        if (isMissingRelation(error.message)) {
+          return 0;
+        }
+        throw new Error(getErrorMessage(error));
+      }
+      return Math.max(0, count ?? 0);
+    },
+  });
+}
+
 export function usePeriodCheckin(
   challengeId: string | undefined,
   challenge?: PeriodChallenge | null,
@@ -160,6 +204,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['workout-submission', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-completions', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['submitted-checkins', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['logged-workout-days', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });

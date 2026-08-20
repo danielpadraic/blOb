@@ -158,7 +158,7 @@ export function challengeTimingLabel(
   });
 }
 
-function compactCountdown(target: Date, now: Date): string {
+export function compactCountdown(target: Date, now: Date): string {
   const minutes = Math.max(differenceInMinutes(target, now), 0);
   if (minutes < 60) {
     return minutes <= 0 ? 'now' : `${minutes}m`;

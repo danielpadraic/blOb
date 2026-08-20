@@ -254,12 +254,12 @@ export function isPointsChallenge(
 }
 
 export function challengeTargetCount(
-  challenge: Pick<Challenge, 'target_count' | 'days_required'> | null | undefined,
+  challenge: Pick<Challenge, 'target_count' | 'days_required' | 'length_value'> | null | undefined,
 ): number {
   if (!challenge) {
     return 1;
   }
-  return Math.max(Number(challenge.target_count || challenge.days_required || 1), 1);
+  return Math.max(Number(challenge.target_count || challenge.days_required || challenge.length_value || 1), 1);
 }
 
 export function totalTaskPoints(tasks: ChallengeTask[] | null | undefined): number {

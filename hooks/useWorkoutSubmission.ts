@@ -272,6 +272,9 @@ export function useSubmitWorkout() {
         queryKey: ['logged-workout-days', input.challengeId],
       });
       void queryClient.invalidateQueries({
+        queryKey: ['submitted-checkins', input.challengeId],
+      });
+      void queryClient.invalidateQueries({
         queryKey: ['challenge-completions', input.challengeId],
       });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
@@ -359,6 +362,9 @@ export function useSubmitHealthWorkout() {
         queryKey: ['logged-workout-days', input.challengeId],
       });
       void queryClient.invalidateQueries({
+        queryKey: ['submitted-checkins', input.challengeId],
+      });
+      void queryClient.invalidateQueries({
         queryKey: ['challenge-completions', input.challengeId],
       });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
@@ -374,11 +380,33 @@ export function usePeriodCompletions(
   challenge?: OfficialDateChallenge | null,
 ) {
   const date = submissionDateFor(challenge);
+  const live = String(challenge?.status ?? '') === 'live';
+  const official = Boolean(challenge && isOfficialSeriesChallenge(challenge));
   return useQuery({
-    queryKey: ['challenge-completions', challengeId, date ?? 'none'],
-    enabled: Boolean(challengeId && date),
+    queryKey: ['challenge-completions', challengeId, date ?? 'none', live ? 'live' : 'not-live'],
+    enabled: Boolean(challengeId && date && challenge),
     queryFn: async (): Promise<Set<string>> => {
+      if (!live) {
+        return new Set();
+      }
       const stamp = date!;
+      if (!official) {
+        const submitted = await supabase
+          .from('challenge_checkins')
+          .select('user_id')
+          .eq('challenge_id', challengeId!)
+          .eq('period_key', stamp)
+          .not('submitted_at', 'is', null);
+        if (submitted.error) {
+          if (isMissingColumn(submitted.error.message)) {
+            return new Set();
+          }
+          throw new Error(getErrorMessage(submitted.error));
+        }
+        return new Set(
+          (submitted.data ?? []).map((row) => String((row as { user_id: string }).user_id)),
+        );
+      }
       const challengeResult = await supabase
         .from('challenges')
         .select('proofs, proof_type, proof_requirements, challenge_type, tasks')

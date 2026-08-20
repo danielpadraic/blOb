@@ -3,7 +3,7 @@ import type { Challenge } from '@/lib/types';
 
 type GoalChallenge = Pick<
   Challenge,
-  'is_official' | 'challenge_type' | 'is_unlimited' | 'days_required' | 'target_count'
+  'is_official' | 'challenge_type' | 'is_unlimited' | 'days_required' | 'target_count' | 'length_value'
 >;
 
 export function challengeGoalLabel(
@@ -21,7 +21,10 @@ export function challengeGoalLabel(
     const days = Math.max(Number(challenge.days_required) || Number(challenge.target_count) || 7, 1);
     return `${days}-Day Consistency`;
   }
-  const target = Math.max(Number(challenge.days_required) || Number(challenge.target_count) || 1, 1);
+  const target = Math.max(
+    Number(challenge.days_required) || Number(challenge.target_count) || Number(challenge.length_value) || 1,
+    1,
+  );
   const done = Math.max(Number(extras?.daysCompleted) || 0, 0);
   return `${done} of ${target} days`;
 }

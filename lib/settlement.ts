@@ -14,7 +14,7 @@ import type {
 } from '@/lib/types';
 import type { CloseChallengeForJudgingResult } from '@/lib/types/challenge';
 import { getErrorMessage } from '@/utils/errors';
-import { formatRelative } from '@/utils/format';
+import { compactCountdown, formatRelative } from '@/utils/format';
 import { formatWallet } from '@/lib/currency';
 import { officialBob } from '@/copy/officialBob';
 
@@ -121,7 +121,8 @@ export function startsInLabel(
   if (!opens || now.getTime() >= opens.getTime()) {
     return null;
   }
-  return `Starts ${formatRelative(opens)}`;
+  const countdown = compactCountdown(opens, now);
+  return countdown === 'now' ? 'Starts soon' : `Starts in ${countdown}`;
 }
 
 export function isClosedForLogs(challenge: {

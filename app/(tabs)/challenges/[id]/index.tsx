@@ -42,8 +42,8 @@ import {
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
-import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
-import { useLoggedWorkoutCount, usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
+import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
+import { usePeriodCompletions, useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import {
@@ -74,10 +74,8 @@ import {
   isOfficialSeriesChallenge,
   officialAlreadyStartedCopy,
 } from '@/lib/officialSeries';
-import { healthProofLines } from '@/lib/health/proofSummary';
-import { fetchHealthWorkoutById } from '@/lib/health/remote';
 import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
-import { startMovedBody } from '@/lib/challengeStart';
+import { heroRingDays } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -85,7 +83,6 @@ import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { TAB_BAR_PEEK, tabBarLift, THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
-import { officialBob } from '@/copy/officialBob';
 import { getErrorMessage } from '@/utils/errors';
 
 const BODY_METRICS_JOIN_COPY =
@@ -119,13 +116,7 @@ export default function ChallengeDetailScreen() {
   }, [boardProfiles.data, roster.data]);
   const todaySubmission = useTodaySubmission(id, challengeQuery.data);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
-  const healthProofId = todaySubmission.data?.health_workout_id;
-  const healthProofQuery = useQuery({
-    queryKey: ['health-proof', healthProofId],
-    enabled: Boolean(healthProofId) && todaySubmission.data?.proof_kind === 'health_workout',
-    queryFn: () => fetchHealthWorkoutById(healthProofId!),
-  });
-  const loggedCount = useLoggedWorkoutCount(id);
+  const submittedCheckins = useSubmittedCheckinCount(id, challengeQuery.data);
   const completions = usePeriodCompletions(id, challengeQuery.data);
   const joinSheet = useJoinConfirm();
   const inviteHost = useInviteHost();
@@ -170,23 +161,10 @@ export default function ChallengeDetailScreen() {
   const daysRequired = challengeTargetCount(challenge);
   const loggedToday = Boolean(todaySubmission.data) || periodCheckin.data?.phase === 'submitted';
   const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
-  const healthProofLinesView = useMemo(() => {
-    const row = healthProofQuery.data;
-    if (!row) {
-      return null;
-    }
-    return healthProofLines({
-      activityLabel: row.activity_label,
-      durationSec: row.duration_sec,
-      confidence: row.confidence,
-      hrAvg: row.hr_avg,
-      caloriesKcal: row.calories_kcal,
-    });
-  }, [healthProofQuery.data]);
-  const daysCompleted = Math.max(
-    Number(participation?.days_completed ?? 0),
-    loggedCount.data ?? 0,
-  );
+  const daysCompleted = heroRingDays({
+    status: challengeQuery.data?.status,
+    submitted: submittedCheckins.data,
+  });
 
   const joinBlocked = useMemo(() => {
     if (!challenge || isJoined) {
@@ -312,7 +290,7 @@ export default function ChallengeDetailScreen() {
       feed.isRefetching ||
       roster.isFetching ||
       todaySubmission.isRefetching ||
-      loggedCount.isRefetching ||
+      submittedCheckins.isRefetching ||
       settlementQuery.isRefetching) &&
     !challengeQuery.isLoading;
 
@@ -423,7 +401,7 @@ export default function ChallengeDetailScreen() {
       feed.refetch(),
       todaySubmission.refetch(),
       periodCheckin.refetch(),
-      loggedCount.refetch(),
+      submittedCheckins.refetch(),
       roster.refetch(),
       settlementQuery.refetch(),
     ]);
@@ -492,10 +470,24 @@ export default function ChallengeDetailScreen() {
   const progressRatio = isUnlimited
     ? 1
     : daysCompleted / Math.max(isPoints ? Math.max(challenge.tasks.length, 1) : target, 1);
+  const startLine =
+    waitingToStart
+      ? startsInLabel(challenge, new Date(nowMs)) ??
+        userStartNeededLabel(challenge) ??
+        copy('challenge.waitingToStart')
+      : null;
+  const stickyJoin = !isJoined && (needsBodyMetrics || canJoin || needsTopUp);
+  const stickyCheckin =
+    isJoined &&
+    challenge.status === 'live' &&
+    !participation?.eliminated_at &&
+    !waitingToStart &&
+    !logsClosed &&
+    !loggedToday;
   const showStickyCta =
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
-    (isJoined || (!isHost && challenge.status !== 'judging'));
+    (stickyJoin || stickyCheckin);
   const stickyPad = tabBarLift(insets.bottom) + TAB_BAR_PEEK;
   const stickyBlock = showStickyCta ? 62 : 0;
 
@@ -551,6 +543,9 @@ export default function ChallengeDetailScreen() {
             ) : null}
           </ChallengeHeroCard>
         </View>
+        {startLine ? (
+          <AppText className="mt-2 text-[13px] leading-5 text-muted">{startLine}</AppText>
+        ) : null}
 
         {isJoined &&
         !loggedToday &&
@@ -879,75 +874,7 @@ export default function ChallengeDetailScreen() {
           borderTopWidth: 1,
           borderTopColor: THEME.border,
         }}>
-        {isJoined ? (
-          participation?.eliminated_at ? (
-            <AppText className="text-sm leading-5 text-muted">
-              {challenge.is_official ? officialBob('missed') : copy('challenge.eliminated')}
-            </AppText>
-          ) : waitingToStart ? (
-            <AppText className="text-sm leading-5 text-muted">
-              {challenge.start_roll_pending
-                ? startMovedBody(challenge)
-                : startsInLabel(challenge, new Date(nowMs)) ??
-                  userStartNeededLabel(challenge) ??
-                  copy('challenge.waitingToStart')}
-            </AppText>
-          ) : logsClosed ? (
-            <Button title={copy('challenge.logClosed')} size="lg" disabled />
-          ) : todaySubmission.isLoading || periodCheckin.isLoading ? (
-            <Button title="Checking today’s check-in" size="lg" loading disabled />
-          ) : loggedToday ? (
-            <View className="gap-2">
-              {healthProofLinesView ? (
-                <View>
-                  <AppText className="text-[13px] font-semibold text-charcoal">
-                    {healthProofLinesView.primary}
-                  </AppText>
-                  {healthProofLinesView.secondary ? (
-                    <AppText className="mt-0.5 text-[12px] text-muted">
-                      {healthProofLinesView.secondary}
-                    </AppText>
-                  ) : null}
-                </View>
-              ) : null}
-              <Button title={copy('checkin.checkedIn')} size="lg" variant="outline" disabled />
-            </View>
-          ) : (
-            <View className="gap-2">
-              <Button
-                title={logTitle}
-                size="lg"
-                onPress={() => router.push(`/challenges/${id}/submit`)}
-              />
-              {watch.visible ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={copy('health.startWatch')}
-                  disabled={watch.busy}
-                  onPress={() => {
-                    void watch.start().then((result) => {
-                      if (result === 'ok') {
-                        setWatchToast(copy('health.startedWatch'));
-                      } else if (result === 'denied' || result === 'failed') {
-                        setWatchToast(copy('health.startWatchFail'));
-                      }
-                      if (result !== 'cancelled') {
-                        setTimeout(() => setWatchToast(null), 2400);
-                      }
-                    });
-                  }}
-                  style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-                  <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
-                    {copy('health.startWatch')}
-                  </AppText>
-                </Pressable>
-              ) : null}
-              {watchToast ? (
-                <AppText className="text-center text-sm text-muted">{watchToast}</AppText>
-              ) : null}
-            </View>
-          )
-        ) : (
+        {stickyJoin ? (
           <View className="gap-2">
             {joinBlocked ? (
               <AppText className="text-sm leading-5 text-coral-dark" numberOfLines={2}>
@@ -963,13 +890,49 @@ export default function ChallengeDetailScreen() {
                 size="lg"
                 onPress={() => router.push(BODY_METRICS_HREF)}
               />
-            ) : canJoin || needsTopUp ? (
+            ) : (
               <Button
                 title={isFreeEntry ? 'Join free' : joinCta.joinLabel}
                 size="lg"
                 loading={joinSheet.loading}
                 onPress={onJoinPress}
               />
+            )}
+          </View>
+        ) : todaySubmission.isLoading || periodCheckin.isLoading ? (
+          <Button title="Checking today’s check-in" size="lg" loading disabled />
+        ) : (
+          <View className="gap-2">
+            <Button
+              title={logTitle}
+              size="lg"
+              onPress={() => router.push(`/challenges/${id}/submit`)}
+            />
+            {watch.visible ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy('health.startWatch')}
+                disabled={watch.busy}
+                onPress={() => {
+                  void watch.start().then((result) => {
+                    if (result === 'ok') {
+                      setWatchToast(copy('health.startedWatch'));
+                    } else if (result === 'denied' || result === 'failed') {
+                      setWatchToast(copy('health.startWatchFail'));
+                    }
+                    if (result !== 'cancelled') {
+                      setTimeout(() => setWatchToast(null), 2400);
+                    }
+                  });
+                }}
+                style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+                  {copy('health.startWatch')}
+                </AppText>
+              </Pressable>
+            ) : null}
+            {watchToast ? (
+              <AppText className="text-center text-sm text-muted">{watchToast}</AppText>
             ) : null}
           </View>
         )}

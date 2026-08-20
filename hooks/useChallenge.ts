@@ -707,6 +707,7 @@ function resetChallengeProgressCaches(
   if (userId) {
     queryClient.setQueryData(['logged-workout-days', challengeId, userId], 0);
   }
+  queryClient.setQueriesData({ queryKey: ['submitted-checkins', challengeId] }, () => 0);
   queryClient.setQueriesData({ queryKey: ['workout-submission', challengeId] }, () => null);
   queryClient.removeQueries({ queryKey: ['challenge-checkin', challengeId] });
   queryClient.setQueriesData({ queryKey: ['challenge-completions', challengeId] }, () => new Set<string>());
@@ -731,6 +732,7 @@ function invalidateChallengeCaches(
   void queryClient.invalidateQueries({ queryKey: ['notifications'] });
   void queryClient.invalidateQueries({ queryKey: ['challenge-checkin', challengeId] });
   void queryClient.invalidateQueries({ queryKey: ['workout-submission', challengeId] });
+  void queryClient.invalidateQueries({ queryKey: ['submitted-checkins', challengeId] });
   void queryClient.invalidateQueries({ queryKey: ['logged-workout-days', challengeId] });
   void queryClient.invalidateQueries({ queryKey: ['challenge-completions', challengeId] });
   void queryClient.invalidateQueries({ queryKey: ['completed-task-ids', challengeId] });
@@ -739,6 +741,7 @@ function invalidateChallengeCaches(
   void queryClient.refetchQueries({ queryKey: ['challenge', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['challenge-participants', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['my-participation', challengeId] });
+  void queryClient.refetchQueries({ queryKey: ['submitted-checkins', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['logged-workout-days', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['challenge-checkin', challengeId] });
   void queryClient.refetchQueries({ queryKey: ['workout-submission', challengeId] });
