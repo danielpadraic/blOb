@@ -14,7 +14,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
-import { isLiveCompetitorStatus } from '@/lib/challenges';
+import { isLiveCompetitor } from '@/lib/challenges';
 import { copy, interpolateCopy } from '@/lib/copy';
 import { formatCashCompact } from '@/lib/currency';
 import { officialCurrentWindow, officialWindowsFor } from '@/lib/officialDays';
@@ -39,7 +39,7 @@ export function FeaturedOfficialStrip() {
 
   const challenge = featured.data ?? null;
   const participation = (mine.data ?? []).find((row) => row.challenge_id === challenge?.id);
-  const joined = Boolean(participation && isLiveCompetitorStatus(participation.status));
+  const joined = Boolean(participation && isLiveCompetitor(participation));
   const joinable = Boolean(challenge && isOfficialJoinable(challenge));
   const live = Boolean(challenge && isOfficialSeriesChallenge(challenge) && challenge.status === 'live');
   const arming = challenge?.status === 'arming';

@@ -173,10 +173,20 @@ export function isLiveCompetitorStatus(status: string | null | undefined): boole
   return value === 'joined' || value === 'active' || value === 'completed';
 }
 
+export function isLiveCompetitor(row: {
+  status?: string | null;
+  eliminated_at?: string | null;
+} | null | undefined): boolean {
+  if (!row) {
+    return false;
+  }
+  return isLiveCompetitorStatus(row.status) && !row.eliminated_at;
+}
+
 export function countLiveCompetitors(
-  rows: { status?: string | null }[] | null | undefined,
+  rows: { status?: string | null; eliminated_at?: string | null }[] | null | undefined,
 ): number {
-  return (rows ?? []).filter((row) => isLiveCompetitorStatus(row.status)).length;
+  return (rows ?? []).filter((row) => isLiveCompetitor(row)).length;
 }
 
 export function competitorSpotsLabel(

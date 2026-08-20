@@ -6,7 +6,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import type { Challenge, ChallengeParticipantWithProfile } from '@/lib/types';
-import { isLiveCompetitorStatus } from '@/lib/challenges';
+import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { utcDateStamp } from '@/utils/dates';
@@ -36,7 +36,7 @@ export function ChallengeLeaderboard({
         row.status === 'eliminated' ||
         row.status === 'failed' ||
         row.status === 'refunded_pre_start';
-      const remaining = !dropped && isLiveCompetitorStatus(row.status);
+      const remaining = !dropped && isLiveCompetitor(row);
       const completed = remaining && completedUserIds.has(row.user_id);
       const name =
         row.profile?.display_name?.trim() ||
