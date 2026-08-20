@@ -31,7 +31,7 @@ import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
+import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
 
 type SlotDraft = {
   uri?: string;
@@ -211,7 +211,7 @@ export default function SubmitWorkoutScreen() {
       await submitCheckin.mutateAsync();
       router.back();
     } catch (caught) {
-      setError(getErrorMessage(caught));
+      setError(getCheckinSubmitMessage(caught));
     }
   }
 

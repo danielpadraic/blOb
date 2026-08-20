@@ -7,7 +7,7 @@ import {
 import { asCheckinStatus, type ChallengeCheckin } from '@/lib/challengeCheckin';
 import { supabase } from '@/lib/supabase';
 import { utcDateStamp } from '@/utils/dates';
-import { getErrorMessage } from '@/utils/errors';
+import { getCheckinSubmitMessage, getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { challengeProofUrl, uploadChallengeProof } from '@/utils/upload';
 
 export type SaveCheckinProofInput = {
@@ -18,7 +18,14 @@ export type SaveCheckinProofInput = {
   text?: string | null;
 };
 
-function throwMapped(error: { message?: string; code?: string; details?: string }): never {
+function throwMapped(
+  error: { message?: string; code?: string; details?: string },
+  kind: 'save' | 'submit',
+): never {
+  logPostgrestError(kind === 'submit' ? 'checkin-submit' : 'checkin-save', error);
+  if (kind === 'submit') {
+    throw new Error(getCheckinSubmitMessage(error));
+  }
   const blob = [error.code, error.message, error.details].filter(Boolean).join(' ');
   const upper = blob.toUpperCase();
   if (upper.includes('ALREADY_LOGGED_TODAY') || upper.includes('ALREADY CHECKED IN')) {
@@ -36,8 +43,13 @@ function throwMapped(error: { message?: string; code?: string; details?: string 
   if (upper.includes('BEGIN CHECK-IN FIRST')) {
     throw new Error('Begin check-in first.');
   }
-  if (upper.includes('42804') || (upper.includes('TASK_IDS') && upper.includes('JSONB'))) {
-    throw new Error('Couldn’t check in. Try again.');
+  if (
+    upper.includes('42804') ||
+    upper.includes('22P02') ||
+    upper.includes('PGRST') ||
+    (upper.includes('TASK_IDS') && upper.includes('JSONB'))
+  ) {
+    throw new Error('Couldn’t save that proof. Try again.');
   }
   throw new Error(getErrorMessage(error));
 }
@@ -125,7 +137,7 @@ export async function saveCheckinProof(input: SaveCheckinProofInput): Promise<Ch
     p_health_workout_id: packed?.healthWorkoutId ?? null,
   });
   if (error) {
-    throwMapped(error);
+    throwMapped(error, 'save');
   }
   return parseChallengeCheckin((data ?? {}) as Record<string, unknown>);
 }
@@ -135,7 +147,7 @@ export async function submitCheckin(challengeId: string): Promise<ChallengeCheck
     p_challenge_id: challengeId,
   });
   if (error) {
-    throwMapped(error);
+    throwMapped(error, 'submit');
   }
   const row = data as Record<string, unknown> | null;
   const nested = row?.checkin;

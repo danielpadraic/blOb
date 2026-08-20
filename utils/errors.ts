@@ -1,5 +1,7 @@
 import { copy } from '@/lib/copy';
 
+const CHECKIN_SUBMIT_FAIL = 'Couldn’t submit this check-in. Try again.';
+
 export function getErrorMessage(error: unknown): string {
   const raw = extractRawMessage(error);
   return humanize(raw);
@@ -22,6 +24,37 @@ export function logPostgrestError(scope: string, error: unknown) {
     details: record?.details ?? null,
     hint: record?.hint ?? null,
   });
+}
+
+/** Confirm / Submit: never render Postgres or PostgREST. Logs the code. */
+export function getCheckinSubmitMessage(error: unknown): string {
+  logPostgrestError('checkin-submit', error);
+  const raw = extractRawMessage(error).toLowerCase();
+  if (raw.includes('already_logged_today') || raw.includes('already checked in') || raw.includes('already submitted')) {
+    return 'Already checked in today. Come back tomorrow.';
+  }
+  if (raw.includes('missing_proofs') || raw.includes('required proof')) {
+    return 'Add every required proof to submit.';
+  }
+  if (raw.includes('not_participant') || raw.includes('join this challenge')) {
+    return 'Join this challenge before you check in.';
+  }
+  if (raw.includes('begin check-in first')) {
+    return 'Begin check-in first.';
+  }
+  if (raw.includes('not_started') || raw.includes('hasn’t started') || raw.includes('hasnt started')) {
+    return 'This challenge hasn’t started yet.';
+  }
+  if (raw.includes('logging is closed') || raw.includes('check-in is closed')) {
+    return 'Check-in is closed for this challenge.';
+  }
+  if (raw.includes('eliminated from this challenge')) {
+    return 'You have been eliminated from this challenge.';
+  }
+  if (raw.includes('not authenticated') || raw.includes('sign in')) {
+    return 'You need to be signed in.';
+  }
+  return CHECKIN_SUBMIT_FAIL;
 }
 
 const CREATE_RPC_MESSAGES: Record<string, string> = {
@@ -347,9 +380,10 @@ function humanize(raw: string): string {
   }
   if (
     message.includes('42804') ||
+    message.includes('22p02') ||
     (message.includes('task_ids') && (message.includes('jsonb') || message.includes('uuid[]')))
   ) {
-    return 'Couldn’t check in. Try again.';
+    return 'Couldn’t submit this check-in. Try again.';
   }
   if (message.includes('begin check-in first')) {
     return 'Begin check-in first.';
