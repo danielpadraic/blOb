@@ -148,7 +148,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
     eyebrow: '7 days · equal split',
     blurb: 'Show up six times this week. Everyone who finishes splits the prize.',
     means:
-      'A 7-day fitness streak. Competitors log 6 days with pre/post selfies and heart-rate proof. Completers split the prize evenly.',
+      'A 7-day fitness streak. Competitors check in 6 days with pre/post selfies and heart-rate proof. Completers split the prize evenly.',
     values: values({
       ...DEFAULT_CREATE_VALUES,
       title: 'Weekly Consistency Challenge',
@@ -170,7 +170,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       creator_contribution: '0',
       participant_cap: 'unlimited',
       rules:
-        'Complete 6 workouts of at least 30 minutes in 7 days. Each log needs a pre-selfie, a post-selfie, and a heart-rate screenshot. Miss the target and you get 0.00 Coins. Finishers split the prize evenly.',
+        'Complete 6 workouts of at least 30 minutes in 7 days. Each check-in needs a pre-selfie, a post-selfie, and a heart-rate screenshot. Miss the target and you get 0.00 Coins. Finishers split the prize evenly.',
     }),
   },
   {
@@ -179,7 +179,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
     eyebrow: '∞ · winner takes all',
     blurb: 'No end date. Miss a week and you’re out. Last person standing takes the prize.',
     means:
-      'Unlimited duration. Stay eligible with 5 logs every week. Miss a week and you’re eliminated. The last person still in wins everything.',
+      'Unlimited duration. Stay eligible with 5 check-ins every week. Miss a week and you’re eliminated. The last person still in wins everything.',
     values: values({
       ...DEFAULT_CREATE_VALUES,
       title: 'Last Man Standing',
@@ -201,7 +201,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       creator_contribution: '0',
       participant_cap: 'unlimited',
       rules:
-        'No end date. Log 5 honest sessions every week to stay eligible. Miss a week and you’re out. The last person still standing wins the entire prize.',
+        'No end date. Check in 5 honest sessions every week to stay eligible. Miss a week and you’re out. The last person still standing wins the entire prize.',
     }),
   },
   {
@@ -215,7 +215,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       ...DEFAULT_CREATE_VALUES,
       title: 'Family week — show up together',
       description:
-        'For your household. Keep it kind and doable. A win is everyone logging the activity you agreed on for two weeks.',
+        'For your household. Keep it kind and doable. A win is everyone checking in for the activity you agreed on for two weeks.',
       category: 'other',
       challenge_type: 'consistency',
       visibility: 'private',
@@ -233,7 +233,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       participant_cap: 'limited',
       max_participants: '8',
       rules:
-        'Household only — keep it kind. Log a photo of the activity you agreed on. Everyone who hits 8 logs in 14 days splits the prize. You fund the prize; competitors enter free.',
+        'Household only — keep it kind. Check in with a photo of the activity you agreed on. Everyone who hits 8 check-ins in 14 days splits the prize. You fund the prize; competitors enter free.',
     }),
   },
   {
@@ -242,7 +242,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
     eyebrow: '30 days · top 3',
     blurb: 'Work-hours friendly. You seed the prize, the team pays an entry fee, top 3 share it.',
     means:
-      'Private 30-day team challenge. Three logs a week. You put in a base, competitors pay an entry fee, and the top 3 share the prize on a sliding scale.',
+      'Private 30-day team challenge. Three check-ins a week. You put in a base, competitors pay an entry fee, and the top 3 share the prize on a sliding scale.',
     values: values({
       ...DEFAULT_CREATE_VALUES,
       title: 'Office team challenge',
@@ -293,7 +293,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       frequency: 'once',
       proofs: ['photo'],
       tasks: [
-        task('Practice the skill and log the session', '10'),
+        task('Practice the skill and check in', '10'),
         task('Share a before/after or progress clip', '20'),
         task('Hit a personal best or ship the work', '30'),
       ],
@@ -495,7 +495,7 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
           return `${index + 1}. ${task.title.trim() || 'Untitled'} (${task.points} pts${proofs ? `, ${proofs}` : ''})`;
         })
         .join('\n')
-    : `Proof each log: ${values.proofs.join(', ') || 'none'}.`;
+    : `Proof each check-in: ${values.proofs.join(', ') || 'none'}.`;
 
   const entry =
     values.participant_cap === 'limited'
@@ -579,7 +579,7 @@ export function challengeContractRows(values: CreateChallengeValues): { label: s
     { label: 'Lane', body: lane === 'private' ? 'Private Challenge' : 'Coin Challenge' },
     { label: 'Title', body: values.title.trim() || 'Untitled challenge' },
     { label: 'Type', body: `${typeLabel} / ${challengeCategoryLabel(values.category)}` },
-    { label: 'Rules', body: rules || 'Set what competitors must log.' },
+    { label: 'Rules', body: rules || 'Set what competitors must check in.' },
     { label: 'Schedule', body: schedule },
     { label: 'Entry', body: buyIn > 0 ? formatWallet(buyIn, lane === 'private' ? values.currency : 'coins') : 'Free' },
     { label: 'Prize structure', body: shortPrizeLabel(values) },

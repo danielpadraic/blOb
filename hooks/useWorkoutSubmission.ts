@@ -217,7 +217,7 @@ export function useSubmitWorkout() {
 
       const required = input.required ?? [];
       if (required.length === 0 && input.images.length < 1) {
-        throw new Error('Add every required proof to log today.');
+        throw new Error('Add every required proof to check in today.');
       }
 
       const logged = await logWorkout({

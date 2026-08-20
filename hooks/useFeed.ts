@@ -572,7 +572,7 @@ export async function insertWorkoutCheckInPost(input: {
   mediaUrls?: string[];
 }): Promise<Post | null> {
   const title = input.challengeTitle?.trim() || OFFICIAL_CHALLENGE_TITLE;
-  const content = `Logged today for the ${title} 💪`;
+  const content = `Checked in today for the ${title} 💪`;
   const media_urls = input.mediaUrls ?? [];
 
   const schema = await resolvePostsSchema();
@@ -600,7 +600,7 @@ export async function insertWorkoutCheckInPost(input: {
       retry.error.message.toLowerCase().includes('schema cache') ||
       retry.error.message.toLowerCase().includes('does not exist');
     if (!missingMedia) {
-      throw new Error('Your workout is logged, but we couldn’t attach the photos to the post.');
+      throw new Error('Your check-in went through, but we couldn’t attach the photos to the post.');
     }
   }
 

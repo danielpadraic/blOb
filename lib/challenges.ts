@@ -424,7 +424,7 @@ export function lastManStandingRequirement(challenge: {
   if (challenge.frequency === 'monthly') {
     return `Stay active ${target} day${target === 1 ? '' : 's'} every month to remain eligible. Miss a month and you’re out.`;
   }
-  return 'Log every day to stay in. Miss a day and you’re out.';
+  return 'Check in every day to stay in. Miss a day and you’re out.';
 }
 
 export function isChallengeFull(challenge: {

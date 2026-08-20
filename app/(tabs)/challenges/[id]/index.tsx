@@ -428,11 +428,11 @@ export default function ChallengeDetailScreen() {
   const isUnlimited = isUnlimitedChallenge(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
   const target = daysRequired;
-  const logTitle = 'Log';
+  const logTitle = 'Check in';
   const proofHeadline =
     proofSteps.length === 1
-      ? 'Proof for every log'
-      : `${proofSteps.length} proofs every log`;
+      ? 'Proof for every check-in'
+      : `${proofSteps.length} proofs every check-in`;
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const isFreeEntry = buyInAmount <= 0;
   const bucks = isBucksChallenge(challenge);
@@ -690,7 +690,7 @@ export default function ChallengeDetailScreen() {
                     <View className="flex-1">
                       <AppText className="font-semibold text-charcoal">{proofDisplayName(proof)}</AppText>
                       <AppText className="text-[13px] leading-5 text-muted">
-                        {proof.method === 'honor' ? 'Honor. Confirm to log.' : methodLabel(proof.method)}
+                        {proof.method === 'honor' ? 'Honor. Confirm to check in.' : methodLabel(proof.method)}
                       </AppText>
                     </View>
                   </View>
@@ -871,7 +871,7 @@ export default function ChallengeDetailScreen() {
           ) : logsClosed ? (
             <Button title={copy('challenge.logClosed')} size="lg" disabled />
           ) : todaySubmission.isLoading ? (
-            <Button title="Checking today’s log" size="lg" loading disabled />
+            <Button title="Checking today’s check-in" size="lg" loading disabled />
           ) : loggedToday ? (
             <View className="gap-2">
               {healthProofLinesView ? (
@@ -886,7 +886,7 @@ export default function ChallengeDetailScreen() {
                   ) : null}
                 </View>
               ) : null}
-              <Button title="You’re good today" size="lg" variant="outline" disabled />
+              <Button title="Checked in" size="lg" variant="outline" disabled />
             </View>
           ) : (
             <View className="gap-2">

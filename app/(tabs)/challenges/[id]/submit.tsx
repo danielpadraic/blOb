@@ -39,16 +39,16 @@ type SlotDraft = {
 function LoggedState({ onBack }: { onBack: () => void }) {
   return (
     <Screen padded={false} edges={['left', 'right', 'bottom']}>
-      <Stack.Screen options={{ title: 'Logged' }} />
+      <Stack.Screen options={{ title: 'Checked in' }} />
       <View className="flex-1 px-5 pt-6">
         <View
           className="rounded-blob px-4 py-4"
           style={{ backgroundColor: THEME.accentSoft }}>
           <AppText className="text-center text-[18px] font-bold" style={{ color: THEME.accent }}>
-            Today’s workout is logged
+            Checked in today
           </AppText>
           <AppText className="mt-2 text-center text-sm leading-5 text-muted">
-            Come back tomorrow for the next proof set. One log per UTC day.
+            Come back tomorrow for the next proof set. One check-in per UTC day.
           </AppText>
         </View>
         <View className="mt-6">
@@ -156,7 +156,7 @@ export default function SubmitWorkoutScreen() {
         });
       }
       if (!allReady) {
-        setError(`Add all ${proofCountLabel} to log today.`);
+        setError(`Add all ${proofCountLabel} to check in today.`);
         return;
       }
       await submit.mutateAsync({
@@ -202,7 +202,7 @@ export default function SubmitWorkoutScreen() {
   if (challengeQuery.isLoading || participationLoading || today.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <MascotState kind="loading" title="Opening today’s log" body="Checking what you still owe." />
+        <MascotState kind="loading" title="Opening today’s check-in" body="Checking what you still owe." />
       </Screen>
     );
   }
@@ -213,7 +213,7 @@ export default function SubmitWorkoutScreen() {
         <MascotState
           kind="error"
           title={copy('challenge.joinFirst')}
-          body="Join this challenge before logging."
+          body="Join this challenge before you check in."
           actionLabel="Back"
           onAction={() => router.back()}
         />
@@ -232,7 +232,7 @@ export default function SubmitWorkoutScreen() {
         <MascotState
           kind="empty"
           title={copy('challenge.eliminated')}
-          body="New logs are not accepted."
+          body="New check-ins are not accepted."
           actionLabel="Back to challenge"
           onAction={() => router.back()}
         />
@@ -258,11 +258,11 @@ export default function SubmitWorkoutScreen() {
   if (isClosedForLogs({ ...challenge, eliminated: Boolean(participation.eliminated_at) })) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <Stack.Screen options={{ title: 'Logging closed' }} />
+        <Stack.Screen options={{ title: 'Check-in closed' }} />
         <MascotState
           kind="empty"
           title={copy('challenge.logClosed')}
-          body="This challenge has ended. New logs are not accepted."
+          body="This challenge has ended. New check-ins are not accepted."
           actionLabel="Back to challenge"
           onAction={() => router.back()}
         />
@@ -318,7 +318,7 @@ export default function SubmitWorkoutScreen() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
-      <Stack.Screen options={{ title: 'Log workout' }} />
+      <Stack.Screen options={{ title: 'Check in' }} />
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-10 pt-2"
@@ -332,7 +332,7 @@ export default function SubmitWorkoutScreen() {
         <AppText className="text-center text-sm text-muted">
           {challenge && isOfficialSeriesChallenge(challenge)
             ? 'Add every required proof for this Official day. One proof fills one day.'
-            : `Add ${proofCountLabel}, then confirm. One log per UTC day.`}
+            : `Add ${proofCountLabel}, then confirm. One check-in per UTC day.`}
         </AppText>
         <AppText className="mt-1 text-center text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
 
@@ -343,7 +343,7 @@ export default function SubmitWorkoutScreen() {
                 {proofDisplayName(proof)}
               </AppText>
               {proof.method === 'honor' ? (
-                <AppText className="text-sm text-muted">Honor. Confirm to log.</AppText>
+                <AppText className="text-sm text-muted">Honor. Confirm to check in.</AppText>
               ) : proof.method === 'checkin' ? (
                 <Input
                   placeholder="What did you do?"

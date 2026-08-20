@@ -238,7 +238,7 @@ export function RulesSlide({
           <FieldAnchor name="rules">
           <FieldAnchor name="target_count">
             <View className="gap-3">
-              <AppText className="text-[15px] leading-6 text-charcoal">Competitors must log</AppText>
+              <AppText className="text-[15px] leading-6 text-charcoal">Competitors must check in</AppText>
               <View className="flex-row flex-wrap items-start gap-2">
                 <View style={{ width: 76 }}>
                   <Controller
@@ -247,7 +247,7 @@ export function RulesSlide({
                     render={({ field: { onChange, onBlur, value, ref } }) => (
                       <Input
                         ref={ref}
-                        accessibilityLabel="How many logs"
+                        accessibilityLabel="How many check-ins"
                         placeholder="6"
                         keyboardType="number-pad"
                         value={value}
@@ -343,7 +343,7 @@ export function RulesSlide({
 
           <FieldAnchor name="proofs">
             <ProofPicker
-              label="Proof for each log"
+              label="Proof for each check-in"
               selected={values.proofs}
               error={errors.proofs?.message}
               onToggle={toggleProof}
@@ -418,7 +418,7 @@ export function RulesSlide({
                   render={({ field: { onChange, onBlur, value, ref } }) => (
                     <Input
                       ref={ref}
-                      placeholder="e.g. Logs must be on separate calendar days"
+                      placeholder="e.g. Check-ins must be on separate calendar days"
                       value={value}
                       onChangeText={onChange}
                       onBlur={onBlur}

@@ -33,13 +33,13 @@ function throwMapped(error: { message?: string; code?: string; details?: string 
   const blob = [error.code, error.message, error.details].filter(Boolean).join(' ');
   const upper = blob.toUpperCase();
   if (upper.includes('ALREADY_LOGGED_TODAY')) {
-    throw new Error('Already logged today. Come back tomorrow.');
+    throw new Error('Already checked in today. Come back tomorrow.');
   }
   if (upper.includes('MISSING_PROOFS')) {
-    throw new Error('Add every required proof to log today.');
+    throw new Error('Add every required proof to check in today.');
   }
   if (upper.includes('NOT_PARTICIPANT')) {
-    throw new Error('Join this challenge before logging.');
+    throw new Error('Join this challenge before you check in.');
   }
   if (upper.includes('NOT_STARTED')) {
     throw new Error('This challenge hasn’t started yet.');
@@ -151,7 +151,7 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     .map((item) => (item.text ?? item.uri).trim());
 
   if (required.length === 0 && mediaProofs.length === 0 && textBits.length === 0 && !input.notes?.trim()) {
-    throw new Error('Add every required proof to log today.');
+    throw new Error('Add every required proof to check in today.');
   }
 
   const uploaded = await Promise.all(

@@ -250,13 +250,13 @@ export function formatPrimaryRuleSentence(
   const count = Math.max(Number(primary.count) || 1, 1);
   const activity = pluralizeActivity(humanizeActivity(primary.activity) || 'workout', count);
   if (primary.period === 'once') {
-    return `Competitors must log ${count} ${activity} once during the challenge.`;
+    return `Competitors must check in ${count} ${activity} once during the challenge.`;
   }
   const period = periodNoun(primary.period) ?? 'week';
   if (unlimited) {
-    return `Competitors must log ${count} ${activity} every ${period} to stay in the challenge.`;
+    return `Competitors must check in ${count} ${activity} every ${period} to stay in the challenge.`;
   }
-  return `Competitors must log ${count} ${activity} every ${period} for the duration of the challenge.`;
+  return `Competitors must check in ${count} ${activity} every ${period} for the duration of the challenge.`;
 }
 
 function splitRulesText(rules: string): { primary: string; extras: string[] } {
@@ -363,8 +363,8 @@ function cadenceParts(
   const activityLabel = activity?.trim()
     ? pluralizeActivity(humanizeActivity(activity) || activity, count)
     : count === 1
-      ? 'log'
-      : 'logs';
+      ? 'check-in'
+      : 'check-ins';
   const long =
     period === 'once'
       ? `${count} ${activityLabel} once during the challenge`
@@ -375,14 +375,14 @@ function cadenceParts(
 function cadenceFromSentence(
   text: string,
 ): { count: number; period: ChallengeFrequency; activity: string | null } | null {
-  const every = text.match(/log\s+(\d+)\s+(.+?)\s+every\s+(day|week|month)\b/i);
+  const every = text.match(/(?:check[- ]?in|log)\s+(\d+)\s+(.+?)\s+every\s+(day|week|month)\b/i);
   if (every) {
     const count = Math.max(Number(every[1]) || 1, 1);
     const period: ChallengeFrequency =
       every[3] === 'day' ? 'daily' : every[3] === 'week' ? 'weekly' : 'monthly';
     return { count, period, activity: every[2].trim() || null };
   }
-  const once = text.match(/log\s+(\d+)\s+(.+?)\s+once\b/i);
+  const once = text.match(/(?:check[- ]?in|log)\s+(\d+)\s+(.+?)\s+once\b/i);
   if (once) {
     return {
       count: Math.max(Number(once[1]) || 1, 1),
@@ -417,11 +417,11 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
   const activity = humanizeActivity(structured?.primary?.activity ?? fromSentence?.activity ?? null);
   const cadence = freq
     ? cadenceParts(perCount, freq, activity)
-    : { cadenceLabel: `${storedTarget} logs`, cadenceLong: `${storedTarget} logs` };
+    : { cadenceLabel: `${storedTarget} check-ins`, cadenceLong: `${storedTarget} check-ins` };
 
   const totalHint =
     !unlimited && freq && freq !== 'once' && freq !== 'daily' && storedTarget > perCount
-      ? `About ${storedTarget} logs over the full window if every ${periodChip(freq)} is completed`
+      ? `About ${storedTarget} check-ins over the full window if every ${periodChip(freq)} is completed`
       : null;
 
   const taskTitle = challengeTaskTitle(challenge);
@@ -451,7 +451,7 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
     (line) =>
       !/\d+\s*\/\s*(day|week|month)/i.test(line) &&
       !/any_exercise/i.test(line) &&
-      !/competitors must log/i.test(line),
+      !/competitors must (?:check in|log)/i.test(line),
   );
 
   const storedLooksBroken =
@@ -470,8 +470,8 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
         : extras.length > 0
           ? null
           : freq && freq !== 'daily'
-            ? `Competitors must log ${cadence.cadenceLong} for the duration of the challenge.`
-            : `Complete ${storedTarget} log${storedTarget === 1 ? '' : 's'} in this challenge.`;
+            ? `Competitors must check in ${cadence.cadenceLong} for the duration of the challenge.`
+            : `Complete ${storedTarget} check-in${storedTarget === 1 ? '' : 's'} in this challenge.`;
 
   return {
     primary,
@@ -507,15 +507,15 @@ export function joinedProgressCopy(
 
   if (copy.period === 'weekly' || copy.period === 'monthly') {
     return {
-      label: `${compactCadence(count, copy.period)} · ${logged} logged`,
+      label: `${compactCadence(count, copy.period)} · ${logged} checked in`,
       ratio: 0,
     };
   }
 
   if (copy.period === 'once') {
-    return { label: `${logged}/${count} logs`, ratio: logged / count };
+    return { label: `${logged}/${count} check-ins`, ratio: logged / count };
   }
 
   const total = Math.max(Number(challenge.days_required || challenge.target_count) || 1, 1);
-  return { label: `${logged}/${total} logs`, ratio: logged / total };
+  return { label: `${logged}/${total} check-ins`, ratio: logged / total };
 }

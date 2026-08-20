@@ -15,7 +15,7 @@ export function challengeGoalLabel(
   }
   if (isUnlimitedChallenge(challenge)) {
     const logs = Math.max(Number(extras?.daysCompleted) || 0, 0);
-    return `${logs} log${logs === 1 ? '' : 's'}`;
+    return `${logs} check-in${logs === 1 ? '' : 's'}`;
   }
   if (challenge.is_official) {
     const days = Math.max(Number(challenge.days_required) || Number(challenge.target_count) || 7, 1);

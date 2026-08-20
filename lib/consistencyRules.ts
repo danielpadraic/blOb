@@ -15,7 +15,7 @@ export const EXTRA_RULE_KINDS = ['separate_days', 'min_minutes', 'custom'] as co
 export type ExtraRuleKind = (typeof EXTRA_RULE_KINDS)[number];
 
 export const EXTRA_RULE_PRESETS: { kind: Exclude<ExtraRuleKind, 'custom'>; text: string }[] = [
-  { kind: 'separate_days', text: 'Logs must be on separate calendar days' },
+  { kind: 'separate_days', text: 'Check-ins must be on separate calendar days' },
   { kind: 'min_minutes', text: 'Share proof of at least 30 minutes of elevated heart rate.' },
 ];
 
@@ -94,13 +94,13 @@ export function consistencyRuleSentence(
   const count = ruleCount(values);
   const activity = pluralizeActivity(values.rule_activity, count);
   if (values.frequency === 'once') {
-    return `Competitors must log ${count} ${activity} for the duration of the challenge.`;
+    return `Competitors must check in ${count} ${activity} for the duration of the challenge.`;
   }
   const period = periodNoun(values.frequency) ?? 'week';
   if (values.duration_type === 'unlimited') {
-    return `Competitors must log ${count} ${activity} every ${period} to stay in the challenge.`;
+    return `Competitors must check in ${count} ${activity} every ${period} to stay in the challenge.`;
   }
-  return `Competitors must log ${count} ${activity} every ${period} for the duration of the challenge.`;
+  return `Competitors must check in ${count} ${activity} every ${period} for the duration of the challenge.`;
 }
 
 export function extraRuleLines(values: Pick<CreateChallengeValues, 'extra_rules'>): string[] {

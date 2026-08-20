@@ -63,7 +63,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-official',
     placement: 'below',
     title: 'Featured Challenge',
-    body: 'This week’s Official. Join or log from the strip. Open it for the full challenge.',
+    body: 'This week’s Official. Join or check in from the strip. Open it for the full challenge.',
   },
   {
     id: 'tabFeed',

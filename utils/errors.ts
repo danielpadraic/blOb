@@ -316,22 +316,25 @@ function humanize(raw: string): string {
     return 'Pick someone to invite.';
   }
   if (message.includes('already_logged_today') || message.includes('already logged')) {
-    return 'Already logged today. Come back tomorrow.';
+    return 'Already checked in today. Come back tomorrow.';
   }
   if (message.includes('missing_proofs') || message.includes('all three proofs')) {
-    return 'Add all three proofs to log today.';
+    return 'Add all three proofs to check in today.';
   }
-  if (message.includes('not_participant')) {
-    return 'Join this challenge before logging.';
+  if (message.includes('not_participant') || message.includes('before you log a workout')) {
+    return 'Join this challenge before you check in.';
+  }
+  if (message.includes('calendar day to log')) {
+    return 'Pick a calendar day to check in.';
   }
   if (message.includes('already submitted')) {
-    return 'Already logged today. Come back tomorrow.';
+    return 'Already checked in today. Come back tomorrow.';
   }
   if (message.includes('not_started') || message.includes('hasn’t started yet') || message.includes('hasnt started yet')) {
     return 'This challenge hasn’t started yet.';
   }
   if (message.includes('logging is closed')) {
-    return 'Logging is closed for this challenge.';
+    return 'Check-in is closed for this challenge.';
   }
   if (message.includes('eliminated from this challenge')) {
     return 'You have been eliminated from this challenge.';
@@ -343,7 +346,7 @@ function humanize(raw: string): string {
     return 'Those tasks are not part of this challenge.';
   }
   if (message.includes('upload every required proof') || message.includes('required proof')) {
-    return 'Add all three proofs to log today.';
+    return 'Add all three proofs to check in today.';
   }
   if (
     (message.includes('log_workout') ||
@@ -353,13 +356,13 @@ function humanize(raw: string): string {
   ) {
     return message.includes('log_health_workout')
       ? copy('health.attachFailed')
-      : 'Couldn’t reach the log service. Try again.';
+      : 'Couldn’t check in. Try again.';
   }
   if (message.includes('health_schema_missing')) {
     return copy('health.attachFailed');
   }
   if (message.includes('couldn’t publish the photos') || message.includes('could not publish the photos')) {
-    return 'Your workout is logged, but we couldn’t attach the photos to the post.';
+    return 'Your check-in went through, but we couldn’t attach the photos to the post.';
   }
   if (message.includes('challenge_not_ended') || message.includes('hasn’t ended') || message.includes('hasnt ended')) {
     return 'This challenge hasn’t ended yet.';
@@ -383,10 +386,10 @@ function humanize(raw: string): string {
     (message.includes('duplicate') || message.includes('unique')) &&
     message.includes('workout_submissions')
   ) {
-    return 'Already logged today. Come back tomorrow.';
+    return 'Already checked in today. Come back tomorrow.';
   }
   if (message.includes('not a participant') || message.includes('is_challenge_participant')) {
-    return 'Join this challenge before logging.';
+    return 'Join this challenge before you check in.';
   }
   if (message.includes('mime type') || message.includes('not supported') || message.includes('allowed_mime')) {
     return 'That photo type isn’t supported. Try a JPEG or PNG.';

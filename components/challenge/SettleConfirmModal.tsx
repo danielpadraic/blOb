@@ -75,7 +75,7 @@ export function SettleConfirmModal({
           </AppText>
           <AppText className="mt-2 text-muted">
             {judging
-              ? 'The window is over. This locks new logs and joins. Payout unlocks 1 hour after the challenge ended.'
+              ? 'The window is over. This locks new check-ins and joins. Payout unlocks 1 hour after the challenge ended.'
               : `${pool} will be paid out now (${structureLabel(challenge)}${
                   finishers > 0 ? ` · ${finishers} completer${finishers === 1 ? '' : 's'}` : ''
                 }). This can only happen once.`}

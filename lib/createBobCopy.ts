@@ -24,7 +24,7 @@ const GOAL_TYPE_TIPS: Record<ChallengeCategory, WizardBobTip> = {
   fitness: {
     pose: 'point',
     tagline: 'Stay active together.',
-    example: 'log 8,000 steps a day, or 30+ minutes with an elevated heart rate, several days a week.',
+    example: 'check in with 8,000 steps a day, or 30+ minutes with an elevated heart rate, several days a week.',
   },
   sports: {
     pose: 'point',
@@ -39,7 +39,7 @@ const GOAL_TYPE_TIPS: Record<ChallengeCategory, WizardBobTip> = {
   education: {
     pose: 'point',
     tagline: 'Practice with a purpose.',
-    example: '25 minutes of intentional practice a day on a language, instrument, or new skill—and log it.',
+    example: '25 minutes of intentional practice a day on a language, instrument, or new skill—and check in.',
   },
   creative: {
     pose: 'point',
@@ -99,7 +99,7 @@ const STEP_TIPS: Record<number, WizardBobTip[]> = {
   ],
   1: [{ pose: 'wave', tagline: 'Let’s build one.' }],
   2: goalTips(),
-  3: [{ pose: 'point', tagline: 'Consistency is daily logs. Points is a score race. Pick what fits.' }],
+  3: [{ pose: 'point', tagline: 'Consistency is daily check-ins. Points is a score race. Pick what fits.' }],
   4: [
     { pose: 'point', tagline: 'Set start and end. Timed challenges close when time’s up.' },
     { pose: 'point', tagline: 'You can’t end a timed challenge early.' },
@@ -170,9 +170,9 @@ const FIELD_OOPS: Record<string, string> = {
   end_mode: 'Pick how many days it runs.',
   duration_value: 'Pick 1, 7, 30, or a custom number of days.',
   duration_unit: 'Duration is in days.',
-  frequency: 'pick how often people need to log.',
-  target_count: 'say how many times they must log.',
-  rule_activity: 'name the activity they log.',
+  frequency: 'pick how often people need to check in.',
+  target_count: 'say how many times they must check in.',
+  rule_activity: 'name the activity they check in for.',
   extra_rules: 'that extra rule needs a line of text.',
   prize_structure: 'pick how the prize is split.',
   top_places_mode: 'pick percent or a count for top places.',
@@ -185,10 +185,10 @@ const FIELD_OOPS: Record<string, string> = {
   participant_cap: 'pick a competitor cap or leave it unlimited.',
   max_participants: 'set a competitor cap number.',
   creator_participating: 'say whether you’re playing too.',
-  rules: 'add what competitors must log (count, activity, and how often).',
+  rules: 'add the check-in rule (count, activity, and how often).',
   proofs: 'pick at least one proof type.',
   tasks: 'add a task with a name before we go on.',
-  min_minutes: 'set a minimum minutes per log.',
+  min_minutes: 'set a minimum minutes per check-in.',
   cover_image_url: 'that cover needs a full http(s) link.',
   rules_video_url: 'that video needs a full http(s) link.',
   bucks: 'check all three $ confirmations before we publish.',
@@ -200,7 +200,7 @@ const FIELD_OOPS: Record<string, string> = {
 export function wizardBobOops(field: string, rotate = 0): string {
   const root = field.split('.')[0] || field;
   if (root === 'rules') {
-    return 'Not so fast — add what competitors must log (count, activity, and how often).';
+    return 'Not so fast — add the check-in rule (count, activity, and how often).';
   }
   const body = FIELD_OOPS[root] ?? 'this one needs a look before we go on.';
   const prefix = OOPS_PREFIXES[Math.abs(rotate) % OOPS_PREFIXES.length];

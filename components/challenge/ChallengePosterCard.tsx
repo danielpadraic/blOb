@@ -181,7 +181,7 @@ export function ChallengePosterCard({
             )}
             {competing ? (
               <AppText className="text-[11px] font-semibold text-charcoal" numberOfLines={1}>
-                {points ? progressCopy?.label ?? `${days} tasks` : `${days} log${days === 1 ? '' : 's'}`}
+                {points ? progressCopy?.label ?? `${days} tasks` : `${days} check-in${days === 1 ? '' : 's'}`}
               </AppText>
             ) : null}
           </View>
@@ -298,7 +298,7 @@ function posterStatus({
   remaining: number;
 }) {
   if (competing) {
-    return `You · ${logs} log${logs === 1 ? '' : 's'} · ${dropped ? 'dropped' : 'still in'}`;
+    return `You · ${logs} check-in${logs === 1 ? '' : 's'} · ${dropped ? 'dropped' : 'still in'}`;
   }
   if (remaining <= 0) {
     return 'Settled';

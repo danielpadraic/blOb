@@ -56,7 +56,7 @@ export function QuickActionSheet({
           {
             id: 'log' as const,
             glyph: '✅',
-            label: 'Log today’s activity',
+            label: 'Check in',
             hint: loggable.title,
           },
         ]

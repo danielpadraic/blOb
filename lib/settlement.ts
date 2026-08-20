@@ -123,9 +123,9 @@ export function loggingOpensHelper(
 ): string {
   const opens = challengeLoggingOpensAt(challenge);
   if (!opens || now.getTime() >= opens.getTime()) {
-    return 'Logging opens when the challenge starts.';
+    return 'Check-in opens when the challenge starts.';
   }
-  return `Logging opens when the challenge starts ${formatRelative(opens)}.`;
+  return `Check-in opens when the challenge starts ${formatRelative(opens)}.`;
 }
 
 export function startsInLabel(

@@ -39,7 +39,7 @@ export default function ChallengeIdLayout() {
           name="submit"
           options={{
             headerShown: true,
-            title: 'Log workout',
+            title: 'Check in',
             headerBackVisible: false,
             headerLeft: () => <StackBackButton />,
             headerRight: () => <WalletBar />,

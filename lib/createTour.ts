@@ -75,14 +75,14 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     target: 'create-simple-frequency',
     placement: 'below',
     title: 'Frequency',
-    body: 'How often they have to log.',
+    body: 'How often they have to check in.',
   },
   {
     id: 'simple-proof',
     target: 'create-simple-proof',
     placement: 'below',
     title: 'Proof',
-    body: 'What they attach when they log.',
+    body: 'What they attach when they check in.',
   },
   {
     id: 'simple-visibility',
@@ -147,7 +147,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: GOAL,
     title: 'Task',
-    body: 'The action people log.',
+    body: 'The action people check in for.',
   },
   {
     id: 'adv-visibility',
@@ -243,7 +243,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: ENTRY,
     title: 'Misses',
-    body: 'How many missed logs still keep someone in.',
+    body: 'How many missed check-ins still keep someone in.',
   },
   {
     id: 'adv-judging',
@@ -267,7 +267,7 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     wizardStep: RULES,
     title: 'Proof',
-    body: 'What people attach on each log.',
+    body: 'What people attach on each check-in.',
   },
   {
     id: 'adv-extras',

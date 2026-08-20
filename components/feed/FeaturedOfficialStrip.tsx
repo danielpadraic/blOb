@@ -91,9 +91,9 @@ export function FeaturedOfficialStrip() {
   let metaDone = false;
   if (joined && live) {
     if (logDue) {
-      meta = 'Log today’s proof';
+      meta = 'Check in';
     } else if (todaySubmission.data) {
-      meta = 'Done';
+      meta = 'Checked in';
       metaDone = true;
     }
   } else if (arming) {
@@ -104,7 +104,7 @@ export function FeaturedOfficialStrip() {
 
   const showJoin = !joined && joinable;
   const showLog = joined && logDue;
-  const ctaLabel = showJoin ? `Join ${formatCashCompact(buyIn || 1)}` : showLog ? 'Log' : null;
+  const ctaLabel = showJoin ? `Join ${formatCashCompact(buyIn || 1)}` : showLog ? 'Check in' : null;
 
   function openDetail() {
     router.push(challengeDetailHref(card.id, 'feed'));

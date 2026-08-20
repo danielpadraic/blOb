@@ -29,10 +29,10 @@ function throwMapped(error: { message?: string; code?: string; details?: string 
     throw new Error(copy('health.attachFailed'));
   }
   if (upper.includes('ALREADY_LOGGED_TODAY') || upper.includes('ALREADY LOGGED')) {
-    throw new Error('Already logged today. Come back tomorrow.');
+    throw new Error('Already checked in today. Come back tomorrow.');
   }
   if (upper.includes('NOT_PARTICIPANT') || upper.includes('JOIN THE CHALLENGE')) {
-    throw new Error('Join this challenge before logging.');
+    throw new Error('Join this challenge before you check in.');
   }
   if (upper.includes('NOT_STARTED')) {
     throw new Error('This challenge hasn’t started yet.');

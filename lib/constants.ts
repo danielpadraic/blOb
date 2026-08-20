@@ -122,7 +122,7 @@ export const CHALLENGE_TYPES = [
   {
     value: 'consistency',
     label: 'Consistency',
-    helper: 'Log a required number of times on a schedule. Hit the target to finish.',
+    helper: 'Check in a required number of times on a schedule. Hit the target to finish.',
   },
   {
     value: 'points',
@@ -135,22 +135,22 @@ export const CHALLENGE_FREQUENCIES = [
   {
     value: 'daily',
     label: 'Daily',
-    helper: 'One successful log counts for that calendar day.',
+    helper: 'One successful check-in counts for that calendar day.',
   },
   {
     value: 'weekly',
     label: 'Weekly',
-    helper: 'One successful log counts for that week.',
+    helper: 'One successful check-in counts for that week.',
   },
   {
     value: 'monthly',
     label: 'Monthly',
-    helper: 'One successful log counts for that month.',
+    helper: 'One successful check-in counts for that month.',
   },
   {
     value: 'once',
     label: 'Once',
-    helper: 'A one-shot target — usually a single log.',
+    helper: 'A one-shot target — usually a single check-in.',
   },
 ] as const satisfies readonly { value: ChallengeFrequency; label: string; helper: string }[];
 
@@ -247,7 +247,7 @@ export const PROOF_META: Record<
   },
   text_note: {
     label: 'Write a check-in of what you completed.',
-    helper: 'A short written log of what you completed.',
+    helper: 'A short written check-in of what you completed.',
     short: 'Note',
   },
   link: {
@@ -266,7 +266,7 @@ export function proofMeta(type: string): { label: string; helper: string; short:
   return (
     PROOF_META[type as ProofType] ?? {
       label: type.replace(/_/g, ' '),
-      helper: 'Attach this when you log a day.',
+      helper: 'Attach this when you check in.',
       short: type.replace(/_/g, ' '),
     }
   );

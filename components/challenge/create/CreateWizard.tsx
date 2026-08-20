@@ -992,7 +992,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
     setError('rules', {
       type: 'validate',
-      message: 'Add what competitors must log (count, activity, and how often).',
+      message: 'Add the check-in rule (count, activity, and how often).',
     });
     return { field: 'rules', step: STEP_RULES };
   }
@@ -1936,7 +1936,7 @@ function TypeSlide({
                   pointsLocked
                     ? 'Last-man-standing uses Consistency so everyone is judged on staying eligible.'
                     : item.value === 'consistency'
-                      ? 'Log on a schedule. Hit the target to finish.'
+                      ? 'Check in on a schedule. Hit the target to finish.'
                       : 'Earn points from a task list. Totals decide ranking.'
                 }
                 disabled={pointsLocked}
@@ -2138,7 +2138,7 @@ function DurationSlide({
             render={({ field: { onChange, onBlur, value, ref } }) => (
               <Input
                 ref={ref}
-                label={frequency === 'weekly' ? 'Logs required each week' : 'Logs required each day'}
+                label={frequency === 'weekly' ? 'Check-ins required each week' : 'Check-ins required each day'}
                 placeholder={frequency === 'weekly' ? '5' : '1'}
                 keyboardType="number-pad"
                 value={value}
@@ -2147,8 +2147,8 @@ function DurationSlide({
                 error={errors.target_count?.message}
                 hint={
                   frequency === 'weekly'
-                    ? 'Miss this many logs in a week and you’re out.'
-                    : 'Daily last-man-standing is one successful log per day.'
+                    ? 'Miss this many check-ins in a week and you’re out.'
+                    : 'Daily last-man-standing is one successful check-in per day.'
                 }
               />
             )}

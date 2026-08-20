@@ -545,7 +545,7 @@ export const createChallengeSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['target_count'],
-        message: 'Say how many times they must log',
+        message: 'Say how many times they must check in',
       });
     } else if (target > 100) {
       ctx.addIssue({
@@ -557,13 +557,13 @@ export const createChallengeSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['target_count'],
-        message: 'Daily last-man-standing is one log per day',
+        message: 'Daily last-man-standing is one check-in per day',
       });
     } else if (values.duration_type === 'unlimited' && values.frequency === 'weekly' && target > 7) {
       ctx.addIssue({
         code: 'custom',
         path: ['target_count'],
-        message: 'Weekly last-man-standing can’t ask for more than 7 logs a week',
+        message: 'Weekly last-man-standing can’t ask for more than 7 check-ins a week',
       });
     }
 

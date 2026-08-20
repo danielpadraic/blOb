@@ -76,21 +76,21 @@ function acknowledgments(challenge: Challenge) {
       title: points
         ? challenge.tasks.some((task) => task.proof_required)
           ? 'Some tasks need proof'
-          : 'Log your progress'
+          : 'Check in your progress'
         : unlimited
           ? 'Miss the requirement and you’re out'
           : proofs.length === 1
             ? 'Proof is required'
-            : `${proofs.length} proofs, every log`,
+            : `${proofs.length} proofs, every check-in`,
       body: points
         ? challenge.tasks.some((task) => task.proof_required)
-          ? `When you log, attach: ${proofLabels}. Task-by-task logging comes next — for now it’s a simple daily log.`
-          : 'For now you log progress with a short note. Task-by-task checkoff comes next.'
+          ? `When you check in, attach: ${proofLabels}. Task-by-task tracking comes next — for now it’s a simple daily check-in.`
+          : 'For now you check in with a short note. Task-by-task checkoff comes next.'
         : unlimited
           ? [
               ruleCopy.primary,
               ...ruleCopy.extras,
-              `Every log needs: ${proofLabels}. Stay eligible until only one person remains.`,
+              `Every check-in needs: ${proofLabels}. Stay eligible until only one person remains.`,
             ]
               .filter(Boolean)
               .join('\n')
@@ -98,8 +98,8 @@ function acknowledgments(challenge: Challenge) {
               ruleCopy.primary,
               ...ruleCopy.extras,
               honorOnly
-                ? 'Honor. Confirm to log.'
-                : `Each log needs: ${proofLabels}. ${copy('create.proofsHelper')}`,
+                ? 'Honor. Confirm to check in.'
+                : `Each check-in needs: ${proofLabels}. ${copy('create.proofsHelper')}`,
             ]
               .filter(Boolean)
               .join('\n'),

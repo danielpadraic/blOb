@@ -58,7 +58,7 @@ export function ProfileChallengeRow({ item }: { item: ProfileChallenge }) {
             {isPointsChallenge(item.challenge)
               ? Math.max(item.challenge.tasks?.length || 1, 1)
               : challengeTargetCount(item.challenge)}{' '}
-            {isPointsChallenge(item.challenge) ? 'tasks' : 'logs'}
+            {isPointsChallenge(item.challenge) ? 'tasks' : 'check-ins'}
           </AppText>
         ) : (
           <View className="ml-1 flex-row items-center">

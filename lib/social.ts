@@ -276,7 +276,7 @@ export function feedEventAction(event: Pick<FeedEvent, 'event_type'>): string {
     case 'challenge_joined':
       return 'joined a challenge';
     case 'result_submitted':
-      return 'logged a result';
+      return 'checked in';
     case 'challenge_won':
       return 'won a challenge';
     case 'story_posted':
