@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
-import { FieldNoteButton } from '@/components/challenge/FieldNote';
+import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
@@ -158,14 +158,14 @@ export function ChallengeHeroCard({
       ) : (
         <View className="flex-row items-start justify-between gap-3">
           <View className="min-w-0 flex-1">
-            <AppText
-              className="text-[11px] font-semibold uppercase"
+            <FieldNoteLabel
+              note="pot"
+              tint="light"
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-              style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
+              textClassName="text-[11px] font-semibold uppercase"
+              textStyle={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
               Prize
-            </AppText>
+            </FieldNoteLabel>
             <View className="mt-1 flex-row items-center" style={{ gap: 6, minWidth: 0 }}>
               {bucks ? (
                 <AppText
@@ -185,7 +185,6 @@ export function ChallengeHeroCard({
                   </AppText>
                 </>
               )}
-              <FieldNoteButton note="pot" tint="light" />
             </View>
           </View>
           {showProgressRing && joined ? (

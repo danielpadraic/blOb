@@ -11,7 +11,7 @@ import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
-import { FieldNoteButton, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
+import { FieldNoteLabel, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
@@ -629,12 +629,12 @@ export default function ChallengeDetailScreen() {
 
         {startNeeded ? (
           <Card className="mt-4">
-            <View className="flex-row items-center" style={{ marginLeft: -8 }}>
-              <AppText className="min-w-0 flex-1 leading-6 text-charcoal">
-                {startNeeded}
-              </AppText>
-              <FieldNoteButton note="startNeeded" />
-            </View>
+            <FieldNoteLabel
+              note="startNeeded"
+              textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
+              Start
+            </FieldNoteLabel>
+            <AppText className="mt-1 leading-6 text-charcoal">{startNeeded}</AppText>
           </Card>
         ) : null}
 
@@ -644,12 +644,11 @@ export default function ChallengeDetailScreen() {
           </AppText>
           {hideBuyIn ? null : (
             <View>
-              <View className="flex-row items-center" style={{ marginLeft: -8 }}>
-                <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-                  Entry fee
-                </AppText>
-                <FieldNoteButton note="buyIn" />
-              </View>
+              <FieldNoteLabel
+                note="buyIn"
+                textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                Entry fee
+              </FieldNoteLabel>
               <AppText className="mt-1 text-xl font-bold text-charcoal">
                 {isFreeEntry
                   ? 'Free'
@@ -738,12 +737,11 @@ export default function ChallengeDetailScreen() {
 
         {wasCancelled || challenge.is_official ? null : (
         <Card className="mt-4">
-          <View className="flex-row items-center" style={{ marginLeft: -8 }}>
-            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-              Prize
-            </AppText>
-            <FieldNoteButton note="pot" />
-          </View>
+          <FieldNoteLabel
+            note="pot"
+            textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Prize
+          </FieldNoteLabel>
           {prizeForfeited ? (
             <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
               Stakes forfeited, no refund.

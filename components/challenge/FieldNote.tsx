@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
@@ -17,6 +17,10 @@ type ChallengeNotesApi = {
 };
 
 const ChallengeNotesContext = createContext<ChallengeNotesApi | null>(null);
+
+const NOTE_CIRCLE = 21;
+const NOTE_HIT = 44;
+const NOTE_INSET = (NOTE_HIT - NOTE_CIRCLE) / 2;
 
 export function useChallengeNotesOptional(): ChallengeNotesApi | null {
   return useContext(ChallengeNotesContext);
@@ -49,19 +53,82 @@ export function FieldNoteButton({
   if (!notes) {
     return null;
   }
-  const color = tint === 'light' ? 'rgba(255,255,255,0.9)' : THEME.textMuted;
+  const color = tint === 'light' ? 'rgba(255,255,255,0.72)' : THEME.textMuted;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? `About ${copy(FIELD_NOTE_TITLE[note])}`}
-      onPress={() => notes.open(note)}
+      onPress={(event) => {
+        event.stopPropagation();
+        notes.open(note);
+      }}
       hitSlop={0}
       className="items-center justify-center"
-      style={{ width: 44, height: 44 }}>
-      <AppText className="text-[18px] font-semibold" style={{ color }}>
-        ?
-      </AppText>
+      style={{
+        width: NOTE_HIT,
+        height: NOTE_HIT,
+        marginTop: -NOTE_INSET,
+        marginBottom: -NOTE_INSET,
+        marginLeft: -NOTE_INSET + 2,
+        marginRight: -NOTE_INSET,
+        zIndex: 1,
+      }}>
+      <View
+        style={{
+          width: NOTE_CIRCLE,
+          height: NOTE_CIRCLE,
+          borderRadius: NOTE_CIRCLE / 2,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: color,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'transparent',
+        }}>
+        <AppText
+          selectable={false}
+          className="text-[11px] font-medium"
+          style={{ color, lineHeight: 13, textTransform: 'none' }}>
+          i
+        </AppText>
+      </View>
     </Pressable>
+  );
+}
+
+/** Label with the info mark on the top-right of the word. Amount stays on the next line. */
+export function FieldNoteLabel({
+  note,
+  tint = 'dark',
+  children,
+  textClassName,
+  textStyle,
+  numberOfLines,
+}: {
+  note: FieldNoteKey;
+  tint?: 'light' | 'dark';
+  children: string;
+  textClassName?: string;
+  textStyle?: TextStyle;
+  numberOfLines?: number;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        alignSelf: 'flex-start',
+        maxWidth: '100%',
+      }}>
+      <AppText
+        className={textClassName}
+        style={[{ flexShrink: 1 }, textStyle]}
+        numberOfLines={numberOfLines}
+        adjustsFontSizeToFit={numberOfLines === 1}
+        minimumFontScale={0.75}>
+        {children}
+      </AppText>
+      <FieldNoteButton note={note} tint={tint} />
+    </View>
   );
 }
 

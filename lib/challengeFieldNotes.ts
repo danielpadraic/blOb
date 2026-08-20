@@ -39,7 +39,7 @@ export function userStartNeededLabel(
     return null;
   }
   if (left === 1) {
-    return 'Start: 1 more person needed';
+    return '1 more person needed';
   }
-  return `Start: ${left} more people needed`;
+  return `${left} more people needed`;
 }

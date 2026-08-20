@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
-import { FieldNoteButton } from '@/components/challenge/FieldNote';
+import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { signupProofLines } from '@/lib/challengeProofs';
@@ -160,12 +160,11 @@ export function CreateReviewPreview({
 
       <Card>
         <View className="flex-row items-start justify-between gap-3">
-          <View className="flex-1 flex-row items-center" style={{ marginLeft: -8 }}>
-            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-              Prize
-            </AppText>
-            <FieldNoteButton note="pot" />
-          </View>
+          <FieldNoteLabel
+            note="pot"
+            textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Prize
+          </FieldNoteLabel>
           <EditLink onPress={() => onEdit('prize')} />
         </View>
         <View className="mt-2">
@@ -174,12 +173,11 @@ export function CreateReviewPreview({
       </Card>
 
       <Card>
-        <View className="flex-row items-center" style={{ marginLeft: -8 }}>
-          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-            Entry fee
-          </AppText>
-          <FieldNoteButton note="buyIn" />
-        </View>
+        <FieldNoteLabel
+          note="buyIn"
+          textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
+          Entry fee
+        </FieldNoteLabel>
         <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
           {Number(challenge.buy_in_amount) > 0
             ? isBucksChallenge(challenge)
@@ -193,12 +191,12 @@ export function CreateReviewPreview({
 
       {startNeeded ? (
         <Card>
-          <View className="flex-row items-center" style={{ marginLeft: -8 }}>
-            <AppText className="min-w-0 flex-1 leading-6 text-charcoal">
-              {startNeeded}
-            </AppText>
-            <FieldNoteButton note="startNeeded" />
-          </View>
+          <FieldNoteLabel
+            note="startNeeded"
+            textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Start
+          </FieldNoteLabel>
+          <AppText className="mt-1 leading-6 text-charcoal">{startNeeded}</AppText>
         </Card>
       ) : null}
 

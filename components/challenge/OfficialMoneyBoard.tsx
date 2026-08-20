@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
-import { FieldNoteButton } from '@/components/challenge/FieldNote';
+import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
@@ -70,9 +70,13 @@ export function OfficialMoneyBoard({
             <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} note="pot" />
           </View>
           {startLine ? (
-            <View className="flex-row items-center" style={{ marginLeft: -8 }}>
+            <View className="flex-row items-start" style={{ gap: 6 }}>
+              <FieldNoteLabel
+                note="startNeeded"
+                textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                Start
+              </FieldNoteLabel>
               <AppText className="min-w-0 flex-1 text-[12px] leading-5 text-muted">{startLine}</AppText>
-              <FieldNoteButton note="startNeeded" />
             </View>
           ) : null}
           <OfficialInviteButton
@@ -104,17 +108,24 @@ function Stat({
 }) {
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
-      <View className="flex-row items-center" style={note ? { minHeight: 44, marginVertical: -10 } : undefined}>
+      {note ? (
+        <FieldNoteLabel
+          note={note}
+          numberOfLines={1}
+          textClassName="text-[9px] font-semibold uppercase text-muted"
+          textStyle={{ letterSpacing: 0.2 }}>
+          {label}
+        </FieldNoteLabel>
+      ) : (
         <AppText
-          className="min-w-0 flex-1 text-[9px] font-semibold uppercase text-muted"
+          className="text-[9px] font-semibold uppercase text-muted"
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.75}
           style={{ letterSpacing: 0.2 }}>
           {label}
         </AppText>
-        {note ? <FieldNoteButton note={note} /> : null}
-      </View>
+      )}
       {typeof value === 'string' ? (
         <AppText className="mt-0.5 text-[13px] font-extrabold text-charcoal" numberOfLines={1}>
           {value}

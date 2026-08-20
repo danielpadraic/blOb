@@ -82,9 +82,9 @@ export function officialStartNeededLabel(needed: number): string | null {
     return null;
   }
   if (needed === 1) {
-    return 'Start: 1 more contestant needed';
+    return '1 more contestant needed';
   }
-  return `Start: ${needed} more contestants needed`;
+  return `${needed} more contestants needed`;
 }
 
 /** Home Featured Challenge: live week_10 if the viewer is in it, else filling, else arming. */

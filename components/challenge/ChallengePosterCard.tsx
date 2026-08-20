@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { FieldNoteButton, useChallengeNotesOptional } from '@/components/challenge/FieldNote';
+import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
@@ -229,7 +229,6 @@ export function OfficialFillingStats({
   showStartLine?: boolean;
   tone?: 'card' | 'hero';
 }) {
-  const notes = useChallengeNotesOptional();
   const guarantee = Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
@@ -272,14 +271,20 @@ export function OfficialFillingStats({
         />
       </View>
       {startLine ? (
-        <View className="flex-row items-center" style={notes ? { marginLeft: -8 } : undefined}>
+        <View className="mt-1 flex-row items-start" style={{ gap: 6 }}>
+          <FieldNoteLabel
+            note="startNeeded"
+            tint={hero ? 'light' : 'dark'}
+            textClassName="text-[11px] font-semibold uppercase"
+            textStyle={{ color: hero ? 'rgba(255,255,255,0.62)' : THEME.textMuted, letterSpacing: 0.2 }}>
+            Start
+          </FieldNoteLabel>
           <AppText
             className="min-w-0 flex-1 text-[11px] leading-4"
             style={{ color: hero ? 'rgba(255,255,255,0.78)' : THEME.textMuted }}
             numberOfLines={2}>
             {startLine}
           </AppText>
-          <FieldNoteButton note="startNeeded" tint={hero ? 'light' : 'dark'} />
         </View>
       ) : null}
     </View>
@@ -319,21 +324,28 @@ function PosterStat({
   note?: 'pot' | 'buyIn';
   tint?: 'light' | 'dark';
 }) {
-  const notes = useChallengeNotesOptional();
-  const showNote = Boolean(note && notes);
+  const labelStyle = { color: labelColor ?? THEME.textMuted, letterSpacing: 0.2 };
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
-      <View className="flex-row items-center" style={showNote ? { minHeight: 44, marginVertical: -10 } : undefined}>
+      {note ? (
+        <FieldNoteLabel
+          note={note}
+          tint={tint}
+          numberOfLines={1}
+          textClassName="text-[9px] font-semibold uppercase"
+          textStyle={labelStyle}>
+          {label}
+        </FieldNoteLabel>
+      ) : (
         <AppText
-          className="min-w-0 flex-1 text-[9px] font-semibold uppercase"
+          className="text-[9px] font-semibold uppercase"
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.75}
-          style={{ color: labelColor ?? THEME.textMuted, letterSpacing: 0.2 }}>
+          style={labelStyle}>
           {label}
         </AppText>
-        {note ? <FieldNoteButton note={note} tint={tint} /> : null}
-      </View>
+      )}
       {typeof value === 'string' ? (
         <AppText className="mt-0.5 text-[12px] font-extrabold text-charcoal" numberOfLines={1}>
           {value}
