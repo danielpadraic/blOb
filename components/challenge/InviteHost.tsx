@@ -6,7 +6,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
 import { Composer } from '@/components/feed/Composer';
@@ -15,9 +16,11 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { useCreatePost } from '@/hooks/useFeed';
 import { challengeAnnounceCopy } from '@/lib/challengeFeedPost';
+import { challengeShareUrl } from '@/lib/officialShare';
 import type { PostAudience } from '@/lib/postAudience';
 import type { FeedChallengePreview } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
+import { getErrorMessage } from '@/utils/errors';
 
 export type ChallengeShareTarget = {
   challengeId: string;
@@ -52,7 +55,7 @@ export function InviteHost({ children }: { children: ReactNode }) {
 
   const open = useCallback((next: ChallengeShareTarget) => {
     setTarget(next);
-    setPanel(next.allowSendToPeople === false ? 'feed' : 'menu');
+    setPanel('menu');
   }, []);
 
   const value = useMemo(() => ({ open }), [open]);
@@ -65,6 +68,19 @@ export function InviteHost({ children }: { children: ReactNode }) {
   function close() {
     setTarget(null);
     setPanel('menu');
+  }
+
+  async function copyLink() {
+    if (!target) {
+      return;
+    }
+    try {
+      await Clipboard.setStringAsync(challengeShareUrl(target.challengeId));
+      close();
+      showToast('Link copied.');
+    } catch (error) {
+      Alert.alert('Couldn’t copy that', getErrorMessage(error));
+    }
   }
 
   const preview: FeedChallengePreview | null = target
@@ -110,6 +126,7 @@ export function InviteHost({ children }: { children: ReactNode }) {
                 onPress={() => setPanel('people')}
               />
             ) : null}
+            <Button title="Copy link" size="lg" variant="outline" onPress={() => void copyLink()} />
             <Button title="Close" variant="ghost" onPress={close} />
           </View>
         </View>
@@ -146,17 +163,7 @@ export function InviteHost({ children }: { children: ReactNode }) {
             />
           ) : null}
           <View className="mt-2">
-            <Button
-              title={target?.allowSendToPeople === false ? 'Close' : 'Back'}
-              variant="ghost"
-              onPress={() => {
-                if (target?.allowSendToPeople === false) {
-                  close();
-                  return;
-                }
-                setPanel('menu');
-              }}
-            />
+            <Button title="Back" variant="ghost" onPress={() => setPanel('menu')} />
           </View>
         </View>
       </ChromeOverlay>
