@@ -62,14 +62,26 @@ alter table public.challenge_checkins enable row level security;
 drop policy if exists "Participants read challenge checkins" on public.challenge_checkins;
 create policy "Participants read challenge checkins"
   on public.challenge_checkins for select
-  using (public.is_challenge_participant(challenge_id, auth.uid()));
+  using (
+    exists (
+      select 1
+      from public.challenge_participants cp
+      where cp.challenge_id = challenge_checkins.challenge_id
+        and cp.user_id = auth.uid()
+    )
+  );
 
 drop policy if exists "Owners insert own checkins" on public.challenge_checkins;
 create policy "Owners insert own checkins"
   on public.challenge_checkins for insert
   with check (
     auth.uid() = user_id
-    and public.is_challenge_participant(challenge_id, auth.uid())
+    and exists (
+      select 1
+      from public.challenge_participants cp
+      where cp.challenge_id = challenge_id
+        and cp.user_id = auth.uid()
+    )
   );
 
 drop policy if exists "Owners update own checkins" on public.challenge_checkins;
