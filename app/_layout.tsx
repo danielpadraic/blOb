@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { BootScreen } from '@/components/ui/BootScreen';
+import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { WalletProvider } from '@/hooks/useWallet';
@@ -22,7 +22,7 @@ import { queryClient } from '@/lib/queryClient';
 import { paymentsProviderError } from '@/services/payments';
 import { isProfileComplete } from '@/utils/validators';
 
-export { ErrorBoundary } from 'expo-router';
+export { AppErrorBoundary as ErrorBoundary };
 
 SplashScreen.preventAutoHideAsync();
 

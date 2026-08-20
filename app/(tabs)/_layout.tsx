@@ -9,6 +9,8 @@ import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
 import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
 import { InviteHost } from '@/components/challenge/InviteHost';
+import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
+import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { TourHost } from '@/components/tour/TourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
 import { TourProvider, useTour } from '@/components/tour/TourContext';
@@ -24,6 +26,8 @@ import { useWalletOptional } from '@/hooks/useWallet';
 import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
 import { primeCameraFromGesture } from '@/lib/cameraSession';
 import { THEME } from '@/lib/theme';
+
+export { AppErrorBoundary as ErrorBoundary };
 
 export default function TabLayout() {
   return (
