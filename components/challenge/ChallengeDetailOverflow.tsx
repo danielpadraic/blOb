@@ -24,7 +24,7 @@ import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, getStartUpdateMessage } from '@/utils/errors';
 
 let overflowVisible = false;
 let openOverflowMenu = (_anchor: MenuAnchor) => {};
@@ -109,7 +109,7 @@ export function useChallengeDetailOverflow() {
         setError(null);
         nudge.mutate(id, {
           onSuccess: () => setRollDismissed(false),
-          onError: (err) => setError(getErrorMessage(err)),
+          onError: (err) => setError(getStartUpdateMessage(err)),
         });
       },
     });
@@ -154,24 +154,17 @@ export function useChallengeDetailOverflow() {
     actions,
     rollOpen,
     closeRoll: () => setRollDismissed(true),
-    resolveKeep: () => {
+    applyStart: (startsAt: string, mode: 'keep' | 'shorten') => {
       if (!id) {
         return;
       }
       setError(null);
       resolveRoll.mutate(
-        { challengeId: id, keep: true },
-        { onError: (err) => setError(getErrorMessage(err)) },
-      );
-    },
-    resolveShorten: () => {
-      if (!id) {
-        return;
-      }
-      setError(null);
-      resolveRoll.mutate(
-        { challengeId: id, keep: false },
-        { onError: (err) => setError(getErrorMessage(err)) },
+        { challengeId: id, startsAt, mode },
+        {
+          onSuccess: () => setRollDismissed(true),
+          onError: (err) => setError(getStartUpdateMessage(err)),
+        },
       );
     },
   };
@@ -227,8 +220,7 @@ export function ChallengeDetailOverflowHost({
           loading={overflow.loading}
           error={overflow.error}
           onClose={overflow.closeRoll}
-          onKeep={overflow.resolveKeep}
-          onShorten={overflow.resolveShorten}
+          onApply={overflow.applyStart}
         />
       ) : null}
     </>

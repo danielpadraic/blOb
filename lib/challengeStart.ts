@@ -75,6 +75,15 @@ export function canShortenStartRoll(challenge: {
   return end - start >= DAY_MS;
 }
 
+export function nextStartAt(iso: string | null | undefined, now = new Date()): string {
+  const date = iso ? new Date(iso) : new Date(now);
+  const resolved = Number.isNaN(date.getTime()) ? new Date(now) : new Date(date);
+  while (resolved.getTime() <= now.getTime()) {
+    resolved.setTime(resolved.getTime() + DAY_MS);
+  }
+  return resolved.toISOString();
+}
+
 export function formatStartMovedDate(iso: string | null | undefined, timeZone?: string | null): string {
   if (!iso) {
     return '';

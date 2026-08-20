@@ -1263,6 +1263,18 @@ export type Database = {
         Args: { p_challenge_id: string };
         Returns: Challenge;
       };
+      apply_challenge_start: {
+        Args: { p_challenge_id: string; p_starts_at: string; p_mode: string };
+        Returns: {
+          ok: boolean;
+          challenge_id: string;
+          starts_at?: string;
+          ends_at?: string | null;
+          length_value?: number | null;
+          days_required?: number | null;
+          start_roll_pending?: boolean;
+        };
+      };
       resolve_start_roll: {
         Args: { p_challenge_id: string; p_keep: boolean };
         Returns: Challenge;

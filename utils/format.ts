@@ -293,6 +293,12 @@ export function lobbyDurationLabel(challenge: {
   if (challenge.is_unlimited) {
     return 'Ongoing';
   }
+  if (challenge.ends_at) {
+    const days = challengeWindowDays(challenge.starts_at, challenge.ends_at);
+    if (days > 0) {
+      return `${days} day${days === 1 ? '' : 's'}`;
+    }
+  }
   const length = Number(challenge.length_value ?? 0);
   const unit = String(challenge.length_unit ?? '');
   if (length > 0 && unit) {
@@ -306,12 +312,6 @@ export function lobbyDurationLabel(challenge: {
       return `${length} year${length === 1 ? '' : 's'}`;
     }
     return `${length} day${length === 1 ? '' : 's'}`;
-  }
-  if (challenge.ends_at) {
-    const days = challengeWindowDays(challenge.starts_at, challenge.ends_at);
-    if (days > 0) {
-      return `${days} day${days === 1 ? '' : 's'}`;
-    }
   }
   const required = Number(challenge.days_required ?? 0);
   if (required > 0) {

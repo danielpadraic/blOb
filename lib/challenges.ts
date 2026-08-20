@@ -26,7 +26,7 @@ import type {
   TopPlacesDistribution,
   TopPlacesMode,
 } from '@/lib/types';
-import { getCreateChallengeMessage, getErrorMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
+import { getCreateChallengeMessage, getErrorMessage, getStartUpdateMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
 import { challengeCurrency, formatWallet } from '@/lib/currency';
 import { applyLaneForPublish, isInviteOnlyChallenge } from '@/lib/challengeLane';
 import {
@@ -1331,25 +1331,49 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
   return fetchChallengeById(result.challenge_id);
 }
 
-export async function resolveStartRoll(challengeId: string, keep: boolean): Promise<Challenge> {
-  const { data, error } = await supabase.rpc('resolve_start_roll', {
+export async function applyChallengeStart(
+  challengeId: string,
+  startsAt: string,
+  mode: 'keep' | 'shorten',
+): Promise<Challenge> {
+  const { data, error } = await supabase.rpc('apply_challenge_start', {
     p_challenge_id: challengeId,
-    p_keep: keep,
+    p_starts_at: startsAt,
+    p_mode: mode,
   });
+  console.log('[blob:start-roll]', { challengeId, startsAt, mode, data, error });
   if (error) {
-    throw new Error(getErrorMessage(error));
+    logPostgrestError('start-roll', error);
+    throw new Error(getStartUpdateMessage(error));
   }
-  return normalizeChallenge((data ?? {}) as ChallengeRow);
+  try {
+    return await fetchChallengeById(challengeId);
+  } catch (caught) {
+    logPostgrestError('start-roll-refetch', caught);
+    throw new Error(getStartUpdateMessage(caught));
+  }
+}
+
+export async function resolveStartRoll(challengeId: string, keep: boolean): Promise<Challenge> {
+  const current = await fetchChallengeById(challengeId);
+  return applyChallengeStart(challengeId, current.starts_at, keep ? 'keep' : 'shorten');
 }
 
 export async function nudgeChallengeStart(challengeId: string): Promise<Challenge> {
   const { data, error } = await supabase.rpc('nudge_challenge_start', {
     p_challenge_id: challengeId,
   });
+  console.log('[blob:start-nudge]', { challengeId, data, error });
   if (error) {
-    throw new Error(getErrorMessage(error));
+    logPostgrestError('start-nudge', error);
+    throw new Error(getStartUpdateMessage(error));
   }
-  return normalizeChallenge((data ?? {}) as ChallengeRow);
+  try {
+    return await fetchChallengeById(challengeId);
+  } catch (caught) {
+    logPostgrestError('start-nudge-refetch', caught);
+    throw new Error(getStartUpdateMessage(caught));
+  }
 }
 
 export async function updateUserChallenge(

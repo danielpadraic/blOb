@@ -19,8 +19,8 @@ import {
   fetchOfficialDiscoverChallenges,
   insertUserChallenge,
   joinChallenge,
+  applyChallengeStart,
   nudgeChallengeStart,
-  resolveStartRoll,
   updateUserChallenge,
   withParticipantCounts,
   type FriendChallengeProof,
@@ -718,8 +718,15 @@ export function useResolveStartRoll() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ challengeId, keep }: { challengeId: string; keep: boolean }) =>
-      resolveStartRoll(challengeId, keep),
+    mutationFn: async ({
+      challengeId,
+      startsAt,
+      mode,
+    }: {
+      challengeId: string;
+      startsAt: string;
+      mode: 'keep' | 'shorten';
+    }) => applyChallengeStart(challengeId, startsAt, mode),
     onSuccess: (challenge) => {
       queryClient.setQueryData<ChallengeWithStats>(['challenge', challenge.id], (current) =>
         current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },

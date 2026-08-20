@@ -5,6 +5,15 @@ export function getErrorMessage(error: unknown): string {
   return humanize(raw);
 }
 
+export function getStartUpdateMessage(error: unknown): string {
+  logPostgrestError('start-roll', error);
+  const raw = extractRawMessage(error).toLowerCase();
+  if (raw.includes('duration_too_short') || raw.includes('duration has to stay')) {
+    return 'Duration has to stay at least 1 day.';
+  }
+  return copy('error.startUpdate');
+}
+
 export function logPostgrestError(scope: string, error: unknown) {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
   console.log(`[blob:${scope}]`, {
@@ -194,6 +203,15 @@ function humanize(raw: string): string {
 
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
+  }
+  if (
+    message.includes('load failed') ||
+    message.includes('failed to fetch') ||
+    message.includes('networkrequestfailed') ||
+    message.includes('network request failed') ||
+    message.includes('typeerror')
+  ) {
+    return 'We couldn’t reach blOb just now. Try again.';
   }
   if (message.includes('invalid login') || message.includes('invalid credentials')) {
     return 'That email and password don’t match.';

@@ -134,7 +134,12 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
                   if (!row.item.read_at) {
                     markRead.mutate([row.item.id]);
                   }
-                  resolveRoll.mutate({ challengeId, keep });
+                  const startsAt = row.item.data?.starts_at ?? new Date().toISOString();
+                  resolveRoll.mutate({
+                    challengeId,
+                    startsAt,
+                    mode: keep ? 'keep' : 'shorten',
+                  });
                 }}
               />
             )
