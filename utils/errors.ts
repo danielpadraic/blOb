@@ -327,6 +327,12 @@ function humanize(raw: string): string {
   if (message.includes('calendar day to log')) {
     return 'Pick a calendar day to check in.';
   }
+  if (
+    message.includes('42804') ||
+    (message.includes('task_ids') && (message.includes('jsonb') || message.includes('uuid[]')))
+  ) {
+    return 'Couldn’t check in. Try again.';
+  }
   if (message.includes('begin check-in first')) {
     return 'Begin check-in first.';
   }

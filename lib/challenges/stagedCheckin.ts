@@ -36,6 +36,9 @@ function throwMapped(error: { message?: string; code?: string; details?: string 
   if (upper.includes('BEGIN CHECK-IN FIRST')) {
     throw new Error('Begin check-in first.');
   }
+  if (upper.includes('42804') || (upper.includes('TASK_IDS') && upper.includes('JSONB'))) {
+    throw new Error('Couldn’t check in. Try again.');
+  }
   throw new Error(getErrorMessage(error));
 }
 
