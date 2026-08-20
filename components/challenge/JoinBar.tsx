@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { Button } from '@/components/ui/Button';
+import { JoinCtaButton } from '@/components/challenge/JoinCtaButton';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { challengeCardTags } from '@/lib/challengeTags';
@@ -64,20 +65,18 @@ export function JoinBar({
             : `${money(buyInAmount)} moves into the prize the moment you join.`}
         </AppText>
       )}
-      <Button
-        title={
-          topUp
-            ? cta.topUpLabel
-            : disabledReason
-              ? 'Unavailable'
-              : isFree
-                ? 'Join free'
-                : cta.joinLabel
-        }
-        onPress={topUp ? onTopUp : onJoin}
-        loading={loading}
-        disabled={Boolean(disabledReason) && !topUp}
-      />
+      {topUp ? (
+        <Button title={cta.topUpLabel} onPress={onTopUp} loading={loading} />
+      ) : disabledReason ? (
+        <Button title="Unavailable" onPress={onJoin} disabled />
+      ) : (
+        <JoinCtaButton
+          currency={challenge.currency}
+          amount={buyInAmount}
+          loading={loading}
+          onPress={onJoin}
+        />
+      )}
     </Card>
   );
 }

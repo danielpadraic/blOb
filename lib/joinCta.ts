@@ -21,8 +21,8 @@ export function bucksJoinCta(input: {
     joinLabel: buyIn > 0
       ? cashBuyIn
         ? `Join ${formatCash(buyIn)}`
-        : `Join ${Number.isInteger(buyIn) ? String(buyIn) : buyIn.toFixed(2)}`
-      : 'Join',
+        : 'Join'
+      : 'Join free',
     topUpLabel: `Add ${formatCash(shortfall > 0 ? shortfall : buyIn)} to join`,
   };
 }

@@ -16,6 +16,7 @@ import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
+import { JoinCtaButton, JOIN_CTA_HEIGHT } from '@/components/challenge/JoinCtaButton';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -81,7 +82,7 @@ import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib
 import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
-import { TAB_BAR_PEEK, tabBarLift, THEME } from '@/lib/theme';
+import { tabBarLift, THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -488,8 +489,8 @@ export default function ChallengeDetailScreen() {
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
     (stickyJoin || stickyCheckin);
-  const stickyPad = tabBarLift(insets.bottom) + TAB_BAR_PEEK;
-  const stickyBlock = showStickyCta ? 62 : 0;
+  const tabClearance = tabBarLift(insets.bottom);
+  const stickyBlock = showStickyCta ? JOIN_CTA_HEIGHT + 12 : 0;
 
   return (
     <ChallengeNotesProvider>
@@ -506,7 +507,7 @@ export default function ChallengeDetailScreen() {
         ref={scrollRef}
         className="flex-1"
         contentContainerClassName="px-4"
-        contentContainerStyle={{ paddingBottom: stickyPad + stickyBlock + 16 }}
+        contentContainerStyle={{ paddingBottom: tabClearance + stickyBlock + 16 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -861,51 +862,49 @@ export default function ChallengeDetailScreen() {
 
       {showStickyCta ? (
       <View
+        pointerEvents="box-none"
         style={{
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: 0,
+          bottom: tabClearance,
           zIndex: 20,
           paddingHorizontal: 16,
-          paddingTop: 10,
-          paddingBottom: stickyPad,
-          backgroundColor: THEME.background,
-          borderTopWidth: 1,
-          borderTopColor: THEME.border,
         }}>
         {stickyJoin ? (
-          <View className="gap-2">
-            {joinBlocked ? (
-              <AppText className="text-sm leading-5 text-coral-dark" numberOfLines={2}>
-                {joinBlocked}
-              </AppText>
-            ) : null}
+          <View className="gap-1.5">
             {actionError ? (
-              <AppText className="text-sm leading-5 text-coral-dark">{actionError}</AppText>
+              <AppText className="text-center text-sm leading-5 text-coral-dark">{actionError}</AppText>
             ) : null}
             {needsBodyMetrics ? (
               <Button
                 title="Add body metrics"
-                size="lg"
+                size="md"
                 onPress={() => router.push(BODY_METRICS_HREF)}
               />
-            ) : (
+            ) : needsTopUp ? (
               <Button
-                title={isFreeEntry ? 'Join free' : joinCta.joinLabel}
-                size="lg"
+                title={joinCta.topUpLabel}
+                size="md"
+                loading={joinSheet.loading}
+                onPress={onJoinPress}
+              />
+            ) : (
+              <JoinCtaButton
+                currency={challenge.currency}
+                amount={buyInAmount}
                 loading={joinSheet.loading}
                 onPress={onJoinPress}
               />
             )}
           </View>
         ) : periodCheckin.isLoading ? (
-          <Button title="Checking today’s check-in" size="lg" loading disabled />
+          <Button title="Checking today’s check-in" size="md" loading disabled />
         ) : (
-          <View className="gap-2">
+          <View className="gap-1.5">
             <Button
               title={logTitle}
-              size="lg"
+              size="md"
               onPress={() => router.push(`/challenges/${id}/submit`)}
             />
             {watch.visible ? (
@@ -925,7 +924,7 @@ export default function ChallengeDetailScreen() {
                     }
                   });
                 }}
-                style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                style={{ minHeight: 36, alignItems: 'center', justifyContent: 'center' }}>
                 <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
                   {copy('health.startWatch')}
                 </AppText>
