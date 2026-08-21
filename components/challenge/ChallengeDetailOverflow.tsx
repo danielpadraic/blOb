@@ -24,7 +24,7 @@ import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
-import { getErrorMessage, getStartUpdateMessage } from '@/utils/errors';
+import { getCancelChallengeMessage, getStartUpdateMessage } from '@/utils/errors';
 
 let overflowVisible = false;
 let openOverflowMenu = (_anchor: MenuAnchor) => {};
@@ -54,11 +54,12 @@ export function useChallengeDetailOverflow() {
   const [error, setError] = useState<string | null>(null);
 
   const challenge = challengeQuery.data ?? null;
+  const officialViewer = isOfficialAccount(profile);
   const canEdit = canHostQuickEdit({ challenge, viewerId: user?.id });
   const canCancel = canCancelChallenge({
     challenge,
     viewerId: user?.id,
-    official: isOfficialAccount(profile),
+    official: officialViewer,
     otherJoiners: countOtherJoiners(roster.data, challenge?.created_by),
     rosterReady: roster.data != null,
   });
@@ -92,7 +93,7 @@ export function useChallengeDetailOverflow() {
         router.replace({ pathname: '/challenges', params: { notice: 'cancelled' } });
       },
       onError: (err) => {
-        setError(getErrorMessage(err));
+        setError(getCancelChallengeMessage(err));
       },
     });
   }
@@ -127,7 +128,7 @@ export function useChallengeDetailOverflow() {
   if (canCancel) {
     actions.push({
       key: 'cancel',
-      label: copy('challenge.cancel'),
+      label: officialViewer ? copy('challenge.delete') : copy('challenge.cancel'),
       danger: true,
       onPress: () => {
         setError(null);
@@ -189,6 +190,25 @@ export function ChallengeDetailHeaderRight() {
       {overflowVisible ? <ChallengeOverflowButton onPress={openOverflowMenu} /> : null}
     </View>
   );
+}
+
+export function ChallengeHeroOverflowButton({ light = true }: { light?: boolean }) {
+  const [, setRev] = useState(0);
+  useEffect(() => {
+    const listener = () => setRev((value) => value + 1);
+    overflowListeners.add(listener);
+    if (overflowVisible) {
+      listener();
+    }
+    return () => {
+      overflowListeners.delete(listener);
+    };
+  }, []);
+
+  if (!overflowVisible) {
+    return null;
+  }
+  return <ChallengeOverflowButton light={light} onPress={openOverflowMenu} />;
 }
 
 export function ChallengeDetailOverflowHost({

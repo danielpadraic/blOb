@@ -15,8 +15,10 @@ export type ChallengeOverflowAction = {
 
 export function ChallengeOverflowButton({
   onPress,
+  light = false,
 }: {
   onPress: (anchor: MenuAnchor) => void;
+  light?: boolean;
 }) {
   const ref = useRef<View>(null);
 
@@ -35,7 +37,7 @@ export function ChallengeOverflowButton({
       style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
       <AppText
         className="text-[22px] font-extrabold leading-7"
-        style={{ color: THEME.textPrimary }}>
+        style={{ color: light ? '#fff' : THEME.textPrimary }}>
         ⋯
       </AppText>
     </Pressable>

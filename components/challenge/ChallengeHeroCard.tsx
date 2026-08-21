@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
-import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
+import { ChallengeHeroOverflowButton } from '@/components/challenge/ChallengeDetailOverflow';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { ProfileLink } from '@/components/profile/ProfileLink';
@@ -263,16 +263,21 @@ export function ChallengeHeroCard({
         />
       ) : null}
       <View className="gap-3 p-4">
-        {onOpen ? (
-          <Pressable
-            onPress={onOpen}
-            accessibilityRole="button"
-            accessibilityLabel={challenge.title}>
-            {summary}
-          </Pressable>
-        ) : (
-          summary
-        )}
+        <View className="flex-row items-start">
+          <View className="min-w-0 flex-1">
+            {onOpen ? (
+              <Pressable
+                onPress={onOpen}
+                accessibilityRole="button"
+                accessibilityLabel={challenge.title}>
+                {summary}
+              </Pressable>
+            ) : (
+              summary
+            )}
+          </View>
+          <ChallengeHeroOverflowButton />
+        </View>
         {filling ? (
           <OfficialInviteButton
             challengeId={challenge.id}

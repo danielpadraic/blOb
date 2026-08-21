@@ -105,7 +105,7 @@ export function MentionField({
       <View
         className={compact && empty ? 'flex-row items-center' : 'flex-row flex-wrap items-center'}
         style={{
-          minHeight: compact ? lineHeight : 44,
+          minHeight: compact ? 32 : 44,
           borderWidth: 0,
           position: 'relative',
         }}>
@@ -118,7 +118,7 @@ export function MentionField({
               position: 'absolute',
               left: 0,
               right: 0,
-              top: 0,
+              top: 5,
               fontSize: 16,
               lineHeight,
               color: THEME.textMuted,
@@ -173,9 +173,9 @@ export function MentionField({
                 flexShrink: 1,
                 minWidth: compact ? 48 : 72,
                 width: compact && empty ? '100%' : undefined,
-                minHeight: compact ? lineHeight : 36,
-                maxHeight: compact && !grown ? lineHeight : 120,
-                paddingVertical: compact ? 0 : 6,
+                minHeight: compact ? 32 : 36,
+                maxHeight: compact && !grown ? 32 : 160,
+                paddingVertical: compact ? 5 : 6,
                 color: THEME.textPrimary,
                 fontSize: 16,
                 lineHeight,

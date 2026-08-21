@@ -513,6 +513,9 @@ export default function ChallengeDetailScreen() {
             tintColor={THEME.accent}
           />
         }
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}>
         <View style={{ marginTop: 8 }}>
           <ChallengeHeroCard

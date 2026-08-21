@@ -57,6 +57,7 @@ type ComposerProps = {
   hideAudience?: boolean;
   quote?: { postId: string; snapshot: QuoteSnapshot; audience?: string | null } | null;
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
+  tall?: boolean;
   onSubmit: (input: ComposeInput) => Promise<unknown> | void;
 };
 
@@ -71,6 +72,7 @@ export function Composer({
   hideAudience,
   quote,
   wallHost,
+  tall,
   onSubmit,
 }: ComposerProps) {
   const { user } = useAuth();
@@ -229,7 +231,7 @@ export function Composer({
 
   return (
     <Card padded={false} style={{ paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20 }}>
-      <View className="flex-row items-end" style={{ gap: 2 }}>
+      <View className="flex-row items-end" style={{ gap: 8 }}>
         <Avatar
           uri={profile?.avatar_url}
           name={profile?.display_name ?? profile?.username ?? user?.email}
@@ -237,48 +239,92 @@ export function Composer({
           radius={14}
         />
         <View
-          className="min-w-0 flex-1"
+          className="min-w-0 flex-1 flex-row items-end"
           style={{
             backgroundColor: THEME.background,
             borderWidth: 1,
             borderColor: THEME.border,
             borderRadius: 18,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            minHeight: 44,
-            justifyContent: 'center',
+            paddingLeft: 12,
+            paddingRight: 4,
+            paddingVertical: tall ? 10 : 6,
+            minHeight: tall ? 88 : 44,
+            alignItems: 'flex-end',
           }}>
-          {wallHost ? (
-            <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
-              {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
-            </AppText>
-          ) : null}
-          <MentionField
-            key={fieldKey}
-            placeholder={resolvedPlaceholder}
-            autoFocus={autoFocus}
-            compact
-            audience={audience}
-            audienceUserIds={audienceUserIds}
-            onChange={setDoc}
-            onSubmit={() => void handleSubmit()}
-            accessibilityLabel="Write a post"
-          />
-        </View>
-        {!quote ? (
-          <>
-            <ComposerIcon
-              glyph={GLYPH.camera}
-              label="Camera"
-              onPress={() => router.push(captureHref('post', 'photo'))}
-            />
-            <ComposerIcon glyph={GLYPH.album} label="Gallery" onPress={() => void pickGallery()} />
-            {gifSearchConfigured() ? (
-              <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+          <View className="min-w-0 flex-1" style={{ minHeight: tall ? 72 : 32, paddingVertical: 4, justifyContent: tall ? 'flex-start' : 'center' }}>
+            {wallHost ? (
+              <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
+                {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
+              </AppText>
             ) : null}
-          </>
-        ) : null}
-        {hideAudience ? null : (
+            <MentionField
+              key={fieldKey}
+              placeholder={resolvedPlaceholder}
+              autoFocus={autoFocus}
+              compact
+              audience={audience}
+              audienceUserIds={audienceUserIds}
+              onChange={setDoc}
+              onSubmit={() => void handleSubmit()}
+              accessibilityLabel="Write a post"
+            />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Post"
+            onPress={() => void handleSubmit()}
+            disabled={!canPost || busy}
+            className="items-center justify-center"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: canPost && !busy ? THEME.primary : THEME.border,
+            }}>
+            <Glyph
+              name={GLYPH.send}
+              color={canPost && !busy ? THEME.primaryForeground : THEME.textMuted}
+              size={18}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      {!quote ? (
+        <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44 }}>
+          <ComposerIcon
+            glyph={GLYPH.camera}
+            label="Camera"
+            onPress={() => router.push(captureHref('post', 'photo'))}
+          />
+          <ComposerIcon glyph={GLYPH.album} label="Gallery" onPress={() => void pickGallery()} />
+          {gifSearchConfigured() ? (
+            <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+          ) : null}
+          {hideAudience ? null : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Audience"
+              onPress={() =>
+                social?.openAudience({
+                  audience,
+                  audienceUserIds,
+                  allowPublic,
+                  onSave: (next, ids) => {
+                    setAudience(next);
+                    setAudienceUserIds(ids);
+                  },
+                })
+              }
+              hitSlop={4}
+              className="items-center justify-center"
+              style={{ width: 44, height: 44 }}>
+              <AudienceIconButton audience={audience} />
+            </Pressable>
+          )}
+        </View>
+      ) : hideAudience ? null : (
+        <View className="mt-1 flex-row items-center" style={{ minHeight: 44 }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Audience"
@@ -298,26 +344,8 @@ export function Composer({
             style={{ width: 44, height: 44 }}>
             <AudienceIconButton audience={audience} />
           </Pressable>
-        )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Post"
-          onPress={() => void handleSubmit()}
-          disabled={!canPost || busy}
-          className="items-center justify-center"
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            backgroundColor: canPost && !busy ? THEME.primary : THEME.border,
-          }}>
-          <Glyph
-            name={GLYPH.send}
-            color={canPost && !busy ? THEME.primaryForeground : THEME.textMuted}
-            size={18}
-          />
-        </Pressable>
-      </View>
+        </View>
+      )}
 
       {gifOpen && !quote && gifSearchConfigured() ? (
         <GifPicker

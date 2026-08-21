@@ -232,6 +232,7 @@ export interface Profile {
   motivation_tone?: 'gentle' | 'neutral' | 'honest' | null;
   encouragement_tone?: 'gentle' | 'neutral' | 'honest' | null;
   is_official?: boolean;
+  is_admin?: boolean;
   is_creator?: boolean;
   allow_profile_posts?: boolean;
   profile_visibility?: 'public' | 'friends' | string | null;

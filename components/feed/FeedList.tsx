@@ -92,6 +92,7 @@ export function FeedList({
           placeholder={composerPlaceholder}
           submitting={composing}
           hideAudience={hideAudience}
+          tall={embedded}
           onSubmit={async (input) => {
             await onCompose(input);
             scrollRef.current?.scrollTo({ y: 0 });
@@ -166,6 +167,8 @@ export function FeedList({
         ) : undefined
       }
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
       showsVerticalScrollIndicator={false}>
       {body}
     </ScrollView>

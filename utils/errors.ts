@@ -16,6 +16,11 @@ export function getStartUpdateMessage(error: unknown): string {
   return copy('error.startUpdate');
 }
 
+export function getCancelChallengeMessage(error: unknown): string {
+  logPostgrestError('cancel-challenge', error);
+  return copy('error.cancelChallenge');
+}
+
 export function logPostgrestError(scope: string, error: unknown) {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
   console.log(`[blob:${scope}]`, {
@@ -236,6 +241,15 @@ function humanize(raw: string): string {
 
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
+  }
+  if (
+    message.includes('42703') ||
+    message.includes('ref_type') ||
+    message.includes('pgrst204') ||
+    (message.includes('schema cache') && message.includes('column')) ||
+    (message.includes('could not find the') && message.includes('column'))
+  ) {
+    return 'Couldn’t complete that just now. Try again.';
   }
   if (
     message.includes('load failed') ||

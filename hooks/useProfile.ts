@@ -51,6 +51,7 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     motivation_tone: asCopyTone(profile.motivation_tone),
     encouragement_tone: asCopyTone(profile.encouragement_tone),
     is_official: Boolean(profile.is_official),
+    is_admin: Boolean((profile as Profile).is_admin),
     tos_accepted_at: profile.tos_accepted_at ?? null,
     privacy_accepted_at: profile.privacy_accepted_at ?? null,
     skill_attestation_at: profile.skill_attestation_at ?? null,

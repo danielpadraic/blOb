@@ -33,7 +33,7 @@ import { AppText } from '@/components/ui/AppText';
 import { challengeDetailHref } from '@/lib/routes';
 import { asCopyTone, copy } from '@/lib/copy';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
-import { getErrorMessage } from '@/utils/errors';
+import { getCancelChallengeMessage } from '@/utils/errors';
 import type { ChallengeWithStats } from '@/lib/types';
 import { useQuery } from '@tanstack/react-query';
 
@@ -287,6 +287,11 @@ export default function ChallengesScreen() {
             currentUserId={user?.id}
             progressById={progressById}
             onPress={openChallenge}
+            allowCancel
+            official={isOfficialAccount(profile)}
+            onOverflow={(challenge, anchor) =>
+              setOverflow((current) => (current ? null : { challenge, anchor }))
+            }
           />
           <ChallengeCarousel
             title={copy('lobby.railFriends')}
@@ -321,7 +326,7 @@ export default function ChallengesScreen() {
             ? [
                 {
                   key: 'cancel',
-                  label: copy('challenge.cancel'),
+                  label: isOfficialAccount(profile) ? copy('challenge.delete') : copy('challenge.cancel'),
                   danger: true,
                   onPress: () => {
                     setCancelError(null);
@@ -356,7 +361,7 @@ export default function ChallengesScreen() {
                 setTimeout(() => setToast(null), 2200);
               },
               onError: (error) => {
-                setCancelError(getErrorMessage(error));
+                setCancelError(getCancelChallengeMessage(error));
               },
             });
           }}
