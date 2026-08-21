@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View } from 'react-native';
 
 import { useMentionCandidates } from '@/hooks/useMentionCandidates';
 import { copy } from '@/lib/copy';
@@ -43,6 +43,7 @@ export function MentionField({
 }: MentionFieldProps) {
   const [parts, setParts] = useState<MentionPart[]>(emptyMentionParts);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [grown, setGrown] = useState(!compact);
   const lastPart = parts[parts.length - 1];
   const lastText = lastPart?.type === 'text' ? lastPart.value : '';
   const query = mentionQueryFromText(lastText);
@@ -95,14 +96,36 @@ export function MentionField({
     commit(backspaceMentionParts(parts));
   }
 
+  const empty = chips.length === 0 && !lastText;
+  const lineHeight = 22;
+  const showPlaceholder = Boolean(compact && empty && placeholder);
+
   return (
     <View>
       <View
-        className="flex-row flex-wrap items-center"
+        className={compact && empty ? 'flex-row items-center' : 'flex-row flex-wrap items-center'}
         style={{
-          minHeight: compact ? 32 : 44,
+          minHeight: compact ? lineHeight : 44,
           borderWidth: 0,
+          position: 'relative',
         }}>
+        {showPlaceholder ? (
+          <AppText
+            pointerEvents="none"
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              fontSize: 16,
+              lineHeight,
+              color: THEME.textMuted,
+            }}>
+            {placeholder}
+          </AppText>
+        ) : null}
         {parts.map((part) =>
           part.type === 'chip' ? (
             <View
@@ -117,26 +140,50 @@ export function MentionField({
             <TextInput
               key={part.id}
               value={part.value}
-              onChangeText={updateLastText}
-              placeholder={chips.length === 0 ? placeholder : undefined}
+              onChangeText={(value) => {
+                updateLastText(value);
+                if (compact) {
+                  setGrown(value.length > 0);
+                }
+              }}
+              placeholder={compact ? undefined : chips.length === 0 ? placeholder : undefined}
               placeholderTextColor={THEME.textMuted}
               autoFocus={autoFocus}
-              multiline
+              multiline={compact ? grown : true}
               blurOnSubmit={false}
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              autoCorrect
+              autoCapitalize="sentences"
+              keyboardType="default"
               accessibilityLabel={accessibilityLabel ?? 'Write a post'}
               onKeyPress={(event) => onKeyPress(event.nativeEvent.key)}
               onSubmitEditing={onSubmit}
+              onContentSizeChange={(event) => {
+                if (!compact) {
+                  return;
+                }
+                if (event.nativeEvent.contentSize.height > lineHeight + 4 && lastText) {
+                  setGrown(true);
+                }
+              }}
               style={{
                 flexGrow: 1,
-                minWidth: 72,
-                minHeight: compact ? 32 : 36,
-                paddingVertical: compact ? 4 : 6,
+                flexShrink: 1,
+                minWidth: compact ? 48 : 72,
+                width: compact && empty ? '100%' : undefined,
+                minHeight: compact ? lineHeight : 36,
+                maxHeight: compact && !grown ? lineHeight : 120,
+                paddingVertical: compact ? 0 : 6,
                 color: THEME.textPrimary,
-                fontSize: 14,
+                fontSize: 16,
+                lineHeight,
+                ...(Platform.OS === 'web' ? ({ outlineStyle: 'none', overflow: 'hidden' } as object) : null),
               }}
             />
           ) : (
-            <AppText key={part.id} className="text-[14px] text-ink">
+            <AppText key={part.id} className="text-[16px] text-ink">
               {part.value}
             </AppText>
           ),

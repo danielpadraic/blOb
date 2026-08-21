@@ -3,14 +3,14 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 import { MentionField } from '@/components/feed/MentionField';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
+import { GifPicker } from '@/components/feed/GifPicker';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
@@ -18,6 +18,7 @@ import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { asCopyTone, copy } from '@/lib/copy';
+import { ensureLibraryPermission, openAppSettings, permissionCopy } from '@/lib/mediaPermissions';
 import {
   asDefaultPostAudience,
   type PostAudience,
@@ -30,16 +31,18 @@ import { wallHostLabel } from '@/lib/profileWall';
 import { supabase } from '@/lib/supabase';
 import type { ComposeInput, QuoteSnapshot } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
-import { handleEnterToSubmit } from '@/utils/keyboard';
-import { isHttpUrl, mediaKind } from '@/utils/media';
-import { uploadPostMedia } from '@/utils/upload';
+import { mediaKind } from '@/utils/media';
+import { uploadPostAttachment } from '@/utils/upload';
+
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 type Attachment = {
   id: string;
   uri: string;
-  kind: 'photo' | 'video' | 'file' | 'link';
+  kind: 'photo' | 'video' | 'file' | 'link' | 'gif';
   mimeType?: string | null;
   name?: string;
+  size?: number | null;
   blob?: Blob | null;
 };
 
@@ -76,11 +79,11 @@ export function Composer({
   const router = useRouter();
   const social = useSocialSheetsOptional();
   const profileDefault = asDefaultPostAudience(profile?.default_post_audience);
+  const [fieldKey, setFieldKey] = useState(0);
   const [doc, setDoc] = useState<MentionDoc>({ text: initialText ?? '', chips: [] });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [linkDraft, setLinkDraft] = useState('');
+  const [gifOpen, setGifOpen] = useState(false);
   const allowPublic = !audienceOptions || audienceOptions.some((item) => item.value === 'public');
   const [audience, setAudience] = useState<PostAudience>(
     hideAudience ? 'public' : (defaultAudience ?? (wallHost ? 'public' : profileDefault)),
@@ -109,6 +112,41 @@ export function Composer({
     });
   }
 
+  async function pickPhoto() {
+    const permission = await ensureLibraryPermission();
+    if (!permission.ok) {
+      const copyBlock = permissionCopy('library');
+      Alert.alert(copyBlock.title, copyBlock.body, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => void openAppSettings() },
+      ]);
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.9,
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      });
+      if (result.canceled || !result.assets[0]?.uri) {
+        return;
+      }
+      const asset = result.assets[0];
+      addAttachment({
+        uri: asset.uri,
+        kind: 'photo',
+        mimeType: asset.mimeType,
+        name: asset.fileName ?? 'Photo',
+        size: asset.fileSize ?? null,
+        blob: asset.file ?? null,
+      });
+    } catch (error) {
+      Alert.alert('Couldn’t attach that photo', getErrorMessage(error));
+    }
+  }
+
   async function pickFile() {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -119,35 +157,21 @@ export function Composer({
         return;
       }
       const asset = result.assets[0];
+      if (typeof asset.size === 'number' && asset.size > MAX_FILE_BYTES) {
+        Alert.alert('That file is too large', 'Keep it under 50 MB.');
+        return;
+      }
       addAttachment({
         uri: asset.uri,
         kind: 'file',
         mimeType: asset.mimeType ?? asset.file?.type,
         name: asset.name,
+        size: asset.size ?? null,
         blob: asset.file ?? null,
       });
     } catch (error) {
       Alert.alert('Couldn’t attach that file', getErrorMessage(error));
     }
-  }
-
-  function addLink() {
-    const url = linkDraft.trim();
-    if (!isHttpUrl(url)) {
-      Alert.alert('Needs a real link', 'Paste a full http(s) URL.');
-      return;
-    }
-    addAttachment({ uri: url, kind: 'link', name: url });
-    setLinkDraft('');
-    setLinkOpen(false);
-  }
-
-  function onOther() {
-    Alert.alert('Add something', 'A file or a link — your call.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Link', onPress: () => setLinkOpen(true) },
-      { text: 'File', onPress: () => void pickFile() },
-    ]);
   }
 
   async function handleSubmit() {
@@ -163,18 +187,23 @@ export function Composer({
       const mediaUrls: string[] = [];
       if (!quote) {
         for (const [index, attachment] of attachments.entries()) {
-          if (attachment.kind === 'link') {
+          if (attachment.kind === 'link' || attachment.kind === 'gif') {
             mediaUrls.push(attachment.uri);
             continue;
           }
-          const url = await uploadPostMedia({
-            uri: attachment.uri,
-            userId: user.id,
-            fileStem: `${Date.now()}-${index}`,
-            mimeType: attachment.mimeType ?? attachment.blob?.type,
-            blob: attachment.blob,
-          });
-          mediaUrls.push(url);
+          try {
+            const url = await uploadPostAttachment({
+              uri: attachment.uri,
+              userId: user.id,
+              fileStem: `${Date.now()}-${index}`,
+              mimeType: attachment.mimeType ?? attachment.blob?.type,
+              blob: attachment.blob,
+              originalName: attachment.name,
+            });
+            mediaUrls.push(url);
+          } catch {
+            throw new Error(copy('error.composerUpload'));
+          }
         }
       }
       if (wallHost?.id) {
@@ -197,6 +226,8 @@ export function Composer({
       });
       setDoc({ text: '', chips: [] });
       setAttachments([]);
+      setGifOpen(false);
+      setFieldKey((value) => value + 1);
       setAudience(hideAudience ? 'public' : wallHost ? 'public' : profileDefault);
       setAudienceUserIds([]);
     } catch (error) {
@@ -211,7 +242,7 @@ export function Composer({
 
   return (
     <Card padded={false} style={{ paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20 }}>
-      <View className="flex-row items-center gap-2.5">
+      <View className="flex-row items-end" style={{ gap: 2 }}>
         <Avatar
           uri={profile?.avatar_url}
           name={profile?.display_name ?? profile?.username ?? user?.email}
@@ -219,65 +250,67 @@ export function Composer({
           radius={14}
         />
         <View
-          className="min-w-0 flex-1 flex-row items-center"
+          className="min-w-0 flex-1"
           style={{
             backgroundColor: THEME.background,
             borderWidth: 1,
             borderColor: THEME.border,
             borderRadius: 18,
-            paddingLeft: 10,
-            paddingRight: 4,
-            minHeight: 40,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            minHeight: 44,
+            justifyContent: 'center',
           }}>
-          <View className="min-w-0 flex-1">
-            {wallHost ? (
-              <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
-                {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
-              </AppText>
-            ) : null}
-            <MentionField
-              placeholder={resolvedPlaceholder}
-              autoFocus={autoFocus}
-              compact
-              audience={audience}
-              audienceUserIds={audienceUserIds}
-              onChange={setDoc}
-              onSubmit={() => void handleSubmit()}
-              accessibilityLabel="Write a post"
-            />
-          </View>
-          {hideAudience ? null : (
-            <AudienceIconButton
-              audience={audience}
-              onPress={() =>
-                social?.openAudience({
-                  audience,
-                  audienceUserIds,
-                  allowPublic,
-                  onSave: (next, ids) => {
-                    setAudience(next);
-                    setAudienceUserIds(ids);
-                  },
-                })
-              }
-            />
-          )}
-          {!quote ? (
-            <>
-              <ComposerIcon
-                glyph={GLYPH.camera}
-                label="Photo"
-                onPress={() => router.push(captureHref('post', 'photo'))}
-              />
-              <ComposerIcon
-                glyph={GLYPH.video}
-                label="Video"
-                onPress={() => router.push(captureHref('post', 'video'))}
-              />
-              <ComposerIcon glyph={GLYPH.attach} label="Other" onPress={onOther} />
-            </>
+          {wallHost ? (
+            <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
+              {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
+            </AppText>
           ) : null}
+          <MentionField
+            key={fieldKey}
+            placeholder={resolvedPlaceholder}
+            autoFocus={autoFocus}
+            compact
+            audience={audience}
+            audienceUserIds={audienceUserIds}
+            onChange={setDoc}
+            onSubmit={() => void handleSubmit()}
+            accessibilityLabel="Write a post"
+          />
         </View>
+        {!quote ? (
+          <>
+            <ComposerIcon
+              glyph={GLYPH.camera}
+              label="Camera"
+              onPress={() => router.push(captureHref('post', 'photo'))}
+            />
+            <ComposerIcon glyph={GLYPH.album} label="Photo library" onPress={() => void pickPhoto()} />
+            <ComposerIcon glyph={GLYPH.attach} label="File" onPress={() => void pickFile()} />
+            <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+          </>
+        ) : null}
+        {hideAudience ? null : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Audience"
+            onPress={() =>
+              social?.openAudience({
+                audience,
+                audienceUserIds,
+                allowPublic,
+                onSave: (next, ids) => {
+                  setAudience(next);
+                  setAudienceUserIds(ids);
+                },
+              })
+            }
+            hitSlop={4}
+            className="items-center justify-center"
+            style={{ width: 44, height: 44 }}>
+            <AudienceIconButton audience={audience} />
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Post"
@@ -285,18 +318,29 @@ export function Composer({
           disabled={!canPost || busy}
           className="items-center justify-center"
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 12,
+            width: 44,
+            height: 44,
+            borderRadius: 14,
             backgroundColor: canPost && !busy ? THEME.primary : THEME.border,
           }}>
           <Glyph
             name={GLYPH.send}
             color={canPost && !busy ? THEME.primaryForeground : THEME.textMuted}
-            size={16}
+            size={18}
           />
         </Pressable>
       </View>
+
+      {gifOpen && !quote ? (
+        <GifPicker
+          visible
+          onClose={() => setGifOpen(false)}
+          onPick={(url) => {
+            addAttachment({ uri: url, kind: 'gif', name: 'GIF' });
+            setGifOpen(false);
+          }}
+        />
+      ) : null}
 
       {quote ? (
         <View className="mt-2" pointerEvents="none">
@@ -323,44 +367,18 @@ export function Composer({
           ))}
         </View>
       ) : null}
-
-      {linkOpen ? (
-        <View
-          className="mt-3 px-1 pb-1 pt-3"
-          style={{
-            borderTopWidth: 1,
-            borderTopColor: THEME.border,
-          }}>
-            <AppText className="mb-3 text-[16px] font-bold text-charcoal">Paste a link</AppText>
-            <Input
-              value={linkDraft}
-              onChangeText={setLinkDraft}
-              placeholder="https://"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              onKeyPress={(event) => handleEnterToSubmit(event, addLink)}
-            />
-            <View className="mt-3 flex-row gap-2">
-              <View className="flex-1">
-                <Button title="Cancel" variant="ghost" size="sm" onPress={() => setLinkOpen(false)} />
-              </View>
-              <View className="flex-1">
-                <Button title="Add link" size="sm" onPress={addLink} disabled={!linkDraft.trim()} />
-              </View>
-            </View>
-        </View>
-      ) : null}
     </Card>
   );
 }
 
 function ComposerIcon({
   glyph,
+  mark,
   label,
   onPress,
 }: {
-  glyph: (typeof GLYPH)[keyof typeof GLYPH];
+  glyph?: (typeof GLYPH)[keyof typeof GLYPH];
+  mark?: string;
   label: string;
   onPress: () => void;
 }) {
@@ -371,10 +389,30 @@ function ComposerIcon({
       onPress={onPress}
       hitSlop={4}
       className="items-center justify-center"
-      style={{ width: 28, height: 32 }}>
-      <Glyph name={glyph} color={THEME.textMuted} size={15} />
+      style={{ width: 44, height: 44 }}>
+      {mark ? (
+        <AppText className="text-[11px] font-extrabold" style={{ color: THEME.textMuted }}>
+          {mark}
+        </AppText>
+      ) : glyph ? (
+        <Glyph name={glyph} color={THEME.textMuted} size={18} />
+      ) : null}
     </Pressable>
   );
+}
+
+function formatSize(bytes?: number | null): string | null {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) {
+    return null;
+  }
+  if (n < 1024) {
+    return `${Math.round(n)} B`;
+  }
+  if (n < 1024 * 1024) {
+    return `${Math.round(n / 1024)} KB`;
+  }
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function AttachmentChip({
@@ -384,7 +422,9 @@ function AttachmentChip({
   attachment: Attachment;
   onRemove: () => void;
 }) {
-  const kind = attachment.kind === 'link' ? 'link' : mediaKind(attachment.uri);
+  const kind = attachment.kind === 'link' ? 'link' : attachment.kind === 'gif' ? 'image' : mediaKind(attachment.uri);
+  const size = formatSize(attachment.size);
+  const fileLabel = [attachment.name || 'File', size].filter(Boolean).join(' · ');
   return (
     <View
       className="flex-row items-center overflow-hidden"
@@ -393,18 +433,23 @@ function AttachmentChip({
         borderColor: THEME.border,
         borderRadius: 10,
         backgroundColor: THEME.background,
+        maxWidth: '100%',
       }}>
-      {kind === 'image' || attachment.kind === 'photo' ? (
-        <Image source={{ uri: attachment.uri }} style={{ width: 36, height: 36 }} contentFit="cover" />
+      {kind === 'image' || attachment.kind === 'photo' || attachment.kind === 'gif' ? (
+        <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44 }} contentFit="cover" />
       ) : (
-        <View className="h-9 items-center justify-center px-2">
-          <AppText className="text-[11px] font-semibold text-charcoal">
-            {attachment.kind === 'video' ? 'Video' : attachment.kind === 'link' ? 'Link' : 'File'}
+        <View className="min-h-[44px] justify-center px-2.5" style={{ maxWidth: 180 }}>
+          <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
+            {attachment.kind === 'video' ? 'Video' : attachment.kind === 'link' ? 'Link' : fileLabel}
           </AppText>
         </View>
       )}
-      <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" onPress={onRemove} className="px-2">
-        <AppText className="text-[12px] font-semibold text-muted">×</AppText>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Remove attachment"
+        onPress={onRemove}
+        style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+        <AppText className="text-[14px] font-semibold text-muted">×</AppText>
       </Pressable>
     </View>
   );

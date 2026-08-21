@@ -21,6 +21,8 @@ The app is Expo SDK 57 + Expo Router + TypeScript + NativeWind + Supabase.
 cp .env.example .env
 ```
 
+Home composer GIF search uses Tenor. Set `EXPO_PUBLIC_TENOR_KEY` (a Tenor API v2 key). `EXPO_PUBLIC_GIPHY_KEY` works as a fallback if Tenor is unset.
+
 3. In the [Supabase SQL editor](https://supabase.com/dashboard), run `supabase/schema.sql`. That creates tables, RLS, storage buckets, RPCs (`join_challenge`, `get_my_profile`), and seeds **The 6-Day Spark**.
 4. Disable “Confirm email” in Auth settings while you are developing, or use the confirmation link after register.
 5. Install and start:

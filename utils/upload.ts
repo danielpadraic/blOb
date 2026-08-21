@@ -9,7 +9,7 @@ import { getErrorMessage } from '@/utils/errors';
 
 export type StorageBucket = 'avatars' | 'challenge-proofs' | 'post-media';
 
-const IMAGE_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+const IMAGE_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/gif']);
 
 export function guessContentType(uri: string): string {
   const lowered = uri.toLowerCase().split('?')[0] ?? uri.toLowerCase();
@@ -144,15 +144,17 @@ export function buildStoragePath(input: {
   return `${input.userId}/${stamp}.${ext}`;
 }
 
-function humanStorageError(error: unknown, kind: 'photo' | 'proof' | 'avatar'): string {
+function humanStorageError(error: unknown, kind: 'photo' | 'proof' | 'avatar' | 'file'): string {
   const raw = getErrorMessage(error);
   const message = raw.toLowerCase();
-  const noun = kind === 'proof' ? 'proof' : 'photo';
+  const noun = kind === 'proof' ? 'proof' : kind === 'file' ? 'file' : 'photo';
 
   if (message.includes('mime') || message.includes('not supported') || message.includes('content type') || message.includes('octet-stream')) {
-    return kind === 'proof'
-      ? 'That proof type isn’t supported. Try a JPEG, PNG, or short MP4.'
-      : `That ${noun} type isn’t supported. Try a JPEG or PNG.`;
+    return kind === 'file'
+      ? 'That file type isn’t supported.'
+      : kind === 'proof'
+        ? 'That proof type isn’t supported. Try a JPEG, PNG, or short MP4.'
+        : `That ${noun} type isn’t supported. Try a JPEG or PNG.`;
   }
   if (message.includes('maximum size') || message.includes('payload too large') || message.includes('file size')) {
     return `That ${noun} is too large. Try a smaller one.`;
@@ -193,7 +195,13 @@ async function uploadObject(input: {
   }
 
   const kind =
-    input.bucket === 'avatars' ? 'avatar' : input.bucket === 'challenge-proofs' ? 'proof' : 'photo';
+    input.bucket === 'avatars'
+      ? 'avatar'
+      : input.bucket === 'challenge-proofs'
+        ? 'proof'
+        : input.path.includes('/files/')
+          ? 'file'
+          : 'photo';
   // post-media has INSERT but historically no UPDATE policy; upsert:true is a 400.
   const upsert = input.upsert ?? false;
   const fileName = input.path.split('/').pop() ?? `upload.${extensionFor(input.contentType)}`;
@@ -330,6 +338,56 @@ export async function uploadPostMedia(input: {
     throw new Error('The photo uploaded, but we couldn’t build a link to it.');
   }
   return data.publicUrl;
+}
+
+function fileExtension(contentType: string, originalName?: string): string {
+  const fromName = originalName?.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') ?? '';
+  if (fromName && fromName.length <= 8) {
+    return fromName;
+  }
+  return extensionFor(contentType);
+}
+
+export async function uploadPostAttachment(input: {
+  uri: string;
+  userId: string;
+  fileStem: string;
+  mimeType?: string | null;
+  blob?: Blob | null;
+  originalName?: string;
+}): Promise<string> {
+  const contentType = normalizeContentType(input.mimeType ?? input.blob?.type, input.uri);
+  if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
+    return uploadPostMedia({
+      uri: input.uri,
+      userId: input.userId,
+      fileStem: input.fileStem,
+      mimeType: contentType,
+      blob: input.blob,
+    });
+  }
+  const ext = fileExtension(contentType, input.originalName);
+  const storedType =
+    contentType.startsWith('application/') || contentType.startsWith('text/')
+      ? contentType
+      : 'application/octet-stream';
+  try {
+    const path = await uploadObject({
+      bucket: STORAGE_BUCKETS.postMedia,
+      path: `${input.userId}/files/${input.fileStem}.${ext}`,
+      uri: input.uri,
+      contentType: storedType,
+      blob: input.blob,
+      upsert: false,
+    });
+    const { data } = supabase.storage.from(STORAGE_BUCKETS.postMedia).getPublicUrl(path);
+    if (!data.publicUrl) {
+      throw new Error('The file uploaded, but we couldn’t build a link to it.');
+    }
+    return data.publicUrl;
+  } catch (error) {
+    throw new Error(humanStorageError(error, 'file'));
+  }
 }
 
 export async function uploadAvatarImage(input: {

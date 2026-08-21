@@ -12,11 +12,14 @@ export function mediaKind(url: string): MediaKind {
   if (/\.(png|jpe?g|webp|gif|heic|heif)$/.test(path)) {
     return 'image';
   }
-  if (/\/object\/public\/post-media\//.test(path) || /\/object\/public\/avatars\//.test(path)) {
+  if (/tenor\.com|giphy\.com|gph\.is/.test(path)) {
     return 'image';
   }
-  if (/\.(pdf|txt|csv|zip|docx?)$/.test(path)) {
+  if (/\.(pdf|txt|csv|zip|docx?)$/.test(path) || /\/object\/public\/post-media\/[^/]+\/files\//.test(path)) {
     return 'file';
+  }
+  if (/\/object\/public\/post-media\//.test(path) || /\/object\/public\/avatars\//.test(path)) {
+    return 'image';
   }
   if (/^https?:\/\//.test(url)) {
     return 'link';
