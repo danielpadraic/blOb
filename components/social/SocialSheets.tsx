@@ -44,6 +44,7 @@ import { personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
+import { useBugReport } from '@/components/bug/BugReportHost';
 
 const REPORT_REASONS = [
   { value: 'spam', label: 'Spam' },
@@ -461,8 +462,16 @@ function ProfileMuteMenu({
 }) {
   const toggle = useToggleMute();
   const block = useBlockUser();
+  const bugReport = useBugReport();
   return (
     <View style={{ minWidth: 140 }}>
+      <ListRow
+        label="Report a problem"
+        onPress={() => {
+          onClose();
+          bugReport.open();
+        }}
+      />
       <ListRow
         label={muted ? 'Unmute' : 'Mute'}
         onPress={() => {

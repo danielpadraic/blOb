@@ -14,39 +14,50 @@ import {
   Pressable,
   View,
 } from 'react-native';
-import { usePathname } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  ChallengeMenuPopover,
+  type MenuAnchor,
+} from '@/components/challenge/ChallengeOverflowMenu';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { submitBugReport, type BugReportAttachment } from '@/lib/bugReports';
 import { getLastCapture } from '@/lib/lastCapture';
+import { ADMIN_HREF } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
 import { ensureLibraryPermission, openAppSettings, permissionCopy } from '@/lib/mediaPermissions';
 import { asGalleryMedia } from '@/utils/media';
 import { getErrorMessage } from '@/utils/errors';
 
+export type { MenuAnchor as BugReportMenuAnchor };
+
 type BugReportContextValue = {
   open: () => void;
+  openMenu: (anchor: MenuAnchor, options?: { admin?: boolean }) => void;
 };
 
 const BugReportContext = createContext<BugReportContextValue | null>(null);
 
+const EMPTY: BugReportContextValue = {
+  open: () => {},
+  openMenu: () => {},
+};
+
 export function useBugReport(): BugReportContextValue {
-  const value = useContext(BugReportContext);
-  if (!value) {
-    return { open: () => {} };
-  }
-  return value;
+  return useContext(BugReportContext) ?? EMPTY;
 }
 
 export function BugReportHost({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState<{ anchor: MenuAnchor; admin: boolean } | null>(null);
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState<BugReportAttachment | null>(null);
   const [route, setRoute] = useState('');
@@ -56,6 +67,7 @@ export function BugReportHost({ children }: { children?: ReactNode }) {
   const lastCapture = open ? getLastCapture() : null;
 
   const show = useCallback(() => {
+    setMenu(null);
     setRoute(pathname);
     setMessage('');
     setAttachment(null);
@@ -64,6 +76,10 @@ export function BugReportHost({ children }: { children?: ReactNode }) {
     setOpen(true);
   }, [pathname]);
 
+  const openMenu = useCallback((anchor: MenuAnchor, options?: { admin?: boolean }) => {
+    setMenu({ anchor, admin: Boolean(options?.admin) });
+  }, []);
+
   const close = useCallback(() => {
     if (sending) {
       return;
@@ -71,7 +87,7 @@ export function BugReportHost({ children }: { children?: ReactNode }) {
     setOpen(false);
   }, [sending]);
 
-  const value = useMemo(() => ({ open: show }), [show]);
+  const value = useMemo(() => ({ open: show, openMenu }), [openMenu, show]);
 
   async function pickGallery() {
     const permission = await ensureLibraryPermission();
@@ -158,6 +174,26 @@ export function BugReportHost({ children }: { children?: ReactNode }) {
       <View style={{ flex: 1 }}>
         {children}
         <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 300, elevation: 300 }}>
+        <ChallengeMenuPopover
+          anchor={menu?.anchor ?? null}
+          onClose={() => setMenu(null)}
+          actions={[
+            {
+              key: 'report',
+              label: 'Report a problem',
+              onPress: show,
+            },
+            ...(menu?.admin
+              ? [
+                  {
+                    key: 'admin',
+                    label: 'Admin',
+                    onPress: () => router.push(ADMIN_HREF),
+                  },
+                ]
+              : []),
+          ]}
+        />
         <ChromeOverlay visible={open} onClose={close}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Pressable

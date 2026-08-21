@@ -1,4 +1,5 @@
 import { Pressable, View } from 'react-native';
+import { useRef } from 'react';
 import { useRouter } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
@@ -24,7 +25,7 @@ import {
   profileWeightKg,
 } from '@/lib/bodyMetrics';
 import { experienceLabel, goalsLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
-import { FITNESS_HISTORY_HREF, ADMIN_HREF } from '@/lib/routes';
+import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { isAdminViewer } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
@@ -42,6 +43,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const canAdmin = isAdminViewer(profile);
   const bugReport = useBugReport();
+  const menuRef = useRef<View>(null);
 
   if (isLoading) {
     return (
@@ -85,16 +87,20 @@ export default function ProfileScreen() {
       <AppHeader
         title="You"
         trailing={
-          canAdmin ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Admin"
-              hitSlop={8}
-              onPress={() => router.push(ADMIN_HREF)}
-              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-              <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
-            </Pressable>
-          ) : null
+          <Pressable
+            ref={menuRef}
+            collapsable={false}
+            accessibilityRole="button"
+            accessibilityLabel="Profile menu"
+            hitSlop={8}
+            onPress={() => {
+              menuRef.current?.measureInWindow((x, y, width, height) => {
+                bugReport.openMenu({ x, y, width, height }, { admin: canAdmin });
+              });
+            }}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
+          </Pressable>
         }
       />
       <ProfileHeader profile={profile} />

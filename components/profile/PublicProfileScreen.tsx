@@ -195,20 +195,24 @@ export default function PublicProfileScreen() {
       <Stack.Screen
         options={{
           ...headerOptions,
-          headerRight: isSelf && isAdminViewer(profile)
+          headerRight: isSelf
             ? () => (
                 <Pressable
+                  ref={menuRef}
+                  collapsable={false}
                   accessibilityRole="button"
-                  accessibilityLabel="Admin"
+                  accessibilityLabel="Profile menu"
                   hitSlop={8}
-                  onPress={() => router.push(ADMIN_HREF)}
+                  onPress={() => {
+                    menuRef.current?.measureInWindow((x, y, width, height) => {
+                      bugReport.openMenu({ x, y, width, height }, { admin: isAdminViewer(profile) });
+                    });
+                  }}
                   style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                   <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
                 </Pressable>
               )
-            : isSelf || official
-              ? undefined
-              : () => (
+            : () => (
                   <Pressable
                     ref={menuRef}
                     collapsable={false}
@@ -287,17 +291,15 @@ export default function PublicProfileScreen() {
                   variant="outline"
                   onPress={() => router.push(directMessageHref(profile.id))}
                 />
-                {official ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Report a problem"
-                    onPress={() => bugReport.open()}
-                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
-                    <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                      Report a problem
-                    </AppText>
-                  </Pressable>
-                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Report a problem"
+                  onPress={() => bugReport.open()}
+                  style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                    Report a problem
+                  </AppText>
+                </Pressable>
                 {canPost ? (
                   <Pressable
                     accessibilityRole="button"
