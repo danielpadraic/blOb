@@ -30,6 +30,7 @@ import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { mediaDurationMs, waveClipWindows } from '@/lib/waveClips';
 import { getErrorMessage } from '@/utils/errors';
+import { asGalleryMedia } from '@/utils/media';
 import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
 
 type CaptureStudioProps = {
@@ -129,8 +130,8 @@ export function CaptureStudio({
       setDenied(permission);
       return;
     }
-    const videos = captureKind === 'video' || mode === 'story';
-    const images = captureKind === 'photo' || mode === 'story';
+    const videos = captureKind === 'video' || mode === 'story' || mode === 'post';
+    const images = captureKind === 'photo' || mode === 'story' || mode === 'post';
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: videos && images ? ['images', 'videos'] : videos ? ['videos'] : ['images'],
       quality: 0.8,
@@ -143,7 +144,17 @@ export function CaptureStudio({
       return;
     }
     const asset = result.assets[0];
-    const isVideo = (asset.duration != null && asset.duration > 0) || Boolean(asset.mimeType?.startsWith('video'));
+    const kind = asGalleryMedia({
+      mimeType: asset.mimeType ?? asset.file?.type,
+      fileName: asset.fileName,
+      uri: asset.uri,
+      type: asset.type,
+    });
+    if (!kind) {
+      setError(copy('error.usePhotoOrVideo'));
+      return;
+    }
+    const isVideo = kind === 'video';
     setDraft({
       uri: asset.uri,
       mediaType: isVideo ? 'video' : 'image',
@@ -262,7 +273,7 @@ export function CaptureStudio({
           }
           webFallback={mode === 'story' ? false : webFallback}
           chromeInset={false}
-          allowModeToggle={mode === 'story'}
+          allowModeToggle={mode === 'story' || mode === 'post'}
           deniedTitle={mode === 'story' ? copy('wave.cameraNeed') : undefined}
           onCaptured={(next) => {
             setDraft(next);

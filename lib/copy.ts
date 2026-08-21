@@ -152,6 +152,7 @@ const STRINGS = {
   'challenge.pickStart': 'Pick a start date',
   'error.startUpdate': 'Couldn’t update the start.',
   'error.composerUpload': 'Couldn’t upload that. The post wasn’t sent.',
+  'error.usePhotoOrVideo': 'Use a photo or video.',
   'challenge.startTomorrow': 'Start tomorrow',
   'challenge.editChallenge': 'Edit challenge',
   'challenge.waitingToStart': 'Waiting to start.',

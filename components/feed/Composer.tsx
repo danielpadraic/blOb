@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
-import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 
 import { MentionField } from '@/components/feed/MentionField';
@@ -18,6 +17,7 @@ import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { asCopyTone, copy } from '@/lib/copy';
+import { gifSearchConfigured } from '@/lib/gifSearch';
 import { ensureLibraryPermission, openAppSettings, permissionCopy } from '@/lib/mediaPermissions';
 import {
   asDefaultPostAudience,
@@ -31,7 +31,7 @@ import { wallHostLabel } from '@/lib/profileWall';
 import { supabase } from '@/lib/supabase';
 import type { ComposeInput, QuoteSnapshot } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
-import { mediaKind } from '@/utils/media';
+import { asGalleryMedia } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -39,7 +39,7 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024;
 type Attachment = {
   id: string;
   uri: string;
-  kind: 'photo' | 'video' | 'file' | 'link' | 'gif';
+  kind: 'photo' | 'video' | 'gif';
   mimeType?: string | null;
   name?: string;
   size?: number | null;
@@ -112,7 +112,7 @@ export function Composer({
     });
   }
 
-  async function pickPhoto() {
+  async function pickGallery() {
     const permission = await ensureLibraryPermission();
     if (!permission.ok) {
       const copyBlock = permissionCopy('library');
@@ -124,7 +124,7 @@ export function Composer({
     }
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ['images', 'videos'],
         allowsEditing: false,
         quality: 0.9,
         preferredAssetRepresentationMode:
@@ -134,43 +134,30 @@ export function Composer({
         return;
       }
       const asset = result.assets[0];
-      addAttachment({
+      const kind = asGalleryMedia({
+        mimeType: asset.mimeType ?? asset.file?.type,
+        fileName: asset.fileName,
         uri: asset.uri,
-        kind: 'photo',
-        mimeType: asset.mimeType,
-        name: asset.fileName ?? 'Photo',
-        size: asset.fileSize ?? null,
-        blob: asset.file ?? null,
+        type: asset.type,
       });
-    } catch (error) {
-      Alert.alert('Couldn’t attach that photo', getErrorMessage(error));
-    }
-  }
-
-  async function pickFile() {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (result.canceled || !result.assets[0]) {
+      if (!kind) {
+        Alert.alert(copy('error.usePhotoOrVideo'));
         return;
       }
-      const asset = result.assets[0];
-      if (typeof asset.size === 'number' && asset.size > MAX_FILE_BYTES) {
+      if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_FILE_BYTES) {
         Alert.alert('That file is too large', 'Keep it under 50 MB.');
         return;
       }
       addAttachment({
         uri: asset.uri,
-        kind: 'file',
+        kind,
         mimeType: asset.mimeType ?? asset.file?.type,
-        name: asset.name,
-        size: asset.size ?? null,
+        name: asset.fileName ?? (kind === 'video' ? 'Video' : 'Photo'),
+        size: asset.fileSize ?? null,
         blob: asset.file ?? null,
       });
     } catch (error) {
-      Alert.alert('Couldn’t attach that file', getErrorMessage(error));
+      Alert.alert('Couldn’t attach that', getErrorMessage(error));
     }
   }
 
@@ -187,7 +174,7 @@ export function Composer({
       const mediaUrls: string[] = [];
       if (!quote) {
         for (const [index, attachment] of attachments.entries()) {
-          if (attachment.kind === 'link' || attachment.kind === 'gif') {
+          if (attachment.kind === 'gif') {
             mediaUrls.push(attachment.uri);
             continue;
           }
@@ -285,9 +272,10 @@ export function Composer({
               label="Camera"
               onPress={() => router.push(captureHref('post', 'photo'))}
             />
-            <ComposerIcon glyph={GLYPH.album} label="Photo library" onPress={() => void pickPhoto()} />
-            <ComposerIcon glyph={GLYPH.attach} label="File" onPress={() => void pickFile()} />
-            <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+            <ComposerIcon glyph={GLYPH.album} label="Gallery" onPress={() => void pickGallery()} />
+            {gifSearchConfigured() ? (
+              <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+            ) : null}
           </>
         ) : null}
         {hideAudience ? null : (
@@ -331,7 +319,7 @@ export function Composer({
         </Pressable>
       </View>
 
-      {gifOpen && !quote ? (
+      {gifOpen && !quote && gifSearchConfigured() ? (
         <GifPicker
           visible
           onClose={() => setGifOpen(false)}
@@ -401,20 +389,6 @@ function ComposerIcon({
   );
 }
 
-function formatSize(bytes?: number | null): string | null {
-  const n = Number(bytes);
-  if (!Number.isFinite(n) || n <= 0) {
-    return null;
-  }
-  if (n < 1024) {
-    return `${Math.round(n)} B`;
-  }
-  if (n < 1024 * 1024) {
-    return `${Math.round(n / 1024)} KB`;
-  }
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function AttachmentChip({
   attachment,
   onRemove,
@@ -422,26 +396,24 @@ function AttachmentChip({
   attachment: Attachment;
   onRemove: () => void;
 }) {
-  const kind = attachment.kind === 'link' ? 'link' : attachment.kind === 'gif' ? 'image' : mediaKind(attachment.uri);
-  const size = formatSize(attachment.size);
-  const fileLabel = [attachment.name || 'File', size].filter(Boolean).join(' · ');
+  const visual = attachment.kind !== 'video';
   return (
     <View
       className="flex-row items-center overflow-hidden"
       style={{
         borderWidth: 1,
         borderColor: THEME.border,
-        borderRadius: 10,
+        borderRadius: 12,
         backgroundColor: THEME.background,
         maxWidth: '100%',
       }}>
-      {kind === 'image' || attachment.kind === 'photo' || attachment.kind === 'gif' ? (
-        <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44 }} contentFit="cover" />
+      {visual ? (
+        <Image source={{ uri: attachment.uri }} style={{ width: 96, height: 72 }} contentFit="cover" />
       ) : (
-        <View className="min-h-[44px] justify-center px-2.5" style={{ maxWidth: 180 }}>
-          <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
-            {attachment.kind === 'video' ? 'Video' : attachment.kind === 'link' ? 'Link' : fileLabel}
-          </AppText>
+        <View
+          className="items-center justify-center"
+          style={{ width: 96, height: 72, backgroundColor: THEME.primary }}>
+          <Glyph name={GLYPH.play} color="#fff" size={22} />
         </View>
       )}
       <Pressable
