@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
+import { AdminWallets } from '@/components/admin/AdminWallets';
 import { useAdminPulse } from '@/hooks/useAdmin';
 import { type AdminPulseMetric, type AdminRange } from '@/lib/admin';
 import { ADMIN_ERRORS_HREF, ADMIN_REPORTS_HREF, adminMetricHref } from '@/lib/routes';
@@ -117,6 +118,8 @@ export default function AdminPulseScreen() {
             Since {format(new Date(pulse.data.start), 'MMM d, h:mm a')} (Chicago)
           </AppText>
         ) : null}
+
+        <AdminWallets />
       </View>
     </Screen>
   );

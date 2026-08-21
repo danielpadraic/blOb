@@ -41,6 +41,14 @@ export type AdminErrorView = AppErrorRow & {
   username?: string | null;
 };
 
+export type AdminWalletRow = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  coins: number;
+  bucks: number;
+};
+
 function asNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -104,4 +112,24 @@ export async function fetchAdminErrors(): Promise<AdminErrorView[]> {
     ...row,
     username: row.user_id ? names.get(row.user_id) ?? null : null,
   }));
+}
+
+export async function fetchAdminWallets(): Promise<AdminWalletRow[]> {
+  const { data, error } = await supabase.rpc('admin_wallets');
+  if (error) {
+    throw error;
+  }
+  if (!Array.isArray(data)) {
+    return [];
+  }
+  return data.map((item) => {
+    const row = item as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ''),
+      username: typeof row.username === 'string' ? row.username : null,
+      display_name: typeof row.display_name === 'string' ? row.display_name : null,
+      coins: asNumber(row.coins),
+      bucks: asNumber(row.bucks),
+    };
+  });
 }

@@ -4,6 +4,7 @@ import {
   fetchAdminErrors,
   fetchAdminPulse,
   fetchAdminPulseList,
+  fetchAdminWallets,
   type AdminPulseMetric,
   type AdminRange,
 } from '@/lib/admin';
@@ -50,5 +51,14 @@ export function useAdminBugReports(enabled: boolean) {
     queryKey: ['admin-bug-reports'],
     queryFn: () => fetchAdminBugReports(),
     enabled,
+  });
+}
+
+export function useAdminWallets(enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin-wallets'],
+    queryFn: () => fetchAdminWallets(),
+    enabled,
+    staleTime: 10_000,
   });
 }

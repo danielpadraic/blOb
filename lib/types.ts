@@ -1283,6 +1283,10 @@ export type Database = {
         Args: { p_metric: string; p_range?: string };
         Returns: unknown;
       };
+      admin_wallets: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
       accept_legal: {
         Args: { p_tos: boolean; p_privacy: boolean; p_skill: boolean };
         Returns: { ok: boolean; tos_version: string; privacy_version: string; accepted_at: string };
