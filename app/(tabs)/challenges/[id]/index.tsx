@@ -80,7 +80,7 @@ import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { heroRingDays } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
-import { challengeGoalLabel } from '@/lib/challengeGoal';
+import { challengeGoalLabel, challengeDurationDays } from '@/lib/challengeGoal';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { tabBarLift, THEME } from '@/lib/theme';
@@ -159,7 +159,7 @@ export default function ChallengeDetailScreen() {
     }
     return countLiveCompetitors(roster.data);
   }, [challenge?.participant_count, isJoined, roster.data]);
-  const daysRequired = challengeTargetCount(challenge);
+  const durationDays = challengeDurationDays(challenge);
   const loggedToday = periodCheckin.data?.phase === 'submitted';
   const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
   const daysCompleted = heroRingDays({
@@ -413,7 +413,8 @@ export default function ChallengeDetailScreen() {
   const isPoints = isPointsChallenge(challenge);
   const isUnlimited = isUnlimitedChallenge(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
-  const target = daysRequired;
+  const target = durationDays;
+  const checkinTarget = challengeTargetCount(challenge);
   const logTitle = periodCheckin.data?.ctaTitle ?? copy('checkin.begin');
   const proofHeadline =
     proofSteps.length === 1
@@ -426,7 +427,7 @@ export default function ChallengeDetailScreen() {
     eliminated: Boolean(participation?.eliminated_at),
   });
   const settlement = settlementQuery.data;
-  const finishers = completerCount(roster.data ?? [], challenge.days_required ?? target);
+  const finishers = completerCount(roster.data ?? [], checkinTarget);
   const payoutAt = distributableAt(challenge);
   const gateOpen = isDistributeGateOpen(challenge, new Date(nowMs));
   const showJudgingUi =

@@ -1,4 +1,4 @@
-import { defaultSchedule, ensureSchedule, parseScheduleDate, scheduleRangeLabel, scheduleSummary } from '@/lib/challengeSchedule';
+import { defaultSchedule, durationDaysFromValues, ensureSchedule, parseScheduleDate, scheduleRangeLabel, scheduleSummary } from '@/lib/challengeSchedule';
 
 import {
   fundingModelSummary,
@@ -10,7 +10,7 @@ import type { ChallengeWithStats, ProofType } from '@/lib/types';
 import {
   composeChallengeRules,
   consistencyRuleSentence,
-  deriveFinishTarget,
+  checkinTargetForStore,
   extraRuleLines,
   emptyExtraRule,
   buildRulesStructured,
@@ -599,7 +599,8 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
   const title = typeof values?.title === 'string' ? values.title : '';
   const persistTasks = persistTasksForPublish(values, points);
   const namedProofs = namedProofsForPublish(values);
-  const target = deriveFinishTarget(values);
+  const durationDays = unlimited ? null : durationDaysFromValues(schedule);
+  const target = checkinTargetForStore(values, durationDays);
   const cap =
     values.participant_cap === 'limited' && Number(values.max_participants) > 0
       ? Number(values.max_participants)
@@ -616,7 +617,7 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     is_official: false,
     created_by: null,
     buy_in_amount: buyIn,
-    days_required: target,
+    days_required: durationDays ?? target,
     min_minutes: minMinutesForPublish(values),
     proof_requirements: namedProofs.length
       ? namedProofs
@@ -633,6 +634,8 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     status: 'open',
     starts_at: schedule.starts_at,
     ends_at: unlimited ? null : schedule.ends_at,
+    length_value: durationDays,
+    length_unit: unlimited ? null : 'days',
     prize_pool: contribution,
     prize_structure: unlimited ? 'winner_take_all' : values.prize_structure,
     top_places_mode: values.prize_structure === 'top_places' ? values.top_places_mode : null,

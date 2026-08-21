@@ -1,4 +1,5 @@
 import { resolveChallengeProofs } from '@/lib/challengeProofs';
+import { challengeDurationDays } from '@/lib/challengeGoal';
 import {
   asRulePeriod,
   parseRulesStructured,
@@ -17,9 +18,12 @@ type RuleChallenge = {
   frequency?: string | null;
   target_count?: number | null;
   days_required?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
   starts_at?: string | null;
   ends_at?: string | null;
   is_unlimited?: boolean | null;
+  is_official?: boolean | null;
   challenge_type?: string | null;
   min_minutes?: number | null;
   category?: string | null;
@@ -516,6 +520,6 @@ export function joinedProgressCopy(
     return { label: `${logged}/${count} check-ins`, ratio: logged / count };
   }
 
-  const total = Math.max(Number(challenge.days_required || challenge.target_count) || 1, 1);
+  const total = challengeDurationDays(challenge);
   return { label: `${logged}/${total} check-ins`, ratio: logged / total };
 }

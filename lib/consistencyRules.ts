@@ -192,6 +192,23 @@ export function deriveFinishTarget(
   return count * periodCountInDuration(days, values.frequency);
 }
 
+/** Check-ins to finish. Duration days stay separate — never count × days. */
+export function checkinTargetForStore(
+  values: Pick<
+    CreateChallengeValues,
+    'challenge_type' | 'duration_type' | 'required_checkins' | 'target_count' | 'duration_days' | 'frequency' | 'tasks'
+  >,
+  durationDays: number | null,
+): number {
+  if (values.challenge_type === 'points' && values.duration_type !== 'unlimited') {
+    return deriveFinishTarget(values);
+  }
+  return Math.max(
+    Number(values.required_checkins) || Number(values.target_count) || durationDays || 1,
+    1,
+  );
+}
+
 export function buildRulesStructured(
   values: Pick<
     CreateChallengeValues,

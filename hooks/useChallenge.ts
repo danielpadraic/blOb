@@ -3,7 +3,7 @@ import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { discardChallengeDraft } from '@/lib/challengeDraft';
 import { announceCreatedChallenge } from '@/lib/challengeFeedPost';
 import { applyLaneForPublish } from '@/lib/challengeLane';
-import { ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
+import { durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
   fetchChallengeById,
   fetchChallengeShareState,
@@ -43,8 +43,8 @@ import {
 } from '@/lib/settlement';
 import {
   buildRulesStructured,
+  checkinTargetForStore,
   composeChallengeRules,
-  deriveFinishTarget,
 } from '@/lib/consistencyRules';
 import { copy } from '@/lib/copy';
 import { fetchChallengePreviewsByIds } from '@/lib/social';
@@ -542,7 +542,8 @@ export function useCreateChallenge() {
       const unlimited = values.duration_type === 'unlimited';
       const schedule = ensureSchedule(values);
       const isPoints = !unlimited && values.challenge_type === 'points';
-      const targetCount = deriveFinishTarget(values);
+      const durationDays = unlimited ? null : durationDaysFromValues(schedule);
+      const targetCount = checkinTargetForStore(values, durationDays);
       const rulesText = composeChallengeRules(values);
       const rulesStructured = buildRulesStructured(values);
       const tasks = persistTasksForPublish(values, isPoints);
@@ -589,7 +590,7 @@ export function useCreateChallenge() {
         rules: rulesText || null,
         created_by: user.id,
         buy_in_amount: lane.buy_in_amount,
-        days_required: targetCount,
+        days_required: durationDays ?? targetCount,
         min_minutes: minMinutes,
         proof_requirements: isPoints
           ? []
@@ -603,7 +604,7 @@ export function useCreateChallenge() {
         starts_at: schedule.starts_at,
         ends_at: unlimited ? null : schedule.ends_at,
         end_mode: unlimited ? 'indefinite_lms' : publishEndMode(schedule.end_mode),
-        length_value: unlimited ? null : Number(schedule.duration_value) || Number(schedule.duration_days),
+        length_value: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
         category: values.category,
         challenge_type: unlimited ? 'consistency' : values.challenge_type,
@@ -811,7 +812,8 @@ export function useUpdateUserChallenge() {
       const unlimited = values.duration_type === 'unlimited';
       const schedule = ensureSchedule(values);
       const isPoints = !unlimited && values.challenge_type === 'points';
-      const targetCount = deriveFinishTarget(values);
+      const durationDays = unlimited ? null : durationDaysFromValues(schedule);
+      const targetCount = checkinTargetForStore(values, durationDays);
       const namedProofs = namedProofsForPublish(values);
       return updateUserChallenge(challengeId, {
         title: values.title.trim(),
@@ -821,7 +823,7 @@ export function useUpdateUserChallenge() {
         ends_at: unlimited ? null : schedule.ends_at,
         is_unlimited: unlimited,
         min_participants: Math.max(Number(values.min_participants) || 2, 2),
-        days_required: targetCount,
+        days_required: durationDays ?? targetCount,
         target_count: targetCount,
         min_minutes: minMinutesForPublish(values),
         frequency: isPoints ? 'once' : values.frequency,
@@ -836,7 +838,7 @@ export function useUpdateUserChallenge() {
         visibility: values.visibility,
         discoverability: values.discoverability ?? null,
         task: values.task?.trim() || values.rule_activity.trim() || null,
-        length_value: unlimited ? null : Number(schedule.duration_value) || Number(schedule.duration_days),
+        length_value: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
         required_checkins: Number(values.required_checkins) || targetCount,
         misses_allowed: Math.max(Number(values.misses_allowed) || 0, 0),

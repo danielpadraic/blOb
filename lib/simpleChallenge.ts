@@ -421,7 +421,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
 export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeDraft {
   const unlimited = isUnlimitedChallenge(challenge);
   let days = Math.max(Number(challenge.length_value) || 0, 0);
-  if (!unlimited && challenge.starts_at && challenge.ends_at) {
+  if (!days && !unlimited && challenge.starts_at && challenge.ends_at) {
     const start = Date.parse(challenge.starts_at);
     const end = Date.parse(challenge.ends_at);
     if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
