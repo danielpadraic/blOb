@@ -39,6 +39,7 @@ import { ADMIN_HREF } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { mediaKind } from '@/utils/media';
+import { useBugReport } from '@/components/bug/BugReportHost';
 
 const TABS = [
   { value: 'posts', label: 'Posts' },
@@ -82,6 +83,7 @@ export default function PublicProfileScreen() {
   const toggleReaction = useToggleReaction();
   const createComment = useCreateComment();
   const social = useSocialSheetsOptional();
+  const bugReport = useBugReport();
   const menuRef = useRef<View>(null);
   const headerTitle = profile?.username ? `@${profile.username}` : 'Profile';
   const headerOptions = useMemo(
@@ -255,9 +257,18 @@ export default function PublicProfileScreen() {
                     </AppText>
                   </Pressable>
                 ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Report a problem"
+                  onPress={() => bugReport.open()}
+                  style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                    Report a problem
+                  </AppText>
+                </Pressable>
               </View>
             ) : (
-              <View className="mt-2 flex-row flex-wrap gap-2">
+              <View className="mt-2 flex-row flex-wrap items-center gap-2">
                 <Button
                   title={friendTitle}
                   size="sm"
@@ -276,6 +287,17 @@ export default function PublicProfileScreen() {
                   variant="outline"
                   onPress={() => router.push(directMessageHref(profile.id))}
                 />
+                {official ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Report a problem"
+                    onPress={() => bugReport.open()}
+                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+                    <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                      Report a problem
+                    </AppText>
+                  </Pressable>
+                ) : null}
                 {canPost ? (
                   <Pressable
                     accessibilityRole="button"

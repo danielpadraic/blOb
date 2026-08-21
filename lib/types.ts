@@ -142,6 +142,16 @@ export type AppErrorRow = {
   created_at: string;
 };
 
+export type BugReportRow = {
+  id: string;
+  user_id: string | null;
+  route: string | null;
+  message: string | null;
+  image_path: string | null;
+  meta: Record<string, unknown> | null;
+  created_at: string;
+};
+
 export type ChallengeLane = 'coins' | 'private' | 'official';
 
 export type ProfileBadgeTone = 'gold' | 'green' | 'teal' | 'charcoal' | 'mint';
@@ -1230,6 +1240,12 @@ export type Database = {
         Partial<{ id: string; user_id: string; created_at: string }>,
         Partial<{ id: string; user_id: string; created_at: string }>,
         [Relationship<'app_opens_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      bug_reports: TableDef<
+        BugReportRow,
+        Partial<BugReportRow>,
+        Partial<BugReportRow>,
+        [Relationship<'bug_reports_user_id_fkey', 'user_id', 'profiles', 'id'>]
       >;
     };
     Views: {

@@ -9,7 +9,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { useAdminPulse } from '@/hooks/useAdmin';
 import { type AdminPulseMetric, type AdminRange } from '@/lib/admin';
-import { ADMIN_ERRORS_HREF, adminMetricHref } from '@/lib/routes';
+import { ADMIN_ERRORS_HREF, ADMIN_REPORTS_HREF, adminMetricHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { useState } from 'react';
 
@@ -45,14 +45,24 @@ export default function AdminPulseScreen() {
       <View className="gap-4 pb-6 pt-1">
         <View className="flex-row items-center justify-between">
           <AppText className="text-[22px] font-extrabold text-charcoal">Pulse</AppText>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push(ADMIN_ERRORS_HREF)}
-            style={{ minHeight: 44, justifyContent: 'center' }}>
-            <AppText className="text-[14px] font-semibold" style={{ color: THEME.accent }}>
-              Errors
-            </AppText>
-          </Pressable>
+          <View className="flex-row items-center gap-4">
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push(ADMIN_ERRORS_HREF)}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <AppText className="text-[14px] font-semibold" style={{ color: THEME.accent }}>
+                Errors
+              </AppText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push(ADMIN_REPORTS_HREF)}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <AppText className="text-[14px] font-semibold" style={{ color: THEME.accent }}>
+                Reports
+              </AppText>
+            </Pressable>
+          </View>
         </View>
 
         <SegmentedControl

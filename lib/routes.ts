@@ -7,6 +7,7 @@ export const TABS_HREF = '/feed';
 export const LOBBY_HREF = '/challenges';
 export const ADMIN_HREF = '/admin' as Href;
 export const ADMIN_ERRORS_HREF = '/admin/errors' as Href;
+export const ADMIN_REPORTS_HREF = '/admin/reports' as Href;
 
 export function adminMetricHref(metric: string, range: string): Href {
   return { pathname: '/admin/[metric]', params: { metric, range } } as unknown as Href;

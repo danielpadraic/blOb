@@ -7,6 +7,7 @@ import {
   type AdminPulseMetric,
   type AdminRange,
 } from '@/lib/admin';
+import { fetchAdminBugReports } from '@/lib/bugReports';
 import { isAdminViewer } from '@/lib/official';
 import { useMyProfile } from '@/hooks/useProfile';
 
@@ -40,6 +41,14 @@ export function useAdminErrors(enabled: boolean) {
   return useQuery({
     queryKey: ['admin-errors'],
     queryFn: () => fetchAdminErrors(),
+    enabled,
+  });
+}
+
+export function useAdminBugReports(enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin-bug-reports'],
+    queryFn: () => fetchAdminBugReports(),
     enabled,
   });
 }

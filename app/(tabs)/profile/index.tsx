@@ -30,6 +30,7 @@ import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
 import { StreakBadgesRow } from '@/components/profile/StreakBadgesRow';
 import { PrivacySettingsCard } from '@/components/profile/PrivacySettingsCard';
+import { useBugReport } from '@/components/bug/BugReportHost';
 
 const PHYSICAL_DISCLAIMER = 'Always private. Used for Challenge recommendations and competition placement.';
 
@@ -40,6 +41,7 @@ export default function ProfileScreen() {
   const wallet = useWalletOptional();
   const router = useRouter();
   const canAdmin = isAdminViewer(profile);
+  const bugReport = useBugReport();
 
   if (isLoading) {
     return (
@@ -214,6 +216,15 @@ export default function ProfileScreen() {
         </Card>
 
         <View className="mt-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Report a problem"
+            onPress={() => bugReport.open()}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+              Report a problem
+            </AppText>
+          </Pressable>
           <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
         </View>
       </View>

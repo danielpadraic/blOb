@@ -15,6 +15,7 @@ export default function AdminLayout() {
         }}>
         <Stack.Screen name="index" options={{ title: 'Admin' }} />
         <Stack.Screen name="errors" options={{ title: 'Errors' }} />
+        <Stack.Screen name="reports" options={{ title: 'Reports' }} />
         <Stack.Screen name="[metric]" options={{ title: 'Pulse' }} />
       </Stack>
     </AdminGate>

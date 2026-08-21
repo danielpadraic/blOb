@@ -10,6 +10,7 @@ import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialS
 import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
 import { InviteHost } from '@/components/challenge/InviteHost';
 import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
+import { BugReportHost } from '@/components/bug/BugReportHost';
 import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { TourHost } from '@/components/tour/TourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
@@ -33,7 +34,9 @@ export default function TabLayout() {
   return (
     <TourProvider>
       <JoinConfirmProvider>
-        <TabLayoutInner />
+        <BugReportHost>
+          <TabLayoutInner />
+        </BugReportHost>
       </JoinConfirmProvider>
     </TourProvider>
   );

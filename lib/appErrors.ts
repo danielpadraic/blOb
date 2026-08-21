@@ -75,6 +75,12 @@ export type ReportAppErrorInput = {
   payload?: Record<string, unknown> | null;
 };
 
+let lastAppErrorCode: string | null = null;
+
+export function getLastAppErrorCode(): string | null {
+  return lastAppErrorCode;
+}
+
 /** Fire-and-forget. Never throws. Never stores tokens, passwords, or body metrics. */
 export function reportAppError(input: ReportAppErrorInput): void {
   void (async () => {
@@ -85,6 +91,9 @@ export function reportAppError(input: ReportAppErrorInput): void {
         return;
       }
       const code = input.code ?? extractPostgrestCode(input.error) ?? null;
+      if (code) {
+        lastAppErrorCode = code;
+      }
       const message = (input.message ?? extractMessage(input.error)).slice(0, 500);
       const payload = scrubValue({
         ...(input.payload ?? {}),

@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
+import { rememberLastCapture } from '@/lib/lastCapture';
 import { captureKindFor, type CapturedMedia, type CaptureMode } from '@/components/capture/types';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { Button } from '@/components/ui/Button';
@@ -155,6 +156,14 @@ export function CaptureStudio({
       return;
     }
     const isVideo = kind === 'video';
+    if (!isVideo) {
+      rememberLastCapture({
+        uri: asset.uri,
+        mimeType: asset.mimeType ?? asset.file?.type,
+        blob: asset.file ?? null,
+        size: asset.fileSize ?? null,
+      });
+    }
     setDraft({
       uri: asset.uri,
       mediaType: isVideo ? 'video' : 'image',
@@ -276,6 +285,13 @@ export function CaptureStudio({
           allowModeToggle={mode === 'story' || mode === 'post'}
           deniedTitle={mode === 'story' ? copy('wave.cameraNeed') : undefined}
           onCaptured={(next) => {
+            if (next.mediaType === 'image') {
+              rememberLastCapture({
+                uri: next.uri,
+                mimeType: next.mimeType,
+                blob: next.blob,
+              });
+            }
             setDraft(next);
             setStep('preview');
           }}

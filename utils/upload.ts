@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { ProofType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
-export type StorageBucket = 'avatars' | 'challenge-proofs' | 'post-media';
+export type StorageBucket = 'avatars' | 'challenge-proofs' | 'post-media' | 'bug-reports';
 
 const IMAGE_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/gif']);
 
@@ -249,6 +249,33 @@ async function uploadObject(input: {
     throw new Error(humanStorageError(first.error, kind));
   }
   return jpegPath;
+}
+
+export async function uploadBugReportImage(input: {
+  uri: string;
+  userId: string;
+  mimeType?: string | null;
+  blob?: Blob | null;
+  size?: number | null;
+}): Promise<string> {
+  const contentType = coerceImageContentType(input.mimeType ?? input.blob?.type, input.uri);
+  const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+  if (contentType === 'application/pdf' || contentType.includes('pdf') || !allowed.has(contentType)) {
+    throw new Error('Use a JPEG, PNG, WebP, or HEIC screenshot.');
+  }
+  if (typeof input.size === 'number' && input.size > 8 * 1024 * 1024) {
+    throw new Error('That screenshot is too large. Keep it under 8 MB.');
+  }
+  const ext = extensionFor(contentType);
+  const path = `${input.userId}/${Date.now()}.${ext}`;
+  return uploadObject({
+    bucket: STORAGE_BUCKETS.bugReports,
+    path,
+    uri: input.uri,
+    contentType,
+    blob: input.blob,
+    upsert: false,
+  });
 }
 
 export async function uploadChallengeProof(input: {

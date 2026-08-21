@@ -26,6 +26,7 @@ export const STORAGE_BUCKETS = {
   avatars: 'avatars',
   challengeProofs: 'challenge-proofs',
   postMedia: 'post-media',
+  bugReports: 'bug-reports',
 } as const;
 
 export const ACTIVITY_OPTIONS = [
