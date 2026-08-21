@@ -36,6 +36,7 @@ function postInsertPayload(
     challenge_id: string;
     content: string;
     audience: PostAudience;
+    source?: Post['source'];
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -47,6 +48,9 @@ function postInsertPayload(
   if (schema.hasAudience) {
     payload.audience = base.audience;
     payload.audience_user_ids = [];
+  }
+  if (schema.hasSource) {
+    payload.source = base.source ?? 'feed';
   }
   return payload;
 }
@@ -68,6 +72,7 @@ export async function insertChallengeFeedPost(input: {
         challenge_id: input.challengeId,
         content,
         audience: input.audience || DEFAULT_POST_AUDIENCE,
+        source: 'feed',
       }),
     )
     .select(schema.select)

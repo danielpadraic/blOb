@@ -30,6 +30,7 @@ type FeedListProps = {
   empty?: ReactNode;
   highlightPostId?: string;
   hideAudience?: boolean;
+  composeSource?: ComposeInput['source'];
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -60,6 +61,7 @@ export function FeedList({
   empty,
   highlightPostId,
   hideAudience,
+  composeSource,
   onRefresh,
   onRetry,
   onCompose,
@@ -94,7 +96,7 @@ export function FeedList({
           hideAudience={hideAudience}
           tall={embedded}
           onSubmit={async (input) => {
-            await onCompose(input);
+            await onCompose({ ...input, source: composeSource ?? input.source ?? 'feed' });
             scrollRef.current?.scrollTo({ y: 0 });
           }}
         />

@@ -517,8 +517,11 @@ export interface Post {
   wall_removed_at?: string | null;
   checkin_id?: string | null;
   checkin_stage?: string | null;
+  source?: PostSource | null;
   created_at: string;
 }
+
+export type PostSource = 'challenge' | 'checkin' | 'feed' | 'share';
 
 export type ComposeInput = {
   content: string;
@@ -530,6 +533,7 @@ export type ComposeInput = {
   quotedPostId?: string | null;
   quoteSnapshot?: QuoteSnapshot | null;
   challengeId?: string | null;
+  source?: PostSource;
 };
 
 export type PostMention = {

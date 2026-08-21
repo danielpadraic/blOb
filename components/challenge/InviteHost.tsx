@@ -156,6 +156,7 @@ export function InviteHost({ children }: { children: ReactNode }) {
                   ...input,
                   challengeId: target.challengeId,
                   audience: input.audience === 'friends' ? 'friends' : 'public',
+                  source: 'share',
                 });
                 close();
                 showToast('Shared to feed.');

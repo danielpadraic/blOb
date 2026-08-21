@@ -77,6 +77,9 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
   if (select.includes('checkin_id') && scope.kind !== 'challenge') {
     query = query.is('checkin_id', null);
   }
+  if (scope.kind === 'challenge' && /(^|,\s*)source(,|$)/.test(select)) {
+    query = query.in('source', ['challenge', 'checkin']);
+  }
   return scope.kind === 'challenge'
     ? query.eq('challenge_id', scope.challengeId)
     : scope.kind === 'ids'
@@ -109,6 +112,7 @@ function postInsertPayload(
     quoted_post_id?: string | null;
     quote_snapshot?: PostWithMeta['quote_snapshot'];
     wall_host_id?: string | null;
+    source?: Post['source'];
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -127,6 +131,9 @@ function postInsertPayload(
   }
   if (schema.hasWall && base.wall_host_id) {
     payload.wall_host_id = base.wall_host_id;
+  }
+  if (schema.hasSource) {
+    payload.source = base.source ?? 'feed';
   }
   return payload;
 }
@@ -586,6 +593,7 @@ export async function insertWorkoutCheckInPost(input: {
     media_urls,
     audience: DEFAULT_POST_AUDIENCE,
     audience_user_ids: [],
+    source: 'checkin',
   });
 
   const created = await supabase.from('posts').insert(payload).select(schema.select).single();
@@ -617,6 +625,7 @@ export async function insertWorkoutCheckInPost(input: {
         media_urls: [],
         audience: DEFAULT_POST_AUDIENCE,
         audience_user_ids: [],
+        source: 'checkin',
       }),
     )
     .select(schema.select)
@@ -774,6 +783,7 @@ export function useCreatePost(challengeId?: string | null) {
         quoted_post_id,
         quote_snapshot: quoted_post_id ? (input.quoteSnapshot ?? null) : null,
         wall_host_id: input.wallHostId ?? null,
+        source: input.source ?? 'feed',
       });
       const created = await supabase.from('posts').insert(payload).select(schema.select).single();
       if (created.error) {
@@ -810,6 +820,7 @@ export function useCreatePost(challengeId?: string | null) {
           quoted_post_id: input.quotedPostId ?? null,
           quote_snapshot: input.quoteSnapshot ?? null,
           wall_host_id: input.wallHostId ?? null,
+          source: input.source ?? 'feed',
           mentions: (input.mentionedUserIds ?? []).map((userId) => ({
             userId,
             username: '',

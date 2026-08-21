@@ -854,6 +854,7 @@ export default function ChallengeDetailScreen() {
           }
           composerPlaceholder="How’s the work going?"
           hideAudience
+          composeSource="challenge"
           canCompose={isJoined && !participation?.eliminated_at}
           composing={createPost.isPending}
           commenting={createComment.isPending}
