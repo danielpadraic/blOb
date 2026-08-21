@@ -7,6 +7,7 @@ import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
 import { ChallengeHeroOverflowButton } from '@/components/challenge/ChallengeDetailOverflow';
+import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { ProfileLink } from '@/components/profile/ProfileLink';
