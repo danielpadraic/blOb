@@ -12,26 +12,31 @@ type JoinCtaButtonProps = {
   amount: number;
   loading?: boolean;
   disabled?: boolean;
+  verb?: 'Join' | 'Pay';
+  size?: 'md' | 'lg';
   onPress: () => void;
 };
 
-/** Coins: Join + coin icon + amount. Cash: “Join $1.00”. Never a naked “Join 10”. */
+/** Coins: verb + coin icon + amount. Cash: “Join $1.00”. Never the word “Coins.” */
 export function JoinCtaButton({
   currency,
   amount,
   loading = false,
   disabled = false,
+  verb = 'Join',
+  size = 'md',
   onPress,
 }: JoinCtaButtonProps) {
   const buyIn = Math.max(Number(amount) || 0, 0);
   const cash = isBucksChallenge({ currency });
   const free = buyIn <= 0;
   const isDisabled = Boolean(disabled || loading);
+  const height = size === 'lg' ? 56 : JOIN_CTA_HEIGHT;
   const a11y = free
-    ? 'Join free'
+    ? `${verb} free`
     : cash
-      ? `Join ${formatCash(buyIn)}`
-      : `Join ${formatWalletNumber(buyIn)} coins`;
+      ? `${verb} ${formatCash(buyIn)}`
+      : `${verb} ${formatWalletNumber(buyIn)}`;
 
   return (
     <Pressable
@@ -41,7 +46,7 @@ export function JoinCtaButton({
       disabled={isDisabled}
       onPress={onPress}
       style={{
-        height: JOIN_CTA_HEIGHT,
+        height,
         width: '100%',
         backgroundColor: THEME.primary,
         borderRadius: THEME.radiusSm,
@@ -56,20 +61,20 @@ export function JoinCtaButton({
         <AppText
           className="text-[16px] font-semibold"
           style={{ color: THEME.primaryForeground }}>
-          Join free
+          {`${verb} free`}
         </AppText>
       ) : cash ? (
         <AppText
           className="text-[16px] font-semibold"
           style={{ color: THEME.primaryForeground }}>
-          {`Join ${formatCash(buyIn)}`}
+          {`${verb} ${formatCash(buyIn)}`}
         </AppText>
       ) : (
         <View className="flex-row items-center" style={{ gap: 8 }}>
           <AppText
             className="text-[16px] font-semibold"
             style={{ color: THEME.primaryForeground }}>
-            Join
+            {verb}
           </AppText>
           <CurrencyMark currency="coins" size={18} />
           <AppText

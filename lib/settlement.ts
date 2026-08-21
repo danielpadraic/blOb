@@ -24,11 +24,11 @@ const JOINABLE_STATUSES: ChallengeStatus[] = [
   'starting',
   'filling',
   'arming',
+  'in_progress',
 ];
 
 const CLOSED_JOIN_STATUSES: ChallengeStatus[] = [
   'live',
-  'in_progress',
   'judging',
   'settled',
   'cancelled',
@@ -57,7 +57,7 @@ export function isJoinWindowOpen(
   if (CLOSED_JOIN_STATUSES.includes(status as ChallengeStatus)) {
     return false;
   }
-  return isJoinableStatus(status);
+  return true;
 }
 
 export function isSettledStatus(status: string | null | undefined): boolean {

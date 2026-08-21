@@ -21,6 +21,18 @@ export function getCancelChallengeMessage(error: unknown): string {
   return copy('error.cancelChallenge');
 }
 
+export function getJoinChallengeMessage(error: unknown): string {
+  logPostgrestError('join-challenge', error);
+  const text = getErrorMessage(error);
+  if (
+    /42703|ref_type|pgrst204/i.test(text) ||
+    isUnknownColumnError(error)
+  ) {
+    return 'Couldn’t complete that just now. Try again.';
+  }
+  return text;
+}
+
 export function logPostgrestError(scope: string, error: unknown) {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
   console.log(`[blob:${scope}]`, {
@@ -498,7 +510,7 @@ function humanize(raw: string): string {
     return 'Private challenges can’t charge competitors an entry fee for the prize.';
   }
   if (message.includes('insufficient_funds') || message.includes('insufficient credits') || message.includes('insufficient bucks')) {
-    return 'Not enough Coins or $ to fund this prize.';
+    return 'Not enough in your wallet.';
   }
   if (message.includes('no_refund_after_start')) {
     return 'Refunds are not allowed after the official start.';

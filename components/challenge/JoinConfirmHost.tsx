@@ -8,7 +8,7 @@ import { useWalletOptional } from '@/hooks/useWallet';
 import { walletBalance } from '@/lib/currency';
 import { bucksJoinCta } from '@/lib/joinCta';
 import type { Challenge } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
+import { getJoinChallengeMessage } from '@/utils/errors';
 
 type JoinConfirmContextValue = {
   open: (challenge: Challenge) => void;
@@ -68,7 +68,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       pendingRef.current = null;
       setChallenge(null);
     } catch (caught) {
-      setError(getErrorMessage(caught));
+      setError(getJoinChallengeMessage(caught));
     }
   }, [challenge, join, profile, wallet]);
 

@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { JoinCtaButton } from '@/components/challenge/JoinCtaButton';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
@@ -12,7 +13,7 @@ import { proofDisplayName } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
-import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
+import { formatCash, formatWalletNumber, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { copy } from '@/lib/copy';
 import { officialBob } from '@/copy/officialBob';
@@ -32,7 +33,7 @@ const DISMISS_Y = 88;
 function acknowledgments(challenge: Challenge) {
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
-  const buyIn = formatWalletAmount(buyInAmount, challenge.currency);
+  const buyIn = bucks ? formatCash(buyInAmount) : formatWalletNumber(buyInAmount);
   const isFree = buyInAmount <= 0;
   const proofs = requiredChallengeProofs(challenge);
   const proofLabels = proofs.map((proof) => proofDisplayName(proof)).join(', ');
@@ -59,10 +60,10 @@ function acknowledgments(challenge: Challenge) {
       body: isFree
         ? bucks
           ? 'Confirming does not take money from your wallet. This official challenge still pays the prize in $ (1:1 with USD).'
-          : 'Confirming does not take Coins from your wallet. The prize is already funded.'
+          : 'Confirming does not take anything from your wallet. The prize is already funded.'
         : bucks
           ? `${buyIn} will be deducted immediately. 1:1 with USD. This cannot be reversed.`
-          : `${buyIn} will be taken from your Coins the moment you confirm. If you don’t finish, you do not get it back.`,
+          : `${buyIn} will be taken from your wallet the moment you confirm. If you don’t finish, you do not get it back.`,
     },
     {
       id: 'split',
@@ -131,7 +132,7 @@ export function JoinConfirmModal({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
-  const buyIn = formatWalletAmount(buyInAmount, challenge.currency);
+  const buyIn = bucks ? formatCash(buyInAmount) : formatWalletNumber(buyInAmount);
   const isFree = buyInAmount <= 0;
   const items = acknowledgments(challenge);
   const allChecked = items.length === 0 || items.every((item) => checked[item.id]);
@@ -143,15 +144,12 @@ export function JoinConfirmModal({
     hasProfile: Boolean(profile),
   });
   const official = Boolean(challenge.is_official);
-  const confirmTitle = official
-    ? cta.needsTopUp
-      ? cta.topUpLabel
-      : isFree
-        ? 'Confirm and join free'
-        : `Pay ${buyIn} entry`
+  const confirmTitle = official && cta.needsTopUp
+    ? cta.topUpLabel
     : isFree
       ? 'Confirm and join free'
-      : `Pay ${buyIn} entry`;
+      : null;
+  const payEntry = !isFree && !(official && cta.needsTopUp);
 
   useEffect(() => {
     if (!visible) {
@@ -216,7 +214,7 @@ export function JoinConfirmModal({
               <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
             </View>
             <AppText className="text-2xl font-bold text-charcoal">
-              {isFree ? 'Join this challenge?' : `Join for ${buyIn}?`}
+              {isFree || !bucks ? 'Join this challenge?' : `Join for ${buyIn}?`}
             </AppText>
             <AppText className="mt-3 text-[15px] leading-6 text-muted">{officialBob('joinBob')}</AppText>
             <AppText className="mt-3 text-[13px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
@@ -224,7 +222,18 @@ export function JoinConfirmModal({
               <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
             ) : null}
             <View className="mt-6 gap-3">
-              <Button title={confirmTitle} size="lg" loading={loading} onPress={onConfirm} />
+              {payEntry ? (
+                <JoinCtaButton
+                  verb="Pay"
+                  size="lg"
+                  currency={challenge.currency}
+                  amount={buyInAmount}
+                  loading={loading}
+                  onPress={onConfirm}
+                />
+              ) : (
+                <Button title={confirmTitle ?? 'Confirm and join free'} size="lg" loading={loading} onPress={onConfirm} />
+              )}
               <Button title="Not now." variant="ghost" onPress={close} disabled={loading} />
             </View>
           </Animated.View>
@@ -244,7 +253,7 @@ export function JoinConfirmModal({
         }}
         onPress={(event) => event.stopPropagation()}>
           <AppText className="text-2xl font-bold text-charcoal">
-            {isFree ? 'Join this challenge?' : `Join for ${buyIn}?`}
+            {isFree || !bucks ? 'Join this challenge?' : `Join for ${buyIn}?`}
           </AppText>
           <AppText className="mt-2 text-muted">
             {bucks
@@ -252,8 +261,8 @@ export function JoinConfirmModal({
                 ? 'This official challenge pays real money. Check every box. 1:1 with USD.'
                 : `Check every box. ${buyIn} leaves immediately. This cannot be reversed.`
               : isFree
-                ? 'Check all three. Joining is free and does not take Coins from your wallet.'
-                : 'Check all three. Coins leave your wallet the moment you confirm. There is no undo.'}
+                ? 'Check all three. Joining is free and does not take anything from your wallet.'
+                : 'Check all three. The entry fee leaves your wallet the moment you confirm. There is no undo.'}
           </AppText>
 
           <ScrollView className="mt-5" showsVerticalScrollIndicator={false}>
@@ -303,13 +312,25 @@ export function JoinConfirmModal({
             {error ? (
               <AppText className="text-sm leading-5 text-coral-dark">{error}</AppText>
             ) : null}
-            <Button
-              title={confirmTitle}
-              size="lg"
-              loading={loading}
-              disabled={!allChecked}
-              onPress={onConfirm}
-            />
+            {payEntry ? (
+              <JoinCtaButton
+                verb="Pay"
+                size="lg"
+                currency={challenge.currency}
+                amount={buyInAmount}
+                loading={loading}
+                disabled={!allChecked}
+                onPress={onConfirm}
+              />
+            ) : (
+              <Button
+                title={confirmTitle ?? 'Confirm and join free'}
+                size="lg"
+                loading={loading}
+                disabled={!allChecked}
+                onPress={onConfirm}
+              />
+            )}
             <Button title="Not now" variant="ghost" onPress={close} disabled={loading} />
           </View>
       </Pressable>

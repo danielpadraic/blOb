@@ -5,7 +5,7 @@ import {
   refundPreStart,
 } from '@/lib/api/challenges';
 import { copy } from '@/lib/copy';
-import { getErrorMessage } from '@/utils/errors';
+import { getJoinChallengeMessage } from '@/utils/errors';
 import {
   cancelProviderRef,
   joinProviderRef,
@@ -17,13 +17,9 @@ import {
 } from '@/services/payments/types';
 
 function joinFailure(error: unknown): Extract<JoinChargeResult, { ok: false }> {
-  const message = getErrorMessage(error);
+  const message = getJoinChallengeMessage(error);
   const lower = message.toLowerCase();
-  if (
-    lower.includes('state') ||
-    lower.includes('geo') ||
-    message === copy('geo.unavailable')
-  ) {
+  if (lower.includes('geo') || message === copy('geo.unavailable')) {
     return { ok: false, code: 'geo', message: copy('geo.unavailable') };
   }
   if (

@@ -11,7 +11,7 @@ const LIVE_OR_UPCOMING = [
   'arming',
   'live',
 ] as const;
-const JOINABLE_NOT_STARTED = ['open', 'upcoming', 'starting', 'filling', 'arming'] as const;
+const JOINABLE_NOT_STARTED = ['open', 'upcoming', 'starting', 'in_progress', 'filling', 'arming'] as const;
 
 export function isPrivateVisibility(visibility: string | null | undefined): boolean {
   const value = String(visibility ?? '').toLowerCase();

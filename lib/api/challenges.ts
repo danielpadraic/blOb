@@ -11,7 +11,7 @@ import type {
   PublishChallengeResult,
   RefundPreStartResult,
 } from '@/lib/types/challenge';
-import { getCreateChallengeMessage, getErrorMessage, logPostgrestError } from '@/utils/errors';
+import { getCreateChallengeMessage, getJoinChallengeMessage, logPostgrestError } from '@/utils/errors';
 
 const RPC_MESSAGES: Record<string, string> = {
   NOT_AUTHENTICATED: 'Sign in to continue.',
@@ -26,6 +26,7 @@ const RPC_MESSAGES: Record<string, string> = {
   MAX_PARTICIPANTS_MIN_1: 'Max competitors must be at least 1.',
   LMS_REQUIRES_CONSISTENCY: 'Last Man Standing only works with a consistency challenge.',
   FULL_LOBBY_REQUIRES_MAX: 'A full-lobby start needs a max number of competitors.',
+  INSUFFICIENT_FUNDS: 'Not enough in your wallet to join.',
   PROFILE_NOT_FOUND: 'Finish setting up your profile first.',
   NEGATIVE_AMOUNT: 'Amounts can’t be negative.',
   LANE_REQUIRED: 'Choose Coin Challenge or Private Challenge.',
@@ -78,7 +79,7 @@ function rpcMessage(error: unknown): string {
       return label;
     }
   }
-  return getErrorMessage(error);
+  return getJoinChallengeMessage(error);
 }
 
 function unwrap<T>(data: unknown, error: unknown): T {
@@ -115,12 +116,13 @@ export async function publishChallenge(
   return unwrap<PublishChallengeResult>(data, error);
 }
 
-export async function joinChallenge(id: string): Promise<JoinChallengeResult> {
   const { data, error } = await supabase.rpc('join_challenge', { p_challenge_id: id });
   if (error) {
+    logPostgrestError('join_challenge', error);
     reportAppError({ route: 'join_challenge', error, payload: { challenge_id: id } });
+    throw new Error(rpcMessage(error));
   }
-  return unwrap<JoinChallengeResult>(data, error);
+  return data as JoinChallengeResult;
 }
 
 export async function refundPreStart(challengeId: string, userId?: string): Promise<RefundPreStartResult> {

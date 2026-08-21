@@ -27,6 +27,7 @@ import type {
   TopPlacesMode,
 } from '@/lib/types';
 import { getCreateChallengeMessage, getErrorMessage, getStartUpdateMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
+import { reportAppError } from '@/lib/appErrors';
 import { challengeCurrency, formatWalletAmount } from '@/lib/currency';
 import { applyLaneForPublish, isInviteOnlyChallenge } from '@/lib/challengeLane';
 import {
@@ -1067,6 +1068,11 @@ export async function joinChallenge(challengeId: string): Promise<ChallengeParti
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
+    reportAppError({
+      route: 'join_challenge',
+      error,
+      payload: { challenge_id: challengeId, stage: 'load_participant' },
+    });
     throw new Error(getErrorMessage(error));
   }
   const row = data as ChallengeParticipant | null;
