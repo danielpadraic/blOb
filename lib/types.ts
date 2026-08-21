@@ -132,6 +132,16 @@ export type FundingModel = 'creator' | 'hybrid' | 'participants';
 
 export type WalletCurrency = 'coins' | 'bucks';
 
+export type AppErrorRow = {
+  id: string;
+  user_id: string | null;
+  route: string | null;
+  code: string | null;
+  message: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
 export type ChallengeLane = 'coins' | 'private' | 'official';
 
 export type ProfileBadgeTone = 'gold' | 'green' | 'teal' | 'charcoal' | 'mint';
@@ -1209,6 +1219,18 @@ export type Database = {
           Relationship<'reactions_comment_id_fkey', 'comment_id', 'comments', 'id'>,
         ]
       >;
+      app_errors: TableDef<
+        AppErrorRow,
+        Partial<AppErrorRow>,
+        Partial<AppErrorRow>,
+        [Relationship<'app_errors_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      app_opens: TableDef<
+        { id: string; user_id: string; created_at: string },
+        Partial<{ id: string; user_id: string; created_at: string }>,
+        Partial<{ id: string; user_id: string; created_at: string }>,
+        [Relationship<'app_opens_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
     };
     Views: {
       profiles_public: {
@@ -1228,6 +1250,22 @@ export type Database = {
       notify_bob_on_open_self: {
         Args: Record<string, never>;
         Returns: undefined;
+      };
+      ping_app_open: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      is_official_viewer: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      admin_pulse: {
+        Args: { p_range?: string };
+        Returns: Record<string, unknown>;
+      };
+      admin_pulse_list: {
+        Args: { p_metric: string; p_range?: string };
+        Returns: unknown;
       };
       accept_legal: {
         Args: { p_tos: boolean; p_privacy: boolean; p_skill: boolean };

@@ -16,6 +16,7 @@ import { officialLogDate } from '@/lib/officialDays';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
+import { reportAppError } from '@/lib/appErrors';
 import { signedProofUrl } from '@/utils/upload';
 
 const CHECKIN_COLUMNS =
@@ -72,6 +73,11 @@ async function fetchPeriodCheckin(
     if (isMissingRelation(result.error.message)) {
       return null;
     }
+    reportAppError({
+      route: 'checkin_fetch',
+      error: result.error,
+      payload: { challenge_id: challengeId },
+    });
     throw new Error(getErrorMessage(result.error));
   }
   if (!result.data) {

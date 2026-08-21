@@ -7,8 +7,15 @@ export function isOfficialAccount(
   if (!profile) {
     return false;
   }
-  if (profile.is_official || profile.is_admin) {
+  if (isAdminViewer(profile)) {
     return true;
   }
   return String(profile.username ?? '').trim().toLowerCase() === 'blob';
+}
+
+/** /admin gate: Official @blob via is_official or is_admin. */
+export function isAdminViewer(
+  profile?: { is_official?: boolean | null; is_admin?: boolean | null } | null,
+): boolean {
+  return Boolean(profile?.is_official || profile?.is_admin);
 }

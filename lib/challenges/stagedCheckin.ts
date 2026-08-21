@@ -8,6 +8,7 @@ import { asCheckinStatus, type ChallengeCheckin } from '@/lib/challengeCheckin';
 import { supabase } from '@/lib/supabase';
 import { utcDateStamp } from '@/utils/dates';
 import { getCheckinSubmitMessage, getErrorMessage, logPostgrestError } from '@/utils/errors';
+import { reportAppError } from '@/lib/appErrors';
 import { challengeProofUrl, uploadChallengeProof } from '@/utils/upload';
 
 export type SaveCheckinProofInput = {
@@ -24,6 +25,7 @@ function throwMapped(
 ): never {
   logPostgrestError(kind === 'submit' ? 'checkin-submit' : 'checkin-save', error);
   if (kind === 'submit') {
+    reportAppError({ route: 'submit_checkin', error });
     throw new Error(getCheckinSubmitMessage(error));
   }
   const blob = [error.code, error.message, error.details].filter(Boolean).join(' ');

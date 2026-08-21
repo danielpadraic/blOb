@@ -10,6 +10,7 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { AppHeader } from '@/components/wallet/AppHeader';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
@@ -23,7 +24,8 @@ import {
   profileWeightKg,
 } from '@/lib/bodyMetrics';
 import { experienceLabel, goalsLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
-import { FITNESS_HISTORY_HREF } from '@/lib/routes';
+import { FITNESS_HISTORY_HREF, ADMIN_HREF } from '@/lib/routes';
+import { isAdminViewer } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
 import { StreakBadgesRow } from '@/components/profile/StreakBadgesRow';
@@ -37,6 +39,7 @@ export default function ProfileScreen() {
   const tone = useCopyTone();
   const wallet = useWalletOptional();
   const router = useRouter();
+  const canAdmin = isAdminViewer(profile);
 
   if (isLoading) {
     return (
@@ -77,7 +80,21 @@ export default function ProfileScreen() {
 
   return (
     <Screen scroll edges={TAB_ROOT_EDGES}>
-      <AppHeader title="You" />
+      <AppHeader
+        title="You"
+        trailing={
+          canAdmin ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Admin"
+              hitSlop={8}
+              onPress={() => router.push(ADMIN_HREF)}
+              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
+            </Pressable>
+          ) : null
+        }
+      />
       <ProfileHeader profile={profile} />
       <View className="mt-3">
         <StreakBadgesRow userId={profile.id} />

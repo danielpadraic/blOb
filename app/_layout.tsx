@@ -17,6 +17,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { WalletProvider } from '@/hooks/useWallet';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useAppOpenPing } from '@/hooks/useAppOpenPing';
 import { takePendingInviteToken } from '@/lib/challengeInvites';
 import { inviteHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -57,6 +58,7 @@ function RootNavigator() {
   const onOnboarding = pathname.startsWith('/onboarding');
   const [bootExpired, setBootExpired] = useState(false);
   const blocking = isLoading || isBootstrapping || path === 'boot';
+  useAppOpenPing();
 
   useEffect(() => {
     if (!blocking) {
@@ -128,6 +130,7 @@ function RootNavigator() {
         <Stack.Screen name="invite/[token]" />
         <Stack.Protected guard={resolvedPath === 'app'}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="admin" options={{ headerShown: false }} />
           {/* Route group `story` stays so `/story/[id]` links keep working. User-facing name is Wave. */}
           <Stack.Screen name="story" options={{ headerShown: false, animation: 'fade' }} />
         </Stack.Protected>

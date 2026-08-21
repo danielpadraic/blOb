@@ -1,4 +1,5 @@
 import { copy } from '@/lib/copy';
+import { reportAppError } from '@/lib/appErrors';
 import { supabase } from '@/lib/supabase';
 import type {
   CloseChallengeForJudgingResult,
@@ -116,6 +117,9 @@ export async function publishChallenge(
 
 export async function joinChallenge(id: string): Promise<JoinChallengeResult> {
   const { data, error } = await supabase.rpc('join_challenge', { p_challenge_id: id });
+  if (error) {
+    reportAppError({ route: 'join_challenge', error, payload: { challenge_id: id } });
+  }
   return unwrap<JoinChallengeResult>(data, error);
 }
 
@@ -204,5 +208,8 @@ export async function distributeChallenge(id: string): Promise<DistributeChallen
 
 export async function cancelChallenge(id: string): Promise<{ ok: boolean }> {
   const { data, error } = await supabase.rpc('cancel_challenge', { p_challenge_id: id });
+  if (error) {
+    reportAppError({ route: 'cancel_challenge', error, payload: { challenge_id: id } });
+  }
   return unwrap<{ ok: boolean }>(data, error);
 }

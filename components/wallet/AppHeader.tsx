@@ -7,9 +7,10 @@ type AppHeaderProps = {
   title: string;
   subtitle?: string;
   leading?: ReactNode;
+  trailing?: ReactNode;
 };
 
-export function AppHeader({ title, subtitle, leading }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, leading, trailing }: AppHeaderProps) {
   return (
     <View className="mb-2 flex-row items-start gap-2">
       {leading}
@@ -23,6 +24,7 @@ export function AppHeader({ title, subtitle, leading }: AppHeaderProps) {
           </AppText>
         ) : null}
       </View>
+      {trailing}
     </View>
   );
 }

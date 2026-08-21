@@ -34,7 +34,8 @@ import { copy } from '@/lib/copy';
 import { canPostOnProfile } from '@/lib/profileWall';
 import { directMessageHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
-import { isOfficialAccount } from '@/lib/official';
+import { isOfficialAccount, isAdminViewer } from '@/lib/official';
+import { ADMIN_HREF } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { mediaKind } from '@/utils/media';
@@ -192,24 +193,35 @@ export default function PublicProfileScreen() {
       <Stack.Screen
         options={{
           ...headerOptions,
-          headerRight: isSelf || official
-            ? undefined
-            : () => (
+          headerRight: isSelf && isAdminViewer(profile)
+            ? () => (
                 <Pressable
-                  ref={menuRef}
-                  collapsable={false}
                   accessibilityRole="button"
-                  accessibilityLabel="Profile menu"
+                  accessibilityLabel="Admin"
                   hitSlop={8}
-                  onPress={() => {
-                    menuRef.current?.measureInWindow((x, y, width, height) => {
-                      social?.toggleProfileMenu(profile.id, { x, y, width, height });
-                    });
-                  }}
+                  onPress={() => router.push(ADMIN_HREF)}
                   style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                   <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
                 </Pressable>
-              ),
+              )
+            : isSelf || official
+              ? undefined
+              : () => (
+                  <Pressable
+                    ref={menuRef}
+                    collapsable={false}
+                    accessibilityRole="button"
+                    accessibilityLabel="Profile menu"
+                    hitSlop={8}
+                    onPress={() => {
+                      menuRef.current?.measureInWindow((x, y, width, height) => {
+                        social?.toggleProfileMenu(profile.id, { x, y, width, height });
+                      });
+                    }}
+                    style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                    <Glyph name={GLYPH.more} color={THEME.textPrimary} size={18} />
+                  </Pressable>
+                ),
         }}
       />
 
@@ -230,8 +242,19 @@ export default function PublicProfileScreen() {
               <Count label="Challenges" value={publicChallenges.length} />
             </View>
             {isSelf ? (
-              <View className="mt-2 self-start">
+              <View className="mt-2 flex-row flex-wrap items-center gap-2">
                 <Button title="Edit profile" size="sm" onPress={() => router.push('/profile/edit')} />
+                {isAdminViewer(profile) ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Admin"
+                    onPress={() => router.push(ADMIN_HREF)}
+                    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+                    <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                      Admin
+                    </AppText>
+                  </Pressable>
+                ) : null}
               </View>
             ) : (
               <View className="mt-2 flex-row flex-wrap gap-2">

@@ -1,8 +1,16 @@
+import type { Href } from 'expo-router';
+
 import { THEME } from '@/lib/theme';
 
 /** Tab navigator home. `/` is `app/index.tsx` and must not redirect to itself. */
 export const TABS_HREF = '/feed';
 export const LOBBY_HREF = '/challenges';
+export const ADMIN_HREF = '/admin' as Href;
+export const ADMIN_ERRORS_HREF = '/admin/errors' as Href;
+
+export function adminMetricHref(metric: string, range: string): Href {
+  return { pathname: '/admin/[metric]', params: { metric, range } } as unknown as Href;
+}
 
 export function challengeDetailHref(id: string, returnTo: 'lobby' | 'feed' = 'lobby') {
   return {
