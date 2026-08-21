@@ -30,6 +30,10 @@ export const BEFORE_AFTER_HR_PRESET: Array<{ name: string; method: ChallengeProo
 export const PRE_WORKOUT_SELFIE_SENTENCE = 'Post a pre-workout selfie.';
 export const POST_WORKOUT_SELFIE_SENTENCE = 'Post a post-workout selfie.';
 
+/** Official week_10 and the join-confirm proof checkbox. Never “HR.” */
+export const WEEK_10_PROOF_SENTENCE =
+  'A pre-workout selfie, a post-workout selfie, and proof of at least 30 minutes of elevated heart rate from your fitness or heart-rate tracker app.';
+
 export function heartRateMinutesLabel(minutes: number): string {
   const n = Math.max(Math.round(Number(minutes) || 30), 1);
   return n === 1 ? '1 minute' : `${n} minutes`;
@@ -132,10 +136,8 @@ export function signupProofLines(challenge: {
   tasks?: unknown;
 }): string[] {
   const minutes = Math.max(Math.round(Number(challenge.min_minutes) || 30), 1);
-  const officialFitness =
-    Boolean(challenge.is_official) && String(challenge.category ?? 'fitness').toLowerCase() === 'fitness';
-  if (challenge.series_id === 'week_10' || officialFitness) {
-    return [PRE_WORKOUT_SELFIE_SENTENCE, POST_WORKOUT_SELFIE_SENTENCE, heartRateProofSentence(30)];
+  if (usesWeek10ProofSentence(challenge)) {
+    return [WEEK_10_PROOF_SENTENCE];
   }
   const listed = resolveChallengeProofs({
     proofs: challenge.proofs,
@@ -237,6 +239,33 @@ export function isPostWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): 
     lower.includes('post-selfie') ||
     (lower.includes('post') && lower.includes('selfie'))
   );
+}
+
+function isBeforeAfterHeartRateProofs(proofs: ChallengeProof[]): boolean {
+  return (
+    proofs.length === 3 &&
+    proofs.some(isPreWorkoutProof) &&
+    proofs.some(isPostWorkoutProof) &&
+    proofs.some((proof) => proof.method === 'hr')
+  );
+}
+
+/** Official week_10, official fitness, and the before/after/heart-rate trio. */
+export function usesWeek10ProofSentence(challenge: {
+  is_official?: boolean | null;
+  series_id?: string | null;
+  category?: string | null;
+  proofs?: unknown;
+  proof_type?: unknown;
+  proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
+}): boolean {
+  if (challenge.series_id === 'week_10') {
+    return true;
+  }
+  if (Boolean(challenge.is_official) && String(challenge.category ?? 'fitness').toLowerCase() === 'fitness') {
+    return true;
+  }
+  return isBeforeAfterHeartRateProofs(resolveChallengeProofs(challenge));
 }
 
 export function beginCameraProof(proofs: ChallengeProof[]): ChallengeProof | null {

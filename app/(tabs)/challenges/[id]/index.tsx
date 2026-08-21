@@ -593,7 +593,7 @@ export default function ChallengeDetailScreen() {
           </>
         ) : null}
 
-        {signupLines.length > 0 || isPoints ? (
+        {challenge.is_official ? null : signupLines.length > 0 || isPoints ? (
           <Card className="mt-4">
             <AppText
               className="text-[11px] font-semibold uppercase tracking-widest"

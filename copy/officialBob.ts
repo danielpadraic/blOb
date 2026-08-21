@@ -1,7 +1,8 @@
+import { WEEK_10_PROOF_SENTENCE } from '@/lib/challengeProofs';
 import { interpolateCopy } from '@/lib/copy';
 
 export const OFFICIAL_DETAILS_LINES = [
-  'Thirty minutes of elevated heart rate. A picture before, a picture after, and proof of the activity.',
+  WEEK_10_PROOF_SENTENCE,
   'If 10+ finish (or everyone), prize split evenly. If fewer, they split the $10 prize.',
   'Official days end at 11:59 p.m. Central Time.',
   'A phone camera is required. Heart-rate proof is required (Watch, Fitness, or a screenshot).',

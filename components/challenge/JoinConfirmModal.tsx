@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { requiredChallengeProofs, isPointsChallenge, isUnlimitedChallenge, lastManStandingRequirement, prizeStructureSummary } from '@/lib/challenges';
-import { proofDisplayName } from '@/lib/challengeProofs';
+import { proofDisplayName, usesWeek10ProofSentence, WEEK_10_PROOF_SENTENCE } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
@@ -95,15 +95,17 @@ function acknowledgments(challenge: Challenge) {
             ]
               .filter(Boolean)
               .join('\n')
-          : [
-              ruleCopy.primary,
-              ...ruleCopy.extras,
-              honorOnly
-                ? 'Honor. Confirm to check in.'
-                : `Each check-in needs: ${proofLabels}. ${copy('create.proofsHelper')}`,
-            ]
-              .filter(Boolean)
-              .join('\n'),
+          : honorOnly
+            ? 'Honor. Confirm to check in.'
+            : usesWeek10ProofSentence(challenge)
+              ? WEEK_10_PROOF_SENTENCE
+              : [
+                  ruleCopy.primary,
+                  ...ruleCopy.extras,
+                  `Each check-in needs: ${proofLabels}.`,
+                ]
+                  .filter(Boolean)
+                  .join('\n'),
     },
     ...(bucks
       ? [
@@ -217,6 +219,7 @@ export function JoinConfirmModal({
               {isFree || !bucks ? 'Join this challenge?' : `Join for ${buyIn}?`}
             </AppText>
             <AppText className="mt-3 text-[15px] leading-6 text-muted">{officialBob('joinBob')}</AppText>
+            <AppText className="mt-3 text-[15px] leading-6 text-charcoal">{WEEK_10_PROOF_SENTENCE}</AppText>
             <AppText className="mt-3 text-[13px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
             {error ? (
               <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
