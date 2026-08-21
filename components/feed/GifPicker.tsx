@@ -85,7 +85,7 @@ export function GifPicker({ visible, onPick, onClose }: GifPickerProps) {
       </View>
       {!provider ? (
         <AppText className="px-3 pb-3 text-[13px] leading-5 text-muted">
-          Add EXPO_PUBLIC_TENOR_KEY (or EXPO_PUBLIC_GIPHY_KEY) to .env to search GIFs.
+          GIF search isn’t set up yet.
         </AppText>
       ) : loading && hits.length === 0 ? (
         <View className="items-center py-6">

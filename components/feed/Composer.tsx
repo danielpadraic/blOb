@@ -17,7 +17,6 @@ import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { asCopyTone, copy } from '@/lib/copy';
-import { gifSearchConfigured } from '@/lib/gifSearch';
 import { ensureLibraryPermission, openAppSettings, permissionCopy } from '@/lib/mediaPermissions';
 import {
   asDefaultPostAudience,
@@ -290,41 +289,15 @@ export function Composer({
         </View>
       </View>
 
-      {!quote ? (
-        <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44 }}>
-          <ComposerIcon
-            glyph={GLYPH.camera}
-            label="Camera"
-            onPress={() => router.push(captureHref('post', 'photo'))}
-          />
-          <ComposerIcon glyph={GLYPH.album} label="Gallery" onPress={() => void pickGallery()} />
-          {gifSearchConfigured() ? (
-            <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
-          ) : null}
-          {hideAudience ? null : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Audience"
-              onPress={() =>
-                social?.openAudience({
-                  audience,
-                  audienceUserIds,
-                  allowPublic,
-                  onSave: (next, ids) => {
-                    setAudience(next);
-                    setAudienceUserIds(ids);
-                  },
-                })
-              }
-              hitSlop={4}
-              className="items-center justify-center"
-              style={{ width: 44, height: 44 }}>
-              <AudienceIconButton audience={audience} />
-            </Pressable>
-          )}
-        </View>
-      ) : hideAudience ? null : (
-        <View className="mt-1 flex-row items-center" style={{ minHeight: 44 }}>
+      <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44 }}>
+        <ComposerIcon
+          glyph={GLYPH.camera}
+          label="Camera"
+          onPress={() => router.push(captureHref('post', 'photo'))}
+        />
+        <ComposerIcon glyph={GLYPH.album} label="Gallery" onPress={() => void pickGallery()} />
+        <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+        {hideAudience ? null : (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Audience"
@@ -344,10 +317,10 @@ export function Composer({
             style={{ width: 44, height: 44 }}>
             <AudienceIconButton audience={audience} />
           </Pressable>
-        </View>
-      )}
+        )}
+      </View>
 
-      {gifOpen && !quote && gifSearchConfigured() ? (
+      {gifOpen ? (
         <GifPicker
           visible
           onClose={() => setGifOpen(false)}
