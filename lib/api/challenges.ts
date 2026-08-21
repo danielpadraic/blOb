@@ -6,12 +6,18 @@ import type {
   DistributeChallengeResult,
   EliminateParticipantResult,
   JoinChallengeResult,
+  LeaveChallengeResult,
   MarkChallengeStartedResult,
   PublishChallengePayload,
   PublishChallengeResult,
   RefundPreStartResult,
 } from '@/lib/types/challenge';
-import { getCreateChallengeMessage, getJoinChallengeMessage, logPostgrestError } from '@/utils/errors';
+import {
+  getCreateChallengeMessage,
+  getJoinChallengeMessage,
+  getLeaveChallengeMessage,
+  logPostgrestError,
+} from '@/utils/errors';
 
 const RPC_MESSAGES: Record<string, string> = {
   NOT_AUTHENTICATED: 'Sign in to continue.',
@@ -139,6 +145,28 @@ export async function joinChallenge(challengeId: string): Promise<JoinChallengeR
     throw new Error(rpcMessage(error));
   }
   return data as JoinChallengeResult;
+}
+
+/** Live: leave_challenge(p_challenge_id uuid). User-created, not live. Never show 42703/42883. */
+export async function leaveChallenge(challengeId: string): Promise<LeaveChallengeResult> {
+  const id = String(challengeId ?? '').trim();
+  if (!JOIN_UUID.test(id)) {
+    reportAppError({
+      route: 'leave_challenge',
+      code: 'invalid_id',
+      payload: { challenge_id: challengeId },
+    });
+    throw new Error('Couldn’t leave. Try again.');
+  }
+  const { data, error } = await supabase.rpc('leave_challenge', {
+    p_challenge_id: id,
+  });
+  if (error) {
+    logPostgrestError('leave_challenge', error);
+    reportAppError({ route: 'leave_challenge', error, payload: { challenge_id: id } });
+    throw new Error(getLeaveChallengeMessage(error));
+  }
+  return data as LeaveChallengeResult;
 }
 
 export async function refundPreStart(challengeId: string, userId?: string): Promise<RefundPreStartResult> {

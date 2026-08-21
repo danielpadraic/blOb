@@ -57,6 +57,7 @@ import type {
   ChallengeWithStats,
   Profile,
 } from '@/lib/types';
+import { leaveChallenge } from '@/lib/api/challenges';
 import { cancelProviderRef, getPaymentsProvider } from '@/services/payments';
 import { getErrorMessage } from '@/utils/errors';
 import { challengeCurrency, formatCash, formatWallet, walletBalance } from '@/lib/currency';
@@ -522,6 +523,150 @@ export function useJoinChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
+      void reportBadgeActivity();
+    },
+  });
+}
+
+export function useLeaveChallenge() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (challengeId: string) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      return leaveChallenge(challengeId);
+    },
+    onMutate: async (challengeId): Promise<JoinContext> => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['challenge', challengeId] }),
+        queryClient.cancelQueries({ queryKey: ['challenge-participants', challengeId] }),
+        queryClient.cancelQueries({ queryKey: ['my-participation', challengeId] }),
+        queryClient.cancelQueries({ queryKey: ['challenges'] }),
+        queryClient.cancelQueries({ queryKey: ['profile', user?.id] }),
+      ]);
+
+      const previousChallenge = queryClient.getQueryData<ChallengeWithStats>([
+        'challenge',
+        challengeId,
+      ]);
+      const previousParticipants = queryClient.getQueryData<
+        ChallengeParticipantWithProfile[]
+      >(['challenge-participants', challengeId]);
+      const previousParticipation = queryClient.getQueryData<ChallengeParticipant | null>([
+        'my-participation',
+        challengeId,
+        user?.id,
+      ]);
+      const previousList = queryClient.getQueryData<ChallengeWithStats[]>([
+        'challenges',
+        user?.id,
+      ]);
+      const previousProfile = queryClient.getQueryData<Profile | null>([
+        'profile',
+        user?.id,
+        'self',
+      ]);
+
+      const buyIn = Math.max(Number(previousChallenge?.buy_in_amount ?? 0), 0);
+
+      if (previousChallenge) {
+        queryClient.setQueryData<ChallengeWithStats>(['challenge', challengeId], {
+          ...previousChallenge,
+          prize_pool: Math.max(Number(previousChallenge.prize_pool) - buyIn, 0),
+          participant_count: Math.max(Number(previousChallenge.participant_count ?? 0) - 1, 0),
+          eligible_count: Math.max(
+            Number(previousChallenge.eligible_count ?? previousChallenge.participant_count ?? 0) - 1,
+            0,
+          ),
+        });
+      }
+
+      if (user) {
+        queryClient.setQueryData<ChallengeParticipantWithProfile[]>(
+          ['challenge-participants', challengeId],
+          (previousParticipants ?? []).filter((row) => row.user_id !== user.id),
+        );
+        queryClient.setQueryData(['my-participation', challengeId, user.id], null);
+      }
+
+      if (previousList) {
+        queryClient.setQueryData<ChallengeWithStats[]>(
+          ['challenges', user?.id],
+          previousList.map((item) =>
+            item.id === challengeId
+              ? {
+                  ...item,
+                  prize_pool: Math.max(
+                    Number(item.prize_pool) - Math.max(Number(item.buy_in_amount) || 0, 0),
+                    0,
+                  ),
+                  participant_count: Math.max(Number(item.participant_count ?? 0) - 1, 0),
+                }
+              : item,
+          ),
+        );
+      }
+
+      if (previousProfile && user && buyIn > 0) {
+        const currency = challengeCurrency(previousChallenge);
+        const nextCoins = Number(previousProfile.coins ?? previousProfile.credits ?? 0);
+        const nextBucks = Number(previousProfile.bucks ?? 0);
+        queryClient.setQueryData(['profile', user.id, 'self'], {
+          ...previousProfile,
+          coins: currency === 'bucks' ? nextCoins : nextCoins + buyIn,
+          bucks: currency === 'bucks' ? nextBucks + buyIn : nextBucks,
+          credits: currency === 'bucks' ? nextCoins : nextCoins + buyIn,
+        });
+      }
+
+      return {
+        previousChallenge,
+        previousParticipants,
+        previousParticipation,
+        previousList,
+        previousProfile,
+      };
+    },
+    onError: (_error, challengeId, context) => {
+      if (!context) {
+        return;
+      }
+      queryClient.setQueryData(['challenge', challengeId], context.previousChallenge);
+      queryClient.setQueryData(
+        ['challenge-participants', challengeId],
+        context.previousParticipants,
+      );
+      queryClient.setQueryData(
+        ['my-participation', challengeId, user?.id],
+        context.previousParticipation,
+      );
+      queryClient.setQueryData(['challenges', user?.id], context.previousList);
+      if (user) {
+        queryClient.setQueryData(['profile', user.id, 'self'], context.previousProfile);
+      }
+    },
+    onSettled: (_data, _error, challengeId) => {
+      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      void queryClient.invalidateQueries({
+        queryKey: ['challenge-participants', challengeId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['featured-official'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
+      void queryClient.invalidateQueries({ queryKey: ['submitted-checkins', challengeId] });
       void reportBadgeActivity();
     },
   });

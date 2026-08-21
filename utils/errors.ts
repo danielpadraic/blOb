@@ -21,6 +21,11 @@ export function getCancelChallengeMessage(error: unknown): string {
   return copy('error.cancelChallenge');
 }
 
+export function getLeaveChallengeMessage(error: unknown): string {
+  logPostgrestError('leave-challenge', error);
+  return copy('error.leaveChallenge');
+}
+
 export function getJoinChallengeMessage(error: unknown): string {
   logPostgrestError('join-challenge', error);
   const text = getErrorMessage(error);

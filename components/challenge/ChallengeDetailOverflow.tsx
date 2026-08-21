@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
 import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
+import { LeaveChallengeSheet } from '@/components/challenge/LeaveChallengeSheet';
 import { StartRollSheet } from '@/components/challenge/StartRollSheet';
 import {
   ChallengeMenuPopover,
@@ -16,15 +17,18 @@ import {
   useCancelChallenge,
   useChallenge,
   useChallengeParticipants,
+  useLeaveChallenge,
   useNudgeChallengeStart,
   useResolveStartRoll,
 } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
+import { canParticipantLeave } from '@/lib/challengeLeave';
 import { canHostQuickEdit } from '@/lib/challengeStart';
+import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
-import { getCancelChallengeMessage, getStartUpdateMessage } from '@/utils/errors';
+import { getCancelChallengeMessage, getLeaveChallengeMessage, getStartUpdateMessage } from '@/utils/errors';
 
 let overflowVisible = false;
 let openOverflowMenu = (_anchor: MenuAnchor) => {};
@@ -45,16 +49,21 @@ export function useChallengeDetailOverflow() {
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
   const cancel = useCancelChallenge();
+  const leave = useLeaveChallenge();
   const nudge = useNudgeChallengeStart();
   const resolveRoll = useResolveStartRoll();
 
   const [menu, setMenu] = useState<MenuAnchor | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const [rollDismissed, setRollDismissed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const challenge = challengeQuery.data ?? null;
   const officialViewer = isOfficialAccount(profile);
+  const joined = Boolean(
+    user?.id && roster.data?.some((row) => row.user_id === user.id && isLiveCompetitor(row)),
+  );
   const canEdit = canHostQuickEdit({ challenge, viewerId: user?.id });
   const canCancel = canCancelChallenge({
     challenge,
@@ -63,7 +72,8 @@ export function useChallengeDetailOverflow() {
     otherJoiners: countOtherJoiners(roster.data, challenge?.created_by),
     rosterReady: roster.data != null,
   });
-  const showOverflow = canEdit || canCancel;
+  const canLeave = canParticipantLeave({ challenge, joined });
+  const showOverflow = canEdit || canCancel || canLeave;
   const rollPending = Boolean(challenge?.start_roll_pending) && canEdit;
   const rollOpen = rollPending && !rollDismissed;
 
@@ -98,6 +108,21 @@ export function useChallengeDetailOverflow() {
     });
   }
 
+  function confirmLeave() {
+    if (!id || leave.isPending) {
+      return;
+    }
+    setError(null);
+    leave.mutate(id, {
+      onSuccess: () => {
+        setLeaveOpen(false);
+      },
+      onError: (err) => {
+        setError(getLeaveChallengeMessage(err));
+      },
+    });
+  }
+
   const actions: ChallengeOverflowAction[] = [];
   if (canEdit) {
     actions.push({
@@ -125,6 +150,16 @@ export function useChallengeDetailOverflow() {
       },
     });
   }
+  if (canLeave) {
+    actions.push({
+      key: 'leave',
+      label: copy('challenge.leave'),
+      onPress: () => {
+        setError(null);
+        setLeaveOpen(true);
+      },
+    });
+  }
   if (canCancel) {
     actions.push({
       key: 'cancel',
@@ -148,10 +183,13 @@ export function useChallengeDetailOverflow() {
       setCancelOpen(true);
     },
     closeCancel: () => setCancelOpen(false),
+    leaveOpen,
+    closeLeave: () => setLeaveOpen(false),
     challenge,
-    loading: cancel.isPending || nudge.isPending || resolveRoll.isPending,
+    loading: cancel.isPending || leave.isPending || nudge.isPending || resolveRoll.isPending,
     error,
     confirmCancel,
+    confirmLeave,
     actions,
     rollOpen,
     closeRoll: () => setRollDismissed(true),
@@ -228,9 +266,18 @@ export function ChallengeDetailOverflowHost({
           visible={overflow.cancelOpen}
           challenge={overflow.challenge}
           loading={overflow.loading}
-          error={overflow.error}
+          error={overflow.cancelOpen ? overflow.error : null}
           onClose={overflow.closeCancel}
           onConfirm={overflow.confirmCancel}
+        />
+      ) : null}
+      {overflow.challenge ? (
+        <LeaveChallengeSheet
+          visible={overflow.leaveOpen}
+          loading={overflow.loading}
+          error={overflow.leaveOpen ? overflow.error : null}
+          onClose={overflow.closeLeave}
+          onConfirm={overflow.confirmLeave}
         />
       ) : null}
       {overflow.challenge ? (

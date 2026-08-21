@@ -36,6 +36,7 @@ export type ParticipantEscrowStatus =
 export type WalletLedgerEntryType =
   | 'top_up'
   | 'join_escrow'
+  | 'leave_refund'
   | 'creator_fund_escrow'
   | 'refund_pre_start'
   | 'challenge_cancel_refund'
@@ -114,6 +115,14 @@ export type JoinChallengeResult = {
   ok: true;
   challenge_id: string;
   prize_pool: number;
+};
+
+export type LeaveChallengeResult = {
+  ok: true;
+  challenge_id?: string;
+  already_left?: boolean;
+  refunded?: number;
+  prize_pool?: number;
 };
 
 export type RefundPreStartResult = {

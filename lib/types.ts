@@ -1323,6 +1323,16 @@ export type Database = {
         Args: { p_challenge_id: string };
         Returns: { ok: boolean; challenge_id: string; prize_pool: number };
       };
+      leave_challenge: {
+        Args: { p_challenge_id: string };
+        Returns: {
+          ok: boolean;
+          challenge_id?: string;
+          already_left?: boolean;
+          refunded?: number;
+          prize_pool?: number;
+        };
+      };
       tick_official_series: {
         Args: Record<string, never>;
         Returns: { ok: boolean };
