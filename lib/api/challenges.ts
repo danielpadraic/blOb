@@ -116,10 +116,24 @@ export async function publishChallenge(
   return unwrap<PublishChallengeResult>(data, error);
 }
 
-  const { data, error } = await supabase.rpc('join_challenge', { p_challenge_id: id });
+const JOIN_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Live signature: public.join_challenge(p_challenge_id uuid). No extra jsonb. */
+export async function joinChallenge(id: string): Promise<JoinChallengeResult> {
+  const p_challenge_id = String(id ?? '').trim();
+  if (!JOIN_UUID.test(p_challenge_id)) {
+    reportAppError({
+      route: 'join_challenge',
+      code: 'invalid_id',
+      payload: { challenge_id: id },
+    });
+    throw new Error('Couldn’t join. Try again.');
+  }
+  const { data, error } = await supabase.rpc('join_challenge', { p_challenge_id });
   if (error) {
     logPostgrestError('join_challenge', error);
-    reportAppError({ route: 'join_challenge', error, payload: { challenge_id: id } });
+    reportAppError({ route: 'join_challenge', error, payload: { challenge_id: p_challenge_id } });
     throw new Error(rpcMessage(error));
   }
   return data as JoinChallengeResult;

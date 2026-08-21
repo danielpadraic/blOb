@@ -24,6 +24,14 @@ export function getCancelChallengeMessage(error: unknown): string {
 export function getJoinChallengeMessage(error: unknown): string {
   logPostgrestError('join-challenge', error);
   const text = getErrorMessage(error);
+  const raw = extractRawMessage(error);
+  if (
+    /42883|pgrst202|could not find the function|no function matches|user_can_access_challenge/i.test(
+      `${text} ${raw}`,
+    )
+  ) {
+    return 'Couldn’t join. Try again.';
+  }
   if (
     /42703|ref_type|pgrst204/i.test(text) ||
     isUnknownColumnError(error)
@@ -253,6 +261,14 @@ function humanize(raw: string): string {
 
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
+  }
+  if (
+    message.includes('42883') ||
+    message.includes('pgrst202') ||
+    message.includes('no function matches') ||
+    (message.includes('could not find the function') && message.includes('join_challenge'))
+  ) {
+    return 'Couldn’t complete that just now. Try again.';
   }
   if (
     message.includes('42703') ||
