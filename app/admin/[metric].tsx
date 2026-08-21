@@ -3,12 +3,13 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { MascotState } from '@/components/mascot/MascotState';
+import { StackBackButton } from '@/components/navigation/StackBackButton';
 import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAdminPulseList } from '@/hooks/useAdmin';
 import { type AdminPulseMetric, type AdminPulseRow, type AdminRange } from '@/lib/admin';
-import { challengeDetailHref } from '@/lib/routes';
+import { challengeDetailHref, TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 const TITLES: Record<AdminPulseMetric, string> = {
@@ -78,7 +79,13 @@ export default function AdminMetricScreen() {
 
   return (
     <Screen scroll>
-      <Stack.Screen options={{ title: TITLES[metric] }} />
+      <Stack.Screen
+        options={{
+          title: TITLES[metric],
+          headerBackVisible: false,
+          headerLeft: () => <StackBackButton fallback={TABS_HREF} preferHistory />,
+        }}
+      />
       <View className="gap-3 pb-6 pt-1">
         {list.isLoading && !list.data ? (
           <MascotState kind="loading" title="Loading…" compact />

@@ -125,6 +125,7 @@ export function FeedList({
               post={post}
               currentUserId={currentUserId}
               hideAudience={hideAudience}
+              challengeFeed={composeSource === 'challenge'}
               commenting={commenting}
               highlighted={highlightPostId === post.id}
               onReact={(type, commentId) => onReact(post, type, commentId)}

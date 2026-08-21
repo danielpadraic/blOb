@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
@@ -39,6 +40,7 @@ type PostCardProps = {
   post: PostWithMeta;
   currentUserId?: string;
   hideAudience?: boolean;
+  challengeFeed?: boolean;
   onReact: (type: ReactionType, commentId?: string | null) => void;
   onComment?: (
     content: string,
@@ -53,6 +55,7 @@ export function PostCard({
   post,
   currentUserId,
   hideAudience,
+  challengeFeed,
   onReact,
   onComment,
   commenting,
@@ -74,6 +77,23 @@ export function PostCard({
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
   const menuOpen = Boolean(social?.isOpenFor(post.id));
+  const composerPost =
+    post.source === 'challenge' ||
+    post.source === 'checkin' ||
+    Boolean(challengeFeed && post.challenge_id);
+  const preview = useChallengeFeedPreview(composerPost ? post.challenge_id : undefined);
+  const inTitle = preview.data?.title?.trim();
+  const attribution = composerPost
+    ? inTitle
+      ? `@${handle} — in ${inTitle}`
+      : `@${handle}`
+    : `@${handle} · ${formatFeedTime(post.created_at)}${
+        post.wall_host
+          ? ` · ${copy('wall.onHost', 'neutral', {
+              name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
+            })}`
+          : ''
+      }`;
 
   return (
     <Card
@@ -100,13 +120,8 @@ export function PostCard({
                   <OfficialMark profile={post.author} compact />
                 </View>
               </ProfileLink>
-              <AppText className="text-[11px] leading-4 text-muted" numberOfLines={1}>
-                @{handle} · {formatFeedTime(post.created_at)}
-                {post.wall_host
-                  ? ` · ${copy('wall.onHost', 'neutral', {
-                      name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
-                    })}`
-                  : ''}
+              <AppText className="text-[11px] leading-4 text-muted" numberOfLines={2}>
+                {attribution}
               </AppText>
             </View>
             {hideAudience || post.checkin_id ? null : currentUserId && currentUserId === post.author_id ? (
@@ -159,7 +174,9 @@ export function PostCard({
             />
           ) : null}
 
-          {post.challenge_id ? <ChallengeShareCard challengeId={post.challenge_id} /> : null}
+          {post.challenge_id && !composerPost ? (
+            <ChallengeShareCard challengeId={post.challenge_id} />
+          ) : null}
 
           {quote ? (
             <QuoteEmbed
@@ -387,7 +404,7 @@ function chunk<T>(items: T[], size: number): T[][] {
   return rows;
 }
 
-function CoverPhoto({
+function MediaFrame({
   uri,
   height,
   radius,
@@ -398,6 +415,7 @@ function CoverPhoto({
   radius: number;
   label?: string;
 }) {
+  const kind = mediaKind(uri);
   return (
     <View
       style={{
@@ -405,15 +423,19 @@ function CoverPhoto({
         width: '100%',
         borderRadius: radius,
         overflow: 'hidden',
-        backgroundColor: THEME.surface2,
+        backgroundColor: THEME.surface,
       }}>
-      <Image
-        source={{ uri }}
-        style={{ width: '100%', height: '100%' }}
-        contentFit="cover"
-        contentPosition="center"
-        recyclingKey={uri}
-      />
+      {kind === 'video' ? (
+        <PostVideo uri={uri} />
+      ) : (
+        <Image
+          source={{ uri }}
+          style={{ width: '100%', height: '100%' }}
+          contentFit="contain"
+          contentPosition="center"
+          recyclingKey={uri}
+        />
+      )}
       {label ? (
         <View
           pointerEvents="none"
@@ -435,34 +457,55 @@ function CoverPhoto({
   );
 }
 
+function PostVideo({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (instance) => {
+    instance.loop = false;
+    instance.muted = true;
+  });
+  return (
+    <VideoView
+      player={player}
+      style={{ width: '100%', height: '100%', backgroundColor: THEME.surface }}
+      contentFit="contain"
+      nativeControls
+    />
+  );
+}
+
 function ProofMedia({ urls }: { urls: string[] }) {
   const items = urls.filter(Boolean);
   if (items.length === 0) {
     return null;
   }
 
-  const images = items.filter((url) => mediaKind(url) === 'image');
-  const others = items.filter((url) => mediaKind(url) !== 'image');
-  const labels = images.length === 3 ? PROOF_LABELS : images.map((_, index) => String(index + 1));
-  const columns = imageColumns(images.length);
+  const visuals = items.filter((url) => {
+    const kind = mediaKind(url);
+    return kind === 'image' || kind === 'video';
+  });
+  const others = items.filter((url) => {
+    const kind = mediaKind(url);
+    return kind !== 'image' && kind !== 'video';
+  });
+  const labels = visuals.length === 3 ? PROOF_LABELS : undefined;
+  const columns = imageColumns(visuals.length);
 
   return (
     <View className="gap-1.5">
-      {images.length === 1 ? (
-        <CoverPhoto uri={images[0]} height={SINGLE_IMAGE_HEIGHT} radius={14} label={labels[0]} />
-      ) : images.length > 1 ? (
+      {visuals.length === 1 ? (
+        <MediaFrame uri={visuals[0]} height={SINGLE_IMAGE_HEIGHT} radius={14} />
+      ) : visuals.length > 1 ? (
         <View className="gap-1.5">
-          {chunk(images, columns).map((row, rowIndex) => (
+          {chunk(visuals, columns).map((row, rowIndex) => (
             <View key={`row-${rowIndex}`} className="flex-row gap-1.5">
               {row.map((uri, index) => {
                 const itemIndex = rowIndex * columns + index;
                 return (
                   <View key={`${uri}-${itemIndex}`} className="flex-1">
-                    <CoverPhoto
+                    <MediaFrame
                       uri={uri}
                       height={TILE_HEIGHT}
                       radius={12}
-                      label={labels[itemIndex]}
+                      label={labels?.[itemIndex]}
                     />
                   </View>
                 );

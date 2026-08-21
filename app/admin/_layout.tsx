@@ -1,8 +1,13 @@
 import { Stack } from 'expo-router';
 
 import { AdminGate } from '@/components/admin/AdminGate';
-import { TAB_STACK_SCREEN_OPTIONS } from '@/lib/routes';
+import { StackBackButton } from '@/components/navigation/StackBackButton';
+import { TAB_STACK_SCREEN_OPTIONS, TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
+
+function AdminBack() {
+  return <StackBackButton fallback={TABS_HREF} preferHistory />;
+}
 
 export default function AdminLayout() {
   return (
@@ -12,6 +17,8 @@ export default function AdminLayout() {
           ...TAB_STACK_SCREEN_OPTIONS,
           headerStyle: { backgroundColor: THEME.background },
           contentStyle: { backgroundColor: THEME.background },
+          headerBackVisible: false,
+          headerLeft: () => <AdminBack />,
         }}>
         <Stack.Screen name="index" options={{ title: 'Admin' }} />
         <Stack.Screen name="errors" options={{ title: 'Errors' }} />

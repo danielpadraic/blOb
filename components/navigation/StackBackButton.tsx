@@ -8,6 +8,8 @@ import { THEME } from '@/lib/theme';
 
 type StackBackButtonProps = {
   fallback?: Href;
+  /** Pop the previous screen when there is history, then use fallback. */
+  preferHistory?: boolean;
 };
 
 function fallbackHref(returnTo?: string | string[], explicit?: Href): Href {
@@ -46,7 +48,7 @@ export function useDismissTo(target: Href) {
   );
 }
 
-export function StackBackButton({ fallback }: StackBackButtonProps) {
+export function StackBackButton({ fallback, preferHistory = false }: StackBackButtonProps) {
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string }>();
   const target = fallbackHref(params.returnTo, fallback);
@@ -56,7 +58,13 @@ export function StackBackButton({ fallback }: StackBackButtonProps) {
       accessibilityRole="button"
       accessibilityLabel="Back"
       hitSlop={8}
-      onPress={() => popToFallback(router, target)}
+      onPress={() => {
+        if (preferHistory && router.canGoBack()) {
+          router.back();
+          return;
+        }
+        popToFallback(router, target);
+      }}
       className="h-11 w-11 items-center justify-center">
       <AppText
         className="text-[22px] font-semibold leading-7"

@@ -77,20 +77,29 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
   if (select.includes('checkin_id') && scope.kind !== 'challenge') {
     query = query.is('checkin_id', null);
   }
-  if (scope.kind === 'challenge' && /(^|,\s*)source(,|$)/.test(select)) {
-    query = query.in('source', ['challenge', 'checkin']);
+  const hasSource = /(^|,\s*)source(,|$)/.test(select);
+  if (scope.kind === 'challenge') {
+    query = query.eq('challenge_id', scope.challengeId);
+    if (hasSource) {
+      query = query.in('source', ['challenge', 'checkin']);
+    }
+    return query;
   }
-  return scope.kind === 'challenge'
-    ? query.eq('challenge_id', scope.challengeId)
-    : scope.kind === 'ids'
-      ? query.in('challenge_id', scope.challengeIds)
-      : scope.kind === 'authors'
-        ? query.in('author_id', scope.authorIds)
-        : scope.kind === 'wall'
-          ? query.or(
-              `and(author_id.eq.${scope.hostId},wall_host_id.is.null),and(wall_host_id.eq.${scope.hostId},wall_removed_at.is.null)`,
-            )
-        : query.is('challenge_id', null);
+  if (scope.kind === 'ids') {
+    return query.in('challenge_id', scope.challengeIds);
+  }
+  if (scope.kind === 'authors') {
+    return query.in('author_id', scope.authorIds);
+  }
+  if (scope.kind === 'wall') {
+    return query.or(
+      `and(author_id.eq.${scope.hostId},wall_host_id.is.null),and(wall_host_id.eq.${scope.hostId},wall_removed_at.is.null)`,
+    );
+  }
+  if (hasSource) {
+    return query.in('source', ['feed', 'share']);
+  }
+  return query.is('challenge_id', null);
 }
 
 function withQuoteSnapshot(post: PostWithMeta): PostWithMeta {
