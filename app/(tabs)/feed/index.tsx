@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { View } from 'react-native';
 
 import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
@@ -20,6 +21,7 @@ import {
 } from '@/hooks/useFeed';
 import { useActiveStories } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
+import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
 export default function FeedScreen() {
   const { user } = useAuth();
@@ -33,11 +35,27 @@ export default function FeedScreen() {
   const posts = feed.data ?? [];
   const refreshing = (feed.isRefetching || stories.isRefetching) && !feed.isLoading;
 
-  function onRefresh() {
+  const onRefresh = useCallback(() => {
     void feed.refetch();
     void stories.refetch();
     void featured.refetch();
-  }
+  }, [featured, feed, stories]);
+
+  const onCompose = useCallback(
+    (input: ComposeInput) => createPost.mutateAsync(input),
+    [createPost],
+  );
+  const onReact = useCallback(
+    (post: PostWithMeta, type: ReactionType, commentId?: string | null) => {
+      toggleReaction.mutate({ post, type, commentId });
+    },
+    [toggleReaction],
+  );
+  const onComment = useCallback(
+    (post: PostWithMeta, content: string, parentId?: string | null, mentionedUserIds?: string[]) =>
+      createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds }),
+    [createComment],
+  );
 
   if (feed.error) {
     return (
@@ -63,7 +81,6 @@ export default function FeedScreen() {
         emptyBody=""
         composerPlaceholder={copy('home.composer', tone)}
         composing={createPost.isPending}
-        commenting={createComment.isPending}
         headerTop={<FeaturedOfficialStrip />}
         headerExtra={
           <View className="gap-2">
@@ -75,11 +92,9 @@ export default function FeedScreen() {
         empty={<FeedEmptyState compact />}
         onRefresh={onRefresh}
         onRetry={() => void feed.refetch()}
-        onCompose={(input) => createPost.mutateAsync(input)}
-        onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-        onComment={(post, content, parentId, mentionedUserIds) =>
-          createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
-        }
+        onCompose={onCompose}
+        onReact={onReact}
+        onComment={onComment}
       />
     </Screen>
   );

@@ -27,23 +27,35 @@ export function InlineComposer({
   onSubmit,
 }: InlineComposerProps) {
   const fieldRef = useRef<MentionFieldHandle>(null);
-  const [doc, setDoc] = useState<MentionDoc>({ text: '', chips: [] });
+  const docRef = useRef<MentionDoc>({ text: '', chips: [] });
+  const [canSend, setCanSend] = useState(false);
+  const [fieldKey, setFieldKey] = useState(0);
+
+  function onDocChange(doc: MentionDoc) {
+    docRef.current = doc;
+    const next = doc.text.trim().length > 0;
+    setCanSend((current) => (current === next ? current : next));
+  }
 
   async function submit() {
-    const trimmed = doc.text.trim();
+    const latest = fieldRef.current?.getDoc() ?? docRef.current;
+    const trimmed = latest.text.trim();
     if (!trimmed || submitting) {
       return;
     }
     await onSubmit(
       trimmed,
-      doc.chips.map((chip) => chip.userId),
+      latest.chips.map((chip) => chip.userId),
     );
-    setDoc({ text: '', chips: [] });
+    docRef.current = { text: '', chips: [] };
+    setCanSend(false);
+    setFieldKey((value) => value + 1);
   }
 
   return (
     <View style={{ gap: 6 }}>
       <MentionField
+        key={fieldKey}
         ref={fieldRef}
         compact
         pickerPlacement="above"
@@ -52,7 +64,7 @@ export function InlineComposer({
         initialMention={replyTo}
         audience={audience}
         audienceUserIds={audienceUserIds}
-        onChange={setDoc}
+        onChange={onDocChange}
         onSubmit={() => void submit()}
         accessibilityLabel={placeholder}
       />
@@ -78,14 +90,14 @@ export function InlineComposer({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={submitLabel}
-          disabled={!doc.text.trim() || submitting}
+          disabled={!canSend || submitting}
           onPress={() => void submit()}
           style={{
             minHeight: 36,
             paddingHorizontal: 14,
             borderRadius: 999,
             backgroundColor: THEME.primary,
-            opacity: !doc.text.trim() || submitting ? 0.38 : 1,
+            opacity: !canSend || submitting ? 0.38 : 1,
             alignItems: 'center',
             justifyContent: 'center',
           }}>

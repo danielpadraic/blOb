@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -22,7 +22,16 @@ export function useMentionCandidates(input: {
   const friends = useFriends();
   const following = useFollowing(user?.id);
   const audience = asPostAudience(input.audience);
-  const query = input.query.trim().replace(/^@/, '').toLowerCase();
+  const rawQuery = input.query.trim().replace(/^@/, '').toLowerCase();
+  const [query, setQuery] = useState(rawQuery);
+  useEffect(() => {
+    if (!rawQuery) {
+      setQuery('');
+      return;
+    }
+    const handle = setTimeout(() => setQuery(rawQuery), 180);
+    return () => clearTimeout(handle);
+  }, [rawQuery]);
 
   const blocked = useQuery({
     queryKey: ['blocked-ids', user?.id],
@@ -47,6 +56,7 @@ export function useMentionCandidates(input: {
   const searched = useQuery({
     queryKey: ['mention-search', user?.id, query],
     enabled: Boolean(user?.id && input.enabled !== false && query.length > 0),
+    staleTime: 30_000,
     queryFn: () => searchPeople(query, user!.id),
   });
 

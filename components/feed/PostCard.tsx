@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -52,7 +52,7 @@ type PostCardProps = {
   highlighted?: boolean;
 };
 
-export function PostCard({
+function PostCardInner({
   post,
   currentUserId,
   hideAudience,
@@ -267,6 +267,8 @@ export function PostCard({
     </Card>
   );
 }
+
+export const PostCard = memo(PostCardInner);
 
 function ProofFlagButton({ postId }: { postId: string }) {
   const [busy, setBusy] = useState(false);
@@ -543,6 +545,7 @@ function MediaFrame({
           style={{ width: '100%', height: '100%' }}
           contentFit="cover"
           contentPosition="center"
+          cachePolicy="memory-disk"
           recyclingKey={uri}
         />
       )}
@@ -551,9 +554,42 @@ function MediaFrame({
 }
 
 function PostVideo({ uri }: { uri: string }) {
+  const [playing, setPlaying] = useState(false);
+  if (!playing) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Play video"
+        onPress={() => setPlaying(true)}
+        style={{
+          width: '100%',
+          height: '100%',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: THEME.primary,
+        }}>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(16,19,18,0.55)',
+          }}>
+          <Glyph name={GLYPH.play} color="#fff" size={18} />
+        </View>
+      </Pressable>
+    );
+  }
+  return <PostVideoPlayer uri={uri} />;
+}
+
+function PostVideoPlayer({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
     instance.muted = true;
+    instance.play();
   });
   return (
     <VideoView

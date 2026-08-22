@@ -1,6 +1,5 @@
-import type { ReactNode } from 'react';
-import { useRef } from 'react';
-import { Platform, RefreshControl, ScrollView, View } from 'react-native';
+import { memo, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { FlatList, Platform, RefreshControl, ScrollView, View } from 'react-native';
 
 import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
@@ -43,6 +42,52 @@ type FeedListProps = {
   ) => Promise<unknown> | void;
 };
 
+type FeedRowProps = {
+  post: PostWithMeta;
+  currentUserId?: string;
+  hideAudience?: boolean;
+  challengeFeed?: boolean;
+  highlighted?: boolean;
+  onReact: FeedListProps['onReact'];
+  onComment?: FeedListProps['onComment'];
+};
+
+const FeedRow = memo(function FeedRow({
+  post,
+  currentUserId,
+  hideAudience,
+  challengeFeed,
+  highlighted,
+  onReact,
+  onComment,
+}: FeedRowProps) {
+  const handleReact = useCallback(
+    (type: ReactionType, commentId?: string | null) => {
+      onReact(post, type, commentId);
+    },
+    [onReact, post],
+  );
+  const handleComment = useMemo(() => {
+    if (!onComment) {
+      return undefined;
+    }
+    return (content: string, parentId?: string | null, mentionedUserIds?: string[]) =>
+      onComment(post, content, parentId, mentionedUserIds);
+  }, [onComment, post]);
+
+  return (
+    <PostCard
+      post={post}
+      currentUserId={currentUserId}
+      hideAudience={hideAudience}
+      challengeFeed={challengeFeed}
+      highlighted={highlighted}
+      onReact={handleReact}
+      onComment={handleComment}
+    />
+  );
+});
+
 export function FeedList({
   posts,
   isLoading,
@@ -54,7 +99,7 @@ export function FeedList({
   composerPlaceholder,
   canCompose = true,
   composing,
-  commenting,
+  commenting: _commenting,
   embedded,
   headerTop,
   headerExtra,
@@ -68,9 +113,60 @@ export function FeedList({
   onReact,
   onComment,
 }: FeedListProps) {
-  const scrollRef = useRef<ScrollView>(null);
+  const listRef = useRef<FlatList<PostWithMeta>>(null);
   const tour = useTourOptional();
   const tone = useCopyTone();
+  const visiblePosts = useMemo(() => posts.filter((post) => !post.deleted_at), [posts]);
+  const challengeFeed = composeSource === 'challenge';
+
+  const onComposeSubmit = useCallback(
+    async (input: ComposeInput) => {
+      if (!onCompose) {
+        return;
+      }
+      await onCompose({ ...input, source: composeSource ?? input.source ?? 'feed' });
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    },
+    [composeSource, onCompose],
+  );
+
+  const header = (
+    <View className="gap-3">
+      {headerTop}
+      {headerExtra}
+      {canCompose && onCompose ? (
+        <Composer
+          placeholder={composerPlaceholder}
+          submitting={composing}
+          hideAudience={hideAudience}
+          onSubmit={onComposeSubmit}
+        />
+      ) : null}
+      {!embedded ? (
+        <View className="flex-row items-end justify-between pt-1">
+          <AppText className="text-[18px] font-extrabold text-charcoal">Feed</AppText>
+          <AppText className="text-[12px] text-muted">Latest</AppText>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: PostWithMeta }) => (
+      <View className="mt-3">
+        <FeedRow
+          post={item}
+          currentUserId={currentUserId}
+          hideAudience={hideAudience}
+          challengeFeed={challengeFeed}
+          highlighted={highlightPostId === item.id}
+          onReact={onReact}
+          onComment={onComment}
+        />
+      </View>
+    ),
+    [challengeFeed, currentUserId, hideAudience, highlightPostId, onComment, onReact],
+  );
 
   if (error) {
     return (
@@ -83,83 +179,62 @@ export function FeedList({
     );
   }
 
-  const visiblePosts = posts.filter((post) => !post.deleted_at);
-  const body = (
-    <>
-      {headerTop}
-      {headerExtra}
+  if (isLoading) {
+    return (
+      <View className="gap-3">
+        {header}
+        <MascotState kind="loading" title={copy('home.loading', tone)} compact={embedded} />
+      </View>
+    );
+  }
 
-      {canCompose && onCompose ? (
-        <Composer
-          placeholder={composerPlaceholder}
-          submitting={composing}
-          hideAudience={hideAudience}
-          tall={embedded}
-          onSubmit={async (input) => {
-            await onCompose({ ...input, source: composeSource ?? input.source ?? 'feed' });
-            scrollRef.current?.scrollTo({ y: 0 });
-          }}
-        />
-      ) : null}
-
-      {!embedded ? (
-        <View className="flex-row items-end justify-between pt-1">
-          <AppText className="text-[18px] font-extrabold text-charcoal">Feed</AppText>
-          <AppText className="text-[12px] text-muted">Latest</AppText>
-        </View>
-      ) : null}
-
-      {isLoading ? (
-        <MascotState
-          kind="loading"
-          title={copy('home.loading', tone)}
-          compact={embedded}
-        />
-      ) : visiblePosts.length === 0 ? (
-        empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact={embedded} />
-      ) : (
-        <View className="gap-3">
-          {visiblePosts.map((post) => (
-            <PostCard
+  if (embedded) {
+    return (
+      <View className="gap-3">
+        {header}
+        {visiblePosts.length === 0 ? (
+          empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
+        ) : (
+          visiblePosts.map((post) => (
+            <FeedRow
               key={post.id}
               post={post}
               currentUserId={currentUserId}
               hideAudience={hideAudience}
-              challengeFeed={composeSource === 'challenge'}
-              commenting={commenting}
+              challengeFeed={challengeFeed}
               highlighted={highlightPostId === post.id}
-              onReact={(type, commentId) => onReact(post, type, commentId)}
-              onComment={
-                onComment
-                  ? (content, parentId, mentionedUserIds) =>
-                      onComment(post, content, parentId, mentionedUserIds)
-                  : undefined
-              }
+              onReact={onReact}
+              onComment={onComment}
             />
-          ))}
-        </View>
-      )}
-    </>
-  );
-
-  if (embedded) {
-    return <View className="gap-3">{body}</View>;
+          ))
+        )}
+      </View>
+    );
   }
 
   return (
-    <ScrollView
+    <FlatList
       ref={(node) => {
-        scrollRef.current = node;
-        tour?.setHomeScroll(node);
+        listRef.current = node;
+        tour?.setHomeScroll(node as unknown as ScrollView);
       }}
-      className="flex-1"
-      style={
-        Platform.OS === 'web'
-          ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden' } as object)
-          : { flex: 1 }
+      data={visiblePosts}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      ListHeaderComponent={header}
+      ListEmptyComponent={() =>
+        empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
       }
-      contentContainerClassName="gap-3"
-      contentContainerStyle={{ paddingBottom: TAB_BAR_CONTENT_INSET, flexGrow: 0 }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      automaticallyAdjustKeyboardInsets
+      showsVerticalScrollIndicator={false}
+      windowSize={7}
+      maxToRenderPerBatch={5}
+      initialNumToRender={5}
+      updateCellsBatchingPeriod={50}
+      removeClippedSubviews={Platform.OS !== 'web'}
+      contentContainerStyle={{ paddingBottom: TAB_BAR_CONTENT_INSET, flexGrow: 1 }}
       refreshControl={
         onRefresh ? (
           <RefreshControl
@@ -169,11 +244,11 @@ export function FeedList({
           />
         ) : undefined
       }
-      keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
-      keyboardDismissMode="interactive"
-      showsVerticalScrollIndicator={false}>
-      {body}
-    </ScrollView>
+      style={
+        Platform.OS === 'web'
+          ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden' } as object)
+          : { flex: 1 }
+      }
+    />
   );
 }

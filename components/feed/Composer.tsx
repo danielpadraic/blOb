@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
-import { MentionField } from '@/components/feed/MentionField';
+import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { GifPicker } from '@/components/feed/GifPicker';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
@@ -71,7 +71,7 @@ export function Composer({
   hideAudience,
   quote,
   wallHost,
-  tall,
+  tall: _tall,
   onSubmit,
 }: ComposerProps) {
   const { user } = useAuth();
@@ -80,8 +80,10 @@ export function Composer({
   const router = useRouter();
   const social = useSocialSheetsOptional();
   const profileDefault = asDefaultPostAudience(profile?.default_post_audience);
+  const fieldRef = useRef<MentionFieldHandle>(null);
+  const docRef = useRef<MentionDoc>({ text: initialText ?? '', chips: [] });
   const [fieldKey, setFieldKey] = useState(0);
-  const [doc, setDoc] = useState<MentionDoc>({ text: initialText ?? '', chips: [] });
+  const [hasText, setHasText] = useState(Boolean(initialText?.trim()));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
@@ -100,7 +102,7 @@ export function Composer({
 
   const busy = Boolean(submitting || uploading);
   const canPost =
-    Boolean(doc.text.trim() || attachments.length > 0 || quote || attachedChallenge) &&
+    Boolean(hasText || attachments.length > 0 || quote || attachedChallenge) &&
     (audience !== 'specific' || audienceUserIds.length > 0);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
@@ -200,19 +202,21 @@ export function Composer({
           throw new Error(copy('wall.closed'));
         }
       }
+      const latest = fieldRef.current?.getDoc() ?? docRef.current;
       const postAudience = hideAudience ? 'public' : audience;
       await onSubmit({
-        content: doc.text.trim(),
+        content: latest.text.trim(),
         mediaUrls,
         audience: postAudience,
         audienceUserIds: postAudience === 'specific' ? audienceUserIds : [],
-        mentionedUserIds: doc.chips.map((chip) => chip.userId),
+        mentionedUserIds: latest.chips.map((chip) => chip.userId),
         wallHostId: wallHost?.id ?? null,
         quotedPostId: quote?.postId ?? null,
         quoteSnapshot: quote?.snapshot ?? null,
         challengeId: attachedChallenge?.id ?? null,
       });
-      setDoc({ text: '', chips: [] });
+      docRef.current = { text: '', chips: [] };
+      setHasText(false);
       setAttachments([]);
       setGifOpen(false);
       setFieldKey((value) => value + 1);
@@ -246,11 +250,11 @@ export function Composer({
             borderRadius: 18,
             paddingLeft: 12,
             paddingRight: 4,
-            paddingVertical: tall ? 10 : 6,
-            minHeight: tall ? 88 : 44,
+            paddingVertical: 4,
+            minHeight: 40,
             alignItems: 'flex-end',
           }}>
-          <View className="min-w-0 flex-1" style={{ minHeight: tall ? 72 : 32, paddingVertical: 4, justifyContent: tall ? 'flex-start' : 'center' }}>
+          <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'center' }}>
             {wallHost ? (
               <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
                 {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
@@ -258,12 +262,17 @@ export function Composer({
             ) : null}
             <MentionField
               key={fieldKey}
+              ref={fieldRef}
               placeholder={resolvedPlaceholder}
               autoFocus={autoFocus}
               compact
               audience={audience}
               audienceUserIds={audienceUserIds}
-              onChange={setDoc}
+              onChange={(doc) => {
+                docRef.current = doc;
+                const next = doc.text.trim().length > 0;
+                setHasText((current) => (current === next ? current : next));
+              }}
               onSubmit={() => void handleSubmit()}
               accessibilityLabel="Write a post"
             />

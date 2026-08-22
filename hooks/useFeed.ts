@@ -672,6 +672,7 @@ export function useFeed(challengeId?: string | null) {
 
   return useQuery({
     queryKey: ['feed', key, user?.id],
+    staleTime: 30_000,
     queryFn: () => fetchPosts({ challengeId, userId: user?.id }),
   });
 }
@@ -1194,7 +1195,6 @@ export function useCreateComment(challengeId?: string | null) {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const queryClient = useQueryClient();
-  const key = challengeId ?? 'global';
 
   return useMutation({
     mutationFn: async (input: {
@@ -1237,8 +1237,8 @@ export function useCreateComment(challengeId?: string | null) {
       return data;
     },
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: ['feed', key] });
-      const previous = queryClient.getQueryData<PostWithMeta[]>(['feed', key]);
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
       if (user) {
         const optimistic: CommentWithAuthor = {
           id: `optimistic-comment-${Date.now()}`,
@@ -1250,19 +1250,25 @@ export function useCreateComment(challengeId?: string | null) {
           author: asPublicProfile(profile ?? { id: user.id }),
           reactions: [],
         };
-        queryClient.setQueryData<PostWithMeta[]>(['feed', key], (current) =>
-          (current ?? []).map((post) =>
+        queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
+          if (!Array.isArray(current)) {
+            return current;
+          }
+          return (current as PostWithMeta[]).map((post) =>
             post.id === input.postId
               ? { ...post, comments: [...(post.comments ?? []), optimistic] }
               : post,
-          ),
-        );
+          );
+        });
       }
       return { previous };
     },
     onSuccess: (data) => {
-      queryClient.setQueryData<PostWithMeta[]>(['feed', key], (current) =>
-        (current ?? []).map((post) => {
+      queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
+        if (!Array.isArray(current)) {
+          return current;
+        }
+        return (current as PostWithMeta[]).map((post) => {
           if (post.id !== data.post_id) {
             return post;
           }
@@ -1285,17 +1291,13 @@ export function useCreateComment(challengeId?: string | null) {
             };
           });
           return { ...post, comments };
-        }),
-      );
+        });
+      });
     },
     onError: (_error, _input, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['feed', key], context.previous);
+      for (const [queryKey, data] of context?.previous ?? []) {
+        queryClient.setQueryData(queryKey, data);
       }
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['feed', key] });
-      void queryClient.invalidateQueries({ queryKey: ['feed', 'author'] });
     },
   });
 }
