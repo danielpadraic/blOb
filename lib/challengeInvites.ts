@@ -87,17 +87,20 @@ type InviteRow = {
 export async function fetchPendingChallengeInvites(
   challengeId: string,
 ): Promise<ChallengeInviteWithInvitee[]> {
-  const query = supabase
+  const query = await supabase
     .from('challenge_invites')
     .select(
-      'id, challenge_id, inviter_id, invitee_id, status, created_at, accepted_at, invitee:profiles!invitee_id(id, username, display_name, avatar_url)',
+      'id, challenge_id, inviter_id, invitee_id, status, created_at, accepted_at, invitee:profiles!challenge_invites_invitee_id_fkey(id, username, display_name, avatar_url)',
     )
     .eq('challenge_id', challengeId)
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
     .limit(40);
-  let { data, error } = await query;
-  if (error && !isMissingRelationError(error)) {
+  let rows: InviteRow[] | null = null;
+  let error = query.error;
+  if (!error) {
+    rows = (query.data ?? []) as unknown as InviteRow[];
+  } else if (!isMissingRelationError(error)) {
     const fallback = await supabase
       .from('challenge_invites')
       .select('id, challenge_id, inviter_id, invitee_id, status, created_at, accepted_at')
@@ -105,8 +108,8 @@ export async function fetchPendingChallengeInvites(
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(40);
-    data = fallback.data;
     error = fallback.error;
+    rows = (fallback.data ?? []) as InviteRow[];
   }
   if (error) {
     if (isMissingRelationError(error)) {
@@ -114,7 +117,7 @@ export async function fetchPendingChallengeInvites(
     }
     throw new Error(getErrorMessage(error));
   }
-  return ((data ?? []) as InviteRow[]).map((row) => {
+  return (rows ?? []).map((row) => {
     const invitee = Array.isArray(row.invitee) ? row.invitee[0] : row.invitee;
     return {
       id: row.id,

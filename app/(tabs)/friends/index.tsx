@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   View,
+  type RefreshControlProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -567,7 +568,7 @@ function PaneScroll({
   refreshControl,
 }: {
   children: ReactNode;
-  refreshControl?: ReactElement;
+  refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   return (
     <ScrollView

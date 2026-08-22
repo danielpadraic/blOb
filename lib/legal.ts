@@ -31,13 +31,19 @@ function isProfileMissingError(error: unknown): boolean {
 async function ensureMinProfile(userId: string): Promise<void> {
   const first = await supabase
     .from('profiles')
-    .upsert({ id: userId, username: stubUsername(userId) }, { onConflict: 'id', ignoreDuplicates: true });
+    .upsert(
+      { id: userId, username: stubUsername(userId) } as never,
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
   if (!first.error) {
     return;
   }
   const retry = await supabase
     .from('profiles')
-    .upsert({ id: userId, username: stubUsername(userId, 'x') }, { onConflict: 'id', ignoreDuplicates: true });
+    .upsert(
+      { id: userId, username: stubUsername(userId, 'x') } as never,
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
   if (retry.error) {
     throw retry.error;
   }

@@ -109,8 +109,9 @@ async function toTypedBlob(input: {
 
 function asNamedFile(blob: Blob, fileName: string, contentType: string): Blob {
   try {
-    if (typeof File === 'function' && File !== ExpoFile) {
-      return new File([blob], fileName, { type: contentType, lastModified: Date.now() });
+    const FileCtor = globalThis.File;
+    if (typeof FileCtor === 'function' && FileCtor.name === 'File') {
+      return new FileCtor([blob], fileName, { type: contentType, lastModified: Date.now() });
     }
   } catch {
     // Native runtimes may not construct a browser File.

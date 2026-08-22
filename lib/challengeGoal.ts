@@ -17,17 +17,16 @@ type GoalChallenge = Pick<
 
 /** Calendar days the host saved. Never a check-in product or a 100 fallback. */
 export function challengeDurationDays(
-  challenge: Pick<
-    GoalChallenge,
-    | 'is_official'
-    | 'is_unlimited'
-    | 'days_required'
-    | 'target_count'
-    | 'length_value'
-    | 'length_unit'
-    | 'starts_at'
-    | 'ends_at'
-  > | null | undefined,
+  challenge: {
+    is_official?: boolean | null;
+    is_unlimited?: boolean | null;
+    days_required?: number | null;
+    target_count?: number | null;
+    length_value?: number | null;
+    length_unit?: string | null;
+    starts_at?: string | null;
+    ends_at?: string | null;
+  } | null | undefined,
 ): number {
   if (!challenge) {
     return 1;

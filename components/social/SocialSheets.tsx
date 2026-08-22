@@ -624,7 +624,7 @@ const styles = StyleSheet.create({
     elevation: 40,
   },
   dismiss: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'transparent',
   },
   popover: {

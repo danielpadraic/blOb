@@ -118,6 +118,7 @@ type ChallengeListQuery = {
   select: (columns: string) => ChallengeListQuery;
   in: (column: string, values: readonly string[]) => ChallengeListQuery;
   eq: (column: string, value: string) => ChallengeListQuery;
+  not: (column: string, operator: string, value: unknown) => ChallengeListQuery;
   or: (filters: string) => ChallengeListQuery;
   order: (column: string, options?: { ascending?: boolean }) => ChallengeListQuery;
   limit: (count: number) => ChallengeListQuery;
@@ -683,7 +684,7 @@ export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<
 
   const listed = await supabase.rpc('list_official_joinable');
   if (!listed.error && listed.data) {
-    const rows = asChallengeRows(listed.data as ChallengeRow[])
+    const rows = asChallengeRows(listed.data as unknown as ChallengeRow[])
       .map(normalizeChallenge)
       .filter((row) => row.is_official && row.series_id && (row.status === 'filling' || row.status === 'arming'));
     return sortOfficialFirst(rows);
@@ -1434,5 +1435,5 @@ export async function updateUserChallenge(
   if (error) {
     throw new Error(getErrorMessage(error));
   }
-  return normalizeChallenge((data ?? {}) as ChallengeRow);
+  return normalizeChallenge((data ?? {}) as unknown as ChallengeRow);
 }

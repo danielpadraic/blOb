@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     elevation: 60,
   },
   dismiss: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(16, 19, 18, 0.28)',
   },
   card: {
