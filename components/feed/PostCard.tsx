@@ -14,7 +14,10 @@ import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
-import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
+import {
+  useOverflowMenuOpen,
+  useSocialSheetsOptional,
+} from '@/components/social/SocialSheets';
 import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -65,6 +68,7 @@ function PostCardInner({
   const [showComposer, setShowComposer] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const social = useSocialSheetsOptional();
+  const menuOpen = useOverflowMenuOpen(post.id);
   const router = useRouter();
   const moreRef = useRef<View>(null);
   const updateAudience = useUpdatePostAudience();
@@ -77,7 +81,6 @@ function PostCardInner({
   const quote = asQuoteSnapshot(post.quote_snapshot);
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
-  const menuOpen = Boolean(social?.isOpenFor(post.id));
   const checkin = isCheckinPost(post);
   const tagged = Boolean(post.challenge_id);
   const hidePromoCard =

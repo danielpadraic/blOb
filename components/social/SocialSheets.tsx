@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import {
@@ -29,7 +30,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCreatePost } from '@/hooks/useFeed';
 import {
   useBlockUser,
-  useHiddenPostIds,
   useHidePost,
   useMutedUserIds,
   useRemoveFromWall,
@@ -73,12 +73,41 @@ type SocialSheetsValue = {
   toggleProfileMenu: (userId: string, anchor: WindowRect) => void;
   openShare: (post: PostWithMeta, anchor: WindowRect) => void;
   openAudience: (draft: AudienceDraft) => void;
-  isOpenFor: (postId: string) => boolean;
-  isMuted: (userId: string) => boolean;
-  isHidden: (postId: string) => boolean;
+};
+
+type OverflowOpenStore = {
+  getId: () => string | null;
+  setId: (id: string | null) => void;
+  subscribe: (listener: () => void) => () => void;
 };
 
 const SocialSheetsContext = createContext<SocialSheetsValue | null>(null);
+const OverflowOpenStoreContext = createContext<OverflowOpenStore | null>(null);
+
+function createOverflowOpenStore(): OverflowOpenStore {
+  let id: string | null = null;
+  const listeners = new Set<() => void>();
+  return {
+    getId: () => id,
+    setId: (next) => {
+      if (id === next) {
+        return;
+      }
+      id = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
+function subscribeNever() {
+  return () => undefined;
+}
 
 let closeSocialSheetsFn: (() => void) | null = null;
 
@@ -98,13 +127,21 @@ export function useSocialSheetsOptional() {
   return useContext(SocialSheetsContext);
 }
 
+/** Only the matching card re-renders when the overflow id changes. */
+export function useOverflowMenuOpen(postId: string) {
+  const store = useContext(OverflowOpenStoreContext);
+  return useSyncExternalStore(
+    store ? store.subscribe : subscribeNever,
+    () => (store ? store.getId() === postId : false),
+    () => false,
+  );
+}
+
 export function SocialSheetsHost({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const hides = useHiddenPostIds();
   const mutes = useMutedUserIds();
-  const hidden = useMemo(() => new Set(hides.data ?? []), [hides.data]);
   const muted = useMemo(() => new Set(mutes.data ?? []), [mutes.data]);
 
   const showToast = useCallback((message: string) => {
@@ -131,16 +168,16 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const toggleProfileMenu = useCallback(
-    (userId: string, anchor: WindowRect) => {
-      setSheet((current) =>
-        current?.kind === 'profile' && current.userId === userId
-          ? null
-          : { kind: 'profile', userId, muted: muted.has(userId), anchor },
-      );
-    },
-    [muted],
-  );
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+
+  const toggleProfileMenu = useCallback((userId: string, anchor: WindowRect) => {
+    setSheet((current) =>
+      current?.kind === 'profile' && current.userId === userId
+        ? null
+        : { kind: 'profile', userId, muted: mutedRef.current.has(userId), anchor },
+    );
+  }, []);
 
   const openShare = useCallback((post: PostWithMeta, anchor: WindowRect) => {
     setSheet({ kind: 'overflow', post, anchor, panel: 'share' });
@@ -150,21 +187,25 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
     setSheet({ kind: 'audience', draft });
   }, []);
 
+  const overflowStore = useMemo(createOverflowOpenStore, []);
+
+  useEffect(() => {
+    overflowStore.setId(sheet?.kind === 'overflow' ? sheet.post.id : null);
+  }, [overflowStore, sheet]);
+
   const value = useMemo<SocialSheetsValue>(
     () => ({
       toggleOverflow,
       toggleProfileMenu,
       openShare,
       openAudience,
-      isOpenFor: (postId) => sheet?.kind === 'overflow' && sheet.post.id === postId,
-      isMuted: (userId) => muted.has(userId),
-      isHidden: (postId) => hidden.has(postId),
     }),
-    [hidden, muted, openAudience, openShare, sheet, toggleOverflow, toggleProfileMenu],
+    [openAudience, openShare, toggleOverflow, toggleProfileMenu],
   );
 
   return (
     <SocialSheetsContext.Provider value={value}>
+      <OverflowOpenStoreContext.Provider value={overflowStore}>
       {children}
       <SheetView
         sheet={sheet}
@@ -188,6 +229,7 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
           </View>
         </View>
       ) : null}
+      </OverflowOpenStoreContext.Provider>
     </SocialSheetsContext.Provider>
   );
 }

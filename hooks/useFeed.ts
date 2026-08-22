@@ -19,6 +19,8 @@ import type {
   ReactionType,
 } from '@/lib/types';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
+import { queryClient as appQueryClient } from '@/lib/queryClient';
+import { fetchFriends, type FriendEdge } from '@/lib/social';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -491,17 +493,29 @@ async function fetchJoinedChallengeIds(userId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.challenge_id);
 }
 
-async function fetchFriendIds(userId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('friendships')
-    .select('user_a_id, user_b_id')
-    .eq('status', 'accepted')
-    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
-  if (error) {
-    console.log('[blob:feed] friends lookup failed', error.message);
+function friendsKey(userId: string) {
+  return ['friends', userId] as const;
+}
+
+function friendIdsFromEdges(userId: string, edges: FriendEdge[]): string[] {
+  return edges.map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id));
+}
+
+async function friendIdsForUser(userId: string): Promise<string[]> {
+  try {
+    const edges = await appQueryClient.ensureQueryData({
+      queryKey: friendsKey(userId),
+      queryFn: () => fetchFriends(userId),
+      staleTime: 30_000,
+    });
+    return friendIdsFromEdges(userId, edges);
+  } catch (error) {
+    console.log(
+      '[blob:feed] friends lookup failed',
+      error instanceof Error ? error.message : String(error),
+    );
     return [];
   }
-  return (data ?? []).map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id));
 }
 
 async function fetchHostedChallengeIds(userId: string): Promise<string[]> {
@@ -571,7 +585,7 @@ async function fetchPosts(input: {
     await Promise.all([
       fetchJoinedChallengeIds(input.userId),
       fetchHostedChallengeIds(input.userId),
-      fetchFriendIds(input.userId),
+      friendIdsForUser(input.userId),
       fetchOfficialAuthorIds(),
       fetchRecommendedCreatorIds(input.userId),
       fetchHiddenPostIds(input.userId),
@@ -731,7 +745,7 @@ export function useAuthorFeed(authorId?: string | null) {
       const rows = dedupePosts([authored, wall]);
       const [hiddenIds, friendIds, officialIds] = await Promise.all([
         user?.id ? fetchHiddenPostIds(user.id) : Promise.resolve([] as string[]),
-        user?.id ? fetchFriendIds(user.id) : Promise.resolve([] as string[]),
+        user?.id ? friendIdsForUser(user.id) : Promise.resolve([] as string[]),
         fetchOfficialAuthorIds(),
       ]);
       const hidden = new Set(hiddenIds);

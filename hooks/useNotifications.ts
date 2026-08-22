@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { challengeInviteMessage } from '@/lib/challengeFeedPost';
 import {
   fetchNotifications,
-  fetchUnreadNotificationCount,
   inviteToChallenge,
   markNotificationsRead,
 } from '@/lib/notifications';
@@ -16,8 +15,17 @@ import { supabase } from '@/lib/supabase';
 import type { AppNotification } from '@/lib/types';
 
 const NOTIFICATIONS_STALE_MS = 30_000;
-const UNREAD_POLL_MS = 60_000;
 const REALTIME_INVALIDATE_MIN_MS = 2_000;
+
+function unreadCountFromList(items: AppNotification[]) {
+  let count = 0;
+  for (const item of items) {
+    if (!item.read_at) {
+      count += 1;
+    }
+  }
+  return count;
+}
 
 function notificationChannelName(userId: string) {
   return `notifications:${userId}`;
@@ -53,12 +61,12 @@ export function useUnreadNotificationCount() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['notifications', user?.id, 'unread'],
+    queryKey: ['notifications', user?.id],
     enabled: Boolean(user?.id),
     staleTime: NOTIFICATIONS_STALE_MS,
-    refetchInterval: UNREAD_POLL_MS,
     refetchOnMount: false,
-    queryFn: fetchUnreadNotificationCount,
+    queryFn: fetchNotifications,
+    select: unreadCountFromList,
   });
 }
 
@@ -137,7 +145,6 @@ export function useMarkNotificationsRead() {
     onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey: ['notifications', user?.id] });
       const previous = queryClient.getQueryData<AppNotification[]>(['notifications', user?.id]);
-      const previousUnread = queryClient.getQueryData<number>(['notifications', user?.id, 'unread']);
       queryClient.setQueryData<AppNotification[]>(['notifications', user?.id], (current) =>
         (current ?? []).map((item) => {
           if (item.read_at) {
@@ -149,25 +156,11 @@ export function useMarkNotificationsRead() {
           return { ...item, read_at: new Date().toISOString() };
         }),
       );
-      if (!ids || ids.length === 0) {
-        queryClient.setQueryData(['notifications', user?.id, 'unread'], 0);
-      } else if (typeof previousUnread === 'number') {
-        const marked = (previous ?? []).filter(
-          (item) => !item.read_at && ids.includes(item.id),
-        ).length;
-        queryClient.setQueryData(
-          ['notifications', user?.id, 'unread'],
-          Math.max(previousUnread - marked, 0),
-        );
-      }
-      return { previous, previousUnread };
+      return { previous };
     },
     onError: (_error, _ids, context) => {
       if (context?.previous) {
         queryClient.setQueryData(['notifications', user?.id], context.previous);
-      }
-      if (context?.previousUnread !== undefined) {
-        queryClient.setQueryData(['notifications', user?.id, 'unread'], context.previousUnread);
       }
     },
   });
