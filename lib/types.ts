@@ -659,7 +659,12 @@ export type NotificationType =
 
 export type NotificationData = {
   challenge_id?: string;
+  challengeId?: string;
   post_id?: string;
+  postId?: string;
+  actor_id?: string;
+  actorId?: string;
+  notification_id?: string;
   comment_id?: string;
   story_id?: string;
   username?: string;
@@ -1574,6 +1579,10 @@ export type Database = {
       };
       register_push_token: {
         Args: { p_token: string; p_platform?: string | null };
+        Returns: undefined;
+      };
+      notify_challenge_checkin: {
+        Args: { p_challenge_id: string; p_actor_id: string; p_post_id?: string | null };
         Returns: undefined;
       };
       clear_push_token: {

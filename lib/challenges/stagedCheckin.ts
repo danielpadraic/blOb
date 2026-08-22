@@ -5,6 +5,8 @@ import {
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
 import { asCheckinStatus, type ChallengeCheckin } from '@/lib/challengeCheckin';
+import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
+import { maybeRequestPushPermission } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import { utcDateStamp } from '@/utils/dates';
 import { getCheckinSubmitMessage, getErrorMessage, logPostgrestError } from '@/utils/errors';
@@ -158,8 +160,17 @@ export async function submitCheckin(challengeId: string): Promise<ChallengeCheck
   }
   const row = data as Record<string, unknown> | null;
   const nested = row?.checkin;
-  if (nested && typeof nested === 'object') {
-    return parseChallengeCheckin(nested as Record<string, unknown>);
+  const parsed =
+    nested && typeof nested === 'object'
+      ? parseChallengeCheckin(nested as Record<string, unknown>)
+      : null;
+  if (parsed?.user_id) {
+    void notifyChallengeCheckinAfterPost({
+      challengeId,
+      actorId: parsed.user_id,
+      postId: null,
+    });
   }
-  return null;
+  void maybeRequestPushPermission();
+  return parsed;
 }

@@ -1,0 +1,5 @@
+# Linked project: tguzdtwsajnnczdxjqyq
+project_id = "tguzdtwsajnnczdxjqyq"
+
+[functions.push-notify]
+verify_jwt = false

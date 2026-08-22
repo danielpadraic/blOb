@@ -173,7 +173,13 @@ export type NotificationNavData = {
   username?: string;
   href?: string;
   callout_id?: string;
+  notification_id?: string;
+  actor_id?: string;
 };
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
 
 export function notificationDataFromResponse(
   data: Record<string, unknown> | undefined | null,
@@ -182,12 +188,14 @@ export function notificationDataFromResponse(
     return {};
   }
   return {
-    type: typeof data.type === 'string' ? data.type : undefined,
-    challenge_id: typeof data.challenge_id === 'string' ? data.challenge_id : undefined,
-    post_id: typeof data.post_id === 'string' ? data.post_id : undefined,
-    story_id: typeof data.story_id === 'string' ? data.story_id : undefined,
-    username: typeof data.username === 'string' ? data.username : undefined,
-    href: typeof data.href === 'string' ? data.href : undefined,
-    callout_id: typeof data.callout_id === 'string' ? data.callout_id : undefined,
+    type: asString(data.type),
+    challenge_id: asString(data.challenge_id) ?? asString(data.challengeId),
+    post_id: asString(data.post_id) ?? asString(data.postId),
+    story_id: asString(data.story_id) ?? asString(data.storyId),
+    username: asString(data.username),
+    href: asString(data.href),
+    callout_id: asString(data.callout_id) ?? asString(data.calloutId),
+    notification_id: asString(data.notification_id) ?? asString(data.notificationId),
+    actor_id: asString(data.actor_id) ?? asString(data.actorId),
   };
 }

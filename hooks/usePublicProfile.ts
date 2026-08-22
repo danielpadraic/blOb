@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PUBLIC_PROFILE_COLUMNS, PUBLIC_PROFILE_COLUMNS_BASE } from '@/lib/constants';
 import { asWalletCurrency } from '@/lib/currency';
 import { officialFlags } from '@/lib/profileBadges';
+import { asPublicProfile } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type {
   Challenge,
@@ -236,7 +237,7 @@ async function fetchPublicProfile(handle: string): Promise<PublicProfile> {
   if (!data) {
     throw new Error('That blob isn’t on the map.');
   }
-  return redactPublicProfile(data as PublicProfile);
+  return redactPublicProfile(asPublicProfile(data as PublicProfile));
 }
 
 export async function fetchPublicProfileById(id: string): Promise<PublicProfile | null> {
@@ -244,7 +245,7 @@ export async function fetchPublicProfileById(id: string): Promise<PublicProfile 
   if (error) {
     throw new Error(getErrorMessage(error));
   }
-  return data ? redactPublicProfile(data as PublicProfile) : null;
+  return data ? redactPublicProfile(asPublicProfile(data as PublicProfile)) : null;
 }
 
 function splitPayouts(rows: unknown[]): { coins: number; bucks: number } {

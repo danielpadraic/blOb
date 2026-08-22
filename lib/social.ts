@@ -384,6 +384,13 @@ function throwIfError(error: unknown) {
   }
 }
 
+export function asPublicProfile(row: PublicProfile): PublicProfile {
+  const raw = row as PublicProfile & { gender?: unknown; pronoun?: unknown };
+  delete raw.gender;
+  delete raw.pronoun;
+  return raw;
+}
+
 export async function fetchPublicProfilesByIds(ids: string[]): Promise<PublicProfile[]> {
   const unique = [...new Set(ids.filter(Boolean))];
   if (unique.length === 0) {
@@ -394,7 +401,7 @@ export async function fetchPublicProfilesByIds(ids: string[]): Promise<PublicPro
     .select(PUBLIC_PROFILE_COLUMNS)
     .in('id', unique);
   throwIfError(error);
-  return (data ?? []) as PublicProfile[];
+  return ((data ?? []) as PublicProfile[]).map(asPublicProfile);
 }
 
 export async function followUser(followerId: string, followingId: string): Promise<Follow> {
@@ -453,7 +460,9 @@ export async function searchPeople(query: string, currentUserId: string): Promis
 
   const rpc = await supabase.rpc('search_people', { p_query: query.trim() });
   if (!rpc.error) {
-    return ((rpc.data ?? []) as PublicProfile[]).filter((row) => row.id !== currentUserId);
+    return ((rpc.data ?? []) as PublicProfile[])
+      .filter((row) => row.id !== currentUserId)
+      .map(asPublicProfile);
   }
   if (!isMissingSearchRpc(rpc.error)) {
     throwIfError(rpc.error);
@@ -470,7 +479,7 @@ export async function searchPeople(query: string, currentUserId: string): Promis
     .neq('id', currentUserId)
     .limit(16);
   throwIfError(error);
-  return (data ?? []) as PublicProfile[];
+  return ((data ?? []) as PublicProfile[]).map(asPublicProfile);
 }
 
 function isMissingSearchRpc(error: unknown): boolean {

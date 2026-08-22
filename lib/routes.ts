@@ -13,10 +13,18 @@ export function adminMetricHref(metric: string, range: string): Href {
   return { pathname: '/admin/[metric]', params: { metric, range } } as unknown as Href;
 }
 
-export function challengeDetailHref(id: string, returnTo: 'lobby' | 'feed' = 'lobby') {
+export function challengeDetailHref(
+  id: string,
+  returnTo: 'lobby' | 'feed' = 'lobby',
+  postId?: string | null,
+) {
   return {
     pathname: '/challenges/[id]' as const,
-    params: { id, returnTo },
+    params: {
+      id,
+      returnTo,
+      ...(postId ? { postId } : {}),
+    },
   };
 }
 

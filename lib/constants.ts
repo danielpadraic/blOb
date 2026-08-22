@@ -331,6 +331,7 @@ export const DISCOVER_CHALLENGE_STATUSES = [
 
 export const LOBBY_PAGE_SIZE = 40;
 
+/** Never include gender or pronoun — those stay on the owner profile only. */
 export const PUBLIC_PROFILE_COLUMNS_BASE =
   'id, username, display_name, avatar_url, bio, skill_tags, created_at, is_official';
 

@@ -1,9 +1,41 @@
+import { postHref } from '@/lib/postShare';
 import { challengeDetailHref, conversationHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
 import type { Href } from 'expo-router';
+
+export function notificationChallengeId(data?: NotificationData | null): string | undefined {
+  return data?.challenge_id ?? data?.challengeId;
+}
+
+export function notificationPostId(data?: NotificationData | null): string | undefined {
+  return data?.post_id ?? data?.postId;
+}
+
+export function notificationActorId(data?: NotificationData | null): string | undefined {
+  return data?.actor_id ?? data?.actorId;
+}
+
+export async function notifyChallengeCheckinAfterPost(input: {
+  challengeId: string;
+  actorId: string;
+  postId?: string | null;
+}): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('notify_challenge_checkin', {
+      p_challenge_id: input.challengeId,
+      p_actor_id: input.actorId,
+      p_post_id: input.postId ?? null,
+    });
+    if (error) {
+      console.log('[blob:notify] checkin skipped', error.message);
+    }
+  } catch (error) {
+    console.log('[blob:notify] checkin skipped', error);
+  }
+}
 
 const NOTIFICATION_COLUMNS =
   'id, user_id, actor_id, type, title, body, data, read_at, created_at';
@@ -198,8 +230,8 @@ export function notificationHref(item: AppNotification): Href | null {
   if (item.type === 'coins_received' || item.type === 'coin_grant' || item.type === 'badge_unlocked' || item.type === 'payout_received') {
     return '/profile';
   }
-  if (item.type === 'proof_flagged' && data.post_id) {
-    return { pathname: '/feed/p/[id]', params: { id: data.post_id } };
+  if (item.type === 'proof_flagged' && notificationPostId(data)) {
+    return postHref(notificationPostId(data)!);
   }
   if (data.callout_id) {
     return `/challenges/callout/${data.callout_id}`;
@@ -209,11 +241,24 @@ export function notificationHref(item: AppNotification): Href | null {
       return `/challenges/${data.challenge_id}/submit`;
     }
   }
-  if (data.challenge_id) {
-    return challengeDetailHref(data.challenge_id, 'lobby');
+  const challengeId = notificationChallengeId(data);
+  const postId = notificationPostId(data);
+  if (
+    postId &&
+    challengeId &&
+    (item.type === 'challenge_checkin' ||
+      item.type === 'tagged' ||
+      item.type === 'mentioned' ||
+      item.type === 'post_comment' ||
+      item.type === 'post_reaction')
+  ) {
+    return challengeDetailHref(challengeId, 'feed', postId);
   }
-  if (data.post_id) {
-    return { pathname: '/feed/p/[id]', params: { id: data.post_id } };
+  if (challengeId) {
+    return challengeDetailHref(challengeId, 'lobby');
+  }
+  if (postId) {
+    return postHref(postId);
   }
   if (
     item.type === 'tagged' ||

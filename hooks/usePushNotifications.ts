@@ -5,9 +5,10 @@ import * as Notifications from 'expo-notifications';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
-import { notificationHref } from '@/lib/notifications';
+import { markNotificationRead, notificationHref } from '@/lib/notifications';
 import {
   getPushPermissionState,
+  maybeRequestPushPermission,
   notificationDataFromResponse,
   registerPushToken,
   syncDeviceTimezone,
@@ -33,6 +34,8 @@ function hrefFromPushData(data: NotificationNavData): Href | null {
       story_id: data.story_id,
       username: data.username,
       callout_id: data.callout_id,
+      actor_id: data.actor_id,
+      notification_id: data.notification_id,
     },
     read_at: null,
     created_at: '',
@@ -52,12 +55,7 @@ export function usePushNotifications() {
       return;
     }
     void syncDeviceTimezone(profile?.timezone);
-    void (async () => {
-      const state = await getPushPermissionState();
-      if (state === 'granted') {
-        await registerPushToken();
-      }
-    })();
+    void maybeRequestPushPermission();
   }, [profile?.timezone, userId]);
 
   useEffect(() => {
@@ -86,6 +84,9 @@ export function usePushNotifications() {
     }
 
     function open(data: NotificationNavData) {
+      if (data.notification_id) {
+        void markNotificationRead(data.notification_id);
+      }
       const href = hrefFromPushData(data);
       if (href) {
         router.push(href);

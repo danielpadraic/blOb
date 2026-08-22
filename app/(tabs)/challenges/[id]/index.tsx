@@ -92,9 +92,16 @@ const BODY_METRICS_JOIN_COPY =
   'Missing: physical details. Official Challenges need them for matching — they stay private.';
 
 export default function ChallengeDetailScreen() {
-  const params = useLocalSearchParams<{ id: string; returnTo?: string; logged?: string; funded?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    returnTo?: string;
+    logged?: string;
+    funded?: string;
+    postId?: string;
+  }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const router = useRouter();
@@ -851,6 +858,7 @@ export default function ChallengeDetailScreen() {
           posts={feed.data ?? []}
           isLoading={feed.isLoading}
           error={feed.error instanceof Error ? feed.error.message : null}
+          highlightPostId={highlightPostId}
           currentUserId={user?.id}
           emptyTitle="Quiet in this challenge"
           emptyBody={

@@ -1,3 +1,5 @@
+import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
+import { maybeRequestPushPermission } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import {
   captureTypeForMethod,
@@ -234,6 +236,12 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
   const daysCompleted = Number.isFinite(parsedDays)
     ? parsedDays
     : await readDaysCompleted(input.challengeId, userId);
+
+  void notifyChallengeCheckinAfterPost({
+    challengeId: input.challengeId,
+    actorId: userId,
+  });
+  void maybeRequestPushPermission();
 
   return asResult(
     {

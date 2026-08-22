@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { Alert } from 'react-native';
 
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
+import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience, DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
 import { resolvePostsSchema, type PostsSchema } from '@/lib/postsSelect';
@@ -608,13 +609,25 @@ export async function insertWorkoutCheckInPost(input: {
 
   const created = await supabase.from('posts').insert(payload).select(schema.select).single();
   if (!created.error) {
-    return created.data as unknown as Post;
+    const post = created.data as unknown as Post;
+    void notifyChallengeCheckinAfterPost({
+      challengeId: input.challengeId,
+      actorId: input.userId,
+      postId: post.id,
+    });
+    return post;
   }
 
   if (media_urls.length > 0) {
     const retry = await supabase.from('posts').insert(payload).select(schema.select).single();
     if (!retry.error) {
-      return retry.data as unknown as Post;
+      const post = retry.data as unknown as Post;
+      void notifyChallengeCheckinAfterPost({
+        challengeId: input.challengeId,
+        actorId: input.userId,
+        postId: post.id,
+      });
+      return post;
     }
     const missingMedia =
       retry.error.message.toLowerCase().includes('media_urls') ||
@@ -644,7 +657,13 @@ export async function insertWorkoutCheckInPost(input: {
     console.log('[blob:submit] auto-post failed', withoutMedia.error.message);
     return null;
   }
-  return withoutMedia.data as unknown as Post;
+  const post = withoutMedia.data as unknown as Post;
+  void notifyChallengeCheckinAfterPost({
+    challengeId: input.challengeId,
+    actorId: input.userId,
+    postId: post.id,
+  });
+  return post;
 }
 
 export function useFeed(challengeId?: string | null) {
