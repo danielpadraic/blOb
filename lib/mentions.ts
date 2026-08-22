@@ -49,12 +49,125 @@ export function serializeMentionParts(parts: MentionPart[]): MentionDoc {
   return { text: text.trim(), chips };
 }
 
+export type TextSelection = {
+  start: number;
+  end: number;
+};
+
+export type MentionRange = {
+  start: number;
+  end: number;
+  username: string;
+};
+
 export function mentionQueryFromText(value: string): string | null {
-  const match = value.match(/(^|[\s])@([A-Za-z0-9_]*)$/);
+  return mentionQueryAtCursor(value, value.length)?.query ?? null;
+}
+
+export function mentionQueryAtCursor(
+  text: string,
+  cursor: number,
+): { query: string; start: number } | null {
+  const before = text.slice(0, cursor);
+  const match = before.match(/(^|[\s])@([A-Za-z0-9_]*)$/);
   if (!match) {
     return null;
   }
-  return match[2] ?? '';
+  const query = match[2] ?? '';
+  return { query, start: before.length - query.length - 1 };
+}
+
+/** Insert `@username` + suffix and put the caret after the suffix. Replaces a live `@query`. */
+export function insertMention(
+  text: string,
+  selection: TextSelection,
+  username: string,
+  options?: { suffix?: string },
+): { text: string; selection: TextSelection } {
+  const suffix = options?.suffix ?? ' ';
+  const token = `@${username.replace(/^@/, '')}${suffix}`;
+  const query = mentionQueryAtCursor(text, selection.start);
+  if (query) {
+    const next = `${text.slice(0, query.start)}${token}${text.slice(selection.end)}`;
+    const caret = query.start + token.length;
+    return { text: next, selection: { start: caret, end: caret } };
+  }
+  const next = `${text.slice(0, selection.start)}${token}${text.slice(selection.end)}`;
+  const caret = selection.start + token.length;
+  return { text: next, selection: { start: caret, end: caret } };
+}
+
+export function mentionTokenRanges(text: string, usernames: string[]): MentionRange[] {
+  const unique = [...new Set(usernames.map((name) => name.replace(/^@/, '').toLowerCase()).filter(Boolean))];
+  if (!text || unique.length === 0) {
+    return [];
+  }
+  const pattern = new RegExp(
+    `(^|[^A-Za-z0-9_])(@(?:${unique.map(escapeRegExp).join('|')}))(?![A-Za-z0-9_])`,
+    'gi',
+  );
+  const ranges: MentionRange[] = [];
+  for (const match of text.matchAll(pattern)) {
+    const token = match[2] ?? '';
+    const start = (match.index ?? 0) + (match[1]?.length ?? 0);
+    ranges.push({
+      start,
+      end: start + token.length,
+      username: token.slice(1),
+    });
+  }
+  return ranges;
+}
+
+export function snapSelectionOutOfToken(
+  selection: TextSelection,
+  tokens: MentionRange[],
+): TextSelection {
+  if (selection.start !== selection.end) {
+    return selection;
+  }
+  const token = tokens.find((range) => selection.start > range.start && selection.start < range.end);
+  if (!token) {
+    return selection;
+  }
+  return { start: token.end, end: token.end };
+}
+
+export function applyTokenAwareTextChange(
+  prev: string,
+  next: string,
+  selection: TextSelection,
+  tokens: MentionRange[],
+): { text: string; selection: TextSelection; forced: boolean } {
+  if (next.length === prev.length - 1 && selection.start === selection.end) {
+    const deletedAt = Math.max(0, selection.start - 1);
+    const token =
+      tokens.find((range) => deletedAt >= range.start && deletedAt < range.end) ??
+      tokens.find((range) => selection.start === range.end);
+    if (token) {
+      return {
+        text: `${prev.slice(0, token.start)}${prev.slice(token.end)}`,
+        selection: { start: token.start, end: token.start },
+        forced: true,
+      };
+    }
+  }
+  const delta = next.length - prev.length;
+  const caret = Math.max(0, Math.min(next.length, selection.start + delta));
+  return { text: next, selection: { start: caret, end: caret }, forced: false };
+}
+
+export function mentionDocFromState(text: string, chips: MentionChip[]): MentionDoc {
+  const live = new Set(
+    mentionTokenRanges(
+      text,
+      chips.map((chip) => chip.username),
+    ).map((range) => range.username.toLowerCase()),
+  );
+  return {
+    text,
+    chips: chips.filter((chip) => live.has(chip.username.toLowerCase())),
+  };
 }
 
 export function applyMentionPick(parts: MentionPart[], chip: MentionChip): MentionPart[] {

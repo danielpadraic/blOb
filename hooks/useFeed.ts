@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useRef } from 'react';
+import { Alert } from 'react-native';
 
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
@@ -907,40 +909,54 @@ export function useUpdatePostAudience() {
   });
 }
 
+type ToggleReactionInput = {
+  post: PostWithMeta;
+  type: ReactionType;
+  commentId?: string | null;
+};
+
+type ToggleReactionResult =
+  | { action: 'removed' }
+  | { action: 'added'; reaction: Reaction };
+
 export function useToggleReaction() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (input: {
-      post: PostWithMeta;
-      type: ReactionType;
-      commentId?: string | null;
-    }) => {
+  const inflight = useRef(new Set<string>());
+  const mutation = useMutation({
+    mutationFn: async (input: ToggleReactionInput): Promise<ToggleReactionResult> => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
       const existing = findExistingReaction(input.post, user.id, input.type, input.commentId);
 
-      if (existing) {
+      if (existing && isPersistedId(existing.id)) {
         const { error } = await supabase.from('reactions').delete().eq('id', existing.id);
         if (error) {
           throw new Error(getErrorMessage(error));
         }
-        return;
+        return { action: 'removed' };
       }
 
       const inserted = input.commentId
-        ? await supabase.from('reactions').insert({
-            user_id: user.id,
-            comment_id: input.commentId,
-            reaction_type: input.type,
-          })
-        : await supabase.from('reactions').insert({
-            user_id: user.id,
-            post_id: input.post.id,
-            reaction_type: input.type,
-          });
+        ? await supabase
+            .from('reactions')
+            .insert({
+              user_id: user.id,
+              comment_id: input.commentId,
+              reaction_type: input.type,
+            })
+            .select(REACTION_COLUMNS)
+            .single()
+        : await supabase
+            .from('reactions')
+            .insert({
+              user_id: user.id,
+              post_id: input.post.id,
+              reaction_type: input.type,
+            })
+            .select(REACTION_COLUMNS)
+            .single();
       if (inserted.error) {
         const text = inserted.error.message.toLowerCase();
         if (input.commentId && (text.includes('comment_id') || text.includes('null value'))) {
@@ -948,34 +964,81 @@ export function useToggleReaction() {
         }
         throw new Error(getErrorMessage(inserted.error));
       }
+      return { action: 'added', reaction: inserted.data as Reaction };
     },
     onMutate: async (input) => {
       if (!user) {
         return;
       }
-      const key = input.post.challenge_id ?? 'global';
-      await queryClient.cancelQueries({ queryKey: ['feed', key] });
-      const previous = queryClient.getQueryData<PostWithMeta[]>(['feed', key]);
-      queryClient.setQueryData<PostWithMeta[]>(['feed', key], (current) =>
-        (current ?? []).map((post) => {
-          if (post.id !== input.post.id) {
-            return post;
-          }
-          return applyOptimisticReaction(post, user.id, input.type, input.commentId);
-        }),
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
+      patchFeedPosts(queryClient, input.post.id, (post) =>
+        applyOptimisticReaction(post, user.id, input.type, input.commentId),
       );
-      return { previous, key };
+      return { previous };
+    },
+    onSuccess: (result, input) => {
+      if (!user || result.action !== 'added') {
+        return;
+      }
+      const optimisticId = optimisticReactionId(input.type, input.commentId ?? input.post.id, user.id);
+      patchFeedPosts(queryClient, input.post.id, (post) =>
+        replaceReactionId(post, optimisticId, result.reaction, input.commentId),
+      );
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous && context.key) {
-        queryClient.setQueryData(['feed', context.key], context.previous);
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
       }
+      Alert.alert('Couldn’t save reaction');
     },
-    onSettled: (_data, _error, variables) => {
-      const key = variables.post.challenge_id ?? 'global';
-      void queryClient.invalidateQueries({ queryKey: ['feed', key] });
-      void queryClient.invalidateQueries({ queryKey: ['feed', 'author'] });
+  });
+
+  return {
+    ...mutation,
+    mutate(input: ToggleReactionInput) {
+      const guard = `${input.post.id}:${input.commentId ?? ''}:${input.type}`;
+      if (inflight.current.has(guard)) {
+        return;
+      }
+      inflight.current.add(guard);
+      mutation.mutate(input, {
+        onSettled: () => {
+          inflight.current.delete(guard);
+        },
+      });
     },
+  };
+}
+
+function optimisticReactionId(type: ReactionType, targetId: string, userId: string) {
+  return `optimistic-${type}-${targetId}-${userId}`;
+}
+
+function patchFeedPosts(
+  queryClient: QueryClient,
+  postId: string,
+  updater: (post: PostWithMeta) => PostWithMeta,
+) {
+  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
+    if (!current) {
+      return current;
+    }
+    if (Array.isArray(current)) {
+      let changed = false;
+      const next = current.map((post) => {
+        if (!post || (post as PostWithMeta).id !== postId) {
+          return post;
+        }
+        changed = true;
+        return updater(post as PostWithMeta);
+      });
+      return changed ? next : current;
+    }
+    if (typeof current === 'object' && current && (current as PostWithMeta).id === postId) {
+      return updater(current as PostWithMeta);
+    }
+    return current;
   });
 }
 
@@ -1031,7 +1094,7 @@ function toggleReactionList(
   return [
     ...current,
     {
-      id: `optimistic-${type}-${commentId ?? postId}-${userId}`,
+      id: optimisticReactionId(type, commentId ?? postId ?? userId, userId),
       user_id: userId,
       post_id: postId,
       comment_id: commentId,
@@ -1039,6 +1102,31 @@ function toggleReactionList(
       created_at: new Date().toISOString(),
     },
   ];
+}
+
+function replaceReactionId(
+  post: PostWithMeta,
+  optimisticId: string,
+  reaction: Reaction,
+  commentId?: string | null,
+): PostWithMeta {
+  if (!commentId) {
+    return {
+      ...post,
+      reactions: (post.reactions ?? []).map((row) => (row.id === optimisticId ? reaction : row)),
+    };
+  }
+  return {
+    ...post,
+    comments: (post.comments ?? []).map((comment) =>
+      comment.id === commentId
+        ? {
+            ...comment,
+            reactions: (comment.reactions ?? []).map((row) => (row.id === optimisticId ? reaction : row)),
+          }
+        : comment,
+    ),
+  };
 }
 
 function isPersistedId(id: string): boolean {

@@ -27,6 +27,8 @@ type CommentThreadProps = {
   onReply: ReplyHandler;
   onReact?: (commentId: string, type: ReactionType) => void;
   composing?: boolean;
+  audience?: string;
+  audienceUserIds?: string[];
 };
 
 export function CommentThread({
@@ -35,6 +37,8 @@ export function CommentThread({
   onReply,
   onReact,
   composing,
+  audience,
+  audienceUserIds,
 }: CommentThreadProps) {
   const [showAll, setShowAll] = useState(false);
   const roots = nestComments(comments);
@@ -65,6 +69,8 @@ export function CommentThread({
           composing={composing}
           onReply={onReply}
           onReact={onReact}
+          audience={audience}
+          audienceUserIds={audienceUserIds}
         />
       ))}
     </View>
@@ -78,6 +84,8 @@ function CommentItem({
   composing,
   onReply,
   onReact,
+  audience,
+  audienceUserIds,
 }: {
   comment: CommentWithAuthor;
   nested: boolean;
@@ -85,6 +93,8 @@ function CommentItem({
   composing?: boolean;
   onReply: ReplyHandler;
   onReact?: (commentId: string, type: ReactionType) => void;
+  audience?: string;
+  audienceUserIds?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
@@ -134,13 +144,17 @@ function CommentItem({
       </View>
 
       {open ? (
-        <View style={{ marginLeft: 28 }}>
-          <AppText className="mb-1 text-[11px] font-semibold text-muted">
-            Replying to @{handle}
-          </AppText>
+        <View style={{ marginLeft: 28, marginTop: 6 }}>
           <InlineComposer
             placeholder={`Reply to ${name}…`}
             submitting={composing}
+            audience={audience}
+            audienceUserIds={audienceUserIds}
+            replyTo={{
+              userId: comment.author_id,
+              username: handle,
+              label: name,
+            }}
             onSubmit={async (text, mentionedUserIds) => {
               try {
                 await onReply(text, comment.id, mentionedUserIds);
@@ -162,6 +176,8 @@ function CommentItem({
           composing={composing}
           onReply={onReply}
           onReact={onReact}
+          audience={audience}
+          audienceUserIds={audienceUserIds}
         />
       ))}
     </View>

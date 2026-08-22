@@ -112,7 +112,7 @@ export function PostCard({
           <Avatar uri={post.author?.avatar_url} name={name} size={42} radius={14} />
         </ProfileLink>
 
-        <View className="min-w-0 flex-1 gap-2">
+        <View className="min-w-0 flex-1" style={{ gap: 8 }}>
           <View className="flex-row items-start gap-2">
             <View className="min-w-0 flex-1">
               <ProfileLink username={post.author?.username} userId={post.author_id}>
@@ -227,34 +227,41 @@ export function PostCard({
           />
 
           {showComposer && onComment ? (
-            <InlineComposer
-              placeholder="Write a reply…"
-              submitting={commenting}
-              audience={audience}
-              audienceUserIds={post.audience_user_ids ?? []}
-              onSubmit={async (text, mentionedUserIds) => {
-                try {
-                  await onComment(text, null, mentionedUserIds);
-                  setShowComposer(false);
-                } catch (error) {
-                  Alert.alert('Couldn’t post that reply', getErrorMessage(error));
+            <View>
+              <InlineComposer
+                placeholder="Write a reply…"
+                submitting={commenting}
+                audience={audience}
+                audienceUserIds={post.audience_user_ids ?? []}
+                replyTo={
+                  post.author
+                    ? {
+                        userId: post.author_id,
+                        username: handle,
+                        label: name,
+                      }
+                    : null
                 }
-              }}
-            />
+                onSubmit={async (text, mentionedUserIds) => {
+                  try {
+                    await onComment(text, null, mentionedUserIds);
+                    setShowComposer(false);
+                  } catch (error) {
+                    Alert.alert('Couldn’t post that reply', getErrorMessage(error));
+                  }
+                }}
+              />
+            </View>
           ) : null}
 
           {comments.length > 0 ? (
-            <View
-              style={{
-                backgroundColor: THEME.surface2,
-                borderRadius: 14,
-                paddingHorizontal: 10,
-                paddingVertical: 8,
-              }}>
+            <View>
               <CommentThread
                 comments={comments}
                 currentUserId={currentUserId}
                 composing={commenting}
+                audience={audience}
+                audienceUserIds={post.audience_user_ids ?? []}
                 onReply={onComment ?? (async () => undefined)}
                 onReact={(commentId, type) => onReact(type, commentId)}
               />

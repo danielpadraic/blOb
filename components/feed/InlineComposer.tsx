@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Platform, Pressable, View } from 'react-native';
 
-import { MentionField } from '@/components/feed/MentionField';
-import { Button } from '@/components/ui/Button';
-import type { MentionDoc } from '@/lib/mentions';
+import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
+import { AppText } from '@/components/ui/AppText';
+import type { MentionChip, MentionDoc } from '@/lib/mentions';
 import type { PostAudience } from '@/lib/postAudience';
+import { THEME } from '@/lib/theme';
 
 type InlineComposerProps = {
   placeholder?: string;
@@ -12,6 +13,7 @@ type InlineComposerProps = {
   submitLabel?: string;
   audience?: PostAudience | string;
   audienceUserIds?: string[];
+  replyTo?: MentionChip | null;
   onSubmit: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
 };
 
@@ -21,8 +23,10 @@ export function InlineComposer({
   submitLabel = 'Reply',
   audience = 'public',
   audienceUserIds = [],
+  replyTo,
   onSubmit,
 }: InlineComposerProps) {
+  const fieldRef = useRef<MentionFieldHandle>(null);
   const [doc, setDoc] = useState<MentionDoc>({ text: '', chips: [] });
 
   async function submit() {
@@ -38,24 +42,58 @@ export function InlineComposer({
   }
 
   return (
-    <View className="flex-row items-end gap-2">
-      <View className="flex-1">
-        <MentionField
-          placeholder={placeholder}
-          audience={audience}
-          audienceUserIds={audienceUserIds}
-          onChange={setDoc}
-          onSubmit={() => void submit()}
-          accessibilityLabel={placeholder}
-        />
-      </View>
-      <Button
-        title={submitLabel}
-        size="sm"
-        loading={submitting}
-        disabled={!doc.text.trim()}
-        onPress={() => void submit()}
+    <View style={{ gap: 6 }}>
+      <MentionField
+        ref={fieldRef}
+        compact
+        pickerPlacement="above"
+        autoFocus
+        placeholder={placeholder}
+        initialMention={replyTo}
+        audience={audience}
+        audienceUserIds={audienceUserIds}
+        onChange={setDoc}
+        onSubmit={() => void submit()}
+        accessibilityLabel={placeholder}
       />
+      <View className="flex-row items-center" style={{ gap: 8, minHeight: 36 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mention someone"
+          hitSlop={8}
+          onPress={() => fieldRef.current?.insertAt()}
+          {...(Platform.OS === 'web'
+            ? {
+                onMouseDown: (event: { preventDefault: () => void }) => {
+                  event.preventDefault();
+                },
+              }
+            : null)}
+          style={{ minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center' }}>
+          <AppText className="text-[16px] font-extrabold" style={{ color: THEME.accent }}>
+            @
+          </AppText>
+        </Pressable>
+        <View className="flex-1" />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={submitLabel}
+          disabled={!doc.text.trim() || submitting}
+          onPress={() => void submit()}
+          style={{
+            minHeight: 36,
+            paddingHorizontal: 14,
+            borderRadius: 999,
+            backgroundColor: THEME.primary,
+            opacity: !doc.text.trim() || submitting ? 0.38 : 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          <AppText className="text-[14px] font-semibold" style={{ color: THEME.primaryForeground }}>
+            {submitLabel}
+          </AppText>
+        </Pressable>
+      </View>
     </View>
   );
 }
