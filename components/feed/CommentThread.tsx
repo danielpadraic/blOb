@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
+import { Image } from 'expo-image';
 
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { MentionText } from '@/components/feed/MentionText';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, ReactionType } from '@/lib/types';
 import { nestComments } from '@/utils/comments';
 import { getErrorMessage } from '@/utils/errors';
 import { formatFeedTime } from '@/utils/format';
+import { commentMediaUrls, commentTextWithoutMedia, mediaKind } from '@/utils/media';
 
 const INDENT = 12;
 
@@ -100,6 +103,8 @@ function CommentItem({
   const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
   const handle = comment.author?.username ?? 'blob';
   const replies = comment.replies ?? [];
+  const body = commentTextWithoutMedia(comment.content);
+  const mediaUrls = commentMediaUrls(comment.content);
 
   return (
     <View
@@ -125,11 +130,14 @@ function CommentItem({
               <AppText className="text-[11px] font-normal text-muted">@{handle}</AppText>
             </AppText>
           </ProfileLink>
-          <MentionText
-            content={comment.content}
-            mentions={comment.mentions}
-            className="text-[13px] leading-[18px] text-ink"
-          />
+          {body ? (
+            <MentionText
+              content={body}
+              mentions={comment.mentions}
+              className="text-[13px] leading-[18px] text-ink"
+            />
+          ) : null}
+          <CommentMedia urls={mediaUrls} />
           <AppText className="mt-0.5 text-[11px] text-muted">{formatFeedTime(comment.created_at)}</AppText>
           <View className="mt-0.5">
             <ReactionBar
@@ -180,6 +188,43 @@ function CommentItem({
           audienceUserIds={audienceUserIds}
         />
       ))}
+    </View>
+  );
+}
+
+function CommentMedia({ urls }: { urls: string[] }) {
+  if (urls.length === 0) {
+    return null;
+  }
+  return (
+    <View className="mt-1 gap-1.5">
+      {urls.map((url) => {
+        const video = mediaKind(url) === 'video';
+        return (
+          <View
+            key={url}
+            className="overflow-hidden"
+            style={{
+              borderRadius: 12,
+              backgroundColor: THEME.surface,
+              maxWidth: 220,
+            }}>
+            {video ? (
+              <View
+                className="items-center justify-center"
+                style={{ height: 120, backgroundColor: THEME.primary }}>
+                <Glyph name={GLYPH.play} color="#fff" size={22} />
+              </View>
+            ) : (
+              <Image
+                source={{ uri: url }}
+                style={{ width: 220, height: 140 }}
+                contentFit="cover"
+              />
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }

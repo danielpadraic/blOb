@@ -102,6 +102,33 @@ export function isHttpUrl(value: string): boolean {
   }
 }
 
+/** Visual http(s) URLs embedded in a comment body (GIF / photo / video). */
+export function commentMediaUrls(content: string): string[] {
+  const matches = content.match(/https?:\/\/[^\s]+/g) ?? [];
+  return matches.filter((url) => {
+    const kind = mediaKind(url);
+    return kind === 'image' || kind === 'video';
+  });
+}
+
+export function commentTextWithoutMedia(content: string): string {
+  const urls = new Set(commentMediaUrls(content));
+  if (urls.size === 0) {
+    return content;
+  }
+  return content
+    .split('\n')
+    .map((line) =>
+      line
+        .split(/\s+/)
+        .filter((part) => !urls.has(part))
+        .join(' ')
+        .trim(),
+    )
+    .filter(Boolean)
+    .join('\n');
+}
+
 export function displayUrl(url: string): string {
   try {
     const parsed = new URL(url);

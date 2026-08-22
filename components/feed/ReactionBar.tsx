@@ -15,8 +15,8 @@ import type { Reaction, ReactionType } from '@/lib/types';
 import { formatFeedTime } from '@/utils/format';
 
 const REACTION_GLYPH: Record<PostReactionType, GlyphId> = {
-  like: GLYPH.like,
-  love: GLYPH.love,
+  like: GLYPH.strong,
+  love: GLYPH.like,
   care: GLYPH.care,
   fire: GLYPH.fire,
   sad: GLYPH.sad,
@@ -53,7 +53,7 @@ export function ReactionBar({
       <View className="flex-row items-center" style={{ columnGap: 2 }}>
         <Action
           compact
-          icon={mineType ? REACTION_GLYPH[mineType] : GLYPH.likeOutline}
+          icon={mineType ? REACTION_GLYPH[mineType] : GLYPH.strongOutline}
           label="Like"
           count={total}
           color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
@@ -117,7 +117,7 @@ export function ReactionBar({
           }}
           className="h-9 flex-row items-center px-1.5">
           <Glyph
-            name={mineType ? REACTION_GLYPH[mineType] : GLYPH.likeOutline}
+            name={mineType ? REACTION_GLYPH[mineType] : GLYPH.strongOutline}
             color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
             size={18}
           />
