@@ -104,11 +104,11 @@ export function ensureProofSentence(proof: ChallengeProof, minutes = 30): Challe
   if (proof.method === 'hr' || /\bhr\b/.test(lower) || lower.includes('heart rate') || lower.includes('heart-rate')) {
     return { ...proof, method: 'hr', minutes: hrMinutes, name: heartRateProofSentence(hrMinutes) };
   }
-  if (lower.includes('pre-workout') || lower.includes('pre-selfie') || (lower.includes('pre') && lower.includes('selfie'))) {
-    return { ...proof, name: PRE_WORKOUT_SELFIE_SENTENCE };
-  }
-  if (lower.includes('post-workout') || lower.includes('post-selfie') || (lower.includes('post') && lower.includes('selfie'))) {
+  if (isCheckoutProofName(lower)) {
     return { ...proof, name: POST_WORKOUT_SELFIE_SENTENCE };
+  }
+  if (isCheckinSelfieName(lower)) {
+    return { ...proof, name: PRE_WORKOUT_SELFIE_SENTENCE };
   }
   if (isShortProofLabel(name)) {
     return { ...proof, name: defaultSentenceForMethod(proof.method, minutes) };
@@ -222,24 +222,45 @@ export function firstProofMethod(proofs: ChallengeProof[]): ChallengeProofMethod
   return proofs[0]?.method ?? 'photo';
 }
 
-export function isPreWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): boolean {
-  const lower = proof.name.trim().toLowerCase();
-  return (
-    proof.id === 'pre' ||
+function isCheckoutProofName(lower: string): boolean {
+  if (
     lower.includes('pre-workout') ||
     lower.includes('pre-selfie') ||
+    lower.includes('check-in selfie') ||
     (lower.includes('pre') && lower.includes('selfie'))
-  );
-}
-
-export function isPostWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): boolean {
-  const lower = proof.name.trim().toLowerCase();
+  ) {
+    return false;
+  }
   return (
-    proof.id === 'post' ||
+    lower.includes('check-out') ||
+    lower.includes('checkout') ||
+    /\bcheck out\b/.test(lower) ||
     lower.includes('post-workout') ||
     lower.includes('post-selfie') ||
     (lower.includes('post') && lower.includes('selfie'))
   );
+}
+
+function isCheckinSelfieName(lower: string): boolean {
+  if (isCheckoutProofName(lower)) {
+    return false;
+  }
+  return (
+    lower.includes('pre-workout') ||
+    lower.includes('pre-selfie') ||
+    lower.includes('check-in selfie') ||
+    (lower.includes('pre') && lower.includes('selfie'))
+  );
+}
+
+export function isPreWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): boolean {
+  const lower = proof.name.trim().toLowerCase();
+  return proof.id === 'pre' || isCheckinSelfieName(lower);
+}
+
+export function isPostWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): boolean {
+  const lower = proof.name.trim().toLowerCase();
+  return proof.id === 'post' || isCheckoutProofName(lower);
 }
 
 function isBeforeAfterHeartRateProofs(proofs: ChallengeProof[]): boolean {
@@ -377,11 +398,11 @@ export function legacyTypeForProof(proof: ChallengeProof): ProofType | null {
     return 'hr_monitor';
   }
   const named = proof.name.trim().toLowerCase();
-  if (named.includes('pre')) {
-    return 'pre_selfie';
-  }
-  if (named.includes('post')) {
+  if (isCheckoutProofName(named) || proof.id === 'post') {
     return 'post_selfie';
+  }
+  if (isCheckinSelfieName(named) || proof.id === 'pre' || named.includes('pre')) {
+    return 'pre_selfie';
   }
   return 'photo';
 }

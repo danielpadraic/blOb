@@ -20,6 +20,7 @@ import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   beginCameraProof,
   captureTypeForMethod,
+  legacyTypeForProof,
   partSatisfies,
   proofDisplayName,
   proofsAreHonorOnly,
@@ -330,7 +331,7 @@ export default function SubmitWorkoutScreen() {
       <Screen padded={false} edges={TAB_ROOT_EDGES}>
         <Stack.Screen options={{ headerShown: false }} />
         <ProofUploader
-          type={captureTypeForMethod(activeProof.method)}
+          type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}
           fill
           autoOpen
           locked={busy}

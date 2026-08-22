@@ -7,6 +7,9 @@ const AUTO_CAPTION = [
   /^checked in today\b/i,
   /^checked in today for the .+/i,
   /^logged today'?s work\.?$/i,
+  /^check-in complete\.?$/i,
+  /^started check-in\.?$/i,
+  /^added (a |an |the )?(photo|video|pre-workout selfie|post-workout selfie|heart-rate proof|check-in note)\.?$/i,
 ];
 
 export type CheckinPostLike = {
@@ -53,6 +56,11 @@ function stripEmoji(value: string): string {
 }
 
 /** Drop the auto “Checked in today for the …” line so the teal tag can own that copy. */
+export function isCheckinCompleteStage(stage?: string | null): boolean {
+  const value = String(stage ?? '').toLowerCase();
+  return value === 'complete' || value === 'submitted';
+}
+
 export function checkinExtraCaption(
   content: string | null | undefined,
   challengeTitle?: string | null,
@@ -61,7 +69,11 @@ export function checkinExtraCaption(
   if (!text) {
     return '';
   }
-  const plain = stripEmoji(text);
+  const withoutTitle = text.replace(/^check-in complete\.?\s*/i, '').trim();
+  if (!withoutTitle) {
+    return '';
+  }
+  const plain = stripEmoji(withoutTitle);
   if (AUTO_CAPTION.some((pattern) => pattern.test(plain))) {
     return '';
   }
@@ -75,7 +87,7 @@ export function checkinExtraCaption(
       return '';
     }
   }
-  return text;
+  return withoutTitle;
 }
 
 /** City / locality when the post already carries it. Omit missing or “Unknown”. */

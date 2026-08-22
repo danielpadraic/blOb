@@ -25,7 +25,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { useUpdatePostAudience } from '@/hooks/useFeed';
-import { checkinExtraCaption, isCheckinPost, postLocality } from '@/lib/checkinPost';
+import { checkinExtraCaption, isCheckinCompleteStage, isCheckinPost, postLocality } from '@/lib/checkinPost';
 import { PROOF_META } from '@/lib/constants';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
@@ -82,6 +82,7 @@ function PostCardInner({
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
   const checkin = isCheckinPost(post);
+  const checkinComplete = checkin && isCheckinCompleteStage(post.checkin_stage);
   const tagged = Boolean(post.challenge_id);
   const hidePromoCard =
     Boolean(challengeFeed) ||
@@ -181,6 +182,11 @@ function PostCardInner({
       </View>
 
       <View style={{ gap: 10, marginTop: 10 }}>
+        {checkinComplete ? (
+          <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+            Check-in Complete
+          </AppText>
+        ) : null}
         {caption ? (
           <PostBody
             content={caption}
