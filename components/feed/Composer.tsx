@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -99,6 +99,12 @@ export function Composer({
     }
     setAudience(profileDefault);
   }, [defaultAudience, hideAudience, profileDefault, wallHost]);
+
+  const onDocChange = useCallback((doc: MentionDoc) => {
+    docRef.current = doc;
+    const next = doc.text.trim().length > 0;
+    setHasText((current) => (current === next ? current : next));
+  }, []);
 
   const busy = Boolean(submitting || uploading);
   const canPost =
@@ -268,11 +274,7 @@ export function Composer({
               compact
               audience={audience}
               audienceUserIds={audienceUserIds}
-              onChange={(doc) => {
-                docRef.current = doc;
-                const next = doc.text.trim().length > 0;
-                setHasText((current) => (current === next ? current : next));
-              }}
+              onChange={onDocChange}
               onSubmit={() => void handleSubmit()}
               accessibilityLabel="Write a post"
             />

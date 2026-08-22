@@ -3,6 +3,7 @@ import {
   memo,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type ForwardedRef,
@@ -98,10 +99,8 @@ function MentionFieldInner(
   textRef.current = text;
   chipsRef.current = chips;
 
-  const tokens = mentionTokenRanges(
-    text,
-    chips.map((chip) => chip.username),
-  );
+  const chipNames = useMemo(() => chips.map((chip) => chip.username), [chips]);
+  const tokens = useMemo(() => mentionTokenRanges(text, chipNames), [chipNames, text]);
   const query = mentionQueryAtCursor(text, selection.start);
   const open = Boolean(query) && !suppressed;
   const candidates = useMentionCandidates({

@@ -26,6 +26,40 @@ import { useMyProfile } from '@/hooks/useProfile';
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at';
 
+function feedListKey(scope: string, userId?: string | null) {
+  return ['feed', scope, userId] as const;
+}
+
+function asFeedPost(
+  post: Post,
+  author: PublicProfile | undefined,
+  mentionedUserIds?: string[],
+): PostWithMeta {
+  return {
+    ...(post as PostWithMeta),
+    author,
+    comments: [],
+    reactions: [],
+    mentions: (mentionedUserIds ?? []).map((userId) => ({
+      userId,
+      username: '',
+      available: true,
+    })),
+  };
+}
+
+async function insertMentionRowsOnce(
+  run: () => PromiseLike<{ error: { message?: string } | null }>,
+) {
+  let result = await run();
+  if (result.error && !isMissingRelationError(result.error)) {
+    result = await run();
+  }
+  if (result.error && !isMissingRelationError(result.error)) {
+    throw new Error(getErrorMessage(result.error));
+  }
+}
+
 type FeedScope =
   | { kind: 'challenge'; challengeId: string }
   | { kind: 'global' }
@@ -671,7 +705,7 @@ export function useFeed(challengeId?: string | null) {
   const key = challengeId ?? 'global';
 
   return useQuery({
-    queryKey: ['feed', key, user?.id],
+    queryKey: feedListKey(key, user?.id),
     staleTime: 30_000,
     queryFn: () => fetchPosts({ challengeId, userId: user?.id }),
   });
@@ -822,25 +856,31 @@ export function useCreatePost(challengeId?: string | null) {
       const createdPost = created.data as unknown as Post;
       const mentionIds = [...new Set((input.mentionedUserIds ?? []).filter((id) => id && id !== user.id))];
       if (mentionIds.length > 0 && createdPost.id) {
-        const mentions = await supabase.from('post_mentions').insert(
-          mentionIds.map((mentioned_user_id) => ({
-            post_id: createdPost.id,
-            mentioned_user_id,
-            author_id: user.id,
-          })),
-        );
-        if (mentions.error && !isMissingRelationError(mentions.error)) {
-          console.log('[blob:feed] post_mentions insert failed', mentions.error.message);
+        try {
+          await insertMentionRowsOnce(() =>
+            supabase.from('post_mentions').insert(
+              mentionIds.map((mentioned_user_id) => ({
+                post_id: createdPost.id,
+                mentioned_user_id,
+                author_id: user.id,
+              })),
+            ),
+          );
+        } catch (error) {
+          await supabase.from('posts').delete().eq('id', createdPost.id).eq('author_id', user.id);
+          throw error;
         }
       }
       return createdPost;
     },
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: ['feed', key] });
-      const previous = queryClient.getQueryData<PostWithMeta[]>(['feed', key]);
+      const listKey = feedListKey(key, user?.id);
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData<PostWithMeta[]>(listKey);
+      const optimisticId = `optimistic-${Date.now()}`;
       if (user) {
         const optimistic: PostWithMeta = {
-          id: `optimistic-${Date.now()}`,
+          id: optimisticId,
           author_id: user.id,
           challenge_id: input.challengeId ?? challengeId ?? null,
           content: input.content.trim() || null,
@@ -861,22 +901,41 @@ export function useCreatePost(challengeId?: string | null) {
           comments: [],
           reactions: [],
         };
-        queryClient.setQueryData<PostWithMeta[]>(['feed', key], [
-          optimistic,
-          ...(previous ?? []),
-        ]);
+        queryClient.setQueryData<PostWithMeta[]>(listKey, [optimistic, ...(previous ?? [])]);
       }
-      return { previous };
+      return { previous, optimisticId, listKey };
+    },
+    onSuccess: (createdPost, input, context) => {
+      if (!context || !user) {
+        return;
+      }
+      const posted = asFeedPost(
+        createdPost,
+        asPublicProfile(profile ?? { id: user.id }),
+        input.mentionedUserIds,
+      );
+      queryClient.setQueryData<PostWithMeta[]>(context.listKey, (current) => {
+        if (!current) {
+          return [posted];
+        }
+        let replaced = false;
+        const next = current.map((post) => {
+          if (post.id !== context.optimisticId) {
+            return post;
+          }
+          replaced = true;
+          return { ...posted, comments: post.comments ?? [], reactions: post.reactions ?? [] };
+        });
+        return replaced ? next : [posted, ...current.filter((post) => post.id !== posted.id)];
+      });
     },
     onError: (_error, _input, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(['feed', key], context.previous);
+        queryClient.setQueryData(context.listKey, context.previous);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void queryClient.invalidateQueries({ queryKey: ['feed-events'] });
-      void queryClient.invalidateQueries({ queryKey: ['feed', 'author'] });
       void reportBadgeActivity();
     },
   });
@@ -1179,15 +1238,19 @@ async function insertCommentMentions(
   if (ids.length === 0) {
     return;
   }
-  const { error } = await supabase.from('comment_mentions').insert(
-    ids.map((mentioned_user_id) => ({
-      comment_id: commentId,
-      mentioned_user_id,
-      author_id: authorId,
-    })),
-  );
-  if (error && !isMissingRelationError(error)) {
-    console.log('[blob:feed] comment_mentions insert failed', error.message);
+  try {
+    await insertMentionRowsOnce(() =>
+      supabase.from('comment_mentions').insert(
+        ids.map((mentioned_user_id) => ({
+          comment_id: commentId,
+          mentioned_user_id,
+          author_id: authorId,
+        })),
+      ),
+    );
+  } catch (error) {
+    await supabase.from('comments').delete().eq('id', commentId).eq('author_id', authorId);
+    throw error;
   }
 }
 
@@ -1318,21 +1381,18 @@ export function useDeletePost(challengeId?: string | null) {
       }
     },
     onMutate: async (postId) => {
-      await queryClient.cancelQueries({ queryKey: ['feed', key] });
-      const previous = queryClient.getQueryData<PostWithMeta[]>(['feed', key]);
-      queryClient.setQueryData<PostWithMeta[]>(['feed', key], (current) =>
+      const listKey = feedListKey(key, user?.id);
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData<PostWithMeta[]>(listKey);
+      queryClient.setQueryData<PostWithMeta[]>(listKey, (current) =>
         (current ?? []).filter((post) => post.id !== postId),
       );
-      return { previous };
+      return { previous, listKey };
     },
     onError: (_error, _postId, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(['feed', key], context.previous);
+        queryClient.setQueryData(context.listKey, context.previous);
       }
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['feed', key] });
-      void queryClient.invalidateQueries({ queryKey: ['feed', 'author'] });
     },
   });
 }

@@ -136,22 +136,22 @@ export function useFollowers(userId?: string | null) {
   });
 }
 
-export function useFollowing(userId?: string | null) {
+export function useFollowing(userId?: string | null, options?: { enabled?: boolean }) {
   const { user } = useAuth();
   const id = userId ?? user?.id ?? null;
   return useQuery({
     queryKey: socialKeys.following(id ?? ''),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && options?.enabled !== false,
     queryFn: () => fetchFollowing(id!),
   });
 }
 
-export function useFriends(userId?: string | null) {
+export function useFriends(userId?: string | null, options?: { enabled?: boolean }) {
   const { user } = useAuth();
   const id = userId ?? user?.id ?? null;
   return useQuery({
     queryKey: socialKeys.friends(id ?? ''),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && options?.enabled !== false,
     queryFn: () => fetchFriends(id!),
   });
 }

@@ -19,8 +19,9 @@ export function useMentionCandidates(input: {
   enabled?: boolean;
 }) {
   const { user } = useAuth();
-  const friends = useFriends();
-  const following = useFollowing(user?.id);
+  const pickerOpen = input.enabled !== false;
+  const friends = useFriends(undefined, { enabled: pickerOpen });
+  const following = useFollowing(user?.id, { enabled: pickerOpen });
   const audience = asPostAudience(input.audience);
   const rawQuery = input.query.trim().replace(/^@/, '').toLowerCase();
   const [query, setQuery] = useState(rawQuery);
@@ -35,7 +36,7 @@ export function useMentionCandidates(input: {
 
   const blocked = useQuery({
     queryKey: ['blocked-ids', user?.id],
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id && pickerOpen),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('friendships')
@@ -55,7 +56,7 @@ export function useMentionCandidates(input: {
 
   const searched = useQuery({
     queryKey: ['mention-search', user?.id, query],
-    enabled: Boolean(user?.id && input.enabled !== false && query.length > 0),
+    enabled: Boolean(user?.id && pickerOpen && query.length >= 2),
     staleTime: 30_000,
     queryFn: () => searchPeople(query, user!.id),
   });
@@ -117,7 +118,7 @@ export function useMentionCandidates(input: {
 
   return {
     data: rows,
-    isLoading: Boolean(input.enabled !== false) && (friends.isLoading || following.isLoading),
+    isLoading: pickerOpen && (friends.isLoading || following.isLoading),
   };
 }
 

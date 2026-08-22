@@ -130,25 +130,34 @@ export function FeedList({
     [composeSource, onCompose],
   );
 
-  const header = (
-    <View className="gap-3">
-      {headerTop}
-      {headerExtra}
-      {canCompose && onCompose ? (
-        <Composer
-          placeholder={composerPlaceholder}
-          submitting={composing}
-          hideAudience={hideAudience}
-          onSubmit={onComposeSubmit}
-        />
-      ) : null}
-      {!embedded ? (
-        <View className="flex-row items-end justify-between pt-1">
-          <AppText className="text-[18px] font-extrabold text-charcoal">Feed</AppText>
-          <AppText className="text-[12px] text-muted">Latest</AppText>
-        </View>
-      ) : null}
-    </View>
+  const composer = useMemo(() => {
+    if (!canCompose || !onCompose) {
+      return null;
+    }
+    return (
+      <Composer
+        placeholder={composerPlaceholder}
+        submitting={composing}
+        hideAudience={hideAudience}
+        onSubmit={onComposeSubmit}
+      />
+    );
+  }, [canCompose, composerPlaceholder, composing, hideAudience, onCompose, onComposeSubmit]);
+
+  const listHeader = useMemo(
+    () => (
+      <View className="gap-3">
+        {headerTop}
+        {headerExtra}
+        {!embedded ? (
+          <View className="flex-row items-end justify-between pt-1">
+            <AppText className="text-[18px] font-extrabold text-charcoal">Feed</AppText>
+            <AppText className="text-[12px] text-muted">Latest</AppText>
+          </View>
+        ) : null}
+      </View>
+    ),
+    [embedded, headerExtra, headerTop],
   );
 
   const renderItem = useCallback(
@@ -181,8 +190,9 @@ export function FeedList({
 
   if (isLoading) {
     return (
-      <View className="gap-3">
-        {header}
+      <View className="gap-3" style={embedded ? undefined : { flex: 1 }}>
+        {composer}
+        {listHeader}
         <MascotState kind="loading" title={copy('home.loading', tone)} compact={embedded} />
       </View>
     );
@@ -191,7 +201,8 @@ export function FeedList({
   if (embedded) {
     return (
       <View className="gap-3">
-        {header}
+        {listHeader}
+        {composer}
         {visiblePosts.length === 0 ? (
           empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
         ) : (
@@ -213,42 +224,45 @@ export function FeedList({
   }
 
   return (
-    <FlatList
-      ref={(node) => {
-        listRef.current = node;
-        tour?.setHomeScroll(node as unknown as ScrollView);
-      }}
-      data={visiblePosts}
-      keyExtractor={(item) => item.id}
-      renderItem={renderItem}
-      ListHeaderComponent={header}
-      ListEmptyComponent={() =>
-        empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
-      }
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="interactive"
-      automaticallyAdjustKeyboardInsets
-      showsVerticalScrollIndicator={false}
-      windowSize={7}
-      maxToRenderPerBatch={5}
-      initialNumToRender={5}
-      updateCellsBatchingPeriod={50}
-      removeClippedSubviews={Platform.OS !== 'web'}
-      contentContainerStyle={{ paddingBottom: TAB_BAR_CONTENT_INSET, flexGrow: 1 }}
-      refreshControl={
-        onRefresh ? (
-          <RefreshControl
-            refreshing={Boolean(isRefreshing)}
-            onRefresh={onRefresh}
-            tintColor={THEME.accent}
-          />
-        ) : undefined
-      }
-      style={
-        Platform.OS === 'web'
-          ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden' } as object)
-          : { flex: 1 }
-      }
-    />
+    <View style={{ flex: 1 }}>
+      {composer ? <View style={{ marginBottom: 12 }}>{composer}</View> : null}
+      <FlatList
+        ref={(node) => {
+          listRef.current = node;
+          tour?.setHomeScroll(node as unknown as ScrollView);
+        }}
+        data={visiblePosts}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={() =>
+          empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
+        }
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
+        windowSize={7}
+        maxToRenderPerBatch={5}
+        initialNumToRender={5}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS !== 'web'}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_CONTENT_INSET, flexGrow: 1 }}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={Boolean(isRefreshing)}
+              onRefresh={onRefresh}
+              tintColor={THEME.accent}
+            />
+          ) : undefined
+        }
+        style={
+          Platform.OS === 'web'
+            ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden' } as object)
+            : { flex: 1 }
+        }
+      />
+    </View>
   );
 }
