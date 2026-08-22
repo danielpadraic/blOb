@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 
 import { CaptureSourceBadge, HealthProofCaption } from '@/components/challenge/HealthProofCaption';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
@@ -181,8 +181,8 @@ export default function SubmitWorkoutScreen() {
     setSkippedAuto(true);
     try {
       await persistProof(proof, { uri, mimeType, fromLibrary });
-    } catch {
-      return;
+    } catch (caught) {
+      Alert.alert('Couldn’t save that proof', getErrorMessage(caught));
     }
   }
 
