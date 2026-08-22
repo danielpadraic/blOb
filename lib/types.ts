@@ -475,6 +475,7 @@ export interface HealthWorkoutRecord {
   confidence: string;
   raw_summary: Record<string, unknown>;
   dismissed_at?: string | null;
+  begin_notified_at?: string | null;
   created_at: string;
 }
 

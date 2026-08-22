@@ -17,6 +17,7 @@ import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDeta
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { JoinCtaButton, JOIN_CTA_HEIGHT } from '@/components/challenge/JoinCtaButton';
+import { HealthProofCaption } from '@/components/challenge/HealthProofCaption';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
@@ -710,9 +711,16 @@ export default function ChallengeDetailScreen() {
                     </View>
                     <View className="flex-1">
                       <AppText className="font-semibold text-charcoal">{proofDisplayName(proof)}</AppText>
-                      <AppText className="text-[13px] leading-5 text-muted">
-                        {proof.method === 'honor' ? 'Honor. Confirm to check in.' : methodLabel(proof.method)}
-                      </AppText>
+                      {proof.method === 'hr' &&
+                      periodCheckin.data?.proof_parts?.[proof.id]?.healthWorkoutId ? (
+                        <HealthProofCaption
+                          healthWorkoutId={periodCheckin.data.proof_parts[proof.id].healthWorkoutId}
+                        />
+                      ) : (
+                        <AppText className="text-[13px] leading-5 text-muted">
+                          {proof.method === 'honor' ? 'Honor. Confirm to check in.' : methodLabel(proof.method)}
+                        </AppText>
+                      )}
                     </View>
                   </View>
                 ))}

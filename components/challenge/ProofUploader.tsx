@@ -50,10 +50,15 @@ type ProofUploaderProps = {
       | 'proof_requirements'
       | 'challenge_type'
       | 'tasks'
+      | 'is_official'
+      | 'series_id'
+      | 'timezone'
+      | 'days_required'
+      | 'day_windows'
     >;
     onAttach: (workout: HealthWorkout) => Promise<void>;
   };
-  onPicked: (uri: string, mimeType?: string | null) => void;
+  onPicked: (uri: string, mimeType?: string | null, meta?: { fromLibrary?: boolean }) => void;
   onCancel?: () => void;
   onRequestOpen?: () => void;
 };
@@ -80,7 +85,9 @@ export function ProofUploader({
   const [libraryDenied, setLibraryDenied] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const healthChip = Boolean(health && getHealthProvider()?.isAvailable());
+  const healthChip = Boolean(type === 'hr_monitor' && health && getHealthProvider()?.isAvailable());
+  const faceHint =
+    type === 'pre_selfie' || type === 'post_selfie' || type === 'photo' ? copy('health.faceHint') : null;
   const watch = useStartOnWatch(
     health?.challenge ??
       (health
@@ -138,7 +145,7 @@ export function ProofUploader({
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
     if (!result.canceled && result.assets[0]?.uri) {
-      onPicked(result.assets[0].uri, result.assets[0].mimeType);
+      onPicked(result.assets[0].uri, result.assets[0].mimeType, { fromLibrary: true });
       setOpen(false);
     }
   }
@@ -168,8 +175,9 @@ export function ProofUploader({
           webFallback={webFallback}
           chromeInset={fill}
           hrScreenshot={type === 'hr_monitor'}
+          faceHint={faceHint}
           onCaptured={(media) => {
-            onPicked(media.uri, media.mimeType);
+            onPicked(media.uri, media.mimeType, { fromLibrary: false });
             setOpen(false);
           }}
           onOpenGallery={() => void openLibrary()}
@@ -210,6 +218,11 @@ export function ProofUploader({
             minMinutes={health.minMinutes}
             frequency={health.frequency}
             startsAt={health.startsAt}
+            isOfficial={health.challenge?.is_official}
+            seriesId={health.challenge?.series_id}
+            timezone={health.challenge?.timezone}
+            daysRequired={health.challenge?.days_required}
+            dayWindows={health.challenge?.day_windows}
             userId={health.userId}
             attaching={health.attaching}
             onClose={() => setHealthOpen(false)}
@@ -288,10 +301,10 @@ export function ProofUploader({
           onPress={() => void startCamera()}
           className={emptyHeight}>
           <AppText className="text-center text-base font-semibold text-charcoal">
-            Workout attached
+            {copy('health.proofTitle')}
           </AppText>
           <AppText className="mt-2 text-center text-sm leading-6 text-muted">
-            Camera screenshot still works if you want a picture instead.
+            Screenshot remains in Gallery if you want a picture instead.
           </AppText>
         </Pressable>
       ) : uri ? (

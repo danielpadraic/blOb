@@ -17,6 +17,7 @@ export type ChallengeProofPart = {
   url?: string | null;
   text?: string | null;
   healthWorkoutId?: string | null;
+  fromLibrary?: boolean;
 };
 
 export const SIMPLE_PROOF_CAP = 4;
@@ -497,6 +498,7 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
           : typeof row.health_workout_id === 'string'
             ? row.health_workout_id
             : null,
+      fromLibrary: row.fromLibrary === true || row.from_library === true,
     };
   }
   return parts;

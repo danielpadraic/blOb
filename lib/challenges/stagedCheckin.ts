@@ -17,6 +17,7 @@ export type SaveCheckinProofInput = {
   uri?: string | null;
   mimeType?: string | null;
   text?: string | null;
+  fromLibrary?: boolean;
 };
 
 function throwMapped(
@@ -126,7 +127,11 @@ async function proofPartFor(
       mimeType: input.mimeType,
     }),
   );
-  return { id: proof.id, part: { method: proof.method, url }, healthWorkoutId: null };
+  return {
+    id: proof.id,
+    part: { method: proof.method, url, fromLibrary: input.fromLibrary === true },
+    healthWorkoutId: null,
+  };
 }
 
 export async function saveCheckinProof(input: SaveCheckinProofInput): Promise<ChallengeCheckin> {

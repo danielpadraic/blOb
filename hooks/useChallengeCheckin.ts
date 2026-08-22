@@ -9,6 +9,7 @@ import {
 } from '@/lib/challengeCheckin';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
 import { parseProofParts } from '@/lib/challengeProofs';
+import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/localNudges';
 import { heroRingActive } from '@/lib/challengeStart';
 import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
@@ -185,6 +186,25 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
+      const cached = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
+      if (row.post_selfie_url || row.status === 'submitted') {
+        void cancelCheckoutReminder(row.id);
+      } else if (row.status === 'in_progress' || row.status === 'ready') {
+        void scheduleCheckoutReminder({
+          checkinId: row.id,
+          challengeId,
+          userId: user.id,
+          beganAt: row.started_at,
+          minMinutes: cached?.min_minutes,
+          frequency: cached?.frequency,
+          startsAt: cached?.starts_at,
+          isOfficial: cached?.is_official,
+          seriesId: cached?.series_id,
+          timezone: cached?.timezone,
+          daysRequired: cached?.days_required,
+          dayWindows: cached?.day_windows,
+        });
+      }
     },
   });
 }
@@ -196,6 +216,9 @@ export function useSubmitCheckin(challengeId: string | undefined) {
   return useMutation({
     mutationFn: () => submitCheckin(challengeId!),
     onSuccess: (row) => {
+      if (row?.id) {
+        void cancelCheckoutReminder(row.id);
+      }
       if (!challengeId) {
         return;
       }

@@ -204,6 +204,11 @@ export function notificationHref(item: AppNotification): Href | null {
   if (data.callout_id) {
     return `/challenges/callout/${data.callout_id}`;
   }
+  if (item.type === 'health_begin' || item.type === 'health_checkout') {
+    if (data.challenge_id) {
+      return `/challenges/${data.challenge_id}/submit`;
+    }
+  }
   if (data.challenge_id) {
     return challengeDetailHref(data.challenge_id, 'lobby');
   }

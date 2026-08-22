@@ -40,6 +40,7 @@ type InAppCameraProps = {
   onUseWorkout?: () => void;
   onStartWatch?: () => void;
   hrScreenshot?: boolean;
+  faceHint?: string | null;
 };
 
 export function InAppCamera({
@@ -58,6 +59,7 @@ export function InAppCamera({
   onUseWorkout,
   onStartWatch,
   hrScreenshot = false,
+  faceHint = null,
 }: InAppCameraProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
@@ -480,6 +482,11 @@ export function InAppCamera({
       </View>
 
       <View className="absolute left-6 right-6" style={{ bottom: bottomPad }}>
+        {faceHint && !hrScreenshot ? (
+          <AppText className="mb-3 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
+            {faceHint}
+          </AppText>
+        ) : null}
         {hrScreenshot ? (
           <Pressable
             accessibilityRole="button"

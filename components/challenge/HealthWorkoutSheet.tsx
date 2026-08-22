@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { copy } from '@/lib/copy';
 import { rankHealthWorkouts } from '@/lib/health/match';
 import { challengeHealthWindow, meetsMinMinutes } from '@/lib/health/period';
+import { healthSourceLabel } from '@/lib/health/proofSummary';
 import { fetchUsedProviderWorkoutIds, probeOnline, upsertHealthConnection } from '@/lib/health/remote';
 import { THEME, themeShadow } from '@/lib/theme';
 import { getHealthProvider, type HealthWorkout } from '@/services/health';
@@ -21,6 +22,11 @@ type HealthWorkoutSheetProps = {
   minMinutes?: number | null;
   frequency?: string | null;
   startsAt?: string | null;
+  isOfficial?: boolean | null;
+  seriesId?: string | null;
+  timezone?: string | null;
+  daysRequired?: number | null;
+  dayWindows?: unknown;
   userId?: string;
   attaching?: boolean;
   onClose: () => void;
@@ -52,6 +58,11 @@ export function HealthWorkoutSheet({
   minMinutes,
   frequency,
   startsAt,
+  isOfficial,
+  seriesId,
+  timezone,
+  daysRequired,
+  dayWindows,
   userId,
   attaching = false,
   onClose,
@@ -79,7 +90,15 @@ export function HealthWorkoutSheet({
       try {
         const online = await probeOnline();
         setOffline(!online);
-        const period = challengeHealthWindow({ frequency, starts_at: startsAt });
+        const period = challengeHealthWindow({
+          frequency,
+          starts_at: startsAt,
+          is_official: isOfficial,
+          series_id: seriesId,
+          timezone,
+          days_required: daysRequired,
+          day_windows: dayWindows,
+        });
         const [rows, used] = await Promise.all([
           getHealthProvider()?.fetchWorkouts(period) ?? Promise.resolve([]),
           userId ? fetchUsedProviderWorkoutIds(userId) : Promise.resolve(new Set<string>()),
@@ -100,7 +119,7 @@ export function HealthWorkoutSheet({
         setRefreshing(false);
       }
     },
-    [frequency, minMinutes, startsAt, userId],
+    [dayWindows, daysRequired, frequency, isOfficial, minMinutes, seriesId, startsAt, timezone, userId],
   );
 
   useEffect(() => {
@@ -156,6 +175,10 @@ export function HealthWorkoutSheet({
 
   async function confirm() {
     if (!picked || attaching) {
+      return;
+    }
+    if (!meetsMinMinutes(picked.durationSec, minMinutes)) {
+      setError(copy('health.tooShort'));
       return;
     }
     if (offline || !(await probeOnline())) {
@@ -282,6 +305,7 @@ export function HealthWorkoutSheet({
                   <AppText className="text-[15px] font-bold text-charcoal">{row.activityLabel}</AppText>
                   <AppText className="mt-0.5 text-sm text-muted">
                     {formatDuration(row.durationSec)}
+                    {` · ${healthSourceLabel(row.confidence)}`}
                     {formatTime(row.startedAt) ? ` · ${formatTime(row.startedAt)}` : ''}
                     {row.hrAvg ? ` · ${row.hrAvg} avg` : ''}
                   </AppText>

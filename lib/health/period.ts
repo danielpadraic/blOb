@@ -1,5 +1,8 @@
 import { startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 
+import { officialCurrentWindow } from '@/lib/officialDays';
+import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
+
 export function startOfLocalDay(now = new Date()): Date {
   return startOfDay(now);
 }
@@ -21,9 +24,32 @@ export function challengeHealthWindow(challenge?: {
   frequency?: string | null;
   starts_at?: string | null;
   lastLogAt?: string | null;
+  is_official?: boolean | null;
+  series_id?: string | null;
+  status?: string | null;
+  timezone?: string | null;
+  days_required?: number | null;
+  day_windows?: unknown;
 } | null): { from: Date; to: Date } {
   if (challenge?.lastLogAt) {
     return healthQueryWindow({ lastLogAt: challenge.lastLogAt });
+  }
+  if (challenge && isOfficialSeriesChallenge(challenge)) {
+    const current = officialCurrentWindow({
+      ...challenge,
+      day_windows: Array.isArray(challenge.day_windows)
+        ? challenge.day_windows
+        : null,
+    });
+    if (!current) {
+      const empty = new Date(0);
+      return { from: empty, to: empty };
+    }
+    const now = Date.now();
+    return {
+      from: current.startsAt,
+      to: new Date(Math.min(now, current.endsAt.getTime())),
+    };
   }
   const to = new Date();
   const freq = String(challenge?.frequency ?? 'daily').toLowerCase();

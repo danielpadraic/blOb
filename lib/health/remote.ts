@@ -298,6 +298,48 @@ export async function fetchLatestWorkoutStart(
   return started ?? null;
 }
 
+export async function fetchBeginNotifiedProviderWorkoutIds(userId: string): Promise<Set<string>> {
+  const source = currentProvider();
+  if (!source) {
+    return new Set();
+  }
+  const { data, error } = await supabase
+    .from('health_workouts')
+    .select('provider_workout_id')
+    .eq('user_id', userId)
+    .eq('provider', source)
+    .not('begin_notified_at', 'is', null);
+  if (error) {
+    if (missingHealthSchema(error)) {
+      return new Set();
+    }
+    throw new Error(getErrorMessage(error));
+  }
+  return new Set(
+    (data ?? []).map((row) => String((row as { provider_workout_id: string }).provider_workout_id)),
+  );
+}
+
+export async function markHealthWorkoutBeginNotified(
+  userId: string,
+  workout: HealthWorkout,
+): Promise<void> {
+  try {
+    await upsertHealthWorkout(userId, workout);
+  } catch {
+    // Local one-shot still stands if the row cannot be written.
+  }
+  const { error } = await supabase
+    .from('health_workouts')
+    .update({ begin_notified_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('provider', workout.source)
+    .eq('provider_workout_id', workout.providerWorkoutId);
+  if (error && !missingHealthSchema(error)) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
 export async function dismissHealthWorkout(
   userId: string,
   workout: HealthWorkout,

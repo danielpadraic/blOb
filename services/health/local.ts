@@ -6,6 +6,7 @@ import type { HealthSource } from '@/services/health/types';
 const APPLE_STATUS_KEY = 'blob.health.apple.status';
 const CONNECT_STATUS_KEY = 'blob.health.connect.status';
 const DISMISSED_KEY = 'blob.health.dismissed';
+const BEGIN_NOTIFIED_KEY = 'blob.health.beginNotified';
 
 function statusKey(source: HealthSource = 'apple_health'): string {
   return source === 'health_connect' ? CONNECT_STATUS_KEY : APPLE_STATUS_KEY;
@@ -95,4 +96,26 @@ export async function rememberDismissedWorkoutId(providerWorkoutId: string): Pro
   }
   const next = [...current, providerWorkoutId].slice(-80);
   await write(DISMISSED_KEY, JSON.stringify(next));
+}
+
+export async function readBeginNotifiedWorkoutIds(): Promise<string[]> {
+  const raw = await read(BEGIN_NOTIFIED_KEY);
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function rememberBeginNotifiedWorkoutId(providerWorkoutId: string): Promise<void> {
+  const current = await readBeginNotifiedWorkoutIds();
+  if (current.includes(providerWorkoutId)) {
+    return;
+  }
+  const next = [...current, providerWorkoutId].slice(-80);
+  await write(BEGIN_NOTIFIED_KEY, JSON.stringify(next));
 }

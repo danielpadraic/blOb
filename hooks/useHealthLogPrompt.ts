@@ -2,37 +2,45 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { useAuth } from '@/hooks/useAuth';
-import { usePeriodCheckin, useSaveCheckinProof } from '@/hooks/useChallengeCheckin';
+import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
-import { requiredChallengeProofs } from '@/lib/challenges';
+import { formatHealthDuration } from '@/lib/health/proofSummary';
 import { rankHealthWorkouts } from '@/lib/health/match';
-import { challengeHealthWindow } from '@/lib/health/period';
+import { notifyForgotToBegin } from '@/lib/health/localNudges';
+import { challengeHealthWindow, meetsMinMinutes } from '@/lib/health/period';
 import {
+  dismissHealthWorkout,
+  fetchBeginNotifiedProviderWorkoutIds,
   fetchDismissedProviderWorkoutIds,
   fetchLatestWorkoutStart,
   fetchUsedProviderWorkoutIds,
-  upsertHealthWorkout,
+  markHealthWorkoutBeginNotified,
 } from '@/lib/health/remote';
 import { syncNewHealthWorkouts } from '@/lib/health/sync';
-import { supabase } from '@/lib/supabase';
 import { getHealthProvider, type HealthWorkout } from '@/services/health';
-import { readDismissedWorkoutIds, rememberDismissedWorkoutId } from '@/services/health/local';
-import { dismissHealthWorkout } from '@/lib/health/remote';
+import {
+  readBeginNotifiedWorkoutIds,
+  readDismissedWorkoutIds,
+  rememberBeginNotifiedWorkoutId,
+  rememberDismissedWorkoutId,
+} from '@/services/health/local';
 
 export function useHealthLogPrompt() {
   const { user } = useAuth();
   const loggable = useLoggableChallenge();
   const challenge = loggable.data;
   const periodCheckin = usePeriodCheckin(challenge?.id, challenge);
-  const saveProof = useSaveCheckinProof(challenge?.id);
   const [workout, setWorkout] = useState<HealthWorkout | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const available = Platform.OS === 'ios' && Boolean(getHealthProvider()?.isAvailable());
   const phase = periodCheckin.data?.phase ?? 'none';
 
   const scan = useCallback(async () => {
-    if (!user || !available || busy) {
+    if (!user || !available || !challenge) {
+      return;
+    }
+    if (phase !== 'none') {
+      setWorkout(null);
       return;
     }
     try {
@@ -45,39 +53,66 @@ export function useHealthLogPrompt() {
         return;
       }
       const synced = await syncNewHealthWorkouts(user.id);
-      if (!challenge) {
-        return;
-      }
       const period = challengeHealthWindow({
         frequency: challenge.frequency,
         starts_at: challenge.starts_at,
+        is_official: challenge.is_official,
+        series_id: challenge.series_id,
+        status: challenge.status,
+        timezone: challenge.timezone,
+        days_required: challenge.days_required,
+        day_windows: challenge.day_windows,
       });
+      if (period.to.getTime() <= period.from.getTime()) {
+        return;
+      }
       const periodRows = (await provider.fetchWorkouts(period)) ?? [];
       const byId = new Map<string, HealthWorkout>();
       for (const row of [...synced, ...periodRows]) {
         byId.set(row.providerWorkoutId, row);
       }
       const ranged = [...byId.values()];
-      const [used, dismissedRemote, dismissedLocal, lastStart] = await Promise.all([
-        fetchUsedProviderWorkoutIds(user.id),
-        fetchDismissedProviderWorkoutIds(user.id),
-        readDismissedWorkoutIds(),
-        fetchLatestWorkoutStart(user.id, challenge.id),
-      ]);
+      const [used, dismissedRemote, dismissedLocal, notifiedRemote, notifiedLocal, lastStart] =
+        await Promise.all([
+          fetchUsedProviderWorkoutIds(user.id),
+          fetchDismissedProviderWorkoutIds(user.id),
+          readDismissedWorkoutIds(),
+          fetchBeginNotifiedProviderWorkoutIds(user.id).catch(() => new Set<string>()),
+          readBeginNotifiedWorkoutIds(),
+          fetchLatestWorkoutStart(user.id, challenge.id),
+        ]);
       const skip = new Set([...used, ...dismissedRemote, ...dismissedLocal]);
       const ranked = rankHealthWorkouts(ranged, {
         period,
         minMinutes: challenge.min_minutes,
         usedIds: skip,
         preferStartedAfter: lastStart,
-      });
-      if (ranked[0] && ranked[0].providerWorkoutId !== workout?.providerWorkoutId) {
-        setWorkout(ranked[0]);
+      }).filter((row) => meetsMinMinutes(row.durationSec, challenge.min_minutes));
+      const next = ranked[0] ?? null;
+      setWorkout(next);
+      if (!next) {
+        return;
       }
+      const alreadyNotified =
+        notifiedRemote.has(next.providerWorkoutId) || notifiedLocal.includes(next.providerWorkoutId);
+      if (alreadyNotified) {
+        return;
+      }
+      await rememberBeginNotifiedWorkoutId(next.providerWorkoutId);
+      try {
+        await markHealthWorkoutBeginNotified(user.id, next);
+      } catch {
+        // Local one-shot still stands.
+      }
+      await notifyForgotToBegin({
+        challengeId: challenge.id,
+        duration: formatHealthDuration(next.durationSec),
+        activity: next.activityLabel,
+      });
     } catch {
-      // Foreground prompt is optional. Camera log still works.
+      // Foreground prompt is optional. Camera check-in still works.
     }
-  }, [available, busy, challenge, user, workout]);
+  }, [available, challenge, phase, user]);
 
   useEffect(() => {
     if (!available) {
@@ -106,44 +141,10 @@ export function useHealthLogPrompt() {
     setWorkout(null);
   }, [user, workout]);
 
-  const accept = useCallback(async () => {
-    if (!workout || !challenge || !user) {
-      return null;
-    }
-    setBusy(true);
-    try {
-      if (phase !== 'none' && phase !== 'submitted') {
-        const { data } = await supabase
-          .from('challenges')
-          .select('proofs, proof_type, proof_requirements, challenge_type, tasks, min_minutes')
-          .eq('id', challenge.id)
-          .maybeSingle();
-        const hrProof = requiredChallengeProofs(data).find((proof) => proof.method === 'hr');
-        if (hrProof) {
-          const provider = getHealthProvider();
-          const enriched = provider?.enrichHeartRate ? await provider.enrichHeartRate(workout) : workout;
-          const healthWorkoutId = await upsertHealthWorkout(user.id, enriched);
-          await saveProof.mutateAsync({
-            challengeId: challenge.id,
-            proof: hrProof,
-            uri: `health:${healthWorkoutId}`,
-          });
-        }
-        await rememberDismissedWorkoutId(workout.providerWorkoutId);
-        setWorkout(null);
-      }
-      return challenge.id;
-    } finally {
-      setBusy(false);
-    }
-  }, [challenge, phase, saveProof, user, workout]);
-
   return {
     workout,
     challenge,
     phase,
-    busy: busy || saveProof.isPending,
-    accept,
     dismiss,
   };
 }

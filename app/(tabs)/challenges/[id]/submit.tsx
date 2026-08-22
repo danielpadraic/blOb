@@ -2,6 +2,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { CaptureSourceBadge, HealthProofCaption } from '@/components/challenge/HealthProofCaption';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -37,6 +38,7 @@ type SlotDraft = {
   uri?: string;
   mimeType?: string | null;
   text?: string;
+  fromLibrary?: boolean;
 };
 
 function LoggedState({ onBack }: { onBack: () => void }) {
@@ -120,6 +122,7 @@ export default function SubmitWorkoutScreen() {
           uri: part.healthWorkoutId ? `health:${part.healthWorkoutId}` : part.url ?? current[proof.id]?.uri,
           mimeType: current[proof.id]?.mimeType,
           text: part.text ?? current[proof.id]?.text,
+          fromLibrary: part.fromLibrary ?? current[proof.id]?.fromLibrary,
         };
       }
       return next;
@@ -131,11 +134,11 @@ export default function SubmitWorkoutScreen() {
   const busy = saveProof.isPending || submitCheckin.isPending;
   const firstCamera = beginCameraProof(proofSteps);
 
-  function onMedia(proofId: string, uri: string, mimeType?: string | null) {
+  function onMedia(proofId: string, uri: string, mimeType?: string | null, fromLibrary?: boolean) {
     if (busy) {
       return;
     }
-    setDrafts((current) => ({ ...current, [proofId]: { ...current[proofId], uri, mimeType } }));
+    setDrafts((current) => ({ ...current, [proofId]: { ...current[proofId], uri, mimeType, fromLibrary } }));
     setError(null);
   }
 
@@ -159,6 +162,7 @@ export default function SubmitWorkoutScreen() {
         uri: draft?.uri,
         mimeType: draft?.mimeType,
         text: draft?.text,
+        fromLibrary: draft?.fromLibrary,
       });
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -166,12 +170,17 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
-  async function onCaptured(proof: ChallengeProof, uri: string, mimeType?: string | null) {
-    onMedia(proof.id, uri, mimeType);
+  async function onCaptured(
+    proof: ChallengeProof,
+    uri: string,
+    mimeType?: string | null,
+    fromLibrary?: boolean,
+  ) {
+    onMedia(proof.id, uri, mimeType, fromLibrary);
     setCaptureId(null);
     setSkippedAuto(true);
     try {
-      await persistProof(proof, { uri, mimeType });
+      await persistProof(proof, { uri, mimeType, fromLibrary });
     } catch {
       return;
     }
@@ -336,8 +345,8 @@ export default function SubmitWorkoutScreen() {
             challenge,
             onAttach: onAttachHealth,
           }}
-          onPicked={(uri, mimeType) => {
-            void onCaptured(activeProof, uri, mimeType);
+          onPicked={(uri, mimeType, meta) => {
+            void onCaptured(activeProof, uri, mimeType, meta?.fromLibrary);
           }}
           onCancel={() => {
             setCaptureId(null);
@@ -423,7 +432,17 @@ export default function SubmitWorkoutScreen() {
                       editable={!busy && phase !== 'submitted'}
                     />
                   ) : done ? (
-                    <AppText className="text-sm text-muted">Attached.</AppText>
+                    drafts[proof.id]?.uri?.startsWith('health:') ||
+                    checkinQuery.data?.proof_parts?.[proof.id]?.healthWorkoutId ? (
+                      <HealthProofCaption
+                        healthWorkoutId={
+                          checkinQuery.data?.proof_parts?.[proof.id]?.healthWorkoutId ??
+                          drafts[proof.id]?.uri?.replace(/^health:/, '')
+                        }
+                      />
+                    ) : (
+                      <CaptureSourceBadge fromLibrary={drafts[proof.id]?.fromLibrary} />
+                    )
                   ) : (
                     <Pressable
                       accessibilityRole="button"
