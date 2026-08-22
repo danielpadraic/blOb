@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Alert, Linking, Pressable, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -340,28 +340,42 @@ function InChallengeLine({
   const openTag = useOpenChallengeFromTag();
   const label = title?.trim() || 'this challenge';
   return (
-    <View className="flex-row flex-wrap items-center">
-      <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`in ${label}`}
+      onPress={() =>
+        void openTag({
+          challengeId,
+          visibility,
+          challenge_lane: challengeLane,
+          is_official: isOfficial,
+          created_by: createdBy,
+        })
+      }
+      hitSlop={4}
+      className="flex-row items-center"
+      style={{ minWidth: 0, maxWidth: '100%' }}>
+      <AppText
+        className="text-[13px] leading-5"
+        style={{ color: THEME.textMuted, flexShrink: 0 }}>
         in{' '}
       </AppText>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel={label}
-        onPress={() =>
-          void openTag({
-            challengeId,
-            visibility,
-            challenge_lane: challengeLane,
-            is_official: isOfficial,
-            created_by: createdBy,
-          })
-        }
-        hitSlop={4}>
-        <AppText className="text-[13px] font-semibold leading-5" style={{ color: THEME.accent }}>
-          {label}
-        </AppText>
-      </Pressable>
-    </View>
+      <AppText
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        className="text-[13px] font-semibold leading-5"
+        style={{
+          color: THEME.accent,
+          fontWeight: '600',
+          flexShrink: 1,
+          minWidth: 0,
+          ...(Platform.OS === 'web'
+            ? { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+            : null),
+        }}>
+        {label}
+      </AppText>
+    </Pressable>
   );
 }
 
