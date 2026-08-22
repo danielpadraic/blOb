@@ -105,21 +105,24 @@ function PostCardInner({
         borderWidth: highlighted ? 1.5 : 1,
         borderColor: highlighted ? THEME.accent : THEME.border,
       }}>
-      <View className="flex-row items-start" style={{ gap: 10 }}>
+      <View className="flex-row items-center" style={{ gap: 10 }}>
         <ProfileLink username={post.author?.username} userId={post.author_id}>
           <Avatar uri={post.author?.avatar_url} name={name} size={42} />
         </ProfileLink>
-        <View className="min-w-0 flex-1">
+        <View className="min-w-0 flex-1 justify-center">
           <ProfileLink username={post.author?.username} userId={post.author_id}>
-            <View className="flex-row flex-wrap items-baseline" style={{ gap: 6 }}>
+            <View className="flex-row items-center" style={{ gap: 6 }}>
               <AppText
-                className="font-semibold leading-5 text-charcoal"
-                style={{ fontSize: 16 }}
+                className="shrink font-semibold text-charcoal"
+                style={{ fontSize: 16, lineHeight: 20 }}
                 numberOfLines={1}>
                 {name}
               </AppText>
               <OfficialMark profile={post.author} compact />
-              <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={1}>
+              <AppText
+                className="shrink text-[13px]"
+                style={{ color: THEME.textMuted, lineHeight: 18 }}
+                numberOfLines={1}>
                 @{handle}
               </AppText>
             </View>
@@ -181,7 +184,7 @@ function PostCardInner({
         </Pressable>
       </View>
 
-      <View style={{ gap: 10, marginTop: 10 }}>
+      <View style={{ gap: 10, marginTop: 6 }}>
         {checkinComplete ? (
           <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
             Check-in Complete

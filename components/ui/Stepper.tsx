@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
@@ -13,6 +14,31 @@ type StepperProps = {
   formatValue?: (value: number) => string;
 };
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeDraft(raw: string, allowDecimal: boolean): string {
+  const next = raw.replace(allowDecimal ? /[^0-9.]/g : /[^0-9]/g, '');
+  if (!allowDecimal) {
+    return next;
+  }
+  const dot = next.indexOf('.');
+  if (dot === -1) {
+    return next;
+  }
+  return `${next.slice(0, dot + 1)}${next.slice(dot + 1).replace(/\./g, '')}`;
+}
+
+function parseDraft(raw: string, allowDecimal: boolean): number | null {
+  const cleaned = sanitizeDraft(raw, allowDecimal);
+  if (!cleaned || cleaned === '.') {
+    return null;
+  }
+  const parsed = allowDecimal ? Number(cleaned) : Number.parseInt(cleaned, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function Stepper({
   value,
   onChange,
@@ -22,10 +48,28 @@ export function Stepper({
   accessibilityLabel,
   formatValue,
 }: StepperProps) {
-  const safe = Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+  const allowDecimal = Boolean(formatValue);
+  const safe = clamp(Number.isFinite(value) ? value : min, min, max);
+  const [focused, setFocused] = useState(false);
+  const [draft, setDraft] = useState(String(safe));
+
+  useEffect(() => {
+    if (!focused) {
+      setDraft(String(safe));
+    }
+  }, [focused, safe]);
 
   function bump(delta: number) {
-    onChange(Math.min(max, Math.max(min, safe + delta)));
+    onChange(clamp(safe + delta, min, max));
+  }
+
+  function commit() {
+    const parsed = parseDraft(draft, allowDecimal);
+    if (parsed == null) {
+      setDraft(String(safe));
+      return;
+    }
+    onChange(clamp(parsed, min, max));
   }
 
   return (
@@ -50,9 +94,32 @@ export function Stepper({
         style={{ backgroundColor: THEME.background }}>
         <AppText className="text-[18px] font-bold text-charcoal">−</AppText>
       </Pressable>
-      <AppText className="min-w-[72px] text-center text-[16px] font-extrabold text-charcoal">
-        {formatValue ? formatValue(safe) : String(safe)}
-      </AppText>
+      <TextInput
+        accessibilityLabel={accessibilityLabel}
+        value={focused ? draft : formatValue ? formatValue(safe) : String(safe)}
+        onChangeText={(text) => setDraft(sanitizeDraft(text, allowDecimal))}
+        onFocus={() => {
+          setFocused(true);
+          setDraft(String(safe));
+        }}
+        onBlur={() => {
+          commit();
+          setFocused(false);
+        }}
+        onSubmitEditing={commit}
+        keyboardType={allowDecimal ? 'decimal-pad' : 'number-pad'}
+        inputMode={allowDecimal ? 'decimal' : 'numeric'}
+        selectTextOnFocus
+        textAlign="center"
+        style={{
+          minWidth: 72,
+          minHeight: 40,
+          paddingHorizontal: 4,
+          fontSize: 16,
+          fontWeight: '800',
+          color: THEME.textPrimary,
+        }}
+      />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Increase"
