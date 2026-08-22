@@ -466,7 +466,7 @@ export default function ChallengeDetailScreen() {
 
   const signupLines = signupProofLines(challenge);
   const hideBuyIn = isBucksChallenge(challenge) || Boolean(challenge.host_funded);
-  const startNeeded = userStartNeededLabel(challenge);
+  const startNeeded = userStartNeededLabel(challenge, competitorCount);
   const remainingNow = competitorCount;
   const goalLabel = challengeGoalLabel(challenge, {
     daysCompleted,
@@ -481,7 +481,7 @@ export default function ChallengeDetailScreen() {
   const startLine =
     waitingToStart
       ? startsInLabel(challenge, new Date(nowMs)) ??
-        userStartNeededLabel(challenge) ??
+        userStartNeededLabel(challenge, competitorCount) ??
         copy('challenge.waitingToStart')
       : null;
   const stickyJoin = !isJoined && (needsBodyMetrics || canJoin || needsTopUp);
@@ -496,7 +496,7 @@ export default function ChallengeDetailScreen() {
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
     (stickyJoin || stickyCheckin);
-  const tabClearance = tabBarLift(insets.bottom);
+  const tabClearance = tabBarLift(insets.bottom, 'sticky');
   const stickyBlock = showStickyCta ? JOIN_CTA_HEIGHT + 12 : 0;
 
   return (
