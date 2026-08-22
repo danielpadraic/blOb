@@ -74,9 +74,8 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
   if (hideDeleted) {
     query = query.is('deleted_at', null);
   }
-  if (select.includes('checkin_id') && scope.kind !== 'challenge') {
-    query = query.is('checkin_id', null);
-  }
+  // Check-in posts stay on Home when they match joined challenges / friends.
+  // Challenge detail still scopes by challenge_id + source.
   const hasSource = /(^|,\s*)source(,|$)/.test(select);
   if (scope.kind === 'challenge') {
     query = query.eq('challenge_id', scope.challengeId);

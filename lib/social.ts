@@ -42,7 +42,8 @@ export const CONVERSATION_MEMBER_COLUMNS =
   'conversation_id, user_id, joined_at, last_read_at';
 export const MESSAGE_COLUMNS = 'id, conversation_id, sender_id, body, media_url, created_at';
 export const CHALLENGE_FEED_COLUMNS =
-  'id, title, status, is_official, buy_in_amount, prize_pool, currency, cover_image_url, created_by';
+  'id, title, status, is_official, buy_in_amount, prize_pool, currency, cover_image_url, created_by, visibility';
+const CHALLENGE_FEED_COLUMNS_LANE = `${CHALLENGE_FEED_COLUMNS}, challenge_lane`;
 
 export type FollowEdge = Follow & { profile: PublicProfile | null };
 export type FriendEdge = Friendship & { profile: PublicProfile | null };
@@ -104,6 +105,8 @@ export type FeedChallengePreview = {
   currency: string | null;
   cover_image_url: string | null;
   created_by: string | null;
+  visibility?: string | null;
+  challenge_lane?: string | null;
 };
 
 export type FeedEventItem = FeedEvent & {
@@ -662,6 +665,13 @@ export async function fetchChallengePreviewsByIds(ids: string[]): Promise<FeedCh
   const unique = [...new Set(ids.filter(Boolean))];
   if (unique.length === 0) {
     return [];
+  }
+  const withLane = await supabase
+    .from('challenges')
+    .select(CHALLENGE_FEED_COLUMNS_LANE)
+    .in('id', unique);
+  if (!withLane.error) {
+    return (withLane.data ?? []) as FeedChallengePreview[];
   }
   const { data, error } = await supabase
     .from('challenges')

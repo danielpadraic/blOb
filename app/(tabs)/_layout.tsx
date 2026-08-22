@@ -6,6 +6,7 @@ import { BlobTabBar } from '@/components/navigation/BlobTabBar';
 import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
+import { closeMediaLightbox, MediaLightboxHost } from '@/components/feed/MediaLightbox';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
 import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
 import { InviteHost } from '@/components/challenge/InviteHost';
@@ -96,6 +97,7 @@ function TabLayoutInner() {
     setSearchOpen(false);
     setSheetOpen(false);
     closeSocialSheets();
+    closeMediaLightbox();
     wallet?.closeAll();
   }, [wallet]);
 
@@ -204,6 +206,7 @@ function TabLayoutInner() {
         style={{ overflow: friendsTabRoot ? 'visible' : 'hidden', minHeight: 0 }}>
         <InviteHost>
         <SocialSheetsHost>
+        <MediaLightboxHost>
         <Tabs
           tabBar={() => null}
           screenOptions={{
@@ -258,6 +261,7 @@ function TabLayoutInner() {
         />
         <HealthLogPromptHost />
         {onOnboarding ? null : <OfficialPitchHost />}
+        </MediaLightboxHost>
         </SocialSheetsHost>
         </InviteHost>
       </View>

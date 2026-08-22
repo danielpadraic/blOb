@@ -8,6 +8,7 @@ import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
+import { useMediaLightboxOptional } from '@/components/feed/MediaLightbox';
 import { MentionText } from '@/components/feed/MentionText';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
@@ -19,11 +20,12 @@ import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
+import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { useUpdatePostAudience } from '@/hooks/useFeed';
+import { checkinExtraCaption, isCheckinPost, postLocality } from '@/lib/checkinPost';
 import { PROOF_META } from '@/lib/constants';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
-import { challengeDetailHref } from '@/lib/routes';
 import { asPostAudience } from '@/lib/postAudience';
 import { supabase } from '@/lib/supabase';
 import { copy } from '@/lib/copy';
@@ -77,23 +79,24 @@ export function PostCard({
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
   const menuOpen = Boolean(social?.isOpenFor(post.id));
-  const composerPost =
+  const checkin = isCheckinPost(post);
+  const tagged = Boolean(post.challenge_id);
+  const hidePromoCard =
+    Boolean(challengeFeed) ||
+    checkin ||
     post.source === 'challenge' ||
-    post.source === 'checkin' ||
-    Boolean(challengeFeed && post.challenge_id);
-  const preview = useChallengeFeedPreview(composerPost ? post.challenge_id : undefined);
-  const inTitle = preview.data?.title?.trim();
-  const attribution = composerPost
-    ? inTitle
-      ? `@${handle} — in ${inTitle}`
-      : `@${handle}`
-    : `@${handle} · ${formatFeedTime(post.created_at)}${
-        post.wall_host
-          ? ` · ${copy('wall.onHost', 'neutral', {
-              name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
-            })}`
-          : ''
-      }`;
+    post.source === 'checkin';
+  const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
+  const challengeTitle = preview.data?.title?.trim() || null;
+  const city = postLocality(post);
+  const caption = checkin ? checkinExtraCaption(content, challengeTitle) : content;
+  const attribution = `@${handle} · ${formatFeedTime(post.created_at)}${
+    post.wall_host
+      ? ` · ${copy('wall.onHost', 'neutral', {
+          name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
+        })}`
+      : ''
+  }`;
 
   return (
     <Card
@@ -164,17 +167,39 @@ export function PostCard({
             </Pressable>
           </View>
 
-          {content ? (
+          {checkin && !challengeFeed && post.challenge_id ? (
+            <CheckinTagLine
+              challengeId={post.challenge_id}
+              title={challengeTitle}
+              visibility={preview.data?.visibility}
+              challengeLane={preview.data?.challenge_lane}
+              isOfficial={preview.data?.is_official}
+              createdBy={preview.data?.created_by}
+            />
+          ) : null}
+
+          {caption ? (
             <PostBody
-              content={content}
+              content={caption}
               mentions={post.mentions}
               expanded={expanded}
-              canExpand={canExpand}
+              canExpand={
+                checkin
+                  ? caption.length > BODY_COLLAPSE_CHARS ||
+                    caption.split('\n').length > BODY_COLLAPSE_LINES
+                  : canExpand
+              }
               onToggle={() => setExpanded((value) => !value)}
             />
           ) : null}
 
-          {post.challenge_id && !composerPost ? (
+          {city ? (
+            <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
+              {city}
+            </AppText>
+          ) : null}
+
+          {post.challenge_id && !hidePromoCard ? (
             <ChallengeShareCard challengeId={post.challenge_id} />
           ) : null}
 
@@ -190,7 +215,7 @@ export function PostCard({
             />
           ) : null}
 
-          <ProofMedia urls={post.media_urls ?? []} />
+          <ProofMedia urls={post.media_urls ?? []} proof={checkin} />
 
           <ReactionBar
             reactions={post.reactions}
@@ -295,18 +320,77 @@ function ProofFlagButton({ postId }: { postId: string }) {
   );
 }
 
-function ChallengeTitleLink({
+function CheckinTagLine({
   challengeId,
   title,
+  visibility,
+  challengeLane,
+  isOfficial,
+  createdBy,
 }: {
   challengeId: string;
   title?: string | null;
+  visibility?: string | null;
+  challengeLane?: string | null;
+  isOfficial?: boolean | null;
+  createdBy?: string | null;
 }) {
-  const router = useRouter();
+  const openTag = useOpenChallengeFromTag();
+  const label = title?.trim() || 'Challenge';
+  return (
+    <View className="flex-row flex-wrap items-center">
+      <AppText className="text-[14px] leading-5" style={{ color: THEME.textMuted }}>
+        {copy('feed.checkedIn')}{' '}
+      </AppText>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`@${label}`}
+        onPress={() =>
+          void openTag({
+            challengeId,
+            visibility,
+            challenge_lane: challengeLane,
+            is_official: isOfficial,
+            created_by: createdBy,
+          })
+        }
+        hitSlop={4}>
+        <AppText className="text-[14px] font-semibold leading-5" style={{ color: THEME.accent }}>
+          @{label}
+        </AppText>
+      </Pressable>
+    </View>
+  );
+}
+
+function ChallengeTitleLink({
+  challengeId,
+  title,
+  visibility,
+  challengeLane,
+  isOfficial,
+  createdBy,
+}: {
+  challengeId: string;
+  title?: string | null;
+  visibility?: string | null;
+  challengeLane?: string | null;
+  isOfficial?: boolean | null;
+  createdBy?: string | null;
+}) {
+  const openTag = useOpenChallengeFromTag();
   return (
     <AppText
       accessibilityRole="link"
-      onPress={() => router.push(challengeDetailHref(challengeId, 'feed'))}
+      onPress={() =>
+        void openTag({
+          challengeId,
+          visibility,
+          challenge_lane: challengeLane,
+          is_official: isOfficial,
+          created_by: createdBy,
+        })
+      }
       className="text-[14px] font-extrabold leading-5"
       style={{ color: THEME.accent }}>
       {title?.trim() || 'View challenge'}
@@ -323,22 +407,26 @@ function GeoUnavailable() {
 }
 
 function ChallengeShareCard({ challengeId }: { challengeId: string }) {
-  const router = useRouter();
+  const openTag = useOpenChallengeFromTag();
   const share = useChallengeShareState(challengeId);
   const preview = useChallengeFeedPreview(challengeId);
+  const card = preview.data;
   if (share.data?.reason === 'geo') {
     return <GeoUnavailable />;
   }
   if (share.data?.reason === 'hidden') {
     return null;
   }
-  if (preview.data) {
-    return (
-      <ChallengeFeedCard
-        challenge={preview.data}
-        onPress={() => router.push(challengeDetailHref(challengeId, 'feed'))}
-      />
-    );
+  const open = () =>
+    void openTag({
+      challengeId,
+      visibility: card?.visibility,
+      challenge_lane: card?.challenge_lane,
+      is_official: card?.is_official,
+      created_by: card?.created_by,
+    });
+  if (card) {
+    return <ChallengeFeedCard challenge={card} onPress={open} />;
   }
   if (share.data?.reason === 'ok') {
     return <ChallengeTitleLink challengeId={challengeId} title={share.data.title} />;
@@ -409,15 +497,21 @@ function MediaFrame({
   height,
   radius,
   label,
+  onPress,
 }: {
   uri: string;
   height: number;
   radius: number;
   label?: string;
+  onPress?: () => void;
 }) {
   const kind = mediaKind(uri);
   return (
-    <View
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={label ? `Open ${label}` : 'Open photo'}
+      disabled={!onPress}
+      onPress={onPress}
       style={{
         height,
         width: '100%',
@@ -443,17 +537,17 @@ function MediaFrame({
             position: 'absolute',
             left: 6,
             bottom: 6,
-            backgroundColor: 'rgba(16, 19, 18, 0.72)',
-            borderRadius: 999,
+            backgroundColor: THEME.accentSoft,
+            borderRadius: 8,
             paddingHorizontal: 7,
             paddingVertical: 3,
           }}>
-          <AppText className="text-[9px] font-bold" style={{ color: '#fff' }}>
+          <AppText className="text-[9px] font-bold" style={{ color: THEME.accent }}>
             {label}
           </AppText>
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -472,7 +566,8 @@ function PostVideo({ uri }: { uri: string }) {
   );
 }
 
-function ProofMedia({ urls }: { urls: string[] }) {
+function ProofMedia({ urls, proof }: { urls: string[]; proof?: boolean }) {
+  const lightbox = useMediaLightboxOptional();
   const items = urls.filter(Boolean);
   if (items.length === 0) {
     return null;
@@ -486,13 +581,27 @@ function ProofMedia({ urls }: { urls: string[] }) {
     const kind = mediaKind(url);
     return kind !== 'image' && kind !== 'video';
   });
-  const labels = visuals.length === 3 ? PROOF_LABELS : undefined;
+  const labels = proof || visuals.length === 3 ? PROOF_LABELS.slice(0, visuals.length) : undefined;
   const columns = imageColumns(visuals.length);
+  const lightboxItems = visuals.map((uri, index) => ({
+    uri,
+    label: labels?.[index],
+  }));
+
+  function openAt(index: number) {
+    lightbox?.openLightbox(lightboxItems, index);
+  }
 
   return (
     <View className="gap-1.5">
       {visuals.length === 1 ? (
-        <MediaFrame uri={visuals[0]} height={SINGLE_IMAGE_HEIGHT} radius={14} />
+        <MediaFrame
+          uri={visuals[0]}
+          height={SINGLE_IMAGE_HEIGHT}
+          radius={14}
+          label={labels?.[0]}
+          onPress={lightbox ? () => openAt(0) : undefined}
+        />
       ) : visuals.length > 1 ? (
         <View className="gap-1.5">
           {chunk(visuals, columns).map((row, rowIndex) => (
@@ -506,6 +615,7 @@ function ProofMedia({ urls }: { urls: string[] }) {
                       height={TILE_HEIGHT}
                       radius={12}
                       label={labels?.[itemIndex]}
+                      onPress={lightbox ? () => openAt(itemIndex) : undefined}
                     />
                   </View>
                 );

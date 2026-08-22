@@ -98,6 +98,9 @@ const STRINGS = {
   'lobby.friendsJoined': '{name} joined',
   'create.friendsOfFriends': 'Visible to friends of friends',
   'geo.unavailable': 'Sorry, this Challenge isn’t available in your State.',
+  'challenge.privateWallTitle': 'Private challenge',
+  'challenge.privateWall': 'This is a private challenge. Only competitors can open it.',
+  'feed.checkedIn': 'Checked in ·',
   'friends.loading': {
     gentle: 'Finding your people.',
     neutral: 'Finding your people.',
