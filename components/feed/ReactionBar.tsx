@@ -1,20 +1,33 @@
-import { useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Platform, Pressable, StyleSheet, Vibration, View } from 'react-native';
 
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { THEME } from '@/lib/theme';
+import {
+  POST_REACTION_COLORS,
+  POST_REACTION_TYPES,
+  asReactionType,
+  userReaction,
+  type PostReactionType,
+} from '@/lib/reactions';
+import { THEME, themeShadow } from '@/lib/theme';
 import type { Reaction, ReactionType } from '@/lib/types';
+import { formatFeedTime } from '@/utils/format';
 
-const LIKE_ACTIVE = '#D24A5A';
-const FIRE = '#E86A17';
-const FIRE_ACTIVE = '#D4550A';
+const REACTION_GLYPH: Record<PostReactionType, GlyphId> = {
+  like: GLYPH.like,
+  love: GLYPH.love,
+  care: GLYPH.care,
+  fire: GLYPH.fire,
+  sad: GLYPH.sad,
+};
 
 type ReactionBarProps = {
   reactions?: Reaction[];
   currentUserId?: string;
   commentCount?: number;
   compact?: boolean;
+  createdAt?: string;
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
   onShare?: (anchor: { x: number; y: number; width: number; height: number }) => void;
@@ -25,57 +38,176 @@ export function ReactionBar({
   currentUserId,
   commentCount = 0,
   compact = false,
+  createdAt,
   onReact,
   onReply,
   onShare,
 }: ReactionBarProps) {
-  const likeCount = reactions?.filter((reaction) => reaction.reaction_type === 'like').length ?? 0;
-  const fireCount = reactions?.filter((reaction) => reaction.reaction_type === 'fire').length ?? 0;
-  const liked = Boolean(
-    reactions?.some(
-      (reaction) => reaction.reaction_type === 'like' && reaction.user_id === currentUserId,
-    ),
-  );
-  const fired = Boolean(
-    reactions?.some(
-      (reaction) => reaction.reaction_type === 'fire' && reaction.user_id === currentUserId,
-    ),
-  );
+  const [trayOpen, setTrayOpen] = useState(false);
+  const mine = userReaction(reactions, currentUserId);
+  const mineType = mine ? asReactionType(mine.reaction_type) : null;
+  const total = reactions?.length ?? 0;
+
+  if (compact) {
+    return (
+      <View className="flex-row items-center" style={{ columnGap: 2 }}>
+        <Action
+          compact
+          icon={mineType ? REACTION_GLYPH[mineType] : GLYPH.likeOutline}
+          label="Like"
+          count={total}
+          color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
+          onPress={() => onReact('like')}
+        />
+        {onReply ? (
+          <Action
+            compact
+            icon={GLYPH.reply}
+            label="Reply"
+            count={commentCount}
+            color={THEME.textMuted}
+            onPress={onReply}
+          />
+        ) : null}
+        {onShare ? (
+          <View className="flex-1 items-end">
+            <ShareAction compact onShare={onShare} />
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
+  const commentLabel =
+    commentCount === 1 ? '1 comment' : commentCount > 1 ? `${commentCount} comments` : 'Comment';
 
   return (
-    <View className="flex-row items-center" style={{ columnGap: compact ? 2 : 4 }}>
-      <Action
-        compact={compact}
-        icon={liked ? GLYPH.like : GLYPH.likeOutline}
-        label="Like"
-        count={likeCount}
-        color={liked ? LIKE_ACTIVE : THEME.textMuted}
-        onPress={() => onReact('like')}
-      />
-      <Action
-        compact={compact}
-        icon={GLYPH.fire}
-        label="Fire"
-        count={fireCount}
-        color={fired ? FIRE_ACTIVE : FIRE}
-        onPress={() => onReact('fire')}
-      />
-      {onReply ? (
-        <Action
-          compact={compact}
-          icon={GLYPH.reply}
-          label="Reply"
-          count={commentCount}
-          color={THEME.textMuted}
-          onPress={onReply}
+    <View>
+      {trayOpen ? (
+        <ReactionTray
+          selected={mineType}
+          onPick={(type) => {
+            setTrayOpen(false);
+            onReact(type);
+          }}
         />
       ) : null}
-      {onShare ? (
-        <View className="flex-1 items-end">
-          <ShareAction compact={compact} onShare={onShare} />
-        </View>
-      ) : null}
+      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: THEME.border, marginBottom: 10 }} />
+      <View className="flex-row items-center">
+        <AppText className="flex-1 text-[13px]" style={{ color: THEME.textMuted }}>
+          {createdAt ? footerTime(createdAt) : ''}
+        </AppText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={total > 0 ? `Like ${total}` : 'Like'}
+          delayLongPress={280}
+          hitSlop={8}
+          onPress={() => {
+            if (trayOpen) {
+              setTrayOpen(false);
+              return;
+            }
+            onReact('like');
+          }}
+          onLongPress={() => {
+            if (Platform.OS !== 'web') {
+              Vibration.vibrate(10);
+            }
+            setTrayOpen(true);
+          }}
+          className="h-9 flex-row items-center px-1.5">
+          <Glyph
+            name={mineType ? REACTION_GLYPH[mineType] : GLYPH.likeOutline}
+            color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
+            size={18}
+          />
+          {total > 0 ? (
+            <AppText className="ml-1 text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
+              {total}
+            </AppText>
+          ) : null}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={commentLabel}
+          hitSlop={8}
+          onPress={onReply}
+          className="h-9 flex-row items-center px-1.5">
+          <Glyph name={GLYPH.reply} color={THEME.textMuted} size={16} />
+          <AppText className="ml-1 text-[13px]" style={{ color: THEME.textMuted }}>
+            {commentLabel}
+          </AppText>
+        </Pressable>
+      </View>
     </View>
+  );
+}
+
+function footerTime(date: string): string {
+  const short = formatFeedTime(date);
+  if (/^\d+[hm]$/.test(short)) {
+    return `${short} ago`;
+  }
+  return short;
+}
+
+function ReactionTray({
+  selected,
+  onPick,
+}: {
+  selected: PostReactionType | null;
+  onPick: (type: PostReactionType) => void;
+}) {
+  const scale = useRef(new Animated.Value(0.86)).current;
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, friction: 7, tension: 120, useNativeDriver: true }).start();
+  }, [scale]);
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ scale }],
+        alignSelf: 'flex-end',
+        marginBottom: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: THEME.surface,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        borderRadius: 22,
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+        ...themeShadow('card'),
+      }}>
+      {POST_REACTION_TYPES.map((type) => {
+        const active = selected === type;
+        return (
+          <Pressable
+            key={type}
+            accessibilityRole="button"
+            accessibilityLabel={type}
+            onPress={() => onPick(type)}
+            {...(Platform.OS === 'web'
+              ? {
+                  onMouseDown: (event: { preventDefault: () => void }) => {
+                    event.preventDefault();
+                  },
+                }
+              : null)}
+            style={{
+              minHeight: 40,
+              minWidth: 40,
+              paddingHorizontal: 8,
+              borderRadius: 999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: active ? THEME.accentSoft : 'transparent',
+            }}>
+            <Glyph name={REACTION_GLYPH[type]} color={POST_REACTION_COLORS[type]} size={20} />
+          </Pressable>
+        );
+      })}
+    </Animated.View>
   );
 }
 

@@ -917,7 +917,8 @@ type ToggleReactionInput = {
 
 type ToggleReactionResult =
   | { action: 'removed' }
-  | { action: 'added'; reaction: Reaction };
+  | { action: 'added'; reaction: Reaction }
+  | { action: 'updated'; reaction: Reaction };
 
 export function useToggleReaction() {
   const { user } = useAuth();
@@ -928,14 +929,27 @@ export function useToggleReaction() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      const existing = findExistingReaction(input.post, user.id, input.type, input.commentId);
+      const existing = findUserReaction(input.post, user.id, input.commentId);
 
-      if (existing && isPersistedId(existing.id)) {
+      if (existing && isPersistedId(existing.id) && existing.reaction_type === input.type) {
         const { error } = await supabase.from('reactions').delete().eq('id', existing.id);
         if (error) {
           throw new Error(getErrorMessage(error));
         }
         return { action: 'removed' };
+      }
+
+      if (existing && isPersistedId(existing.id)) {
+        const updated = await supabase
+          .from('reactions')
+          .update({ reaction_type: input.type })
+          .eq('id', existing.id)
+          .select(REACTION_COLUMNS)
+          .single();
+        if (updated.error) {
+          throw new Error(getErrorMessage(updated.error));
+        }
+        return { action: 'updated', reaction: updated.data as Reaction };
       }
 
       const inserted = input.commentId
@@ -978,12 +992,12 @@ export function useToggleReaction() {
       return { previous };
     },
     onSuccess: (result, input) => {
-      if (!user || result.action !== 'added') {
+      if (!user || result.action === 'removed') {
         return;
       }
       const optimisticId = optimisticReactionId(input.type, input.commentId ?? input.post.id, user.id);
       patchFeedPosts(queryClient, input.post.id, (post) =>
-        replaceReactionId(post, optimisticId, result.reaction, input.commentId),
+        replaceReactionId(post, optimisticId, result.reaction, input.commentId, user.id),
       );
     },
     onError: (_error, _variables, context) => {
@@ -997,7 +1011,7 @@ export function useToggleReaction() {
   return {
     ...mutation,
     mutate(input: ToggleReactionInput) {
-      const guard = `${input.post.id}:${input.commentId ?? ''}:${input.type}`;
+      const guard = `${input.post.id}:${input.commentId ?? ''}`;
       if (inflight.current.has(guard)) {
         return;
       }
@@ -1042,18 +1056,15 @@ function patchFeedPosts(
   });
 }
 
-function findExistingReaction(
+function findUserReaction(
   post: PostWithMeta,
   userId: string,
-  type: ReactionType,
   commentId?: string | null,
 ): Reaction | undefined {
   const pool = commentId
     ? post.comments?.find((comment) => comment.id === commentId)?.reactions
     : post.reactions;
-  return pool?.find(
-    (reaction) => reaction.user_id === userId && reaction.reaction_type === type,
-  );
+  return pool?.find((reaction) => reaction.user_id === userId);
 }
 
 function applyOptimisticReaction(
@@ -1085,11 +1096,14 @@ function toggleReactionList(
   postId: string | null,
   commentId: string | null,
 ): Reaction[] {
-  const existing = current.find(
-    (reaction) => reaction.user_id === userId && reaction.reaction_type === type,
-  );
-  if (existing) {
+  const existing = current.find((reaction) => reaction.user_id === userId);
+  if (existing && existing.reaction_type === type) {
     return current.filter((reaction) => reaction.id !== existing.id);
+  }
+  if (existing) {
+    return current.map((reaction) =>
+      reaction.user_id === userId ? { ...reaction, reaction_type: type } : reaction,
+    );
   }
   return [
     ...current,
@@ -1109,22 +1123,25 @@ function replaceReactionId(
   optimisticId: string,
   reaction: Reaction,
   commentId?: string | null,
+  userId?: string,
 ): PostWithMeta {
+  function swap(list: Reaction[]) {
+    const byOptimistic = list.some((row) => row.id === optimisticId);
+    if (byOptimistic) {
+      return list.map((row) => (row.id === optimisticId ? reaction : row));
+    }
+    if (userId) {
+      return list.map((row) => (row.user_id === userId ? reaction : row));
+    }
+    return list;
+  }
   if (!commentId) {
-    return {
-      ...post,
-      reactions: (post.reactions ?? []).map((row) => (row.id === optimisticId ? reaction : row)),
-    };
+    return { ...post, reactions: swap(post.reactions ?? []) };
   }
   return {
     ...post,
     comments: (post.comments ?? []).map((comment) =>
-      comment.id === commentId
-        ? {
-            ...comment,
-            reactions: (comment.reactions ?? []).map((row) => (row.id === optimisticId ? reaction : row)),
-          }
-        : comment,
+      comment.id === commentId ? { ...comment, reactions: swap(comment.reactions ?? []) } : comment,
     ),
   };
 }

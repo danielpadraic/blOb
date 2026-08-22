@@ -193,7 +193,7 @@ export interface WalletLedgerEntry {
   created_at: string;
 }
 
-export type ReactionType = 'like' | 'fire' | 'strong';
+export type ReactionType = 'like' | 'love' | 'care' | 'fire' | 'sad';
 
 export interface ProofRequirement {
   type: ProofType;

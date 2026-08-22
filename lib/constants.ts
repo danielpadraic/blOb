@@ -56,8 +56,10 @@ export const REACTION_META: Record<
   { label: string; glyph: string }
 > = {
   like: { label: 'Like', glyph: '♥' },
+  love: { label: 'Love', glyph: '♡' },
+  care: { label: 'Care', glyph: '☺' },
   fire: { label: 'Fire', glyph: '🔥' },
-  strong: { label: 'Strong', glyph: '◆' },
+  sad: { label: 'Sad', glyph: '·' },
 };
 
 export const PROOF_TYPES = ['pre_selfie', 'post_selfie', 'hr_monitor'] as const;

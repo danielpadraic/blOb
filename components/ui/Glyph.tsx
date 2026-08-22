@@ -15,6 +15,8 @@ export function Glyph({ name, color, size = 18 }: GlyphProps) {
 export const GLYPH = {
   like: { ios: 'heart.fill', android: 'favorite', web: 'favorite' },
   love: { ios: 'heart.circle.fill', android: 'favorite', web: 'favorite' },
+  care: { ios: 'face.smiling.fill', android: 'sentiment_satisfied', web: 'sentiment_satisfied' },
+  sad: { ios: 'cloud.rain.fill', android: 'sentiment_dissatisfied', web: 'sentiment_dissatisfied' },
   strong: { ios: 'hand.thumbsup.fill', android: 'thumb_up', web: 'thumb_up' },
   likeOutline: { ios: 'heart', android: 'favorite_border', web: 'favorite_border' },
   fire: { ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' },

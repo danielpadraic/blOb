@@ -32,7 +32,6 @@ import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
-import { formatFeedTime } from '@/utils/format';
 import { displayUrl, mediaKind } from '@/utils/media';
 
 const BODY_COLLAPSE_LINES = 4;
@@ -90,85 +89,39 @@ export function PostCard({
   const challengeTitle = preview.data?.title?.trim() || null;
   const city = postLocality(post);
   const caption = checkin ? checkinExtraCaption(content, challengeTitle) : content;
-  const attribution = `@${handle} · ${formatFeedTime(post.created_at)}${
-    post.wall_host
-      ? ` · ${copy('wall.onHost', 'neutral', {
-          name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
-        })}`
-      : ''
-  }`;
+  const showInLine = Boolean(tagged && !challengeFeed && hidePromoCard);
 
   return (
     <Card
       padded={false}
       style={{
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-        borderWidth: highlighted ? 1.5 : 0,
-        borderColor: highlighted ? THEME.accent : 'transparent',
+        paddingHorizontal: 15,
+        paddingVertical: 15,
+        borderRadius: THEME.radius,
+        borderWidth: highlighted ? 1.5 : 1,
+        borderColor: highlighted ? THEME.accent : THEME.border,
       }}>
-      <View className="flex-row items-start gap-2.5">
+      <View className="flex-row items-start" style={{ gap: 10 }}>
         <ProfileLink username={post.author?.username} userId={post.author_id}>
-          <Avatar uri={post.author?.avatar_url} name={name} size={42} radius={14} />
+          <Avatar uri={post.author?.avatar_url} name={name} size={42} />
         </ProfileLink>
-
-        <View className="min-w-0 flex-1" style={{ gap: 8 }}>
-          <View className="flex-row items-start gap-2">
-            <View className="min-w-0 flex-1">
-              <ProfileLink username={post.author?.username} userId={post.author_id}>
-                <View className="flex-row items-center gap-1">
-                  <AppText className="text-[14px] font-extrabold leading-5 text-charcoal" numberOfLines={1}>
-                    {name}
-                  </AppText>
-                  <OfficialMark profile={post.author} compact />
-                </View>
-              </ProfileLink>
-              <AppText className="text-[11px] leading-4 text-muted" numberOfLines={2}>
-                {attribution}
+        <View className="min-w-0 flex-1">
+          <ProfileLink username={post.author?.username} userId={post.author_id}>
+            <View className="flex-row flex-wrap items-baseline" style={{ gap: 6 }}>
+              <AppText
+                className="font-semibold leading-5 text-charcoal"
+                style={{ fontSize: 16 }}
+                numberOfLines={1}>
+                {name}
+              </AppText>
+              <OfficialMark profile={post.author} compact />
+              <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={1}>
+                @{handle}
               </AppText>
             </View>
-            {hideAudience || post.checkin_id ? null : currentUserId && currentUserId === post.author_id ? (
-              <AudienceIconButton
-                audience={audience}
-                onPress={() =>
-                  social?.openAudience({
-                    audience,
-                    audienceUserIds: post.audience_user_ids ?? [],
-                    onSave: async (next, ids) => {
-                      await updateAudience.mutateAsync({
-                        postId: post.id,
-                        audience: next,
-                        audienceUserIds: ids,
-                      });
-                    },
-                  })
-                }
-              />
-            ) : (
-              <AudienceIconButton audience={audience} />
-            )}
-            {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
-              <ProofFlagButton postId={post.id} />
-            ) : null}
-            <Pressable
-              ref={moreRef}
-              accessibilityRole="button"
-              accessibilityLabel="Post menu"
-              accessibilityState={{ expanded: menuOpen }}
-              hitSlop={8}
-              collapsable={false}
-              onPress={() => {
-                moreRef.current?.measureInWindow((x, y, width, height) => {
-                  social?.toggleOverflow(post, { x, y, width, height });
-                });
-              }}
-              className="h-11 w-11 items-center justify-center">
-              <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
-            </Pressable>
-          </View>
-
-          {checkin && !challengeFeed && post.challenge_id ? (
-            <CheckinTagLine
+          </ProfileLink>
+          {showInLine && post.challenge_id ? (
+            <InChallengeLine
               challengeId={post.challenge_id}
               title={challengeTitle}
               visibility={preview.data?.visibility}
@@ -176,98 +129,140 @@ export function PostCard({
               isOfficial={preview.data?.is_official}
               createdBy={preview.data?.created_by}
             />
-          ) : null}
-
-          {caption ? (
-            <PostBody
-              content={caption}
-              mentions={post.mentions}
-              expanded={expanded}
-              canExpand={
-                checkin
-                  ? caption.length > BODY_COLLAPSE_CHARS ||
-                    caption.split('\n').length > BODY_COLLAPSE_LINES
-                  : canExpand
-              }
-              onToggle={() => setExpanded((value) => !value)}
-            />
-          ) : null}
-
-          {city ? (
-            <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
-              {city}
+          ) : post.wall_host ? (
+            <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={1}>
+              {copy('wall.onHost', 'neutral', {
+                name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
+              })}
             </AppText>
           ) : null}
-
-          {post.challenge_id && !hidePromoCard ? (
-            <ChallengeShareCard challengeId={post.challenge_id} />
-          ) : null}
-
-          {quote ? (
-            <QuoteEmbed
-              snapshot={quote}
-              audience={quote.audience ?? post.audience}
-              onPress={() => {
-                if (post.quoted_post_id) {
-                  router.push(postHref(post.quoted_post_id));
-                }
-              }}
-            />
-          ) : null}
-
-          <ProofMedia urls={post.media_urls ?? []} proof={checkin} />
-
-          <ReactionBar
-            reactions={post.reactions}
-            currentUserId={currentUserId}
-            commentCount={comments.length}
-            onReact={(type) => onReact(type)}
-            onReply={onComment ? () => setShowComposer((value) => !value) : undefined}
-            onShare={(anchor) => social?.openShare(post, anchor)}
-          />
-
-          {showComposer && onComment ? (
-            <View>
-              <InlineComposer
-                placeholder="Write a reply…"
-                submitting={commenting}
-                audience={audience}
-                audienceUserIds={post.audience_user_ids ?? []}
-                replyTo={
-                  post.author
-                    ? {
-                        userId: post.author_id,
-                        username: handle,
-                        label: name,
-                      }
-                    : null
-                }
-                onSubmit={async (text, mentionedUserIds) => {
-                  try {
-                    await onComment(text, null, mentionedUserIds);
-                    setShowComposer(false);
-                  } catch (error) {
-                    Alert.alert('Couldn’t post that reply', getErrorMessage(error));
-                  }
-                }}
-              />
-            </View>
-          ) : null}
-
-          {comments.length > 0 ? (
-            <View>
-              <CommentThread
-                comments={comments}
-                currentUserId={currentUserId}
-                composing={commenting}
-                audience={audience}
-                audienceUserIds={post.audience_user_ids ?? []}
-                onReply={onComment ?? (async () => undefined)}
-                onReact={(commentId, type) => onReact(type, commentId)}
-              />
-            </View>
-          ) : null}
         </View>
+        {hideAudience || post.checkin_id ? null : currentUserId && currentUserId === post.author_id ? (
+          <AudienceIconButton
+            audience={audience}
+            onPress={() =>
+              social?.openAudience({
+                audience,
+                audienceUserIds: post.audience_user_ids ?? [],
+                onSave: async (next, ids) => {
+                  await updateAudience.mutateAsync({
+                    postId: post.id,
+                    audience: next,
+                    audienceUserIds: ids,
+                  });
+                },
+              })
+            }
+          />
+        ) : (
+          <AudienceIconButton audience={audience} />
+        )}
+        {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
+          <ProofFlagButton postId={post.id} />
+        ) : null}
+        <Pressable
+          ref={moreRef}
+          accessibilityRole="button"
+          accessibilityLabel="Post menu"
+          accessibilityState={{ expanded: menuOpen }}
+          hitSlop={8}
+          collapsable={false}
+          onPress={() => {
+            moreRef.current?.measureInWindow((x, y, width, height) => {
+              social?.toggleOverflow(post, { x, y, width, height });
+            });
+          }}
+          className="h-11 w-11 items-center justify-center">
+          <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
+        </Pressable>
+      </View>
+
+      <View style={{ gap: 10, marginTop: 10 }}>
+        {caption ? (
+          <PostBody
+            content={caption}
+            mentions={post.mentions}
+            expanded={expanded}
+            canExpand={
+              checkin
+                ? caption.length > BODY_COLLAPSE_CHARS ||
+                  caption.split('\n').length > BODY_COLLAPSE_LINES
+                : canExpand
+            }
+            onToggle={() => setExpanded((value) => !value)}
+          />
+        ) : null}
+
+        {city ? (
+          <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
+            {city}
+          </AppText>
+        ) : null}
+
+        {post.challenge_id && !hidePromoCard ? (
+          <ChallengeShareCard challengeId={post.challenge_id} />
+        ) : null}
+
+        {quote ? (
+          <QuoteEmbed
+            snapshot={quote}
+            audience={quote.audience ?? post.audience}
+            onPress={() => {
+              if (post.quoted_post_id) {
+                router.push(postHref(post.quoted_post_id));
+              }
+            }}
+          />
+        ) : null}
+
+        <ProofMedia urls={post.media_urls ?? []} proof={checkin} />
+
+        <ReactionBar
+          createdAt={post.created_at}
+          reactions={post.reactions}
+          currentUserId={currentUserId}
+          commentCount={comments.length}
+          onReact={(type) => onReact(type)}
+          onReply={onComment ? () => setShowComposer((value) => !value) : undefined}
+        />
+
+        {showComposer && onComment ? (
+          <InlineComposer
+            placeholder="Write a reply…"
+            submitting={commenting}
+            audience={audience}
+            audienceUserIds={post.audience_user_ids ?? []}
+            replyTo={
+              post.author
+                ? {
+                    userId: post.author_id,
+                    username: handle,
+                    label: name,
+                  }
+                : null
+            }
+            onSubmit={async (text, mentionedUserIds) => {
+              try {
+                await onComment(text, null, mentionedUserIds);
+                setShowComposer(false);
+              } catch (error) {
+                Alert.alert('Couldn’t post that reply', getErrorMessage(error));
+              }
+            }}
+          />
+        ) : null}
+
+        {comments.length > 0 ? (
+          <CommentThread
+            comments={comments}
+            currentUserId={currentUserId}
+            composing={commenting}
+            audience={audience}
+            audienceUserIds={post.audience_user_ids ?? []}
+            onReply={onComment ?? (async () => undefined)}
+            onReact={(commentId, type) => onReact(type, commentId)}
+          />
+        ) : null}
       </View>
     </Card>
   );
@@ -327,7 +322,7 @@ function ProofFlagButton({ postId }: { postId: string }) {
   );
 }
 
-function CheckinTagLine({
+function InChallengeLine({
   challengeId,
   title,
   visibility,
@@ -343,15 +338,15 @@ function CheckinTagLine({
   createdBy?: string | null;
 }) {
   const openTag = useOpenChallengeFromTag();
-  const label = title?.trim() || 'Challenge';
+  const label = title?.trim() || 'this challenge';
   return (
     <View className="flex-row flex-wrap items-center">
-      <AppText className="text-[14px] leading-5" style={{ color: THEME.textMuted }}>
-        {copy('feed.checkedIn')}{' '}
+      <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+        in{' '}
       </AppText>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel={`@${label}`}
+        accessibilityLabel={label}
         onPress={() =>
           void openTag({
             challengeId,
@@ -362,8 +357,8 @@ function CheckinTagLine({
           })
         }
         hitSlop={4}>
-        <AppText className="text-[14px] font-semibold leading-5" style={{ color: THEME.accent }}>
-          @{label}
+        <AppText className="text-[13px] font-semibold leading-5" style={{ color: THEME.accent }}>
+          {label}
         </AppText>
       </Pressable>
     </View>
@@ -532,28 +527,11 @@ function MediaFrame({
         <Image
           source={{ uri }}
           style={{ width: '100%', height: '100%' }}
-          contentFit="contain"
+          contentFit="cover"
           contentPosition="center"
           recyclingKey={uri}
         />
       )}
-      {label ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: 6,
-            bottom: 6,
-            backgroundColor: THEME.accentSoft,
-            borderRadius: 8,
-            paddingHorizontal: 7,
-            paddingVertical: 3,
-          }}>
-          <AppText className="text-[9px] font-bold" style={{ color: THEME.accent }}>
-            {label}
-          </AppText>
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -567,7 +545,7 @@ function PostVideo({ uri }: { uri: string }) {
     <VideoView
       player={player}
       style={{ width: '100%', height: '100%', backgroundColor: THEME.surface }}
-      contentFit="contain"
+      contentFit="cover"
       nativeControls
     />
   );
@@ -600,19 +578,18 @@ function ProofMedia({ urls, proof }: { urls: string[]; proof?: boolean }) {
   }
 
   return (
-    <View className="gap-1.5">
+    <View style={{ gap: 6 }}>
       {visuals.length === 1 ? (
         <MediaFrame
           uri={visuals[0]}
           height={SINGLE_IMAGE_HEIGHT}
           radius={14}
-          label={labels?.[0]}
           onPress={lightbox ? () => openAt(0) : undefined}
         />
       ) : visuals.length > 1 ? (
-        <View className="gap-1.5">
+        <View style={{ gap: 6 }}>
           {chunk(visuals, columns).map((row, rowIndex) => (
-            <View key={`row-${rowIndex}`} className="flex-row gap-1.5">
+            <View key={`row-${rowIndex}`} className="flex-row" style={{ gap: 6 }}>
               {row.map((uri, index) => {
                 const itemIndex = rowIndex * columns + index;
                 return (
@@ -621,7 +598,6 @@ function ProofMedia({ urls, proof }: { urls: string[]; proof?: boolean }) {
                       uri={uri}
                       height={TILE_HEIGHT}
                       radius={12}
-                      label={labels?.[itemIndex]}
                       onPress={lightbox ? () => openAt(itemIndex) : undefined}
                     />
                   </View>
