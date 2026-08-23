@@ -4,6 +4,12 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
+import {
+  ChallengeTypeBadge,
+  ChallengeTypePlaceholder,
+  ChallengeTypeTip,
+  useChallengeTypeTip,
+} from '@/components/challenge/ChallengeTypeIcon';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { Avatar } from '@/components/ui/Avatar';
@@ -253,6 +259,7 @@ export function ChallengeInviteCard({
   const [joining, setJoining] = useState(false);
   const joinSheet = useJoinConfirm();
   const openTag = useOpenChallengeFromTag();
+  const typeTip = useChallengeTypeTip();
 
   useEffect(() => {
     if (!ticking) {
@@ -341,7 +348,14 @@ export function ChallengeInviteCard({
         ...(official ? null : themeShadow('card')),
       }}>
       <View style={{ width: '38%', paddingVertical: 8, paddingLeft: 8 }}>
-        <MediaPanel steps={mediaSteps} visual={visual} title={challenge.title} />
+        <MediaPanel
+          steps={mediaSteps}
+          visual={visual}
+          title={challenge.title}
+          category={challenge.category}
+          typeTipOpen={typeTip.open}
+          onTypePress={typeTip.show}
+        />
       </View>
       <View
         className="min-w-0 flex-1"
@@ -506,10 +520,16 @@ function MediaPanel({
   steps,
   visual,
   title,
+  category,
+  typeTipOpen,
+  onTypePress,
 }: {
   steps: InviteMedia[];
   visual: InviteVisualTheme;
   title: string;
+  category?: string | null;
+  typeTipOpen: boolean;
+  onTypePress: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const key = steps.map((step) => (step.kind === 'photo' || step.kind === 'sponsor' ? step.uri : step.kind)).join('|');
@@ -541,6 +561,7 @@ function MediaPanel({
             source={{ uri: resolved.uri }}
             style={{ width: '100%', height: '100%' }}
             contentFit="cover"
+            contentPosition="center"
             cachePolicy="memory-disk"
             onError={failThrough}
             accessibilityLabel={`${title} cover`}
@@ -558,6 +579,8 @@ function MediaPanel({
             }
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
           />
+          <ChallengeTypeBadge category={category} onPhoto onPress={onTypePress} />
+          <ChallengeTypeTip category={category} visible={typeTipOpen} />
         </View>
       ) : resolved.kind === 'sponsor' ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 10 }}>
@@ -572,7 +595,10 @@ function MediaPanel({
       ) : resolved.kind === 'bob' ? (
         <OfficialBobPanel onError={failThrough} />
       ) : (
-        <ThemePlaceholder visual={resolved.visual === 'official' ? 'movement' : resolved.visual} />
+        <View style={{ flex: 1 }}>
+          <ChallengeTypePlaceholder category={category} onPress={onTypePress} />
+          <ChallengeTypeTip category={category} visible={typeTipOpen} anchor="panel" />
+        </View>
       )}
     </View>
   );
@@ -608,100 +634,6 @@ function OfficialBobPanel({ onError }: { onError: () => void }) {
         recyclingKey="bob-3d-wave"
         transition={0}
         onError={onError}
-      />
-    </View>
-  );
-}
-
-function ThemePlaceholder({ visual }: { visual: InviteVisualTheme }) {
-  return (
-    <LinearGradient
-      colors={[...THEME_WASH[visual]]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0.35, y: 1 }}
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <View pointerEvents="none">
-        {visual === 'movement' ? <MovementMotif /> : null}
-        {visual === 'ranked' ? <RankedMotif /> : null}
-        {visual === 'habits' ? <HabitsMotif /> : null}
-        {visual === 'creative' ? <CreativeMotif /> : null}
-      </View>
-    </LinearGradient>
-  );
-}
-
-function MovementMotif() {
-  return (
-    <View style={{ width: 54, height: 54, alignItems: 'center', justifyContent: 'center' }}>
-      <View
-        style={{
-          width: 46,
-          height: 46,
-          borderRadius: 23,
-          borderWidth: 2.5,
-          borderColor: 'rgba(255,255,255,0.7)',
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          right: 6,
-          top: 18,
-          width: 16,
-          height: 16,
-          borderTopWidth: 2.5,
-          borderRightWidth: 2.5,
-          borderColor: 'rgba(255,255,255,0.86)',
-          transform: [{ rotate: '45deg' }],
-        }}
-      />
-    </View>
-  );
-}
-
-function RankedMotif() {
-  return (
-    <View className="flex-row items-end" style={{ height: 42, gap: 5 }}>
-      <View style={{ width: 8, height: 16, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.42)' }} />
-      <View style={{ width: 8, height: 26, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.64)' }} />
-      <View style={{ width: 8, height: 38, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.88)' }} />
-    </View>
-  );
-}
-
-function HabitsMotif() {
-  return (
-    <View className="items-center" style={{ gap: 8 }}>
-      <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'rgba(47,72,44,0.28)' }} />
-      <View className="flex-row" style={{ gap: 6 }}>
-        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(47,72,44,0.34)' }} />
-        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(47,72,44,0.34)' }} />
-        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(47,72,44,0.34)' }} />
-      </View>
-    </View>
-  );
-}
-
-function CreativeMotif() {
-  return (
-    <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-      <View
-        style={{
-          width: 26,
-          height: 26,
-          borderWidth: 2,
-          borderColor: 'rgba(80,48,96,0.42)',
-          transform: [{ rotate: '18deg' }],
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          width: 22,
-          height: 2,
-          backgroundColor: 'rgba(80,48,96,0.28)',
-          transform: [{ rotate: '-22deg' }],
-        }}
       />
     </View>
   );
