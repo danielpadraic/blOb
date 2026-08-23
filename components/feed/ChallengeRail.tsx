@@ -40,6 +40,7 @@ export function ChallengeRail() {
         currentUserId={user?.id}
         progressById={progressById}
         onPress={open}
+        layout="rail"
       />
       <Pressable
         accessibilityRole="button"

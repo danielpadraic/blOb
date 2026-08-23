@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
+import { ChallengeCardVisual } from '@/components/challenge/ChallengeCardVisual';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
-import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
-import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { BuckUsdAmount, StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { isLiveCompetitorStatus, isPointsChallenge } from '@/lib/challenges';
@@ -27,7 +25,6 @@ import { lobbyTimeLabel } from '@/utils/format';
 export const POSTER_WIDTH = 250;
 export const POSTER_HEIGHT = 188;
 export const POSTER_RADIUS = 25;
-const OFFICIAL_POSTER_HEIGHT = 292;
 
 type ChallengePosterCardProps = {
   challenge: ChallengeWithStats;
@@ -80,7 +77,7 @@ export function ChallengePosterCard({
 
   const cardStyle = {
     width: POSTER_WIDTH,
-    height: officialJoinable || officialLive ? OFFICIAL_POSTER_HEIGHT : POSTER_HEIGHT,
+    height: POSTER_HEIGHT,
     backgroundColor: THEME.surface,
     borderColor: THEME.border,
     borderWidth: 1,
@@ -110,47 +107,18 @@ export function ChallengePosterCard({
     </View>
   );
 
-  if (officialJoinable) {
+  if (officialJoinable || officialLive || challenge.is_official) {
     return (
-      <LinearGradient
-        colors={['#2C9B89', '#10201D']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          width: POSTER_WIDTH,
-          minHeight: OFFICIAL_POSTER_HEIGHT,
-          borderRadius: POSTER_RADIUS,
-          overflow: 'hidden',
-          padding: 12,
-          justifyContent: 'space-between',
-          ...themeShadow('card'),
-        }}>
-        <Pressable
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={challenge.title}>
-          <ChallengeTagRow
-            tags={challengeCardTags({
-              challenge,
-              hosting: hosting && !joined,
-              joined: competing,
-              invited: invited && !joined && !hosting,
-            })}
-          />
-          <AppText
-            className="mt-2 text-[15px] font-extrabold leading-5"
-            style={{ color: '#fff' }}
-            numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={0.85}>
-            {challenge.title}
-          </AppText>
-          <View className="mt-3">
-            <OfficialFillingStats challenge={challenge} nowMs={nowMs} tone="hero" />
-          </View>
-        </Pressable>
-        <OfficialInviteButton challengeId={challenge.id} challengeTitle={challenge.title} tone="hero" />
-      </LinearGradient>
+      <ChallengeCardVisual
+        challenge={challenge}
+        joined={competing}
+        hosting={hosting}
+        invited={invited}
+        myDays={days}
+        nowMs={nowMs}
+        onPress={onPress}
+        showOfficialShare
+      />
     );
   }
 
@@ -161,11 +129,6 @@ export function ChallengePosterCard({
       accessibilityLabel={challenge.title}
       style={cardStyle}>
       {header}
-          {officialLive ? (
-            <View className="mb-2">
-              <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="card" />
-            </View>
-          ) : null}
           <View className="flex-row items-center justify-between gap-2">
             <StakeAmount
               amount={challenge.buy_in_amount}

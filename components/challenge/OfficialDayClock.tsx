@@ -26,12 +26,14 @@ type OfficialDayClockProps = {
   >;
   now?: Date;
   variant?: 'hero' | 'page' | 'card';
+  tone?: 'light' | 'dark';
 };
 
 export function OfficialDayClock({
   challenge,
   now = new Date(),
   variant = 'page',
+  tone,
 }: OfficialDayClockProps) {
   if (!isOfficialSeriesChallenge(challenge)) {
     return null;
@@ -40,7 +42,7 @@ export function OfficialDayClock({
   const windows = officialWindowsFor(challenge);
   const current = officialCurrentWindow(challenge, now);
   const total = Math.max(windows.length, Number(challenge.days_required) || 7);
-  const dark = variant === 'hero';
+  const dark = tone === 'dark' || (tone == null && variant === 'hero');
   const color = dark ? 'rgba(255,255,255,0.86)' : undefined;
   const titleColor = dark ? '#fff' : undefined;
   const mutedClass = dark ? undefined : 'text-muted';
