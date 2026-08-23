@@ -142,14 +142,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      throw new Error(getErrorMessage(error));
+      throw error;
     }
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
-      throw new Error(getErrorMessage(error));
+      throw error;
     }
     return { needsEmailConfirmation: !data.session };
   }, []);

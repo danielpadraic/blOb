@@ -86,10 +86,7 @@ export function reportAppError(input: ReportAppErrorInput): void {
   void (async () => {
     try {
       const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user?.id;
-      if (!userId) {
-        return;
-      }
+      const userId = data.session?.user?.id ?? null;
       const code = input.code ?? extractPostgrestCode(input.error) ?? null;
       if (code) {
         lastAppErrorCode = code;

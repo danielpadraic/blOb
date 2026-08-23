@@ -19,7 +19,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
-import { getErrorMessage } from '@/utils/errors';
+import { reportAppError } from '@/lib/appErrors';
+import { getAuthFormMessage } from '@/utils/errors';
 import { loginSchema, type LoginValues } from '@/utils/validators';
 
 export default function LoginScreen() {
@@ -41,7 +42,8 @@ export default function LoginScreen() {
     try {
       await signIn(values.email.trim(), values.password);
     } catch (error) {
-      setFormError(getErrorMessage(error));
+      reportAppError({ route: 'auth/login', error });
+      setFormError(getAuthFormMessage(error));
     }
   });
 
@@ -53,9 +55,8 @@ export default function LoginScreen() {
       if (isAuthCancelled(error)) {
         return;
       }
-      setFormError(
-        error instanceof Error ? error.message : 'That sign-in didn’t finish. Please try again.',
-      );
+      reportAppError({ route: 'auth/login-google', error });
+      setFormError(getAuthFormMessage(error));
     }
   }
 

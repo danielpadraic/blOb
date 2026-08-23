@@ -261,6 +261,67 @@ export function getPasswordUpdateMessage(error: unknown): string {
   return copy('error.passwordUpdate');
 }
 
+function isNetworkAuthError(blob: string): boolean {
+  return (
+    blob.includes('load failed') ||
+    blob.includes('failed to fetch') ||
+    blob.includes('networkrequestfailed') ||
+    blob.includes('network request failed') ||
+    blob.includes('network error') ||
+    blob.includes('typeerror')
+  );
+}
+
+function leaksAuthCode(text: string): boolean {
+  return /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/.test(text);
+}
+
+/** Register / login. Never returns a Supabase Auth code. */
+export function getAuthFormMessage(error: unknown): string {
+  logPostgrestError('auth', error);
+  const code = extractAuthCode(error);
+  const raw = extractRawMessage(error);
+  const blob = `${code} ${raw}`.toLowerCase();
+
+  if (
+    code === 'over_email_send_rate_limit' ||
+    blob.includes('over_email_send_rate_limit') ||
+    (blob.includes('email') && blob.includes('rate') && blob.includes('limit'))
+  ) {
+    return copy('auth.waitRetry');
+  }
+  if (
+    code === 'user_already_exists' ||
+    code === 'email_exists' ||
+    blob.includes('user_already_exists') ||
+    blob.includes('already registered') ||
+    blob.includes('user already') ||
+    blob.includes('email already')
+  ) {
+    return copy('auth.emailExists');
+  }
+  if (
+    code === 'weak_password' ||
+    blob.includes('weak_password') ||
+    (blob.includes('password') &&
+      (blob.includes('weak') ||
+        blob.includes('character of each') ||
+        (blob.includes('uppercase') && blob.includes('lowercase') && blob.includes('symbol')))) ||
+    (blob.includes('password') && blob.includes('least'))
+  ) {
+    return copy('error.passwordWeak');
+  }
+  if (isNetworkAuthError(blob)) {
+    return copy('auth.network');
+  }
+
+  const human = humanize(raw);
+  if (!human || leaksAuthCode(human)) {
+    return copy('auth.waitRetry');
+  }
+  return human;
+}
+
 function humanize(raw: string): string {
   const message = raw.toLowerCase();
 
@@ -299,8 +360,14 @@ function humanize(raw: string): string {
   if (message.includes('email not confirmed')) {
     return 'Please confirm your email, then come back to sign in.';
   }
-  if (message.includes('already registered') || message.includes('user already')) {
-    return 'That email is already in use. Try signing in instead.';
+  if (
+    message.includes('over_email_send_rate_limit') ||
+    (message.includes('email') && message.includes('rate') && message.includes('limit'))
+  ) {
+    return copy('auth.waitRetry');
+  }
+  if (message.includes('already registered') || message.includes('user already') || message.includes('user_already_exists')) {
+    return copy('auth.emailExists');
   }
   if (
     message.includes('weak_password') ||

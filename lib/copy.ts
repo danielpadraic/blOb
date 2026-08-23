@@ -50,6 +50,9 @@ const STRINGS = {
   },
   'auth.createAccount': 'Create account',
   'auth.signIn': 'Sign in',
+  'auth.waitRetry': 'Please wait a few seconds and try again.',
+  'auth.emailExists': 'That email already has an account. Sign in.',
+  'auth.network': 'Couldn’t reach the server. Try again.',
   'auth.newHere': 'New here?',
   'home.header': 'Home',
   'home.loading': {

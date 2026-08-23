@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
@@ -20,7 +20,8 @@ import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
+import { reportAppError } from '@/lib/appErrors';
+import { getAuthFormMessage } from '@/utils/errors';
 import { registerSchema, type RegisterValues } from '@/utils/validators';
 
 export default function RegisterScreen() {
@@ -29,6 +30,8 @@ export default function RegisterScreen() {
   const [emailStep, setEmailStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  const lockRef = useRef(0);
   const {
     control,
     handleSubmit,
@@ -38,18 +41,44 @@ export default function RegisterScreen() {
     defaultValues: { email: '', password: '', confirmPassword: '' },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
-    setFormError(null);
-    setInfo(null);
-    try {
-      const result = await signUp(values.email.trim(), values.password);
-      if (result.needsEmailConfirmation) {
-        setInfo('Check your inbox to confirm your email, then come back to sign in.');
-      }
-    } catch (error) {
-      setFormError(getErrorMessage(error));
+  useEffect(() => {
+    if (lockedUntil <= 0) {
+      return;
     }
-  });
+    const wait = Math.max(0, lockedUntil - Date.now());
+    const timer = setTimeout(() => setLockedUntil(0), wait);
+    return () => clearTimeout(timer);
+  }, [lockedUntil]);
+
+  const submitAccount = handleSubmit(
+    async (values) => {
+      setFormError(null);
+      setInfo(null);
+      try {
+        const result = await signUp(values.email.trim(), values.password);
+        if (result.needsEmailConfirmation) {
+          setInfo('Check your inbox to confirm your email, then come back to sign in.');
+        }
+      } catch (error) {
+        reportAppError({ route: 'auth/register', error });
+        setFormError(getAuthFormMessage(error));
+      }
+    },
+    () => {
+      lockRef.current = 0;
+      setLockedUntil(0);
+    },
+  );
+
+  function onCreateAccount() {
+    const now = Date.now();
+    if (isSubmitting || now < lockRef.current) {
+      return;
+    }
+    lockRef.current = now + 3000;
+    setLockedUntil(lockRef.current);
+    void submitAccount();
+  }
 
   async function runGoogle() {
     setFormError(null);
@@ -60,9 +89,8 @@ export default function RegisterScreen() {
       if (isAuthCancelled(error)) {
         return;
       }
-      setFormError(
-        error instanceof Error ? error.message : 'That sign-in didn’t finish. Please try again.',
-      );
+      reportAppError({ route: 'auth/register-google', error });
+      setFormError(getAuthFormMessage(error));
     }
   }
 
@@ -140,7 +168,13 @@ export default function RegisterScreen() {
               {info}
             </AppText>
           ) : null}
-          <Button title="Create an Account" onPress={onSubmit} loading={isSubmitting} size="lg" />
+          <Button
+            title="Create an Account"
+            onPress={onCreateAccount}
+            loading={isSubmitting}
+            disabled={isSubmitting || lockedUntil > Date.now()}
+            size="lg"
+          />
           <View className="mt-2 flex-row justify-center gap-1">
             <AppText style={{ color: 'rgba(255,255,255,0.55)' }}>Already competing?</AppText>
             <Pressable
