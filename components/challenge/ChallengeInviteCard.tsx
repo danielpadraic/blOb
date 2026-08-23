@@ -360,22 +360,13 @@ export function ChallengeInviteCard({
                 accessibilityLabel={sponsorName}
               />
             ) : (
-              <View
-                style={{
-                  backgroundColor: '#F7F7F5',
-                  borderRadius: 8,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  minHeight: 32,
-                  justifyContent: 'center',
-                }}>
-                <Image
-                  source={BLOB_WORDMARK}
-                  style={{ width: 58, height: 24, backgroundColor: 'transparent' }}
-                  contentFit="contain"
-                  accessibilityLabel="blOb"
-                />
-              </View>
+              <Image
+                source={BLOB_WORDMARK}
+                style={{ width: 64, height: 26, backgroundColor: 'transparent' }}
+                contentFit="contain"
+                tintColor="#F7FFFC"
+                accessibilityLabel="blOb"
+              />
             )}
           </View>
         ) : host ? (
