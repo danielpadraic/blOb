@@ -21,8 +21,10 @@ import {
   useToggleStoryReaction,
   useViewStory,
 } from '@/hooks/useSocial';
+import { Button } from '@/components/ui/Button';
 import { copy } from '@/lib/copy';
 import { challengeDetailHref } from '@/lib/routes';
+import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { personDisplayName, storyTimeLeft, type FeedChallengePreview, type StoryGroup } from '@/lib/social';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import { storyShareUrl } from '@/lib/waveShare';
@@ -46,6 +48,7 @@ export function StoryViewer({
   onClose,
 }: StoryViewerProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const viewStory = useViewStory();
   const [groupIndex, setGroupIndex] = useState(startGroupIndex);
   const [storyIndex, setStoryIndex] = useState(startStoryIndex);
@@ -274,6 +277,20 @@ export function StoryViewer({
             </AppText>
           ) : null}
           {challenge ? <ChallengeChip challenge={challenge} onClose={onClose} /> : null}
+          {group.isOwn ? (
+            <View className="mt-3 px-4">
+              <Button
+                title={copy('wave.recordAnother')}
+                variant="secondary"
+                size="lg"
+                accessibilityLabel={copy('wave.add')}
+                onPress={() => {
+                  onClose();
+                  startFreshWaveCapture(router);
+                }}
+              />
+            </View>
+          ) : null}
           <WaveSocialBar storyId={story.id} onComments={() => setPanel('comments')} onShare={() => setPanel('share')} />
           {panel === 'comments' ? <WaveComments storyId={story.id} onClose={() => setPanel(null)} /> : null}
           {panel === 'share' ? <WaveShare storyId={story.id} onClose={() => setPanel(null)} /> : null}

@@ -25,8 +25,10 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
-import { CAPTURE_REEL_HREF, CAPTURE_STORY_HREF, LOBBY_HREF } from '@/lib/routes';
+import { CAPTURE_REEL_HREF, LOBBY_HREF } from '@/lib/routes';
 import { primeCameraFromGesture } from '@/lib/cameraSession';
+import { rememberLastCapture } from '@/lib/lastCapture';
+import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { THEME } from '@/lib/theme';
 
 export { AppErrorBoundary as ErrorBoundary };
@@ -168,14 +170,13 @@ function TabLayoutInner() {
     }
     if (id === 'story') {
       closeOverlays();
-      void primeCameraFromGesture('video').then(() => {
-        setTimeout(() => router.push(CAPTURE_STORY_HREF), 60);
-      });
+      startFreshWaveCapture(router);
       return;
     }
     if (id === 'reel') {
       // Action id stays `reel`; capture URL stays mode=reel. User-facing name is Round.
       closeOverlays();
+      rememberLastCapture(null);
       void primeCameraFromGesture('video').then(() => {
         setTimeout(() => router.push(CAPTURE_REEL_HREF), 60);
       });

@@ -287,6 +287,7 @@ const STRINGS = {
   'wave.empty': 'Nobody’s waving. You can.',
   'wave.yours': 'Your Wave',
   'wave.add': 'Add Wave',
+  'wave.recordAnother': 'Record another',
   'wave.share': 'Share Wave',
   'wave.new': 'New Wave',
   'wave.noun': 'Wave',

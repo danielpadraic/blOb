@@ -5,8 +5,8 @@ import { StoryRing } from '@/components/stories/StoryRing';
 import { AppText } from '@/components/ui/AppText';
 import { useStoryGroups } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
-import { primeCameraFromGesture } from '@/lib/cameraSession';
-import { STORY_CREATE_HREF, storyHref } from '@/lib/routes';
+import { storyHref } from '@/lib/routes';
+import { startFreshWaveCapture } from '@/lib/waveCapture';
 import type { StoryGroup } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
@@ -16,8 +16,7 @@ export function StoryTray() {
 
   function openGroup(group: StoryGroup) {
     if (group.stories.length === 0) {
-      void primeCameraFromGesture('video');
-      router.push(STORY_CREATE_HREF);
+      startFreshWaveCapture(router);
       return;
     }
     router.push(storyHref(group.stories[0]!.id));
@@ -39,10 +38,7 @@ export function StoryTray() {
               group={group}
               seen={group.stories.length === 0 || (!group.isOwn && !unseen)}
               onPress={() => openGroup(group)}
-              onAdd={() => {
-                void primeCameraFromGesture('video');
-                router.push(STORY_CREATE_HREF);
-              }}
+              onAdd={() => startFreshWaveCapture(router)}
             />
           );
         })}

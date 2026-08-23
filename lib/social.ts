@@ -826,7 +826,9 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     media_url: mediaUrl,
     media_type: input.media_type,
     challenge_id: input.challenge_id ?? null,
-    caption: index === 0 ? input.caption?.trim() || null : null,
+    caption:
+      clip.caption?.trim() ||
+      (clips.length === 1 ? input.caption?.trim() || null : null),
     expires_at: expiresAt,
     sequence_id: sequenceId,
     sequence_index: index,

@@ -54,6 +54,8 @@ type InAppCameraProps = {
   hrScreenshot?: boolean;
   faceHint?: string | null;
   facingKind?: CameraFacingKind;
+  /** When set, show tick marks at this interval (seconds) while recording. Wave uses 15. */
+  clipTickSec?: number;
 };
 
 export function InAppCamera({
@@ -74,6 +76,7 @@ export function InAppCamera({
   hrScreenshot = false,
   faceHint = null,
   facingKind = 'proof',
+  clipTickSec,
 }: InAppCameraProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
@@ -422,7 +425,11 @@ export function InAppCamera({
             Close
           </AppText>
         </Pressable>
-        <RecordingClock recording={recording} maxDuration={maxDuration} />
+        <RecordingClock
+          recording={recording}
+          maxDuration={maxDuration}
+          clipTickSec={clipTickSec}
+        />
         {onUseWorkout || onStartWatch ? (
           <View className="items-end" style={{ gap: 8, maxWidth: 168 }}>
             {onUseWorkout ? (
@@ -664,12 +671,51 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   );
 }, (prev, next) => prev.facing === next.facing && prev.video === next.video && prev.cameraRef === next.cameraRef);
 
-function RecordingClock({ recording, maxDuration }: { recording: boolean; maxDuration: number }) {
+function formatRecordClock(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${String(rest).padStart(2, '0')}`;
+}
+
+function RecordingClock({
+  recording,
+  maxDuration,
+  clipTickSec,
+}: {
+  recording: boolean;
+  maxDuration: number;
+  clipTickSec?: number;
+}) {
   const elapsed = useRecordingElapsed(recording, maxDuration);
+  const ticks = clipTickSec && clipTickSec > 0 ? Math.floor(maxDuration / clipTickSec) : 0;
   return (
-    <AppText className="text-[12px] font-semibold" style={{ color: '#fff' }}>
-      {recording ? `${Math.ceil(elapsed)}s / ${maxDuration}s` : `${maxDuration}s`}
-    </AppText>
+    <View className="items-center">
+      <AppText className="text-[12px] font-semibold" style={{ color: '#fff' }}>
+        {recording
+          ? `${formatRecordClock(elapsed)} / ${formatRecordClock(maxDuration)}`
+          : formatRecordClock(maxDuration)}
+      </AppText>
+      {ticks > 0 ? (
+        <View className="mt-1 flex-row items-center" style={{ gap: 4 }}>
+          {Array.from({ length: ticks }, (_, index) => {
+            const mark = (index + 1) * clipTickSec!;
+            const filled = recording && elapsed >= mark;
+            return (
+              <View
+                key={mark}
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 2.5,
+                  backgroundColor: filled ? THEME.accentBright : 'rgba(255,255,255,0.35)',
+                }}
+              />
+            );
+          })}
+        </View>
+      ) : null}
+    </View>
   );
 }
 

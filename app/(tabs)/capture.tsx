@@ -17,7 +17,11 @@ export default function CaptureScreen() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
-      <CaptureStudio initialMode={initialMode} initialMedia={initialMedia} />
+      <CaptureStudio
+        key={`${initialMode}-${initialMedia}`}
+        initialMode={initialMode}
+        initialMedia={initialMedia}
+      />
     </Screen>
   );
 }

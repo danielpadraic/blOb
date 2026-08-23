@@ -694,7 +694,9 @@ export function useCreateStory() {
           media_url: input.media_url,
           media_type: input.media_type,
           challenge_id: input.challenge_id ?? null,
-          caption: index === 0 ? input.caption?.trim() || null : null,
+          caption:
+            clip.caption?.trim() ||
+            (clips.length === 1 ? input.caption?.trim() || null : null),
           expires_at: input.expires_at ?? new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
           created_at: now.toISOString(),
           sequence_index: index,

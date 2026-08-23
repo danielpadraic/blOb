@@ -31,7 +31,13 @@ import {
 } from '@/lib/postAudience';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
-import { mediaDurationMs, waveClipWindows } from '@/lib/waveClips';
+import {
+  WAVE_CLIP_MS,
+  WAVE_RECORD_MAX_SEC,
+  formatWaveClipLabel,
+  resolveMediaDurationMs,
+  waveClipWindows,
+} from '@/lib/waveClips';
 import { getErrorMessage } from '@/utils/errors';
 import { asGalleryMedia } from '@/utils/media';
 import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
@@ -42,7 +48,6 @@ type CaptureStudioProps = {
   onClose?: () => void;
 };
 
-const STORY_MAX = 15;
 const REEL_MAX = 45;
 const POST_MAX = 60;
 
@@ -64,11 +69,12 @@ export function CaptureStudio({
 
   const mode = initialMode;
   const captureKind = captureKindFor(mode, initialMedia);
-  const maxDuration = mode === 'reel' ? REEL_MAX : mode === 'post' ? POST_MAX : STORY_MAX;
+  const maxDuration = mode === 'reel' ? REEL_MAX : mode === 'post' ? POST_MAX : WAVE_RECORD_MAX_SEC;
 
   const [step, setStep] = useState<'camera' | 'preview'>('camera');
   const [draft, setDraft] = useState<CapturedMedia | null>(null);
   const [caption, setCaption] = useState('');
+  const [clipCaptions, setClipCaptions] = useState<string[]>([]);
   const [audience, setAudience] = useState<PostAudience>(
     asDefaultPostAudience(profile?.default_post_audience),
   );
@@ -84,6 +90,33 @@ export function CaptureStudio({
     () => challengeOptions.find((row) => row.id === challengeId) ?? null,
     [challengeId, challengeOptions],
   );
+  const waveClips = useMemo(
+    () => (mode === 'story' && draft ? waveClipWindows(draft.durationMs, draft.mediaType) : []),
+    [draft, mode],
+  );
+  const multiClip = mode === 'story' && draft?.mediaType === 'video' && waveClips.length > 1;
+
+  function resetStudio() {
+    setDraft(null);
+    setCaption('');
+    setClipCaptions([]);
+    setStep('camera');
+    setProgress(0);
+    setError(null);
+    rememberLastCapture(null);
+  }
+
+  function acceptDraft(next: CapturedMedia) {
+    setDraft(next);
+    setCaption('');
+    setClipCaptions([]);
+    setError(null);
+    setStep('preview');
+  }
+
+  useEffect(() => {
+    resetStudio();
+  }, [mode]);
 
   useEffect(() => {
     if (mode === 'story') {
@@ -115,6 +148,7 @@ export function CaptureStudio({
   }, [captureKind, mode]);
 
   function close() {
+    resetStudio();
     if (onClose) {
       onClose();
       return;
@@ -166,14 +200,14 @@ export function CaptureStudio({
         size: asset.fileSize ?? null,
       });
     }
-    setDraft({
+    const durationMs = isVideo ? await resolveMediaDurationMs(asset.uri, asset.duration) : null;
+    acceptDraft({
       uri: asset.uri,
       mediaType: isVideo ? 'video' : 'image',
       mimeType: asset.mimeType ?? asset.file?.type,
       blob: asset.file ?? null,
-      durationMs: mediaDurationMs(asset.duration),
+      durationMs,
     });
-    setStep('preview');
   }
 
   async function publish() {
@@ -234,11 +268,14 @@ export function CaptureStudio({
           audienceUserIds: audience === 'specific' ? audienceUserIds : [],
         });
       } else {
-        const clips = waveClipWindows(draft.durationMs, draft.mediaType);
+        const clips = waveClips.map((clip, index) => ({
+          ...clip,
+          caption: multiClip ? clipCaptions[index]?.trim() || null : caption.trim() || null,
+        }));
         const stories = await createStory.mutateAsync({
           media_url: mediaUrl,
           media_type: draft.mediaType,
-          caption: caption.trim() || null,
+          caption: multiClip ? null : caption.trim() || null,
           challenge_id: challengeId,
           clips,
         });
@@ -258,6 +295,7 @@ export function CaptureStudio({
         }
       }
       setProgress(100);
+      resetStudio();
       close();
     } catch (caught) {
       setProgress(0);
@@ -275,6 +313,7 @@ export function CaptureStudio({
           capture={captureKind}
           facingKind={mode === 'post' ? 'proof' : 'social'}
           maxDuration={maxDuration}
+          clipTickSec={mode === 'story' ? WAVE_CLIP_MS / 1000 : undefined}
           blocked={mode === 'story' ? false : Boolean(denied && denied.kind !== 'library')}
           blockedReason={
             denied?.kind === 'microphone'
@@ -295,8 +334,7 @@ export function CaptureStudio({
                 blob: next.blob,
               });
             }
-            setDraft(next);
-            setStep('preview');
+            acceptDraft(next);
           }}
           onOpenGallery={() => void openLibrary()}
           onCancel={close}
@@ -352,7 +390,10 @@ export function CaptureStudio({
           <Pressable
             accessibilityRole="button"
             onPress={() => {
+              rememberLastCapture(null);
               setDraft(null);
+              setCaption('');
+              setClipCaptions([]);
               setStep('camera');
             }}
             className="absolute right-3 top-3 rounded-full px-3 py-1.5"
@@ -364,14 +405,40 @@ export function CaptureStudio({
         </Card>
       ) : null}
 
-      <Input
-        label="Caption"
-        placeholder="Add a caption"
-        value={caption}
-        onChangeText={setCaption}
-        maxLength={mode === 'post' ? 280 : 140}
-        hint={caption.length > 0 ? `${caption.length}/${mode === 'post' ? 280 : 140}` : undefined}
-      />
+      {multiClip ? (
+        <View className="gap-3">
+          {waveClips.map((clip, index) => (
+            <Input
+              key={`${clip.startMs}-${clip.durationMs}`}
+              label={formatWaveClipLabel(index, clip)}
+              placeholder="Add a caption"
+              value={clipCaptions[index] ?? ''}
+              onChangeText={(value) =>
+                setClipCaptions((current) => {
+                  const next = waveClips.map((_, slot) => current[slot] ?? '');
+                  next[index] = value;
+                  return next;
+                })
+              }
+              maxLength={140}
+              hint={
+                (clipCaptions[index] ?? '').length > 0
+                  ? `${(clipCaptions[index] ?? '').length}/140`
+                  : undefined
+              }
+            />
+          ))}
+        </View>
+      ) : (
+        <Input
+          label="Caption"
+          placeholder="Add a caption"
+          value={caption}
+          onChangeText={setCaption}
+          maxLength={mode === 'post' ? 280 : 140}
+          hint={caption.length > 0 ? `${caption.length}/${mode === 'post' ? 280 : 140}` : undefined}
+        />
+      )}
 
       {challengeOptions.length > 0 ? (
         <View className="gap-2">
