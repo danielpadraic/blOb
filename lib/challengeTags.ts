@@ -1,45 +1,15 @@
-import { CHALLENGE_STATUS_LABEL } from '@/lib/constants';
-import { copy } from '@/lib/copy';
-import { isBucksChallenge } from '@/lib/currency';
 import { isPointsChallenge } from '@/lib/challenges';
 
-/** One color per tag TYPE. Color stays even if the label copy changes. */
 export type ChallengeTagKind =
   | 'official'
   | 'public'
   | 'private'
-  | 'hosting'
-  | 'consistency'
-  | 'filling'
-  | 'arming'
-  | 'live'
-  | 'coins'
   | 'joined'
-  | 'points'
-  | 'invited'
-  | 'notJoined';
-
-export type ChallengeTagToken = {
-  bg: string;
-  fg: string;
-};
-
-/** Small, low-saturation fills. Full near-black only for Official. */
-export const CHALLENGE_TAG_TOKENS: Record<ChallengeTagKind, ChallengeTagToken> = {
-  official: { bg: '#151716', fg: '#FFFFFF' },
-  public: { bg: '#E4EBE4', fg: '#5F6B63' },
-  private: { bg: '#EBE4F0', fg: '#6A5A78' },
-  hosting: { bg: '#E4D8F2', fg: '#4B2A7A' },
-  consistency: { bg: '#E7F7F3', fg: '#2C9B89' },
-  filling: { bg: '#F6EED8', fg: '#9A7420' },
-  arming: { bg: '#F6E6C8', fg: '#B07A18' },
-  live: { bg: '#DFF3E3', fg: '#2E7A42' },
-  coins: { bg: '#F4E6C1', fg: '#A07C12' },
-  joined: { bg: '#E7F7F3', fg: '#2C9B89' },
-  points: { bg: '#DCE8F2', fg: '#3D6A8A' },
-  invited: { bg: '#EBE4F0', fg: '#6A5A78' },
-  notJoined: { bg: '#E8EBE8', fg: '#7F8581' },
-};
+  | 'notJoined'
+  | 'live'
+  | 'notStarted'
+  | 'consistency'
+  | 'points';
 
 export type ChallengeTagSpec = {
   kind: ChallengeTagKind;
@@ -51,20 +21,48 @@ type TagChallenge = {
   visibility?: string | null;
   status?: string | null;
   challenge_type?: string | null;
-  currency?: string | null;
-  buy_in_amount?: number | null;
+  starts_at?: string | null;
+  timezone?: string | null;
 };
 
-function statusKind(status: string | null | undefined): ChallengeTagKind | null {
+function formatStartWhen(startsAt?: string | null, timeZone?: string | null): string | null {
+  if (!startsAt) {
+    return null;
+  }
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const options: Intl.DateTimeFormatOptions = {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  };
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      ...options,
+      timeZone: timeZone || undefined,
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat(undefined, options).format(date);
+  }
+}
+
+function phaseKind(status: string | null | undefined): 'live' | 'notStarted' | null {
   const value = String(status ?? '').toLowerCase();
-  if (value === 'filling' || value === 'open' || value === 'upcoming' || value === 'starting') {
-    return 'filling';
-  }
-  if (value === 'arming' || value === 'judging') {
-    return 'arming';
-  }
   if (value === 'live' || value === 'in_progress') {
     return 'live';
+  }
+  if (
+    value === 'filling' ||
+    value === 'open' ||
+    value === 'upcoming' ||
+    value === 'starting' ||
+    value === 'arming' ||
+    value === 'judging'
+  ) {
+    return 'notStarted';
   }
   return null;
 }
@@ -80,48 +78,40 @@ export function challengeCardTags(input: {
   const tags: ChallengeTagSpec[] = [];
 
   if (challenge.is_official) {
-    tags.push({
-      kind: 'official',
-      label:
-        Boolean(challenge.is_official) &&
-        isBucksChallenge(challenge) &&
-        Number(challenge.buy_in_amount) <= 0
-          ? 'Sponsored'
-          : 'Official',
-    });
+    tags.push({ kind: 'official', label: 'Official' });
   }
 
   const visibility = String(challenge.visibility ?? 'public').toLowerCase();
   if (visibility === 'private' || visibility === 'invite') {
-    tags.push({ kind: 'private', label: visibility === 'invite' ? 'Invite only' : 'Private' });
-  } else if (!challenge.is_official) {
+    tags.push({
+      kind: 'private',
+      label: visibility === 'invite' ? 'Invite only' : 'Private',
+    });
+  } else {
     tags.push({ kind: 'public', label: 'Public' });
   }
 
-  if (input.hosting) {
-    tags.push({ kind: 'hosting', label: 'Hosting' });
+  if (input.joined || input.hosting) {
+    tags.push({ kind: 'joined', label: 'You’re in' });
+  } else {
+    tags.push({ kind: 'notJoined', label: 'Not joined' });
   }
 
-  if (input.joined) {
-    tags.push({ kind: 'joined', label: copy('feed.youreIn') });
-  } else if (input.showNotJoined) {
-    tags.push({ kind: 'notJoined', label: copy('feed.notJoined') });
-  } else if (input.invited) {
-    tags.push({ kind: 'invited', label: 'Invited' });
+  const phase = phaseKind(challenge.status);
+  if (phase === 'live') {
+    tags.push({ kind: 'live', label: 'Live — in progress' });
+  } else if (phase === 'notStarted') {
+    const when = formatStartWhen(challenge.starts_at, challenge.timezone);
+    tags.push({
+      kind: 'notStarted',
+      label: when ? `Not started · ${when}` : 'Not started',
+    });
   }
 
   if (isPointsChallenge(challenge)) {
     tags.push({ kind: 'points', label: 'Points' });
   } else {
     tags.push({ kind: 'consistency', label: 'Consistency' });
-  }
-
-  const phase = statusKind(challenge.status);
-  if (phase && phase !== 'filling') {
-    tags.push({
-      kind: phase,
-      label: CHALLENGE_STATUS_LABEL[String(challenge.status)] ?? String(challenge.status),
-    });
   }
 
   return tags;

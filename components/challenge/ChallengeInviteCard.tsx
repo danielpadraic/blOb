@@ -10,7 +10,9 @@ import {
   ChallengeTypeTip,
   useChallengeTypeTip,
 } from '@/components/challenge/ChallengeTypeIcon';
+import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
+import { challengeCardTags } from '@/lib/challengeTags';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -89,7 +91,7 @@ type InviteMedia =
   | { kind: 'bob' }
   | { kind: 'placeholder'; visual: InviteVisualTheme };
 
-const HEIGHT = 162;
+const HEIGHT = 176;
 const RADIUS = 16;
 const PANEL_RADIUS = 12;
 const OFFICIAL_BG = '#123832';
@@ -239,7 +241,6 @@ export function ChallengeInviteCard({
   hosting = false,
   eliminated = false,
   host,
-  showStateTags = false,
   onPress,
 }: ChallengeInviteCardProps) {
   const official =
@@ -290,8 +291,7 @@ export function ChallengeInviteCard({
   const cta = canJoin ? 'Join' : 'View';
   const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
   const muted = official ? 'rgba(231,247,243,0.72)' : THEME.textMuted;
-  const stateTag =
-    showStateTags && !canCheckIn ? (joined ? 'You’re in' : hosting ? 'Hosting' : null) : null;
+  const tags = challengeCardTags({ challenge, hosting, joined });
   const sponsorName = challenge.sponsor_name?.trim() || 'blOb';
   const cardLabel = `${challenge.title}. ${status}. ${canCheckIn ? 'View or check-in' : cta}`;
 
@@ -360,21 +360,14 @@ export function ChallengeInviteCard({
       <View
         className="min-w-0 flex-1"
         style={{ paddingLeft: 10, paddingRight: 10, paddingVertical: 10, justifyContent: 'space-between' }}>
-        <View className="flex-row items-start" style={{ gap: 8 }}>
+        <View>
+          <ChallengeTagRow tags={tags} compact />
           <AppText
-            className="min-w-0 flex-1 text-[16px] font-semibold leading-5"
+            className="mt-1 min-w-0 text-[16px] font-semibold leading-5"
             style={{ color: titleColor }}
             numberOfLines={1}>
             {challenge.title}
           </AppText>
-          {stateTag ? (
-            <AppText
-              className="text-[11px] font-extrabold"
-              style={{ color: official ? '#9EE8DC' : THEME.accent, flexShrink: 0 }}
-              numberOfLines={1}>
-              {stateTag}
-            </AppText>
-          ) : null}
         </View>
 
         {official ? (

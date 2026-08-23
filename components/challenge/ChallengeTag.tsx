@@ -1,99 +1,128 @@
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { Image } from 'expo-image';
 
-import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import {
-  CHALLENGE_TAG_TOKENS,
-  type ChallengeTagKind,
-  type ChallengeTagSpec,
-  type ChallengeTagToken,
-} from '@/lib/challengeTags';
+import { type ChallengeTagKind, type ChallengeTagSpec } from '@/lib/challengeTags';
+import { THEME } from '@/lib/theme';
+
+const ICON = 26;
+const COMPACT = 22;
+const TIP_MS = 2200;
+
+const TAG_ICONS: Record<ChallengeTagKind, number> = {
+  official: require('@/assets/challenge-tags/official.png'),
+  public: require('@/assets/challenge-tags/public.png'),
+  private: require('@/assets/challenge-tags/private.png'),
+  joined: require('@/assets/challenge-tags/joined.png'),
+  notJoined: require('@/assets/challenge-tags/not_joined.png'),
+  live: require('@/assets/challenge-tags/live.png'),
+  notStarted: require('@/assets/challenge-tags/not_started.png'),
+  consistency: require('@/assets/challenge-tags/consistency.png'),
+  points: require('@/assets/challenge-tags/points.png'),
+};
 
 type ChallengeTagProps = {
   kind: ChallengeTagKind;
   label: string;
-  tone?: 'light' | 'dark';
+  size?: number;
+  active?: boolean;
+  onPress: () => void;
 };
 
-const DARK_TAG_TOKENS: Partial<Record<ChallengeTagKind, ChallengeTagToken>> = {
-  official: { bg: '#101312', fg: '#FFFFFF' },
-  public: { bg: 'rgba(255,255,255,0.14)', fg: '#F7FFFC' },
-  private: { bg: 'rgba(255,255,255,0.14)', fg: '#F7FFFC' },
-};
-
-const TAG_GLYPH: Partial<Record<ChallengeTagKind, GlyphId>> = {
-  official: GLYPH.shield,
-  public: GLYPH.globe,
-  private: GLYPH.shield,
-  hosting: GLYPH.people,
-  consistency: GLYPH.star,
-  filling: GLYPH.sparkle,
-  arming: GLYPH.clock,
-  coins: GLYPH.sparkle,
-  joined: GLYPH.check,
-  invited: GLYPH.bell,
-  points: GLYPH.sparkle,
-};
-
-export function ChallengeTag({ kind, label, tone = 'light' }: ChallengeTagProps) {
-  const token = (tone === 'dark' && DARK_TAG_TOKENS[kind]) || CHALLENGE_TAG_TOKENS[kind];
-  const glyph = TAG_GLYPH[kind];
+export function ChallengeTag({ kind, label, size = ICON, active, onPress }: ChallengeTagProps) {
   return (
-    <View
-      className="flex-row items-center self-start rounded-full"
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: Boolean(active) }}
+      hitSlop={6}
+      onPress={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
       style={{
-        backgroundColor: token.bg,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        gap: 4,
-        borderWidth: kind === 'official' && tone === 'dark' ? 1 : 0,
-        borderColor: '#FFFFFF',
+        width: size,
+        height: size,
+        backgroundColor: 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
-      {kind === 'live' ? (
-        <View
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: token.fg,
-          }}
-        />
-      ) : glyph ? (
-        <Glyph name={glyph} color={token.fg} size={10} />
-      ) : null}
-      <AppText
-        className="text-[9px] font-extrabold uppercase"
-        style={{
-          color: token.fg,
-          letterSpacing: 0.35,
-          lineHeight: 11,
-        }}>
-        {label}
-      </AppText>
-    </View>
+      <Image
+        source={TAG_ICONS[kind]}
+        style={{ width: size, height: size, backgroundColor: 'transparent' }}
+        contentFit="contain"
+        recyclingKey={kind}
+      />
+    </Pressable>
   );
 }
 
 export function ChallengeTagRow({
   tags,
-  tone = 'light',
+  tone: _tone = 'light',
+  compact = false,
 }: {
   tags: ChallengeTagSpec[];
   tone?: 'light' | 'dark';
+  compact?: boolean;
 }) {
+  const [tip, setTip] = useState<string | null>(null);
+  const size = compact ? COMPACT : ICON;
+
+  useEffect(() => {
+    if (!tip) {
+      return;
+    }
+    const handle = setTimeout(() => setTip(null), TIP_MS);
+    return () => clearTimeout(handle);
+  }, [tip]);
+
   if (tags.length === 0) {
     return null;
   }
+
   return (
-    <View className="flex-row flex-wrap items-center" style={{ gap: 5 }}>
-      {tags.map((tag) => (
-        <ChallengeTag
-          key={`${tag.kind}-${tag.label}`}
-          kind={tag.kind}
-          label={tag.label}
-          tone={tone}
-        />
-      ))}
+    <View style={{ position: 'relative', zIndex: 6 }}>
+      <View className="flex-row flex-wrap items-center" style={{ gap: 8 }}>
+        {tags.map((tag) => (
+          <ChallengeTag
+            key={tag.kind}
+            kind={tag.kind}
+            label={tag.label}
+            size={size}
+            active={tip === tag.label}
+            onPress={() => setTip(tag.label)}
+          />
+        ))}
+      </View>
+      {tip ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: size + 4,
+            left: 0,
+            zIndex: 8,
+          }}>
+          <View
+            style={{
+              backgroundColor: 'rgba(16, 19, 18, 0.88)',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 8,
+            }}>
+            <AppText
+              style={{
+                color: THEME.primaryForeground,
+                fontSize: 12,
+                fontWeight: '700',
+              }}>
+              {tip}
+            </AppText>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
