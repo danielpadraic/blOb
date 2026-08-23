@@ -1379,33 +1379,40 @@ export function useCreateComment(challengeId?: string | null) {
   });
 }
 
-export function useDeletePost(challengeId?: string | null) {
+export function useDeletePost(_challengeId?: string | null) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const key = challengeId ?? 'global';
 
   return useMutation({
     mutationFn: async (postId: string) => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      const { error } = await supabase.from('posts').delete().eq('id', postId).eq('author_id', user.id);
+      const { error } = await supabase.rpc('soft_delete_post', { p_post_id: postId });
       if (error) {
-        throw new Error(getErrorMessage(error));
+        throw new Error(getErrorMessage(error) || 'Couldn’t delete.');
       }
     },
     onMutate: async (postId) => {
-      const listKey = feedListKey(key, user?.id);
-      await queryClient.cancelQueries({ queryKey: listKey });
-      const previous = queryClient.getQueryData<PostWithMeta[]>(listKey);
-      queryClient.setQueryData<PostWithMeta[]>(listKey, (current) =>
-        (current ?? []).filter((post) => post.id !== postId),
-      );
-      return { previous, listKey };
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
+      queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
+        if (!current) {
+          return current;
+        }
+        if (Array.isArray(current)) {
+          return current.filter((post) => !post || (post as PostWithMeta).id !== postId);
+        }
+        if (typeof current === 'object' && (current as PostWithMeta).id === postId) {
+          return { ...(current as PostWithMeta), deleted_at: new Date().toISOString() };
+        }
+        return current;
+      });
+      return { previous };
     },
     onError: (_error, _postId, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(context.listKey, context.previous);
+      for (const [queryKey, data] of context?.previous ?? []) {
+        queryClient.setQueryData(queryKey, data);
       }
     },
   });

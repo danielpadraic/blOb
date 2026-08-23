@@ -1,3 +1,4 @@
+import { THEME } from '@/lib/theme';
 import type { Reaction, ReactionType } from '@/lib/types';
 
 export const POST_REACTION_TYPES = ['like', 'love', 'care', 'fire', 'sad'] as const;
@@ -5,7 +6,7 @@ export const POST_REACTION_TYPES = ['like', 'love', 'care', 'fire', 'sad'] as co
 export type PostReactionType = (typeof POST_REACTION_TYPES)[number];
 
 export const POST_REACTION_COLORS: Record<PostReactionType, string> = {
-  like: '#D24A5A',
+  like: THEME.accent,
   love: '#E23D6B',
   care: '#F5A524',
   fire: '#E86A17',

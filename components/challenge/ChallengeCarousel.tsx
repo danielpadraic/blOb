@@ -1,6 +1,10 @@
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
-import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
+import {
+  ChallengeInviteCard,
+  type InviteHost,
+  type InviteSection,
+} from '@/components/challenge/ChallengeInviteCard';
 import { type MenuAnchor } from '@/components/challenge/ChallengeOverflowMenu';
 import { AppText } from '@/components/ui/AppText';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -11,12 +15,21 @@ export type CarouselSocialProof = {
   kind: 'hosting' | 'joined';
 };
 
+export type CarouselProgress = {
+  days: number;
+  status: string;
+  eliminated?: boolean;
+};
+
 type ChallengeCarouselProps = {
   title: string;
   challenges: ChallengeWithStats[];
+  section?: InviteSection;
   currentUserId?: string;
-  progressById?: Map<string, { days: number; status: string }>;
+  progressById?: Map<string, CarouselProgress>;
   socialProofById?: Map<string, CarouselSocialProof>;
+  hostById?: Map<string, InviteHost>;
+  selfHost?: InviteHost | null;
   onPress: (id: string) => void;
   allowCancel?: boolean;
   official?: boolean;
@@ -24,14 +37,17 @@ type ChallengeCarouselProps = {
   onOverflow?: (challenge: ChallengeWithStats, anchor: MenuAnchor) => void;
 };
 
-const CARD_GAP = 14;
+const CARD_GAP = 12;
 
 export function ChallengeCarousel({
   title,
   challenges,
+  section,
   currentUserId,
   progressById,
   socialProofById,
+  hostById,
+  selfHost,
   onPress,
   showStateTags = false,
 }: ChallengeCarouselProps) {
@@ -39,7 +55,7 @@ export function ChallengeCarousel({
   if (challenges.length === 0) {
     return null;
   }
-  const cardWidth = Math.min(Math.round(width * 0.83), 420);
+  const cardWidth = Math.min(Math.round(width * 0.84), 420);
 
   return (
     <View className="mb-5">
@@ -59,22 +75,23 @@ export function ChallengeCarousel({
           const mine = progressById?.get(challenge.id);
           const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
           const proof = socialProofById?.get(challenge.id);
-          const host = challenge.is_official
+          const resolvedHost = challenge.is_official
             ? null
             : hosting
-              ? { name: 'You' }
-              : proof?.kind === 'hosting'
-                ? { name: proof.name, avatarUrl: proof.avatarUrl }
-                : null;
+              ? (selfHost ?? { name: 'You' })
+              : (challenge.created_by && hostById?.get(challenge.created_by)) ||
+                (proof?.kind === 'hosting' ? { name: proof.name, avatarUrl: proof.avatarUrl } : null);
           return (
             <View key={challenge.id} style={{ width: cardWidth, marginRight: CARD_GAP }}>
               <ChallengeInviteCard
                 challenge={challenge}
                 theme={challenge.is_official ? 'official' : 'user'}
                 context="lobby"
+                section={section}
                 joined={Boolean(mine)}
                 hosting={hosting}
-                host={host}
+                eliminated={Boolean(mine?.eliminated)}
+                host={resolvedHost}
                 showStateTags={showStateTags}
                 onPress={() => onPress(challenge.id)}
               />

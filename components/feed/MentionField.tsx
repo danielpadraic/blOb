@@ -45,6 +45,7 @@ type MentionFieldProps = {
   placeholder?: string;
   autoFocus?: boolean;
   compact?: boolean;
+  collapsed?: boolean;
   pickerPlacement?: 'above' | 'below';
   initialText?: string;
   initialMention?: MentionChip | null;
@@ -53,6 +54,8 @@ type MentionFieldProps = {
   excludeIds?: string[];
   onChange: (doc: MentionDoc) => void;
   onSubmit?: () => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
   accessibilityLabel?: string;
 };
 
@@ -67,6 +70,7 @@ function MentionFieldInner(
     placeholder,
     autoFocus,
     compact,
+    collapsed,
     pickerPlacement = 'below',
     initialText,
     initialMention,
@@ -75,6 +79,8 @@ function MentionFieldInner(
     excludeIds,
     onChange,
     onSubmit,
+    onFocus,
+    onBlur,
     accessibilityLabel,
   }: MentionFieldProps,
   ref: ForwardedRef<MentionFieldHandle>,
@@ -102,7 +108,7 @@ function MentionFieldInner(
   const chipNames = useMemo(() => chips.map((chip) => chip.username), [chips]);
   const tokens = useMemo(() => mentionTokenRanges(text, chipNames), [chipNames, text]);
   const query = mentionQueryAtCursor(text, selection.start);
-  const open = Boolean(query) && !suppressed;
+  const open = Boolean(query) && !suppressed && !collapsed;
   const candidates = useMentionCandidates({
     query: query?.query ?? '',
     audience,
@@ -317,7 +323,15 @@ function MentionFieldInner(
         keyboardType="default"
         accessibilityLabel={accessibilityLabel ?? 'Write a post'}
         onSubmitEditing={onSubmit}
+        onFocus={onFocus}
+        onBlur={onBlur}
         onContentSizeChange={(event) => {
+          if (collapsed) {
+            if (height !== MIN_HEIGHT) {
+              setHeight(MIN_HEIGHT);
+            }
+            return;
+          }
           const next = Math.min(
             MAX_HEIGHT,
             Math.max(MIN_HEIGHT, Math.ceil(event.nativeEvent.contentSize.height)),
@@ -328,8 +342,8 @@ function MentionFieldInner(
         }}
         style={{
           minHeight: MIN_HEIGHT,
-          height,
-          maxHeight: MAX_HEIGHT,
+          height: collapsed ? MIN_HEIGHT : height,
+          maxHeight: collapsed ? MIN_HEIGHT : MAX_HEIGHT,
           paddingVertical: 6,
           paddingHorizontal: 0,
           color: THEME.textPrimary,

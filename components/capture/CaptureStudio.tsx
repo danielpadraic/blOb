@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useRouter } from 'expo-router';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
@@ -10,6 +11,7 @@ import { captureKindFor, type CapturedMedia, type CaptureMode } from '@/componen
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
@@ -271,6 +273,7 @@ export function CaptureStudio({
       <View className="flex-1">
         <InAppCamera
           capture={captureKind}
+          facingKind={mode === 'post' ? 'proof' : 'social'}
           maxDuration={maxDuration}
           blocked={mode === 'story' ? false : Boolean(denied && denied.kind !== 'library')}
           blockedReason={
@@ -344,11 +347,7 @@ export function CaptureStudio({
           {draft.mediaType === 'image' ? (
             <Image source={{ uri: draft.uri }} style={{ width: '100%', height: 280 }} contentFit="cover" />
           ) : (
-            <View className="h-[200px] items-center justify-center" style={{ backgroundColor: THEME.primary }}>
-              <AppText className="text-[14px] font-semibold" style={{ color: THEME.primaryForeground }}>
-                Clip ready
-              </AppText>
-            </View>
+            <DraftClipPreview uri={draft.uri} />
           )}
           <Pressable
             accessibilityRole="button"
@@ -449,5 +448,69 @@ export function CaptureStudio({
         onPress={() => void publish()}
       />
     </ScrollView>
+  );
+}
+
+function DraftClipPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (instance) => {
+    instance.loop = false;
+    instance.muted = true;
+    instance.currentTime = 0;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    player.muted = true;
+    player.currentTime = 0.05;
+    try {
+      player.play();
+    } catch {
+      // First-frame decode can fail on a still-creating blob URL.
+    }
+    const id = setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+      player.pause();
+      player.currentTime = 0.05;
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [player, uri]);
+
+  return (
+    <View style={{ width: '100%', height: 280, backgroundColor: THEME.primary }}>
+      <VideoView
+        player={player}
+        style={{ width: '100%', height: 280 }}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(16,19,18,0.55)',
+          }}>
+          <Glyph name={GLYPH.play} color="#fff" size={18} />
+        </View>
+      </View>
+    </View>
   );
 }

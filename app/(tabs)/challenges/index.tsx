@@ -4,6 +4,7 @@ import { RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
 import { ChallengeCarousel, type CarouselSocialProof } from '@/components/challenge/ChallengeCarousel';
+import type { InviteHost } from '@/components/challenge/ChallengeInviteCard';
 import {
   ChallengeMenuPopover,
   type MenuAnchor,
@@ -100,7 +101,7 @@ export default function ChallengesScreen() {
   const drafts = (draftsQuery.data ?? []).filter(isVisibleDraft);
   const search = query.trim();
   const progressById = useMemo(() => {
-    const map = new Map<string, { days: number; status: string }>();
+    const map = new Map<string, { days: number; status: string; eliminated?: boolean }>();
     for (const row of mine.data ?? []) {
       if (!isLobbyParticipant(row.status)) {
         continue;
@@ -108,10 +109,20 @@ export default function ChallengesScreen() {
       map.set(row.challenge_id, {
         days: Number(row.days_completed ?? 0),
         status: row.status ?? 'joined',
+        eliminated: Boolean(row.eliminated_at),
       });
     }
     return map;
   }, [mine.data]);
+  const selfHost = useMemo<InviteHost | null>(() => {
+    if (!profile) {
+      return user ? { name: 'You' } : null;
+    }
+    return {
+      name: personDisplayName(profile),
+      avatarUrl: profile.avatar_url,
+    };
+  }, [profile, user]);
   const hosting = (hostingQuery.data ?? []).filter(
     (row) => matchesSearch(row.title, search) && !progressById.has(row.id),
   );
@@ -150,6 +161,30 @@ export default function ChallengesScreen() {
     }
     return map;
   }, [friendProfiles.data, friends]);
+  const hostIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of [...active, ...hosting, ...friends.map((item) => item.challenge)]) {
+      if (!row.is_official && row.created_by && row.created_by !== user?.id) {
+        ids.add(row.created_by);
+      }
+    }
+    return [...ids];
+  }, [active, hosting, friends, user?.id]);
+  const hostProfiles = useQuery({
+    queryKey: ['lobby-host-profiles', hostIds.join(',')],
+    enabled: hostIds.length > 0,
+    queryFn: () => fetchPublicProfilesByIds(hostIds),
+  });
+  const hostById = useMemo(() => {
+    const map = new Map<string, InviteHost>();
+    for (const row of hostProfiles.data ?? []) {
+      map.set(row.id, {
+        name: personDisplayName(row),
+        avatarUrl: row.avatar_url,
+      });
+    }
+    return map;
+  }, [hostProfiles.data]);
 
   const loading =
     (hostingQuery.isPending && !hostingQuery.data) &&
@@ -271,8 +306,11 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railOfficial')}
             challenges={official}
+            section="official"
             currentUserId={user?.id}
             progressById={progressById}
+            hostById={hostById}
+            selfHost={selfHost}
             onPress={openChallenge}
             allowCancel
             official={isOfficialAccount(profile)}
@@ -283,8 +321,11 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railActive')}
             challenges={active}
+            section="active"
             currentUserId={user?.id}
             progressById={progressById}
+            hostById={hostById}
+            selfHost={selfHost}
             onPress={openChallenge}
             showStateTags
             allowCancel
@@ -296,16 +337,22 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railFriends')}
             challenges={friends.map((row) => row.challenge)}
+            section="friends"
             currentUserId={user?.id}
             progressById={progressById}
             socialProofById={socialProofById}
+            hostById={hostById}
+            selfHost={selfHost}
             onPress={openChallenge}
           />
           <ChallengeCarousel
             title={copy('lobby.railHosting')}
             challenges={hosting}
+            section="hosting"
             currentUserId={user?.id}
             progressById={progressById}
+            hostById={hostById}
+            selfHost={selfHost}
             onPress={openChallenge}
             allowCancel
             official={isOfficialAccount(profile)}

@@ -100,6 +100,7 @@ function CommentItem({
   audienceUserIds?: string[];
 }) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
   const handle = comment.author?.username ?? 'blob';
   const replies = comment.replies ?? [];
@@ -145,7 +146,14 @@ function CommentItem({
               reactions={comment.reactions}
               currentUserId={currentUserId}
               onReact={(type) => onReact?.(comment.id, type)}
-              onReply={() => setOpen((value) => !value)}
+              onReply={() => {
+                if (!open) {
+                  setOpen(true);
+                  setExpanded(true);
+                  return;
+                }
+                setExpanded((value) => !value);
+              }}
             />
           </View>
         </View>
@@ -158,6 +166,8 @@ function CommentItem({
             submitting={composing}
             audience={audience}
             audienceUserIds={audienceUserIds}
+            expanded={expanded}
+            onExpandedChange={setExpanded}
             replyTo={{
               userId: comment.author_id,
               username: handle,
@@ -167,6 +177,7 @@ function CommentItem({
               try {
                 await onReply(text, comment.id, mentionedUserIds);
                 setOpen(false);
+                setExpanded(true);
               } catch (error) {
                 Alert.alert('Couldn’t post that reply', getErrorMessage(error));
               }

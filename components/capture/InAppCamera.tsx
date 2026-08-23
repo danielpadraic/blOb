@@ -1,10 +1,22 @@
-import { createElement, useEffect, useRef, useState } from 'react';
+import {
+  createElement,
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import { Platform, Pressable, View } from 'react-native';
-import { CameraView, type CameraType } from 'expo-camera';
+import { CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { lastCameraFacing, rememberCameraFacing } from '@/components/capture/cameraFacing';
+import {
+  lastCameraFacing,
+  rememberCameraFacing,
+  type CameraFacingKind,
+} from '@/components/capture/cameraFacing';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import {
@@ -41,6 +53,7 @@ type InAppCameraProps = {
   onStartWatch?: () => void;
   hrScreenshot?: boolean;
   faceHint?: string | null;
+  facingKind?: CameraFacingKind;
 };
 
 export function InAppCamera({
@@ -60,6 +73,7 @@ export function InAppCamera({
   onStartWatch,
   hrScreenshot = false,
   faceHint = null,
+  facingKind = 'proof',
 }: InAppCameraProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
@@ -67,13 +81,12 @@ export function InAppCamera({
   const webStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing());
+  const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing(facingKind));
   const [capture, setCapture] = useState<CaptureMedia>(captureProp);
   const [ready, setReady] = useState(false);
   const [fail, setFail] = useState<CameraFail>(null);
   const [retry, setRetry] = useState(0);
   const [recording, setRecording] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const recordingRef = useRef(false);
   const holdRef = useRef(false);
@@ -159,25 +172,25 @@ export function InAppCamera({
     };
   }, [facing, parentBlocked, retry, video, web]);
 
-  useEffect(() => {
-    if (!recording) {
-      setElapsed(0);
+  const attachWebVideo = useCallback((node: HTMLVideoElement | null) => {
+    webVideoRef.current = node;
+    const stream = webStreamRef.current;
+    if (!node || !stream) {
       return;
     }
-    const started = Date.now();
-    const tick = setInterval(() => {
-      setElapsed(Math.min(maxDuration, (Date.now() - started) / 1000));
-    }, 80);
-    return () => clearInterval(tick);
-  }, [maxDuration, recording]);
-
-  function attachWebVideo(node: HTMLVideoElement | null) {
-    webVideoRef.current = node;
-    if (node && webStreamRef.current) {
-      node.srcObject = webStreamRef.current;
+    if (node.srcObject !== stream) {
+      node.srcObject = stream;
       void node.play().catch((error) => logCameraError(error, 'video.attach'));
     }
-  }
+  }, []);
+
+  const onCameraReady = useCallback(() => {
+    setReady(true);
+    setFail(null);
+  }, []);
+
+  const onCameraDenied = useCallback(() => setFail('denied'), []);
+  const onCameraMissing = useCallback(() => setFail('missing'), []);
 
   async function takePhoto() {
     if (!shutterEnabled) {
@@ -361,43 +374,16 @@ export function InAppCamera({
   return (
     <View className="flex-1 overflow-hidden" style={{ backgroundColor: THEME.primary }}>
       {web && !parentBlocked && fail == null ? (
-        <View style={{ flex: 1 }}>
-          {createElement('video', {
-            ref: attachWebVideo,
-            autoPlay: true,
-            muted: true,
-            playsInline: true,
-            style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#101312' },
-          })}
-        </View>
+        <WebCameraPreview attach={attachWebVideo} />
       ) : !showDenied ? (
-        <CameraView
-          ref={cameraRef}
-          style={{ flex: 1 }}
+        <NativeCameraPreview
+          cameraRef={cameraRef}
           facing={facing}
-          mode={video ? 'video' : 'picture'}
-          mute={false}
-          onCameraReady={() => {
-            setReady(true);
-            setFail(null);
-          }}
-          onMountError={(event) => {
-            const message = String((event as { message?: string })?.message ?? event ?? '');
-            const synthetic = new Error(message);
-            if (message.toLowerCase().includes('allow')) {
-              synthetic.name = 'NotAllowedError';
-            } else if (message.toLowerCase().includes('found') || message.toLowerCase().includes('device')) {
-              synthetic.name = 'NotFoundError';
-            }
-            logCameraError(synthetic, 'onMountError');
-            const kind = cameraErrorKind(synthetic);
-            if (kind === 'missing') {
-              setFail('missing');
-              onUnavailable?.();
-              return;
-            }
-            setFail('denied');
-          }}
+          video={video}
+          onReady={onCameraReady}
+          onUnavailable={onUnavailable}
+          onDenied={onCameraDenied}
+          onMissing={onCameraMissing}
         />
       ) : (
         <View className="flex-1 items-center justify-center px-6">
@@ -436,9 +422,7 @@ export function InAppCamera({
             Close
           </AppText>
         </Pressable>
-        <AppText className="text-[12px] font-semibold" style={{ color: '#fff' }}>
-          {recording ? `${Math.ceil(elapsed)}s / ${maxDuration}s` : `${maxDuration}s`}
-        </AppText>
+        <RecordingClock recording={recording} maxDuration={maxDuration} />
         {onUseWorkout || onStartWatch ? (
           <View className="items-end" style={{ gap: 8, maxWidth: 168 }}>
             {onUseWorkout ? (
@@ -533,9 +517,7 @@ export function InAppCamera({
           </Pressable>
 
           <View style={{ width: 82, height: 82, alignItems: 'center', justifyContent: 'center' }}>
-            {video ? (
-              <ShutterRing progress={recording ? elapsed / maxDuration : 0} />
-            ) : null}
+            {video ? <RecordingRing recording={recording} maxDuration={maxDuration} /> : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={shutterLabel}
@@ -566,7 +548,7 @@ export function InAppCamera({
             onPress={() =>
               setFacing((current) => {
                 const next = current === 'back' ? 'front' : 'back';
-                rememberCameraFacing(next);
+                rememberCameraFacing(next, facingKind);
                 return next;
               })
             }
@@ -585,6 +567,115 @@ export function InAppCamera({
       </View>
     </View>
   );
+}
+
+function useRecordingElapsed(recording: boolean, maxDuration: number) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!recording) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const tick = setInterval(() => {
+      setElapsed(Math.min(maxDuration, (Date.now() - started) / 1000));
+    }, 250);
+    return () => clearInterval(tick);
+  }, [maxDuration, recording]);
+  return elapsed;
+}
+
+const WebCameraPreview = memo(function WebCameraPreview({
+  attach,
+}: {
+  attach: (node: HTMLVideoElement | null) => void;
+}) {
+  return (
+    <View style={{ flex: 1 }}>
+      {createElement('video', {
+        ref: attach,
+        autoPlay: true,
+        muted: true,
+        playsInline: true,
+        style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#101312' },
+      })}
+    </View>
+  );
+});
+
+const NativeCameraPreview = memo(function NativeCameraPreview({
+  cameraRef,
+  facing,
+  video,
+  onReady,
+  onUnavailable,
+  onDenied,
+  onMissing,
+}: {
+  cameraRef: RefObject<CameraView | null>;
+  facing: CameraType;
+  video: boolean;
+  onReady: () => void;
+  onUnavailable?: () => void;
+  onDenied: () => void;
+  onMissing: () => void;
+}) {
+  const onReadyRef = useRef(onReady);
+  const onUnavailableRef = useRef(onUnavailable);
+  const onDeniedRef = useRef(onDenied);
+  const onMissingRef = useRef(onMissing);
+  onReadyRef.current = onReady;
+  onUnavailableRef.current = onUnavailable;
+  onDeniedRef.current = onDenied;
+  onMissingRef.current = onMissing;
+
+  const handleReady = useCallback(() => {
+    onReadyRef.current();
+  }, []);
+
+  const handleMountError = useCallback((event: CameraMountError) => {
+    const message = String(event?.message ?? '');
+    const synthetic = new Error(message);
+    if (message.toLowerCase().includes('allow')) {
+      synthetic.name = 'NotAllowedError';
+    } else if (message.toLowerCase().includes('found') || message.toLowerCase().includes('device')) {
+      synthetic.name = 'NotFoundError';
+    }
+    logCameraError(synthetic, 'onMountError');
+    const kind = cameraErrorKind(synthetic);
+    if (kind === 'missing') {
+      onMissingRef.current();
+      onUnavailableRef.current?.();
+      return;
+    }
+    onDeniedRef.current();
+  }, []);
+
+  return (
+    <CameraView
+      ref={cameraRef}
+      style={{ flex: 1 }}
+      facing={facing}
+      mode={video ? 'video' : 'picture'}
+      mute={false}
+      onCameraReady={handleReady}
+      onMountError={handleMountError}
+    />
+  );
+}, (prev, next) => prev.facing === next.facing && prev.video === next.video && prev.cameraRef === next.cameraRef);
+
+function RecordingClock({ recording, maxDuration }: { recording: boolean; maxDuration: number }) {
+  const elapsed = useRecordingElapsed(recording, maxDuration);
+  return (
+    <AppText className="text-[12px] font-semibold" style={{ color: '#fff' }}>
+      {recording ? `${Math.ceil(elapsed)}s / ${maxDuration}s` : `${maxDuration}s`}
+    </AppText>
+  );
+}
+
+function RecordingRing({ recording, maxDuration }: { recording: boolean; maxDuration: number }) {
+  const elapsed = useRecordingElapsed(recording, maxDuration);
+  return <ShutterRing progress={recording ? elapsed / maxDuration : 0} />;
 }
 
 function ShutterRing({ progress }: { progress: number }) {

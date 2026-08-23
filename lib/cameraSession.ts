@@ -44,14 +44,17 @@ export function takePrimedCameraStream(): MediaStream | null {
   return stream;
 }
 
-export async function primeCameraFromGesture(kind: 'photo' | 'video' = 'video'): Promise<void> {
+export async function primeCameraFromGesture(
+  kind: 'photo' | 'video' = 'video',
+  facing: 'front' | 'back' = 'front',
+): Promise<void> {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     return;
   }
   stopPrimedCameraStream();
   try {
     primed = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' },
+      video: { facingMode: facing === 'front' ? 'user' : 'environment' },
       audio: kind === 'video',
     });
   } catch (error) {

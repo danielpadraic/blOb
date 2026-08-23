@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
@@ -5,24 +6,40 @@ import { ChallengeCarousel } from '@/components/challenge/ChallengeCarousel';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeedActiveChallenges, useMyChallengeProgress } from '@/hooks/useChallenge';
+import { useMyProfile } from '@/hooks/useProfile';
 import { copy } from '@/lib/copy';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { challengeDetailHref } from '@/lib/routes';
+import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
 export function ChallengeRail() {
   const router = useRouter();
   const { user } = useAuth();
+  const { profile } = useMyProfile();
   const active = useFeedActiveChallenges();
   const mine = useMyChallengeProgress();
 
   const progressById = new Map(
     (mine.data ?? []).map((row) => [
       row.challenge_id,
-      { days: Number(row.days_completed ?? 0), status: row.status ?? 'joined' },
+      {
+        days: Number(row.days_completed ?? 0),
+        status: row.status ?? 'joined',
+        eliminated: Boolean(row.eliminated_at),
+      },
     ]),
   );
   const activeRows = (active.data ?? []).filter((row) => !isOfficialSeriesChallenge(row));
+  const selfHost = useMemo(
+    () =>
+      profile
+        ? { name: personDisplayName(profile), avatarUrl: profile.avatar_url }
+        : user
+          ? { name: 'You' }
+          : null,
+    [profile, user],
+  );
 
   if (activeRows.length === 0) {
     return null;
@@ -39,6 +56,7 @@ export function ChallengeRail() {
         challenges={activeRows}
         currentUserId={user?.id}
         progressById={progressById}
+        selfHost={selfHost}
         onPress={open}
       />
       <Pressable

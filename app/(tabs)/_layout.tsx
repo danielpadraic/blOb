@@ -175,7 +175,10 @@ function TabLayoutInner() {
     }
     if (id === 'reel') {
       // Action id stays `reel`; capture URL stays mode=reel. User-facing name is Round.
-      go(CAPTURE_REEL_HREF);
+      closeOverlays();
+      void primeCameraFromGesture('video').then(() => {
+        setTimeout(() => router.push(CAPTURE_REEL_HREF), 60);
+      });
       return;
     }
     if (id === 'coins') {
@@ -192,6 +195,7 @@ function TabLayoutInner() {
   const friendsTabRoot = pathname === '/friends';
 
   return (
+    <MediaLightboxHost>
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
       {isChallengeIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
         <TabChromeHeader
@@ -206,7 +210,6 @@ function TabLayoutInner() {
         style={{ overflow: friendsTabRoot ? 'visible' : 'hidden', minHeight: 0 }}>
         <InviteHost>
         <SocialSheetsHost>
-        <MediaLightboxHost>
         <Tabs
           tabBar={() => null}
           screenOptions={{
@@ -261,7 +264,6 @@ function TabLayoutInner() {
         />
         <HealthLogPromptHost />
         {onOnboarding ? null : <OfficialPitchHost />}
-        </MediaLightboxHost>
         </SocialSheetsHost>
         </InviteHost>
       </View>
@@ -284,6 +286,7 @@ function TabLayoutInner() {
         </>
       )}
     </View>
+    </MediaLightboxHost>
   );
 }
 

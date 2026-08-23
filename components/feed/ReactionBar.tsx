@@ -22,6 +22,48 @@ const REACTION_GLYPH: Record<PostReactionType, GlyphId> = {
   sad: GLYPH.sad,
 };
 
+const noSelectStyle =
+  Platform.OS === 'web'
+    ? ({
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+      } as const)
+    : undefined;
+
+function clearWebSelection() {
+  if (Platform.OS !== 'web') {
+    return;
+  }
+  (
+    globalThis as { getSelection?: () => { removeAllRanges?: () => void } | null }
+  )
+    .getSelection?.()
+    ?.removeAllRanges?.();
+}
+
+function webNoSelectProps() {
+  if (Platform.OS !== 'web') {
+    return null;
+  }
+  return {
+    onContextMenu: (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+    },
+    onMouseDown: (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+    },
+  };
+}
+
+function openReactionTray(setOpen: (next: boolean) => void) {
+  if (Platform.OS !== 'web') {
+    Vibration.vibrate(10);
+  }
+  clearWebSelection();
+  setOpen(true);
+}
+
 type ReactionBarProps = {
   reactions?: Reaction[];
   currentUserId?: string;
@@ -50,6 +92,16 @@ export function ReactionBar({
 
   if (compact) {
     return (
+      <View>
+        {trayOpen ? (
+          <ReactionTray
+            selected={mineType}
+            onPick={(type) => {
+              setTrayOpen(false);
+              onReact(type);
+            }}
+          />
+        ) : null}
       <View className="flex-row items-center" style={{ columnGap: 2 }}>
         <Action
           compact
@@ -57,7 +109,14 @@ export function ReactionBar({
           label="Like"
           count={total}
           color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
-          onPress={() => onReact('like')}
+          onPress={() => {
+            if (trayOpen) {
+              setTrayOpen(false);
+              return;
+            }
+            onReact('like');
+          }}
+          onLongPress={() => openReactionTray(setTrayOpen)}
         />
         {onReply ? (
           <Action
@@ -74,6 +133,7 @@ export function ReactionBar({
             <ShareAction compact onShare={onShare} />
           </View>
         ) : null}
+      </View>
       </View>
     );
   }
@@ -109,20 +169,20 @@ export function ReactionBar({
             }
             onReact('like');
           }}
-          onLongPress={() => {
-            if (Platform.OS !== 'web') {
-              Vibration.vibrate(10);
-            }
-            setTrayOpen(true);
-          }}
-          className="h-9 flex-row items-center px-1.5">
+          onLongPress={() => openReactionTray(setTrayOpen)}
+          {...webNoSelectProps()}
+          className="h-9 flex-row items-center px-1.5"
+          style={noSelectStyle}>
           <Glyph
             name={mineType ? REACTION_GLYPH[mineType] : GLYPH.strongOutline}
             color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
             size={18}
           />
           {total > 0 ? (
-            <AppText className="ml-1 text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
+            <AppText
+              selectable={false}
+              className="ml-1 text-[13px] font-semibold"
+              style={[{ color: THEME.textPrimary }, noSelectStyle]}>
               {total}
             </AppText>
           ) : null}
@@ -248,6 +308,7 @@ function Action({
   color,
   compact,
   onPress,
+  onLongPress,
 }: {
   icon: GlyphId;
   label: string;
@@ -255,23 +316,29 @@ function Action({
   color: string;
   compact?: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={count > 0 ? `${label} ${count}` : label}
+      delayLongPress={onLongPress ? 280 : undefined}
       onPress={onPress}
+      onLongPress={onLongPress}
+      {...(onLongPress ? webNoSelectProps() : null)}
       className={
         compact
           ? 'h-6 flex-row items-center rounded-full px-1'
           : 'h-7 flex-row items-center rounded-full px-1.5'
       }
-      hitSlop={compact ? 4 : 6}>
+      hitSlop={compact ? 4 : 6}
+      style={onLongPress ? noSelectStyle : undefined}>
       <Glyph name={icon} color={color} size={compact ? 14 : 16} />
       {count > 0 ? (
         <AppText
+          selectable={false}
           className={compact ? 'ml-0.5 text-[10px] font-bold' : 'ml-1 text-[12px] font-bold'}
-          style={{ color }}>
+          style={[{ color }, onLongPress ? noSelectStyle : null]}>
           {count}
         </AppText>
       ) : null}
