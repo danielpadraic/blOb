@@ -18,7 +18,11 @@ export function mediaKind(url: string): MediaKind {
   if (/\.(pdf|txt|csv|zip|docx?)$/.test(path) || /\/object\/public\/post-media\/[^/]+\/files\//.test(path)) {
     return 'file';
   }
-  if (/\/object\/public\/post-media\//.test(path) || /\/object\/public\/avatars\//.test(path)) {
+  if (
+    /\/object\/public\/post-media\//.test(path) ||
+    /\/object\/public\/avatars\//.test(path) ||
+    /\/storage\/v1\/object\//.test(path)
+  ) {
     return 'image';
   }
   if (/^https?:\/\//.test(url)) {
