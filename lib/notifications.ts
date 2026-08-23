@@ -68,6 +68,114 @@ export function asNotification(row: AppNotification): AppNotification {
   };
 }
 
+const STACKABLE_TYPES = new Set(['post_reaction', 'post_comment', 'tagged', 'mentioned']);
+
+function interactionStackKey(item: AppNotification): string | null {
+  if (!STACKABLE_TYPES.has(item.type)) {
+    return null;
+  }
+  if (item.data.stack_key) {
+    return `${item.type}:${item.data.stack_key}`;
+  }
+  const postId = notificationPostId(item.data);
+  const commentId = item.data.comment_id;
+  if (item.type === 'post_reaction') {
+    if (commentId) {
+      return `${item.type}:comment:${commentId}`;
+    }
+    return postId ? `${item.type}:post:${postId}` : null;
+  }
+  if (item.type === 'post_comment') {
+    return postId ? `${item.type}:post:${postId}` : null;
+  }
+  if (item.type === 'tagged') {
+    return postId ? `${item.type}:post:${postId}` : null;
+  }
+  if (item.type === 'mentioned' && commentId) {
+    return `${item.type}:comment:${commentId}`;
+  }
+  return null;
+}
+
+function stackedSuffix(type: string, stackKey: string): { one: string; many: string } {
+  if (type === 'post_reaction') {
+    return stackKey.includes('comment:')
+      ? { one: 'reacted to your comment', many: 'reacted to your comment' }
+      : { one: 'reacted to your post', many: 'reacted to your post' };
+  }
+  if (type === 'post_comment') {
+    return stackKey.includes('comment:')
+      ? { one: 'replied to your comment', many: 'replied to your comment' }
+      : { one: 'replied to your post', many: 'replied to your post' };
+  }
+  if (type === 'mentioned') {
+    return { one: 'tagged you', many: 'tagged you in a comment' };
+  }
+  return { one: 'tagged you', many: 'tagged you in a post' };
+}
+
+export function stackedInteractionTitle(name: string, count: number, one: string, many: string): string {
+  const display = name.trim() || 'Someone';
+  if (count <= 1) {
+    return `${display} ${one}`;
+  }
+  const others = count - 1;
+  return others === 1
+    ? `${display} and 1 other ${many}`
+    : `${display} and ${others} others ${many}`;
+}
+
+export function collapseStackedNotifications(items: AppNotification[]): AppNotification[] {
+  const seen = new Map<string, AppNotification>();
+  const out: AppNotification[] = [];
+  for (const item of items) {
+    const key = interactionStackKey(item);
+    if (!key) {
+      out.push(item);
+      continue;
+    }
+    const current = seen.get(key);
+    if (!current) {
+      seen.set(key, item);
+      out.push(item);
+      continue;
+    }
+    const ids = new Set<string>();
+    for (const id of current.data.actor_ids ?? []) {
+      if (id) {
+        ids.add(id);
+      }
+    }
+    for (const id of item.data.actor_ids ?? []) {
+      if (id) {
+        ids.add(id);
+      }
+    }
+    if (current.actor_id) {
+      ids.add(current.actor_id);
+    }
+    if (item.actor_id) {
+      ids.add(item.actor_id);
+    }
+    const count = Math.max(ids.size, Number(current.data.count) || 1, Number(item.data.count) || 1);
+    const suffix = stackedSuffix(current.type, key);
+    const name = current.actor?.display_name || current.actor?.username || 'Someone';
+    current.data = {
+      ...current.data,
+      actor_ids: [...ids],
+      count,
+    };
+    current.title = stackedInteractionTitle(name, count, suffix.one, suffix.many);
+    if (!current.read_at || (item.read_at && item.read_at < current.read_at)) {
+      current.read_at = item.read_at ?? current.read_at;
+    }
+    if (item.read_at == null) {
+      current.read_at = null;
+    }
+  }
+  return out;
+}
+
 export async function fetchNotifications(): Promise<AppNotification[]> {
   const { data, error } = await supabase
     .from('notifications')
@@ -84,18 +192,20 @@ export async function fetchNotifications(): Promise<AppNotification[]> {
   const rows = ((data ?? []) as AppNotification[]).map(asNotification);
   const actorIds = [...new Set(rows.map((row) => row.actor_id).filter(Boolean))] as string[];
   if (actorIds.length === 0) {
-    return rows;
+    return collapseStackedNotifications(rows);
   }
   try {
     const actors = await fetchPublicProfilesByIds(actorIds);
     const byId = new Map(actors.map((profile) => [profile.id, profile]));
-    return rows.map((row) => ({
-      ...row,
-      actor: row.actor_id ? byId.get(row.actor_id) ?? null : null,
-    }));
+    return collapseStackedNotifications(
+      rows.map((row) => ({
+        ...row,
+        actor: row.actor_id ? byId.get(row.actor_id) ?? null : null,
+      })),
+    );
   } catch (error) {
     console.log('[blob:notifications] actor hydrate skipped', getErrorMessage(error));
-    return rows;
+    return collapseStackedNotifications(rows);
   }
 }
 

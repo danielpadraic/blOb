@@ -688,6 +688,9 @@ export type NotificationData = {
   can_shorten?: boolean;
   category?: string;
   line_index?: number;
+  actor_ids?: string[];
+  count?: number;
+  stack_key?: string;
 };
 
 export interface AppNotification {

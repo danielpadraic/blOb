@@ -16,6 +16,10 @@ export const PUSH_PROMPT_TYPES = new Set([
   'challenge_invite',
   'challenge_join_confirmed',
   'challenge_joined',
+  'tagged',
+  'mentioned',
+  'post_comment',
+  'post_reaction',
 ]);
 
 export type PushPermissionState = 'undetermined' | 'granted' | 'denied' | 'unavailable';
