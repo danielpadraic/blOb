@@ -59,6 +59,7 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     privacy_version: profile.privacy_version ?? null,
     tutorial_completed_at: profile.tutorial_completed_at ?? null,
     create_tour_opt_out_at: profile.create_tour_opt_out_at ?? null,
+    official_pitch_dismissed_challenge_id: profile.official_pitch_dismissed_challenge_id ?? null,
   };
 }
 

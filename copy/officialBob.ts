@@ -20,6 +20,7 @@ const OFFICIAL_BOB = {
   loginBody: BOB_PITCH,
   loginCta: 'See this week’s challenge',
   loginSkip: 'Not now',
+  loginDontShow: 'Do not show again',
   cardPromise: OFFICIAL_DETAILS_LINES[0],
   cardSplit: OFFICIAL_DETAILS_LINES[1],
   legalBoard: OFFICIAL_DETAILS_LINES[1],

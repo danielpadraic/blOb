@@ -265,6 +265,7 @@ export interface Profile {
   privacy_version?: string | null;
   tutorial_completed_at?: string | null;
   create_tour_opt_out_at?: string | null;
+  official_pitch_dismissed_challenge_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1311,6 +1312,10 @@ export type Database = {
       };
       set_create_tour_opt_out: {
         Args: { p_opt_out: boolean };
+        Returns: string | null;
+      };
+      set_official_pitch_dismissed: {
+        Args: { p_challenge_id: string };
         Returns: string | null;
       };
       notify_story_shared: {

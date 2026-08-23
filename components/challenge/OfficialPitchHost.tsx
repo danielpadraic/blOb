@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSegments } from 'expo-router';
 
@@ -10,7 +10,13 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { officialBob } from '@/copy/officialBob';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyProfile } from '@/hooks/useProfile';
 import { fetchOfficialDiscoverChallenges } from '@/lib/challenges';
+import {
+  officialPitchSuppressed,
+  persistOfficialPitchDismissed,
+  readOfficialPitchDismissedId,
+} from '@/lib/officialPitch';
 import { OFFICIAL_ACTIVE_STATUSES } from '@/lib/officialSeries';
 import { challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
@@ -18,10 +24,12 @@ import { THEME, themeShadow } from '@/lib/theme';
 
 const LIVE_JOIN = ['joined', 'active', 'completed'] as const;
 
+/** Not now: hide for this app session only. Do not show again writes a persisted id. */
 let skippedThisSession = false;
 
 export function OfficialPitchHost() {
   const { user } = useAuth();
+  const { profile } = useMyProfile();
   const router = useRouter();
   const segments = useSegments();
   const tour = useTourOptional();
@@ -30,6 +38,8 @@ export function OfficialPitchHost() {
     return parts[0] === 'feed' && (!parts[1] || parts[1] === 'index');
   })();
   const [skipped, setSkipped] = useState(skippedThisSession);
+  const [localDismissedId, setLocalDismissedId] = useState<string | null>(null);
+  const [localReady, setLocalReady] = useState(!user?.id);
   const inOfficial = useQuery({
     queryKey: ['official-participation', user?.id],
     enabled: Boolean(user?.id) && !skipped,
@@ -61,17 +71,51 @@ export function OfficialPitchHost() {
     queryFn: () => fetchOfficialDiscoverChallenges(user?.id),
   });
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) {
+      setLocalDismissedId(null);
+      setLocalReady(true);
+      return;
+    }
+    setLocalReady(false);
+    void readOfficialPitchDismissedId(user.id).then((id) => {
+      if (!cancelled) {
+        setLocalDismissedId(id);
+        setLocalReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const advertisedId = joinable.data?.[0]?.id ?? null;
+  const dismissedId = profile?.official_pitch_dismissed_challenge_id ?? localDismissedId;
+  const suppressed = officialPitchSuppressed(advertisedId, dismissedId);
+
   const visible =
     onHome &&
     !skipped &&
+    !suppressed &&
     Boolean(user) &&
     !tour?.active &&
+    localReady &&
     !inOfficial.isLoading &&
-    inOfficial.data === false;
+    inOfficial.data === false &&
+    !joinable.isLoading;
 
   function dismiss() {
     skippedThisSession = true;
     setSkipped(true);
+  }
+
+  async function dismissForThisOfficial() {
+    if (user?.id && advertisedId) {
+      setLocalDismissedId(advertisedId);
+      await persistOfficialPitchDismissed(user.id, advertisedId);
+    }
+    dismiss();
   }
 
   if (!visible) {
@@ -113,6 +157,20 @@ export function OfficialPitchHost() {
             }}
           />
           <Button title={officialBob('loginSkip')} variant="ghost" onPress={dismiss} />
+          {advertisedId ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={officialBob('loginDontShow')}
+              hitSlop={8}
+              onPress={() => void dismissForThisOfficial()}
+              style={{ minHeight: 36, alignItems: 'center', justifyContent: 'center' }}>
+              <AppText
+                className="text-center text-[13px] font-semibold"
+                style={{ color: THEME.textMuted }}>
+                {officialBob('loginDontShow')}
+              </AppText>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </ChromeOverlay>
