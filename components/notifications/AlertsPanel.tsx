@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
+import { Alert, FlatList, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -10,11 +10,19 @@ import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useMarkNotificationsRead, useNotifications } from '@/hooks/useNotifications';
 import { useResolveStartRoll } from '@/hooks/useChallenge';
-import { isCoinGrantAlert, isPersonAlert, notificationGlyph, notificationHref } from '@/lib/notifications';
+import { useAcceptFriendRequest, useRejectFriendRequest } from '@/hooks/useSocial';
+import {
+  friendRequestFromUserId,
+  isCoinGrantAlert,
+  isPersonAlert,
+  notificationGlyph,
+  notificationHref,
+} from '@/lib/notifications';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import type { AppNotification } from '@/lib/types';
+import { getErrorMessage } from '@/utils/errors';
 import { formatFeedTime } from '@/utils/format';
 import { useCopyTone } from '@/hooks/useCopy';
 
@@ -60,10 +68,44 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const list = useNotifications();
   const markRead = useMarkNotificationsRead();
   const resolveRoll = useResolveStartRoll();
+  const acceptFriend = useAcceptFriendRequest();
+  const denyFriend = useRejectFriendRequest();
   const tone = useCopyTone();
   const items = list.data ?? [];
   const unreadCount = items.filter((item) => !item.read_at).length;
   const rows = useMemo(() => groupByDay(items), [items]);
+
+  const onFriendRequest = useCallback(
+    (item: AppNotification, action: 'confirm' | 'deny') => {
+      const fromUserId = friendRequestFromUserId(item);
+      if (!fromUserId) {
+        return;
+      }
+      const busy =
+        (acceptFriend.isPending && acceptFriend.variables === fromUserId) ||
+        (denyFriend.isPending && denyFriend.variables === fromUserId);
+      if (busy) {
+        return;
+      }
+      const mark = () => {
+        if (!item.read_at) {
+          markRead.mutate([item.id]);
+        }
+      };
+      if (action === 'confirm') {
+        acceptFriend.mutate(fromUserId, {
+          onSuccess: mark,
+          onError: (error) => Alert.alert('Couldn’t confirm that request', getErrorMessage(error)),
+        });
+        return;
+      }
+      denyFriend.mutate(fromUserId, {
+        onSuccess: mark,
+        onError: (error) => Alert.alert('Couldn’t deny that request', getErrorMessage(error)),
+      });
+    },
+    [acceptFriend, denyFriend, markRead],
+  );
 
   const onOpen = useCallback(
     (item: AppNotification) => {
@@ -127,6 +169,13 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
               <NotificationRow
                 item={row.item}
                 onPress={() => onOpen(row.item)}
+                friendActionPending={
+                  (acceptFriend.isPending &&
+                    acceptFriend.variables === friendRequestFromUserId(row.item)) ||
+                  (denyFriend.isPending &&
+                    denyFriend.variables === friendRequestFromUserId(row.item))
+                }
+                onFriendRequest={(action) => onFriendRequest(row.item, action)}
                 onResolveStart={(keep) => {
                   const challengeId = row.item.data?.challenge_id;
                   if (!challengeId || resolveRoll.isPending) {
@@ -191,15 +240,21 @@ function NotificationRow({
   item,
   onPress,
   onResolveStart,
+  onFriendRequest,
+  friendActionPending,
 }: {
   item: AppNotification;
   onPress: () => void;
   onResolveStart?: (keep: boolean) => void;
+  onFriendRequest?: (action: 'confirm' | 'deny') => void;
+  friendActionPending?: boolean;
 }) {
   const unread = !item.read_at;
   const keepDays = Math.max(Number(item.data?.keep_days) || 0, 1);
   const showRoll = item.type === 'start_rolled' && Boolean(item.data?.challenge_id) && onResolveStart;
   const canShorten = item.data?.can_shorten !== false;
+  const showFriendActions =
+    item.type === 'friend_request' && unread && Boolean(friendRequestFromUserId(item)) && onFriendRequest;
   return (
     <Pressable
       accessibilityRole="button"
@@ -260,6 +315,42 @@ function NotificationRow({
                 </AppText>
               </Pressable>
             ) : null}
+          </View>
+        ) : null}
+        {showFriendActions ? (
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            <Pressable
+              accessibilityRole="button"
+              disabled={friendActionPending}
+              onPress={(event) => {
+                event.stopPropagation();
+                onFriendRequest('confirm');
+              }}
+              className="rounded-full px-3"
+              style={{ minHeight: 36, justifyContent: 'center', backgroundColor: THEME.primary }}>
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
+                Confirm
+              </AppText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={friendActionPending}
+              onPress={(event) => {
+                event.stopPropagation();
+                onFriendRequest('deny');
+              }}
+              className="rounded-full px-3"
+              style={{
+                minHeight: 36,
+                justifyContent: 'center',
+                backgroundColor: THEME.surface,
+                borderWidth: 1,
+                borderColor: THEME.border,
+              }}>
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
+                Deny
+              </AppText>
+            </Pressable>
           </View>
         ) : null}
       </View>

@@ -629,6 +629,7 @@ export type NotificationType =
   | 'profile_incomplete'
   | 'friend_request'
   | 'friend_accepted'
+  | 'friend_challenge'
   | 'post_comment'
   | 'post_reaction'
   | 'post_reposted'
@@ -665,6 +666,7 @@ export type NotificationData = {
   postId?: string;
   actor_id?: string;
   actorId?: string;
+  from_user_id?: string;
   notification_id?: string;
   comment_id?: string;
   story_id?: string;
@@ -1588,6 +1590,14 @@ export type Database = {
       };
       notify_challenge_checkin: {
         Args: { p_challenge_id: string; p_actor_id: string; p_post_id?: string | null };
+        Returns: undefined;
+      };
+      notify_friends_of_new_challenge: {
+        Args: { p_challenge_id: string };
+        Returns: undefined;
+      };
+      ensure_friend_request_notification: {
+        Args: { p_to_user_id: string };
         Returns: undefined;
       };
       clear_push_token: {

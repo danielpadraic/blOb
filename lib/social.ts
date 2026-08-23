@@ -587,6 +587,16 @@ export async function sendFriendRequest(fromUserId: string, toUserId: string): P
     .select(FRIENDSHIP_COLUMNS)
     .single();
   throwIfError(error);
+  try {
+    const { error: notifyError } = await supabase.rpc('ensure_friend_request_notification', {
+      p_to_user_id: toUserId,
+    });
+    if (notifyError) {
+      console.log('[blob:notify] friend request skipped', notifyError.message);
+    }
+  } catch (notifyError) {
+    console.log('[blob:notify] friend request skipped', notifyError);
+  }
   const { maybeRequestPushPermission } = await import('@/lib/push');
   void maybeRequestPushPermission();
   return data as Friendship;

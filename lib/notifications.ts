@@ -15,7 +15,24 @@ export function notificationPostId(data?: NotificationData | null): string | und
 }
 
 export function notificationActorId(data?: NotificationData | null): string | undefined {
-  return data?.actor_id ?? data?.actorId;
+  return data?.actor_id ?? data?.actorId ?? data?.from_user_id;
+}
+
+export function friendRequestFromUserId(item: AppNotification): string | undefined {
+  return item.actor_id ?? item.data?.from_user_id ?? notificationActorId(item.data);
+}
+
+export async function notifyFriendsOfCreatedChallenge(challengeId: string): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('notify_friends_of_new_challenge', {
+      p_challenge_id: challengeId,
+    });
+    if (error) {
+      console.log('[blob:notify] friend challenge skipped', error.message);
+    }
+  } catch (error) {
+    console.log('[blob:notify] friend challenge skipped', error);
+  }
 }
 
 export async function notifyChallengeCheckinAfterPost(input: {
@@ -214,15 +231,20 @@ export function notificationHref(item: AppNotification): Href | null {
   if (data.story_id) {
     return storyHref(data.story_id);
   }
-  if (
-    item.type === 'friend_request' ||
-    item.type === 'friend_accepted' ||
-    item.type === 'follow'
-  ) {
+  if (item.type === 'friend_request') {
+    return { pathname: '/friends', params: { segment: 'requests' } };
+  }
+  if (item.type === 'friend_accepted' || item.type === 'follow') {
     if (data.username) {
       return { pathname: '/friends/u/[username]', params: { username: data.username } };
     }
     return '/friends';
+  }
+  if (item.type === 'friend_challenge') {
+    const friendChallengeId = notificationChallengeId(data);
+    if (friendChallengeId) {
+      return challengeDetailHref(friendChallengeId, 'lobby');
+    }
   }
   if (item.type === 'profile_incomplete') {
     return '/profile/body-metrics';
@@ -299,6 +321,8 @@ export function notificationGlyph(type: string, data?: NotificationData): string
     case 'friend_accepted':
     case 'follow':
       return '👋';
+    case 'friend_challenge':
+      return '🏁';
     case 'story_reaction':
       return '❤️';
     case 'story_comment':

@@ -124,6 +124,7 @@ function invalidateFriendship(
   void queryClient.invalidateQueries({ queryKey: socialKeys.friends(targetUserId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.requests(userId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.requests(targetUserId) });
+  void queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
 }
 
 export function useFollowers(userId?: string | null) {

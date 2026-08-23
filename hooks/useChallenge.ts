@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { discardChallengeDraft } from '@/lib/challengeDraft';
 import { announceCreatedChallenge } from '@/lib/challengeFeedPost';
+import { notifyFriendsOfCreatedChallenge } from '@/lib/notifications';
 import { applyLaneForPublish } from '@/lib/challengeLane';
 import { durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
@@ -803,6 +804,7 @@ export function useCreateChallenge() {
         challenge_lane: challenge.challenge_lane ?? lane.challenge_lane,
         is_official: challenge.is_official,
       });
+      void notifyFriendsOfCreatedChallenge(challenge.id);
       return challenge;
     },
     onSuccess: (challenge, values) => {

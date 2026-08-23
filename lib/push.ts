@@ -12,6 +12,7 @@ const ANDROID_CHANNEL = 'alerts';
 export const PUSH_PROMPT_TYPES = new Set([
   'friend_request',
   'friend_accepted',
+  'friend_challenge',
   'challenge_invite',
   'challenge_join_confirmed',
   'challenge_joined',
