@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { officialLogDate } from '@/lib/officialDays';
-import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
+import { checkinPeriodKey, checkinPeriodKeyCandidates } from '@/lib/checkinPeriod';
 import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
@@ -72,10 +71,11 @@ export function useLoggableChallenge() {
 
       const eligible = challenges
         .filter((challenge) => {
-          const expected = isOfficialSeriesChallenge(challenge)
-            ? officialLogDate(challenge)
-            : date;
-          if (expected && loggedRows.get(challenge.id)?.has(expected)) {
+          const expected = checkinPeriodKey(challenge);
+          if (loggedRows.get(challenge.id)?.has(expected)) {
+            return false;
+          }
+          if (submittedThisPeriod(challenge, checkinRows)) {
             return false;
           }
           if (new Date(challenge.starts_at).getTime() > now) {
@@ -104,10 +104,7 @@ export function useLoggableChallenge() {
       if (!first) {
         return null;
       }
-      const expected = isOfficialSeriesChallenge(first) ? officialLogDate(first) : date;
-      const phase = expected
-        ? checkinRows.get(`${first.id}:${expected}`) ?? 'none'
-        : 'none';
+      const phase = phaseForPeriod(first, checkinRows);
       return {
         ...first,
         checkinPhase: phase,
@@ -115,6 +112,28 @@ export function useLoggableChallenge() {
       };
     },
   });
+}
+
+function submittedThisPeriod(
+  challenge: LoggableChallenge,
+  checkinRows: Map<string, CheckinPhase>,
+): boolean {
+  return checkinPeriodKeyCandidates(challenge).some(
+    (key) => checkinRows.get(`${challenge.id}:${key}`) === 'submitted',
+  );
+}
+
+function phaseForPeriod(
+  challenge: LoggableChallenge,
+  checkinRows: Map<string, CheckinPhase>,
+): CheckinPhase {
+  for (const key of checkinPeriodKeyCandidates(challenge)) {
+    const phase = checkinRows.get(`${challenge.id}:${key}`);
+    if (phase) {
+      return phase;
+    }
+  }
+  return 'none';
 }
 
 async function fetchActiveParticipations(userId: string): Promise<ParticipationRow[]> {

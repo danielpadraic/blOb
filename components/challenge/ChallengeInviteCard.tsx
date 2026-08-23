@@ -9,6 +9,7 @@ import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { fetchChallengeById } from '@/lib/challenges';
@@ -36,6 +37,9 @@ export type InviteChallenge = {
   ends_at?: string | null;
   is_unlimited?: boolean | null;
   series_id?: string | null;
+  timezone?: string | null;
+  days_required?: number | null;
+  day_windows?: unknown;
   armed_at?: string | null;
   prize_pool?: number | null;
   host_budget?: number | null;
@@ -260,7 +264,22 @@ export function ChallengeInviteCard({
 
   const status = inviteCardStatus(challenge, nowMs);
   const canJoin = inviteCardCanJoin({ challenge, joined, hosting });
-  const canCheckIn = section === 'active' && inviteCardCanCheckIn({ challenge, joined, eliminated });
+  const periodCheckin = usePeriodCheckin(
+    section === 'active' && joined && !eliminated ? challenge.id : undefined,
+    {
+      is_official: challenge.is_official,
+      series_id: challenge.series_id,
+      status: challenge.status,
+      starts_at: challenge.starts_at,
+      timezone: challenge.timezone,
+      days_required: challenge.days_required,
+    },
+  );
+  const checkedIn = periodCheckin.data?.phase === 'submitted';
+  const canCheckIn =
+    section === 'active' &&
+    inviteCardCanCheckIn({ challenge, joined, eliminated }) &&
+    !checkedIn;
   const cta = canJoin ? 'Join' : 'View';
   const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
   const muted = official ? 'rgba(231,247,243,0.72)' : THEME.textMuted;

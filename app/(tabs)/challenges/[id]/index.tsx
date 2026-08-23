@@ -172,7 +172,7 @@ export default function ChallengeDetailScreen() {
   const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
   const daysCompleted = heroRingDays({
     status: challengeQuery.data?.status,
-    submitted: submittedCheckins.data,
+    submitted: Math.max(submittedCheckins.data ?? 0, loggedToday ? 1 : 0),
   });
 
   const joinBlocked = useMemo(() => {
@@ -490,8 +490,7 @@ export default function ChallengeDetailScreen() {
     challenge.status === 'live' &&
     !participation?.eliminated_at &&
     !waitingToStart &&
-    !logsClosed &&
-    !loggedToday;
+    !logsClosed;
   const showStickyCta =
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
@@ -926,11 +925,18 @@ export default function ChallengeDetailScreen() {
         ) : (
           <View className="gap-1.5">
             <Button
-              title={logTitle}
+              title={loggedToday ? copy('checkin.checkedIn') : logTitle}
               size="md"
-              onPress={() => router.push(`/challenges/${id}/submit`)}
+              variant={loggedToday ? 'outline' : 'primary'}
+              disabled={loggedToday}
+              onPress={() => {
+                if (loggedToday) {
+                  return;
+                }
+                router.push(`/challenges/${id}/submit`);
+              }}
             />
-            {watch.visible ? (
+            {!loggedToday && watch.visible ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={copy('health.startWatch')}

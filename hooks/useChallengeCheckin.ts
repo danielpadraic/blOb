@@ -14,9 +14,14 @@ import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/l
 import { heroRingActive } from '@/lib/challengeStart';
 import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
-import { officialLogDate } from '@/lib/officialDays';
+import {
+  challengeClockTz,
+  checkinPeriodKey,
+  checkinPeriodKeyCandidates,
+  type CheckinPeriodChallenge,
+} from '@/lib/checkinPeriod';
+import { dateStampInZone } from '@/lib/officialDays';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
-import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
 import { signedProofUrl } from '@/utils/upload';
@@ -24,12 +29,7 @@ import { signedProofUrl } from '@/utils/upload';
 const CHECKIN_COLUMNS =
   'id, user_id, challenge_id, period_key, status, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, health_workout_id, workout_submission_id, started_at, submitted_at, created_at, updated_at';
 
-type PeriodChallenge = Pick<
-  Challenge,
-  'is_official' | 'series_id' | 'status' | 'starts_at' | 'timezone' | 'days_required' | 'day_windows'
-> & {
-  target_count?: number | null;
-};
+type PeriodChallenge = CheckinPeriodChallenge;
 
 export type ChallengeCheckinView = ChallengeCheckin & {
   phase: CheckinPhase;
@@ -38,10 +38,7 @@ export type ChallengeCheckinView = ChallengeCheckin & {
 };
 
 function periodKeyFor(challenge?: PeriodChallenge | null): string {
-  if (challenge && isOfficialSeriesChallenge(challenge)) {
-    return officialLogDate(challenge) ?? utcDateStamp();
-  }
-  return utcDateStamp();
+  return checkinPeriodKey(challenge);
 }
 
 function checkinQueryKey(challengeId: string | undefined, userId: string | undefined, date: string) {
@@ -85,7 +82,11 @@ async function fetchPeriodCheckin(
   if (!result.data) {
     return null;
   }
-  const parsed = parseChallengeCheckin(result.data as Record<string, unknown>);
+  return hydrateCheckin(result.data as Record<string, unknown>);
+}
+
+async function hydrateCheckin(data: Record<string, unknown>): Promise<ChallengeCheckin> {
+  const parsed = parseChallengeCheckin(data);
   const parts = { ...parsed.proof_parts };
   await Promise.all(
     Object.entries(parts).map(async ([id, part]) => {
@@ -95,6 +96,61 @@ async function fetchPeriodCheckin(
     }),
   );
   return { ...parsed, proof_parts: parts };
+}
+
+function isSubmittedToday(
+  row: { status?: string | null; submitted_at?: string | null },
+  challenge?: PeriodChallenge | null,
+): boolean {
+  if (row.status !== 'submitted' || !row.submitted_at) {
+    return false;
+  }
+  const submitted = new Date(row.submitted_at);
+  if (Number.isNaN(submitted.getTime())) {
+    return false;
+  }
+  const tz = challengeClockTz(challenge);
+  return dateStampInZone(submitted, tz) === dateStampInZone(new Date(), tz);
+}
+
+export async function fetchCurrentPeriodCheckin(
+  challengeId: string,
+  userId: string,
+  challenge?: PeriodChallenge | null,
+  date?: string,
+): Promise<ChallengeCheckin | null> {
+  const key = date ?? periodKeyFor(challenge);
+  const exact = await fetchPeriodCheckin(challengeId, userId, key);
+  if (exact) {
+    return exact;
+  }
+  const recent = await supabase
+    .from('challenge_checkins')
+    .select(CHECKIN_COLUMNS)
+    .eq('challenge_id', challengeId)
+    .eq('user_id', userId)
+    .order('period_key', { ascending: false })
+    .limit(8);
+  if (recent.error) {
+    if (isMissingRelation(recent.error.message)) {
+      return null;
+    }
+    throw new Error(getErrorMessage(recent.error));
+  }
+  const candidates = new Set(checkinPeriodKeyCandidates(challenge));
+  const rows = (recent.data ?? []) as Record<string, unknown>[];
+  const match =
+    rows.find((row) => candidates.has(String(row.period_key ?? ''))) ??
+    rows.find((row) =>
+      isSubmittedToday(
+        {
+          status: typeof row.status === 'string' ? row.status : null,
+          submitted_at: typeof row.submitted_at === 'string' ? row.submitted_at : null,
+        },
+        challenge,
+      ),
+    );
+  return match ? hydrateCheckin(match) : null;
 }
 
 function asView(row: ChallengeCheckin | null): ChallengeCheckinView {
@@ -167,7 +223,7 @@ export function usePeriodCheckin(
     enabled: Boolean(challengeId && user?.id),
     refetchInterval: official ? 30_000 : false,
     queryFn: async (): Promise<ChallengeCheckinView> => {
-      const row = await fetchPeriodCheckin(challengeId!, user!.id, date);
+      const row = await fetchCurrentPeriodCheckin(challengeId!, user!.id, challenge, date);
       return asView(row);
     },
   });

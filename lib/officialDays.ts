@@ -37,13 +37,27 @@ function pad(n: number, width = 2): string {
   return String(n).padStart(width, '0');
 }
 
+/** Calendar YYYY-MM-DD in `timeZone`. Matches Postgres `(timezone(tz, now()))::date`. */
+export function dateStampInZone(date: Date, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  }
+}
+
 function ymdInZone(date: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+  return dateStampInZone(date, timeZone);
 }
 
 function addDaysYmd(ymd: string, days: number): string {

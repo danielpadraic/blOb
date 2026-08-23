@@ -11,7 +11,8 @@ import { copy } from '@/lib/copy';
 import { parseProofParts } from '@/lib/challengeProofs';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant, ChallengeProof, ProofType, WorkoutSubmission } from '@/lib/types';
-import { officialLogDate } from '@/lib/officialDays';
+import { checkinPeriodKey, checkinPeriodKeyCandidates, challengeClockTz } from '@/lib/checkinPeriod';
+import { dateStampInZone } from '@/lib/officialDays';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
@@ -116,11 +117,8 @@ type OfficialDateChallenge = Pick<
   'is_official' | 'series_id' | 'status' | 'starts_at' | 'timezone' | 'days_required' | 'target_count' | 'day_windows'
 >;
 
-function submissionDateFor(challenge?: OfficialDateChallenge | null): string | null {
-  if (challenge && isOfficialSeriesChallenge(challenge)) {
-    return officialLogDate(challenge);
-  }
-  return utcDateStamp();
+function submissionDateFor(challenge?: OfficialDateChallenge | null): string {
+  return checkinPeriodKey(challenge);
 }
 
 export function useTodaySubmission(
@@ -371,35 +369,82 @@ export function useSubmitHealthWorkout() {
   });
 }
 
+async function fetchSubmittedUserIds(challengeId: string, periodKey: string): Promise<Set<string>> {
+  const submitted = await supabase
+    .from('challenge_checkins')
+    .select('user_id')
+    .eq('challenge_id', challengeId)
+    .eq('period_key', periodKey)
+    .eq('status', 'submitted')
+    .not('submitted_at', 'is', null);
+  if (submitted.error) {
+    if (isMissingColumn(submitted.error.message)) {
+      return new Set();
+    }
+    throw new Error(getErrorMessage(submitted.error));
+  }
+  return new Set((submitted.data ?? []).map((row) => String((row as { user_id: string }).user_id)));
+}
+
 export function usePeriodCompletions(
   challengeId: string | undefined,
   challenge?: OfficialDateChallenge | null,
 ) {
+  const { user } = useAuth();
   const date = submissionDateFor(challenge);
   const live = String(challenge?.status ?? '') === 'live';
   return useQuery({
-    queryKey: ['challenge-completions', challengeId, date ?? 'none', live ? 'live' : 'not-live'],
-    enabled: Boolean(challengeId && date && challenge),
+    queryKey: ['challenge-completions', challengeId, date, live ? 'live' : 'not-live'],
+    enabled: Boolean(challengeId && challenge),
     queryFn: async (): Promise<Set<string>> => {
       if (!live) {
         return new Set();
       }
-      const submitted = await supabase
-        .from('challenge_checkins')
-        .select('user_id')
-        .eq('challenge_id', challengeId!)
-        .eq('period_key', date!)
-        .eq('status', 'submitted')
-        .not('submitted_at', 'is', null);
-      if (submitted.error) {
-        if (isMissingColumn(submitted.error.message)) {
-          return new Set();
-        }
-        throw new Error(getErrorMessage(submitted.error));
+      const exact = await fetchSubmittedUserIds(challengeId!, date);
+      if (exact.size > 0) {
+        return exact;
       }
-      return new Set(
-        (submitted.data ?? []).map((row) => String((row as { user_id: string }).user_id)),
-      );
+      if (!user?.id) {
+        return exact;
+      }
+      const mine = await supabase
+        .from('challenge_checkins')
+        .select('period_key, submitted_at, status')
+        .eq('challenge_id', challengeId!)
+        .eq('user_id', user.id)
+        .eq('status', 'submitted')
+        .not('submitted_at', 'is', null)
+        .order('period_key', { ascending: false })
+        .limit(5);
+      if (mine.error) {
+        if (isMissingColumn(mine.error.message)) {
+          return exact;
+        }
+        throw new Error(getErrorMessage(mine.error));
+      }
+      const candidates = new Set(checkinPeriodKeyCandidates(challenge));
+      const tz = challengeClockTz(challenge);
+      const today = dateStampInZone(new Date(), tz);
+      const recovered = (mine.data ?? []).find((row) => {
+        const key = String((row as { period_key: string }).period_key ?? '');
+        const submittedAt = String((row as { submitted_at?: string | null }).submitted_at ?? '');
+        if (candidates.has(key)) {
+          return true;
+        }
+        if (!submittedAt) {
+          return false;
+        }
+        const at = new Date(submittedAt);
+        return !Number.isNaN(at.getTime()) && dateStampInZone(at, tz) === today;
+      });
+      if (!recovered) {
+        return exact;
+      }
+      const recoveredKey = String((recovered as { period_key: string }).period_key);
+      if (!recoveredKey || recoveredKey === date) {
+        return exact;
+      }
+      return fetchSubmittedUserIds(challengeId!, recoveredKey);
     },
   });
 }
