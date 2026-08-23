@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { Controller, type UseFormReturn } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
@@ -19,7 +18,6 @@ import {
 } from '@/lib/consistencyRules';
 import { CREATE_PROOF_TYPES, proofMeta } from '@/lib/constants';
 import { heartRateProofSentence } from '@/lib/challengeProofs';
-import { THEME } from '@/lib/theme';
 import type { ChallengeFrequency, ProofType } from '@/lib/types';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -40,12 +38,9 @@ export function RulesSlide({
   values,
   isPoints,
   isUnlimited,
-  coverBusy,
   onFrequencyChange,
   onAddTask,
   onRemoveTask,
-  onUploadCover,
-  onClearCover,
 }: {
   control: Form['control'];
   errors: Form['formState']['errors'];
@@ -54,12 +49,9 @@ export function RulesSlide({
   values: CreateChallengeValues;
   isPoints: boolean;
   isUnlimited: boolean;
-  coverBusy: boolean;
   onFrequencyChange: (next: ChallengeFrequency) => void;
   onAddTask: () => void;
   onRemoveTask: (index: number) => void;
-  onUploadCover: () => void;
-  onClearCover: () => void;
 }) {
   const extraRules = values.extra_rules ?? [];
   const activityIsCustom = !isActivityPreset(values.rule_activity);
@@ -439,51 +431,6 @@ export function RulesSlide({
             ))}
             <Button title="Add another rule" variant="outline" onPress={addCustomRule} />
           </View>
-        </FieldLabel>
-      </FieldAnchor>
-
-      <FieldAnchor name="cover_image_url">
-        <FieldLabel
-          label="Cover image"
-          error={errors.cover_image_url?.message}
-          hint="Optional. Shows on the Lobby card and challenge page.">
-          {values.cover_image_url ? (
-            <Image
-              source={{ uri: values.cover_image_url }}
-              style={{ height: 120, width: '100%', borderRadius: THEME.radiusSm, backgroundColor: THEME.background }}
-              contentFit="cover"
-            />
-          ) : null}
-          <View className="flex-row gap-2">
-            <View className="flex-1">
-              <Button
-                title={coverBusy ? 'Uploading…' : values.cover_image_url ? 'Replace cover' : 'Upload cover'}
-                variant="outline"
-                loading={coverBusy}
-                onPress={onUploadCover}
-              />
-            </View>
-            {values.cover_image_url ? (
-              <View className="flex-1">
-                <Button title="Remove" variant="ghost" onPress={onClearCover} />
-              </View>
-            ) : null}
-          </View>
-          <Controller
-            control={control}
-            name="cover_image_url"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label="Or paste a cover URL"
-                placeholder="https://"
-                value={value ?? ''}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            )}
-          />
         </FieldLabel>
       </FieldAnchor>
 

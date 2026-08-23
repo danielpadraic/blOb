@@ -3,6 +3,7 @@ import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
+import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
@@ -470,6 +471,12 @@ export function SimpleCreateForm() {
           onChangeText={(description) => patch({ description })}
           maxLength={120}
           numberOfLines={1}
+        />
+
+        <ChallengePhotoField
+          uri={draft.cover_image_url}
+          onChange={(cover_image_url) => patch({ cover_image_url })}
+          onClear={() => patch({ cover_image_url: '' })}
         />
 
         <TourAnchor id="create-simple-start">

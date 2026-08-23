@@ -1,10 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as ImagePicker from 'expo-image-picker';
 import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { AppState, BackHandler, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 
+import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
@@ -96,7 +96,6 @@ import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from
 import { authStorage } from '@/lib/utils/secureStore';
 import { getCreateChallengeMessage, getErrorMessage } from '@/utils/errors';
 import { formatWallet, walletBalance } from '@/lib/currency';
-import { uploadChallengeCover } from '@/utils/upload';
 import {
   createChallengeSchema,
   emptyChallengeTask,
@@ -168,7 +167,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [bucksAcks, setBucksAcks] = useState<Record<string, boolean>>({});
   const [liveChallengeId, setLiveChallengeId] = useState<string | null>(null);
-  const [coverBusy, setCoverBusy] = useState(false);
   const [tutorialOn, setTutorialOn] = useState(false);
   const [bobTipOpen, setBobTipOpen] = useState(false);
   const [tipIndex, setTipIndex] = useState(0);
@@ -590,38 +588,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return;
     }
     await abandonSessionDraft();
-  }
-
-  async function uploadCover() {
-    if (!user || coverBusy) {
-      return;
-    }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setFormError('Turn on photo access in Settings to upload a cover.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-    });
-    if (result.canceled || !result.assets[0]?.uri) {
-      return;
-    }
-    setCoverBusy(true);
-    setFormError(null);
-    try {
-      const url = await uploadChallengeCover({
-        uri: result.assets[0].uri,
-        userId: user.id,
-        mimeType: result.assets[0].mimeType,
-      });
-      setValue('cover_image_url', url, { shouldDirty: true, shouldValidate: true });
-    } catch (error) {
-      setFormError(getErrorMessage(error) || 'Couldn’t upload that cover. Paste a URL instead.');
-    } finally {
-      setCoverBusy(false);
-    }
   }
 
   useEffect(() => {
@@ -1480,10 +1446,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               visibility={values.visibility}
               challengeLane={values.challenge_lane}
               extraTasks={values.extra_tasks ?? []}
+              coverUrl={values.cover_image_url}
               isPoints={isPoints}
               onCategoryChange={onCategoryChange}
               onVisibilityChange={(value) => setValue('visibility', value, { shouldValidate: true })}
               onExtraTasksChange={(extra_tasks) => setValue('extra_tasks', extra_tasks, { shouldDirty: true })}
+              onCoverChange={(cover_image_url) =>
+                setValue('cover_image_url', cover_image_url, { shouldDirty: true, shouldValidate: true })
+              }
+              onCoverClear={() => setValue('cover_image_url', '', { shouldDirty: true, shouldValidate: true })}
             />
           ) : null}
           {step === STEP_TYPE ? (
@@ -1567,12 +1538,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               values={values}
               isPoints={isPoints}
               isUnlimited={isUnlimited}
-              coverBusy={coverBusy}
               onFrequencyChange={onFrequencyChange}
               onAddTask={addTask}
               onRemoveTask={removeTask}
-              onUploadCover={() => void uploadCover()}
-              onClearCover={() => setValue('cover_image_url', '', { shouldDirty: true })}
             />
           ) : null}
           {step === STEP_REVIEW ? (
@@ -1787,10 +1755,13 @@ function GoalSlide({
   visibility,
   challengeLane,
   extraTasks,
+  coverUrl,
   isPoints,
   onCategoryChange,
   onVisibilityChange,
   onExtraTasksChange,
+  onCoverChange,
+  onCoverClear,
 }: {
   control: ReturnType<typeof useForm<CreateChallengeValues>>['control'];
   errors: ReturnType<typeof useForm<CreateChallengeValues>>['formState']['errors'];
@@ -1798,10 +1769,13 @@ function GoalSlide({
   visibility: CreateChallengeValues['visibility'];
   challengeLane: CreateChallengeValues['challenge_lane'];
   extraTasks: CreateChallengeValues['extra_tasks'];
+  coverUrl?: string | null;
   isPoints: boolean;
   onCategoryChange: (next: CreateChallengeValues['category']) => void;
   onVisibilityChange: (next: CreateChallengeValues['visibility']) => void;
   onExtraTasksChange: (next: NonNullable<CreateChallengeValues['extra_tasks']>) => void;
+  onCoverChange: (url: string) => void;
+  onCoverClear: () => void;
 }) {
   const isPrivateLane = normalizeUserChallengeLane(challengeLane) === 'private';
   return (
@@ -1860,6 +1834,14 @@ function GoalSlide({
           />
         )}
       />
+      </FieldAnchor>
+      <FieldAnchor name="cover_image_url">
+        <ChallengePhotoField
+          uri={coverUrl}
+          error={errors.cover_image_url?.message}
+          onChange={onCoverChange}
+          onClear={onCoverClear}
+        />
       </FieldAnchor>
       <FieldAnchor name="task">
         <Controller

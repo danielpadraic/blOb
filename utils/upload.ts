@@ -5,6 +5,10 @@ import { STORAGE_BUCKETS } from '@/lib/constants';
 import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { ProofType } from '@/lib/types';
+import {
+  compressImageForUpload,
+  type CompressKind,
+} from '@/utils/compressImage';
 import { getErrorMessage } from '@/utils/errors';
 
 export type StorageBucket = 'avatars' | 'challenge-proofs' | 'post-media' | 'bug-reports';
@@ -44,6 +48,29 @@ export function coerceImageContentType(mimeType?: string | null, uri?: string): 
     return 'image/jpeg';
   }
   return normalized;
+}
+
+function compressKindFor(bucket: StorageBucket, path: string): CompressKind {
+  if (bucket === 'avatars') {
+    return 'avatar';
+  }
+  if (bucket === 'challenge-proofs') {
+    return 'proof';
+  }
+  if (bucket === 'bug-reports') {
+    return 'bug';
+  }
+  if (path.includes('/stories/')) {
+    return 'story';
+  }
+  return 'post';
+}
+
+function withExtension(path: string, ext: string): string {
+  if (/\.[A-Za-z0-9]+$/.test(path)) {
+    return path.replace(/\.[A-Za-z0-9]+$/, `.${ext}`);
+  }
+  return `${path}.${ext}`;
 }
 
 function extensionFor(contentType: string): string {
@@ -185,11 +212,29 @@ async function uploadObject(input: {
   contentType: string;
   blob?: Blob | null;
   upsert?: boolean;
+  size?: number | null;
 }): Promise<string> {
+  let { uri, contentType, blob, path } = input;
+  if (contentType.startsWith('image/') && contentType !== 'image/gif') {
+    const compressed = await compressImageForUpload({
+      uri,
+      mimeType: contentType,
+      kind: compressKindFor(input.bucket, input.path),
+      blob,
+      size: input.size,
+    });
+    uri = compressed.uri;
+    contentType = compressed.contentType;
+    blob = compressed.blob;
+    if (contentType === 'image/jpeg') {
+      path = withExtension(path, 'jpg');
+    }
+  }
+
   const body = await toTypedBlob({
-    uri: input.uri,
-    contentType: input.contentType,
-    blob: input.blob,
+    uri,
+    contentType,
+    blob,
   });
   if (body.size < 32) {
     throw new Error('That photo didn’t load. Try choosing it again.');
@@ -200,17 +245,17 @@ async function uploadObject(input: {
       ? 'avatar'
       : input.bucket === 'challenge-proofs'
         ? 'proof'
-        : input.path.includes('/files/')
+        : path.includes('/files/')
           ? 'file'
           : 'photo';
   // post-media has INSERT but historically no UPDATE policy; upsert:true is a 400.
   const upsert = input.upsert ?? false;
-  const fileName = input.path.split('/').pop() ?? `upload.${extensionFor(input.contentType)}`;
-  const typed = asNamedFile(body, fileName, input.contentType);
+  const fileName = path.split('/').pop() ?? `upload.${extensionFor(contentType)}`;
+  const typed = asNamedFile(body, fileName, contentType);
 
-  const send = (payload: Blob | ArrayBuffer, path = input.path, contentType = input.contentType) =>
-    supabase.storage.from(input.bucket).upload(path, payload, {
-      contentType,
+  const send = (payload: Blob | ArrayBuffer, nextPath = path, nextType = contentType) =>
+    supabase.storage.from(input.bucket).upload(nextPath, payload, {
+      contentType: nextType,
       cacheControl: '3600',
       upsert,
     });
@@ -218,14 +263,14 @@ async function uploadObject(input: {
   const primary = Platform.OS === 'web' ? typed : await typed.arrayBuffer();
   const first = await send(primary);
   if (!first.error) {
-    return input.path;
+    return path;
   }
 
   console.log(
     '[blob:upload]',
     input.bucket,
-    input.path,
-    input.contentType,
+    path,
+    contentType,
     typed.type,
     typed.size,
     first.error.message,
@@ -234,15 +279,15 @@ async function uploadObject(input: {
   const secondary = Platform.OS === 'web' ? await typed.arrayBuffer() : typed;
   const alt = await send(secondary);
   if (!alt.error) {
-    return input.path;
+    return path;
   }
 
-  const canRetryJpeg = input.contentType.startsWith('image/') && input.contentType !== 'image/jpeg';
+  const canRetryJpeg = contentType.startsWith('image/') && contentType !== 'image/jpeg';
   if (!canRetryJpeg) {
     throw new Error(humanStorageError(first.error, kind));
   }
 
-  const jpegPath = input.path.replace(/\.[^.]+$/, '.jpg');
+  const jpegPath = withExtension(path, 'jpg');
   const jpegBody = asNamedFile(typed, jpegPath.split('/').pop() ?? 'photo.jpg', 'image/jpeg');
   const jpegPayload = Platform.OS === 'web' ? jpegBody : await jpegBody.arrayBuffer();
   const retry = await send(jpegPayload, jpegPath, 'image/jpeg');
@@ -275,6 +320,7 @@ export async function uploadBugReportImage(input: {
     uri: input.uri,
     contentType,
     blob: input.blob,
+    size: input.size,
     upsert: false,
   });
 }
@@ -314,11 +360,16 @@ export async function uploadChallengeCover(input: {
   userId: string;
   mimeType?: string | null;
 }): Promise<string> {
+  const contentType = coerceImageContentType(input.mimeType, input.uri);
+  const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+  if (contentType === 'application/pdf' || contentType.includes('pdf') || !allowed.has(contentType)) {
+    throw new Error('Use a JPEG, PNG, WebP, or HEIC photo.');
+  }
   return uploadPostMedia({
     uri: input.uri,
     userId: input.userId,
-    fileStem: `challenge-cover-${Date.now()}`,
-    mimeType: input.mimeType,
+    fileStem: `covers/${Date.now()}`,
+    mimeType: contentType,
   });
 }
 

@@ -108,6 +108,7 @@ export type SimpleChallengeDraft = {
   visibility: SimpleVisibility;
   friends_of_friends: boolean;
   min_participants: number;
+  cover_image_url: string;
 };
 
 export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
@@ -131,6 +132,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     visibility: 'public',
     friends_of_friends: true,
     min_participants: 2,
+    cover_image_url: '',
   };
 }
 
@@ -139,6 +141,7 @@ function withProofSentences(draft: SimpleChallengeDraft): SimpleChallengeDraft {
     ...draft,
     extra_tasks: Array.isArray(draft.extra_tasks) ? draft.extra_tasks : [],
     proofs: (draft.proofs ?? []).map((item) => ensureProofSentence(item, item.minutes ?? 30)),
+    cover_image_url: draft.cover_image_url?.trim() || '',
   };
 }
 
@@ -407,7 +410,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     currency: bucks ? 'bucks' : 'coins',
     creator_participating: true,
     min_minutes: String(minMinutes),
-    cover_image_url: '',
+    cover_image_url: draft.cover_image_url?.trim() || '',
     rules_video_url: '',
     rules: '',
   };
@@ -468,6 +471,7 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
     visibility,
     friends_of_friends: challenge.discoverability === 'friends_of_friends',
     min_participants: Math.max(Number(challenge.min_participants) || 2, 2),
+    cover_image_url: challenge.cover_image_url?.trim() || '',
   };
 }
 

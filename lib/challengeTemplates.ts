@@ -45,13 +45,13 @@ export function wizardStepIndex(key: CreateWizardStepKey): number {
 export const CREATE_STEP_FIELDS: Record<number, readonly (keyof CreateChallengeValues)[]> = {
   0: ['challenge_lane'],
   1: [],
-  2: ['title', 'description', 'category', 'visibility', 'task', 'extra_tasks'],
+  2: ['title', 'description', 'category', 'visibility', 'task', 'extra_tasks', 'cover_image_url'],
   3: ['challenge_type'],
   4: ['duration_type', 'duration_days', 'starts_at', 'ends_at', 'end_mode', 'duration_value', 'duration_unit', 'frequency', 'target_count'],
   5: ['prize_structure', 'top_places_mode', 'top_places_value', 'top_places_distribution'],
   6: ['funding_model', 'creator_contribution'],
   7: ['buy_in', 'currency', 'participant_cap', 'max_participants', 'creator_participating', 'min_participants', 'misses_allowed', 'proof_review'],
-  8: ['rules', 'proofs', 'tasks', 'frequency', 'target_count', 'rule_activity', 'extra_rules', 'min_minutes', 'cover_image_url', 'rules_video_url'],
+  8: ['rules', 'proofs', 'tasks', 'frequency', 'target_count', 'rule_activity', 'extra_rules', 'min_minutes', 'rules_video_url'],
   9: [],
 };
 
