@@ -1,32 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
-import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { TourAnchor } from '@/components/tour/TourAnchor';
-import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeaturedOfficialChallenge, useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
-import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
-import { useTodaySubmission } from '@/hooks/useWorkoutSubmission';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
-import { isLiveCompetitor } from '@/lib/challenges';
-import { copy, interpolateCopy } from '@/lib/copy';
 import { formatCashCompact } from '@/lib/currency';
-import { officialCurrentWindow, officialWindowsFor } from '@/lib/officialDays';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
-  isOfficialSeriesChallenge,
   officialContestantsNeeded,
 } from '@/lib/officialSeries';
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
-import { isClosedForLogs } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
+
+const BLOB_WORDMARK = require('@/assets/mascot/blob-logo.png');
+const BAR = '#123832';
 
 export function FeaturedOfficialStrip() {
   const router = useRouter();
@@ -38,202 +32,122 @@ export function FeaturedOfficialStrip() {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const challenge = featured.data ?? null;
-  const participation = (mine.data ?? []).find((row) => row.challenge_id === challenge?.id);
-  const joined = Boolean(participation && isLiveCompetitor(participation));
-  const joinable = Boolean(challenge && isOfficialJoinable(challenge));
-  const live = Boolean(challenge && isOfficialSeriesChallenge(challenge) && challenge.status === 'live');
-  const arming = challenge?.status === 'arming';
-  const todaySubmission = useTodaySubmission(joined && live ? challenge?.id : undefined, challenge);
-  const periodCheckin = usePeriodCheckin(joined && live ? challenge?.id : undefined, challenge);
-  const buyIn = Math.max(Number(challenge?.buy_in_amount) || 0, 0);
-  const guarantee = Math.max(Number(challenge?.host_budget ?? challenge?.creator_contribution) || 0, 0);
+  const joined = Boolean((mine.data ?? []).some((row) => row.challenge_id === challenge?.id));
+  const joinable = Boolean(challenge && isOfficialJoinable(challenge) && !joined);
 
   useEffect(() => {
-    if (!joinable && !live) {
+    if (!joinable) {
       return;
     }
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [joinable, live]);
+  }, [joinable]);
 
-  const submitted = Boolean(todaySubmission.data) || periodCheckin.data?.phase === 'submitted';
-  const checkinPhase = submitted ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
-  const logDue = useMemo(() => {
-    if (!challenge || !joined || !live || participation?.eliminated_at) {
-      return false;
-    }
-    if (isClosedForLogs({ ...challenge, eliminated: Boolean(participation?.eliminated_at) })) {
-      return false;
-    }
-    if (todaySubmission.isLoading || periodCheckin.isLoading || submitted) {
-      return false;
-    }
-    return true;
-  }, [
-    challenge,
-    joined,
-    live,
-    participation?.eliminated_at,
-    todaySubmission.data,
-    todaySubmission.isLoading,
-    periodCheckin.isLoading,
-    submitted,
-  ]);
-
-  if (!challenge) {
+  if (!challenge || !joinable) {
     return null;
   }
 
   const card = challenge;
-  const needsBodyMetrics = Boolean(
-    user && card.is_official && !joined && !hasCompletedBodyMetrics(profile),
-  );
+  const buyIn = Math.max(Number(card.buy_in_amount) || 0, 0);
+  const guarantee = Math.max(Number(card.host_budget ?? card.creator_contribution) || 0, 0);
   const pot = Math.max(Number(card.prize_pool) || 0, 0);
   const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
-  const weeklyTitle = `Weekly ${formatCashCompact(guarantee || 10)}`;
-  const windows = officialWindowsFor(card);
-  const current = officialCurrentWindow(card, new Date(nowMs));
-  const total = Math.max(windows.length, Number(card.days_required) || 7, 7);
-  const dayLabel = interpolateCopy(copy('official.dayOf'), {
-    n: current?.day ?? Math.min(Math.max(Number(participation?.days_completed) || 0, 0) + 1, total),
-    total,
-  });
+  const title = `Weekly ${formatCashCompact(guarantee || 10)}`;
+  const joinLabel = `Join ${formatCashCompact(buyIn || 1)}`;
+  const needsBodyMetrics = Boolean(user && card.is_official && !hasCompletedBodyMetrics(profile));
 
-  const title = joined && live ? dayLabel : weeklyTitle;
   let meta = '';
-  let metaDone = false;
-  if (joined && live) {
-    if (logDue) {
-      meta = checkinPhase === 'ready' ? copy('checkin.submit') : checkinPhase === 'in_progress' ? copy('checkin.continue') : copy('checkin.begin');
-    } else if (submitted) {
-      meta = copy('checkin.checkedIn');
-      metaDone = true;
-    }
-  } else if (arming) {
-    meta = armingCountdownLabel(card.armed_at, new Date(nowMs)) ?? '';
+  if (card.status === 'arming') {
+    meta = armingCountdownLabel(card.armed_at, new Date(nowMs)) ?? 'Starts in …';
   } else if (needed > 0) {
     meta = `${needed} to start`;
+  } else {
+    meta = 'Filling';
   }
-
-  const showJoin = !joined && joinable;
-  const showLog = joined && logDue;
-  const ctaLabel = showJoin
-    ? `Join ${formatCashCompact(buyIn || 1)}`
-    : showLog
-      ? checkinPhase === 'ready'
-        ? copy('checkin.submit')
-        : checkinPhase === 'in_progress'
-          ? copy('checkin.continue')
-          : copy('checkin.begin')
-      : null;
 
   function openDetail() {
     router.push(challengeDetailHref(card.id, 'feed'));
   }
 
-  function onCta() {
-    if (showLog) {
-      router.push(`/challenges/${card.id}/submit`);
+  function onJoin() {
+    if (needsBodyMetrics) {
+      router.push(BODY_METRICS_HREF);
       return;
     }
-    if (showJoin) {
-      if (needsBodyMetrics) {
-        router.push(BODY_METRICS_HREF);
-        return;
-      }
-      joinSheet.open(card);
-      return;
-    }
-    openDetail();
+    joinSheet.open(card);
   }
 
   return (
     <TourAnchor id="tour-official">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${title}. ${meta}. ${joined ? 'Joined' : 'Not joined'}`}
+        accessibilityLabel={`${title}. ${meta}. ${joinLabel}`}
         onPress={openDetail}
         style={{
-          minHeight: 56,
-          height: 60,
-          borderRadius: 12,
+          minHeight: 58,
+          borderRadius: 18,
           overflow: 'hidden',
-          borderWidth: 1,
-          borderColor: 'rgba(44, 155, 137, 0.16)',
+          backgroundColor: BAR,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 8,
+          paddingRight: 8,
+          paddingLeft: 10,
         }}>
-        <LinearGradient
-          colors={['#E8F3EF', '#F6F5F1']}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingRight: 6 }}>
-          <View
-            style={{
-              width: 4,
-              alignSelf: 'stretch',
-              marginVertical: 8,
-              marginLeft: 8,
-              borderRadius: 4,
-              backgroundColor: THEME.textPrimary,
-            }}
-          />
-          <View style={{ width: 28, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}>
-            <BlobMascot variant="logo" size={24} />
-          </View>
-          <View className="min-w-0 flex-1 px-2">
-            <View className="flex-row items-center" style={{ gap: 6 }}>
-              <View
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: joined ? THEME.accent : THEME.textMuted,
-                }}
-              />
-              <AppText
-                className="flex-1 text-[16px] font-semibold text-charcoal"
-                numberOfLines={1}
-                style={{ includeFontPadding: false }}>
-                {title}
-              </AppText>
-            </View>
-            {meta ? (
-              <View className="mt-0.5 flex-row items-center" style={{ gap: 4 }}>
-                {metaDone ? <Glyph name={GLYPH.check} color={THEME.accent} size={12} /> : null}
-                <AppText className="flex-1 text-[12px] text-muted" numberOfLines={1}>
-                  {meta}
-                </AppText>
-              </View>
-            ) : null}
-          </View>
-          {ctaLabel ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={ctaLabel}
-              disabled={joinSheet.loading}
-              onPress={(event) => {
-                event.stopPropagation();
-                onCta();
-              }}
-              style={{
-                minHeight: 44,
-                minWidth: 44,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                backgroundColor: THEME.primary,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: joinSheet.loading ? 0.38 : 1,
-              }}>
-              <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
-                {ctaLabel}
-              </AppText>
-            </Pressable>
-          ) : (
-            <View style={{ minHeight: 44, minWidth: 32, alignItems: 'center', justifyContent: 'center' }}>
-              <AppText className="text-[20px] font-semibold text-muted">›</AppText>
-            </View>
-          )}
-        </LinearGradient>
+        <View
+          style={{
+            width: 3,
+            alignSelf: 'stretch',
+            marginVertical: 6,
+            marginRight: 8,
+            borderRadius: 2,
+            backgroundColor: THEME.accent,
+          }}
+        />
+        <Image
+          source={BLOB_WORDMARK}
+          style={{ width: 56, height: 22, backgroundColor: 'transparent' }}
+          contentFit="contain"
+          tintColor="#F7FFFC"
+          accessibilityLabel="blOb"
+        />
+        <View className="min-w-0 flex-1" style={{ paddingHorizontal: 10 }}>
+          <AppText
+            className="text-[16px] font-extrabold"
+            numberOfLines={1}
+            style={{ color: '#FFFFFF' }}>
+            {title}
+          </AppText>
+          {meta ? (
+            <AppText
+              className="mt-0.5 text-[12px] font-semibold"
+              numberOfLines={1}
+              style={{ color: 'rgba(231, 247, 243, 0.72)' }}>
+              {meta}
+            </AppText>
+          ) : null}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={joinLabel}
+          disabled={joinSheet.loading}
+          onPress={(event) => {
+            event.stopPropagation();
+            onJoin();
+          }}
+          style={{
+            minHeight: 36,
+            paddingHorizontal: 14,
+            borderRadius: 999,
+            backgroundColor: THEME.accent,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: joinSheet.loading ? 0.38 : 1,
+          }}>
+          <AppText className="text-[13px] font-extrabold" style={{ color: THEME.accentForeground }}>
+            {joinLabel}
+          </AppText>
+        </Pressable>
       </Pressable>
     </TourAnchor>
   );
