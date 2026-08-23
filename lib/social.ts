@@ -44,7 +44,7 @@ export const MESSAGE_COLUMNS = 'id, conversation_id, sender_id, body, media_url,
 export const CHALLENGE_FEED_COLUMNS =
   'id, title, status, is_official, buy_in_amount, prize_pool, currency, cover_image_url, created_by, visibility';
 const CHALLENGE_FEED_COLUMNS_LANE = `${CHALLENGE_FEED_COLUMNS}, challenge_lane`;
-const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at, series_id`;
+const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at, series_id, category, challenge_type`;
 
 export type FollowEdge = Follow & { profile: PublicProfile | null };
 export type FriendEdge = Friendship & { profile: PublicProfile | null };
@@ -110,6 +110,8 @@ export type FeedChallengePreview = {
   challenge_lane?: string | null;
   starts_at?: string | null;
   series_id?: string | null;
+  category?: string | null;
+  challenge_type?: string | null;
 };
 
 export type FeedEventItem = FeedEvent & {

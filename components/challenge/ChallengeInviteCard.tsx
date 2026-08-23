@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
@@ -36,12 +37,16 @@ export type InviteChallenge = {
   start_rule?: string | null;
   visibility?: string | null;
   challenge_lane?: unknown;
+  category?: string | null;
+  challenge_type?: string | null;
 };
 
 export type InviteHost = {
   name: string;
   avatarUrl?: string | null;
 };
+
+export type InviteVisualTheme = 'movement' | 'ranked' | 'habits' | 'creative' | 'official';
 
 type ChallengeInviteCardProps = {
   challenge: InviteChallenge;
@@ -54,9 +59,36 @@ type ChallengeInviteCardProps = {
   onPress?: () => void;
 };
 
-const HEIGHT = 132;
+const HEIGHT = 160;
 const RADIUS = 16;
+const PANEL_WIDTH = 82;
 const OFFICIAL_BG = '#123832';
+
+const THEME_WASH: Record<InviteVisualTheme, readonly [string, string]> = {
+  movement: ['#2C9B89', '#9EE8DC'],
+  ranked: ['#4C5A9E', '#A8B6E8'],
+  habits: ['#8FA88A', '#F3EEE4'],
+  creative: ['#C9B6E0', '#F5C9B8'],
+  official: ['#16463E', '#0E2421'],
+};
+
+export function inviteVisualTheme(challenge: InviteChallenge): InviteVisualTheme {
+  if (challenge.is_official) {
+    return 'official';
+  }
+  const kind = String(challenge.challenge_type ?? '').toLowerCase();
+  const category = String(challenge.category ?? '').toLowerCase();
+  if (kind === 'points' || category === 'gaming') {
+    return 'ranked';
+  }
+  if (category === 'creative') {
+    return 'creative';
+  }
+  if (category === 'fitness' || category === 'sports') {
+    return 'movement';
+  }
+  return 'habits';
+}
 
 function isEndedStatus(status: string): boolean {
   return (
@@ -116,7 +148,6 @@ export function inviteCardCanJoin(input: {
 export function ChallengeInviteCard({
   challenge,
   theme,
-  context = 'lobby',
   joined: joinedProp,
   hosting = false,
   host,
@@ -124,6 +155,7 @@ export function ChallengeInviteCard({
   onPress,
 }: ChallengeInviteCardProps) {
   const official = theme === 'official' || (theme == null && Boolean(challenge.is_official));
+  const visual = official ? 'official' : inviteVisualTheme(challenge);
   const { user } = useAuth();
   const mine = useMyChallengeProgress();
   const joined =
@@ -150,9 +182,7 @@ export function ChallengeInviteCard({
   const cta = canJoin ? 'Join' : 'View';
   const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
   const muted = official ? 'rgba(231,247,243,0.72)' : THEME.textMuted;
-  const stateTag =
-    showStateTags && !official ? (joined ? 'You’re in' : hosting ? 'Hosting' : null) : null;
-  const showHost = context === 'feed' && !official && Boolean(host);
+  const stateTag = showStateTags ? (joined ? 'You’re in' : hosting ? 'Hosting' : null) : null;
 
   async function openDetail() {
     if (onPress) {
@@ -192,79 +222,179 @@ export function ChallengeInviteCard({
       onPress={() => void openDetail()}
       accessibilityRole="button"
       accessibilityLabel={challenge.title}
+      className="flex-row overflow-hidden"
       style={{
         height: HEIGHT,
-        maxHeight: 140,
+        maxHeight: 168,
         borderRadius: RADIUS,
-        overflow: 'hidden',
         backgroundColor: official ? OFFICIAL_BG : THEME.surface,
         borderWidth: official ? 0 : 1,
         borderColor: THEME.border,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        justifyContent: 'space-between',
         ...(official ? null : themeShadow('card')),
       }}>
-      {official || showHost || stateTag ? (
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          {official ? <BlobMascot variant="logo" size={24} /> : null}
-          {showHost && host ? <Avatar uri={host.avatarUrl} name={host.name} size={28} /> : null}
+      <ThemePanel theme={visual} />
+      <View className="min-w-0 flex-1" style={{ paddingHorizontal: 12, paddingVertical: 12, justifyContent: 'space-between' }}>
+        <View className="flex-row items-start" style={{ gap: 8 }}>
+          <AppText
+            className="min-w-0 flex-1 text-[16px] font-semibold leading-5"
+            style={{ color: titleColor }}
+            numberOfLines={1}>
+            {challenge.title}
+          </AppText>
           {stateTag ? (
             <AppText
               className="text-[11px] font-extrabold"
-              style={{ color: THEME.accent, flexShrink: 0 }}
+              style={{ color: official ? '#9EE8DC' : THEME.accent, flexShrink: 0 }}
               numberOfLines={1}>
               {stateTag}
             </AppText>
           ) : null}
         </View>
-      ) : (
-        <View />
-      )}
 
-      <AppText
-        className="text-[17px] font-semibold leading-5"
-        style={{ color: titleColor }}
-        numberOfLines={1}>
-        {challenge.title}
-      </AppText>
+        {official ? (
+          <View className="flex-row items-center" style={{ gap: 6, minHeight: 22 }}>
+            <AppText className="text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
+              Sponsored by
+            </AppText>
+            <BlobMascot variant="logo" size={28} />
+          </View>
+        ) : host ? (
+          <View className="flex-row items-center" style={{ gap: 6, minHeight: 22 }}>
+            <Avatar uri={host.avatarUrl} name={host.name} size={20} />
+            <AppText className="min-w-0 flex-1 text-[12px]" style={{ color: muted }} numberOfLines={1}>
+              Hosted by{' '}
+              <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
+                {host.name}
+              </AppText>
+            </AppText>
+          </View>
+        ) : (
+          <View style={{ minHeight: 22 }} />
+        )}
 
-      <View className="flex-row items-center" style={{ gap: 10 }}>
-        <View className="min-w-0 flex-1 flex-row items-center" style={{ gap: 6 }}>
-          <EntryMark challenge={challenge} color={titleColor} />
-          <AppText style={{ color: muted }}>·</AppText>
-          <AppText className="min-w-0 flex-1 text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
-            {status}
-          </AppText>
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          <View className="min-w-0 flex-1 flex-row items-center" style={{ gap: 5 }}>
+            <EntryMark challenge={challenge} color={titleColor} />
+            <AppText style={{ color: muted }}>·</AppText>
+            <AppText className="min-w-0 flex-1 text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
+              {status}
+            </AppText>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={cta}
+            disabled={joining}
+            onPress={(event) => {
+              event.stopPropagation();
+              void onCta();
+            }}
+            style={{
+              minHeight: 44,
+              minWidth: 72,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              backgroundColor: canJoin ? THEME.accent : official ? 'rgba(255,255,255,0.12)' : THEME.surface,
+              borderWidth: 1,
+              borderColor: canJoin ? THEME.accent : official ? 'rgba(255,255,255,0.28)' : THEME.accent,
+            }}>
+            <AppText
+              className="text-[14px] font-extrabold"
+              style={{ color: canJoin ? THEME.accentForeground : official ? '#FFFFFF' : THEME.accent }}>
+              {cta}
+            </AppText>
+          </Pressable>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={cta}
-          disabled={joining}
-          onPress={(event) => {
-            event.stopPropagation();
-            void onCta();
-          }}
-          style={{
-            minHeight: 44,
-            minWidth: 72,
-            paddingHorizontal: 14,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            backgroundColor: canJoin ? THEME.accent : official ? 'rgba(255,255,255,0.12)' : THEME.surface,
-            borderWidth: 1,
-            borderColor: canJoin ? THEME.accent : official ? 'rgba(255,255,255,0.28)' : THEME.accent,
-          }}>
-          <AppText
-            className="text-[14px] font-extrabold"
-            style={{ color: canJoin ? THEME.accentForeground : official ? '#FFFFFF' : THEME.accent }}>
-            {cta}
-          </AppText>
-        </Pressable>
       </View>
     </Pressable>
+  );
+}
+
+function ThemePanel({ theme }: { theme: InviteVisualTheme }) {
+  return (
+    <LinearGradient
+      colors={[...THEME_WASH[theme]]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.4, y: 1 }}
+      style={{ width: PANEL_WIDTH, height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+      <View pointerEvents="none">
+        {theme === 'movement' ? <MovementMotif /> : null}
+        {theme === 'ranked' ? <RankedMotif /> : null}
+        {theme === 'habits' ? <HabitsMotif /> : null}
+        {theme === 'creative' ? <CreativeMotif /> : null}
+        {theme === 'official' ? <OfficialMotif /> : null}
+      </View>
+    </LinearGradient>
+  );
+}
+
+function MovementMotif() {
+  return (
+    <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.72)' }}>
+      <View
+        style={{
+          position: 'absolute',
+          right: 4,
+          top: 10,
+          width: 14,
+          height: 14,
+          borderTopWidth: 2.5,
+          borderRightWidth: 2.5,
+          borderColor: 'rgba(255,255,255,0.8)',
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
+function RankedMotif() {
+  return (
+    <View className="flex-row items-end" style={{ height: 32, gap: 4 }}>
+      <View style={{ width: 6, height: 12, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.45)' }} />
+      <View style={{ width: 6, height: 20, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.65)' }} />
+      <View style={{ width: 6, height: 28, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.88)' }} />
+    </View>
+  );
+}
+
+function HabitsMotif() {
+  return (
+    <View className="flex-row items-center" style={{ gap: 6 }}>
+      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(47,72,44,0.35)' }} />
+      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'rgba(47,72,44,0.28)' }} />
+      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(47,72,44,0.35)' }} />
+    </View>
+  );
+}
+
+function CreativeMotif() {
+  return (
+    <View
+      style={{
+        width: 22,
+        height: 22,
+        borderWidth: 2,
+        borderColor: 'rgba(80,48,96,0.45)',
+        transform: [{ rotate: '18deg' }],
+      }}
+    />
+  );
+}
+
+function OfficialMotif() {
+  return (
+    <View
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        borderWidth: 1.5,
+        borderColor: 'rgba(158,232,220,0.22)',
+      }}
+    />
   );
 }
 
@@ -272,15 +402,15 @@ function EntryMark({ challenge, color }: { challenge: InviteChallenge; color: st
   const amount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   if (isBucksChallenge(challenge)) {
     return (
-      <AppText className="text-[15px] font-extrabold" style={{ color }} numberOfLines={1}>
+      <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
         {formatCashCompact(amount)}
       </AppText>
     );
   }
   return (
-    <View className="flex-row items-center" style={{ gap: 5 }}>
-      <CurrencyMark currency={challenge.currency} size={16} />
-      <AppText className="text-[15px] font-extrabold" style={{ color }} numberOfLines={1}>
+    <View className="flex-row items-center" style={{ gap: 4 }}>
+      <CurrencyMark currency={challenge.currency} size={15} />
+      <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
         {amount <= 0 ? '0' : Number.isInteger(amount) ? String(amount) : amount.toFixed(2)}
       </AppText>
     </View>

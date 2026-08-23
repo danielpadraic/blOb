@@ -31,6 +31,7 @@ export function ChallengeCarousel({
   challenges,
   currentUserId,
   progressById,
+  socialProofById,
   onPress,
   showStateTags = false,
 }: ChallengeCarouselProps) {
@@ -38,7 +39,7 @@ export function ChallengeCarousel({
   if (challenges.length === 0) {
     return null;
   }
-  const cardWidth = Math.min(Math.round(width * 0.82), 400);
+  const cardWidth = Math.min(Math.round(width * 0.83), 420);
 
   return (
     <View className="mb-5">
@@ -57,6 +58,14 @@ export function ChallengeCarousel({
         {challenges.map((challenge) => {
           const mine = progressById?.get(challenge.id);
           const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
+          const proof = socialProofById?.get(challenge.id);
+          const host = challenge.is_official
+            ? null
+            : hosting
+              ? { name: 'You' }
+              : proof?.kind === 'hosting'
+                ? { name: proof.name, avatarUrl: proof.avatarUrl }
+                : null;
           return (
             <View key={challenge.id} style={{ width: cardWidth, marginRight: CARD_GAP }}>
               <ChallengeInviteCard
@@ -65,6 +74,7 @@ export function ChallengeCarousel({
                 context="lobby"
                 joined={Boolean(mine)}
                 hosting={hosting}
+                host={host}
                 showStateTags={showStateTags}
                 onPress={() => onPress(challenge.id)}
               />
