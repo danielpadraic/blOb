@@ -51,6 +51,13 @@ export const STORY_CREATE_HREF = captureHref('story');
 export const CAPTURE_STORY_HREF = captureHref('story');
 export const CAPTURE_REEL_HREF = captureHref('reel');
 
+export function reelHref(id: string) {
+  return {
+    pathname: '/reel/[id]' as const,
+    params: { id },
+  };
+}
+
 /** Viewer route stays `/story/[id]` so existing links keep working. User-facing name is Wave. */
 export function storyHref(id: string) {
   return {

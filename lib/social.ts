@@ -48,6 +48,7 @@ const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at,
 
 export type FollowEdge = Follow & { profile: PublicProfile | null };
 export type FriendEdge = Friendship & { profile: PublicProfile | null };
+export type ReelItem = Reel & { profile: PublicProfile | null };
 
 export type FriendshipSnapshot = {
   status: FriendshipStatus | 'none';
@@ -878,7 +879,19 @@ export async function viewStory(userId: string, storyId: string): Promise<void> 
   throwIfError(error);
 }
 
-export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<Reel[]> {
+async function withReelProfiles(rows: Reel[]): Promise<ReelItem[]> {
+  if (rows.length === 0) {
+    return [];
+  }
+  const profiles = await fetchPublicProfilesByIds(rows.map((row) => row.user_id));
+  const byId = new Map(profiles.map((profile) => [profile.id, profile]));
+  return rows.map((row) => ({
+    ...row,
+    profile: byId.get(row.user_id) ?? null,
+  }));
+}
+
+export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> {
   const { data, error } = await supabase
     .from('reels')
     .select(REEL_COLUMNS)
@@ -890,7 +903,22 @@ export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<Reel[]> {
     }
     throwIfError(error);
   }
-  return (data ?? []) as Reel[];
+  return withReelProfiles((data ?? []) as Reel[]);
+}
+
+export async function fetchReel(id: string): Promise<ReelItem | null> {
+  const { data, error } = await supabase.from('reels').select(REEL_COLUMNS).eq('id', id).maybeSingle();
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return null;
+    }
+    throwIfError(error);
+  }
+  if (!data) {
+    return null;
+  }
+  const [item] = await withReelProfiles([data as Reel]);
+  return item ?? null;
 }
 
 export async function createReel(userId: string, input: CreateReelInput): Promise<Reel> {

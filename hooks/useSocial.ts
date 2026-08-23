@@ -24,6 +24,7 @@ import {
   fetchFriendshipSnapshot,
   fetchMessages,
   fetchPublicProfilesByIds,
+  fetchReel,
   fetchReels,
   fetchStory,
   fetchStoryChallengeOptions,
@@ -47,6 +48,7 @@ import {
   type ConversationPreview,
   type CreateFeedEventInput,
   type CreateReelInput,
+  type ReelItem,
   type CreateStoryInput,
   type FollowEdge,
   type FriendEdge,
@@ -54,12 +56,13 @@ import {
   type FeedEventItem,
   type SendMessageInput,
 } from '@/lib/social';
-import type { Friendship, Message, Reel, Story, StoryComment, StoryReaction, StoryReactionType } from '@/types/social';
+import type { Friendship, Message, Story, StoryComment, StoryReaction, StoryReactionType } from '@/types/social';
 
 export type {
   ConversationPreview,
   CreateFeedEventInput,
   CreateReelInput,
+  ReelItem,
   CreateStoryInput,
   FeedEventItem,
   FollowEdge,
@@ -89,6 +92,7 @@ export const socialKeys = {
   storyReactions: (storyId: string) => ['story-reactions', storyId] as const,
   storyComments: (storyId: string) => ['story-comments', storyId] as const,
   reels: (limit: number) => ['reels', limit] as const,
+  reel: (id: string) => ['reel', id] as const,
   conversations: (userId: string) => ['conversations', userId] as const,
   conversation: (id: string) => ['conversation', id] as const,
   messages: (conversationId: string) => ['messages', conversationId] as const,
@@ -858,6 +862,14 @@ export function useReels(limit = SOCIAL_PAGE_SIZE) {
   });
 }
 
+export function useReel(id?: string | null) {
+  return useQuery({
+    queryKey: socialKeys.reel(id ?? ''),
+    enabled: Boolean(id),
+    queryFn: () => fetchReel(id!),
+  });
+}
+
 export function useCreateReel() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -869,9 +881,9 @@ export function useCreateReel() {
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: ['reels'] });
-      const previous = queryClient.getQueriesData<Reel[]>({ queryKey: ['reels'] });
+      const previous = queryClient.getQueriesData<ReelItem[]>({ queryKey: ['reels'] });
       if (user?.id) {
-        const optimistic: Reel = {
+        const optimistic: ReelItem = {
           id: `optimistic-${Date.now()}`,
           user_id: user.id,
           video_url: input.video_url,
@@ -880,8 +892,9 @@ export function useCreateReel() {
           challenge_id: input.challenge_id ?? null,
           duration_ms: input.duration_ms ?? null,
           created_at: new Date().toISOString(),
+          profile: null,
         };
-        queryClient.setQueriesData<Reel[]>({ queryKey: ['reels'] }, (current) =>
+        queryClient.setQueriesData<ReelItem[]>({ queryKey: ['reels'] }, (current) =>
           current ? [optimistic, ...current] : current,
         );
       }
