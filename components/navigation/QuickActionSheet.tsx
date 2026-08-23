@@ -9,15 +9,7 @@ import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
-export type QuickActionId =
-  | 'log'
-  | 'create'
-  | 'join'
-  | 'post'
-  | 'story'
-  | 'reel'
-  | 'coins'
-  | 'callout';
+export type QuickActionId = 'log' | 'create' | 'join' | 'post' | 'story' | 'reel' | 'coins' | 'callout';
 
 type QuickActionSheetProps = {
   visible: boolean;
@@ -49,26 +41,28 @@ export function QuickActionSheet({
   const [handleH, setHandleH] = useState(72);
   const [listH, setListH] = useState(0);
   const [contentH, setContentH] = useState(0);
+  const [step, setStep] = useState<'root' | 'post'>('root');
 
-  const rows: ActionRow[] = [
-    ...(loggable
+  const rows: ActionRow[] =
+    step === 'post'
       ? [
-          {
-            id: 'log' as const,
-            glyph: '✅',
-            label: loggable.ctaTitle ?? copy('checkin.begin'),
-            hint: loggable.title,
-          },
+          { id: 'story', glyph: '📷', label: copy('wave.noun') },
+          { id: 'reel', glyph: '🎬', label: copy('round.noun') },
+          { id: 'post', glyph: '✍️', label: 'Feed' },
         ]
-      : []),
-    { id: 'create', glyph: '🏁', label: 'Create a Challenge' },
-    { id: 'callout', glyph: '⚔️', label: 'Call someone out' },
-    { id: 'join', glyph: '🤝', label: 'Join a Challenge' },
-    { id: 'post', glyph: '✍️', label: 'New Post' },
-    { id: 'story', glyph: '📷', label: copy('wave.noun') },
-    { id: 'reel', glyph: '🎬', label: copy('round.noun') },
-    { id: 'coins', glyph: '🪙', label: 'Send Coins or $' },
-  ];
+      : [
+          ...(loggable
+            ? [
+                {
+                  id: 'log' as const,
+                  glyph: '✅',
+                  label: loggable.ctaTitle ?? copy('checkin.begin'),
+                  hint: loggable.title,
+                },
+              ]
+            : []),
+          { id: 'post', glyph: '✍️', label: 'Post' },
+        ];
 
   const listMax = Math.max(ROW_MIN + LIST_PAD, sheetMax - handleH);
   const canScroll = contentH > listH + 1;
@@ -76,6 +70,7 @@ export function QuickActionSheet({
   useEffect(() => {
     if (!visible) {
       translateY.value = 0;
+      setStep('root');
     }
   }, [translateY, visible]);
 
@@ -101,6 +96,14 @@ export function QuickActionSheet({
     transform: [{ translateY: translateY.value }],
   }));
 
+  function onRow(id: QuickActionId) {
+    if (step === 'root' && id === 'post') {
+      setStep('post');
+      return;
+    }
+    onAction(id);
+  }
+
   return (
     <ChromeOverlay visible={visible} onClose={onClose}>
       <Animated.View
@@ -125,7 +128,23 @@ export function QuickActionSheet({
             accessibilityLabel="Close quick actions"
             accessibilityHint="Drag down to close">
             <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
-            <AppText className="mt-3 text-lg font-bold text-charcoal">Quick actions</AppText>
+            <View className="mt-3 flex-row items-center" style={{ minHeight: 28 }}>
+              {step === 'post' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                  onPress={() => setStep('root')}
+                  hitSlop={8}
+                  style={{ position: 'absolute', left: 0, minHeight: 44, justifyContent: 'center' }}>
+                  <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+                    Back
+                  </AppText>
+                </Pressable>
+              ) : null}
+              <AppText className="text-lg font-bold text-charcoal">
+                {step === 'post' ? 'Post' : 'Quick actions'}
+              </AppText>
+            </View>
           </View>
         </GestureDetector>
 
@@ -151,10 +170,10 @@ export function QuickActionSheet({
             }}>
             {rows.map((row, index) => (
               <Pressable
-                key={row.id}
+                key={`${step}-${row.id}`}
                 accessibilityRole="button"
                 accessibilityLabel={row.label}
-                onPress={() => onAction(row.id)}
+                onPress={() => onRow(row.id)}
                 className="flex-row items-center px-4"
                 style={{
                   minHeight: ROW_MIN,

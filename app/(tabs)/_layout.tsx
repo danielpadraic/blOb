@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tabs, usePathname, useRouter, useSegments, type Href } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
 import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
@@ -16,7 +16,12 @@ import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { TourHost } from '@/components/tour/TourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
 import { TourProvider, useTour } from '@/components/tour/TourContext';
-import { TabChromeHeader, isAlertsTab, isChallengeIdRoute } from '@/components/wallet/TabChrome';
+import {
+  TabChromeHeader,
+  isAlertsTab,
+  isChallengeIdRoute,
+  type LogoMenuAction,
+} from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
@@ -89,7 +94,9 @@ function TabLayoutInner() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [logoMenuOpen, setLogoMenuOpen] = useState(false);
   const loggable = useLoggableChallenge();
+  const leftApp = useRef(false);
   useNotificationsRealtime();
   usePushNotifications();
   useTickUserGrants(true);
@@ -98,6 +105,7 @@ function TabLayoutInner() {
     setAlertsOpen(false);
     setSearchOpen(false);
     setSheetOpen(false);
+    setLogoMenuOpen(false);
     closeSocialSheets();
     closeMediaLightbox();
     wallet?.closeAll();
@@ -118,6 +126,7 @@ function TabLayoutInner() {
     }
     setSearchOpen(false);
     setSheetOpen(false);
+    setLogoMenuOpen(false);
     wallet?.closeAll();
     setAlertsOpen(true);
   }
@@ -129,6 +138,7 @@ function TabLayoutInner() {
     }
     setAlertsOpen(false);
     setSheetOpen(false);
+    setLogoMenuOpen(false);
     wallet?.closeAll();
     setSearchOpen(true);
   }
@@ -140,10 +150,49 @@ function TabLayoutInner() {
     }
     setAlertsOpen(false);
     setSearchOpen(false);
+    setLogoMenuOpen(false);
     closeSocialSheets();
     wallet?.closeAll();
     setSheetOpen(true);
   }
+
+  function toggleLogoMenu() {
+    if (logoMenuOpen) {
+      setLogoMenuOpen(false);
+      return;
+    }
+    setAlertsOpen(false);
+    setSearchOpen(false);
+    setSheetOpen(false);
+    closeSocialSheets();
+    wallet?.closeAll();
+    setLogoMenuOpen(true);
+  }
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'background' || next === 'inactive') {
+        leftApp.current = true;
+        return;
+      }
+      if (next !== 'active' || !leftApp.current) {
+        return;
+      }
+      leftApp.current = false;
+      if (
+        pathname.startsWith('/onboarding') ||
+        pathname.includes('/capture') ||
+        pathname.includes('/submit')
+      ) {
+        return;
+      }
+      if (pathname === '/feed' || pathname === '/feed/') {
+        return;
+      }
+      router.replace('/feed');
+    });
+    return () => sub.remove();
+  }, [pathname, router]);
 
   function go(href: Href) {
     closeOverlays();
@@ -202,8 +251,11 @@ function TabLayoutInner() {
         <TabChromeHeader
           alertsOpen={alertsOpen}
           searchOpen={searchOpen}
+          logoMenuOpen={logoMenuOpen}
           onToggleAlerts={toggleAlerts}
           onToggleSearch={toggleSearch}
+          onToggleLogoMenu={toggleLogoMenu}
+          onLogoAction={(id: LogoMenuAction) => onAction(id)}
         />
       )}
       <View
