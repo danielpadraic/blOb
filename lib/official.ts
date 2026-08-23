@@ -30,3 +30,17 @@ export function isOfficialAccount(profile?: OfficialProfile | null): boolean {
 export function isAdminViewer(profile?: OfficialProfile | null): boolean {
   return isOfficialAccount(profile);
 }
+
+/** First-party Official challenge. Uses flags / Official account id, not display copy. */
+export function isOfficialChallenge(challenge?: {
+  is_official?: boolean | null;
+  created_by?: string | null;
+} | null): boolean {
+  if (!challenge) {
+    return false;
+  }
+  if (challenge.is_official) {
+    return true;
+  }
+  return challenge.created_by === OFFICIAL_BOB_ID;
+}
