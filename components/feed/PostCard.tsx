@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
-import { ChallengeShareEmbed } from '@/components/feed/ChallengeShareEmbed';
+import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
@@ -495,7 +495,13 @@ function ChallengeShareCard({
         : null;
     return (
       <View className="mt-3">
-        <ChallengeShareEmbed challenge={card} host={host} onPress={open} />
+        <ChallengeInviteCard
+          challenge={card}
+          theme={card.is_official ? 'official' : 'user'}
+          context="feed"
+          host={host}
+          onPress={open}
+        />
       </View>
     );
   }

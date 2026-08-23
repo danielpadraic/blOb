@@ -1,6 +1,6 @@
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
-import { LobbyChallengeCard } from '@/components/challenge/LobbyChallengeCard';
+import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
 import { type MenuAnchor } from '@/components/challenge/ChallengeOverflowMenu';
 import { AppText } from '@/components/ui/AppText';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -20,6 +20,7 @@ type ChallengeCarouselProps = {
   onPress: (id: string) => void;
   allowCancel?: boolean;
   official?: boolean;
+  showStateTags?: boolean;
   onOverflow?: (challenge: ChallengeWithStats, anchor: MenuAnchor) => void;
 };
 
@@ -31,6 +32,7 @@ export function ChallengeCarousel({
   currentUserId,
   progressById,
   onPress,
+  showStateTags = false,
 }: ChallengeCarouselProps) {
   const { width } = useWindowDimensions();
   if (challenges.length === 0) {
@@ -57,10 +59,13 @@ export function ChallengeCarousel({
           const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
           return (
             <View key={challenge.id} style={{ width: cardWidth, marginRight: CARD_GAP }}>
-              <LobbyChallengeCard
+              <ChallengeInviteCard
                 challenge={challenge}
+                theme={challenge.is_official ? 'official' : 'user'}
+                context="lobby"
                 joined={Boolean(mine)}
                 hosting={hosting}
+                showStateTags={showStateTags}
                 onPress={() => onPress(challenge.id)}
               />
             </View>

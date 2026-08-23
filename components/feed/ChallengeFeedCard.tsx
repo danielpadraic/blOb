@@ -1,4 +1,4 @@
-import { ChallengeShareEmbed } from '@/components/feed/ChallengeShareEmbed';
+import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
 import type { FeedChallengePreview } from '@/lib/social';
 
 type ChallengeFeedCardProps = {
@@ -8,7 +8,14 @@ type ChallengeFeedCardProps = {
   onPress?: () => void;
 };
 
-/** Home/composer share attachment. Visual is ChallengeShareEmbed. */
 export function ChallengeFeedCard({ challenge, joined, onPress }: ChallengeFeedCardProps) {
-  return <ChallengeShareEmbed challenge={challenge} joined={joined} onPress={onPress} />;
+  return (
+    <ChallengeInviteCard
+      challenge={challenge}
+      theme={challenge.is_official ? 'official' : 'user'}
+      context="feed"
+      joined={joined}
+      onPress={onPress}
+    />
+  );
 }

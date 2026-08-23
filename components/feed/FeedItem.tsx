@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 
-import { ChallengeShareEmbed } from '@/components/feed/ChallengeShareEmbed';
+import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -71,8 +71,10 @@ export function FeedItem({ event, joined, onPressChallenge }: FeedItemProps) {
           ) : null}
           {event.challenge ? (
             <View className="mt-3">
-              <ChallengeShareEmbed
+              <ChallengeInviteCard
                 challenge={event.challenge}
+                theme={event.challenge.is_official ? 'official' : 'user'}
+                context="feed"
                 joined={joined}
                 host={
                   event.actor && event.challenge.created_by === event.actor_id

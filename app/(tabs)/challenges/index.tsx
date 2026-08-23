@@ -286,6 +286,7 @@ export default function ChallengesScreen() {
             currentUserId={user?.id}
             progressById={progressById}
             onPress={openChallenge}
+            showStateTags
             allowCancel
             official={isOfficialAccount(profile)}
             onOverflow={(challenge, anchor) =>
