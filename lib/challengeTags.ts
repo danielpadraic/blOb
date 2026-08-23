@@ -94,7 +94,7 @@ export function challengeCardTags(input: {
   const visibility = String(challenge.visibility ?? 'public').toLowerCase();
   if (visibility === 'private' || visibility === 'invite') {
     tags.push({ kind: 'private', label: visibility === 'invite' ? 'Invite only' : 'Private' });
-  } else {
+  } else if (!challenge.is_official) {
     tags.push({ kind: 'public', label: 'Public' });
   }
 
@@ -117,15 +117,11 @@ export function challengeCardTags(input: {
   }
 
   const phase = statusKind(challenge.status);
-  if (phase) {
+  if (phase && phase !== 'filling') {
     tags.push({
       kind: phase,
       label: CHALLENGE_STATUS_LABEL[String(challenge.status)] ?? String(challenge.status),
     });
-  }
-
-  if (!isBucksChallenge(challenge)) {
-    tags.push({ kind: 'coins', label: 'Coins' });
   }
 
   return tags;
