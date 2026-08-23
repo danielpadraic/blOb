@@ -7,15 +7,18 @@ type ChromeOverlayProps = {
   children: ReactNode;
   align?: 'end' | 'center' | 'start';
   dim?: boolean | 'heavy';
+  /** Stack above tab-bar chrome (ComposeTabButton is zIndex 80–90). */
+  zIndex?: number;
 };
 
-/** Fills the parent (the gap between header and tab bar). Never use RN Modal for in-app sheets. */
+/** Fills the parent. Never use RN Modal for in-app sheets. */
 export function ChromeOverlay({
   visible,
   onClose,
   children,
   align = 'end',
   dim = true,
+  zIndex,
 }: ChromeOverlayProps) {
   if (!visible) {
     return null;
@@ -26,7 +29,12 @@ export function ChromeOverlay({
     dim === 'heavy' ? 'rgba(16, 19, 18, 0.88)' : dim ? 'rgba(16, 19, 18, 0.55)' : 'transparent';
 
   return (
-    <View pointerEvents="auto" style={styles.host}>
+    <View
+      pointerEvents="auto"
+      style={[
+        styles.host,
+        zIndex != null ? { zIndex, elevation: zIndex } : null,
+      ]}>
       <View
         accessibilityRole="none"
         accessibilityLabel={onClose ? 'Dismiss' : undefined}

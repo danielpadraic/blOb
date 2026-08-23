@@ -105,7 +105,7 @@ export function QuickActionSheet({
   }
 
   return (
-    <ChromeOverlay visible={visible} onClose={onClose}>
+    <ChromeOverlay visible={visible} onClose={onClose} zIndex={120}>
       <Animated.View
         style={[
           {
@@ -128,22 +128,27 @@ export function QuickActionSheet({
             accessibilityLabel="Close quick actions"
             accessibilityHint="Drag down to close">
             <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
-            <View className="mt-3 flex-row items-center" style={{ minHeight: 28 }}>
-              {step === 'post' ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Back"
-                  onPress={() => setStep('root')}
-                  hitSlop={8}
-                  style={{ position: 'absolute', left: 0, minHeight: 44, justifyContent: 'center' }}>
-                  <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
-                    Back
-                  </AppText>
-                </Pressable>
-              ) : null}
-              <AppText className="text-lg font-bold text-charcoal">
-                {step === 'post' ? 'Post' : 'Quick actions'}
-              </AppText>
+            <View className="mt-3 w-full flex-row items-center" style={{ minHeight: 44 }}>
+              <View style={{ flex: 1, alignItems: 'flex-start', justifyContent: 'center', minHeight: 44 }}>
+                {step === 'post' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Back"
+                    onPress={() => setStep('root')}
+                    hitSlop={8}
+                    style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+                      Back
+                    </AppText>
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <AppText className="text-lg font-bold text-charcoal" numberOfLines={1}>
+                  {step === 'post' ? 'Post' : 'Quick actions'}
+                </AppText>
+              </View>
+              <View style={{ flex: 1, minHeight: 44 }} />
             </View>
           </View>
         </GestureDetector>

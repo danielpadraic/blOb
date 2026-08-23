@@ -309,12 +309,6 @@ function TabLayoutInner() {
         </Tabs>
         <AlertsOverlay visible={alertsOpen} onClose={closeAlerts} />
         <SearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
-        <QuickActionSheet
-          visible={sheetOpen}
-          loggable={loggable.data}
-          onClose={() => setSheetOpen(false)}
-          onAction={onAction}
-        />
         <HealthLogPromptHost />
         {onOnboarding ? null : <OfficialPitchHost />}
         </SocialSheetsHost>
@@ -327,6 +321,16 @@ function TabLayoutInner() {
           onTabPress={closeOverlays}
         />
       )}
+      <View
+        pointerEvents={sheetOpen ? 'auto' : 'none'}
+        style={styles.sheetLayer}>
+        <QuickActionSheet
+          visible={sheetOpen}
+          loggable={loggable.data}
+          onClose={() => setSheetOpen(false)}
+          onAction={onAction}
+        />
+      </View>
       <JoinConfirmLayer />
       <View pointerEvents="box-none" style={styles.chromeLayer}>
         <WalletHost />
@@ -344,6 +348,15 @@ function TabLayoutInner() {
 }
 
 const styles = StyleSheet.create({
+  sheetLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 120,
+    elevation: 120,
+  },
   chromeLayer: {
     position: 'absolute',
     top: 0,
