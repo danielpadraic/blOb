@@ -305,5 +305,5 @@ async function fetchRecommendedProfiles(userId: string): Promise<PublicProfile[]
   return ((data ?? []) as PublicProfile[])
     .filter((row) => !exclude.has(row.id))
     .map(redactPublicProfile)
-    .slice(0, 4);
+    .slice(0, 12);
 }

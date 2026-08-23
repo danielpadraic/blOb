@@ -93,6 +93,7 @@ const STRINGS = {
   'lobby.railFriends': 'Friends',
   'feed.railActive': 'Active',
   'feed.featuredChallenge': 'Featured Challenge',
+  'feed.peopleYouMayKnow': 'People you may know',
   'feed.youreIn': 'You’re in',
   'feed.notJoined': 'Not joined',
   'feed.openChallenge': 'Open',
