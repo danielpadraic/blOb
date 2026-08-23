@@ -18,7 +18,7 @@ import { challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { formatCash, isBucksChallenge } from '@/lib/currency';
 import { isOfficialJoinable } from '@/lib/officialSeries';
-import { themeShadow } from '@/lib/theme';
+import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 
 type HeroHost = {
@@ -46,6 +46,9 @@ type ChallengeHeroCardProps = {
   children?: ReactNode;
 };
 
+const OFFICIAL_HERO = ['#1B5A50', '#123832', '#0E2421'] as const;
+const USER_HERO = ['#FFFFFF', '#F7F7F5'] as const;
+
 export function ChallengeHeroCard({
   challenge,
   host,
@@ -65,7 +68,7 @@ export function ChallengeHeroCard({
   children,
 }: ChallengeHeroCardProps) {
   const official = Boolean(challenge.is_official);
-  const filling = isOfficialJoinable(challenge);
+  const filling = official && isOfficialJoinable(challenge);
   const tags = challengeCardTags({
     challenge,
     hosting: Boolean(hosting && viewerId && viewerId === challenge.created_by),
@@ -76,40 +79,46 @@ export function ChallengeHeroCard({
   const subtitle = challengeGoalSubtitle(challenge);
   const pool = Number(challenge.prize_pool) || 0;
   const bucks = isBucksChallenge(challenge);
+  const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
+  const muted = official ? 'rgba(255,255,255,0.78)' : THEME.textMuted;
+  const labelMuted = official ? 'rgba(255,255,255,0.62)' : THEME.textMuted;
+  const ringLabel = official
+    ? 'text-[16px] font-extrabold text-white'
+    : 'text-[16px] font-extrabold text-charcoal';
+  const hostName = host?.display_name?.trim() || host?.username || '';
 
   const summary = (
     <View className="gap-3">
-      <ChallengeTagRow tags={tags} />
+      <ChallengeTagRow tags={tags} tone={official ? 'dark' : 'light'} />
       <AppText
         className="text-[24px] font-extrabold leading-7"
-        style={{ color: '#fff' }}
+        style={{ color: titleColor }}
         numberOfLines={2}>
         {challenge.title}
       </AppText>
       {official ? (
-        <View className="flex-row items-center" style={{ gap: 8, minHeight: 28, flexWrap: 'nowrap' }}>
-          <AppText
-            className="text-[13px] font-semibold"
-            numberOfLines={1}
-            style={{ color: 'rgba(255,255,255,0.86)' }}>
+        <View
+          className="flex-row items-center"
+          style={{ gap: 8, minHeight: 28, flexWrap: 'nowrap' }}
+          accessibilityLabel="Sponsored by blOb">
+          <AppText className="text-[13px] font-semibold" numberOfLines={1} style={{ color: muted }}>
             Sponsored by
           </AppText>
           <BlobMascot variant="logo" size={72} />
         </View>
-      ) : null}
-      {host && !official ? (
+      ) : host ? (
         <ProfileLink username={host.username} userId={host.id}>
-          <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.78)' }}>
+          <AppText className="text-[13px]" style={{ color: muted }}>
             Hosted by{' '}
-            <AppText className="font-semibold" style={{ color: '#fff' }}>
-              {host.display_name ?? host.username}
+            <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
+              {hostName}
             </AppText>
           </AppText>
         </ProfileLink>
       ) : null}
-      <ProofRequirementIcons challenge={challenge} tint="light" />
+      <ProofRequirementIcons challenge={challenge} tint={official ? 'light' : 'dark'} />
       {cancelled ? (
-        <AppText className="text-[15px] font-semibold" style={{ color: '#fff' }}>
+        <AppText className="text-[15px] font-semibold" style={{ color: titleColor }}>
           Cancelled
         </AppText>
       ) : null}
@@ -122,7 +131,7 @@ export function ChallengeHeroCard({
                 size={72}
                 strokeWidth={7}
                 label={`${daysCompleted}`}
-                labelClassName="text-[16px] font-extrabold text-white"
+                labelClassName={ringLabel}
                 color="#72D9CB"
               />
             </View>
@@ -133,17 +142,14 @@ export function ChallengeHeroCard({
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
-                style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
+                style={{ color: labelMuted, letterSpacing: 0.2 }}>
                 Goal
               </AppText>
-              <AppText className="mt-1 text-[15px] font-bold" style={{ color: '#fff' }} numberOfLines={1}>
+              <AppText className="mt-1 text-[15px] font-bold" style={{ color: titleColor }} numberOfLines={1}>
                 {goalLabel}
               </AppText>
               {subtitle ? (
-                <AppText
-                  className="mt-0.5 text-[11px]"
-                  style={{ color: 'rgba(255,255,255,0.72)' }}
-                  numberOfLines={1}>
+                <AppText className="mt-0.5 text-[11px]" style={{ color: muted }} numberOfLines={1}>
                   {subtitle}
                 </AppText>
               ) : null}
@@ -161,17 +167,17 @@ export function ChallengeHeroCard({
           <View className="min-w-0 flex-1">
             <FieldNoteLabel
               note="pot"
-              tint="light"
+              tint="dark"
               numberOfLines={1}
               textClassName="text-[11px] font-semibold uppercase"
-              textStyle={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
+              textStyle={{ color: labelMuted, letterSpacing: 0.2 }}>
               Prize
             </FieldNoteLabel>
             <View className="mt-1 flex-row items-center" style={{ gap: 6, minWidth: 0 }}>
               {bucks ? (
                 <AppText
                   className="text-[22px] font-extrabold"
-                  style={{ color: '#fff' }}
+                  style={{ color: titleColor }}
                   numberOfLines={1}>
                   {formatCash(pool)}
                 </AppText>
@@ -180,7 +186,7 @@ export function ChallengeHeroCard({
                   <CurrencyMark currency="coins" size={22} />
                   <AppText
                     className="text-[22px] font-extrabold"
-                    style={{ color: '#fff' }}
+                    style={{ color: titleColor }}
                     numberOfLines={1}>
                     {pool.toFixed(2)}
                   </AppText>
@@ -195,12 +201,12 @@ export function ChallengeHeroCard({
                 size={72}
                 strokeWidth={7}
                 label={`${daysCompleted}`}
-                labelClassName="text-[16px] font-extrabold text-white"
-                color="#72D9CB"
+                labelClassName={ringLabel}
+                color={THEME.accent}
               />
               <AppText
                 className="mt-1 text-center text-[12px] font-semibold"
-                style={{ color: '#fff' }}
+                style={{ color: titleColor }}
                 numberOfLines={1}>
                 {goalLabel}
               </AppText>
@@ -212,19 +218,19 @@ export function ChallengeHeroCard({
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
-                style={{ color: 'rgba(255,255,255,0.62)', letterSpacing: 0.2 }}>
+                style={{ color: labelMuted, letterSpacing: 0.2 }}>
                 Goal
               </AppText>
               <AppText
                 className="mt-1 text-right text-[15px] font-bold"
-                style={{ color: '#fff' }}
+                style={{ color: titleColor }}
                 numberOfLines={1}>
                 {goalLabel}
               </AppText>
               {subtitle ? (
                 <AppText
                   className="mt-0.5 text-right text-[11px]"
-                  style={{ color: 'rgba(255,255,255,0.72)' }}
+                  style={{ color: muted }}
                   numberOfLines={1}>
                   {subtitle}
                 </AppText>
@@ -238,12 +244,14 @@ export function ChallengeHeroCard({
 
   return (
     <LinearGradient
-      colors={['#2C9B89', '#10201D']}
+      colors={[...(official ? OFFICIAL_HERO : USER_HERO)]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
         borderRadius: 24,
         overflow: 'hidden',
+        borderWidth: official ? 0 : 1,
+        borderColor: THEME.border,
         ...themeShadow('card'),
       }}>
       {challenge.cover_image_url ? (
@@ -255,7 +263,7 @@ export function ChallengeHeroCard({
             right: 0,
             bottom: 0,
             left: 0,
-            opacity: 0.18,
+            opacity: official ? 0.18 : 0.1,
             borderRadius: 24,
           }}
           contentFit="cover"
@@ -277,7 +285,7 @@ export function ChallengeHeroCard({
               summary
             )}
           </View>
-          <ChallengeHeroOverflowButton />
+          <ChallengeHeroOverflowButton light={official} />
         </View>
         {filling ? (
           <OfficialInviteButton
