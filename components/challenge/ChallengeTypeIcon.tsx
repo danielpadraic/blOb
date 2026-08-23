@@ -38,7 +38,7 @@ export function ChallengeTypePlaceholder({
       }}>
       <Image
         source={challengeTypeIconSource(category)}
-        style={{ width: '88%', height: '88%' }}
+        style={{ width: '88%', height: '88%', backgroundColor: 'transparent' }}
         contentFit="contain"
         contentPosition="center"
         recyclingKey={challengeTypeIconKey(category)}
@@ -50,11 +50,9 @@ export function ChallengeTypePlaceholder({
 
 export function ChallengeTypeBadge({
   category,
-  tone = 'dark',
   onPress,
 }: {
   category?: string | null;
-  tone?: 'dark' | 'light';
   onPress: () => void;
 }) {
   const label = challengeTypeIconLabel(category);
@@ -69,20 +67,18 @@ export function ChallengeTypeBadge({
       }}
       style={{
         position: 'absolute',
-        left: 6,
-        bottom: 6,
+        left: 5,
+        bottom: 5,
         zIndex: 4,
         width: BADGE,
         height: BADGE,
-        borderRadius: 8,
-        overflow: 'hidden',
-        backgroundColor: tone === 'light' ? 'rgba(247, 247, 245, 0.9)' : 'rgba(16, 19, 18, 0.42)',
+        backgroundColor: 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
       <Image
         source={challengeTypeIconSource(category)}
-        style={{ width: BADGE - 2, height: BADGE - 2 }}
+        style={{ width: BADGE, height: BADGE, backgroundColor: 'transparent' }}
         contentFit="contain"
         recyclingKey={challengeTypeIconKey(category)}
       />

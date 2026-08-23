@@ -548,6 +548,7 @@ function MediaPanel({
   }
 
   const officialPanel = visual === 'official' || resolved.kind === 'bob';
+  const showTypeBadge = officialPanel || resolved.kind === 'photo';
 
   return (
     <View
@@ -597,12 +598,14 @@ function MediaPanel({
       ) : (
         <ChallengeTypePlaceholder category={category} onPress={onTypePress} />
       )}
-      <ChallengeTypeBadge
-        category={category}
-        tone={officialPanel || resolved.kind === 'photo' ? 'light' : 'dark'}
-        onPress={onTypePress}
-      />
-      <ChallengeTypeTip category={category} visible={typeTipOpen} />
+      {showTypeBadge ? (
+        <>
+          <ChallengeTypeBadge category={category} onPress={onTypePress} />
+          <ChallengeTypeTip category={category} visible={typeTipOpen} />
+        </>
+      ) : (
+        <ChallengeTypeTip category={category} visible={typeTipOpen} anchor="panel" />
+      )}
     </View>
   );
 }
