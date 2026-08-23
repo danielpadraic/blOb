@@ -4,9 +4,9 @@ export type CopyTone = (typeof COPY_TONES)[number];
 
 const STRINGS = {
   'bfp.sliderHint': {
-    gentle: 'Move this until this Blob looks like you do right now.',
-    neutral: 'Match the slider to your current body fat, or type the exact %.',
-    honest: 'This is what you look like today, not what you wish. Slide until it matches, or type the number if you have it.',
+    gentle: 'Adjust until this matches how you look right now — or enter your actual body-fat %.',
+    neutral: 'Slide to your current body type, or type your actual body-fat %.',
+    honest: 'Set current body fat, not a goal. Slide to match today, or enter the real %.',
   },
   'bfp.enterExact': 'Enter exact %',
   'bfp.exactLabel': 'Exact body fat %',
