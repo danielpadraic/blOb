@@ -1,4 +1,4 @@
-import { ScrollView, View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { ChallengeCard } from '@/components/challenge/ChallengeCard';
 import { type MenuAnchor } from '@/components/challenge/ChallengeOverflowMenu';
@@ -21,9 +21,10 @@ type ChallengeCarouselProps = {
   onPress: (id: string) => void;
   allowCancel?: boolean;
   official?: boolean;
-  layout?: 'stack' | 'rail';
   onOverflow?: (challenge: ChallengeWithStats, anchor: MenuAnchor) => void;
 };
+
+const CARD_GAP = 10;
 
 export function ChallengeCarousel({
   title,
@@ -34,67 +35,62 @@ export function ChallengeCarousel({
   onPress,
   allowCancel = false,
   official = false,
-  layout = 'stack',
   onOverflow,
 }: ChallengeCarouselProps) {
+  const { width } = useWindowDimensions();
   if (challenges.length === 0) {
     return null;
   }
-  const rail = layout === 'rail';
-  const cards = challenges.map((challenge) => {
-    const mine = progressById?.get(challenge.id);
-    const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
-    const joined = Boolean(mine);
-    const showOverflow =
-      allowCancel &&
-      Boolean(onOverflow) &&
-      canCancelChallengeCard({
-        challenge,
-        viewerId: currentUserId,
-        official,
-      });
-    const card = (
-      <ChallengeCard
-        variant={rail ? 'rail' : 'discover'}
-        challenge={challenge}
-        myDays={joined ? mine?.days ?? 0 : null}
-        joined={joined}
-        hosting={hosting}
-        socialProof={socialProofById?.get(challenge.id)}
-        participantStatus={mine?.status}
-        onPress={() => onPress(challenge.id)}
-        onOverflow={
-          showOverflow && onOverflow
-            ? (anchor) => onOverflow(challenge, anchor)
-            : undefined
-        }
-      />
-    );
-    return (
-      <View key={challenge.id} style={rail ? { width: 292 } : undefined}>
-        {card}
-      </View>
-    );
-  });
+  const cardWidth = Math.min(Math.round(width * 0.82), 400);
+  const snap = cardWidth + CARD_GAP;
 
   return (
     <View className="mb-5">
       <AppText className="text-[18px] font-extrabold text-charcoal">{title}</AppText>
-      {rail ? (
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          directionalLockEnabled
-          showsHorizontalScrollIndicator={false}
-          className="mt-2.5"
-          contentContainerStyle={{ gap: 8, paddingRight: 12 }}>
-          {cards}
-        </ScrollView>
-      ) : (
-        <View className="mt-2.5" style={{ gap: 12 }}>
-          {cards}
-        </View>
-      )}
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        directionalLockEnabled
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={snap}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        className="mt-2.5"
+        contentContainerStyle={{ paddingRight: 16 }}>
+        {challenges.map((challenge) => {
+          const mine = progressById?.get(challenge.id);
+          const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
+          const joined = Boolean(mine);
+          const showOverflow =
+            allowCancel &&
+            Boolean(onOverflow) &&
+            canCancelChallengeCard({
+              challenge,
+              viewerId: currentUserId,
+              official,
+            });
+          return (
+            <View key={challenge.id} style={{ width: cardWidth, marginRight: CARD_GAP }}>
+              <ChallengeCard
+                variant="rail"
+                challenge={challenge}
+                myDays={joined ? mine?.days ?? 0 : null}
+                joined={joined}
+                hosting={hosting}
+                socialProof={socialProofById?.get(challenge.id)}
+                participantStatus={mine?.status}
+                onPress={() => onPress(challenge.id)}
+                onOverflow={
+                  showOverflow && onOverflow
+                    ? (anchor) => onOverflow(challenge, anchor)
+                    : undefined
+                }
+              />
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }

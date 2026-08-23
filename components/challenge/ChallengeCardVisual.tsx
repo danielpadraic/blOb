@@ -122,7 +122,7 @@ export function ChallengeCardVisual({
   const dark = official;
   const tags = challengeCardTags({
     challenge,
-    hosting: hosting && !joined,
+    hosting,
     joined,
     invited: invited && !joined && !hosting,
   });

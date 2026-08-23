@@ -653,9 +653,18 @@ export async function fetchHostingChallenges(userId?: string): Promise<Challenge
   if (!userId) {
     return [];
   }
-  const mine = await fetchJoinedLobbyChallenges(userId);
+  const [mine, joinedIds] = await Promise.all([
+    fetchJoinedLobbyChallenges(userId),
+    fetchJoinedChallengeIds(userId),
+  ]);
+  const joined = new Set(joinedIds);
   return sortMyLobby(
-    mine.filter((row) => row.created_by === userId && isLiveOrUpcoming(row.status)),
+    mine.filter(
+      (row) =>
+        row.created_by === userId &&
+        !joined.has(row.id) &&
+        isLiveOrUpcoming(row.status),
+    ),
   );
 }
 
@@ -666,12 +675,7 @@ export async function fetchCompetingChallenges(userId?: string): Promise<Challen
   const joinedIds = new Set(await fetchJoinedChallengeIds(userId));
   const mine = await fetchJoinedLobbyChallenges(userId);
   return sortMyLobby(
-    mine.filter(
-      (row) =>
-        row.created_by !== userId &&
-        joinedIds.has(row.id) &&
-        isLiveOrUpcoming(row.status),
-    ),
+    mine.filter((row) => joinedIds.has(row.id) && isLiveOrUpcoming(row.status)),
   );
 }
 

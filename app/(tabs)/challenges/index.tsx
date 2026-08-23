@@ -99,8 +99,6 @@ export default function ChallengesScreen() {
 
   const drafts = (draftsQuery.data ?? []).filter(isVisibleDraft);
   const search = query.trim();
-  const hosting = (hostingQuery.data ?? []).filter((row) => matchesSearch(row.title, search));
-  const active = (activeQuery.data ?? []).filter((row) => matchesSearch(row.title, search));
   const progressById = useMemo(() => {
     const map = new Map<string, { days: number; status: string }>();
     for (const row of mine.data ?? []) {
@@ -114,13 +112,21 @@ export default function ChallengesScreen() {
     }
     return map;
   }, [mine.data]);
+  const hosting = (hostingQuery.data ?? []).filter(
+    (row) => matchesSearch(row.title, search) && !progressById.has(row.id),
+  );
+  const active = (activeQuery.data ?? []).filter((row) => matchesSearch(row.title, search));
   const official = (officialQuery.data ?? []).filter(
-    (row) => matchesSearch(row.title, search) && isLobbyDiscoverCard(row, Boolean(progressById.get(row.id))),
+    (row) =>
+      matchesSearch(row.title, search) &&
+      !progressById.has(row.id) &&
+      (row.status === 'filling' || row.status === 'arming'),
   );
   const friends = (friendsQuery.data ?? []).filter(
     (row) =>
       matchesSearch(row.challenge.title, search) &&
-      isLobbyDiscoverCard(row.challenge, Boolean(progressById.get(row.challenge.id))),
+      !progressById.has(row.challenge.id) &&
+      isLobbyDiscoverCard(row.challenge, false),
   );
   const friendIds = useMemo(
     () => [...new Set(friends.map((row) => row.friendId))],
@@ -263,8 +269,8 @@ export default function ChallengesScreen() {
           }
           showsVerticalScrollIndicator={false}>
           <ChallengeCarousel
-            title={copy('lobby.railHosting')}
-            challenges={hosting}
+            title={copy('lobby.railOfficial')}
+            challenges={official}
             currentUserId={user?.id}
             progressById={progressById}
             onPress={openChallenge}
@@ -277,13 +283,6 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railActive')}
             challenges={active}
-            currentUserId={user?.id}
-            progressById={progressById}
-            onPress={openChallenge}
-          />
-          <ChallengeCarousel
-            title={copy('lobby.railOfficial')}
-            challenges={official}
             currentUserId={user?.id}
             progressById={progressById}
             onPress={openChallenge}
@@ -300,6 +299,18 @@ export default function ChallengesScreen() {
             progressById={progressById}
             socialProofById={socialProofById}
             onPress={openChallenge}
+          />
+          <ChallengeCarousel
+            title={copy('lobby.railHosting')}
+            challenges={hosting}
+            currentUserId={user?.id}
+            progressById={progressById}
+            onPress={openChallenge}
+            allowCancel
+            official={isOfficialAccount(profile)}
+            onOverflow={(challenge, anchor) =>
+              setOverflow((current) => (current ? null : { challenge, anchor }))
+            }
           />
         </ScrollView>
       )}
