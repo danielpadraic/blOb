@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
-import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
+import { ChallengeShareEmbed } from '@/components/feed/ChallengeShareEmbed';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
@@ -66,6 +66,7 @@ function PostCardInner({
   highlighted,
 }: PostCardProps) {
   const [showComposer, setShowComposer] = useState(false);
+  const [composerExpanded, setComposerExpanded] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const social = useSocialSheetsOptional();
   const menuOpen = useOverflowMenuOpen(post.id);
@@ -104,6 +105,7 @@ function PostCardInner({
         borderRadius: THEME.radius,
         borderWidth: highlighted ? 1.5 : 1,
         borderColor: highlighted ? THEME.accent : THEME.border,
+        overflow: 'visible',
       }}>
       <View className="flex-row items-center" style={{ gap: 10 }}>
         <ProfileLink username={post.author?.username} userId={post.author_id}>
@@ -212,7 +214,18 @@ function PostCardInner({
         ) : null}
 
         {post.challenge_id && !hidePromoCard ? (
-          <ChallengeShareCard challengeId={post.challenge_id} />
+          <ChallengeShareCard
+            challengeId={post.challenge_id}
+            author={
+              post.author
+                ? {
+                    id: post.author.id,
+                    name,
+                    avatarUrl: post.author.avatar_url,
+                  }
+                : null
+            }
+          />
         ) : null}
 
         {quote ? (
@@ -235,7 +248,18 @@ function PostCardInner({
           currentUserId={currentUserId}
           commentCount={comments.length}
           onReact={(type) => onReact(type)}
-          onReply={onComment ? () => setShowComposer((value) => !value) : undefined}
+          onReply={
+            onComment
+              ? () => {
+                  if (!showComposer) {
+                    setShowComposer(true);
+                    setComposerExpanded(true);
+                    return;
+                  }
+                  setComposerExpanded((value) => !value);
+                }
+              : undefined
+          }
         />
 
         {showComposer && onComment ? (
@@ -244,6 +268,8 @@ function PostCardInner({
             submitting={commenting}
             audience={audience}
             audienceUserIds={post.audience_user_ids ?? []}
+            expanded={composerExpanded}
+            onExpandedChange={setComposerExpanded}
             replyTo={
               post.author
                 ? {
@@ -257,6 +283,7 @@ function PostCardInner({
               try {
                 await onComment(text, null, mentionedUserIds);
                 setShowComposer(false);
+                setComposerExpanded(true);
               } catch (error) {
                 Alert.alert('Couldn’t post that reply', getErrorMessage(error));
               }
@@ -436,7 +463,13 @@ function GeoUnavailable() {
   );
 }
 
-function ChallengeShareCard({ challengeId }: { challengeId: string }) {
+function ChallengeShareCard({
+  challengeId,
+  author,
+}: {
+  challengeId: string;
+  author?: { id: string; name: string; avatarUrl?: string | null } | null;
+}) {
   const openTag = useOpenChallengeFromTag();
   const share = useChallengeShareState(challengeId);
   const preview = useChallengeFeedPreview(challengeId);
@@ -456,7 +489,15 @@ function ChallengeShareCard({ challengeId }: { challengeId: string }) {
       created_by: card?.created_by,
     });
   if (card) {
-    return <ChallengeFeedCard challenge={card} onPress={open} />;
+    const host =
+      author && card.created_by && author.id === card.created_by
+        ? { name: author.name, avatarUrl: author.avatarUrl }
+        : null;
+    return (
+      <View className="mt-3">
+        <ChallengeShareEmbed challenge={card} host={host} onPress={open} />
+      </View>
+    );
   }
   if (share.data?.reason === 'ok') {
     return <ChallengeTitleLink challengeId={challengeId} title={share.data.title} />;

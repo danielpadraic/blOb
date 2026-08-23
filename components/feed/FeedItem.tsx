@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 
-import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
+import { ChallengeShareEmbed } from '@/components/feed/ChallengeShareEmbed';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -70,12 +70,18 @@ export function FeedItem({ event, joined, onPressChallenge }: FeedItemProps) {
             </AppText>
           ) : null}
           {event.challenge ? (
-            <ChallengeFeedCard
-              challenge={event.challenge}
-              joined={joined}
-              won={won}
-              onPress={onPressChallenge}
-            />
+            <View className="mt-3">
+              <ChallengeShareEmbed
+                challenge={event.challenge}
+                joined={joined}
+                host={
+                  event.actor && event.challenge.created_by === event.actor_id
+                    ? { name, avatarUrl: event.actor.avatar_url }
+                    : null
+                }
+                onPress={onPressChallenge}
+              />
+            </View>
           ) : share.data?.reason === 'geo' ? (
             <AppText className="mt-2 text-[12px]" style={{ color: THEME.textMuted }}>
               {copy('geo.unavailable')}

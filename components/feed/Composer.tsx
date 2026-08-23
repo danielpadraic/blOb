@@ -8,7 +8,7 @@ import { MentionField, type MentionFieldHandle } from '@/components/feed/Mention
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { GifPicker } from '@/components/feed/GifPicker';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
-import { ChallengeFeedCard } from '@/components/feed/ChallengeFeedCard';
+import { ChallengeShareEmbed } from '@/components/feed/ChallengeShareEmbed';
 import { Card } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -350,7 +350,7 @@ export function Composer({
 
       {attachedChallenge && !quote ? (
         <View className="mt-2" pointerEvents="none">
-          <ChallengeFeedCard challenge={attachedChallenge} />
+          <ChallengeShareEmbed challenge={attachedChallenge} />
         </View>
       ) : null}
 
