@@ -520,6 +520,7 @@ export interface Post {
   checkin_id?: string | null;
   checkin_stage?: string | null;
   source?: PostSource | null;
+  system_kind?: string | null;
   created_at: string;
 }
 

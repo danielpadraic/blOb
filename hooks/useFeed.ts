@@ -611,6 +611,9 @@ async function fetchPosts(input: {
     await withSocial(
       dedupePosts([people, challengePosts])
         .filter((post) => {
+          if (post.source === 'challenge') {
+            return false;
+          }
           if (hidden.has(post.id)) {
             return false;
           }

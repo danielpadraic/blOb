@@ -524,6 +524,7 @@ export function useJoinChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void reportBadgeActivity();
     },
   });
