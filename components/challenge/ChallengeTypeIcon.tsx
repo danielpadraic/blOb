@@ -50,11 +50,11 @@ export function ChallengeTypePlaceholder({
 
 export function ChallengeTypeBadge({
   category,
-  onPhoto,
+  tone = 'dark',
   onPress,
 }: {
   category?: string | null;
-  onPhoto?: boolean;
+  tone?: 'dark' | 'light';
   onPress: () => void;
 }) {
   const label = challengeTypeIconLabel(category);
@@ -71,11 +71,12 @@ export function ChallengeTypeBadge({
         position: 'absolute',
         left: 6,
         bottom: 6,
+        zIndex: 4,
         width: BADGE,
         height: BADGE,
         borderRadius: 8,
         overflow: 'hidden',
-        backgroundColor: onPhoto ? 'rgba(16, 19, 18, 0.42)' : 'rgba(247, 247, 245, 0.88)',
+        backgroundColor: tone === 'light' ? 'rgba(247, 247, 245, 0.9)' : 'rgba(16, 19, 18, 0.42)',
         alignItems: 'center',
         justifyContent: 'center',
       }}>

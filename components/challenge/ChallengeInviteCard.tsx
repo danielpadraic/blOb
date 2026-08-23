@@ -352,7 +352,7 @@ export function ChallengeInviteCard({
           steps={mediaSteps}
           visual={visual}
           title={challenge.title}
-          category={challenge.category}
+          category={challenge.category ?? (official ? 'fitness' : undefined)}
           typeTipOpen={typeTip.open}
           onTypePress={typeTip.show}
         />
@@ -547,6 +547,8 @@ function MediaPanel({
     setIndex((current) => Math.min(current + 1, Math.max(steps.length - 1, 0)));
   }
 
+  const officialPanel = visual === 'official' || resolved.kind === 'bob';
+
   return (
     <View
       style={{
@@ -579,8 +581,6 @@ function MediaPanel({
             }
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
           />
-          <ChallengeTypeBadge category={category} onPhoto onPress={onTypePress} />
-          <ChallengeTypeTip category={category} visible={typeTipOpen} />
         </View>
       ) : resolved.kind === 'sponsor' ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 10 }}>
@@ -595,11 +595,14 @@ function MediaPanel({
       ) : resolved.kind === 'bob' ? (
         <OfficialBobPanel onError={failThrough} />
       ) : (
-        <View style={{ flex: 1 }}>
-          <ChallengeTypePlaceholder category={category} onPress={onTypePress} />
-          <ChallengeTypeTip category={category} visible={typeTipOpen} anchor="panel" />
-        </View>
+        <ChallengeTypePlaceholder category={category} onPress={onTypePress} />
       )}
+      <ChallengeTypeBadge
+        category={category}
+        tone={officialPanel || resolved.kind === 'photo' ? 'light' : 'dark'}
+        onPress={onTypePress}
+      />
+      <ChallengeTypeTip category={category} visible={typeTipOpen} />
     </View>
   );
 }
