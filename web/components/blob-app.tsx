@@ -33,6 +33,7 @@ import { FORFEIT_RECEIPT, formatSettlementAmount, receiptHeadline } from '@/lib/
 import { getChallengeSettlementWithClient, trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
 import type { ChallengeSettlementView } from '@/lib/types';
 import { Bob } from '~/components/bob';
+import { ChallengeBoard } from '~/components/challenge-board';
 import { ChallengeLifecycleStatus } from '~/components/challenge-lifecycle-status';
 import { CheckInCamera } from '~/components/check-in-camera';
 import { Button } from '~/components/ui/button';
@@ -75,7 +76,17 @@ type ParticipantRow = {
   days_completed: number | null;
   status: string | null;
   points?: number | null;
+  eliminated_at?: string | null;
+  display_name?: string | null;
+  username?: string | null;
 };
+
+function queryFlag(name: string): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return new URLSearchParams(window.location.search).get(name);
+}
 
 function pathParts(): string[] {
   if (typeof window === 'undefined') {
@@ -280,7 +291,13 @@ function HomeScreen({ userId }: { userId: string }) {
 }
 
 function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId: string }) {
-  const [tab, setTab] = useState<'overview' | 'board' | 'feed'>('overview');
+  const [tab, setTab] = useState<'overview' | 'board' | 'feed'>(() => {
+    const next = queryFlag('tab');
+    if (next === 'board' || next === 'feed' || next === 'overview') {
+      return next;
+    }
+    return queryFlag('receipt') === '1' ? 'board' : 'overview';
+  });
   const [challenge, setChallenge] = useState<ChallengeRow | null>(null);
   const [joined, setJoined] = useState(false);
   const [days, setDays] = useState(0);
@@ -291,6 +308,7 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
   const [error, setError] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<ChallengeSettlementView | null>(null);
   const [ledger, setLedger] = useState<Array<{ id: string; amount: number; created_at: string; challenge_id: string | null }>>([]);
+  const [caughtUpIds, setCaughtUpIds] = useState<string[]>([]);
 
   async function load() {
     const ch = await supabase
@@ -304,10 +322,26 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
     setChallenge(next);
     const part = await supabase
       .from('challenge_participants')
-      .select('user_id, days_completed, status, points')
+      .select('user_id, days_completed, status, points, eliminated_at')
       .eq('challenge_id', challengeId);
     const rows = (part.data ?? []) as ParticipantRow[];
-    setRoster(rows);
+    const ids = rows.map((row) => row.user_id);
+    const names =
+      ids.length > 0
+        ? await supabase.from('profiles_public').select('id, display_name, username').in('id', ids)
+        : { data: [] as Array<{ id: string; display_name?: string | null; username?: string | null }> };
+    const byId = new Map(
+      ((names.data ?? []) as Array<{ id: string; display_name?: string | null; username?: string | null }>).map(
+        (row) => [row.id, row],
+      ),
+    );
+    setRoster(
+      rows.map((row) => ({
+        ...row,
+        display_name: byId.get(row.user_id)?.display_name ?? null,
+        username: byId.get(row.user_id)?.username ?? null,
+      })),
+    );
     const mine = rows.find((row) => row.user_id === userId);
     setJoined(Boolean(mine));
     setDays(Number(mine?.days_completed) || 0);
@@ -328,6 +362,21 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
       .order('created_at', { ascending: false })
       .limit(20);
     setPosts((feed.data ?? []) as Array<{ id: string; content: string | null }>);
+    const today = new Date().toISOString().slice(0, 10);
+    const submitted = await supabase
+      .from('challenge_checkins')
+      .select('user_id, period_key, status')
+      .eq('challenge_id', challengeId)
+      .eq('status', 'submitted');
+    setCaughtUpIds(
+      [
+        ...new Set(
+          ((submitted.data ?? []) as Array<{ user_id: string; period_key?: string | null }>)
+            .filter((row) => !row.period_key || String(row.period_key).startsWith(today))
+            .map((row) => row.user_id),
+        ),
+      ],
+    );
     const receipt = await getChallengeSettlementWithClient(supabase, challengeId);
     setSettlement(receipt);
     const history = await supabase
@@ -355,6 +404,11 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'challenge_participants', filter: `challenge_id=eq.${challengeId}` },
+        () => void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'challenge_checkins', filter: `challenge_id=eq.${challengeId}` },
         () => void load(),
       )
       .on(
@@ -453,6 +507,27 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
               </p>
               {corporate ? <p className="mt-2 text-sm text-muted">Posts stay inside this challenge</p> : null}
             </Card>
+            <ChallengeBoard
+              status={challenge.status}
+              prizePool={challenge.prize_pool}
+              currency={challenge.currency}
+              participants={roster}
+              completedUserIds={caughtUpIds}
+              settlement={
+                settlement
+                  ? {
+                      winner_count: settlement.settlement.winner_count,
+                      prize_pool: settlement.settlement.prize_pool,
+                      payouts: settlement.payouts,
+                    }
+                  : null
+              }
+              viewerId={userId}
+              joined={joined}
+              variant="compact"
+              corporate={corporate}
+              onOpenBoard={() => setTab('board')}
+            />
             {challenge.status === 'settling' && !settlement ? (
               <Card>
                 <p className="text-[15px] font-bold text-ink">Settling</p>
@@ -497,20 +572,26 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
           </div>
         ) : null}
         {tab === 'board' ? (
-          <Card>
-            {roster.length === 0 ? (
-              <p className="text-sm text-muted">No one on the board yet.</p>
-            ) : (
-              roster.map((row) => (
-                <div key={row.user_id} className="flex items-center justify-between py-2">
-                  <p className="text-sm font-bold text-ink">{row.user_id === userId ? 'You' : 'blob'}</p>
-                  <p className="text-sm text-muted">
-                    {Number(row.days_completed) || 0}/{target}
-                  </p>
-                </div>
-              ))
-            )}
-          </Card>
+          <ChallengeBoard
+            status={challenge.status}
+            prizePool={challenge.prize_pool}
+            currency={challenge.currency}
+            participants={roster}
+            completedUserIds={caughtUpIds}
+            settlement={
+              settlement
+                ? {
+                    winner_count: settlement.settlement.winner_count,
+                    prize_pool: settlement.settlement.prize_pool,
+                    payouts: settlement.payouts,
+                  }
+                : null
+            }
+            viewerId={userId}
+            joined={joined}
+            showReceipt={queryFlag('receipt') === '1'}
+            corporate={corporate}
+          />
         ) : null}
         {tab === 'feed' ? (
           <Card>

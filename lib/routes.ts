@@ -17,6 +17,7 @@ export function challengeDetailHref(
   id: string,
   returnTo: 'lobby' | 'feed' = 'lobby',
   postId?: string | null,
+  extra?: { tab?: 'overview' | 'board' | 'feed'; receipt?: boolean },
 ) {
   return {
     pathname: '/challenges/[id]' as const,
@@ -24,6 +25,8 @@ export function challengeDetailHref(
       id,
       returnTo,
       ...(postId ? { postId } : {}),
+      ...(extra?.tab ? { tab: extra.tab } : {}),
+      ...(extra?.receipt ? { receipt: '1' } : {}),
     },
   };
 }

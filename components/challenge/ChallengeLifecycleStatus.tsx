@@ -13,13 +13,15 @@ const LABELS: Record<LifecyclePhase, string> = {
 
 type ChallengeLifecycleStatusProps = {
   status?: string | null;
+  compact?: boolean;
 };
 
-export function ChallengeLifecycleStatus({ status }: ChallengeLifecycleStatusProps) {
+export function ChallengeLifecycleStatus({ status, compact = false }: ChallengeLifecycleStatusProps) {
   const current = lifecyclePhase(status);
+  const phases = compact ? ([current] as LifecyclePhase[]) : LIFECYCLE_PHASES;
   return (
     <View className="flex-row flex-wrap items-center" style={{ gap: 8 }}>
-      {LIFECYCLE_PHASES.map((phase) => {
+      {phases.map((phase) => {
         const active = phase === current;
         return (
           <View

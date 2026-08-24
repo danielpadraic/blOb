@@ -286,6 +286,12 @@ const STRINGS = {
   'note.boardTitle': 'Board',
   'note.board':
     'Empty until people join and check in. Remaining are still in. Caught Up have finished today’s required proof. Dropped missed or were removed.',
+  'note.remainingTitle': 'Remaining',
+  'note.remaining': 'Still in. Proven by check-in progress. They split the prize if they finish.',
+  'note.caughtUpTitle': 'Caught Up',
+  'note.caughtUp': 'Remaining people who already submitted today’s required proof.',
+  'note.droppedTitle': 'Dropped',
+  'note.dropped': 'Missed a required check-in, left, or were removed. They do not share the prize.',
   'note.shareTitle': 'Share if you finish',
   'note.share':
     'An estimate from the current prize and how many are still in. It changes when people join or drop.',

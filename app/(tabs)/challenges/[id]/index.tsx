@@ -117,10 +117,14 @@ export default function ChallengeDetailScreen() {
     logged?: string;
     funded?: string;
     postId?: string;
+    tab?: string;
+    receipt?: string;
   }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
+  const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const receiptParam = Array.isArray(params.receipt) ? params.receipt[0] : params.receipt;
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const router = useRouter();
@@ -163,7 +167,11 @@ export default function ChallengeDetailScreen() {
   const [watchToast, setWatchToast] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pageTab, setPageTab] = useState<ChallengePageTab>(
-    highlightPostId ? 'feed' : 'overview',
+    highlightPostId ? 'feed' : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
+      ? tabParam
+      : receiptParam === '1'
+        ? 'board'
+        : 'overview',
   );
 
   const challenge = challengeQuery.data;
@@ -650,6 +658,18 @@ export default function ChallengeDetailScreen() {
         <View className="mt-4">
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
+        <View className="mt-3">
+          <ChallengeLeaderboard
+            challenge={challenge}
+            roster={boardRoster}
+            completedUserIds={completions.data ?? new Set()}
+            joined={isJoined}
+            viewerId={user?.id}
+            settlement={receipt}
+            variant="compact"
+            onOpenReceipt={() => setPageTab('board')}
+          />
+        </View>
 
         {challenge.status === 'settling' && !receipt ? (
           <Card className="mt-4">
@@ -962,6 +982,9 @@ export default function ChallengeDetailScreen() {
               completedUserIds={completions.data ?? new Set()}
               joined={isJoined}
               viewerId={user?.id}
+              settlement={receipt}
+              showReceipt={receiptParam === '1'}
+              error={roster.error instanceof Error ? roster.error.message : null}
             />
           </View>
         ) : null}

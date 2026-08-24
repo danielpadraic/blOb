@@ -1,14 +1,23 @@
 import { isBucksChallenge, isFreeEntry } from '@/lib/currency';
+import type { CopyKey } from '@/lib/copy';
 import { hasChallengeStarted } from '@/lib/settlement';
 
-export const FIELD_NOTE_KEYS = ['pot', 'potHost', 'buyIn', 'buyInFree', 'board', 'share', 'startNeeded'] as const;
+export const FIELD_NOTE_KEYS = [
+  'pot',
+  'potHost',
+  'buyIn',
+  'buyInFree',
+  'board',
+  'share',
+  'startNeeded',
+  'remaining',
+  'caughtUp',
+  'dropped',
+] as const;
 
 export type FieldNoteKey = (typeof FIELD_NOTE_KEYS)[number];
 
-export const FIELD_NOTE_TITLE: Record<
-  FieldNoteKey,
-  'note.potTitle' | 'note.potHostTitle' | 'note.buyInTitle' | 'note.buyInFreeTitle' | 'note.boardTitle' | 'note.shareTitle' | 'note.startTitle'
-> = {
+export const FIELD_NOTE_TITLE: Record<FieldNoteKey, CopyKey> = {
   pot: 'note.potTitle',
   potHost: 'note.potHostTitle',
   buyIn: 'note.buyInTitle',
@@ -16,12 +25,12 @@ export const FIELD_NOTE_TITLE: Record<
   board: 'note.boardTitle',
   share: 'note.shareTitle',
   startNeeded: 'note.startTitle',
+  remaining: 'note.remainingTitle',
+  caughtUp: 'note.caughtUpTitle',
+  dropped: 'note.droppedTitle',
 };
 
-export const FIELD_NOTE_BODY: Record<
-  FieldNoteKey,
-  'note.pot' | 'note.potHost' | 'note.buyIn' | 'note.buyInFree' | 'note.board' | 'note.share' | 'note.startNeeded'
-> = {
+export const FIELD_NOTE_BODY: Record<FieldNoteKey, CopyKey> = {
   pot: 'note.pot',
   potHost: 'note.potHost',
   buyIn: 'note.buyIn',
@@ -29,6 +38,9 @@ export const FIELD_NOTE_BODY: Record<
   board: 'note.board',
   share: 'note.share',
   startNeeded: 'note.startNeeded',
+  remaining: 'note.remaining',
+  caughtUp: 'note.caughtUp',
+  dropped: 'note.dropped',
 };
 
 export function prizeFieldNote(challenge: {

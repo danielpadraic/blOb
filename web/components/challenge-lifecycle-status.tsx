@@ -7,11 +7,18 @@ const LABELS: Record<LifecyclePhase, string> = {
   settled: 'Settled',
 };
 
-export function ChallengeLifecycleStatus({ status }: { status?: string | null }) {
+export function ChallengeLifecycleStatus({
+  status,
+  compact = false,
+}: {
+  status?: string | null;
+  compact?: boolean;
+}) {
   const current = lifecyclePhase(status);
+  const phases = compact ? ([current] as LifecyclePhase[]) : LIFECYCLE_PHASES;
   return (
     <div className="flex flex-wrap gap-2">
-      {LIFECYCLE_PHASES.map((phase) => {
+      {phases.map((phase) => {
         const active = phase === current;
         return (
           <span

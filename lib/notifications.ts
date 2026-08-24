@@ -359,7 +359,23 @@ export function notificationHref(item: AppNotification): Href | null {
   if (item.type === 'profile_incomplete') {
     return '/profile/body-metrics';
   }
-  if (item.type === 'coins_received' || item.type === 'coin_grant' || item.type === 'badge_unlocked' || item.type === 'payout_received') {
+  if (item.type === 'payout_received') {
+    const payoutChallengeId = notificationChallengeId(data);
+    if (payoutChallengeId) {
+      return challengeDetailHref(payoutChallengeId, 'lobby', null, { tab: 'board', receipt: true });
+    }
+    return '/profile';
+  }
+  if (item.type === 'challenge_settled') {
+    const settledId = notificationChallengeId(data);
+    if (settledId) {
+      return challengeDetailHref(settledId, 'lobby', notificationPostId(data), {
+        tab: 'board',
+        receipt: true,
+      });
+    }
+  }
+  if (item.type === 'coins_received' || item.type === 'coin_grant' || item.type === 'badge_unlocked') {
     return '/profile';
   }
   if (item.type === 'proof_flagged' && notificationPostId(data)) {

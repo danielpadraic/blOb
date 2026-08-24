@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
+import { challengeDetailHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { formatDate } from '@/utils/format';
 
@@ -60,7 +61,9 @@ export function WalletHistory() {
                 return;
               }
               wallet.closeWallet();
-              setTimeout(() => router.push(`/challenges/${row.challenge_id}`), 60);
+              setTimeout(() => {
+                router.push(challengeDetailHref(row.challenge_id, 'lobby', null, { tab: 'board', receipt: true }));
+              }, 60);
             }}
             style={{ minHeight: 44 }}>
             <Card className="flex-row items-center gap-3 py-3">

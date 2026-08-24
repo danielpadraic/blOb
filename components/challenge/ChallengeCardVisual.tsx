@@ -24,6 +24,7 @@ import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeede
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
+import { compactCountsFromStats } from '@/lib/board';
 import { lobbyDiscoverTimeLabel, lobbyTimeLabel } from '@/utils/format';
 
 export type CardHost = {
@@ -317,6 +318,7 @@ export function ChallengeCardVisual({
           ) : null}
         </View>
       ) : null}
+      <CardBoardStrip challenge={challenge} dark={dark} />
     </View>
   );
 
@@ -359,6 +361,36 @@ export function ChallengeCardVisual({
       }}>
       <Watermark dark={false} />
       {inner}
+    </View>
+  );
+}
+
+function CardBoardStrip({
+  challenge,
+  dark,
+}: {
+  challenge: ChallengeWithStats;
+  dark: boolean;
+}) {
+  const counts = compactCountsFromStats(challenge);
+  if (counts.empty && !counts.settled) {
+    return null;
+  }
+  const text = dark ? 'rgba(231,247,243,0.8)' : THEME.textMuted;
+  const strong = dark ? '#FFFFFF' : THEME.textPrimary;
+  return (
+    <View className="flex-row flex-wrap items-center" style={{ gap: 8, minHeight: 28 }}>
+      <AppText className="text-[11px] font-extrabold" style={{ color: strong }}>
+        {counts.remainingCount} in
+      </AppText>
+      <AppText className="text-[11px] font-semibold" style={{ color: text }}>
+        {counts.droppedCount} out
+      </AppText>
+      {counts.settled ? (
+        <AppText className="text-[11px] font-extrabold" style={{ color: dark ? '#9EE8DC' : THEME.accent }}>
+          Settled
+        </AppText>
+      ) : null}
     </View>
   );
 }
