@@ -24,6 +24,7 @@ import {
 import { useMyProfile } from '@/hooks/useProfile';
 import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
 import { canParticipantLeave } from '@/lib/challengeLeave';
+import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
@@ -173,7 +174,12 @@ export function useChallengeDetailOverflow() {
         if (!id) {
           return;
         }
-        router.push({ pathname: '/challenges/create', params: { editId: id } });
+        router.push({
+          pathname: '/challenges/create',
+          params: usesAdvancedCreateEdit(challenge)
+            ? { editId: id, mode: 'advanced' }
+            : { editId: id },
+        });
       },
     });
   }

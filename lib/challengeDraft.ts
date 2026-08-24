@@ -8,7 +8,7 @@ import {
   type ChallengeTemplateId,
   type CreateStartPath,
 } from '@/lib/challengeTemplates';
-import { parseComparablePointsConfig } from '@/lib/comparablePoints';
+import { comparablePointsFromChallenge, parseComparablePointsConfig } from '@/lib/comparablePoints';
 import { asExtraRules, extraRulesFromStructured, parseRulesStructured } from '@/lib/consistencyRules';
 import { CREATE_PROOF_TYPES, normalizeChallengeCategory } from '@/lib/constants';
 import {
@@ -350,6 +350,7 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
 }
 
 export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues {
+  const comparable = comparablePointsFromChallenge(challenge);
   const unlimited = isUnlimitedChallenge(challenge);
   let durationDays = 7;
   if (!unlimited && challenge.starts_at && challenge.ends_at) {
@@ -423,8 +424,8 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     challenge_lane: challenge.challenge_lane === 'private' ? 'private' : 'coins',
     duration_type: 'fixed',
     ...ensureSchedule({
-      starts_at: '',
-      ends_at: '',
+      starts_at: challenge.starts_at ?? '',
+      ends_at: challenge.ends_at ?? '',
       end_mode: 'length',
       duration_value: String(durationDays),
       duration_unit: 'days',
@@ -439,7 +440,19 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
         ? []
         : extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task),
     proofs: proofs.length > 0 ? proofs : challenge.challenge_type === 'points' ? ['photo'] : [...DEFAULT_CREATE_VALUES.proofs],
-    tasks: tasks.length > 0 ? tasks : [emptyChallengeTask()],
+    tasks:
+      tasks.length > 0
+        ? tasks
+        : comparable?.activities
+            .filter((activity) => activity.name.trim().length > 0)
+            .map((activity) => ({
+              ...emptyChallengeTask(),
+              id: activity.id,
+              title: activity.name,
+              points: String(Math.max(Number(comparable.parity_points) || 1, 1)),
+              proof_required: true,
+              proofs: ['photo'] as CreateChallengeValues['proofs'],
+            })) ?? [emptyChallengeTask()],
     prize_structure: normalizePrizeStructure(challenge.prize_structure),
     top_places_mode: normalizeTopPlacesMode(challenge.top_places_mode) ?? 'percent',
     top_places_value: String(challenge.top_places_value ?? 10),
@@ -455,8 +468,10 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     cover_image_url: challenge.cover_image_url ?? '',
     rules_video_url: challenge.rules_video_url ?? '',
     rules: challenge.rules ?? '',
-    scoring_method: challenge.scoring_method === 'comparable_points' ? 'comparable_points' : null,
-    scoring_config: parseComparablePointsConfig(challenge.scoring_config),
+    scoring_method: challenge.scoring_method === 'comparable_points' || comparable
+      ? 'comparable_points'
+      : null,
+    scoring_config: comparable,
     guarantee_enabled: Math.max(Number(challenge.host_budget) || 0, 0) > 0,
   });
 }

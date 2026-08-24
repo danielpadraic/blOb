@@ -63,9 +63,6 @@ export function namedProofsForPublish(values: CreateChallengeValues): ChallengeP
 }
 
 export function persistTasksForPublish(values: CreateChallengeValues, isPoints: boolean): ChallengeTask[] {
-  if (isPoints && values.scoring_method === 'comparable_points') {
-    return [];
-  }
   if (isPoints) {
     return values.tasks.map((task) => {
       const proofs = task.proofs?.length ? task.proofs : task.proof_required ? ['photo'] : [];

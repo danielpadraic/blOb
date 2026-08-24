@@ -1034,10 +1034,9 @@ export function useUpdateUserChallenge() {
         target_count: targetCount,
         min_minutes: minMinutesForPublish(values),
         frequency: isPoints ? 'once' : values.frequency,
-        proofs: isPoints ? [] : namedProofs,
-        proof_requirements: isPoints
-          ? []
-          : namedProofs.length > 0
+        proofs: namedProofs,
+        proof_requirements:
+          namedProofs.length > 0
             ? proofRequirementsFrom(namedProofs)
             : values.proofs.map((type) => ({ type, required: true })),
         tasks: persistTasksForPublish(values, isPoints),
@@ -1054,6 +1053,10 @@ export function useUpdateUserChallenge() {
         cover_image_url: values.cover_image_url?.trim() || null,
         rules_video_url: values.rules_video_url?.trim() || null,
       });
+      const scoring = parseComparablePointsConfig(values.scoring_config);
+      if (values.scoring_method === 'comparable_points' && scoring) {
+        await publishScoringChange(challengeId, scoring);
+      }
       if (user?.id) {
         await persistPrivacyMode({
           challengeId,

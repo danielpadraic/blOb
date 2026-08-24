@@ -39,6 +39,26 @@ function parseDraft(raw: string, allowDecimal: boolean): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export function StepperField({
+  label,
+  hint,
+  ...stepper
+}: StepperProps & { label: string; hint?: string }) {
+  return (
+    <View className="w-full gap-1.5">
+      <View className="flex-row items-center gap-3">
+        <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }}>
+          <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
+        </View>
+        <View style={{ flexShrink: 0 }}>
+          <Stepper {...stepper} accessibilityLabel={stepper.accessibilityLabel ?? label} />
+        </View>
+      </View>
+      {hint ? <AppText className="text-[13px] leading-5 text-muted">{hint}</AppText> : null}
+    </View>
+  );
+}
+
 export function Stepper({
   value,
   onChange,

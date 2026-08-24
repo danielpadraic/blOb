@@ -2,7 +2,7 @@ import { Pressable, View } from 'react-native';
 
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
-import { Stepper } from '@/components/ui/Stepper';
+import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { SIMPLE_PROOF_METHODS } from '@/lib/simpleChallenge';
 import { heartRateMinutesLabel, type ChallengeProofMethod } from '@/lib/challengeProofs';
@@ -19,19 +19,14 @@ export function HeartRateMinutesRow({
 }) {
   const minutes = Math.max(Math.round(Number(value) || 30), 1);
   return (
-    <View className="flex-row items-center justify-between">
-      <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
-        {copy('create.hrMinutes')}
-      </AppText>
-      <Stepper
-        accessibilityLabel={copy('create.hrMinutes')}
-        value={minutes}
-        min={1}
-        max={600}
-        formatValue={heartRateMinutesLabel}
-        onChange={onChange}
-      />
-    </View>
+    <StepperField
+      label={copy('create.hrMinutes')}
+      value={minutes}
+      min={1}
+      max={600}
+      formatValue={heartRateMinutesLabel}
+      onChange={onChange}
+    />
   );
 }
 

@@ -11,7 +11,30 @@ export type ExperienceChallenge = {
   scoring_method?: string | null;
   scoring_config?: unknown;
   comparable_points_config?: unknown;
+  challenge_lane?: string | null;
+  format?: string | null;
+  tasks?: unknown;
 };
+
+/** Advanced create/edit only — never open the Simple form for these. */
+export function usesAdvancedCreateEdit(challenge?: ExperienceChallenge | null): boolean {
+  if (!challenge) {
+    return false;
+  }
+  if (usesComparablePointsScoring(challenge)) {
+    return true;
+  }
+  if (challenge.challenge_type === 'points' || challenge.format === 'points' || challenge.format === 'lms') {
+    return true;
+  }
+  if (challenge.challenge_lane === 'private') {
+    return true;
+  }
+  if (Array.isArray(challenge.tasks) && challenge.tasks.length > 1) {
+    return true;
+  }
+  return false;
+}
 
 export function usesComparablePointsScoring(
   challenge?: ExperienceChallenge | null,

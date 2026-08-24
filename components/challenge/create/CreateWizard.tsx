@@ -30,9 +30,9 @@ import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { Stepper } from '@/components/ui/Stepper';
+import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
-import { useCreateChallenge } from '@/hooks/useChallenge';
+import { useChallenge, useCreateChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -153,15 +153,20 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     resume?: string | string[];
     draftId?: string | string[];
     returnTo?: string | string[];
+    editId?: string | string[];
   }>();
   const resumeOnOpen = (Array.isArray(params.resume) ? params.resume[0] : params.resume) === '1';
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const dismissFallback = returnTo === 'feed' ? TABS_HREF : LOBBY_HREF;
   const { profile } = useMyProfile();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const create = useCreateChallenge();
+  const update = useUpdateUserChallenge();
+  const editing = useChallenge(editId);
+  const isEditing = Boolean(editId);
   const draftsQuery = useChallengeDrafts();
   const saveDraft = useSaveChallengeDraft();
   const discardDraft = useDiscardChallengeDraft();
@@ -188,7 +193,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const [bobError, setBobError] = useState<{ field: string; line: string } | null>(null);
   const tour = useTourOptional();
   const setCreatePeek = tour?.setCreatePeek;
-  useCreateChallengeTour('advanced', !liveChallengeId);
+  const hydratedEdit = useRef(false);
+  useCreateChallengeTour('advanced', !liveChallengeId && !isEditing);
 
   useEffect(() => {
     if (!setCreatePeek) {
@@ -224,15 +230,39 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const isCreatorFunded = values.funding_model === 'creator' || values.funding_model === 'hybrid';
   const contributionAmount = isCreatorFunded ? Math.max(Number(values.creator_contribution) || 0, 0) : 0;
   const walletCredits = walletBalance(profile, values.currency);
+  const alreadyFunded =
+    isEditing && editing.data?.currency === values.currency
+      ? Math.max(Number(editing.data.creator_contribution) || 0, 0)
+      : 0;
+  const extraNeeded = isEditing ? Math.max(contributionAmount - alreadyFunded, 0) : contributionAmount;
   const contributionShort =
-    isCreatorFunded && contributionAmount > walletCredits
-      ? `You need ${formatWallet(contributionAmount, values.currency)} to fund this pool. You have ${formatWallet(walletCredits, values.currency)}.`
+    isCreatorFunded && extraNeeded > walletCredits
+      ? `You need ${formatWallet(extraNeeded, values.currency)} to fund this pool. You have ${formatWallet(walletCredits, values.currency)}.`
       : null;
   const bucksReady =
     values.currency !== 'bucks' ||
     (Boolean(bucksAcks.amount) && Boolean(bucksAcks.immediate) && Boolean(bucksAcks.irreversible));
 
-  const publishing = isSubmitting || create.isPending;
+  const publishing = isSubmitting || create.isPending || update.isPending;
+
+  useEffect(() => {
+    if (!editId || !editing.data || hydratedEdit.current) {
+      return;
+    }
+    hydratedEdit.current = true;
+    const next = valuesFromChallenge(editing.data);
+    skipSaveRef.current = true;
+    reset(next);
+    setLaneChosen(true);
+    setStartPath('previous');
+    setRestoredDraft(true);
+    setEntryTab(entryTabFromValues(next));
+    captureBaseline(next, STEP_GOAL);
+    setStep(STEP_GOAL);
+    queueMicrotask(() => {
+      skipSaveRef.current = false;
+    });
+  }, [editId, editing.data, reset]);
   const lastStep = step === CREATE_WIZARD_STEPS.length - 1;
   const skipSaveRef = useRef(false);
   const didResumeRef = useRef(false);
@@ -512,7 +542,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   function shouldPersistDraft(): boolean {
-    if (skipSaveRef.current || discardedRef.current || liveChallengeId) {
+    if (skipSaveRef.current || discardedRef.current || liveChallengeId || isEditing) {
       return false;
     }
     const snapshot = { ...snapshotRef.current, id: draftIdRef.current };
@@ -535,7 +565,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   function shouldSaveOnExit(): boolean {
-    if (skipSaveRef.current || discardedRef.current || liveChallengeId) {
+    if (skipSaveRef.current || discardedRef.current || liveChallengeId || isEditing) {
       return false;
     }
     const snapshot = { ...snapshotRef.current, id: draftIdRef.current };
@@ -725,7 +755,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (event) => {
-      if (leavingRef.current || skipSaveRef.current || discardedRef.current || liveChallengeId) {
+      if (leavingRef.current || skipSaveRef.current || discardedRef.current || liveChallengeId || isEditing) {
         return;
       }
       event.preventDefault();
@@ -1300,6 +1330,12 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       try {
         skipSaveRef.current = true;
         const rules = syncComposedRules();
+        if (editId) {
+          await update.mutateAsync({ challengeId: editId, values: { ...formValues, rules } });
+          setBobError(null);
+          router.replace(`/challenges/${editId}`);
+          return;
+        }
         const challenge = await create.mutateAsync({ ...formValues, rules, draft_id: draftId });
         setBobError(null);
         setTutorialOn(true);
@@ -1417,6 +1453,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             status={scoringToast ?? (savedFlash ? 'Saved' : null)}
             trailing={
               <View className="flex-row items-center gap-1">
+                {isEditing ? null : (
                 <TourAnchor id="create-advanced-simple">
                 <Pressable
                   accessibilityRole="button"
@@ -1432,6 +1469,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                   </AppText>
                 </Pressable>
                 </TourAnchor>
+                )}
                 <AppText className="mr-1 text-[13px] font-semibold text-muted">{copy('create.advanced')}</AppText>
                 {tutorialOn && bobTipOpen ? null : (
                   <Pressable
@@ -1665,7 +1703,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                   step === STEP_SCORING && scoringEditorOpen
                     ? 'Save scoring method'
                     : lastStep
-                      ? 'Publish'
+                      ? isEditing
+                        ? copy('create.save')
+                        : 'Publish'
                       : reviewReturn
                         ? copy('create.backToReview')
                         : 'Next'
@@ -1686,7 +1726,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   if (embedded) {
     return (
       <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-        <Stack.Screen options={{ headerShown: false, title: 'Advanced' }} />
+        <Stack.Screen options={{ headerShown: false, title: isEditing ? copy('create.editTitle') : 'Advanced' }} />
         {wizardBody}
       </View>
     );
@@ -1696,7 +1736,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     <WizardModalShell onClose={closeWizard} bob={bob}>
       <Stack.Screen
         options={{
-          title: 'Advanced',
+          title: isEditing ? copy('create.editTitle') : 'Advanced',
           headerShown: false,
           presentation: 'containedTransparentModal',
           animation: 'fade',
@@ -2062,16 +2102,13 @@ function DurationLengthPicker({
         />
       </ChipRow>
       {customSelected ? (
-        <View className="flex-row items-center justify-between">
-          <AppText className="text-sm font-semibold text-charcoal">Days</AppText>
-          <Stepper
-            accessibilityLabel="Days"
-            value={days}
-            min={1}
-            max={MAX_CHALLENGE_DURATION_DAYS}
-            onChange={(next) => onChange(String(next))}
-          />
-        </View>
+        <StepperField
+          label="Days"
+          value={days}
+          min={1}
+          max={MAX_CHALLENGE_DURATION_DAYS}
+          onChange={(next) => onChange(String(next))}
+        />
       ) : null}
     </View>
   );
@@ -2491,7 +2528,7 @@ function FundingSlide({
       {isCreatorFunded ? (
         <FieldAnchor name="guarantee_enabled">
           <View className="flex-row items-center justify-between">
-            <View className="mr-4 flex-1">
+            <View className="mr-4" style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }}>
               <AppText className="font-semibold text-charcoal">{copy('create.guaranteePrize')}</AppText>
               <AppText className="mt-0.5 text-xs leading-5 text-muted">
                 {privacyMode === 'private_corporate'
@@ -2701,7 +2738,7 @@ function EntrySlide({
       </FieldAnchor>
       <FieldAnchor name="creator_participating">
       <View className="flex-row items-center justify-between">
-        <View className="mr-4 flex-1">
+        <View className="mr-4" style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }}>
           <AppText className="font-semibold text-charcoal">I’ll join this challenge</AppText>
           <AppText className="mt-0.5 text-xs leading-5 text-muted">
             On if you want to compete too. Off if you’re hosting only.
@@ -2773,7 +2810,7 @@ function ReviewSlide({
               </AppText>
             ) : null}
           </View>
-          <AppText className="flex-1 text-[15px] leading-6 text-charcoal">
+          <AppText className="text-[15px] leading-6 text-charcoal" style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
             I confirm this is a contest of personal effort and skill. No gambling or chance-only stakes.
           </AppText>
         </Pressable>

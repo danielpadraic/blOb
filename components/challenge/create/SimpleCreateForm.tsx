@@ -16,7 +16,7 @@ import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { Stepper } from '@/components/ui/Stepper';
+import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useCreateChallenge, useChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
@@ -51,6 +51,7 @@ import {
   type SimpleDurationPreset,
   type SimpleFrequency,
 } from '@/lib/simpleChallenge';
+import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import { formatChallengeEndLine } from '@/lib/challengeSchedule';
 import { SIMPLE_PROOF_CAP, ensureProofSentence, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
@@ -157,7 +158,17 @@ export function SimpleCreateForm() {
   }
 
   useEffect(() => {
-    if (!editId || !editing.data || hydratedEdit.current) {
+    if (!editId || !editing.data) {
+      return;
+    }
+    if (usesAdvancedCreateEdit(editing.data)) {
+      router.replace({
+        pathname: '/challenges/create',
+        params: returnTo === 'feed' ? { editId, mode: 'advanced', returnTo: 'feed' } : { editId, mode: 'advanced' },
+      });
+      return;
+    }
+    if (hydratedEdit.current) {
       return;
     }
     if (!canHostQuickEdit({ challenge: editing.data, viewerId: user?.id })) {
@@ -166,7 +177,7 @@ export function SimpleCreateForm() {
     }
     hydratedEdit.current = true;
     setDraft(simpleDraftFromChallenge(editing.data));
-  }, [editId, editing.data, user?.id]);
+  }, [editId, editing.data, returnTo, router, user?.id]);
 
   useEffect(() => {
     if (funded !== '1' && draft.currency !== 'bucks') {
@@ -375,33 +386,23 @@ export function SimpleCreateForm() {
                 Private / Corporate Skill Tournaments do not charge an entry fee. The host funds the prize.
               </AppText>
             ) : (
-              <View className="flex-row items-center justify-between" style={{ minHeight: 44 }}>
-                <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
-                  {copy('create.buyIn')}
-                </AppText>
-                <Stepper
-                  accessibilityLabel={copy('create.buyIn')}
-                  value={draft.buy_in}
-                  min={0}
-                  max={10_000}
-                  formatValue={draft.currency === 'bucks' ? formatCash : undefined}
-                  onChange={(buy_in) => patch({ buy_in })}
-                />
-              </View>
-            )}
-            <View className="flex-row items-center justify-between" style={{ minHeight: 44 }}>
-              <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
-                {copy('create.hostPrize')}
-              </AppText>
-              <Stepper
-                accessibilityLabel={copy('create.hostPrize')}
-                value={draft.host_budget}
+              <StepperField
+                label={copy('create.buyIn')}
+                value={draft.buy_in}
                 min={0}
                 max={10_000}
                 formatValue={draft.currency === 'bucks' ? formatCash : undefined}
-                onChange={(host_budget) => patch({ host_budget })}
+                onChange={(buy_in) => patch({ buy_in })}
               />
-            </View>
+            )}
+            <StepperField
+              label={copy('create.hostPrize')}
+              value={draft.host_budget}
+              min={0}
+              max={10_000}
+              formatValue={draft.currency === 'bucks' ? formatCash : undefined}
+              onChange={(host_budget) => patch({ host_budget })}
+            />
             <AppText className="text-[13px] leading-5 text-muted">{copy('create.realMoneyFund')}</AppText>
             <AppText className="text-[13px] leading-5 text-muted">{copy('create.hostContributionHelp')}</AppText>
             {draft.currency === 'bucks' ? (
@@ -412,7 +413,7 @@ export function SimpleCreateForm() {
                 onPress={() => patch({ guarantee_enabled: draft.guarantee_enabled !== true })}
                 className="flex-row items-center justify-between"
                 style={{ minHeight: 44 }}>
-                <View className="mr-3 flex-1">
+                <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }} className="mr-3">
                   <AppText className="text-sm font-semibold text-charcoal">
                     {copy('create.guaranteePrize')}
                   </AppText>
@@ -522,19 +523,14 @@ export function SimpleCreateForm() {
             minimumDate={editId ? undefined : new Date()}
             onChange={(starts_at) => patch({ starts_at })}
           />
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 pr-3">
-              <AppText className="text-sm font-semibold text-charcoal">{copy('create.minToStart')}</AppText>
-              <AppText className="mt-0.5 text-[13px] leading-5 text-muted">{copy('create.minToStartHint')}</AppText>
-            </View>
-            <Stepper
-              accessibilityLabel={copy('create.minToStart')}
-              value={Math.max(draft.min_participants || 2, 2)}
-              min={2}
-              max={99}
-              onChange={(min_participants) => patch({ min_participants })}
-            />
-          </View>
+          <StepperField
+            label={copy('create.minToStart')}
+            hint={copy('create.minToStartHint')}
+            value={Math.max(draft.min_participants || 2, 2)}
+            min={2}
+            max={99}
+            onChange={(min_participants) => patch({ min_participants })}
+          />
         </View>
         </TourAnchor>
 
@@ -564,16 +560,13 @@ export function SimpleCreateForm() {
             ))}
           </View>
           {draft.duration_preset === 'custom' ? (
-            <View className="flex-row items-center justify-between">
-              <AppText className="text-sm font-semibold text-charcoal">{copy('create.days')}</AppText>
-              <Stepper
-                accessibilityLabel={copy('create.days')}
-                value={draft.duration_days}
-                min={1}
-                max={365}
-                onChange={(duration_days) => patch({ duration_days })}
-              />
-            </View>
+            <StepperField
+              label={copy('create.days')}
+              value={draft.duration_days}
+              min={1}
+              max={365}
+              onChange={(duration_days) => patch({ duration_days })}
+            />
           ) : null}
           {endLine ? (
             <AppText className="text-[13px] leading-5 text-muted">{endLine}</AppText>
@@ -630,18 +623,13 @@ export function SimpleCreateForm() {
           </View>
           {draft.frequency === 'custom' ? (
             <View className="gap-2">
-              <View className="flex-row items-center justify-between">
-                <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
-                  {customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
-                </AppText>
-                <Stepper
-                  accessibilityLabel={customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
-                  value={draft.custom_checkins}
-                  min={1}
-                  max={100}
-                  onChange={(custom_checkins) => patch({ custom_checkins })}
-                />
-              </View>
+              <StepperField
+                label={customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
+                value={draft.custom_checkins}
+                min={1}
+                max={100}
+                onChange={(custom_checkins) => patch({ custom_checkins })}
+              />
               <View className="flex-row flex-wrap gap-2">
                 {SIMPLE_CUSTOM_PERIODS.map((item) => (
                   <IconChip
@@ -803,7 +791,9 @@ export function SimpleCreateForm() {
               onPress={() => patch({ friends_of_friends: !draft.friends_of_friends })}
               className="flex-row items-center justify-between"
               style={{ minHeight: 44 }}>
-              <AppText className="mr-3 flex-1 text-[14px] leading-5 text-charcoal">
+              <AppText
+                className="mr-3 text-[14px] leading-5 text-charcoal"
+                style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }}>
                 {copy('create.friendsOfFriends')}
               </AppText>
               <View
