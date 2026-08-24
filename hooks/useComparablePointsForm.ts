@@ -30,6 +30,11 @@ export function useComparablePointsForm(saved: ComparablePointsConfig | null) {
     setError(null);
   }, []);
 
+  const setFloorMaster = useCallback((floor_master: boolean) => {
+    setDraft((current) => ({ ...current, floor_master }));
+    setError(null);
+  }, []);
+
   const addActivity = useCallback(() => {
     setDraft((current) => {
       if (current.activities.length >= COMPARABLE_POINTS_HARD_MAX) {
@@ -128,6 +133,7 @@ export function useComparablePointsForm(saved: ComparablePointsConfig | null) {
       error,
       resetFrom,
       setParityPoints,
+      setFloorMaster,
       addActivity,
       removeActivity,
       patchActivity,
@@ -141,6 +147,7 @@ export function useComparablePointsForm(saved: ComparablePointsConfig | null) {
       error,
       resetFrom,
       setParityPoints,
+      setFloorMaster,
       addActivity,
       removeActivity,
       patchActivity,

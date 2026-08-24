@@ -75,7 +75,7 @@ export function ActivityCard({
             <Chip
               key={unit}
               label={unit}
-              selected={activity.unit === unit}
+              selected={unitIsPreset && activity.unit === unit}
               onPress={() => onChange({ unit })}
             />
           ))}
@@ -128,21 +128,106 @@ export function ActivityCard({
             padding: 12,
           }}>
           <Input
-            label="Extra-work factor"
-            placeholder="0.5"
-            keyboardType="decimal-pad"
-            value={String(activity.multiplier.extra_factor)}
-            onChangeText={(raw) => {
-              const next = Number(raw.replace(/[^\d.]/g, ''));
+            label="Multiplier label"
+            placeholder="e.g. presentations"
+            value={activity.multiplier.label ?? ''}
+            onChangeText={(label) =>
+              onChange({ multiplier: { ...activity.multiplier, label } })
+            }
+          />
+          {(activity.multiplier.tiers ?? []).map((tier, tierIndex) => (
+            <View key={`${tier.threshold}-${tier.percent}-${tierIndex}`} className="flex-row items-start gap-2">
+              <View className="flex-1">
+                <Input
+                  label={tierIndex === 0 ? 'At this many' : undefined}
+                  placeholder="1"
+                  keyboardType="number-pad"
+                  value={tier.threshold ? String(tier.threshold) : ''}
+                  onChangeText={(raw) => {
+                    const next = [...(activity.multiplier.tiers ?? [])];
+                    next[tierIndex] = {
+                      ...tier,
+                      threshold: Number(raw.replace(/[^\d.]/g, '')) || 0,
+                    };
+                    onChange({ multiplier: { ...activity.multiplier, tiers: next } });
+                  }}
+                />
+              </View>
+              <View className="flex-1">
+                <Input
+                  label={tierIndex === 0 ? 'Percent' : undefined}
+                  placeholder="25"
+                  keyboardType="number-pad"
+                  value={tier.percent ? String(tier.percent) : ''}
+                  onChangeText={(raw) => {
+                    const next = [...(activity.multiplier.tiers ?? [])];
+                    next[tierIndex] = {
+                      ...tier,
+                      percent: Number(raw.replace(/[^\d.]/g, '')) || 0,
+                    };
+                    onChange({ multiplier: { ...activity.multiplier, tiers: next } });
+                  }}
+                />
+              </View>
+              {(activity.multiplier.tiers ?? []).length > 1 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove tier"
+                  onPress={() => {
+                    const next = (activity.multiplier.tiers ?? []).filter((_, i) => i !== tierIndex);
+                    onChange({ multiplier: { ...activity.multiplier, tiers: next } });
+                  }}
+                  className="h-[52px] w-[52px] items-center justify-center"
+                  style={{
+                    marginTop: tierIndex === 0 ? 22 : 0,
+                    borderWidth: 1,
+                    borderColor: THEME.border,
+                    backgroundColor: THEME.surface,
+                    borderRadius: 12,
+                  }}>
+                  <AppText className="text-[18px] font-semibold text-muted">×</AppText>
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
               onChange({
                 multiplier: {
                   ...activity.multiplier,
-                  extra_factor: Number.isFinite(next) ? next : activity.multiplier.extra_factor,
+                  tiers: [...(activity.multiplier.tiers ?? []), { threshold: 0, percent: 0 }],
                 },
-              });
-            }}
-            hint="After full value, extra units score at this multiple. 0.5 = half rate."
-          />
+              })
+            }
+            className="items-center self-start rounded-full px-3"
+            style={{
+              minHeight: 36,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              backgroundColor: THEME.surface,
+              justifyContent: 'center',
+            }}>
+            <AppText className="text-sm font-semibold text-charcoal">+ Add tier</AppText>
+          </Pressable>
+          {(activity.multiplier.tiers ?? []).length === 0 ? (
+            <Input
+              label="Extra-work factor"
+              placeholder="0.5"
+              keyboardType="decimal-pad"
+              value={String(activity.multiplier.extra_factor)}
+              onChangeText={(raw) => {
+                const next = Number(raw.replace(/[^\d.]/g, ''));
+                onChange({
+                  multiplier: {
+                    ...activity.multiplier,
+                    extra_factor: Number.isFinite(next) ? next : activity.multiplier.extra_factor,
+                  },
+                });
+              }}
+              hint="After full value, extra units score at this multiple. 0.5 = half rate."
+            />
+          ) : null}
         </View>
       ) : null}
 
@@ -166,7 +251,7 @@ export function ActivityCard({
             <View key={item.id} className="flex-row items-start gap-2">
               <View className="flex-1">
                 <Input
-                  placeholder={itemIndex === 0 ? 'e.g. Heart rate above 120' : 'Another bar'}
+                  placeholder={itemIndex === 0 ? 'e.g. FEX' : 'Another qualifier'}
                   value={item.label}
                   onChangeText={(label) => onPatchQualifier(item.id, label)}
                   maxLength={80}
@@ -203,6 +288,31 @@ export function ActivityCard({
             <AppText className="text-sm font-semibold text-charcoal">+ Add qualifier</AppText>
           </Pressable>
         </View>
+      ) : null}
+
+      <ToggleRow
+        title="Floor"
+        body="A minimum quantity before this activity starts counting."
+        value={Boolean(activity.floor?.enabled)}
+        onValueChange={(enabled) =>
+          onChange({
+            floor: { enabled, min_qty: activity.floor?.min_qty ?? 0 },
+          })
+        }
+      />
+      {activity.floor?.enabled ? (
+        <Input
+          label="Minimum quantity"
+          placeholder="0"
+          keyboardType="decimal-pad"
+          value={activity.floor.min_qty > 0 ? String(activity.floor.min_qty) : ''}
+          onChangeText={(raw) => {
+            const next = raw.replace(/[^\d.]/g, '');
+            onChange({
+              floor: { enabled: true, min_qty: next ? Number(next) : 0 },
+            });
+          }}
+        />
       ) : null}
     </View>
   );

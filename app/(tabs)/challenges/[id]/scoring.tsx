@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -41,6 +41,7 @@ export default function OfficialScoringScreen() {
   const form = useComparablePointsForm(saved);
   const [confirm, setConfirm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const hydratedKey = useRef<string | null>(null);
 
   const allowed = canEditOfficialScoring({
     challenge,
@@ -52,12 +53,18 @@ export default function OfficialScoringScreen() {
   const effective = scoringChangeEffectiveLine(challenge);
 
   useEffect(() => {
-    if (saved) {
-      form.resetFrom(saved);
+    if (!challenge?.id || !saved) {
+      return;
     }
-    // Load the saved config once the challenge row is ready.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [challenge?.id]);
+    const key = `${challenge.id}:${saved.version}:${saved.parity_points}:${saved.activities
+      .map((activity) => activity.id)
+      .join(',')}`;
+    if (hydratedKey.current === key) {
+      return;
+    }
+    hydratedKey.current = key;
+    form.resetFrom(saved);
+  }, [challenge?.id, form, saved]);
 
   function onPublishPress() {
     const result = form.validate();
@@ -117,7 +124,9 @@ export default function OfficialScoringScreen() {
           </AppText>
         </View>
 
-        {confirm ? (
+        {challengeQuery.isLoading && !challenge ? (
+          <AppText className="text-sm leading-5 text-muted">Loading scoring rules…</AppText>
+        ) : confirm ? (
           <Card>
             <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
               Confirm version {nextVersion}

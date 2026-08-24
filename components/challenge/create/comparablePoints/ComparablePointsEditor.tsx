@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Switch, View } from 'react-native';
 
 import { ActivityCard } from '@/components/challenge/create/comparablePoints/ActivityCard';
 import { Input } from '@/components/ui/Input';
@@ -12,6 +12,7 @@ import {
   formatPoints,
   scoreSampleActivity,
 } from '@/lib/comparablePoints';
+import { COLORS } from '@/lib/constants';
 import { THEME } from '@/lib/theme';
 
 export function ComparablePointsEditor({ form }: { form: ComparablePointsForm }) {
@@ -83,6 +84,21 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
           onChangeText={form.setParityPoints}
           hint="Every activity’s full-value quantity is worth this many points."
         />
+        <View className="flex-row items-center justify-between gap-3">
+          <View className="min-w-0 flex-1">
+            <AppText className="font-semibold text-charcoal">Shared floor</AppText>
+            <AppText className="mt-0.5 text-xs leading-5 text-muted">
+              Use each activity’s floor together when scoring the day.
+            </AppText>
+          </View>
+          <Switch
+            value={Boolean(draft.floor_master)}
+            onValueChange={form.setFloorMaster}
+            trackColor={{ true: COLORS.mintDark, false: COLORS.line }}
+            thumbColor={COLORS.white}
+            ios_backgroundColor={COLORS.line}
+          />
+        </View>
         <AppText className="text-sm leading-6 text-charcoal">{sentence}</AppText>
       </View>
 

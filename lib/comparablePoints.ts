@@ -83,7 +83,12 @@ export function emptyActivity(partial?: Partial<ActivityConfig>): ActivityConfig
   return {
     id: partial?.id ?? newId('act'),
     name: partial?.name ?? '',
-    unit: partial?.unit ?? 'minutes',
+    unit:
+      typeof partial?.unit === 'string' && partial.unit.trim()
+        ? partial.unit.trim()
+        : partial
+          ? ''
+          : 'minutes',
     parity_qty: Number.isFinite(partial?.parity_qty) ? Number(partial?.parity_qty) : 0,
     multiplier: {
       enabled: Boolean(partial?.multiplier?.enabled),
@@ -161,7 +166,7 @@ function parseActivity(value: unknown): ActivityConfig | null {
   return emptyActivity({
     id: typeof row.id === 'string' && row.id ? row.id : newId('act'),
     name: typeof row.name === 'string' ? row.name : '',
-    unit: typeof row.unit === 'string' && row.unit.trim() ? row.unit.trim() : 'minutes',
+    unit: typeof row.unit === 'string' && row.unit.trim() ? row.unit.trim() : '',
     parity_qty: asQty(row.parity_qty),
     multiplier: {
       enabled: Boolean(multiplierRow?.enabled ?? row.multiplier_enabled),
@@ -328,6 +333,9 @@ export function diffComparablePoints(
       `Full-value points ${formatPoints(before.parity_points)} → ${formatPoints(after.parity_points)}`,
     );
   }
+  if (Boolean(before.floor_master) !== Boolean(after.floor_master)) {
+    lines.push(`Shared floor ${after.floor_master ? 'on' : 'off'}`);
+  }
   const beforeById = new Map(before.activities.map((item) => [item.id, item]));
   const afterIds = new Set(after.activities.map((item) => item.id));
   for (const activity of after.activities) {
@@ -345,16 +353,33 @@ export function diffComparablePoints(
     }
     if (prev.multiplier.enabled !== activity.multiplier.enabled) {
       lines.push(`${name} multiplier ${activity.multiplier.enabled ? 'on' : 'off'}`);
-    } else if (
-      activity.multiplier.enabled &&
-      prev.multiplier.extra_factor !== activity.multiplier.extra_factor
-    ) {
-      lines.push(
-        `${name} extra-work factor ${prev.multiplier.extra_factor} → ${activity.multiplier.extra_factor}`,
-      );
+    } else if (activity.multiplier.enabled) {
+      if ((prev.multiplier.label ?? '') !== (activity.multiplier.label ?? '')) {
+        lines.push(`${name} multiplier label ${prev.multiplier.label || '—'} → ${activity.multiplier.label || '—'}`);
+      }
+      if (JSON.stringify(prev.multiplier.tiers ?? []) !== JSON.stringify(activity.multiplier.tiers ?? [])) {
+        lines.push(`${name} multiplier tiers changed`);
+      }
+      if (prev.multiplier.extra_factor !== activity.multiplier.extra_factor) {
+        lines.push(
+          `${name} extra-work factor ${prev.multiplier.extra_factor} → ${activity.multiplier.extra_factor}`,
+        );
+      }
     }
     if (prev.qualifiers.enabled !== activity.qualifiers.enabled) {
       lines.push(`${name} qualifiers ${activity.qualifiers.enabled ? 'on' : 'off'}`);
+    } else if (
+      activity.qualifiers.enabled &&
+      prev.qualifiers.items.map((item) => item.label).join('|') !==
+        activity.qualifiers.items.map((item) => item.label).join('|')
+    ) {
+      lines.push(`${name} qualifiers updated`);
+    }
+    if (
+      Boolean(prev.floor?.enabled) !== Boolean(activity.floor?.enabled) ||
+      Number(prev.floor?.min_qty ?? 0) !== Number(activity.floor?.min_qty ?? 0)
+    ) {
+      lines.push(`${name} floor changed`);
     }
   }
   for (const activity of before.activities) {
