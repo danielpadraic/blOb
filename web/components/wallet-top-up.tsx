@@ -69,7 +69,7 @@ export function WalletTopUpHost() {
     setRequest((current) => current ?? { amount: 1 });
     setKind('pending');
     setMessage(TOPUP_COPY.processing);
-    void waitForTopUpCreditWithClient(supabase, { sessionId }).then((result) => {
+    void waitForTopUpCreditWithClient(supabase as never, { sessionId }).then((result) => {
       if (result.status === 'succeeded') {
         setKind('success');
         setMessage(TOPUP_COPY.added(result.amount || 1));
@@ -108,7 +108,7 @@ export function WalletTopUpHost() {
     setKind(null);
     try {
       const urls = returnUrls(request);
-      const session = await createTopUpSessionWithClient(supabase, {
+      const session = await createTopUpSessionWithClient(supabase as never, {
         amount: quote.creditAmount,
         successUrl: urls.successUrl,
         cancelUrl: urls.cancelUrl,
