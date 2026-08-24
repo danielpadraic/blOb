@@ -4,7 +4,16 @@ import { Pressable, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { officialBob } from '@/copy/officialBob';
-import { methodFromProofType, parseChallengeProofs } from '@/lib/challengeProofs';
+import {
+  isCorporateChallenge,
+  isFitnessOfficialChallenge,
+  usesComparablePointsScoring,
+} from '@/lib/challengeExperience';
+import {
+  isDefaultFitnessProofRequirements,
+  methodFromProofType,
+  parseChallengeProofs,
+} from '@/lib/challengeProofs';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Challenge } from '@/lib/types';
 
@@ -20,13 +29,21 @@ function isHeartType(value: string): boolean {
 
 export function officialFitnessProofIcons(challenge: Pick<
   Challenge,
-  'is_official' | 'category' | 'proofs' | 'proof_type' | 'proof_requirements' | 'challenge_type' | 'tasks'
+  | 'is_official'
+  | 'category'
+  | 'proofs'
+  | 'proof_type'
+  | 'proof_requirements'
+  | 'challenge_type'
+  | 'tasks'
+  | 'series_id'
+  | 'privacy_mode'
+  | 'scoring_method'
+  | 'scoring_config'
+  | 'comparable_points_config'
 >): { camera: boolean; heart: boolean } {
-  if (challenge.is_official) {
-    const category = String(challenge.category ?? '').toLowerCase();
-    if (category === 'fitness') {
-      return { camera: true, heart: true };
-    }
+  if (isFitnessOfficialChallenge(challenge)) {
+    return { camera: true, heart: true };
   }
 
   let camera = false;
@@ -48,7 +65,13 @@ export function officialFitnessProofIcons(challenge: Pick<
       heart = true;
     }
   }
-  for (const item of challenge.proof_requirements ?? []) {
+  const skipDefaultFitness =
+    usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge);
+  const requirements =
+    skipDefaultFitness && isDefaultFitnessProofRequirements(challenge.proof_requirements)
+      ? []
+      : (challenge.proof_requirements ?? []);
+  for (const item of requirements) {
     const type = String(item.type ?? '').toLowerCase();
     if (isCameraType(type)) {
       camera = true;
@@ -74,7 +97,18 @@ export function officialFitnessProofIcons(challenge: Pick<
 type ProofRequirementIconsProps = {
   challenge: Pick<
     Challenge,
-    'is_official' | 'category' | 'proofs' | 'proof_type' | 'proof_requirements' | 'challenge_type' | 'tasks'
+    | 'is_official'
+    | 'category'
+    | 'proofs'
+    | 'proof_type'
+    | 'proof_requirements'
+    | 'challenge_type'
+    | 'tasks'
+    | 'series_id'
+    | 'privacy_mode'
+    | 'scoring_method'
+    | 'scoring_config'
+    | 'comparable_points_config'
   >;
   tint?: 'light' | 'dark';
 };

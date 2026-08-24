@@ -22,6 +22,13 @@ type Startable = {
   proof_requirements?: Challenge['proof_requirements'];
   challenge_type?: Challenge['challenge_type'];
   tasks?: Challenge['tasks'];
+  scoring_method?: Challenge['scoring_method'];
+  scoring_config?: Challenge['scoring_config'];
+  comparable_points_config?: Challenge['comparable_points_config'];
+  privacy_mode?: Challenge['privacy_mode'];
+  is_official?: Challenge['is_official'];
+  series_id?: Challenge['series_id'];
+  category?: Challenge['category'];
 };
 
 export function useStartOnWatch(challenge?: Startable | null) {

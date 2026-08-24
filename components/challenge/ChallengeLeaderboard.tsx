@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import type { Challenge, ChallengeParticipantWithProfile } from '@/lib/types';
+import { usesConsistencyExperience } from '@/lib/challengeExperience';
 import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
@@ -58,24 +59,48 @@ export function ChallengeLeaderboard({
   const pot = Number(challenge.prize_pool) || 0;
   const share = remainingCount > 0 ? pot / remainingCount : 0;
   const empty = remaining.length === 0 && dropped.length === 0;
+  const consistency = usesConsistencyExperience(challenge);
 
   return (
     <Card className="gap-3">
-      <FieldNoteLabel
-        note="board"
-        textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-        Board
-      </FieldNoteLabel>
+      {consistency ? (
+        <FieldNoteLabel
+          note="board"
+          textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          Board
+        </FieldNoteLabel>
+      ) : (
+        <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          Board
+        </AppText>
+      )}
       <View className="flex-row" style={{ gap: 8 }}>
-        <Stat label={copy('board.remaining')} value={String(remainingCount)} />
-        <Stat label={copy('board.caughtUp')} value={String(completed.length)} />
-        <Stat label={copy('board.dropped')} value={String(dropped.length)} />
+        <Stat
+          label={copy(consistency ? 'board.remaining' : 'board.in')}
+          value={String(remainingCount)}
+        />
+        <Stat
+          label={copy(consistency ? 'board.caughtUp' : 'board.checkedIn')}
+          value={String(completed.length)}
+        />
+        <Stat
+          label={copy(consistency ? 'board.dropped' : 'board.out')}
+          value={String(dropped.length)}
+        />
       </View>
       <View className="flex-row flex-wrap items-center" style={{ gap: 6 }}>
         <FieldNoteLabel
           note="share"
           textClassName="text-sm font-semibold text-charcoal">
-          {copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish')}
+          {copy(
+            consistency
+              ? joined
+                ? 'board.yourShareIfFinish'
+                : 'board.shareIfFinish'
+              : joined
+                ? 'board.yourShareIfPlace'
+                : 'board.shareIfPlace',
+          )}
         </FieldNoteLabel>
         <StakeAmount
           amount={share}
@@ -90,7 +115,11 @@ export function ChallengeLeaderboard({
       ) : (
         <View className="gap-1.5">
           {remaining.map((row) => (
-            <Row key={row.userId} name={row.name} tag={row.bucket === 'completed' ? 'Done' : 'In'} />
+            <Row
+              key={row.userId}
+              name={row.name}
+              tag={row.bucket === 'completed' ? (consistency ? 'Done' : 'Checked in') : 'In'}
+            />
           ))}
           {dropped.map((row) => (
             <Row key={row.userId} name={row.name} tag="Out" muted />

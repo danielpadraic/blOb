@@ -1,3 +1,7 @@
+import {
+  isFitnessOfficialChallenge,
+  usesComparablePointsScoring,
+} from '@/lib/challengeExperience';
 import { isPointsChallenge, isUnlimitedChallenge } from '@/lib/challenges';
 import type { Challenge } from '@/lib/types';
 import { challengeWindowDays } from '@/utils/format';
@@ -13,6 +17,12 @@ type GoalChallenge = Pick<
   | 'length_unit'
   | 'starts_at'
   | 'ends_at'
+  | 'series_id'
+  | 'category'
+  | 'privacy_mode'
+  | 'scoring_method'
+  | 'scoring_config'
+  | 'comparable_points_config'
 >;
 
 /** Calendar days the host saved. Never a check-in product or a 100 fallback. */
@@ -58,6 +68,9 @@ export function challengeGoalLabel(
   challenge: GoalChallenge,
   extras?: { daysCompleted?: number; taskCount?: number },
 ): string {
+  if (usesComparablePointsScoring(challenge)) {
+    return 'Comparable Points';
+  }
   if (isPointsChallenge(challenge)) {
     return 'Score points';
   }
@@ -65,9 +78,13 @@ export function challengeGoalLabel(
     const logs = Math.max(Number(extras?.daysCompleted) || 0, 0);
     return `${logs} check-in${logs === 1 ? '' : 's'}`;
   }
-  if (challenge.is_official) {
+  if (isFitnessOfficialChallenge(challenge)) {
     const days = challengeDurationDays(challenge);
     return `${days}-Day Consistency`;
+  }
+  if (challenge.is_official) {
+    const days = challengeDurationDays(challenge);
+    return `${days}-day challenge`;
   }
   const target = challengeDurationDays(challenge);
   const done = Math.max(Number(extras?.daysCompleted) || 0, 0);
@@ -75,10 +92,10 @@ export function challengeGoalLabel(
 }
 
 export function challengeGoalSubtitle(challenge: GoalChallenge): string | null {
-  if (isPointsChallenge(challenge) || isUnlimitedChallenge(challenge)) {
+  if (usesComparablePointsScoring(challenge) || isPointsChallenge(challenge) || isUnlimitedChallenge(challenge)) {
     return null;
   }
-  if (challenge.is_official) {
+  if (isFitnessOfficialChallenge(challenge)) {
     return 'Don’t miss a day';
   }
   return null;

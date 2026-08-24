@@ -7,8 +7,14 @@ import {
   PROOF_TYPES,
 } from '@/lib/constants';
 import {
+  isCorporateChallenge,
+  usesComparablePointsScoring,
+} from '@/lib/challengeExperience';
+import {
+  isDefaultFitnessProofRequirements,
   namedProofsFromLegacyTypes,
   parseChallengeProofs,
+  proofsFromProofType,
   resolveChallengeProofs,
   type ChallengeProof,
 } from '@/lib/challengeProofs';
@@ -501,6 +507,37 @@ function asOptionalUrl(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function storedProofRequirements(row: {
+  proof_requirements?: unknown;
+  is_official?: boolean | null;
+  category?: string | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
+  comparable_points_config?: unknown;
+  privacy_mode?: string | null;
+}): ProofRequirement[] {
+  const listed = Array.isArray(row.proof_requirements)
+    ? (row.proof_requirements as ProofRequirement[])
+    : null;
+  if (listed) {
+    if (
+      (usesComparablePointsScoring(row) || isCorporateChallenge(row)) &&
+      isDefaultFitnessProofRequirements(listed)
+    ) {
+      return [];
+    }
+    return listed;
+  }
+  if (
+    usesComparablePointsScoring(row) ||
+    isCorporateChallenge(row) ||
+    (row.is_official && String(row.category ?? '').toLowerCase() !== 'fitness')
+  ) {
+    return [];
+  }
+  return DEFAULT_PROOFS;
+}
+
 export function participantLimitSummary(challenge: {
   max_participants?: number | null;
   participant_count?: number | null;
@@ -527,11 +564,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     buy_in_amount: Number(row.buy_in_amount ?? 0),
     days_required: daysRequired,
     min_minutes: Number(row.min_minutes ?? 30),
-    proof_requirements: Array.isArray(row.proof_requirements)
-      ? (row.proof_requirements as ProofRequirement[])
-      : row.is_official && String(row.category ?? '').toLowerCase() !== 'fitness'
-        ? []
-        : DEFAULT_PROOFS,
+    proof_requirements: storedProofRequirements(row),
     proofs: resolveChallengeProofs({
       proofs: row.proofs,
       proof_type: row.proof_type,
@@ -1221,9 +1254,23 @@ export async function fetchLobbyFriendCounts(
 }
 
 export function requiredProofTypes(
-  challenge: Pick<Challenge, 'proof_requirements' | 'challenge_type' | 'tasks' | 'proofs' | 'proof_type'> | null | undefined,
+  challenge: Pick<
+    Challenge,
+    | 'proof_requirements'
+    | 'challenge_type'
+    | 'tasks'
+    | 'proofs'
+    | 'proof_type'
+    | 'scoring_method'
+    | 'scoring_config'
+    | 'comparable_points_config'
+    | 'privacy_mode'
+    | 'is_official'
+    | 'series_id'
+    | 'category'
+  > | null | undefined,
 ): ProofType[] {
-  if (isPointsChallenge(challenge)) {
+  if (isPointsChallenge(challenge) && !usesComparablePointsScoring(challenge)) {
     const fromTasks = (challenge?.tasks ?? [])
       .filter((task) => task.proof_required)
       .flatMap((task) => task.proof_types ?? []);
@@ -1259,22 +1306,61 @@ export function requiredProofTypes(
     return fromNamed;
   }
 
-  const listed = (challenge?.proof_requirements ?? DEFAULT_PROOFS)
+  const skipFitnessDefault =
+    usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge);
+  const listed = (skipFitnessDefault ? (challenge?.proof_requirements ?? []) : (challenge?.proof_requirements ?? DEFAULT_PROOFS))
     .filter((item) => item?.required !== false)
     .map((item) => item.type)
     .filter(Boolean);
+  if (skipFitnessDefault) {
+    return listed;
+  }
   return listed.length > 0 ? listed : [...PROOF_TYPES];
 }
 
 export function requiredChallengeProofs(
-  challenge: Pick<Challenge, 'proofs' | 'proof_type' | 'proof_requirements' | 'challenge_type' | 'tasks'> | null | undefined,
+  challenge: Pick<
+    Challenge,
+    | 'proofs'
+    | 'proof_type'
+    | 'proof_requirements'
+    | 'challenge_type'
+    | 'tasks'
+    | 'scoring_method'
+    | 'scoring_config'
+    | 'comparable_points_config'
+    | 'privacy_mode'
+    | 'is_official'
+    | 'series_id'
+    | 'category'
+  > | null | undefined,
 ): ChallengeProof[] {
-  if (parseChallengeProofs(challenge?.proofs).length > 0) {
+  const stored = parseChallengeProofs(challenge?.proofs);
+  const requirements =
+    usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)
+      ? isDefaultFitnessProofRequirements(challenge?.proof_requirements)
+        ? []
+        : challenge?.proof_requirements
+      : challenge?.proof_requirements;
+  if (stored.length > 0) {
     return resolveChallengeProofs({
       proofs: challenge?.proofs,
       proof_type: challenge?.proof_type,
-      proof_requirements: challenge?.proof_requirements,
+      proof_requirements: requirements,
     });
+  }
+  if (usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)) {
+    if (requirements && requirements.length > 0) {
+      return resolveChallengeProofs({
+        proofs: [],
+        proof_type: challenge?.proof_type,
+        proof_requirements: requirements,
+      });
+    }
+    if (challenge?.proof_type) {
+      return proofsFromProofType(challenge.proof_type);
+    }
+    return [];
   }
   if (isPointsChallenge(challenge)) {
     const types = requiredProofTypes(challenge);
@@ -1283,7 +1369,7 @@ export function requiredChallengeProofs(
   return resolveChallengeProofs({
     proofs: challenge?.proofs,
     proof_type: challenge?.proof_type,
-    proof_requirements: challenge?.proof_requirements,
+    proof_requirements: requirements,
   });
 }
 

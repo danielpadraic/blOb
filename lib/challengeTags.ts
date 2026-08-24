@@ -1,3 +1,4 @@
+import { usesComparablePointsScoring, usesConsistencyExperience } from '@/lib/challengeExperience';
 import { isPointsChallenge } from '@/lib/challenges';
 
 export type ChallengeTagKind =
@@ -23,6 +24,12 @@ type TagChallenge = {
   challenge_type?: string | null;
   starts_at?: string | null;
   timezone?: string | null;
+  privacy_mode?: string | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
+  comparable_points_config?: unknown;
+  series_id?: string | null;
+  category?: string | null;
 };
 
 function formatStartWhen(startsAt?: string | null, timeZone?: string | null): string | null {
@@ -108,9 +115,11 @@ export function challengeCardTags(input: {
     });
   }
 
-  if (isPointsChallenge(challenge)) {
+  if (usesComparablePointsScoring(challenge)) {
+    tags.push({ kind: 'points', label: 'Comparable Points' });
+  } else if (isPointsChallenge(challenge)) {
     tags.push({ kind: 'points', label: 'Points' });
-  } else {
+  } else if (usesConsistencyExperience(challenge)) {
     tags.push({ kind: 'consistency', label: 'Consistency' });
   }
 

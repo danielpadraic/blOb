@@ -47,6 +47,11 @@ import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
+import {
+  requiresOfficialBodyMetrics,
+  usesComparablePointsScoring,
+  usesConsistencyExperience,
+} from '@/lib/challengeExperience';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import {
@@ -59,6 +64,11 @@ import {
   requiredChallengeProofs,
   totalTaskPoints,
 } from '@/lib/challenges';
+import {
+  comparablePointsFromChallenge,
+  comparablePointsHeadline,
+  comparablePointsLiveSentence,
+} from '@/lib/comparablePoints';
 import {
   canMarkJudging,
   canSettleChallenge,
@@ -91,7 +101,7 @@ import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 
 const BODY_METRICS_JOIN_COPY =
-  'Missing: physical details. Official Challenges need them for matching — they stay private.';
+  'Missing: physical details. Official Fitness Challenges need them for matching — they stay private.';
 
 export default function ChallengeDetailScreen() {
   const params = useLocalSearchParams<{
@@ -206,7 +216,7 @@ export default function ChallengeDetailScreen() {
     if (isChallengeFull(challenge)) {
       return 'This challenge is full.';
     }
-    if (challenge.is_official && !hasCompletedBodyMetrics(profile)) {
+    if (requiresOfficialBodyMetrics(challenge) && !hasCompletedBodyMetrics(profile)) {
       return BODY_METRICS_JOIN_COPY;
     }
     const buyIn = Number(challenge.buy_in_amount) || 0;
@@ -426,16 +436,22 @@ export default function ChallengeDetailScreen() {
   }
 
   const proofSteps = requiredChallengeProofs(challenge);
-  const isPoints = isPointsChallenge(challenge);
+  const comparable = usesComparablePointsScoring(challenge);
+  const comparableConfig = comparable ? comparablePointsFromChallenge(challenge) : null;
+  const isPoints = isPointsChallenge(challenge) && !comparable;
   const isUnlimited = isUnlimitedChallenge(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
+  const showDayRing = isJoined && usesConsistencyExperience(challenge);
   const target = durationDays;
   const checkinTarget = challengeTargetCount(challenge);
   const logTitle = loggedToday
     ? copy('checkin.checkedIn')
     : (periodCheckin.data?.ctaTitle ?? copy('checkin.begin'));
-  const proofHeadline =
-    proofSteps.length === 1
+  const proofHeadline = comparable
+    ? proofSteps.length <= 1
+      ? 'Proof'
+      : 'Required proof'
+    : proofSteps.length === 1
       ? 'Proof for every check-in'
       : `${proofSteps.length} proofs every check-in`;
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
@@ -549,7 +565,7 @@ export default function ChallengeDetailScreen() {
             daysCompleted={daysCompleted}
             progressRatio={progressRatio}
             nowMs={nowMs}
-            showProgressRing={isJoined}
+            showProgressRing={showDayRing}
             cancelled={wasCancelled}
             onInvite={openInvite}>
             {!wasCancelled &&
@@ -708,20 +724,26 @@ export default function ChallengeDetailScreen() {
           )}
           <View>
             <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-              {isPoints ? 'Task points' : isUnlimited ? 'Stay eligible' : 'To finish'}
+              {comparable ? 'Scoring' : isPoints ? 'Task points' : isUnlimited ? 'Stay eligible' : 'To finish'}
             </AppText>
             <AppText className="mt-1 text-xl font-bold text-charcoal">
-              {isPoints
-                ? `${totalTaskPoints(challenge.tasks)} pts`
-                : challenge.is_official
-                  ? challengeGoalLabel(challenge)
-                  : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}
+              {comparable && comparableConfig
+                ? comparablePointsHeadline(comparableConfig)
+                : isPoints
+                  ? `${totalTaskPoints(challenge.tasks)} pts`
+                  : challenge.is_official
+                    ? challengeGoalLabel(challenge)
+                    : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}
             </AppText>
-          {isPoints || isUnlimited || challenge.is_official || !ruleCopy.totalHint ? null : (
+          {comparable && comparableConfig ? (
+              <AppText className="mt-1 text-xs leading-4 text-muted">
+                {comparablePointsLiveSentence(comparableConfig)}
+              </AppText>
+            ) : isPoints || isUnlimited || challenge.is_official || !ruleCopy.totalHint ? null : (
               <AppText className="mt-1 text-xs leading-4 text-muted">{ruleCopy.totalHint}</AppText>
             )}
           </View>
-          {isPoints ? null : (
+          {isPoints || proofSteps.length === 0 ? null : (
             <View>
               <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                 {proofHeadline}

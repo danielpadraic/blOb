@@ -1,3 +1,8 @@
+import {
+  isCorporateChallenge,
+  isFitnessOfficialChallenge,
+  usesComparablePointsScoring,
+} from '@/lib/challengeExperience';
 import { copy } from '@/lib/copy';
 import type { ProofType } from '@/lib/types';
 
@@ -272,6 +277,17 @@ function isBeforeAfterHeartRateProofs(proofs: ChallengeProof[]): boolean {
   );
 }
 
+/** Legacy Official fitness trio — ignore on Comparable Points / corporate unless stored proofs match. */
+export function isDefaultFitnessProofRequirements(
+  items?: Array<{ type?: string; required?: boolean }> | null,
+): boolean {
+  if (!items?.length) {
+    return false;
+  }
+  const types = new Set(items.map((item) => String(item.type ?? '').toLowerCase()));
+  return types.has('pre_selfie') && types.has('post_selfie') && (types.has('hr_monitor') || types.has('hr'));
+}
+
 /** Official week_10, official fitness, and the before/after/heart-rate trio. */
 export function usesWeek10ProofSentence(challenge: {
   is_official?: boolean | null;
@@ -280,11 +296,16 @@ export function usesWeek10ProofSentence(challenge: {
   proofs?: unknown;
   proof_type?: unknown;
   proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
+  challenge_type?: string | null;
+  privacy_mode?: string | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
+  comparable_points_config?: unknown;
 }): boolean {
-  if (challenge.series_id === 'week_10') {
-    return true;
+  if (usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)) {
+    return isBeforeAfterHeartRateProofs(parseChallengeProofs(challenge.proofs));
   }
-  if (Boolean(challenge.is_official) && String(challenge.category ?? '').toLowerCase() === 'fitness') {
+  if (isFitnessOfficialChallenge(challenge)) {
     return true;
   }
   return isBeforeAfterHeartRateProofs(resolveChallengeProofs(challenge));
