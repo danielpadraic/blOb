@@ -16,6 +16,7 @@ import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
 import type { HealthWorkout } from '@/services/health/types';
+import { CHECKIN_BOB, checkinStageHint, checkinStageIndex, checkinStageLabel, classifyCheckinError, isLikelyOffline } from '@/lib/checkin';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   beginCameraProof,
@@ -27,6 +28,7 @@ import {
   type ChallengeProof,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
+import { successHaptic } from '@/lib/haptics';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
 import { upsertHealthWorkout } from '@/lib/health/remote';
@@ -46,22 +48,40 @@ function LoggedState({ onBack }: { onBack: () => void }) {
   return (
     <Screen padded={false} edges={['left', 'right', 'bottom']}>
       <Stack.Screen options={{ title: copy('checkin.checkedIn') }} />
-      <View className="flex-1 px-5 pt-6">
-        <View
-          className="rounded-blob px-4 py-4"
-          style={{ backgroundColor: THEME.accentSoft }}>
-          <AppText className="text-center text-[18px] font-bold" style={{ color: THEME.accent }}>
-            Checked in today
-          </AppText>
-          <AppText className="mt-2 text-center text-sm leading-5 text-muted">
-            Come back tomorrow for the next proof set.
-          </AppText>
-        </View>
-        <View className="mt-6">
-          <Button title="Back to challenge" size="lg" onPress={onBack} />
-        </View>
-      </View>
+      <MascotState
+        kind="success"
+        title={copy('checkin.checkedIn')}
+        body={copy('checkin.alreadyBob')}
+        actionLabel="Back to challenge"
+        onAction={onBack}
+      />
     </Screen>
+  );
+}
+
+function StageRail({ phase }: { phase: 'none' | 'in_progress' | 'ready' | 'submitted' }) {
+  const current = checkinStageIndex(phase);
+  const labels = [copy('checkin.begin'), copy('checkin.continue'), copy('checkin.submit')];
+  return (
+    <View className="mb-4 flex-row items-center justify-center" style={{ gap: 8 }}>
+      {labels.map((label, index) => {
+        const active = index === Math.min(current, 2) && phase !== 'submitted';
+        const done = index < current || phase === 'submitted';
+        return (
+          <View key={label} className="items-center" style={{ minWidth: 72 }}>
+            <View
+              className="h-2 w-full rounded-full"
+              style={{ backgroundColor: done || active ? THEME.accent : THEME.border }}
+            />
+            <AppText
+              className="mt-1 text-[11px] font-bold"
+              style={{ color: done || active ? THEME.textPrimary : THEME.textMuted }}>
+              {label}
+            </AppText>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -89,6 +109,8 @@ export default function SubmitWorkoutScreen() {
 
   const [drafts, setDrafts] = useState<Record<string, SlotDraft>>({});
   const [error, setError] = useState<string | null>(null);
+  const [failKind, setFailKind] = useState<'offline' | 'permission' | 'upload' | null>(null);
+  const [justSubmitted, setJustSubmitted] = useState(false);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -156,6 +178,12 @@ export default function SubmitWorkoutScreen() {
       return;
     }
     setError(null);
+    setFailKind(null);
+    if (isLikelyOffline()) {
+      setFailKind('offline');
+      setError(copy('checkin.offlineBob'));
+      throw new Error(copy('checkin.offlineBob'));
+    }
     try {
       await saveProof.mutateAsync({
         challengeId: id,
@@ -166,6 +194,8 @@ export default function SubmitWorkoutScreen() {
         fromLibrary: draft?.fromLibrary,
       });
     } catch (caught) {
+      const kind = classifyCheckinError(caught);
+      setFailKind(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : kind === 'generic' ? 'upload' : null);
       setError(getErrorMessage(caught));
       throw caught;
     }
@@ -204,6 +234,12 @@ export default function SubmitWorkoutScreen() {
       return;
     }
     setError(null);
+    setFailKind(null);
+    if (isLikelyOffline()) {
+      setFailKind('offline');
+      setError(copy('checkin.offlineBob'));
+      return;
+    }
     try {
       const savedParts = checkinQuery.data?.proof_parts ?? {};
       for (const proof of proofSteps) {
@@ -219,8 +255,11 @@ export default function SubmitWorkoutScreen() {
         await saveProof.mutateAsync({ challengeId: id });
       }
       await submitCheckin.mutateAsync();
-      router.back();
+      await successHaptic();
+      setJustSubmitted(true);
     } catch (caught) {
+      const kind = classifyCheckinError(caught);
+      setFailKind(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : null);
       setError(getCheckinSubmitMessage(caught));
     }
   }
@@ -252,7 +291,46 @@ export default function SubmitWorkoutScreen() {
   if (challengeQuery.isLoading || participationLoading || checkinQuery.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <MascotState kind="loading" title="Opening today’s check-in" body="Checking what you still owe." />
+        <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
+      </Screen>
+    );
+  }
+
+  if (justSubmitted) {
+    return (
+      <Screen padded={false} edges={['left', 'right', 'bottom']}>
+        <Stack.Screen options={{ title: copy('checkin.checkedIn') }} />
+        <MascotState
+          kind="success"
+          title={copy('checkin.checkedIn')}
+          body={copy('checkin.successBob')}
+          actionLabel="Back to challenge"
+          onAction={() => router.replace(`/challenges/${id}`)}
+        />
+      </Screen>
+    );
+  }
+
+  if (failKind === 'offline' || failKind === 'permission' || failKind === 'upload') {
+    return (
+      <Screen padded={false} edges={['left', 'right', 'bottom']}>
+        <Stack.Screen options={{ title: checkinStageLabel(phase) }} />
+        <MascotState
+          kind="error"
+          title={
+            failKind === 'offline'
+              ? copy('checkin.offlineBob')
+              : failKind === 'permission'
+                ? copy('checkin.permissionBob')
+                : copy('checkin.uploadFailBob')
+          }
+          body={error ?? CHECKIN_BOB[failKind]}
+          actionLabel="Try again"
+          onAction={() => {
+            setFailKind(null);
+            setError(null);
+          }}
+        />
       </Screen>
     );
   }
@@ -297,7 +375,7 @@ export default function SubmitWorkoutScreen() {
         <MascotState
           kind="empty"
           title={copy('challenge.notStarted')}
-          body={loggingOpensHelper(challenge)}
+          body={loggingOpensHelper(challenge) || copy('checkin.notLiveBob')}
           actionLabel="Back to challenge"
           onAction={() => router.back()}
         />
@@ -377,7 +455,13 @@ export default function SubmitWorkoutScreen() {
             <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="page" />
           </View>
         ) : null}
-        <AppText className="text-center text-sm text-muted">{copy('checkin.emptyBob')}</AppText>
+        <StageRail phase={phase} />
+        <AppText className="text-center text-sm text-muted">
+          {checkinStageHint(
+            phase,
+            missing.map((proof) => proofDisplayName(proof)),
+          ) || copy('checkin.emptyBob')}
+        </AppText>
         {isOfficialSeriesChallenge(challenge) && (phase === 'in_progress' || phase === 'ready') ? (
           <AppText className="mt-2 text-center text-[13px] font-semibold" style={{ color: THEME.accent }}>
             {copy('checkin.submitBanner')}

@@ -20,6 +20,7 @@
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.4",
     "expo-font": "~57.0.1",
+    "expo-haptics": "~15.0.8",
     "expo-image": "~57.0.3",
     "expo-image-manipulator": "~57.0.12",
     "expo-image-picker": "~57.0.10",
@@ -56,7 +57,8 @@
     "@types/ws": "^8.18.1",
     "prettier-plugin-tailwindcss": "^0.5.14",
     "tailwindcss": "^3.4.19",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "start": "expo start",
@@ -64,7 +66,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "lint": "node scripts/check-unbound-identifiers.js"
+    "lint": "node scripts/check-unbound-identifiers.js",
+    "test": "vitest run",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build"
   },
   "engines": {
     "node": ">=20.19.4"

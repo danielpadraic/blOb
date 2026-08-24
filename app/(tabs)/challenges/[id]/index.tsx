@@ -45,6 +45,7 @@ import {
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
+import { useChallengeBoardRealtime } from '@/hooks/useChallengeBoardRealtime';
 import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
@@ -139,6 +140,7 @@ export default function ChallengeDetailScreen() {
     }));
   }, [boardProfiles.data, roster.data]);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
+  useChallengeBoardRealtime(id);
   const submittedCheckins = useSubmittedCheckinCount(id, challengeQuery.data);
   const completions = usePeriodCompletions(id, challengeQuery.data);
   const joinSheet = useJoinConfirm();

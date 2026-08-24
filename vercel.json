@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm run lint && npx expo export -p web",
-  "outputDirectory": "dist",
+  "buildCommand": "npm --prefix web install && npm --prefix web run build",
+  "outputDirectory": "web/out",
   "framework": null,
   "cleanUrls": true,
   "rewrites": [

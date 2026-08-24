@@ -17,6 +17,8 @@
     "css.d.ts"
   ],
   "exclude": [
-    "supabase/functions"
+    "supabase/functions",
+    "web",
+    "**/*.test.ts"
   ]
 }

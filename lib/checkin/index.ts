@@ -1,0 +1,34 @@
+export { CHECKIN_BOB } from './bob';
+export {
+  classifyCheckinError,
+  isLikelyOffline,
+  isOfflineError,
+  isPermissionError,
+  isUploadError,
+  mapCheckinRpcError,
+  type CheckinFailKind,
+} from './errors';
+export {
+  applyLocalCheckinProgress,
+  boardProgressLabel,
+  didAdvanceBoard,
+  incrementDaysCompleted,
+  type CheckinBoardRow,
+} from './progress';
+export {
+  parseChallengeCheckin,
+  saveCheckinProofWithClient,
+  submitCheckinWithClient,
+  type CheckinRpcClient,
+  type ResolveProofUrlFn,
+  type SaveCheckinProofInput,
+  type UploadCheckinProofFn,
+} from './rpc';
+export {
+  CHECKIN_STAGE_LABELS,
+  checkinStageFromPhase,
+  checkinStageHint,
+  checkinStageIndex,
+  checkinStageLabel,
+  type CheckinStageId,
+} from './stages';

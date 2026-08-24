@@ -9,6 +9,7 @@ import {
   type ChallengeCheckin,
   type CheckinPhase,
 } from '@/lib/challengeCheckin';
+import { incrementDaysCompleted } from '@/lib/checkin/progress';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
 import { parseProofParts } from '@/lib/challengeProofs';
 import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/localNudges';
@@ -310,6 +311,32 @@ export function useSubmitCheckin(challengeId: string | undefined) {
       }
       if (row && user?.id) {
         writeCheckinCache(queryClient, challengeId, user.id, row);
+        queryClient.setQueryData<ChallengeParticipantLike[]>(
+          ['challenge-participants', challengeId],
+          (current) =>
+            (current ?? []).map((item) =>
+              item.user_id === user.id
+                ? {
+                    ...item,
+                    days_completed: incrementDaysCompleted(Number(item.days_completed) || 0, false),
+                  }
+                : item,
+            ),
+        );
+        queryClient.setQueryData(
+          ['my-participation', challengeId, user.id],
+          (current: ChallengeParticipantLike | null | undefined) =>
+            current
+              ? {
+                  ...current,
+                  days_completed: incrementDaysCompleted(Number(current.days_completed) || 0, false),
+                }
+              : current,
+        );
+        queryClient.setQueriesData<number>(
+          { queryKey: ['submitted-checkins', challengeId] },
+          (current) => incrementDaysCompleted(Number(current) || 0, false),
+        );
       }
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['workout-submission', challengeId] });
@@ -317,15 +344,22 @@ export function useSubmitCheckin(challengeId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['submitted-checkins', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['logged-workout-days', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void maybeRequestPushPermission();
     },
   });
 }
+
+type ChallengeParticipantLike = {
+  user_id: string;
+  days_completed?: number | null;
+};
 
 export function parseCheckinParts(value: unknown) {
   return parseProofParts(value);

@@ -47,7 +47,13 @@ export function checkinCtaTitle(phase: CheckinPhase): string {
   if (phase === 'submitted') {
     return 'Checked in';
   }
-  return 'Check In';
+  if (phase === 'ready') {
+    return 'Submit';
+  }
+  if (phase === 'in_progress') {
+    return 'Continue';
+  }
+  return 'Begin';
 }
 
 export function isCheckinPrimary(phase: CheckinPhase): boolean {
