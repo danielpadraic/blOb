@@ -1415,6 +1415,10 @@ export type Database = {
         Args: { p_challenge_id: string; p_payload: Record<string, unknown> };
         Returns: Challenge;
       };
+      update_official_challenge_details: {
+        Args: { p_challenge_id: string; p_payload: Record<string, unknown> };
+        Returns: Challenge;
+      };
       list_official_joinable: {
         Args: Record<string, never>;
         Returns: Challenge[];

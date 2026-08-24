@@ -41,6 +41,23 @@ export function canOpenOfficialTools(input: {
   return canEditOfficialScoring(input);
 }
 
+export function isOfficialOrCorporateDetails(
+  challenge?: Pick<Challenge, 'is_official' | 'privacy_mode'> | null,
+): boolean {
+  return Boolean(challenge?.is_official) || challenge?.privacy_mode === 'private_corporate';
+}
+
+export function canEditOfficialDetails(input: {
+  challenge?: Pick<Challenge, 'created_by' | 'status' | 'is_official' | 'privacy_mode'> | null;
+  viewerId?: string | null;
+  profile?: Pick<Profile, 'id' | 'is_official' | 'is_admin' | 'username'> | null;
+}): boolean {
+  if (!isOfficialOrCorporateDetails(input.challenge)) {
+    return false;
+  }
+  return canEditOfficialScoring(input);
+}
+
 export function scoringChangeEffectiveLine(
   challenge: Pick<
     Challenge,

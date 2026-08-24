@@ -56,6 +56,16 @@ export default function ChallengeIdLayout() {
           }}
         />
         <Stack.Screen
+          name="details"
+          options={{
+            headerShown: true,
+            title: 'Edit details',
+            headerBackVisible: false,
+            headerLeft: () => <StackBackButton />,
+            headerRight: () => <WalletBar />,
+          }}
+        />
+        <Stack.Screen
           name="scoring"
           options={{
             headerShown: true,

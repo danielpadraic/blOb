@@ -51,10 +51,10 @@ const DEFAULT_PROOFS: ProofRequirement[] = [
 ];
 
 const OFFICIAL_DISPLAY_SELECT =
-  'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
+  'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, cover_image_url, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
 
 const LOBBY_SELECTS = [
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version',
   '*',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
@@ -1615,6 +1615,31 @@ export async function updateUserChallenge(
   payload: Record<string, unknown>,
 ): Promise<Challenge> {
   const { data, error } = await supabase.rpc('update_user_challenge', {
+    p_challenge_id: challengeId,
+    p_payload: payload,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  return normalizeChallenge((data ?? {}) as unknown as ChallengeRow);
+}
+
+export type OfficialChallengeDetailsPayload = {
+  title: string;
+  description?: string | null;
+  cover_image_url?: string | null;
+  rules?: string | null;
+  sponsor_name?: string | null;
+  proofs: ChallengeProof[];
+  proof_requirements: Array<{ type: string; required: true }>;
+  proof_type: string;
+};
+
+export async function updateOfficialChallengeDetails(
+  challengeId: string,
+  payload: OfficialChallengeDetailsPayload,
+): Promise<Challenge> {
+  const { data, error } = await supabase.rpc('update_official_challenge_details', {
     p_challenge_id: challengeId,
     p_payload: payload,
   });

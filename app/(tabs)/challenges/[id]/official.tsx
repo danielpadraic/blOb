@@ -14,7 +14,13 @@ import {
   comparablePointsHeadline,
   currentScoringVersion,
 } from '@/lib/comparablePoints';
-import { canOpenOfficialTools, officialScoringStatusLine, scoringChangeEffectiveLine } from '@/lib/officialScoring';
+import {
+  canEditOfficialDetails,
+  canOpenOfficialTools,
+  officialScoringStatusLine,
+  scoringChangeEffectiveLine,
+} from '@/lib/officialScoring';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
 export default function OfficialToolsScreen() {
@@ -30,6 +36,11 @@ export default function OfficialToolsScreen() {
 
   const challenge = challengeQuery.data;
   const allowed = canOpenOfficialTools({
+    challenge,
+    viewerId: user?.id,
+    profile,
+  });
+  const canDetails = canEditOfficialDetails({
     challenge,
     viewerId: user?.id,
     profile,
@@ -110,6 +121,26 @@ export default function OfficialToolsScreen() {
           />
         </View>
       </Card>
+
+      {canDetails ? (
+        <Card className="mt-4">
+          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Details
+          </AppText>
+          <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
+            Title, photo, rules, and proofs
+          </AppText>
+          <AppText className="mt-1 text-[13px] leading-5 text-muted">
+            Scoring and privacy stay as they are.
+          </AppText>
+          <View className="mt-4">
+            <Button
+              title={copy('challenge.editDetails')}
+              onPress={() => router.push(`/challenges/${id}/details`)}
+            />
+          </View>
+        </Card>
+      ) : null}
 
       {(audit.data ?? []).length > 0 ? (
         <Card className="mt-4">

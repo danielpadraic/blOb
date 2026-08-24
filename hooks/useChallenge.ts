@@ -28,6 +28,8 @@ import {
   publishScoringChange,
   fetchScoringAudit,
   updateUserChallenge,
+  updateOfficialChallengeDetails,
+  type OfficialChallengeDetailsPayload,
   withParticipantCounts,
   type FriendChallengeProof,
 } from '@/lib/challenges';
@@ -1027,6 +1029,28 @@ export function useUpdateUserChallenge() {
         current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },
       );
       invalidateChallengeCaches(queryClient, challenge.id, user?.id);
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useUpdateOfficialChallengeDetails(challengeId: string | undefined) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (payload: OfficialChallengeDetailsPayload): Promise<Challenge> => {
+      if (!challengeId) {
+        throw new Error('Challenge not found');
+      }
+      return updateOfficialChallengeDetails(challengeId, payload);
+    },
+    onSuccess: (challenge) => {
+      queryClient.setQueryData<ChallengeWithStats>(['challenge', challenge.id], (current) =>
+        current ? { ...current, ...challenge } : { ...challenge, participant_count: 0 },
+      );
+      invalidateChallengeCaches(queryClient, challenge.id, user?.id);
+      void queryClient.invalidateQueries({ queryKey: ['official-details-source', challenge.id] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
