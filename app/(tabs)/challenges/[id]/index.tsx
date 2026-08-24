@@ -85,6 +85,7 @@ import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/curre
 import { challengeGoalLabel, challengeDurationDays } from '@/lib/challengeGoal';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
+import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
@@ -174,7 +175,8 @@ export default function ChallengeDetailScreen() {
     return countLiveCompetitors(roster.data);
   }, [challenge?.participant_count, isJoined, roster.data]);
   const durationDays = challengeDurationDays(challenge);
-  const loggedToday = periodCheckin.data?.phase === 'submitted';
+  const loggedToday =
+    periodCheckin.data?.phase === 'submitted' || isSubmittedCheckin(periodCheckin.data);
   const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
   const daysCompleted = heroRingDays({
     status: challengeQuery.data?.status,
@@ -429,7 +431,9 @@ export default function ChallengeDetailScreen() {
   const ruleCopy = challengeRuleCopy(challenge);
   const target = durationDays;
   const checkinTarget = challengeTargetCount(challenge);
-  const logTitle = periodCheckin.data?.ctaTitle ?? copy('checkin.begin');
+  const logTitle = loggedToday
+    ? copy('checkin.checkedIn')
+    : (periodCheckin.data?.ctaTitle ?? copy('checkin.begin'));
   const proofHeadline =
     proofSteps.length === 1
       ? 'Proof for every check-in'

@@ -5,6 +5,7 @@ import { maybeRequestPushPermission } from '@/lib/push';
 import {
   checkinCtaTitle,
   isCheckinPrimary,
+  isSubmittedCheckin,
   type ChallengeCheckin,
   type CheckinPhase,
 } from '@/lib/challengeCheckin';
@@ -18,6 +19,7 @@ import {
   challengeClockTz,
   checkinPeriodKey,
   checkinPeriodKeyCandidates,
+  normalizePeriodKey,
   type CheckinPeriodChallenge,
 } from '@/lib/checkinPeriod';
 import { dateStampInZone } from '@/lib/officialDays';
@@ -41,8 +43,17 @@ function periodKeyFor(challenge?: PeriodChallenge | null): string {
   return checkinPeriodKey(challenge);
 }
 
-function checkinQueryKey(challengeId: string | undefined, userId: string | undefined, date: string) {
-  return ['challenge-checkin', challengeId, userId, date] as const;
+function checkinQueryKey(challengeId: string | undefined, userId: string | undefined) {
+  return ['challenge-checkin', challengeId, userId] as const;
+}
+
+function writeCheckinCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  challengeId: string,
+  userId: string,
+  row: ChallengeCheckin,
+) {
+  queryClient.setQueriesData({ queryKey: checkinQueryKey(challengeId, userId) }, asView(row));
 }
 
 function isMissingRelation(message: string): boolean {
@@ -99,10 +110,17 @@ async function hydrateCheckin(data: Record<string, unknown>): Promise<ChallengeC
 }
 
 function isSubmittedToday(
-  row: { status?: string | null; submitted_at?: string | null },
+  row: { status?: string | null; submitted_at?: string | null; period_key?: unknown },
   challenge?: PeriodChallenge | null,
 ): boolean {
-  if (row.status !== 'submitted' || !row.submitted_at) {
+  if (!isSubmittedCheckin(row)) {
+    return false;
+  }
+  const key = normalizePeriodKey(row.period_key);
+  if (key && checkinPeriodKeyCandidates(challenge).includes(key)) {
+    return true;
+  }
+  if (!row.submitted_at) {
     return false;
   }
   const submitted = new Date(row.submitted_at);
@@ -119,8 +137,8 @@ export async function fetchCurrentPeriodCheckin(
   challenge?: PeriodChallenge | null,
   date?: string,
 ): Promise<ChallengeCheckin | null> {
-  const key = date ?? periodKeyFor(challenge);
-  const exact = await fetchPeriodCheckin(challengeId, userId, key);
+  const key = normalizePeriodKey(date ?? periodKeyFor(challenge));
+  const exact = key ? await fetchPeriodCheckin(challengeId, userId, key) : null;
   if (exact) {
     return exact;
   }
@@ -130,22 +148,23 @@ export async function fetchCurrentPeriodCheckin(
     .eq('challenge_id', challengeId)
     .eq('user_id', userId)
     .order('period_key', { ascending: false })
-    .limit(8);
+    .limit(12);
   if (recent.error) {
     if (isMissingRelation(recent.error.message)) {
       return null;
     }
     throw new Error(getErrorMessage(recent.error));
   }
-  const candidates = new Set(checkinPeriodKeyCandidates(challenge));
+  const candidates = new Set(checkinPeriodKeyCandidates(challenge).map(normalizePeriodKey));
   const rows = (recent.data ?? []) as Record<string, unknown>[];
   const match =
-    rows.find((row) => candidates.has(String(row.period_key ?? ''))) ??
+    rows.find((row) => candidates.has(normalizePeriodKey(row.period_key))) ??
     rows.find((row) =>
       isSubmittedToday(
         {
           status: typeof row.status === 'string' ? row.status : null,
           submitted_at: typeof row.submitted_at === 'string' ? row.submitted_at : null,
+          period_key: row.period_key,
         },
         challenge,
       ),
@@ -153,8 +172,18 @@ export async function fetchCurrentPeriodCheckin(
   return match ? hydrateCheckin(match) : null;
 }
 
+function phaseFromRow(row: ChallengeCheckin | null): CheckinPhase {
+  if (!row) {
+    return 'none';
+  }
+  if (isSubmittedCheckin(row)) {
+    return 'submitted';
+  }
+  return row.status;
+}
+
 function asView(row: ChallengeCheckin | null): ChallengeCheckinView {
-  const phase: CheckinPhase = row?.status ?? 'none';
+  const phase = phaseFromRow(row);
   return {
     ...(row ?? {
       id: '',
@@ -166,7 +195,7 @@ function asView(row: ChallengeCheckin | null): ChallengeCheckinView {
       started_at: '',
       created_at: '',
     }),
-    phase: row ? row.status : 'none',
+    phase,
     ctaTitle: checkinCtaTitle(phase),
     isPrimary: isCheckinPrimary(phase),
   };
@@ -219,7 +248,7 @@ export function usePeriodCheckin(
   const official = Boolean(challenge && isOfficialSeriesChallenge(challenge));
 
   return useQuery({
-    queryKey: checkinQueryKey(challengeId, user?.id, date),
+    queryKey: [...checkinQueryKey(challengeId, user?.id), challengeClockTz(challenge), date],
     enabled: Boolean(challengeId && user?.id),
     refetchInterval: official ? 30_000 : false,
     queryFn: async (): Promise<ChallengeCheckinView> => {
@@ -239,7 +268,7 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
       if (!challengeId || !user?.id) {
         return;
       }
-      queryClient.setQueryData(checkinQueryKey(challengeId, user.id, row.period_key), asView(row));
+      writeCheckinCache(queryClient, challengeId, user.id, row);
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
@@ -280,7 +309,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
         return;
       }
       if (row && user?.id) {
-        queryClient.setQueryData(checkinQueryKey(challengeId, user.id, row.period_key), asView(row));
+        writeCheckinCache(queryClient, challengeId, user.id, row);
       }
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['workout-submission', challengeId] });

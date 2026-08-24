@@ -17,6 +17,13 @@ export type CheckinPeriodChallenge = {
   day_windows?: OfficialDayWindowRow[] | null;
 };
 
+/** YYYY-MM-DD from a date column, ISO timestamp, or already-stamped key. */
+export function normalizePeriodKey(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? raw;
+}
+
 /** Mirrors `public.challenge_clock_tz`. */
 export function challengeClockTz(challenge?: CheckinPeriodChallenge | null): string {
   if (challenge && isOfficialSeriesChallenge(challenge)) {
@@ -39,10 +46,10 @@ export function checkinPeriodKey(
   if (challenge && isOfficialSeriesChallenge(challenge)) {
     const windowDate = officialLogDate(challenge, now);
     if (windowDate) {
-      return windowDate;
+      return normalizePeriodKey(windowDate);
     }
   }
-  return dateStampInZone(now, challengeClockTz(challenge));
+  return normalizePeriodKey(dateStampInZone(now, challengeClockTz(challenge)));
 }
 
 /** Nearby stamps to recover a submitted row when the client key is slightly off. */
@@ -55,14 +62,15 @@ export function checkinPeriodKeyCandidates(
   if (challenge && isOfficialSeriesChallenge(challenge)) {
     const windowDate = officialLogDate(challenge, now);
     if (windowDate) {
-      keys.add(windowDate);
+      keys.add(normalizePeriodKey(windowDate));
     }
-    keys.add(dateStampInZone(now, OFFICIAL_SERIES_TIMEZONE));
+    keys.add(normalizePeriodKey(dateStampInZone(now, OFFICIAL_SERIES_TIMEZONE)));
   }
   const tz = challenge?.timezone?.trim();
   if (tz) {
-    keys.add(dateStampInZone(now, tz));
+    keys.add(normalizePeriodKey(dateStampInZone(now, tz)));
   }
-  keys.add(dateStampInZone(now, 'UTC'));
-  return [...keys];
+  keys.add(normalizePeriodKey(dateStampInZone(now, 'UTC')));
+  keys.add(normalizePeriodKey(dateStampInZone(now, challengeClockTz(challenge))));
+  return [...keys].filter(Boolean);
 }

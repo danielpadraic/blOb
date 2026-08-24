@@ -282,9 +282,11 @@ export function ChallengeInviteCard({
       starts_at: challenge.starts_at,
       timezone: challenge.timezone,
       days_required: challenge.days_required,
+      day_windows: Array.isArray(challenge.day_windows) ? challenge.day_windows : null,
     },
   );
-  const checkedIn = periodCheckin.data?.phase === 'submitted';
+  const checkedIn =
+    periodCheckin.data?.phase === 'submitted' || Boolean(periodCheckin.data?.submitted_at);
   const canCheckIn =
     section === 'active' &&
     inviteCardCanCheckIn({ challenge, joined, eliminated }) &&
@@ -449,8 +451,8 @@ export function ChallengeInviteCard({
                 onPress={() => void openDetail()}
               />
               <ActionButton
-                label="Check-In"
-                accessibilityLabel="Check-In"
+                label="Check In"
+                accessibilityLabel="Check In"
                 primary
                 official={official}
                 flex

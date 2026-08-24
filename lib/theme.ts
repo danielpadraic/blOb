@@ -37,8 +37,8 @@ export const TAB_BAR_GUTTER = 10;
 export const TAB_BAR_PEEK = 40;
 /** BlobTabBar paddingTop / negative marginTop — the pill peeks this far into the scene. */
 export const TAB_BAR_SCENE_PEEK = 18;
-/** Tight pad between a scene sticky and the tab pill. */
-export const TAB_STICKY_PAD = 10;
+/** Extra air above the pill for in-flow stickies. Keep at 0 so the CTA sits flush. */
+export const TAB_STICKY_PAD = 0;
 
 /** Space so tab-root screens clear the floating pill bar (70px bar + inset + gap). */
 export const TAB_BAR_CONTENT_INSET = 128;
@@ -50,11 +50,8 @@ export const TAB_BAR_CONTENT_INSET = 128;
  */
 export function tabBarLift(bottomInset: number, kind: 'overlay' | 'sticky' = 'overlay'): number {
   if (kind === 'sticky') {
-    // In-flow scene: tab bar already owns layout + home indicator. On web,
-    // ignore browser-chrome insets so they don't become a phantom band.
-    if (Platform.OS === 'web') {
-      return TAB_BAR_SCENE_PEEK + TAB_STICKY_PAD;
-    }
+    // Scene already ends at the tab bar. The pill peeks TAB_BAR_SCENE_PEEK
+    // into the scene; sit on that edge with no extra transparent gap.
     return TAB_BAR_SCENE_PEEK + TAB_STICKY_PAD;
   }
   return TAB_BAR_HEIGHT + Math.max(bottomInset, TAB_BAR_GUTTER) + 12;

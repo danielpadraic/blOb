@@ -33,17 +33,21 @@ export function asCheckinStatus(value: unknown): CheckinStatus | null {
   return null;
 }
 
+export function isSubmittedCheckin(row?: {
+  status?: string | null;
+  submitted_at?: string | null;
+} | null): boolean {
+  if (!row) {
+    return false;
+  }
+  return row.status === 'submitted' || Boolean(row.submitted_at);
+}
+
 export function checkinCtaTitle(phase: CheckinPhase): string {
-  if (phase === 'in_progress') {
-    return 'Continue check-in';
-  }
-  if (phase === 'ready') {
-    return 'Submit';
-  }
   if (phase === 'submitted') {
     return 'Checked in';
   }
-  return 'Begin check-in';
+  return 'Check In';
 }
 
 export function isCheckinPrimary(phase: CheckinPhase): boolean {

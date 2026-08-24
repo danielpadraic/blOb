@@ -8,6 +8,7 @@ import { asCheckinStatus, type ChallengeCheckin } from '@/lib/challengeCheckin';
 import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
 import { maybeRequestPushPermission } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
+import { normalizePeriodKey } from '@/lib/checkinPeriod';
 import { utcDateStamp } from '@/utils/dates';
 import { getCheckinSubmitMessage, getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
@@ -60,12 +61,14 @@ function throwMapped(
 }
 
 export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCheckin {
-  const status = asCheckinStatus(row.status) ?? 'in_progress';
+  const submittedAt = (row.submitted_at as string | null) ?? null;
+  const parsed = asCheckinStatus(row.status);
+  const status = submittedAt ? 'submitted' : (parsed ?? 'in_progress');
   return {
     id: String(row.id),
     user_id: String(row.user_id),
     challenge_id: String(row.challenge_id),
-    period_key: String(row.period_key ?? row.submission_date ?? utcDateStamp()),
+    period_key: normalizePeriodKey(row.period_key ?? row.submission_date ?? utcDateStamp()),
     status,
     proof_parts: parseProofParts(row.proof_parts),
     pre_selfie_url: (row.pre_selfie_url as string | null) ?? null,
@@ -75,7 +78,7 @@ export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCh
     health_workout_id: (row.health_workout_id as string | null) ?? null,
     workout_submission_id: (row.workout_submission_id as string | null) ?? null,
     started_at: String(row.started_at ?? row.created_at ?? new Date().toISOString()),
-    submitted_at: (row.submitted_at as string | null) ?? null,
+    submitted_at: submittedAt,
     scoring_version:
       row.scoring_version == null || !Number.isFinite(Number(row.scoring_version))
         ? null

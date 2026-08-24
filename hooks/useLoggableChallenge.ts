@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { checkinPeriodKey, checkinPeriodKeyCandidates } from '@/lib/checkinPeriod';
+import { checkinPeriodKey, checkinPeriodKeyCandidates, normalizePeriodKey } from '@/lib/checkinPeriod';
 import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
@@ -192,7 +192,7 @@ async function fetchCheckinPhases(
   }
   const result = await supabase
     .from('challenge_checkins')
-    .select('challenge_id, period_key, status')
+    .select('challenge_id, period_key, status, submitted_at')
     .eq('user_id', userId)
     .in('challenge_id', challengeIds);
   if (result.error) {
@@ -210,8 +210,12 @@ async function fetchCheckinPhases(
   for (const row of result.data ?? []) {
     const status = row.status;
     const phase: CheckinPhase =
-      status === 'in_progress' || status === 'ready' || status === 'submitted' ? status : 'in_progress';
-    phases.set(`${String(row.challenge_id)}:${String(row.period_key)}`, phase);
+      row.submitted_at || status === 'submitted'
+        ? 'submitted'
+        : status === 'ready' || status === 'in_progress'
+          ? status
+          : 'in_progress';
+    phases.set(`${String(row.challenge_id)}:${normalizePeriodKey(row.period_key)}`, phase);
   }
   return phases;
 }
