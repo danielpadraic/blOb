@@ -1,28 +1,29 @@
 {
   "expo": {
     "name": "blOb",
-    "slug": "blob-app",
+    "slug": "blob",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/mascot/blob-icon.png",
+    "icon": "./assets/mascot/app-icon.png",
     "scheme": "blob",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F7F7F5",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "app.blob.mobile",
+      "supportsTablet": false,
+      "bundleIdentifier": "com.blob.tournament",
+      "buildNumber": "1",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.healthkit": true,
         "com.apple.developer.healthkit.background-delivery": true
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "Take a check-in photo or Story for your Challenge.",
-        "NSMicrophoneUsageDescription": "Record a short Story or Reel with sound for your Challenge.",
-        "NSPhotoLibraryUsageDescription": "Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins.",
-        "NSUserNotificationsUsageDescription": "Alerts for friend requests, Challenge invites, and check-ins.",
-        "NSHealthShareUsageDescription": "blOb reads workouts and heart rate so you can use them as challenge proof.",
-        "NSHealthUpdateUsageDescription": "blOb starts your challenge workout on Apple Watch.",
+        "NSCameraUsageDescription": "blOb needs the camera so you can take check-in photos for Skill Tournaments.",
+        "NSMicrophoneUsageDescription": "blOb needs the microphone so you can record check-in or Story videos for Skill Tournaments.",
+        "NSPhotoLibraryUsageDescription": "blOb needs photo access so you can attach proof for Skill Tournaments.",
+        "NSUserNotificationsUsageDescription": "Alerts for friend requests, Skill Tournament invites, and check-ins.",
+        "NSHealthShareUsageDescription": "blOb reads workouts and heart rate only to verify effort in Skill Tournaments.",
+        "NSHealthUpdateUsageDescription": "blOb starts or updates a workout session only to verify effort in Skill Tournaments.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -30,18 +31,18 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#131515",
-        "foregroundImage": "./assets/mascot/blob-wave.png"
+        "backgroundColor": "#F7F7F5",
+        "foregroundImage": "./assets/mascot/bob-wave.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "app.blob.mobile",
       "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO",
-        "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO",
-        "READ_MEDIA_VISUAL_USER_SELECTED",
-        "POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.health.READ_EXERCISE",
         "android.permission.health.READ_HEART_RATE",
         "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
@@ -58,7 +59,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/login/blob-login.png",
+          "image": "./assets/mascot/splash.png",
           "resizeMode": "contain",
           "backgroundColor": "#F7F7F5"
         }
@@ -68,16 +69,16 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Choose a photo or clip from your library for Stories, Reels, and Challenge check-ins.",
-          "cameraPermission": "Take a check-in photo or Story for your Challenge.",
-          "microphonePermission": "Record a short Story or Reel with sound for your Challenge."
+          "photosPermission": "blOb needs photo access so you can attach proof for Skill Tournaments.",
+          "cameraPermission": "blOb needs the camera so you can take check-in photos for Skill Tournaments.",
+          "microphonePermission": "blOb needs the microphone so you can record check-in or Story videos for Skill Tournaments."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Take a check-in photo or Story for your Challenge.",
-          "microphonePermission": "Record a short Story or Reel with sound for your Challenge.",
+          "cameraPermission": "blOb needs the camera so you can take check-in photos for Skill Tournaments.",
+          "microphonePermission": "blOb needs the microphone so you can record check-in or Story videos for Skill Tournaments.",
           "recordAudioAndroid": true,
           "barcodeScannerEnabled": false
         }
@@ -89,7 +90,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/mascot/blob-icon.png",
+          "icon": "./assets/mascot/app-icon.png",
           "color": "#2C9B89",
           "defaultChannel": "alerts",
           "enableBackgroundRemoteNotifications": true
@@ -98,8 +99,8 @@
       [
         "react-native-health",
         {
-          "healthSharePermission": "blOb reads workouts and heart rate so you can use them as challenge proof.",
-          "healthUpdatePermission": "blOb starts your challenge workout on Apple Watch.",
+          "healthSharePermission": "blOb reads workouts and heart rate only to verify effort in Skill Tournaments.",
+          "healthUpdatePermission": "blOb starts or updates a workout session only to verify effort in Skill Tournaments.",
           "isClinicalDataEnabled": false
         }
       ],
@@ -118,6 +119,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "935bffa2-b998-42bd-9a03-f8d3b28c2035"
+      }
+    },
+    "owner": "danielharders-team"
   }
 }
