@@ -58,6 +58,15 @@ export function officialAlreadyStartedCopy(): string {
   return ALREADY_STARTED;
 }
 
+/** Official “Guaranteed Prize” is host_budget only. Zero / unset means the setting is off. */
+export function officialGuaranteeAmount(challenge: { host_budget?: number | null }): number {
+  return Math.max(Number(challenge.host_budget) || 0, 0);
+}
+
+export function showsGuaranteedPrize(challenge: { host_budget?: number | null }): boolean {
+  return officialGuaranteeAmount(challenge) > 0;
+}
+
 export function officialToStartAmount(guarantee: number): number {
   return Math.max(Number(guarantee) || 0, 0) * 1.5;
 }

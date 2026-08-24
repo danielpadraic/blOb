@@ -19,7 +19,9 @@ import {
   isOfficialJoinable,
   isOfficialSeriesChallenge,
   officialContestantsNeeded,
+  officialGuaranteeAmount,
   officialStartNeededLabel,
+  showsGuaranteedPrize,
 } from '@/lib/officialSeries';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -195,7 +197,8 @@ export function OfficialFillingStats({
   showStartLine?: boolean;
   tone?: 'card' | 'hero';
 }) {
-  const guarantee = Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
+  const guarantee = officialGuaranteeAmount(challenge);
+  const showGuarantee = showsGuaranteedPrize(challenge);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
@@ -224,17 +227,20 @@ export function OfficialFillingStats({
               currency={challenge.currency}
               textClassName={amountClass}
               color={amountColor}
+              labeled
             />
           }
           labelColor={labelColor}
           note={entryFieldNote(challenge)}
           tint={hero ? 'light' : 'dark'}
         />
-        <PosterStat
-          label={copy('board.guarantee')}
-          value={<BuckUsdAmount amount={guarantee} textClassName={amountClass} color={amountColor} />}
-          labelColor={labelColor}
-        />
+        {showGuarantee ? (
+          <PosterStat
+            label={copy('board.guarantee')}
+            value={<BuckUsdAmount amount={guarantee} textClassName={amountClass} color={amountColor} />}
+            labelColor={labelColor}
+          />
+        ) : null}
         <PosterStat
           label={copy('board.pot')}
           value={

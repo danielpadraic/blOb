@@ -54,9 +54,15 @@ export function formatCashCompact(amount: number | null | undefined): string {
 }
 
 export const FREE_ENTRY_LABEL = 'FREE Entry';
+export const FREE_LABEL = 'FREE';
 
 export function isFreeEntry(amount: number | null | undefined): boolean {
   return Math.max(Number(amount) || 0, 0) <= 0;
+}
+
+/** Use FREE when an “Entry” label is already next to the amount. */
+export function freeEntryLabel(hasEntryLabelNearby: boolean): string {
+  return hasEntryLabelNearby ? FREE_LABEL : FREE_ENTRY_LABEL;
 }
 
 /** $5,000 — whole dollars get a comma, no cents. */

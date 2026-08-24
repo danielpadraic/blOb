@@ -91,7 +91,7 @@ export function challengeCardTags(input: {
     tags.push({ kind: 'public', label: 'Public' });
   }
 
-  if (input.joined || input.hosting) {
+  if (input.joined) {
     tags.push({ kind: 'joined', label: 'You’re in' });
   } else {
     tags.push({ kind: 'notJoined', label: 'Not joined' });

@@ -189,6 +189,9 @@ const STRINGS = {
   'create.realMoneyFund': 'For challenges with real money, you fund this amount.',
   'create.buyIn': 'Entry fee',
   'create.freeEntry': 'FREE Entry',
+  'create.free': 'FREE',
+  'create.guaranteePrize': 'Guaranteed Prize',
+  'create.guaranteePrizeHelp': 'Optional floor on Official cards. Off by default for Private Corporate.',
   'create.type': 'Type',
   'create.titleLabel': 'Title',
   'create.titlePlaceholder': 'Morning miles',
@@ -278,7 +281,7 @@ const STRINGS = {
   'note.startNeeded':
     'Starts when enough people have joined. This number will fall as people pay the entry fee.',
   'board.liveShare': 'Live share {amount}',
-  'board.guarantee': 'Guarantee',
+  'board.guarantee': 'Guaranteed Prize',
   'board.pot': 'Prize',
   'board.toStart': 'To start (1.5×)',
   'board.joined': 'Joined',

@@ -782,7 +782,12 @@ export function useCreateChallenge() {
         draft_id: values.draft_id ?? null,
         min_participants: Math.max(Number(values.min_participants) || 2, 2),
         host_funded: values.host_funded === true || lane.currency === 'bucks',
-        host_budget: contribution,
+        host_budget:
+          (values.guarantee_enabled ??
+            asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane) !==
+              'private_corporate')
+            ? contribution
+            : 0,
         format: unlimited ? 'lms' : values.format ?? values.challenge_type,
         task: values.task?.trim() || values.rule_activity.trim() || null,
         required_checkins: Number(values.required_checkins) || targetCount,

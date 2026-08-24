@@ -257,6 +257,7 @@ export const createChallengeSchema = z
     proof_review: z.enum(['auto', 'host']).optional(),
     host_funded: z.boolean().optional(),
     host_budget: z.string().optional(),
+    guarantee_enabled: z.boolean().optional(),
     required_checkins: z.string().optional(),
     payout_mode: z.enum(['even_split_remaining', 'winner_take_all', 'top_places']).optional(),
     format: z.enum(['consistency', 'points', 'lms']).optional(),

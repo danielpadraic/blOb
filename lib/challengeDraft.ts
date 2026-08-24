@@ -339,6 +339,10 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       rules: asString(row.rules, ''),
       scoring_method: row.scoring_method === 'comparable_points' ? 'comparable_points' : null,
       scoring_config: parseComparablePointsConfig(row.scoring_config),
+      guarantee_enabled:
+        typeof row.guarantee_enabled === 'boolean'
+          ? row.guarantee_enabled
+          : row.privacy_mode !== 'private_corporate',
     };
   } catch {
     return emptyValues();
@@ -453,6 +457,7 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     rules: challenge.rules ?? '',
     scoring_method: challenge.scoring_method === 'comparable_points' ? 'comparable_points' : null,
     scoring_config: parseComparablePointsConfig(challenge.scoring_config),
+    guarantee_enabled: Math.max(Number(challenge.host_budget) || 0, 0) > 0,
   });
 }
 

@@ -20,7 +20,7 @@ import { challengeDurationDays, challengeGoalLabel, challengeGoalSubtitle } from
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { isPointsChallenge } from '@/lib/challenges';
-import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
+import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialGuaranteeAmount, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -89,7 +89,7 @@ function startStripCopy(
     return text ? { kicker: 'Status', text } : null;
   }
   if (official && isOfficialJoinable(challenge)) {
-    const guarantee = Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
+    const guarantee = officialGuaranteeAmount(challenge);
     const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
     const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
     const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
@@ -400,7 +400,7 @@ function ProofMark({ proof, dark }: { proof: ProofChip; dark: boolean }) {
 function MoneyRow({ challenge, dark }: { challenge: ChallengeWithStats; dark: boolean }) {
   const official = Boolean(challenge.is_official);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
-  const guarantee = Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
+  const guarantee = officialGuaranteeAmount(challenge);
   const prize = Math.max(Number(challenge.prize_pool) || 0, 0);
   const labelColor = dark ? 'rgba(231,247,243,0.62)' : THEME.accent;
   const valueClass = dark
@@ -419,6 +419,7 @@ function MoneyRow({ challenge, dark }: { challenge: ChallengeWithStats; dark: bo
           currency={challenge.currency}
           textClassName={valueClass}
           color={valueColor}
+          labeled
         />
       ),
     });

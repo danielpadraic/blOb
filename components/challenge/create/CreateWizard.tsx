@@ -1511,6 +1511,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                 setValue('privacy_mode', next.privacy_mode, { shouldValidate: true, shouldDirty: true });
                 setValue('visibility', next.visibility, { shouldValidate: true, shouldDirty: true });
                 setValue('discoverability', next.discoverability, { shouldDirty: true });
+                if (next.privacy_mode === 'private_corporate') {
+                  setValue('guarantee_enabled', false, { shouldDirty: true });
+                }
               }}
               onExtraTasksChange={(extra_tasks) => setValue('extra_tasks', extra_tasks, { shouldDirty: true })}
               onCoverChange={(cover_image_url) =>
@@ -1575,7 +1578,12 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               contributionShort={contributionShort}
               walletCredits={walletCredits}
               flow={coinFlowLines(values)}
+              guaranteeEnabled={values.guarantee_enabled !== false}
+              privacyMode={asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane)}
               onFundingChange={onFundingChange}
+              onGuaranteeChange={(value) =>
+                setValue('guarantee_enabled', value, { shouldValidate: true, shouldDirty: true })
+              }
               onCurrencyChange={(value) => {
                 if (normalizeUserChallengeLane(values.challenge_lane) !== 'private') {
                   return;
@@ -2378,7 +2386,10 @@ function FundingSlide({
   contributionShort,
   walletCredits,
   flow,
+  guaranteeEnabled,
+  privacyMode,
   onFundingChange,
+  onGuaranteeChange,
   onCurrencyChange,
 }: {
   control: ReturnType<typeof useForm<CreateChallengeValues>>['control'];
@@ -2390,7 +2401,10 @@ function FundingSlide({
   contributionShort: string | null;
   walletCredits: number;
   flow: { label: string; body: string }[];
+  guaranteeEnabled: boolean;
+  privacyMode: PrivacyMode;
   onFundingChange: (next: FundingModel) => void;
+  onGuaranteeChange: (next: boolean) => void;
   onCurrencyChange: (next: CreateChallengeValues['currency']) => void;
 }) {
   const isPrivateLane = normalizeUserChallengeLane(challengeLane) === 'private';
@@ -2471,6 +2485,28 @@ function FundingSlide({
             />
           )}
         />
+        </FieldAnchor>
+      ) : null}
+
+      {isCreatorFunded ? (
+        <FieldAnchor name="guarantee_enabled">
+          <View className="flex-row items-center justify-between">
+            <View className="mr-4 flex-1">
+              <AppText className="font-semibold text-charcoal">{copy('create.guaranteePrize')}</AppText>
+              <AppText className="mt-0.5 text-xs leading-5 text-muted">
+                {privacyMode === 'private_corporate'
+                  ? 'Off for Private Corporate unless you turn it on.'
+                  : copy('create.guaranteePrizeHelp')}
+              </AppText>
+            </View>
+            <Switch
+              value={guaranteeEnabled}
+              onValueChange={onGuaranteeChange}
+              trackColor={{ true: COLORS.mintDark, false: COLORS.line }}
+              thumbColor={COLORS.white}
+              ios_backgroundColor={COLORS.line}
+            />
+          </View>
         </FieldAnchor>
       ) : null}
 

@@ -21,12 +21,12 @@ import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { fetchChallengeById } from '@/lib/challenges';
-import { formatCashCompact, isBucksChallenge } from '@/lib/currency';
+import { formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { copy } from '@/lib/copy';
 import { namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
 import { isOfficialChallenge } from '@/lib/official';
-import { armingCountdownLabel, officialContestantsNeeded } from '@/lib/officialSeries';
+import { armingCountdownLabel, officialContestantsNeeded, officialGuaranteeAmount } from '@/lib/officialSeries';
 import { isClosedForLogs, isJoinWindowOpen } from '@/lib/settlement';
 import { THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
@@ -186,7 +186,7 @@ export function inviteCardStatus(challenge: InviteChallenge, nowMs = Date.now())
     return 'Live';
   }
   if (challenge.is_official) {
-    const guarantee = Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
+    const guarantee = officialGuaranteeAmount(challenge);
     const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
     const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
     const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
@@ -421,7 +421,7 @@ export function ChallengeInviteCard({
         <View style={{ gap: canCheckIn ? 6 : 0 }}>
           <View className="flex-row items-center" style={{ gap: 8 }}>
             <View className="min-w-0 flex-1 flex-row items-center" style={{ gap: 5 }}>
-              <EntryMark challenge={challenge} color={titleColor} />
+              <LobbyMoneyMark challenge={challenge} color={titleColor} />
               <AppText style={{ color: muted }}>·</AppText>
               <AppText className="min-w-0 flex-1 text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
                 {status}
@@ -645,6 +645,43 @@ function OfficialBobPanel({ onError }: { onError: () => void }) {
       />
     </View>
   );
+}
+
+function lobbyCardShowsPrize(challenge: InviteChallenge, nowMs = Date.now()): boolean {
+  const status = String(challenge.status ?? '');
+  if (status === 'live' || status === 'in_progress') {
+    return true;
+  }
+  if (status === 'judging' || status === 'settled' || status === 'distributing') {
+    return true;
+  }
+  const start = challenge.starts_at ? new Date(challenge.starts_at).getTime() : NaN;
+  if (!Number.isFinite(start) || start > nowMs) {
+    return false;
+  }
+  return status !== 'cancelled' && status !== 'cancelled_underfilled';
+}
+
+function LobbyMoneyMark({ challenge, color }: { challenge: InviteChallenge; color: string }) {
+  if (lobbyCardShowsPrize(challenge)) {
+    const prize = Math.max(Number(challenge.prize_pool) || 0, 0);
+    if (isBucksChallenge(challenge)) {
+      return (
+        <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
+          {formatCashPrizeAmount(prize)}
+        </AppText>
+      );
+    }
+    return (
+      <View className="flex-row items-center" style={{ gap: 4 }}>
+        <CurrencyMark currency={challenge.currency} size={15} />
+        <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
+          {Number.isInteger(prize) ? String(prize) : prize.toFixed(2)}
+        </AppText>
+      </View>
+    );
+  }
+  return <EntryMark challenge={challenge} color={color} />;
 }
 
 function EntryMark({ challenge, color }: { challenge: InviteChallenge; color: string }) {

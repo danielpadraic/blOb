@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { cashPrizeLabel, FREE_ENTRY_LABEL, formatWalletAmount, isBucksChallenge } from '@/lib/currency';
+import { cashPrizeLabel, FREE_LABEL, formatWalletAmount, isBucksChallenge } from '@/lib/currency';
 import { bucksJoinCta } from '@/lib/joinCta';
 import type { Challenge } from '@/lib/types';
 
@@ -50,7 +50,7 @@ export function JoinBar({
               amount={buyInAmount}
               currency={challenge.currency}
               size={18}
-              freeLabel={FREE_ENTRY_LABEL}
+              freeLabel={FREE_LABEL}
               textClassName="text-2xl font-bold text-charcoal"
             />
           </View>

@@ -94,6 +94,7 @@ export type SimpleChallengeDraft = {
   currency: SimpleCurrency;
   buy_in: number;
   host_budget: number;
+  guarantee_enabled?: boolean;
   type: SimpleChallengeType;
   title: string;
   description: string;
@@ -119,6 +120,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     currency: 'coins',
     buy_in: 0,
     host_budget: 0,
+    guarantee_enabled: true,
     type: 'any_exercise',
     title: '',
     description: '',
@@ -147,6 +149,10 @@ function withProofSentences(draft: SimpleChallengeDraft): SimpleChallengeDraft {
     proofs: (draft.proofs ?? []).map((item) => ensureProofSentence(item, item.minutes ?? 30)),
     cover_image_url: draft.cover_image_url?.trim() || '',
     privacy_mode,
+    guarantee_enabled:
+      privacy_mode === 'private_corporate'
+        ? draft.guarantee_enabled === true
+        : draft.guarantee_enabled !== false,
     friends_of_friends: privacy_mode === 'private_corporate' ? false : draft.friends_of_friends,
     visibility: privacy_mode === 'private_corporate' ? 'invite' : draft.visibility,
   };
@@ -414,7 +420,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     proof_type: proofTypeFromMethod(firstProofMethod(proofs)) as CreateChallengeValues['proof_type'],
     task: draft.task.trim(),
     host_funded: bucks,
-    host_budget: String(hostBudget),
+    host_budget: String((draft.guarantee_enabled ?? !corporate) ? hostBudget : 0),
+    guarantee_enabled: draft.guarantee_enabled ?? !corporate,
     required_checkins: String(required),
     payout_mode: 'even_split_remaining',
     format: 'consistency',
@@ -462,7 +469,8 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
   return {
     currency: challenge.currency === 'bucks' ? 'bucks' : 'coins',
     buy_in: Math.max(Number(challenge.buy_in_amount) || 0, 0),
-    host_budget: Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0),
+    host_budget: Math.max(Number(challenge.prize_pool ?? challenge.creator_contribution) || 0, 0),
+    guarantee_enabled: Math.max(Number(challenge.host_budget) || 0, 0) > 0,
     type: type.value,
     title: challenge.title,
     description: challenge.description ?? '',

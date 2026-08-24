@@ -13,7 +13,9 @@ import {
   armingCountdownLabel,
   isOfficialJoinable,
   officialContestantsNeeded,
+  officialGuaranteeAmount,
   officialStartNeededLabel,
+  showsGuaranteedPrize,
 } from '@/lib/officialSeries';
 import { THEME } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -21,7 +23,7 @@ import type { ChallengeWithStats } from '@/lib/types';
 export function officialGuarantee(
   challenge: Pick<ChallengeWithStats, 'host_budget' | 'creator_contribution'>,
 ): number {
-  return Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0);
+  return officialGuaranteeAmount(challenge);
 }
 
 export function OfficialMoneyBoard({
@@ -44,6 +46,7 @@ export function OfficialMoneyBoard({
   }, [filling, challenge.status]);
 
   const guarantee = officialGuarantee(challenge);
+  const showGuarantee = showsGuaranteedPrize(challenge);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const joined = Math.max(Number(challenge.participant_count) || 0, 0);
@@ -75,11 +78,14 @@ export function OfficialMoneyBoard({
                   amount={buyIn}
                   currency={challenge.currency}
                   textClassName="text-[13px] font-extrabold text-charcoal"
+                  labeled
                 />
               }
               note={entryFieldNote(challenge)}
             />
-            <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
+            {showGuarantee ? (
+              <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
+            ) : null}
             <Stat label={copy('board.pot')} value={cashPrizeLabel(pot)} note={prizeFieldNote(challenge)} />
           </View>
           {startLine ? (
@@ -103,7 +109,9 @@ export function OfficialMoneyBoard({
           <Stat label={copy('board.joined')} value={String(joined)} />
           <Stat label={copy('board.finished')} value={String(Math.max(finished, 0))} />
           <Stat label={copy('board.pot')} value={cashPrizeLabel(pot)} note={prizeFieldNote(challenge)} />
-          <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
+          {showGuarantee ? (
+            <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
+          ) : null}
         </View>
       )}
     </View>

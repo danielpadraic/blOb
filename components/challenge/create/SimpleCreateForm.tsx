@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
@@ -385,6 +385,31 @@ export function SimpleCreateForm() {
                 />
               </View>
               <AppText className="text-[13px] leading-5 text-muted">{copy('create.realMoneyFund')}</AppText>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: draft.guarantee_enabled === true }}
+                accessibilityLabel={copy('create.guaranteePrize')}
+                onPress={() => patch({ guarantee_enabled: draft.guarantee_enabled !== true })}
+                className="flex-row items-center justify-between"
+                style={{ minHeight: 44 }}>
+                <View className="mr-3 flex-1">
+                  <AppText className="text-sm font-semibold text-charcoal">
+                    {copy('create.guaranteePrize')}
+                  </AppText>
+                  <AppText className="mt-0.5 text-[13px] leading-5 text-muted">
+                    {draft.privacy_mode === 'private_corporate'
+                      ? 'Off for Private Corporate unless you turn it on.'
+                      : copy('create.guaranteePrizeHelp')}
+                  </AppText>
+                </View>
+                <Switch
+                  value={draft.guarantee_enabled === true}
+                  onValueChange={(guarantee_enabled) => patch({ guarantee_enabled })}
+                  trackColor={{ true: THEME.accent, false: THEME.border }}
+                  thumbColor={THEME.surface}
+                  ios_backgroundColor={THEME.border}
+                />
+              </Pressable>
               {poolShortfall > 0 ? (
                 <View className="gap-2">
                   <AppText className="text-sm text-coral-dark">
@@ -759,6 +784,8 @@ export function SimpleCreateForm() {
               patch({
                 privacy_mode: next.privacy_mode,
                 visibility: next.visibility === 'private' ? 'invite' : next.visibility,
+                guarantee_enabled:
+                  next.privacy_mode === 'private_corporate' ? false : draft.guarantee_enabled !== false,
                 friends_of_friends:
                   next.privacy_mode === 'private_corporate'
                     ? false

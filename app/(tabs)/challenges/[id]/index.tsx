@@ -696,7 +696,7 @@ export default function ChallengeDetailScreen() {
                   amount={buyInAmount}
                   currency={challenge.currency}
                   size={18}
-                  freeLabel={copy('create.freeEntry')}
+                  freeLabel={copy('create.free')}
                   textClassName="text-xl font-bold text-charcoal"
                 />
               </View>
