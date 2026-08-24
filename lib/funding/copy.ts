@@ -66,6 +66,8 @@ export function ledgerReceiptLabel(entryType: string | null | undefined): string
       return FUNDING_COPY.hostContribution;
     case 'distribute_win':
       return 'Prize';
+    case 'top_up':
+      return 'Added $';
     default:
       return 'Wallet';
   }

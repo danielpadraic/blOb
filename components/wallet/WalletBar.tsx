@@ -9,7 +9,9 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { supabase } from '@/lib/supabase';
 import { copy } from '@/lib/copy';
+import { formatCash } from '@/lib/currency';
 import { isOfficialAccount } from '@/lib/official';
+import { countUpValues } from '@/lib/topup';
 import { THEME } from '@/lib/theme';
 import { formatCoins } from '@/utils/format';
 
@@ -19,73 +21,106 @@ export function WalletBar() {
   const queryClient = useQueryClient();
   const official = isOfficialAccount(profile);
   const coins = Number(profile?.coins ?? profile?.credits ?? 0);
-  const lastShown = Number(profile?.last_shown_coin_balance ?? coins);
+  const bucks = Number(profile?.bucks ?? 0);
+  const lastShownCoins = Number(profile?.last_shown_coin_balance ?? coins);
+  const lastShownBucks = Number(profile?.last_shown_bucks_balance ?? bucks);
   const [displayCoins, setDisplayCoins] = useState(coins);
-  const animating = useRef(false);
-  const shownAt = useRef<number | null>(null);
+  const [displayBucks, setDisplayBucks] = useState(bucks);
+  const animatingCoins = useRef(false);
+  const animatingBucks = useRef(false);
+  const shownCoins = useRef<number | null>(null);
+  const shownBucks = useRef<number | null>(null);
 
   useEffect(() => {
     if (!profile || official) {
       return;
     }
-    if (shownAt.current === coins) {
+    if (shownCoins.current === coins || coins <= lastShownCoins) {
       setDisplayCoins(coins);
+      shownCoins.current = coins;
+      if (coins < lastShownCoins) {
+        void markCoinsShown();
+      }
       return;
     }
-    if (coins < lastShown) {
-      setDisplayCoins(coins);
-      shownAt.current = coins;
-      void markShown();
+    if (!animatingCoins.current) {
+      void runCount(
+        lastShownCoins,
+        coins,
+        setDisplayCoins,
+        animatingCoins,
+        shownCoins,
+        markCoinsShown,
+      );
+    }
+  }, [coins, lastShownCoins, official, profile?.id]);
+
+  useEffect(() => {
+    if (!profile || official) {
       return;
     }
-    if (coins === lastShown) {
-      setDisplayCoins(coins);
-      shownAt.current = coins;
+    if (shownBucks.current === bucks || bucks <= lastShownBucks) {
+      setDisplayBucks(bucks);
+      shownBucks.current = bucks;
+      if (bucks < lastShownBucks) {
+        void markBucksShown();
+      }
       return;
     }
-    if (coins > lastShown && !animating.current) {
-      void countUp(lastShown, coins);
+    if (!animatingBucks.current) {
+      void runCount(
+        lastShownBucks,
+        bucks,
+        setDisplayBucks,
+        animatingBucks,
+        shownBucks,
+        markBucksShown,
+      );
     }
-  }, [coins, lastShown, official, profile?.id]);
+  }, [bucks, lastShownBucks, official, profile?.id]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (official) {
+      if (official || state !== 'active') {
         return;
       }
-      if (state === 'active' && coins > lastShown && !animating.current) {
-        void countUp(lastShown, coins);
+      if (coins > lastShownCoins && !animatingCoins.current) {
+        void runCount(
+          lastShownCoins,
+          coins,
+          setDisplayCoins,
+          animatingCoins,
+          shownCoins,
+          markCoinsShown,
+        );
+      }
+      if (bucks > lastShownBucks && !animatingBucks.current) {
+        void runCount(
+          lastShownBucks,
+          bucks,
+          setDisplayBucks,
+          animatingBucks,
+          shownBucks,
+          markBucksShown,
+        );
       }
     });
     return () => sub.remove();
-  }, [coins, lastShown, official]);
+  }, [bucks, coins, lastShownBucks, lastShownCoins, official]);
 
-  async function countUp(from: number, to: number) {
-    animating.current = true;
-    const start = Math.max(from, 0);
-    const end = to;
-    const steps = Math.min(24, Math.max(8, end - start));
-    const step = (end - start) / steps;
-    for (let i = 1; i <= steps; i += 1) {
-      setDisplayCoins(Math.round(start + step * i));
-      await sleep(24);
-    }
-    setDisplayCoins(end);
-    animating.current = false;
-    shownAt.current = end;
-    await markShown();
+  async function markCoinsShown() {
+    await supabase.rpc('mark_coin_balance_shown');
+    void queryClient.invalidateQueries({ queryKey: ['profile'] });
   }
 
-  async function markShown() {
-    await supabase.rpc('mark_coin_balance_shown');
+  async function markBucksShown() {
+    await supabase.rpc('mark_bucks_balance_shown');
     void queryClient.invalidateQueries({ queryKey: ['profile'] });
   }
 
   if (!profile || !wallet) {
     return null;
   }
-
-  const bucks = Number(profile.bucks ?? 0);
 
   return (
     <Pressable
@@ -114,12 +149,31 @@ export function WalletBar() {
       <TourAnchor id="tour-money">
         <View className="flex-row items-center" style={{ minHeight: 28 }}>
           <AppText className="ml-1.5 text-[12px] font-extrabold" style={{ color: '#1B7A4A' }}>
-            {`$${Number(bucks).toFixed(2)}`}
+            {formatCash(displayBucks)}
           </AppText>
         </View>
       </TourAnchor>
     </Pressable>
   );
+}
+
+async function runCount(
+  from: number,
+  to: number,
+  setValue: (value: number) => void,
+  animating: { current: boolean },
+  shownAt: { current: number | null },
+  markShown: () => Promise<void>,
+) {
+  animating.current = true;
+  for (const value of countUpValues(from, to)) {
+    setValue(value);
+    await sleep(24);
+  }
+  setValue(to);
+  animating.current = false;
+  shownAt.current = to;
+  await markShown();
 }
 
 function sleep(ms: number) {

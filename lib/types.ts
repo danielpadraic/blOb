@@ -259,6 +259,7 @@ export interface Profile {
   coins: number;
   bucks: number;
   last_shown_coin_balance?: number | null;
+  last_shown_bucks_balance?: number | null;
   timezone?: string | null;
   motivation_tone?: 'gentle' | 'neutral' | 'honest' | null;
   encouragement_tone?: 'gentle' | 'neutral' | 'honest' | null;
@@ -1359,6 +1360,10 @@ export type Database = {
         Returns: undefined;
       };
       mark_coin_balance_shown: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      mark_bucks_balance_shown: {
         Args: Record<string, never>;
         Returns: number;
       };

@@ -38,6 +38,7 @@ import {
   formatFundingAmount,
   fundingFromChallenge,
   fundingReceiptLines,
+  joinShortfall,
   participateLabel,
 } from '@/lib/funding';
 import { topUpChallengePrizeWithClient } from '@/lib/funding/rpc';
@@ -50,6 +51,8 @@ import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { WalletBar } from '~/components/wallet-bar';
+import { WalletSheetHost } from '~/components/wallet-sheet';
+import { WalletTopUpHost, requestWebTopUp } from '~/components/wallet-top-up';
 import { resolveProofUrl, uploadWebProof } from '~/lib/storage';
 import { supabase } from '~/lib/supabase';
 
@@ -177,16 +180,22 @@ export function BlobApp() {
   const challengeId = route[0] === 'challenges' ? route[1] : undefined;
   const checkin = route[2] === 'check-in' || route[2] === 'check-in';
 
+  let screen = <HomeScreen userId={session.user.id} />;
   if (challengeId === 'create') {
-    return <CreateScreen userId={session.user.id} />;
+    screen = <CreateScreen userId={session.user.id} />;
+  } else if (challengeId && checkin) {
+    screen = <CheckInScreen challengeId={challengeId} userId={session.user.id} />;
+  } else if (challengeId) {
+    screen = <ChallengeScreen challengeId={challengeId} userId={session.user.id} />;
   }
-  if (challengeId && checkin) {
-    return <CheckInScreen challengeId={challengeId} userId={session.user.id} />;
-  }
-  if (challengeId) {
-    return <ChallengeScreen challengeId={challengeId} userId={session.user.id} />;
-  }
-  return <HomeScreen userId={session.user.id} />;
+
+  return (
+    <>
+      {screen}
+      <WalletSheetHost userId={session.user.id} />
+      <WalletTopUpHost />
+    </>
+  );
 }
 
 function LoginScreen() {
@@ -276,6 +285,15 @@ function CreateScreen({ userId }: { userId: string }) {
       },
     });
     if (publishError) {
+      const raw = publishError.message.toLowerCase();
+      if (raw.includes('insufficient')) {
+        const profile = await supabase.from('profiles').select('bucks').eq('id', userId).maybeSingle();
+        const have = Number((profile.data as { bucks?: number } | null)?.bucks ?? 0);
+        const need = Math.max(entryFee, 0) + Math.max(hostAdd, 0);
+        requestWebTopUp({ amount: Math.max(joinShortfall(have, need), 1), returnCreate: true });
+        setBusy(false);
+        return;
+      }
       setError(publishError.message);
       setBusy(false);
       return;
@@ -443,6 +461,7 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
   const [ledger, setLedger] = useState<Array<{ id: string; amount: number; created_at: string; challenge_id: string | null }>>([]);
   const [caughtUpIds, setCaughtUpIds] = useState<string[]>([]);
   const [hostAdd, setHostAdd] = useState(1);
+  const [walletBucks, setWalletBucks] = useState(0);
 
   async function load() {
     const ch = await supabase
@@ -511,6 +530,8 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
         ),
       ],
     );
+    const wallet = await supabase.from('profiles').select('bucks').eq('id', userId).maybeSingle();
+    setWalletBucks(Number((wallet.data as { bucks?: number } | null)?.bucks ?? 0));
     const receipt = await getChallengeSettlementWithClient(supabase, challengeId);
     setSettlement(receipt);
     const history = await supabase
@@ -577,11 +598,26 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
   }, [challengeId, userId]);
 
   async function join() {
+    const entry = Number(challenge?.buy_in_amount) || 0;
+    const shortfall =
+      String(challenge?.currency) === 'bucks' ? joinShortfall(walletBucks, entry) : 0;
+    if (shortfall > 0) {
+      requestWebTopUp({ amount: shortfall, returnChallengeId: challengeId });
+      return;
+    }
     setBusy(true);
     setError(null);
     const { error: joinError } = await supabase.rpc('join_challenge', { p_challenge_id: challengeId });
     if (joinError) {
-      setError(joinError.message);
+      const raw = joinError.message.toLowerCase();
+      if (raw.includes('insufficient')) {
+        requestWebTopUp({
+          amount: Math.max(joinShortfall(walletBucks, entry), 1),
+          returnChallengeId: challengeId,
+        });
+      } else {
+        setError(joinError.message);
+      }
     } else {
       await load();
     }
@@ -672,6 +708,14 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
                     disabled={busy}
                     onClick={() => {
                       void (async () => {
+                        const need =
+                          String(challenge.currency) === 'bucks'
+                            ? joinShortfall(walletBucks, hostAdd)
+                            : 0;
+                        if (need > 0) {
+                          requestWebTopUp({ amount: need, returnChallengeId: challengeId });
+                          return;
+                        }
                         setBusy(true);
                         setError(null);
                         try {
@@ -681,7 +725,15 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
                           });
                           await load();
                         } catch (err) {
-                          setError(err instanceof Error ? err.message : FUNDING_COPY.insufficient);
+                          const raw = err instanceof Error ? err.message.toLowerCase() : '';
+                          if (raw.includes('insufficient')) {
+                            requestWebTopUp({
+                              amount: Math.max(joinShortfall(walletBucks, hostAdd), 1),
+                              returnChallengeId: challengeId,
+                            });
+                          } else {
+                            setError(err instanceof Error ? err.message : FUNDING_COPY.insufficient);
+                          }
                         }
                         setBusy(false);
                       })();

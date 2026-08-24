@@ -1,74 +1,85 @@
 import { useState } from 'react';
 import { View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
-import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
-import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
 import { formatCash } from '@/lib/currency';
 import { challengeDetailHref } from '@/lib/routes';
-import { startWebCardTopUp } from '@/lib/topUp';
+import { startCardTopUp } from '@/lib/topUp';
+import { TOPUP_COPY, classifyTopUpError, quoteTopUp, topUpErrorCopy } from '@/lib/topup';
 import { THEME } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
 
 export function TopUpSheet() {
   const router = useRouter();
-  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { refetch } = useMyProfile();
   const { topUp, closeTopUp } = useWallet();
-  const [name, setName] = useState('');
-  const [number, setNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvc, setCvc] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [kind, setKind] = useState<'error' | 'pending' | 'success' | null>(null);
 
   if (!topUp) {
     return null;
   }
 
-  const amountLabel = formatCash(topUp.amount);
+  const quote = quoteTopUp(topUp.amount);
+  const amountLabel = formatCash(quote?.creditAmount ?? topUp.amount);
 
-  async function onPay() {
-    if (!user || !topUp) {
+  async function finish(next?: 'create' | string) {
+    await refetch();
+    void queryClient.invalidateQueries({ queryKey: ['profile'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet-ledger'] });
+    closeTopUp();
+    if (next === 'create' || topUp.returnCreate) {
       return;
     }
-    const digits = number.replace(/\D/g, '');
-    if (name.trim().length < 2 || digits.length < 13 || expiry.replace(/\D/g, '').length < 4 || cvc.length < 3) {
-      setError('Enter a valid card to add this amount.');
+    if (typeof next === 'string' && next) {
+      router.replace(challengeDetailHref(next, 'feed'));
+    }
+  }
+
+  async function onPay() {
+    if (!topUp || !quote) {
+      setKind('error');
+      setMessage(TOPUP_COPY.amountLimit);
       return;
     }
     setBusy(true);
-    setError(null);
+    setMessage(null);
+    setKind(null);
     try {
-      const result = await startWebCardTopUp({
-        amount: topUp.amount,
+      const result = await startCardTopUp({
+        amount: quote.creditAmount,
         challengeId: topUp.returnChallengeId,
         returnCreate: topUp.returnCreate,
-        userId: user.id,
       });
-      if (result === 'cancel') {
+      if (result.status === 'canceled') {
+        setKind('error');
+        setMessage(TOPUP_COPY.canceled);
         return;
       }
-      if (result === 'unavailable') {
-        setError('Card top-up isn’t available in this build. Use the web card path.');
+      if (result.status === 'failed') {
+        setKind('error');
+        setMessage(topUpErrorCopy(result.code));
         return;
       }
-      await refetch();
-      const challengeId = topUp.returnChallengeId;
-      closeTopUp();
-      if (topUp.returnCreate) {
+      if (result.status === 'pending') {
+        setKind('pending');
+        setMessage(TOPUP_COPY.processing);
+        await refetch();
         return;
       }
-      if (challengeId) {
-        router.replace(challengeDetailHref(challengeId, 'feed'));
-      }
+      setKind('success');
+      setMessage(TOPUP_COPY.added(result.amount || quote.creditAmount));
+      await finish(topUp.returnCreate ? 'create' : topUp.returnChallengeId);
     } catch (err) {
-      setError(getErrorMessage(err));
+      setKind('error');
+      setMessage(topUpErrorCopy(classifyTopUpError(err)));
     } finally {
       setBusy(false);
     }
@@ -85,47 +96,27 @@ export function TopUpSheet() {
         }}>
         <View className="mb-3 items-center">
           <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
-          <AppText className="mt-3 text-lg font-bold text-charcoal">Add {amountLabel}</AppText>
+          <AppText className="mt-3 text-lg font-bold text-charcoal">{TOPUP_COPY.title(quote?.creditAmount ?? topUp.amount)}</AppText>
           <AppText className="mt-1 text-center text-[13px] leading-5 text-muted">
             {topUp.returnCreate
-              ? `Pay with card. This adds ${amountLabel} to your wallet, then brings you back to Create.`
-              : `Pay with card. This adds ${amountLabel} to your wallet, then brings you back to the challenge.`}
+              ? TOPUP_COPY.bodyCreate(quote?.creditAmount ?? topUp.amount)
+              : topUp.returnChallengeId
+                ? TOPUP_COPY.bodyChallenge(quote?.creditAmount ?? topUp.amount)
+                : TOPUP_COPY.body(quote?.creditAmount ?? topUp.amount)}
           </AppText>
+          <AppText className="mt-2 text-center text-[13px] leading-5 text-muted">{TOPUP_COPY.feeNone}</AppText>
         </View>
         <View className="gap-3">
-          <Input label="Name on card" value={name} onChangeText={setName} autoCapitalize="words" />
-          <Input
-            label="Card number"
-            value={number}
-            onChangeText={setNumber}
-            keyboardType="number-pad"
-            placeholder="ACCT-000015"
-          />
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Input
-                label="Expiry"
-                value={expiry}
-                onChangeText={setExpiry}
-                placeholder="MM/YY"
-                keyboardType="number-pad"
-              />
-            </View>
-            <View className="flex-1">
-              <Input
-                label="CVC"
-                value={cvc}
-                onChangeText={setCvc}
-                keyboardType="number-pad"
-                secureTextEntry
-              />
-            </View>
-          </View>
-          {error ? (
-            <AppText className="text-[13px] leading-5 text-coral-dark">{error}</AppText>
+          {message ? (
+            <AppText
+              className="text-[13px] leading-5"
+              style={{ color: kind === 'error' ? '#9A3B3B' : THEME.ink }}>
+              {message}
+            </AppText>
           ) : null}
-          <Button title={`Pay ${amountLabel}`} size="lg" loading={busy} onPress={() => void onPay()} />
-          <Button title="Not now" variant="ghost" onPress={closeTopUp} disabled={busy} />
+          <Button title={TOPUP_COPY.pay(quote?.chargeAmount ?? topUp.amount)} size="lg" loading={busy} onPress={() => void onPay()} />
+          <Button title={TOPUP_COPY.notNow} variant="ghost" onPress={closeTopUp} disabled={busy} />
+          <AppText className="text-center text-[12px] text-muted">{amountLabel} is added to your $ balance.</AppText>
         </View>
       </View>
     </ChromeOverlay>
