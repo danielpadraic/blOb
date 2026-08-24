@@ -11,6 +11,7 @@ import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
+import { HostPrizeTopUp } from '@/components/challenge/HostPrizeTopUp';
 import { FieldNoteLabel, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
@@ -699,6 +700,9 @@ export default function ChallengeDetailScreen() {
               targetCount={target}
               currency={challenge.currency}
               official={challenge.is_official}
+              entryFeePaid={participation?.buy_in_paid ?? challenge.buy_in_amount}
+              hostContribution={challenge.creator_contribution}
+              prizePool={challenge.prize_pool}
             />
           </View>
         ) : null}
@@ -905,13 +909,18 @@ export default function ChallengeDetailScreen() {
           </FieldNoteLabel>
           {prizeForfeited ? (
             <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
-              Stakes forfeited, no refund.
+              Nobody remaining. The prize is forfeited. No refunds.
             </AppText>
           ) : (
             <View className="mt-2">
               <ChallengePrizeLine challenge={challenge} />
             </View>
           )}
+          {isHost ? (
+            <View className="mt-4">
+              <HostPrizeTopUp challenge={challenge} isHost={isHost} />
+            </View>
+          ) : null}
         </Card>
         )}
 

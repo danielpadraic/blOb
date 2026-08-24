@@ -180,6 +180,12 @@ export function ChallengeBoard({
           joined={joined}
           currency={challenge.currency}
           official={Boolean(challenge.is_official)}
+          entryFeePaid={
+            (roster ?? []).find((row) => row.user_id === viewerId)?.buy_in_paid ??
+            challenge.buy_in_amount
+          }
+          hostContribution={challenge.creator_contribution}
+          prizePool={challenge.prize_pool}
         />
       ) : null}
     </Card>

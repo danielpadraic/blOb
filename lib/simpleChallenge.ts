@@ -365,8 +365,10 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const bucks = draft.currency === 'bucks';
   const corporate = draft.privacy_mode === 'private_corporate';
   const invite = corporate || draft.visibility === 'invite';
-  const buyIn = bucks ? 0 : Math.max(Math.floor(draft.buy_in) || 0, 0);
-  const hostBudget = bucks ? Math.max(Math.floor(draft.host_budget) || 0, 0) : 0;
+  const buyIn = corporate ? 0 : Math.max(Number(draft.buy_in) || 0, 0);
+  const hostContribution = Math.max(Number(draft.host_budget) || 0, 0);
+  const fundingModel =
+    buyIn > 0 && hostContribution > 0 ? 'hybrid' : hostContribution > 0 ? 'creator' : 'participants';
   const extra_tasks = filledExtraTasks(draft);
   const proofs = (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
     ensureProofSentence(item, item.minutes ?? DEFAULT_MIN_MINUTES),
@@ -410,8 +412,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     challenge_proofs: proofs,
     tasks: DEFAULT_CREATE_VALUES.tasks,
     prize_structure: 'equal_split',
-    funding_model: bucks ? 'creator' : 'participants',
-    creator_contribution: String(hostBudget),
+    funding_model: fundingModel,
+    creator_contribution: String(hostContribution),
     participant_cap: 'unlimited',
     max_participants: '',
     min_participants: String(Math.max(Number(draft.min_participants) || 2, 2)),
@@ -419,8 +421,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     proof_review: 'auto',
     proof_type: proofTypeFromMethod(firstProofMethod(proofs)) as CreateChallengeValues['proof_type'],
     task: draft.task.trim(),
-    host_funded: bucks,
-    host_budget: String((draft.guarantee_enabled ?? !corporate) ? hostBudget : 0),
+    host_funded: hostContribution > 0,
+    host_budget: String((draft.guarantee_enabled ?? false) ? hostContribution : 0),
     guarantee_enabled: draft.guarantee_enabled ?? !corporate,
     required_checkins: String(required),
     payout_mode: 'even_split_remaining',
@@ -469,7 +471,7 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
   return {
     currency: challenge.currency === 'bucks' ? 'bucks' : 'coins',
     buy_in: Math.max(Number(challenge.buy_in_amount) || 0, 0),
-    host_budget: Math.max(Number(challenge.prize_pool ?? challenge.creator_contribution) || 0, 0),
+    host_budget: Math.max(Number(challenge.creator_contribution) || 0, 0),
     guarantee_enabled: Math.max(Number(challenge.host_budget) || 0, 0) > 0,
     type: type.value,
     title: challenge.title,

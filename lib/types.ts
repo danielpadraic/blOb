@@ -1428,6 +1428,26 @@ export type Database = {
         Args: { p_payload: Record<string, unknown> };
         Returns: { ok: boolean; challenge_id: string; prize_pool: number };
       };
+      top_up_challenge_prize: {
+        Args: { p_challenge_id: string; p_amount: number; p_request_id?: string | null };
+        Returns: {
+          ok: boolean;
+          challenge_id: string;
+          prize_pool: number;
+          host_contribution: number;
+          already_applied?: boolean;
+        };
+      };
+      get_challenge_funding: {
+        Args: { p_challenge_id: string };
+        Returns: {
+          entry_fee: number;
+          host_contribution: number;
+          entry_fees_collected: number;
+          prize_total: number;
+          currency: string;
+        };
+      };
       refund_pre_start: {
         Args: { p_challenge_id: string; p_user_id?: string };
         Returns: { ok: boolean; already_refunded?: boolean; refunded?: number };

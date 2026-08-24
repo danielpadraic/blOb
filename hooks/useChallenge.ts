@@ -65,7 +65,7 @@ import type {
   ChallengeWithStats,
   Profile,
 } from '@/lib/types';
-import { leaveChallenge } from '@/lib/api/challenges';
+import { leaveChallenge, topUpChallengePrize } from '@/lib/api/challenges';
 import { cancelProviderRef, getPaymentsProvider } from '@/services/payments';
 import { getErrorMessage } from '@/utils/errors';
 import { challengeCurrency, formatCash, formatWallet, walletBalance } from '@/lib/currency';
@@ -701,6 +701,26 @@ export function useLeaveChallenge() {
   });
 }
 
+export function useTopUpChallengePrize() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (input: { challengeId: string; amount: number }) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      return topUpChallengePrize(input.challengeId, input.amount);
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['challenge', input.challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet-ledger'] });
+      void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+    },
+  });
+}
+
 export function useCreateChallenge() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -752,7 +772,7 @@ export function useCreateChallenge() {
           throw new Error(`Add ${formatCash(needed - currentWallet)}`);
         }
         throw new Error(
-          `You need ${formatWallet(needed, lane.currency)} to fund this pool. You have ${formatWallet(currentWallet, lane.currency)}.`,
+          `You need ${formatWallet(needed, lane.currency)} to fund this prize. You have ${formatWallet(currentWallet, lane.currency)}.`,
         );
       }
 
@@ -803,7 +823,7 @@ export function useCreateChallenge() {
         rules_list: rulesStructured,
         draft_id: values.draft_id ?? null,
         min_participants: Math.max(Number(values.min_participants) || 2, 2),
-        host_funded: values.host_funded === true || lane.currency === 'bucks',
+        host_funded: values.host_funded === true || contribution > 0,
         host_budget:
           (values.guarantee_enabled ??
             asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane) !==

@@ -12,7 +12,7 @@ type JoinCtaButtonProps = {
   amount: number;
   loading?: boolean;
   disabled?: boolean;
-  verb?: 'Join' | 'Pay';
+  verb?: 'Join' | 'Pay' | 'Participate';
   size?: 'md' | 'lg';
   onPress: () => void;
 };
@@ -23,7 +23,7 @@ export function JoinCtaButton({
   amount,
   loading = false,
   disabled = false,
-  verb = 'Join',
+  verb = 'Participate',
   size = 'md',
   onPress,
 }: JoinCtaButtonProps) {

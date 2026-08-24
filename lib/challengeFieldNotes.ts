@@ -48,7 +48,7 @@ export function prizeFieldNote(challenge: {
   buy_in_amount?: number | null;
   currency?: string | null;
 }): FieldNoteKey {
-  if (challenge.host_funded || (isBucksChallenge(challenge) && isFreeEntry(challenge.buy_in_amount))) {
+  if (isFreeEntry(challenge.buy_in_amount) && (challenge.host_funded || isBucksChallenge(challenge))) {
     return 'potHost';
   }
   return 'pot';

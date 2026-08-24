@@ -32,7 +32,10 @@ const RPC_MESSAGES: Record<string, string> = {
   MAX_PARTICIPANTS_MIN_1: 'Max competitors must be at least 1.',
   LMS_REQUIRES_CONSISTENCY: 'Last Man Standing only works with a consistency challenge.',
   FULL_LOBBY_REQUIRES_MAX: 'A full-lobby start needs a max number of competitors.',
-  INSUFFICIENT_FUNDS: 'Not enough in your wallet to join.',
+  INSUFFICIENT_FUNDS: 'Not enough in your wallet to participate.',
+  NOT_HOST: 'Only the host can add to the prize.',
+  INVALID_AMOUNT: 'Enter an amount to add.',
+  LEAVE_NOT_ALLOWED: 'You can’t leave after this Skill Tournament is live.',
   PROFILE_NOT_FOUND: 'Finish setting up your profile first.',
   NEGATIVE_AMOUNT: 'Amounts can’t be negative.',
   LANE_REQUIRED: 'Choose Coin Challenge or Private Challenge.',
@@ -250,6 +253,23 @@ export async function closeChallengeForJudging(
 export async function distributeChallenge(id: string): Promise<DistributeChallengeResult> {
   const { data, error } = await supabase.rpc('distribute_challenge', { p_challenge_id: id });
   return unwrap<DistributeChallengeResult>(data, error);
+}
+
+export async function topUpChallengePrize(
+  challengeId: string,
+  amount: number,
+  requestId?: string | null,
+): Promise<{ ok: boolean; challenge_id: string; prize_pool: number; host_contribution: number }> {
+  const { data, error } = await supabase.rpc('top_up_challenge_prize', {
+    p_challenge_id: challengeId,
+    p_amount: amount,
+    p_request_id: requestId ?? null,
+  });
+  if (error) {
+    logPostgrestError('top_up_challenge_prize', error);
+    throw new Error(rpcMessage(error));
+  }
+  return unwrap(data, error);
 }
 
 export async function cancelChallenge(id: string): Promise<{ ok: boolean }> {

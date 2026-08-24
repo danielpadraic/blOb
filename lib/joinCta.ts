@@ -1,9 +1,9 @@
-import { formatCash, isBucksChallenge } from '@/lib/currency';
+import { isBucksChallenge } from '@/lib/currency';
+import { participateLabel, topUpToParticipateLabel } from '@/lib/funding/copy';
+import { joinShortfall as fundingShortfall } from '@/lib/funding/model';
 
 export function joinShortfall(wallet: number, buyIn: number): number {
-  const need = Math.max(Number(buyIn) || 0, 0);
-  const have = Math.max(Number(wallet) || 0, 0);
-  return Math.max(0, Number((need - have).toFixed(2)));
+  return fundingShortfall(wallet, buyIn);
 }
 
 export function bucksJoinCta(input: {
@@ -18,11 +18,7 @@ export function bucksJoinCta(input: {
   return {
     needsTopUp: cashBuyIn && buyIn > 0 && input.hasProfile && shortfall > 0,
     shortfall,
-    joinLabel: buyIn > 0
-      ? cashBuyIn
-        ? `Join ${formatCash(buyIn)}`
-        : 'Join'
-      : 'Join free',
-    topUpLabel: `Add ${formatCash(shortfall > 0 ? shortfall : buyIn)} to join`,
+    joinLabel: participateLabel({ amount: buyIn, currency: input.currency }),
+    topUpLabel: topUpToParticipateLabel(shortfall > 0 ? shortfall : buyIn),
   };
 }

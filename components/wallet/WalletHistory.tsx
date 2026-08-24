@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { challengeDetailHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
+import { ledgerReceiptLabel } from '@/lib/funding';
 import { formatDate } from '@/utils/format';
 
 type LedgerRow = {
@@ -69,7 +70,7 @@ export function WalletHistory() {
             <Card className="flex-row items-center gap-3 py-3">
               <View className="flex-1">
                 <AppText className="text-[14px] font-bold text-charcoal">
-                  {row.entry_type === 'distribute_win' ? 'Challenge payout' : row.reason || 'Wallet'}
+                  {ledgerReceiptLabel(row.entry_type)}
                 </AppText>
                 <AppText className="text-[12px] text-muted">{formatDate(row.created_at, 'MMM d')}</AppText>
               </View>

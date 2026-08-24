@@ -2597,7 +2597,7 @@ function EntrySlide({
             onChangeText={onChange}
             onBlur={onBlur}
             error={errors.buy_in?.message}
-            hint="Each competitor pays this from their Coin balance when they enter. Not refundable after start."
+            hint="Each person pays this to participate. It goes into the prize. Leave before live and it comes back in full."
           />
         )}
       />

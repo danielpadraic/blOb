@@ -31,6 +31,16 @@ import {
 import { lifecycleLabel, shouldAutoSettle } from '@/lib/settlement/lifecycle';
 import { FORFEIT_RECEIPT, formatSettlementAmount, receiptHeadline } from '@/lib/settlement/receipts';
 import { getChallengeSettlementWithClient, trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
+import {
+  FUNDING_COPY,
+  canHostTopUp,
+  canRefundEntryFee,
+  formatFundingAmount,
+  fundingFromChallenge,
+  fundingReceiptLines,
+  participateLabel,
+} from '@/lib/funding';
+import { topUpChallengePrizeWithClient } from '@/lib/funding/rpc';
 import type { ChallengeSettlementView } from '@/lib/types';
 import { Bob } from '~/components/bob';
 import { ChallengeBoard } from '~/components/challenge-board';
@@ -69,6 +79,8 @@ type ChallengeRow = {
   currency?: string | null;
   distributed_at?: string | null;
   is_unlimited?: boolean | null;
+  created_by?: string | null;
+  creator_contribution?: number | null;
 };
 
 type ParticipantRow = {
@@ -77,6 +89,7 @@ type ParticipantRow = {
   status: string | null;
   points?: number | null;
   eliminated_at?: string | null;
+  buy_in_paid?: number | null;
   display_name?: string | null;
   username?: string | null;
 };
@@ -164,6 +177,9 @@ export function BlobApp() {
   const challengeId = route[0] === 'challenges' ? route[1] : undefined;
   const checkin = route[2] === 'check-in' || route[2] === 'check-in';
 
+  if (challengeId === 'create') {
+    return <CreateScreen userId={session.user.id} />;
+  }
   if (challengeId && checkin) {
     return <CheckInScreen challengeId={challengeId} userId={session.user.id} />;
   }
@@ -215,6 +231,99 @@ function LoginScreen() {
   );
 }
 
+function CreateScreen({ userId }: { userId: string }) {
+  const [title, setTitle] = useState('Morning miles');
+  const [entryFee, setEntryFee] = useState(5);
+  const [hostAdd, setHostAdd] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function publish() {
+    setBusy(true);
+    setError(null);
+    const start = new Date();
+    start.setDate(start.getDate() + 1);
+    start.setHours(9, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const { data, error: publishError } = await supabase.rpc('publish_challenge', {
+      p_payload: {
+        title: title.trim() || 'Skill Tournament',
+        currency: 'bucks',
+        buy_in_amount: Math.max(entryFee, 0),
+        creator_contribution: Math.max(hostAdd, 0),
+        host_budget: 0,
+        host_funded: hostAdd > 0,
+        funding_model: hostAdd > 0 && entryFee > 0 ? 'hybrid' : hostAdd > 0 ? 'creator' : 'participants',
+        prize_structure: 'equal_split',
+        payout_mode: 'even_split_remaining',
+        format: 'consistency',
+        challenge_type: 'consistency',
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+        end_mode: 'length',
+        length_value: 7,
+        length_unit: 'days',
+        required_checkins: 7,
+        target_count: 7,
+        days_required: 7,
+        frequency: 'daily',
+        min_participants: 2,
+        creator_participating: true,
+        task: 'Run 1 mile',
+        proof_type: 'photo',
+        created_by: userId,
+      },
+    });
+    if (publishError) {
+      setError(publishError.message);
+      setBusy(false);
+      return;
+    }
+    const id = String((data as { challenge_id?: string } | null)?.challenge_id ?? '');
+    setBusy(false);
+    if (id) {
+      go(`/challenges/${id}/`);
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
+      <div className="mb-4 flex items-center justify-between">
+        <button type="button" className="min-h-11 text-sm font-bold text-teal" onClick={() => go('/')}>
+          Back
+        </button>
+        <p className="text-[13px] font-bold text-ink">{FUNDING_COPY.createTitle}</p>
+        <span className="min-w-11" />
+      </div>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted">{FUNDING_COPY.entryHelp}</p>
+        <p className="text-sm text-muted">{FUNDING_COPY.prizeHelp}</p>
+        <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
+        <label className="text-sm font-bold text-ink">{FUNDING_COPY.entryFee} $</label>
+        <Input
+          type="number"
+          min={0}
+          value={entryFee}
+          onChange={(event) => setEntryFee(Math.max(Number(event.target.value) || 0, 0))}
+        />
+        <label className="text-sm font-bold text-ink">{FUNDING_COPY.hostContribution} $</label>
+        <Input
+          type="number"
+          min={0}
+          value={hostAdd}
+          onChange={(event) => setHostAdd(Math.max(Number(event.target.value) || 0, 0))}
+        />
+        <p className="text-sm text-muted">{FUNDING_COPY.hostHelp}</p>
+        {error ? <p className="text-sm text-[#9A3B3B]">{error}</p> : null}
+        <Button type="button" disabled={busy} onClick={() => void publish()}>
+          Publish
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function HomeScreen({ userId }: { userId: string }) {
   const [rows, setRows] = useState<ChallengeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -224,7 +333,7 @@ function HomeScreen({ userId }: { userId: string }) {
       const official = await supabase
         .from('challenges')
         .select(
-          'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, ends_at, buy_in_amount, prize_pool, prize_structure, currency, distributed_at',
+          'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, ends_at, buy_in_amount, prize_pool, prize_structure, currency, distributed_at, created_by, creator_contribution',
         )
         .eq('is_official', true)
         .in('status', ['filling', 'arming', 'live', 'upcoming', 'settling', 'settled', 'ended'])
@@ -239,20 +348,33 @@ function HomeScreen({ userId }: { userId: string }) {
         .select('challenge_id')
         .eq('user_id', userId)
         .limit(20);
+      const hosted = await supabase
+        .from('challenges')
+        .select(
+          'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, proofs, days_required, buy_in_amount, prize_pool, currency, created_by, creator_contribution',
+        )
+        .eq('created_by', userId)
+        .eq('is_official', false)
+        .order('created_at', { ascending: false })
+        .limit(12);
       const ids = (mine.data ?? []).map((row) => String((row as { challenge_id: string }).challenge_id));
       let joined: ChallengeRow[] = [];
       if (ids.length) {
         const extra = await supabase
           .from('challenges')
           .select(
-            'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, proofs, days_required',
+            'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, proofs, days_required, buy_in_amount, prize_pool, currency, created_by, creator_contribution',
           )
           .in('id', ids);
         joined = (extra.data ?? []) as ChallengeRow[];
       }
       const seen = new Set<string>();
       setRows(
-        [...((official.data ?? []) as ChallengeRow[]), ...joined].filter((row) => {
+        [
+          ...((hosted.data ?? []) as ChallengeRow[]),
+          ...((official.data ?? []) as ChallengeRow[]),
+          ...joined,
+        ].filter((row) => {
           if (seen.has(row.id)) {
             return false;
           }
@@ -268,6 +390,12 @@ function HomeScreen({ userId }: { userId: string }) {
       <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-ink">Challenges</h1>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="min-h-11 text-sm font-bold text-teal"
+            onClick={() => go('/challenges/create/')}>
+            New
+          </button>
           <WalletBar userId={userId} />
           <button type="button" className="min-h-11 text-sm font-bold text-teal" onClick={() => void supabase.auth.signOut()}>
             Sign out
@@ -281,6 +409,11 @@ function HomeScreen({ userId }: { userId: string }) {
             <Card>
               <p className="text-[15px] font-bold text-ink">{row.title}</p>
               <p className="mt-1 text-sm text-muted">{lifecycleLabel(row.status)}</p>
+              {Number(row.buy_in_amount) > 0 ? (
+                <p className="mt-1 text-sm text-muted">
+                  {FUNDING_COPY.entryFee} {formatFundingAmount(row.buy_in_amount, row.currency)}
+                </p>
+              ) : null}
             </Card>
           </button>
         ))}
@@ -309,12 +442,13 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
   const [settlement, setSettlement] = useState<ChallengeSettlementView | null>(null);
   const [ledger, setLedger] = useState<Array<{ id: string; amount: number; created_at: string; challenge_id: string | null }>>([]);
   const [caughtUpIds, setCaughtUpIds] = useState<string[]>([]);
+  const [hostAdd, setHostAdd] = useState(1);
 
   async function load() {
     const ch = await supabase
       .from('challenges')
       .select(
-        'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, scoring_config, comparable_points_config, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, ends_at, buy_in_amount, prize_pool, prize_structure, currency, distributed_at, is_unlimited',
+        'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, scoring_config, comparable_points_config, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, ends_at, buy_in_amount, prize_pool, prize_structure, currency, distributed_at, is_unlimited, created_by, creator_contribution',
       )
       .eq('id', challengeId)
       .maybeSingle();
@@ -322,7 +456,7 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
     setChallenge(next);
     const part = await supabase
       .from('challenge_participants')
-      .select('user_id, days_completed, status, points, eliminated_at')
+      .select('user_id, days_completed, status, points, eliminated_at, buy_in_paid')
       .eq('challenge_id', challengeId);
     const rows = (part.data ?? []) as ParticipantRow[];
     const ids = rows.map((row) => row.user_id);
@@ -506,6 +640,56 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
                 Your progress {days}/{target}
               </p>
               {corporate ? <p className="mt-2 text-sm text-muted">Posts stay inside this challenge</p> : null}
+              <p className="mt-3 text-sm font-bold text-ink">
+                {FUNDING_COPY.prize} {formatFundingAmount(challenge.prize_pool, challenge.currency)}
+              </p>
+              {Number(challenge.buy_in_amount) > 0 ? (
+                <p className="mt-1 text-sm text-muted">
+                  {FUNDING_COPY.entryFee} {formatFundingAmount(challenge.buy_in_amount, challenge.currency)}
+                </p>
+              ) : null}
+              {Number(challenge.creator_contribution) > 0 ? (
+                <p className="mt-1 text-sm text-muted">
+                  {FUNDING_COPY.hostContribution}{' '}
+                  {formatFundingAmount(challenge.creator_contribution, challenge.currency)}
+                </p>
+              ) : null}
+              {canHostTopUp({
+                status: challenge.status,
+                isHost: challenge.created_by === userId,
+                official: Boolean(challenge.is_official),
+              }) ? (
+                <div className="mt-3 flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={hostAdd}
+                    onChange={(event) => setHostAdd(Math.max(Number(event.target.value) || 1, 1))}
+                    className="h-11 w-24"
+                  />
+                  <Button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      void (async () => {
+                        setBusy(true);
+                        setError(null);
+                        try {
+                          await topUpChallengePrizeWithClient(supabase, {
+                            challengeId,
+                            amount: hostAdd,
+                          });
+                          await load();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : FUNDING_COPY.insufficient);
+                        }
+                        setBusy(false);
+                      })();
+                    }}>
+                    {FUNDING_COPY.addToPrize}
+                  </Button>
+                </div>
+              ) : null}
             </Card>
             <ChallengeBoard
               status={challenge.status}
@@ -532,7 +716,7 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
               <Card>
                 <p className="text-[15px] font-bold text-ink">Settling</p>
                 <p className="mt-1 text-sm text-muted">
-                  Splitting the prize among remaining competitors. This updates on its own.
+                  Splitting the prize among remaining finishers. This updates on its own.
                 </p>
               </Card>
             ) : null}
@@ -550,6 +734,28 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
                     currency: challenge.currency,
                   })}
                 </p>
+                {(() => {
+                  const funding = fundingFromChallenge(challenge);
+                  const lines = fundingReceiptLines({
+                    funding,
+                    viewerEntryFee: roster.find((row) => row.user_id === userId)?.buy_in_paid ?? 0,
+                    viewerPayout: settlement.payouts.find((row) => row.user_id === userId)?.amount,
+                    winnerCount: settlement.settlement.winner_count,
+                    spectator: !joined,
+                  });
+                  return (
+                    <div className="mt-2 flex flex-col gap-1">
+                      {lines.entryFee ? <p className="text-sm text-muted">{lines.entryFee}</p> : null}
+                      {lines.hostContribution ? (
+                        <p className="text-sm text-muted">{lines.hostContribution}</p>
+                      ) : null}
+                      {lines.entryFeesCollected ? (
+                        <p className="text-sm text-muted">{lines.entryFeesCollected}</p>
+                      ) : null}
+                      <p className="text-sm text-muted">{lines.remainingFinishers}</p>
+                    </div>
+                  );
+                })()}
                 {settlement.settlement.winner_count === 0 ? (
                   <p className="mt-2 text-sm text-muted">{FORFEIT_RECEIPT}</p>
                 ) : (
@@ -613,11 +819,16 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
         {!joined ? (
           <div className="flex flex-col gap-2">
             <Button type="button" disabled={busy} onClick={() => void join()}>
-              Join
+              {participateLabel({
+                amount: Number(challenge.buy_in_amount) || 0,
+                currency: challenge.currency,
+              })}
             </Button>
-            {challenge.status !== 'live' && challenge.status !== 'filling' ? (
-              <p className="text-center text-xs text-muted">Leave before live returns the entry to your wallet.</p>
-            ) : null}
+            {canRefundEntryFee(challenge.status) ? (
+              <p className="text-center text-xs text-muted">{FUNDING_COPY.refundBeforeLive}</p>
+            ) : (
+              <p className="text-center text-xs text-muted">{FUNDING_COPY.committedLive}</p>
+            )}
           </div>
         ) : challenge.status === 'settled' || challenge.status === 'settling' ? (
           <Button type="button" variant="outline" disabled>
@@ -628,9 +839,11 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
             <Button type="button" variant="outline" disabled>
               {CHECKIN_BOB.notLive}
             </Button>
-            <Button type="button" variant="ghost" disabled={busy} onClick={() => void leave()}>
-              Leave · refund
-            </Button>
+            {canRefundEntryFee(challenge.status) ? (
+              <Button type="button" variant="ghost" disabled={busy} onClick={() => void leave()}>
+                Leave · refund
+              </Button>
+            ) : null}
           </div>
         ) : (
           <Button

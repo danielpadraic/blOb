@@ -2,6 +2,8 @@ import type { Challenge } from '@/lib/types';
 
 const LEFT_STATUSES = new Set([
   'live',
+  'ended',
+  'settling',
   'judging',
   'settled',
   'cancelled',

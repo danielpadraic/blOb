@@ -177,11 +177,11 @@ export function SimpleCreateForm() {
 
   const endLine = formatChallengeEndLine(endsAtOf(draft));
   const wallet = walletBalance(profile, draft.currency);
-  const hostCost = draft.currency === 'bucks' ? Math.max(draft.host_budget, 0) : 0;
-  const creatorBuyIn = draft.currency === 'coins' ? Math.max(draft.buy_in, 0) : 0;
+  const hostCost = Math.max(draft.host_budget, 0);
+  const creatorBuyIn = draft.privacy_mode === 'private_corporate' ? 0 : Math.max(draft.buy_in, 0);
   const needed = hostCost + creatorBuyIn;
   const poolShortfall =
-    isFetched && draft.currency === 'bucks' && hostCost > 0 ? Math.max(hostCost - wallet, 0) : 0;
+    isFetched && draft.currency === 'bucks' && needed > 0 ? Math.max(needed - wallet, 0) : 0;
 
   const costHint = useMemo(() => {
     if (draft.currency === 'bucks') {
@@ -323,8 +323,10 @@ export function SimpleCreateForm() {
                 {draft.currency === 'bucks' ? (
                   <AppText className="text-[13px] text-muted">{copy('money.realUsd')}</AppText>
                 ) : null}
-                <AppText className="text-[13px] text-muted">{copy('money.leavesNow')}</AppText>
-                <AppText className="text-[13px] text-muted">{copy('money.irreversible')}</AppText>
+                <AppText className="text-[13px] text-muted">{copy('create.realMoneyFund')}</AppText>
+                {creatorBuyIn > 0 ? (
+                  <AppText className="text-[13px] text-muted">{copy('note.buyIn')}</AppText>
+                ) : null}
               </View>
             ) : null}
             <Button
@@ -353,8 +355,6 @@ export function SimpleCreateForm() {
             onChange={(value) =>
               patch({
                 currency: value,
-                buy_in: value === 'bucks' ? 0 : draft.buy_in,
-                host_budget: value === 'coins' ? 0 : Math.max(draft.host_budget, 1),
                 friends_of_friends:
                   draft.privacy_mode === 'private_corporate'
                     ? false
@@ -362,29 +362,49 @@ export function SimpleCreateForm() {
               })
             }
           />
-          {draft.currency === 'bucks' ? (
-            <TourAnchor id="create-simple-buyin">
-            <View
-              className="gap-2"
-              collapsable={false}
-              nativeID="create-simple-buyin"
-              ref={(node) => {
-                sectionRefs.current['create-simple-buyin'] = node;
-              }}>
-              <View className="flex-row items-center justify-between">
+          <TourAnchor id="create-simple-buyin">
+          <View
+            className="gap-3"
+            collapsable={false}
+            nativeID="create-simple-buyin"
+            ref={(node) => {
+              sectionRefs.current['create-simple-buyin'] = node;
+            }}>
+            {draft.privacy_mode === 'private_corporate' ? (
+              <AppText className="text-[13px] leading-5 text-muted">
+                Private / Corporate Skill Tournaments do not charge an entry fee. The host funds the prize.
+              </AppText>
+            ) : (
+              <View className="flex-row items-center justify-between" style={{ minHeight: 44 }}>
                 <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
-                  {copy('create.totalPrizePool')}
+                  {copy('create.buyIn')}
                 </AppText>
                 <Stepper
-                  accessibilityLabel={copy('create.totalPrizePool')}
-                  value={draft.host_budget}
+                  accessibilityLabel={copy('create.buyIn')}
+                  value={draft.buy_in}
                   min={0}
                   max={10_000}
-                  formatValue={formatCash}
-                  onChange={(host_budget) => patch({ host_budget })}
+                  formatValue={draft.currency === 'bucks' ? formatCash : undefined}
+                  onChange={(buy_in) => patch({ buy_in })}
                 />
               </View>
-              <AppText className="text-[13px] leading-5 text-muted">{copy('create.realMoneyFund')}</AppText>
+            )}
+            <View className="flex-row items-center justify-between" style={{ minHeight: 44 }}>
+              <AppText className="mr-3 flex-1 text-sm font-semibold text-charcoal">
+                {copy('create.hostPrize')}
+              </AppText>
+              <Stepper
+                accessibilityLabel={copy('create.hostPrize')}
+                value={draft.host_budget}
+                min={0}
+                max={10_000}
+                formatValue={draft.currency === 'bucks' ? formatCash : undefined}
+                onChange={(host_budget) => patch({ host_budget })}
+              />
+            </View>
+            <AppText className="text-[13px] leading-5 text-muted">{copy('create.realMoneyFund')}</AppText>
+            <AppText className="text-[13px] leading-5 text-muted">{copy('create.hostContributionHelp')}</AppText>
+            {draft.currency === 'bucks' ? (
               <Pressable
                 accessibilityRole="switch"
                 accessibilityState={{ checked: draft.guarantee_enabled === true }}
@@ -410,42 +430,23 @@ export function SimpleCreateForm() {
                   ios_backgroundColor={THEME.border}
                 />
               </Pressable>
-              {poolShortfall > 0 ? (
-                <View className="gap-2">
-                  <AppText className="text-sm text-coral-dark">
-                    Add {formatCash(poolShortfall)}
-                  </AppText>
-                  <Button
-                    title={`Add ${formatCash(poolShortfall)}`}
-                    onPress={() => {
-                      persistSimpleDraft(draft);
-                      walletSheet?.openTopUp({ amount: poolShortfall, returnCreate: true });
-                    }}
-                  />
-                </View>
-              ) : null}
-            </View>
-            </TourAnchor>
-          ) : (
-            <TourAnchor id="create-simple-buyin">
-            <View
-              className="flex-row items-center justify-between"
-              collapsable={false}
-              nativeID="create-simple-buyin"
-              ref={(node) => {
-                sectionRefs.current['create-simple-buyin'] = node;
-              }}>
-              <AppText className="text-sm font-semibold text-charcoal">{copy('create.buyIn')}</AppText>
-              <Stepper
-                accessibilityLabel={copy('create.buyIn')}
-                value={draft.buy_in}
-                min={0}
-                max={10_000}
-                onChange={(buy_in) => patch({ buy_in })}
-              />
-            </View>
-            </TourAnchor>
-          )}
+            ) : null}
+            {poolShortfall > 0 ? (
+              <View className="gap-2">
+                <AppText className="text-sm text-coral-dark">
+                  Add {formatCash(poolShortfall)}
+                </AppText>
+                <Button
+                  title={`Add ${formatCash(poolShortfall)}`}
+                  onPress={() => {
+                    persistSimpleDraft(draft);
+                    walletSheet?.openTopUp({ amount: poolShortfall, returnCreate: true });
+                  }}
+                />
+              </View>
+            ) : null}
+          </View>
+          </TourAnchor>
         </View>
         </TourAnchor>
 

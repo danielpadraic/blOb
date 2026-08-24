@@ -7,6 +7,7 @@ import { payoutDisplayName, personalSettlementCopy } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
 import type { ChallengeSettlementView } from '@/lib/types';
 import { formatWallet } from '@/lib/currency';
+import { fundingFromChallenge, fundingReceiptLines } from '@/lib/funding';
 import { formatDate } from '@/utils/format';
 
 type SettlementSummaryProps = {
@@ -17,6 +18,9 @@ type SettlementSummaryProps = {
   targetCount?: number | null;
   currency?: string | null;
   official?: boolean;
+  entryFeePaid?: number | null;
+  hostContribution?: number | null;
+  prizePool?: number | null;
 };
 
 export function SettlementSummary({
@@ -27,6 +31,9 @@ export function SettlementSummary({
   targetCount,
   currency,
   official = false,
+  entryFeePaid,
+  hostContribution,
+  prizePool,
 }: SettlementSummaryProps) {
   const mine = settlement.payouts.find((payout) => payout.user_id === userId);
   const personal = personalSettlementCopy({
@@ -39,9 +46,22 @@ export function SettlementSummary({
     official,
     winnerCount: settlement.settlement.winner_count,
   });
-  const pool = Number(settlement.settlement.prize_pool ?? 0);
+  const pool = Number(prizePool ?? settlement.settlement.prize_pool ?? 0);
   const paid = Number(settlement.settlement.distributed ?? 0);
   const winners = Math.max(Number(settlement.settlement.winner_count) || settlement.payouts.length, 0);
+  const funding = fundingFromChallenge({
+    buy_in_amount: entryFeePaid,
+    creator_contribution: hostContribution,
+    prize_pool: pool > 0 ? pool : paid,
+    currency,
+  });
+  const fundingLines = fundingReceiptLines({
+    funding,
+    viewerEntryFee: joined ? entryFeePaid : 0,
+    viewerPayout: mine?.amount,
+    winnerCount: winners,
+    spectator: !joined,
+  });
 
   return (
     <View className="gap-3">
@@ -53,7 +73,7 @@ export function SettlementSummary({
         <View className="mt-3 flex-row gap-3">
           <View className="flex-1">
             <AppText className="text-[9px] font-semibold uppercase tracking-wide text-muted">
-              Pool
+              Prize
             </AppText>
             <View className="mt-0.5">
               <StakeAmount
@@ -93,6 +113,20 @@ export function SettlementSummary({
             )}
           </View>
         </View>
+        {fundingLines.entryFee || fundingLines.hostContribution || fundingLines.entryFeesCollected ? (
+          <View className="mt-3 gap-1">
+            {fundingLines.entryFee ? (
+              <AppText className="text-sm leading-5 text-muted">{fundingLines.entryFee}</AppText>
+            ) : null}
+            {fundingLines.hostContribution ? (
+              <AppText className="text-sm leading-5 text-muted">{fundingLines.hostContribution}</AppText>
+            ) : null}
+            {fundingLines.entryFeesCollected ? (
+              <AppText className="text-sm leading-5 text-muted">{fundingLines.entryFeesCollected}</AppText>
+            ) : null}
+            <AppText className="text-sm leading-5 text-muted">{fundingLines.remainingFinishers}</AppText>
+          </View>
+        ) : null}
         <AppText className="mt-3 text-sm leading-5 text-muted">
           {winners === 0
             ? 'Nobody remaining. The prize is forfeited. No refunds.'

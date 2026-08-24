@@ -62,8 +62,8 @@ function acknowledgments(challenge: Challenge) {
           ? 'Confirming does not take money from your wallet. This official challenge still pays the prize in $ (1:1 with USD).'
           : 'Confirming does not take anything from your wallet. The prize is already funded.'
         : bucks
-          ? `${buyIn} will be deducted immediately. 1:1 with USD. This cannot be reversed.`
-          : `${buyIn} will be taken from your wallet the moment you confirm. If you don’t finish, you do not get it back.`,
+          ? `${buyIn} leaves now and goes into the prize. Leave before this Skill Tournament goes live and it comes back in full. Once live, the entry fee is committed.`
+          : `${buyIn} leaves now and goes into the prize. Leave before live and it comes back in full. Once live, the entry fee is committed.`,
     },
     {
       id: 'split',
@@ -114,7 +114,7 @@ function acknowledgments(challenge: Challenge) {
             title: copy('money.irreversible'),
             body: isFree
               ? 'The prize is still real money. Results and payouts cannot be undone.'
-              : `${buyIn} is deducted immediately. There is no refund.`,
+              : `${buyIn} leaves now. Full refund if you leave before live. Once live, the entry fee is committed.`,
           },
         ]
       : []),
@@ -233,7 +233,7 @@ export function JoinConfirmModal({
             <View className="mt-6 gap-3">
               {payEntry ? (
                 <JoinCtaButton
-                  verb="Pay"
+                  verb="Participate"
                   size="lg"
                   currency={challenge.currency}
                   amount={buyInAmount}
@@ -262,16 +262,16 @@ export function JoinConfirmModal({
         }}
         onPress={(event) => event.stopPropagation()}>
           <AppText className="text-2xl font-bold text-charcoal">
-            {isFree || !bucks ? 'Join this challenge?' : `Join for ${buyIn}?`}
+            {isFree ? 'Participate in this Skill Tournament?' : `Participate ${buyIn}?`}
           </AppText>
           <AppText className="mt-2 text-muted">
             {bucks
               ? isFree
-                ? 'This official challenge pays real money. Check every box. 1:1 with USD.'
-                : `Check every box. ${buyIn} leaves immediately. This cannot be reversed.`
+                ? 'This Skill Tournament pays real money. Check every box. 1:1 with USD.'
+                : `Check every box. ${buyIn} leaves now. Full refund if you leave before live.`
               : isFree
-                ? 'Check all three. Joining is free and does not take anything from your wallet.'
-                : 'Check all three. The entry fee leaves your wallet the moment you confirm. There is no undo.'}
+                ? 'Check all three. Participating is free and does not take anything from your wallet.'
+                : 'Check all three. The entry fee leaves now. Full refund if you leave before live.'}
           </AppText>
 
           <ScrollView className="mt-5" showsVerticalScrollIndicator={false}>
@@ -323,7 +323,7 @@ export function JoinConfirmModal({
             ) : null}
             {payEntry ? (
               <JoinCtaButton
-                verb="Pay"
+                verb="Participate"
                 size="lg"
                 currency={challenge.currency}
                 amount={buyInAmount}

@@ -52,12 +52,12 @@ export function applyLaneForPublish(input: {
     };
   }
 
-  if (input.currency === 'bucks' || input.host_funded) {
+  if (input.currency === 'bucks') {
     return {
       challenge_lane: 'coins',
       visibility,
       currency: 'bucks',
-      buy_in_amount: 0,
+      buy_in_amount: buyIn,
     };
   }
 
@@ -119,5 +119,5 @@ export function laneReviewLine(input: {
     return 'Invite-only. You are funding the prize. Competitors are not charged an entry fee.';
   }
   const listed = input.visibility === 'private' ? 'Unlisted' : 'Public';
-  return `Competitors compete for Coins. ${listed} in Lobby.`;
+  return `Skill Tournament. ${listed} in Lobby.`;
 }

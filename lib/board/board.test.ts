@@ -95,6 +95,6 @@ describe('settled board', () => {
     expect(view.spectator).toBe(true);
     expect(view.youPaid).toBe(false);
     expect(boardSettledCopy(view).showBob).toBe(false);
-    expect(boardEmptyCopy({ settled: false, spectator: true })).toContain('Join');
+    expect(boardEmptyCopy({ settled: false, spectator: true })).toContain('Participate');
   });
 });

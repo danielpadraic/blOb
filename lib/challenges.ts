@@ -408,7 +408,7 @@ export function prizeStructureSummary(config: PrizeStructureConfig): string {
     return 'One winner takes the entire prize.';
   }
   if (structure !== 'top_places') {
-    return 'Everyone who successfully completes the challenge splits the prize evenly.';
+    return 'Remaining finishers split the prize evenly.';
   }
 
   const raw = Number(config.top_places_value);
@@ -446,13 +446,13 @@ export function fundingModelSummary(config: {
 
   if (model === 'creator') {
     return buyIn > 0
-      ? `The creator funds the prize with ${money(contribution)}. Competitors also pay ${money(buyIn)} to enter.`
-      : `The creator funds the entire prize with ${money(contribution)}. Competitors enter free.`;
+      ? `The host funds the prize with ${money(contribution)}. Each person also pays an entry fee of ${money(buyIn)}.`
+      : `The host funds the prize with ${money(contribution)}. There is no entry fee.`;
   }
   if (model === 'hybrid') {
-    return `The creator puts in ${money(contribution)} and each competitor pays ${money(buyIn)}. Both go into the prize.`;
+    return `The host adds ${money(contribution)} and each person pays an entry fee of ${money(buyIn)}. Both go into the prize.`;
   }
-  return `The prize is funded only by competitor entry fees of ${money(buyIn)} each.`;
+  return `The prize is the total of entry fees of ${money(buyIn)} each.`;
 }
 
 export function isUnlimitedChallenge(
@@ -1458,7 +1458,7 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     creator_contribution: input.creator_contribution,
     frequency: input.frequency,
     target_count: input.target_count,
-    host_funded: input.host_funded ?? lane.currency === 'bucks',
+    host_funded: input.host_funded ?? input.creator_contribution > 0,
     host_budget: input.host_budget ?? input.creator_contribution,
     format: input.format ?? input.challenge_type,
     task: input.task ?? null,

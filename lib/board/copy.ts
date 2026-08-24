@@ -5,7 +5,7 @@ import type { BoardView } from './model';
 export const BOARD_INFO = {
   remaining: {
     title: 'Remaining',
-    body: 'Still in. Proven by check-in progress. They split the prize if they finish.',
+    body: 'Still in. Proven by check-in progress. Remaining finishers split the prize.',
   },
   caughtUp: {
     title: 'Caught Up',
@@ -30,7 +30,7 @@ export function boardEmptyCopy(view: Pick<BoardView, 'settled' | 'spectator'>): 
     return 'This challenge settled with nobody on the board.';
   }
   if (view.spectator) {
-    return 'Join to appear on the board. Remaining show up after the first proven check-in.';
+    return 'Participate to appear on the board. Remaining show up after the first proven check-in.';
   }
   return 'Empty until people join and check in.';
 }
@@ -57,7 +57,7 @@ export function boardSettledCopy(view: Pick<BoardView, 'forfeited' | 'youPaid' |
   if (view.spectator) {
     return {
       title: 'Settled',
-      body: `${view.remainingCount} remaining split the prize.`,
+      body: `${view.remainingCount} remaining finishers split the prize.`,
       showBob: false,
     };
   }
