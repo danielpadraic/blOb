@@ -435,11 +435,37 @@ export function comparablePointsLiveSentence(config: ComparablePointsConfig): st
   return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}.`;
 }
 
+function multiplierTiers(activity: ActivityConfig): ActivityMultiplierTier[] {
+  return (activity.multiplier.tiers ?? [])
+    .filter((tier) => Number.isFinite(tier.threshold) && Number.isFinite(tier.percent))
+    .slice()
+    .sort((left, right) => left.threshold - right.threshold || left.percent - right.percent);
+}
+
+export function resolveMultiplierPercent(activity: ActivityConfig, multiplierQty = 0): number {
+  if (!activity.multiplier.enabled) {
+    return 100;
+  }
+  const tiers = multiplierTiers(activity);
+  if (tiers.length === 0) {
+    return 100;
+  }
+  const amount = asQty(multiplierQty);
+  let percent = 0;
+  for (const tier of tiers) {
+    if (amount + 1e-9 >= tier.threshold) {
+      percent = tier.percent;
+    }
+  }
+  return Math.max(0, percent);
+}
+
 export function scoreSampleActivity(
   config: Pick<ComparablePointsConfig, 'parity_points'>,
   activity: ActivityConfig,
   qty: number,
   qualifierMet = true,
+  multiplierQty = 0,
 ): number {
   if (activity.qualifiers.enabled && !qualifierMet) {
     return 0;
@@ -449,10 +475,17 @@ export function scoreSampleActivity(
     return 0;
   }
   const ratio = amount / activity.parity_qty;
-  if (ratio <= 1 || !activity.multiplier.enabled) {
-    return Math.round(Math.min(ratio, 1) * config.parity_points);
+  const usesTiers = activity.multiplier.enabled && multiplierTiers(activity).length > 0;
+  let base: number;
+  if (ratio <= 1 || !activity.multiplier.enabled || usesTiers) {
+    base = Math.min(ratio, 1) * config.parity_points;
+  } else {
+    base =
+      config.parity_points +
+      (ratio - 1) * config.parity_points * clampFactor(activity.multiplier.extra_factor);
   }
-  return Math.round(
-    config.parity_points + (ratio - 1) * config.parity_points * clampFactor(activity.multiplier.extra_factor),
-  );
+  if (!usesTiers) {
+    return Math.round(base);
+  }
+  return Math.round((base * resolveMultiplierPercent(activity, multiplierQty)) / 100);
 }

@@ -19,6 +19,7 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
   const { draft } = form;
   const [simOpen, setSimOpen] = useState(false);
   const [sampleQty, setSampleQty] = useState<Record<string, string>>({});
+  const [sampleMultiplier, setSampleMultiplier] = useState<Record<string, string>>({});
   const [sampleMet, setSampleMet] = useState<Record<string, boolean>>({});
 
   const sentence = useMemo(() => comparablePointsLiveSentence(draft), [draft]);
@@ -127,8 +128,9 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
             </AppText>
             {draft.activities.map((activity) => {
               const qty = Number(sampleQty[activity.id] || 0);
+              const multiplierQty = Number(sampleMultiplier[activity.id] || 0);
               const met = sampleMet[activity.id] !== false;
-              const points = scoreSampleActivity(draft, activity, qty, met);
+              const points = scoreSampleActivity(draft, activity, qty, met, multiplierQty);
               return (
                 <View key={activity.id} className="gap-2">
                   <Input
@@ -140,6 +142,17 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
                       setSampleQty((current) => ({ ...current, [activity.id]: value }))
                     }
                   />
+                  {activity.multiplier.enabled ? (
+                    <Input
+                      label={activity.multiplier.label?.trim() || 'Multiplier'}
+                      placeholder="0"
+                      keyboardType="decimal-pad"
+                      value={sampleMultiplier[activity.id] ?? ''}
+                      onChangeText={(value) =>
+                        setSampleMultiplier((current) => ({ ...current, [activity.id]: value }))
+                      }
+                    />
+                  ) : null}
                   {activity.qualifiers.enabled ? (
                     <Pressable
                       accessibilityRole="button"
@@ -170,8 +183,9 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
               {formatPoints(
                 draft.activities.reduce((sum, activity) => {
                   const qty = Number(sampleQty[activity.id] || 0);
+                  const multiplierQty = Number(sampleMultiplier[activity.id] || 0);
                   const met = sampleMet[activity.id] !== false;
-                  return sum + scoreSampleActivity(draft, activity, qty, met);
+                  return sum + scoreSampleActivity(draft, activity, qty, met, multiplierQty);
                 }, 0),
               )}{' '}
               pts
