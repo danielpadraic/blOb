@@ -54,3 +54,8 @@ export function usesConsistencyExperience(challenge?: ExperienceChallenge | null
   }
   return true;
 }
+
+/** Ranked scoreboard — Comparable Points or classic task points. */
+export function usesPointsBoard(challenge?: ExperienceChallenge | null): boolean {
+  return usesComparablePointsScoring(challenge) || challenge?.challenge_type === 'points';
+}

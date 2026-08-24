@@ -47,7 +47,9 @@ import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
+import { ChallengePageTabs, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
 import {
+  isCorporateChallenge,
   requiresOfficialBodyMetrics,
   usesComparablePointsScoring,
   usesConsistencyExperience,
@@ -154,6 +156,9 @@ export default function ChallengeDetailScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [watchToast, setWatchToast] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [pageTab, setPageTab] = useState<ChallengePageTab>(
+    highlightPostId ? 'feed' : 'overview',
+  );
 
   const challenge = challengeQuery.data;
   const participation = useMemo(
@@ -253,6 +258,12 @@ export default function ChallengeDetailScreen() {
   }, [fundedParam, refetchProfile]);
 
   useEffect(() => {
+    if (highlightPostId) {
+      setPageTab('feed');
+    }
+  }, [highlightPostId]);
+
+  useEffect(() => {
     if (!needsBodyMetrics) {
       return;
     }
@@ -284,6 +295,10 @@ export default function ChallengeDetailScreen() {
   }, [judgingHold, waitingToStart, officialLiveClock]);
 
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [pageTab]);
   const lastFocusFetchAt = useRef(Date.now());
   const refetchChallenge = useRef(challengeQuery.refetch);
   const refetchRoster = useRef(roster.refetch);
@@ -536,6 +551,9 @@ export default function ChallengeDetailScreen() {
           headerRight: () => <ChallengeDetailHeaderRight />,
         }}
       />
+      <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+        <ChallengePageTabs value={pageTab} onChange={setPageTab} />
+      </View>
       <ScrollView
         ref={scrollRef}
         className="flex-1"
@@ -552,6 +570,8 @@ export default function ChallengeDetailScreen() {
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}>
+        {pageTab === 'overview' ? (
+        <View>
         <View style={{ marginTop: 8 }}>
           <ChallengeHeroCard
             challenge={challenge}
@@ -679,15 +699,6 @@ export default function ChallengeDetailScreen() {
             ) : null}
           </Card>
         ) : null}
-
-        <View className="mt-4">
-          <ChallengeLeaderboard
-            challenge={challenge}
-            roster={boardRoster}
-            completedUserIds={completions.data ?? new Set()}
-            joined={isJoined}
-          />
-        </View>
 
         {startNeeded ? (
           <Card className="mt-4">
@@ -889,40 +900,61 @@ export default function ChallengeDetailScreen() {
           ) : null}
         </View>
 
-        <AppText className="mt-8 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-          Challenge feed
-        </AppText>
-        <AppText className="mt-1 mb-4 text-xl font-bold text-charcoal">
-          Posts from this challenge
-        </AppText>
-        <FeedList
-          embedded
-          posts={feed.data ?? []}
-          isLoading={feed.isLoading}
-          error={feed.error instanceof Error ? feed.error.message : null}
-          highlightPostId={highlightPostId}
-          currentUserId={user?.id}
-          emptyTitle="Quiet in this challenge"
-          emptyBody={
-            isJoined
-              ? participation?.eliminated_at
-                ? 'You’re out, but you can still watch the check-ins.'
-                : copy('checkin.emptyBob')
-              : 'Join the challenge to post in this feed.'
-          }
-          composerPlaceholder="How’s the work going?"
-          hideAudience
-          composeSource="challenge"
-          canCompose={isJoined && !participation?.eliminated_at}
-          composing={createPost.isPending}
-          commenting={createComment.isPending}
-          onRetry={() => void feed.refetch()}
-          onCompose={(input) => createPost.mutateAsync(input)}
-          onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-          onComment={(post, content, parentId, mentionedUserIds) =>
-            createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
-          }
-        />
+        </View>
+        ) : null}
+
+        {pageTab === 'board' ? (
+          <View className="mt-4">
+            <ChallengeLeaderboard
+              challenge={challenge}
+              roster={boardRoster}
+              completedUserIds={completions.data ?? new Set()}
+              joined={isJoined}
+              viewerId={user?.id}
+            />
+          </View>
+        ) : null}
+
+        {pageTab === 'feed' ? (
+          <View className="mt-4">
+            <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+              Lobby Feed
+            </AppText>
+            <AppText className="mt-1 mb-3 text-xl font-bold text-charcoal">
+              {isCorporateChallenge(challenge)
+                ? 'Posts stay inside this challenge'
+                : 'Posts from this challenge'}
+            </AppText>
+            <FeedList
+              embedded
+              posts={feed.data ?? []}
+              isLoading={feed.isLoading}
+              error={feed.error instanceof Error ? feed.error.message : null}
+              highlightPostId={highlightPostId}
+              currentUserId={user?.id}
+              emptyTitle="Quiet in this challenge"
+              emptyBody={
+                isJoined
+                  ? participation?.eliminated_at
+                    ? 'You’re out, but you can still watch the check-ins.'
+                    : copy('checkin.emptyBob')
+                  : 'Join the challenge to post in this feed.'
+              }
+              composerPlaceholder="How’s the work going?"
+              hideAudience
+              composeSource="challenge"
+              canCompose={isJoined && !participation?.eliminated_at}
+              composing={createPost.isPending}
+              commenting={createComment.isPending}
+              onRetry={() => void feed.refetch()}
+              onCompose={(input) => createPost.mutateAsync(input)}
+              onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
+              onComment={(post, content, parentId, mentionedUserIds) =>
+                createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
+              }
+            />
+          </View>
+        ) : null}
       </ScrollView>
 
       {showStickyCta ? (

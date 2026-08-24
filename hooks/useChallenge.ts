@@ -271,9 +271,20 @@ export function useChallenge(id: string | undefined) {
 }
 
 const PARTICIPANT_COLUMNS =
+  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at';
+const PARTICIPANT_COLUMNS_NO_POINTS =
   'id, challenge_id, user_id, status, days_completed, joined_at, completed_at, eliminated_at';
 const PARTICIPANT_COLUMNS_LEGACY =
   'id, challenge_id, user_id, status, days_completed, joined_at, completed_at';
+
+function asParticipant(row: ChallengeParticipant, extras?: Partial<ChallengeParticipant>): ChallengeParticipant {
+  return {
+    ...row,
+    days_completed: Number(row.days_completed ?? 0),
+    points: Number(row.points ?? extras?.points ?? 0),
+    eliminated_at: row.eliminated_at ?? extras?.eliminated_at ?? null,
+  };
+}
 
 export function useChallengeParticipants(challengeId: string | undefined) {
   return useQuery({
@@ -285,21 +296,30 @@ export function useChallengeParticipants(challengeId: string | undefined) {
         .select(PARTICIPANT_COLUMNS)
         .eq('challenge_id', challengeId!)
         .order('joined_at', { ascending: true });
-      if (error) {
-        const fallback = await supabase
-          .from('challenge_participants')
-          .select(PARTICIPANT_COLUMNS_LEGACY)
-          .eq('challenge_id', challengeId!)
-          .order('joined_at', { ascending: true });
-        if (fallback.error) {
-          throw new Error(getErrorMessage(error));
-        }
-        return (fallback.data ?? []).map((row) => ({
-          ...(row as ChallengeParticipant),
-          eliminated_at: null,
-        })) as ChallengeParticipantWithProfile[];
+      if (!error) {
+        return (data ?? []).map((row) => asParticipant(row as ChallengeParticipant));
       }
-      return (data ?? []) as unknown as ChallengeParticipantWithProfile[];
+      const withoutPoints = await supabase
+        .from('challenge_participants')
+        .select(PARTICIPANT_COLUMNS_NO_POINTS)
+        .eq('challenge_id', challengeId!)
+        .order('joined_at', { ascending: true });
+      if (!withoutPoints.error) {
+        return (withoutPoints.data ?? []).map((row) =>
+          asParticipant(row as ChallengeParticipant, { points: 0 }),
+        );
+      }
+      const fallback = await supabase
+        .from('challenge_participants')
+        .select(PARTICIPANT_COLUMNS_LEGACY)
+        .eq('challenge_id', challengeId!)
+        .order('joined_at', { ascending: true });
+      if (fallback.error) {
+        throw new Error(getErrorMessage(error));
+      }
+      return (fallback.data ?? []).map((row) =>
+        asParticipant(row as ChallengeParticipant, { points: 0, eliminated_at: null }),
+      );
     },
   });
 }
@@ -316,33 +336,33 @@ export function useMyParticipation(challengeId: string | undefined) {
         .eq('challenge_id', challengeId!)
         .eq('user_id', user!.id)
         .maybeSingle();
-      if (error) {
-        const fallback = await supabase
-          .from('challenge_participants')
-          .select(PARTICIPANT_COLUMNS_LEGACY)
-          .eq('challenge_id', challengeId!)
-          .eq('user_id', user!.id)
-          .maybeSingle();
-        if (fallback.error) {
-          throw new Error(getErrorMessage(error));
-        }
-        if (!fallback.data) {
-          return null;
-        }
-        return {
-          ...(fallback.data as ChallengeParticipant),
-          days_completed: Number((fallback.data as ChallengeParticipant).days_completed ?? 0),
-          eliminated_at: null,
-        };
+      if (!error) {
+        return data ? asParticipant(data as ChallengeParticipant) : null;
       }
-      if (!data) {
+      const withoutPoints = await supabase
+        .from('challenge_participants')
+        .select(PARTICIPANT_COLUMNS_NO_POINTS)
+        .eq('challenge_id', challengeId!)
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (!withoutPoints.error) {
+        return withoutPoints.data
+          ? asParticipant(withoutPoints.data as ChallengeParticipant, { points: 0 })
+          : null;
+      }
+      const fallback = await supabase
+        .from('challenge_participants')
+        .select(PARTICIPANT_COLUMNS_LEGACY)
+        .eq('challenge_id', challengeId!)
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (fallback.error) {
+        throw new Error(getErrorMessage(error));
+      }
+      if (!fallback.data) {
         return null;
       }
-      return {
-        ...(data as ChallengeParticipant),
-        days_completed: Number((data as ChallengeParticipant).days_completed ?? 0),
-        eliminated_at: (data as ChallengeParticipant).eliminated_at ?? null,
-      };
+      return asParticipant(fallback.data as ChallengeParticipant, { points: 0, eliminated_at: null });
     },
   });
   return { ...query, participation: query.data ?? null };

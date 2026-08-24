@@ -272,6 +272,7 @@ const STRINGS = {
   'board.shareIfFinish': 'Share if you finish:',
   'board.yourShareIfPlace': 'Your share if you place:',
   'board.shareIfPlace': 'Share if you place:',
+  'board.yourRank': 'Your rank',
   'note.potTitle': 'Prize',
   'note.pot':
     'Prize grows as people pay the entry fee. On publish it may be only your amount, or $0 until the first join.',
