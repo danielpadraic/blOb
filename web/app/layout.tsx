@@ -9,6 +9,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'blOb',
   description: 'Check in. Show up.',
+  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     title: 'blOb',
