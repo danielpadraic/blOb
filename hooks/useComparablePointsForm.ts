@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   COMPARABLE_POINTS_HARD_MAX,
+  DEFAULT_PARITY_POINTS,
   cloneComparablePointsConfig,
   emptyActivity,
   emptyComparablePointsConfig,
@@ -12,17 +13,54 @@ import {
   type ComparablePointsConfig,
 } from '@/lib/comparablePoints';
 
+function isEmptyComparableDraft(config: ComparablePointsConfig): boolean {
+  if (config.parity_points !== DEFAULT_PARITY_POINTS || config.activities.length !== 1) {
+    return false;
+  }
+  const only = config.activities[0];
+  return !only.name.trim() && only.parity_qty <= 0 && only.unit === 'minutes';
+}
+
+function savedConfigKey(config: ComparablePointsConfig | null): string | null {
+  if (!config || config.activities.length < 1) {
+    return null;
+  }
+  return `${config.version}:${config.parity_points}:${config.activities
+    .map((activity) => `${activity.id}:${activity.name}:${activity.parity_qty}`)
+    .join('|')}`;
+}
+
 export function useComparablePointsForm(saved: ComparablePointsConfig | null) {
   const [draft, setDraft] = useState<ComparablePointsConfig>(() =>
-    saved ? cloneComparablePointsConfig(saved) : emptyComparablePointsConfig(),
+    saved && saved.activities.length >= 1
+      ? cloneComparablePointsConfig(saved)
+      : emptyComparablePointsConfig(),
   );
   const [error, setError] = useState<string | null>(null);
+  const appliedKey = useRef<string | null>(savedConfigKey(saved));
 
   const resetFrom = useCallback((next: unknown) => {
     const parsed = parseComparablePointsConfig(next);
-    setDraft(parsed ? cloneComparablePointsConfig(parsed) : emptyComparablePointsConfig());
+    const nextDraft = parsed ? cloneComparablePointsConfig(parsed) : emptyComparablePointsConfig();
+    appliedKey.current = savedConfigKey(parsed);
+    setDraft(nextDraft);
     setError(null);
   }, []);
+
+  useEffect(() => {
+    if (!saved || saved.activities.length < 1) {
+      return;
+    }
+    const key = savedConfigKey(saved);
+    if (!key || appliedKey.current === key) {
+      return;
+    }
+    appliedKey.current = key;
+    setDraft((current) =>
+      isEmptyComparableDraft(current) ? cloneComparablePointsConfig(saved) : current,
+    );
+    setError(null);
+  }, [saved]);
 
   const setParityPoints = useCallback((value: number | string) => {
     const parsed = Math.round(Number(value) || 0);

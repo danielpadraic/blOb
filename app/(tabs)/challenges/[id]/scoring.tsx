@@ -1,5 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,8 +16,10 @@ import {
   comparablePointsFromChallenge,
   diffComparablePoints,
   nextScoringVersion,
+  type ComparablePointsConfig,
 } from '@/lib/comparablePoints';
 import { canEditOfficialScoring, scoringChangeEffectiveLine } from '@/lib/officialScoring';
+import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -26,22 +29,92 @@ const LIVE_COPY =
   'This change starts on the next challenge day. Earlier check-ins keep the scoring rules that were active when they were submitted.';
 const BANNER_COPY =
   'Active challenge. Changes begin with the next challenge day. Earlier check-ins keep their original scoring rules.';
+const SCORING_SOURCE_SELECT =
+  'scoring_method, scoring_config, comparable_points_config, scoring_version';
+
+function scoringFormKey(
+  challengeId: string | undefined,
+  saved: ComparablePointsConfig | null,
+): string {
+  if (!saved || saved.activities.length < 1) {
+    return `${challengeId ?? 'new'}:empty`;
+  }
+  return `${challengeId}:${saved.version}:${saved.parity_points}:${saved.activities
+    .map((activity) => `${activity.id}:${activity.name}:${activity.parity_qty}`)
+    .join('|')}`;
+}
 
 export default function OfficialScoringScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const challengeQuery = useChallenge(id);
+  const challenge = challengeQuery.data;
+  const fromChallenge = comparablePointsFromChallenge(challenge);
+  const needScoringFetch = Boolean(id) && !challengeQuery.isPending && !fromChallenge;
+  const scoringSource = useQuery({
+    queryKey: ['official-scoring-source', id],
+    enabled: needScoringFetch,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('challenges')
+        .select(SCORING_SOURCE_SELECT)
+        .eq('id', id!)
+        .maybeSingle();
+      if (error) {
+        throw error;
+      }
+      return data;
+    },
+  });
+  const mergedChallenge = scoringSource.data
+    ? { ...challenge, ...scoringSource.data }
+    : challenge;
+  const saved = fromChallenge ?? comparablePointsFromChallenge(mergedChallenge);
+  const queryReady =
+    !challengeQuery.isPending && (!needScoringFetch || scoringSource.isFetched || scoringSource.isError);
+
+  if (!queryReady) {
+    return (
+      <View className="flex-1 px-4 pt-6" style={{ backgroundColor: THEME.background }}>
+        <View
+          className="mb-4 px-4 py-3"
+          style={{ backgroundColor: AMBER_BG, borderRadius: THEME.radius }}>
+          <AppText className="text-[14px] font-semibold leading-5" style={{ color: AMBER_INK }}>
+            {BANNER_COPY}
+          </AppText>
+        </View>
+        <AppText className="text-sm leading-5 text-muted">Loading scoring rules…</AppText>
+      </View>
+    );
+  }
+
+  return (
+    <OfficialScoringForm
+      key={scoringFormKey(id, saved)}
+      id={id}
+      saved={saved}
+      challenge={mergedChallenge}
+    />
+  );
+}
+
+function OfficialScoringForm({
+  id,
+  saved,
+  challenge,
+}: {
+  id: string | undefined;
+  saved: ComparablePointsConfig | null;
+  challenge: ReturnType<typeof useChallenge>['data'] | undefined;
+}) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { profile } = useMyProfile();
-  const challengeQuery = useChallenge(id);
   const publish = usePublishScoringChange(id);
-  const challenge = challengeQuery.data;
-  const saved = comparablePointsFromChallenge(challenge);
   const form = useComparablePointsForm(saved);
   const [confirm, setConfirm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const hydratedKey = useRef<string | null>(null);
 
   const allowed = canEditOfficialScoring({
     challenge,
@@ -51,20 +124,6 @@ export default function OfficialScoringScreen() {
   const nextVersion = nextScoringVersion(challenge);
   const diffs = useMemo(() => diffComparablePoints(saved, form.draft), [saved, form.draft]);
   const effective = scoringChangeEffectiveLine(challenge);
-
-  useEffect(() => {
-    if (!challenge?.id || !saved) {
-      return;
-    }
-    const key = `${challenge.id}:${saved.version}:${saved.parity_points}:${saved.activities
-      .map((activity) => activity.id)
-      .join(',')}`;
-    if (hydratedKey.current === key) {
-      return;
-    }
-    hydratedKey.current = key;
-    form.resetFrom(saved);
-  }, [challenge?.id, form, saved]);
 
   function onPublishPress() {
     const result = form.validate();
@@ -124,9 +183,7 @@ export default function OfficialScoringScreen() {
           </AppText>
         </View>
 
-        {challengeQuery.isLoading && !challenge ? (
-          <AppText className="text-sm leading-5 text-muted">Loading scoring rules…</AppText>
-        ) : confirm ? (
+        {confirm ? (
           <Card>
             <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
               Confirm version {nextVersion}
