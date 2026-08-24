@@ -19,6 +19,7 @@ import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { JoinCtaButton, JOIN_CTA_HEIGHT } from '@/components/challenge/JoinCtaButton';
 import { HealthProofCaption } from '@/components/challenge/HealthProofCaption';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
+import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -81,9 +82,12 @@ import {
   hasChallengeStarted,
   isClosedForLogs,
   isDistributeGateOpen,
+  isEvenSplitAutoSettle,
   isJoinWindowOpen,
   payoutCountdownLabel,
+  shouldAutoSettle,
   startsInLabel,
+  trySettleIfEnded,
 } from '@/lib/settlement';
 import {
   isOfficialJoinable,
@@ -339,6 +343,26 @@ export default function ChallengeDetailScreen() {
       settlementQuery.isRefetching) &&
     !challengeQuery.isLoading;
 
+  useEffect(() => {
+    if (!id || !challenge || !shouldAutoSettle(challenge)) {
+      return;
+    }
+    let cancelled = false;
+    void trySettleIfEnded(id)
+      .then((view) => {
+        if (cancelled || !view) {
+          return;
+        }
+        void settlementQuery.refetch();
+        void challengeQuery.refetch();
+        void refetchProfile();
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, challenge?.status, challenge?.ends_at, challenge?.distributed_at]);
+
   if (challengeQuery.isLoading) {
     return (
       <Screen>
@@ -481,11 +505,14 @@ export default function ChallengeDetailScreen() {
   const finishers = completerCount(roster.data ?? [], checkinTarget);
   const payoutAt = distributableAt(challenge);
   const gateOpen = isDistributeGateOpen(challenge, new Date(nowMs));
+  const autoSettle = isEvenSplitAutoSettle(challenge);
   const showJudgingUi =
+    !autoSettle &&
     !isUnlimited &&
     hasChallengeEnded(challenge, new Date(nowMs)) &&
     challenge.status !== 'settled' &&
-    challenge.status !== 'cancelled';
+    challenge.status !== 'cancelled' &&
+    challenge.status !== 'settling';
   const canJudge = canMarkJudging(challenge, user?.id, new Date(nowMs)) && !settlement;
   const canSettle = canSettleChallenge(challenge, user?.id) && !settlement;
   const receipt =
@@ -620,8 +647,30 @@ export default function ChallengeDetailScreen() {
           </View>
         ) : null}
 
+        <View className="mt-4">
+          <ChallengeLifecycleStatus status={challenge.status} />
+        </View>
+
+        {challenge.status === 'settling' && !receipt ? (
+          <Card className="mt-4">
+            <AppText className="font-semibold text-charcoal">Settling</AppText>
+            <AppText className="mt-1 text-sm leading-5 text-muted">
+              Splitting the prize among remaining competitors. This updates on its own.
+            </AppText>
+          </Card>
+        ) : null}
+
         {receipt ? (
           <View className="mt-4">
+            {isJoined &&
+            Number(receipt.payouts.find((row) => row.user_id === user?.id)?.amount) > 0 ? (
+              <MascotState
+                kind="success"
+                compact
+                title="You got paid."
+                body="The receipt is yours to keep."
+              />
+            ) : null}
             <SettlementSummary
               settlement={receipt}
               userId={user?.id}

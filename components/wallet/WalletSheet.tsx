@@ -2,6 +2,7 @@ import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { SendWalletButton, WalletBalances } from '@/components/currency/WalletBalances';
+import { WalletHistory } from '@/components/wallet/WalletHistory';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -51,6 +52,7 @@ export function WalletSheet() {
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <WalletBalances profile={profile} />
+            <WalletHistory />
 
             <AppText className="mt-5 text-[13px] leading-5 text-muted">
               {copy('money.realUsd')}

@@ -37,6 +37,7 @@ export function SettlementSummary({
     joined,
     currency,
     official,
+    winnerCount: settlement.settlement.winner_count,
   });
   const pool = Number(settlement.settlement.prize_pool ?? 0);
   const paid = Number(settlement.settlement.distributed ?? 0);
@@ -94,7 +95,7 @@ export function SettlementSummary({
         </View>
         <AppText className="mt-3 text-sm leading-5 text-muted">
           {winners === 0
-            ? 'Nobody hit the finish line this round. The work still counted.'
+            ? 'Nobody remaining. The prize is forfeited. No refunds.'
             : `Paid ${formatWallet(paid || pool, currency)} on ${formatDate(settlement.settlement.settled_at, 'MMM d')}.`}
         </AppText>
       </Card>

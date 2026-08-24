@@ -28,11 +28,17 @@ import {
   resolveChallengeProofs,
   type ChallengeProof,
 } from '../../lib/challengeProofs';
+import { lifecycleLabel, shouldAutoSettle } from '@/lib/settlement/lifecycle';
+import { FORFEIT_RECEIPT, formatSettlementAmount, receiptHeadline } from '@/lib/settlement/receipts';
+import { getChallengeSettlementWithClient, trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
+import type { ChallengeSettlementView } from '@/lib/types';
 import { Bob } from '~/components/bob';
+import { ChallengeLifecycleStatus } from '~/components/challenge-lifecycle-status';
 import { CheckInCamera } from '~/components/check-in-camera';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { WalletBar } from '~/components/wallet-bar';
 import { resolveProofUrl, uploadWebProof } from '~/lib/storage';
 import { supabase } from '~/lib/supabase';
 
@@ -55,7 +61,13 @@ type ChallengeRow = {
   days_required?: number | null;
   target_count?: number | null;
   starts_at?: string | null;
+  ends_at?: string | null;
   buy_in_amount?: number | null;
+  prize_pool?: number | null;
+  prize_structure?: string | null;
+  currency?: string | null;
+  distributed_at?: string | null;
+  is_unlimited?: boolean | null;
 };
 
 type ParticipantRow = {
@@ -201,10 +213,10 @@ function HomeScreen({ userId }: { userId: string }) {
       const official = await supabase
         .from('challenges')
         .select(
-          'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, buy_in_amount',
+          'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, ends_at, buy_in_amount, prize_pool, prize_structure, currency, distributed_at',
         )
         .eq('is_official', true)
-        .in('status', ['filling', 'arming', 'live', 'upcoming'])
+        .in('status', ['filling', 'arming', 'live', 'upcoming', 'settling', 'settled', 'ended'])
         .order('starts_at', { ascending: false })
         .limit(8);
       if (official.error) {
@@ -242,11 +254,14 @@ function HomeScreen({ userId }: { userId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-ink">Challenges</h1>
-        <button type="button" className="text-sm font-bold text-teal" onClick={() => void supabase.auth.signOut()}>
-          Sign out
-        </button>
+        <div className="flex items-center gap-2">
+          <WalletBar userId={userId} />
+          <button type="button" className="min-h-11 text-sm font-bold text-teal" onClick={() => void supabase.auth.signOut()}>
+            Sign out
+          </button>
+        </div>
       </div>
       {error ? <Bob line="Home didn’t load." /> : null}
       <div className="flex flex-col gap-3 overflow-y-auto pb-8">
@@ -254,7 +269,7 @@ function HomeScreen({ userId }: { userId: string }) {
           <button key={row.id} type="button" className="text-left" onClick={() => go(`/challenges/${row.id}/`)}>
             <Card>
               <p className="text-[15px] font-bold text-ink">{row.title}</p>
-              <p className="mt-1 text-sm text-muted">{row.status}</p>
+              <p className="mt-1 text-sm text-muted">{lifecycleLabel(row.status)}</p>
             </Card>
           </button>
         ))}
@@ -274,16 +289,19 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
   const [phase, setPhase] = useState<CheckinPhase>('none');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settlement, setSettlement] = useState<ChallengeSettlementView | null>(null);
+  const [ledger, setLedger] = useState<Array<{ id: string; amount: number; created_at: string; challenge_id: string | null }>>([]);
 
   async function load() {
     const ch = await supabase
       .from('challenges')
       .select(
-        'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, scoring_config, comparable_points_config, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, buy_in_amount',
+        'id, title, status, is_official, series_id, category, challenge_type, privacy_mode, scoring_method, scoring_config, comparable_points_config, proofs, proof_type, proof_requirements, min_minutes, days_required, target_count, starts_at, ends_at, buy_in_amount, prize_pool, prize_structure, currency, distributed_at, is_unlimited',
       )
       .eq('id', challengeId)
       .maybeSingle();
-    setChallenge((ch.data as ChallengeRow | null) ?? null);
+    const next = (ch.data as ChallengeRow | null) ?? null;
+    setChallenge(next);
     const part = await supabase
       .from('challenge_participants')
       .select('user_id, days_completed, status, points')
@@ -310,6 +328,24 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
       .order('created_at', { ascending: false })
       .limit(20);
     setPosts((feed.data ?? []) as Array<{ id: string; content: string | null }>);
+    const receipt = await getChallengeSettlementWithClient(supabase, challengeId);
+    setSettlement(receipt);
+    const history = await supabase
+      .from('wallet_ledger')
+      .select('id, amount, created_at, challenge_id')
+      .eq('user_id', userId)
+      .eq('challenge_id', challengeId)
+      .order('created_at', { ascending: false })
+      .limit(8);
+    setLedger(
+      ((history.data ?? []) as Array<{ id: string; amount: number; created_at: string; challenge_id: string | null }>),
+    );
+    if (next && shouldAutoSettle(next)) {
+      const settled = await trySettleIfEndedWithClient(supabase, challengeId);
+      if (settled) {
+        setSettlement(settled);
+      }
+    }
   }
 
   useEffect(() => {
@@ -324,6 +360,26 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'posts', filter: `challenge_id=eq.${challengeId}` },
+        () => void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'challenges', filter: `id=eq.${challengeId}` },
+        () => void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'challenge_settlements', filter: `challenge_id=eq.${challengeId}` },
+        () => void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'challenge_payouts', filter: `challenge_id=eq.${challengeId}` },
+        () => void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wallet_ledger', filter: `user_id=eq.${userId}` },
         () => void load(),
       )
       .subscribe();
@@ -365,11 +421,11 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between px-4 pt-4">
-        <button type="button" className="text-sm font-bold text-teal" onClick={() => go('/')}>
+        <button type="button" className="min-h-11 text-sm font-bold text-teal" onClick={() => go('/')}>
           Back
         </button>
         <p className="text-[13px] font-bold text-ink">{challenge.title}</p>
-        <span className="w-10" />
+        <WalletBar userId={userId} />
       </div>
       <div className="mt-3 flex justify-center gap-2 px-4">
         {(['overview', 'board', 'feed'] as const).map((item) => (
@@ -386,14 +442,59 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4">
         {tab === 'overview' ? (
-          <Card>
-            <p className="text-[15px] font-bold text-ink">{challenge.title}</p>
-            <p className="mt-2 text-sm text-muted">{challenge.status}</p>
-            <p className="mt-2 text-sm text-ink">
-              Your progress {days}/{target}
-            </p>
-            {corporate ? <p className="mt-2 text-sm text-muted">Posts stay inside this challenge</p> : null}
-          </Card>
+          <div className="flex flex-col gap-3">
+            <Card>
+              <p className="text-[15px] font-bold text-ink">{challenge.title}</p>
+              <div className="mt-3">
+                <ChallengeLifecycleStatus status={challenge.status} />
+              </div>
+              <p className="mt-3 text-sm text-ink">
+                Your progress {days}/{target}
+              </p>
+              {corporate ? <p className="mt-2 text-sm text-muted">Posts stay inside this challenge</p> : null}
+            </Card>
+            {challenge.status === 'settling' && !settlement ? (
+              <Card>
+                <p className="text-[15px] font-bold text-ink">Settling</p>
+                <p className="mt-1 text-sm text-muted">
+                  Splitting the prize among remaining competitors. This updates on its own.
+                </p>
+              </Card>
+            ) : null}
+            {settlement ? (
+              <Card>
+                {joined && Number(settlement.payouts.find((row) => row.user_id === userId)?.amount) > 0 ? (
+                  <Bob title="You got paid." line="The receipt is yours to keep." compact />
+                ) : null}
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Receipt</p>
+                <p className="mt-2 text-[18px] font-bold leading-6 text-ink">
+                  {receiptHeadline({
+                    joined,
+                    winnerCount: settlement.settlement.winner_count,
+                    payoutAmount: settlement.payouts.find((row) => row.user_id === userId)?.amount,
+                    currency: challenge.currency,
+                  })}
+                </p>
+                {settlement.settlement.winner_count === 0 ? (
+                  <p className="mt-2 text-sm text-muted">{FORFEIT_RECEIPT}</p>
+                ) : (
+                  <div className="mt-3 flex flex-col gap-2">
+                    {settlement.payouts.map((payout) => (
+                      <div key={payout.user_id} className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-ink">{payout.user_id === userId ? 'You' : 'Competitor'}</p>
+                        <p className="text-sm font-bold text-ink">
+                          {formatSettlementAmount(payout.amount, challenge.currency)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {ledger.length > 0 ? (
+                  <p className="mt-3 text-xs text-muted">Saved in wallet history.</p>
+                ) : null}
+              </Card>
+            ) : null}
+          </div>
         ) : null}
         {tab === 'board' ? (
           <Card>
@@ -437,6 +538,10 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
               <p className="text-center text-xs text-muted">Leave before live returns the entry to your wallet.</p>
             ) : null}
           </div>
+        ) : challenge.status === 'settled' || challenge.status === 'settling' ? (
+          <Button type="button" variant="outline" disabled>
+            {lifecycleLabel(challenge.status)}
+          </Button>
         ) : challenge.status !== 'live' ? (
           <div className="flex flex-col gap-2">
             <Button type="button" variant="outline" disabled>

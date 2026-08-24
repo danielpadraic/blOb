@@ -79,6 +79,7 @@ export type ChallengeStatus =
   | 'arming'
   | 'live'
   | 'ended'
+  | 'settling'
   | 'judging'
   | 'distributing'
   | 'settled'
@@ -1470,6 +1471,14 @@ export type Database = {
       get_challenge_settlement: {
         Args: { p_challenge_id: string };
         Returns: ChallengeSettlementView | null;
+      };
+      settle_ended_challenge: {
+        Args: { p_challenge_id: string };
+        Returns: ChallengeSettlementView;
+      };
+      tick_settlements: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
       settle_challenge: {
         Args: { p_challenge_id: string };

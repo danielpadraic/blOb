@@ -17,6 +17,24 @@ import { getErrorMessage } from '@/utils/errors';
 import { compactCountdown, formatRelative } from '@/utils/format';
 import { formatWallet } from '@/lib/currency';
 import { officialBob } from '@/copy/officialBob';
+import { FORFEIT_RECEIPT } from '@/lib/settlement/receipts';
+import { isEvenSplitAutoSettle } from '@/lib/settlement/lifecycle';
+import {
+  getChallengeSettlementWithClient,
+  settleEndedChallengeWithClient,
+  tickSettlementsWithClient,
+} from '@/lib/settlement/rpc';
+
+export {
+  LIFECYCLE_LABELS,
+  isEvenSplitAutoSettle,
+  lifecycleLabel,
+  lifecyclePhase,
+  shouldAutoSettle,
+} from '@/lib/settlement/lifecycle';
+export { FORFEIT_RECEIPT, formatSettlementAmount, receiptHeadline } from '@/lib/settlement/receipts';
+export { classifySettlementError, settlementErrorCopy } from '@/lib/settlement/errors';
+export { trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
 
 const JOINABLE_STATUSES: ChallengeStatus[] = [
   'upcoming',
@@ -29,6 +47,8 @@ const JOINABLE_STATUSES: ChallengeStatus[] = [
 
 const CLOSED_JOIN_STATUSES: ChallengeStatus[] = [
   'live',
+  'ended',
+  'settling',
   'judging',
   'settled',
   'cancelled',
@@ -172,10 +192,17 @@ export function hasChallengeEnded(
 }
 
 export function canMarkJudging(
-  challenge: Pick<Challenge, 'status' | 'created_by' | 'ends_at' | 'is_unlimited'>,
+  challenge: Pick<Challenge, 'status' | 'created_by' | 'ends_at' | 'is_unlimited'> & {
+    prize_structure?: string | null;
+    end_mode?: string | null;
+    challenge_type?: string | null;
+  },
   userId: string | undefined,
   now = new Date(),
 ): boolean {
+  if (isEvenSplitAutoSettle(challenge)) {
+    return false;
+  }
   if (!isHostOfChallenge(challenge, userId)) {
     return false;
   }
@@ -190,9 +217,16 @@ export function canMarkJudging(
 }
 
 export function canSettleChallenge(
-  challenge: Pick<Challenge, 'status' | 'created_by' | 'distributed_at' | 'is_unlimited' | 'ends_at'>,
+  challenge: Pick<Challenge, 'status' | 'created_by' | 'distributed_at' | 'is_unlimited' | 'ends_at'> & {
+    prize_structure?: string | null;
+    end_mode?: string | null;
+    challenge_type?: string | null;
+  },
   userId: string | undefined,
 ): boolean {
+  if (isEvenSplitAutoSettle(challenge)) {
+    return false;
+  }
   if (!isHostOfChallenge(challenge, userId)) {
     return false;
   }
@@ -310,9 +344,13 @@ export function personalSettlementCopy(input: {
   joined: boolean;
   currency?: WalletCurrency | string | null;
   official?: boolean;
+  winnerCount?: number | null;
 }): string {
   if (!input.joined) {
     return 'You were not in this challenge.';
+  }
+  if (Number(input.winnerCount) === 0) {
+    return FORFEIT_RECEIPT;
   }
   if (input.official) {
     if (input.payout && Number(input.payout.amount) > 0) {
@@ -321,7 +359,7 @@ export function personalSettlementCopy(input: {
     return officialBob('stillWon');
   }
   if (input.payout && Number(input.payout.amount) > 0) {
-    return `You earned ${formatWallet(input.payout.amount, input.currency)}.`;
+    return `You received ${formatWallet(input.payout.amount, input.currency)}.`;
   }
   return 'No payout this time.';
 }
@@ -430,9 +468,9 @@ export async function fetchChallengeSettlement(
 
     const payoutsQuery = await supabase
       .from('challenge_payouts')
-      .select('id, settlement_id, challenge_id, user_id, place, score, amount, reason, created_at')
+      .select('id, challenge_id, user_id, amount, created_at')
       .eq('challenge_id', challengeId)
-      .order('place', { ascending: true });
+      .order('created_at', { ascending: true });
 
     const settlement = asSettlement(data as Record<string, unknown>);
     const fromTable = (payoutsQuery.data ?? []).map((row) => asPayout(row as Record<string, unknown>));
@@ -456,45 +494,45 @@ export async function markChallengeJudging(
 }
 
 export async function settleChallenge(challengeId: string): Promise<ChallengeSettlementView> {
-  const { data: session } = await supabase.auth.getUser();
-  const userId = session.user?.id ?? '';
   try {
-    await getPaymentsProvider().payout({
-      userId,
-      amountCents: 0,
-      challengeId,
-    });
+    return await settleEndedChallengeWithClient(supabase, challengeId);
   } catch (error) {
-    const message = getErrorMessage(error);
-    if (message === 'Already paid out.') {
-      const existing = await fetchChallengeSettlement(challengeId);
-      if (existing) {
-        return existing;
+    const existing = await fetchChallengeSettlement(challengeId);
+    if (existing) {
+      return existing;
+    }
+    const { data: session } = await supabase.auth.getUser();
+    const userId = session.user?.id ?? '';
+    try {
+      await getPaymentsProvider().payout({
+        userId,
+        amountCents: 0,
+        challengeId,
+      });
+    } catch (legacy) {
+      const message = getErrorMessage(legacy);
+      if (message === 'Already paid out.') {
+        const paid = await fetchChallengeSettlement(challengeId);
+        if (paid) {
+          return paid;
+        }
       }
+      throw error;
+    }
+    const after = await fetchChallengeSettlement(challengeId);
+    if (after) {
+      return after;
     }
     throw error;
   }
+}
 
-  const existing = await fetchChallengeSettlement(challengeId);
-  if (existing) {
-    return existing;
-  }
-
-  return {
-    already_settled: true,
-    settlement: {
-      id: challengeId,
-      challenge_id: challengeId,
-      settled_by: null,
-      prize_pool: 0,
-      distributed: 0,
-      prize_structure: 'equal_split',
-      winner_count: 0,
-      settled_at: new Date().toISOString(),
-      slices: [],
-    },
-    payouts: [],
-  };
+export async function trySettleIfEnded(challengeId: string): Promise<ChallengeSettlementView | null> {
+  await tickSettlementsWithClient(supabase);
+  return (
+    (await getChallengeSettlementWithClient(supabase, challengeId)) ??
+    (await fetchChallengeSettlement(challengeId))
+  );
 }
 
 const SYNC_STATUSES_MIN_INTERVAL_MS = 15_000;
@@ -514,6 +552,11 @@ export async function syncChallengeStatuses(): Promise<void> {
     const { error } = await supabase.rpc('sync_challenge_statuses');
     if (error) {
       console.log('[blob:status] sync skipped', error.message);
+    }
+    try {
+      await tickSettlementsWithClient(supabase);
+    } catch (tickError) {
+      console.log('[blob:status] settlement tick skipped', tickError);
     }
   })().finally(() => {
     statusSyncInFlight = null;

@@ -24,6 +24,16 @@ export function useChallengeBoardRealtime(challengeId?: string) {
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
     };
 
+    const refreshSettlement = () => {
+      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge-settlement', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet-ledger'] });
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      refreshBoard();
+      refreshFeed();
+    };
+
     const channel = supabase
       .channel(`challenge-board:${challengeId}`)
       .on(
@@ -55,6 +65,59 @@ export function useChallengeBoardRealtime(challengeId?: string) {
           filter: `challenge_id=eq.${challengeId}`,
         },
         refreshFeed,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'challenges',
+          filter: `id=eq.${challengeId}`,
+        },
+        refreshSettlement,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'challenge_settlements',
+          filter: `challenge_id=eq.${challengeId}`,
+        },
+        refreshSettlement,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'challenge_payouts',
+          filter: `challenge_id=eq.${challengeId}`,
+        },
+        refreshSettlement,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wallet_ledger',
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['wallet-ledger'] });
+          void queryClient.invalidateQueries({ queryKey: ['profile'] });
+        },
       )
       .subscribe();
 
