@@ -1538,6 +1538,9 @@ export type Database = {
           p_proof_id?: string | null;
           p_proof_part?: unknown;
           p_health_workout_id?: string | null;
+          p_notes?: string | null;
+          p_extra_media?: string[] | null;
+          p_clear_proof?: boolean;
         };
         Returns: Record<string, unknown>;
       };

@@ -6,8 +6,11 @@ import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
+import { loggableStatusLine } from '@/lib/loggable';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
+
+export { asLoggableList, loggableStatusLine } from '@/lib/loggable';
 
 export type LoggableChallenge = Pick<
   Challenge,
@@ -27,15 +30,19 @@ export type LoggableChallenge = Pick<
 > & {
   checkinPhase?: CheckinPhase;
   ctaTitle?: string;
+  daysCompleted?: number;
+  statusLine?: string;
 };
 
 type ParticipationRow = Pick<
   ChallengeParticipant,
   'challenge_id' | 'status' | 'joined_at' | 'eliminated_at'
->;
+> & {
+  days_completed?: number | null;
+};
 
-const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at';
-const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at';
+const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at, days_completed';
+const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at, days_completed';
 
 const CHALLENGE_SELECTS = [
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
@@ -45,20 +52,20 @@ const CHALLENGE_SELECTS = [
   'id, title, is_official, status, starts_at, ends_at',
 ] as const;
 
-export function useLoggableChallenge() {
+export function useLoggableChallenges() {
   const { user } = useAuth();
   const date = utcDateStamp();
 
   return useQuery({
     queryKey: ['loggable-challenge', user?.id, date],
     enabled: Boolean(user?.id),
-    queryFn: async (): Promise<LoggableChallenge | null> => {
+    queryFn: async (): Promise<LoggableChallenge[]> => {
       if (!user) {
-        return null;
+        return [];
       }
       const participations = await fetchActiveParticipations(user.id);
       if (participations.length === 0) {
-        return null;
+        return [];
       }
       const challengeIds = participations.map((row) => row.challenge_id);
       const [challenges, loggedRows, checkinRows] = await Promise.all([
@@ -67,9 +74,12 @@ export function useLoggableChallenge() {
         fetchCheckinPhases(user.id, challengeIds),
       ]);
       const joinedAt = new Map(participations.map((row) => [row.challenge_id, row.joined_at]));
+      const daysCompleted = new Map(
+        participations.map((row) => [row.challenge_id, Number(row.days_completed ?? 0)]),
+      );
       const now = Date.now();
 
-      const eligible = challenges
+      return challenges
         .filter((challenge) => {
           const expected = checkinPeriodKey(challenge);
           if (loggedRows.get(challenge.id)?.has(expected)) {
@@ -98,20 +108,34 @@ export function useLoggableChallenge() {
           const aJoined = joinedAt.get(a.id) ?? '';
           const bJoined = joinedAt.get(b.id) ?? '';
           return new Date(bJoined).getTime() - new Date(aJoined).getTime();
+        })
+        .map((challenge) => {
+          const phase = phaseForPeriod(challenge, checkinRows);
+          const completed = daysCompleted.get(challenge.id) ?? 0;
+          return {
+            ...challenge,
+            daysCompleted: completed,
+            checkinPhase: phase,
+            ctaTitle: checkinCtaTitle(phase),
+            statusLine: loggableStatusLine({
+              ends_at: challenge.ends_at,
+              days_required: challenge.days_required,
+              daysCompleted: completed,
+              todayKey: checkinPeriodKey(challenge),
+            }),
+          };
         });
-
-      const first = eligible[0];
-      if (!first) {
-        return null;
-      }
-      const phase = phaseForPeriod(first, checkinRows);
-      return {
-        ...first,
-        checkinPhase: phase,
-        ctaTitle: checkinCtaTitle(phase),
-      };
     },
   });
+}
+
+/** First open check-in only. Quick Action should use `useLoggableChallenges`. */
+export function useLoggableChallenge() {
+  const list = useLoggableChallenges();
+  return {
+    ...list,
+    data: list.data?.[0] ?? null,
+  };
 }
 
 function submittedThisPeriod(
@@ -141,12 +165,18 @@ async function fetchActiveParticipations(userId: string): Promise<ParticipationR
     .from('challenge_participants')
     .select(PARTICIPANT_SELECT)
     .eq('user_id', userId);
-  const result = primary.error
+  const fallback = primary.error
     ? await supabase
         .from('challenge_participants')
         .select(PARTICIPANT_SELECT_LEGACY)
         .eq('user_id', userId)
     : primary;
+  const result = fallback.error
+    ? await supabase
+        .from('challenge_participants')
+        .select('challenge_id, status, joined_at')
+        .eq('user_id', userId)
+    : fallback;
   if (result.error) {
     throw new Error(getErrorMessage(result.error));
   }
@@ -154,6 +184,7 @@ async function fetchActiveParticipations(userId: string): Promise<ParticipationR
     .map((row) => ({
       ...row,
       eliminated_at: row.eliminated_at ?? null,
+      days_completed: Number(row.days_completed ?? 0),
     }))
     .filter((row) => {
       const status = String(row.status ?? 'joined');

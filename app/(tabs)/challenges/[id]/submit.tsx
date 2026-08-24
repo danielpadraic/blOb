@@ -1,13 +1,11 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 
-import { CaptureSourceBadge, HealthProofCaption } from '@/components/challenge/HealthProofCaption';
+import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { MascotState } from '@/components/mascot/MascotState';
-import { Button } from '@/components/ui/Button';
-import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
@@ -16,7 +14,7 @@ import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
 import type { HealthWorkout } from '@/services/health/types';
-import { CHECKIN_BOB, checkinStageHint, checkinStageIndex, checkinStageLabel, classifyCheckinError, isLikelyOffline } from '@/lib/checkin';
+import { CHECKIN_BOB, checkinStageHint, checkinStageLabel, classifyCheckinError, isLikelyOffline } from '@/lib/checkin';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   beginCameraProof,
@@ -34,8 +32,10 @@ import { copy } from '@/lib/copy';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
-import { THEME } from '@/lib/theme';
+import { supabase } from '@/lib/supabase';
+import type { MentionDoc } from '@/lib/mentions';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
+import { uploadPostAttachment } from '@/utils/upload';
 
 type SlotDraft = {
   uri?: string;
@@ -56,32 +56,6 @@ function LoggedState({ onBack }: { onBack: () => void }) {
         onAction={onBack}
       />
     </Screen>
-  );
-}
-
-function StageRail({ phase }: { phase: 'none' | 'in_progress' | 'ready' | 'submitted' }) {
-  const current = checkinStageIndex(phase);
-  const labels = [copy('checkin.begin'), copy('checkin.continue'), copy('checkin.submit')];
-  return (
-    <View className="mb-4 flex-row items-center justify-center" style={{ gap: 8 }}>
-      {labels.map((label, index) => {
-        const active = index === Math.min(current, 2) && phase !== 'submitted';
-        const done = index < current || phase === 'submitted';
-        return (
-          <View key={label} className="items-center" style={{ minWidth: 72 }}>
-            <View
-              className="h-2 w-full rounded-full"
-              style={{ backgroundColor: done || active ? THEME.accent : THEME.border }}
-            />
-            <AppText
-              className="mt-1 text-[11px] font-bold"
-              style={{ color: done || active ? THEME.textPrimary : THEME.textMuted }}>
-              {label}
-            </AppText>
-          </View>
-        );
-      })}
-    </View>
   );
 }
 
@@ -114,6 +88,8 @@ export default function SubmitWorkoutScreen() {
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [extras, setExtras] = useState<CheckinExtra[]>([]);
+  const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
@@ -150,7 +126,10 @@ export default function SubmitWorkoutScreen() {
       }
       return next;
     });
-  }, [challenge, checkinQuery.data?.id, checkinQuery.data?.proof_parts, checkinQuery.data?.updated_at]);
+    if (checkinQuery.data?.notes) {
+      setCaption((current) => (current.text.trim() ? current : { text: String(checkinQuery.data?.notes), chips: current.chips }));
+    }
+  }, [challenge, checkinQuery.data?.id, checkinQuery.data?.notes, checkinQuery.data?.proof_parts, checkinQuery.data?.updated_at]);
 
   const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
@@ -217,13 +196,17 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
-  async function onBeginHonor() {
-    if (!id || busy) {
+  async function onRemoveProof(proof: ChallengeProof) {
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[proof.id];
+      return next;
+    });
+    if (!id) {
       return;
     }
-    setError(null);
     try {
-      await saveProof.mutateAsync({ challengeId: id });
+      await saveProof.mutateAsync({ challengeId: id, proof, clearProof: true });
     } catch (caught) {
       setError(getErrorMessage(caught));
     }
@@ -243,18 +226,77 @@ export default function SubmitWorkoutScreen() {
     try {
       const savedParts = checkinQuery.data?.proof_parts ?? {};
       for (const proof of proofSteps) {
-        if (partSatisfies(proof, savedParts[proof.id])) {
-          continue;
-        }
         if (proof.method === 'honor') {
           continue;
         }
-        await persistProof(proof, drafts[proof.id]);
+        const draft = drafts[proof.id];
+        if (partSatisfies(proof, savedParts[proof.id]) && partSatisfies(proof, slotPart(proof, draft))) {
+          continue;
+        }
+        if (!partSatisfies(proof, slotPart(proof, draft))) {
+          continue;
+        }
+        await persistProof(proof, draft);
       }
-      if (phase === 'none' && honorOnly) {
-        await saveProof.mutateAsync({ challengeId: id });
+      const uploadedExtras: CheckinExtra[] = [];
+      const extraUrls: string[] = [];
+      if (user?.id) {
+        for (const [index, extra] of extras.entries()) {
+          if (extra.remoteUrl) {
+            extraUrls.push(extra.remoteUrl);
+            uploadedExtras.push(extra);
+            continue;
+          }
+          if (extra.kind === 'gif') {
+            extraUrls.push(extra.uri);
+            uploadedExtras.push({ ...extra, remoteUrl: extra.uri });
+            continue;
+          }
+          const remoteUrl = await uploadPostAttachment({
+            uri: extra.uri,
+            userId: user.id,
+            fileStem: `checkin-extra-${Date.now()}-${index}`,
+            mimeType: extra.mimeType ?? extra.blob?.type,
+            blob: extra.blob,
+            originalName: extra.name,
+          });
+          extraUrls.push(remoteUrl);
+          uploadedExtras.push({ ...extra, remoteUrl });
+        }
+        if (uploadedExtras.length) {
+          setExtras(uploadedExtras);
+        }
       }
-      await submitCheckin.mutateAsync();
+      const notes = caption.text.trim() || null;
+      await saveProof.mutateAsync({
+        challengeId: id,
+        notes,
+        extraMedia: extraUrls.length ? extraUrls : null,
+      });
+      const submitted = await submitCheckin.mutateAsync();
+      const mentionIds = [...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id))];
+      if (mentionIds.length > 0 && submitted?.id && user?.id) {
+        try {
+          const post = await supabase
+            .from('posts')
+            .select('id')
+            .eq('checkin_id', submitted.id)
+            .is('deleted_at', null)
+            .maybeSingle();
+          const postId = (post.data as { id?: string } | null)?.id;
+          if (postId) {
+            await supabase.from('post_mentions').insert(
+              mentionIds.map((mentioned_user_id) => ({
+                post_id: postId,
+                mentioned_user_id,
+                author_id: user.id,
+              })),
+            );
+          }
+        } catch {
+          // Caption already saved; mention notify is best-effort.
+        }
+      }
       await successHaptic();
       setJustSubmitted(true);
     } catch (caught) {
@@ -439,12 +481,12 @@ export default function SubmitWorkoutScreen() {
     );
   }
 
-  const screenTitle =
-    phase === 'ready' ? copy('checkin.submit') : phase === 'in_progress' ? copy('checkin.continue') : copy('checkin.begin');
+  const composerProofs = proofSteps.filter((proof) => proof.method !== 'honor' && proof.method !== 'checkin');
+  const textProofs = proofSteps.filter((proof) => proof.method === 'checkin');
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
-      <Stack.Screen options={{ title: screenTitle }} />
+      <Stack.Screen options={{ title: 'Check-in' }} />
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-10 pt-2"
@@ -455,117 +497,52 @@ export default function SubmitWorkoutScreen() {
             <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="page" />
           </View>
         ) : null}
-        <StageRail phase={phase} />
-        <AppText className="text-center text-sm text-muted">
+        <AppText className="mb-3 text-center text-sm text-muted">
           {checkinStageHint(
             phase,
             missing.map((proof) => proofDisplayName(proof)),
           ) || copy('checkin.emptyBob')}
         </AppText>
-        {isOfficialSeriesChallenge(challenge) && (phase === 'in_progress' || phase === 'ready') ? (
-          <AppText className="mt-2 text-center text-[13px] font-semibold" style={{ color: THEME.accent }}>
-            {copy('checkin.submitBanner')}
-          </AppText>
-        ) : null}
 
-        {honorOnly && phase === 'none' ? (
-          <View className="mt-8">
-            <Button
-              title={copy('checkin.imStarting')}
-              size="lg"
-              loading={busy}
-              disabled={busy}
-              onPress={() => void onBeginHonor()}
+        {textProofs.map((proof) => (
+          <View key={proof.id} className="mb-3">
+            <Input
+              placeholder={proofDisplayName(proof) || 'What did you do?'}
+              value={drafts[proof.id]?.text ?? ''}
+              onChangeText={(value) => onText(proof.id, value)}
+              onBlur={() => {
+                const text = drafts[proof.id]?.text?.trim() ?? '';
+                if (text) {
+                  void persistProof(proof, { text });
+                }
+              }}
+              editable={!busy && phase !== 'submitted'}
             />
           </View>
-        ) : (
-          <View className="mt-5 gap-4">
-            {proofSteps.map((proof) => {
-              const done = partSatisfies(proof, slotPart(proof, drafts[proof.id]));
-              return (
-                <View
-                  key={proof.id}
-                  className="rounded-blob border px-3 py-3"
-                  style={{ borderColor: THEME.border, backgroundColor: THEME.surface }}>
-                  <View className="mb-2 flex-row items-center" style={{ gap: 8 }}>
-                    <View
-                      className="h-6 w-6 items-center justify-center rounded-full"
-                      style={{
-                        backgroundColor: done ? THEME.accentSoft : THEME.surface2,
-                        borderWidth: 1,
-                        borderColor: done ? THEME.accent : THEME.border,
-                      }}>
-                      {done ? <Glyph name={GLYPH.check} color={THEME.accent} size={14} /> : null}
-                    </View>
-                    <AppText className="flex-1 text-[15px] font-bold text-charcoal">
-                      {proofDisplayName(proof)}
-                    </AppText>
-                  </View>
-                  {proof.method === 'honor' ? (
-                    <AppText className="text-sm text-muted">Honor. Confirm to check in.</AppText>
-                  ) : proof.method === 'checkin' ? (
-                    <Input
-                      placeholder="What did you do?"
-                      value={drafts[proof.id]?.text ?? ''}
-                      onChangeText={(value) => onText(proof.id, value)}
-                      onBlur={() => {
-                        const text = drafts[proof.id]?.text?.trim() ?? '';
-                        if (text && !done) {
-                          void persistProof(proof, { text });
-                        }
-                      }}
-                      editable={!busy && phase !== 'submitted'}
-                    />
-                  ) : done ? (
-                    drafts[proof.id]?.uri?.startsWith('health:') ||
-                    checkinQuery.data?.proof_parts?.[proof.id]?.healthWorkoutId ? (
-                      <HealthProofCaption
-                        healthWorkoutId={
-                          checkinQuery.data?.proof_parts?.[proof.id]?.healthWorkoutId ??
-                          drafts[proof.id]?.uri?.replace(/^health:/, '')
-                        }
-                      />
-                    ) : (
-                      <CaptureSourceBadge fromLibrary={drafts[proof.id]?.fromLibrary} />
-                    )
-                  ) : (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Add ${proofDisplayName(proof)}`}
-                      onPress={() => setCaptureId(proof.id)}
-                      style={{ minHeight: 44, justifyContent: 'center' }}>
-                      <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
-                        Add this proof
-                      </AppText>
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        )}
+        ))}
 
-        {missing.length > 0 && filledCount > 0 ? (
-          <AppText className="mt-4 text-sm leading-5 text-muted">
-            Still needed: {missing.map((proof) => proofDisplayName(proof)).join(', ')}.
-          </AppText>
-        ) : null}
+        <CheckinComposer
+          proofs={composerProofs}
+          drafts={drafts}
+          extras={extras}
+          initialCaption={checkinQuery.data?.notes ?? ''}
+          allReady={allReady}
+          busy={busy}
+          canSend={allReady && phase !== 'submitted'}
+          onAddProof={(proof) => {
+            if (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') {
+              setCaptureId(proof.id);
+            }
+          }}
+          onRemoveProof={(proof) => void onRemoveProof(proof)}
+          onExtrasChange={setExtras}
+          onCaptionChange={setCaption}
+          onSend={() => void onSubmit()}
+        />
 
         {error ? (
           <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
         ) : null}
-
-        <View className="mt-6">
-          {allReady && phase !== 'submitted' && phase !== 'none' ? (
-            <Button
-              title={copy('checkin.submit')}
-              size="lg"
-              loading={busy}
-              disabled={busy}
-              onPress={() => void onSubmit()}
-            />
-          ) : null}
-        </View>
       </ScrollView>
     </Screen>
   );

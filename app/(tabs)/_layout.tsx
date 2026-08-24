@@ -23,7 +23,7 @@ import {
   type LogoMenuAction,
 } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
-import { useLoggableChallenge } from '@/hooks/useLoggableChallenge';
+import { useLoggableChallenges, type LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { HealthLogPromptHost } from '@/components/health/HealthLogPrompt';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
@@ -95,7 +95,7 @@ function TabLayoutInner() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
-  const loggable = useLoggableChallenge();
+  const loggable = useLoggableChallenges();
   const leftApp = useRef(false);
   useNotificationsRealtime();
   usePushNotifications();
@@ -199,9 +199,13 @@ function TabLayoutInner() {
     setTimeout(() => router.push(href), 60);
   }
 
-  function onAction(id: QuickActionId) {
-    if (id === 'log' && loggable.data?.id) {
-      go(`/challenges/${loggable.data.id}/submit`);
+  function onAction(id: QuickActionId, challenge?: LoggableChallenge) {
+    if (id === 'log') {
+      const picked = challenge?.id;
+      if (!picked) {
+        return;
+      }
+      go(`/challenges/${picked}/submit`);
       return;
     }
     if (id === 'create') {

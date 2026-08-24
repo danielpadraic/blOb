@@ -34,6 +34,9 @@ export type SaveCheckinProofInput = {
   text?: string | null;
   fromLibrary?: boolean;
   blob?: Blob | null;
+  notes?: string | null;
+  extraMedia?: string[] | null;
+  clearProof?: boolean;
 };
 
 export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCheckin {
@@ -80,6 +83,9 @@ async function proofPartFor(
   upload: UploadCheckinProofFn,
   resolveUrl: ResolveProofUrlFn,
 ): Promise<{ id: string; part: ChallengeProofPart; healthWorkoutId: string | null } | null> {
+  if (input.clearProof) {
+    return input.proof ? { id: input.proof.id, part: { method: input.proof.method }, healthWorkoutId: null } : null;
+  }
   const proof = input.proof;
   if (!proof) {
     return null;
@@ -132,9 +138,12 @@ export async function saveCheckinProofWithClient(
   const packed = await proofPartFor(input, userId, upload, resolveUrl);
   const { data, error } = (await client.rpc('save_checkin_proof', {
     p_challenge_id: input.challengeId,
-    p_proof_id: packed?.id ?? null,
-    p_proof_part: packed?.part ?? null,
-    p_health_workout_id: packed?.healthWorkoutId ?? null,
+    p_proof_id: input.clearProof ? input.proof?.id ?? packed?.id ?? null : packed?.id ?? null,
+    p_proof_part: input.clearProof ? null : packed?.part ?? null,
+    p_health_workout_id: input.clearProof ? null : packed?.healthWorkoutId ?? null,
+    p_notes: input.notes ?? null,
+    p_extra_media: input.extraMedia ?? null,
+    p_clear_proof: input.clearProof === true,
   })) as { data: unknown; error: { message?: string; code?: string; details?: string } | null };
   if (error) {
     throw new Error(mapCheckinRpcError(error, 'save'));

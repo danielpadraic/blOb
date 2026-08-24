@@ -6,6 +6,7 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
+import { asLoggableList } from '@/lib/loggable';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
@@ -13,9 +14,9 @@ export type QuickActionId = 'log' | 'create' | 'join' | 'post' | 'story' | 'reel
 
 type QuickActionSheetProps = {
   visible: boolean;
-  loggable?: LoggableChallenge | null;
+  loggable?: LoggableChallenge | LoggableChallenge[] | null;
   onClose: () => void;
-  onAction: (id: QuickActionId) => void;
+  onAction: (id: QuickActionId, challenge?: LoggableChallenge) => void;
 };
 
 type ActionRow = {
@@ -41,7 +42,9 @@ export function QuickActionSheet({
   const [handleH, setHandleH] = useState(72);
   const [listH, setListH] = useState(0);
   const [contentH, setContentH] = useState(0);
-  const [step, setStep] = useState<'root' | 'post'>('root');
+  const [step, setStep] = useState<'root' | 'post' | 'log'>('root');
+  const loggables = asLoggableList(loggable);
+  const only = loggables.length === 1 ? loggables[0] : null;
 
   const rows: ActionRow[] =
     step === 'post'
@@ -50,19 +53,30 @@ export function QuickActionSheet({
           { id: 'reel', glyph: '🎬', label: copy('round.noun') },
           { id: 'post', glyph: '✍️', label: 'Feed' },
         ]
-      : [
-          ...(loggable
-            ? [
-                {
-                  id: 'log' as const,
-                  glyph: '✅',
-                  label: loggable.ctaTitle ?? copy('checkin.begin'),
-                  hint: loggable.title,
-                },
-              ]
-            : []),
-          { id: 'post', glyph: '✍️', label: 'Post' },
-        ];
+      : step === 'log'
+        ? []
+        : [
+            ...(loggables.length === 1 && only
+              ? [
+                  {
+                    id: 'log' as const,
+                    glyph: '✅',
+                    label: only.ctaTitle ?? copy('checkin.begin'),
+                    hint: only.title,
+                  },
+                ]
+              : loggables.length > 1
+                ? [
+                    {
+                      id: 'log' as const,
+                      glyph: '✅',
+                      label: 'Check In',
+                      hint: `${loggables.length} open`,
+                    },
+                  ]
+                : []),
+            { id: 'post', glyph: '✍️', label: 'Post' },
+          ];
 
   const listMax = Math.max(ROW_MIN + LIST_PAD, sheetMax - handleH);
   const canScroll = contentH > listH + 1;
@@ -96,9 +110,21 @@ export function QuickActionSheet({
     transform: [{ translateY: translateY.value }],
   }));
 
-  function onRow(id: QuickActionId) {
+  function onRow(id: QuickActionId, challenge?: LoggableChallenge) {
     if (step === 'root' && id === 'post') {
       setStep('post');
+      return;
+    }
+    if (step === 'root' && id === 'log' && loggables.length > 1) {
+      setStep('log');
+      return;
+    }
+    if (id === 'log') {
+      const picked = challenge ?? only ?? undefined;
+      if (!picked) {
+        return;
+      }
+      onAction('log', picked);
       return;
     }
     onAction(id);
@@ -130,7 +156,7 @@ export function QuickActionSheet({
             <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
             <View className="mt-3 w-full flex-row items-center" style={{ minHeight: 44 }}>
               <View style={{ flex: 1, alignItems: 'flex-start', justifyContent: 'center', minHeight: 44 }}>
-                {step === 'post' ? (
+                {step === 'post' || step === 'log' ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Back"
@@ -145,7 +171,7 @@ export function QuickActionSheet({
               </View>
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                 <AppText className="text-lg font-bold text-charcoal" numberOfLines={1}>
-                  {step === 'post' ? 'Post' : 'Quick actions'}
+                  {step === 'post' ? 'Post' : step === 'log' ? 'Check In' : 'Quick actions'}
                 </AppText>
               </View>
               <View style={{ flex: 1, minHeight: 44 }} />
@@ -173,35 +199,65 @@ export function QuickActionSheet({
               backgroundColor: THEME.surface,
               overflow: 'hidden',
             }}>
-            {rows.map((row, index) => (
-              <Pressable
-                key={`${step}-${row.id}`}
-                accessibilityRole="button"
-                accessibilityLabel={row.label}
-                onPress={() => onRow(row.id)}
-                className="flex-row items-center px-4"
-                style={{
-                  minHeight: ROW_MIN,
-                  paddingVertical: 12,
-                  borderTopWidth: index === 0 ? 0 : 1,
-                  borderTopColor: THEME.border,
-                }}>
-                <View
-                  className="h-10 w-10 items-center justify-center rounded-full"
-                  style={{ backgroundColor: THEME.surface2 }}>
-                  <AppText className="text-[18px]">{row.glyph}</AppText>
-                </View>
-                <View className="ml-3 flex-1">
-                  <AppText className="font-semibold text-charcoal">{row.label}</AppText>
-                  {row.hint ? (
-                    <AppText className="mt-0.5 text-sm text-muted" numberOfLines={1}>
-                      {row.hint}
-                    </AppText>
-                  ) : null}
-                </View>
-                <AppText className="text-muted">›</AppText>
-              </Pressable>
-            ))}
+            {step === 'log'
+              ? loggables.map((challenge, index) => (
+                  <Pressable
+                    key={challenge.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={challenge.title}
+                    onPress={() => onRow('log', challenge)}
+                    className="flex-row items-center px-4"
+                    style={{
+                      minHeight: ROW_MIN,
+                      paddingVertical: 12,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: THEME.border,
+                    }}>
+                    <View
+                      className="h-10 w-10 items-center justify-center rounded-full"
+                      style={{ backgroundColor: THEME.surface2 }}>
+                      <AppText className="text-[18px]">✅</AppText>
+                    </View>
+                    <View className="ml-3 flex-1">
+                      <AppText className="font-semibold text-charcoal">{challenge.title}</AppText>
+                      {challenge.statusLine ? (
+                        <AppText className="mt-0.5 text-sm text-muted" numberOfLines={1}>
+                          {challenge.statusLine}
+                        </AppText>
+                      ) : null}
+                    </View>
+                    <AppText className="text-muted">›</AppText>
+                  </Pressable>
+                ))
+              : rows.map((row, index) => (
+                  <Pressable
+                    key={`${step}-${row.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={row.label}
+                    onPress={() => onRow(row.id)}
+                    className="flex-row items-center px-4"
+                    style={{
+                      minHeight: ROW_MIN,
+                      paddingVertical: 12,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: THEME.border,
+                    }}>
+                    <View
+                      className="h-10 w-10 items-center justify-center rounded-full"
+                      style={{ backgroundColor: THEME.surface2 }}>
+                      <AppText className="text-[18px]">{row.glyph}</AppText>
+                    </View>
+                    <View className="ml-3 flex-1">
+                      <AppText className="font-semibold text-charcoal">{row.label}</AppText>
+                      {row.hint ? (
+                        <AppText className="mt-0.5 text-sm text-muted" numberOfLines={1}>
+                          {row.hint}
+                        </AppText>
+                      ) : null}
+                    </View>
+                    <AppText className="text-muted">›</AppText>
+                  </Pressable>
+                ))}
           </View>
         </ScrollView>
       </Animated.View>

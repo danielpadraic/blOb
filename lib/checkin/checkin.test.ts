@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { checkinCtaTitle } from '@/lib/challengeCheckin';
+import { saveCheckinProofWithClient } from '@/lib/checkin/rpc';
 import {
   BEFORE_AFTER_HR_PRESET,
   checkinProofsReady,
@@ -68,5 +69,74 @@ describe('official weekly proofs', () => {
   it('blocks a second submit for the same window', () => {
     expect(incrementDaysCompleted(1, true)).toBe(1);
     expect(classifyCheckinError(new Error('ALREADY_LOGGED_TODAY'))).toBe('already');
+  });
+});
+
+const savedRow = {
+  id: 'ck-1',
+  user_id: 'u1',
+  challenge_id: 'c1',
+  period_key: '2026-08-24',
+  status: 'in_progress',
+  proof_parts: {},
+  started_at: '2026-08-24T12:00:00.000Z',
+  created_at: '2026-08-24T12:00:00.000Z',
+};
+
+describe('check-in composer save', () => {
+  it('clears a required proof without uploading', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    const upload = vi.fn();
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'pre', name: 'Pre-workout selfie', method: 'photo' },
+        clearProof: true,
+      },
+      upload,
+      async () => 'https://example.com/unused.jpg',
+    );
+    expect(upload).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      'save_checkin_proof',
+      expect.objectContaining({
+        p_challenge_id: 'c1',
+        p_proof_id: 'pre',
+        p_proof_part: null,
+        p_clear_proof: true,
+      }),
+    );
+  });
+
+  it('saves caption and extra media without a new proof part', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        notes: 'Crushed legs @friend',
+        extraMedia: ['https://example.com/cheer.gif'],
+      },
+      async () => {
+        throw new Error('should not upload');
+      },
+      async () => 'https://example.com/unused.jpg',
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      'save_checkin_proof',
+      expect.objectContaining({
+        p_notes: 'Crushed legs @friend',
+        p_extra_media: ['https://example.com/cheer.gif'],
+        p_proof_id: null,
+        p_clear_proof: false,
+      }),
+    );
   });
 });
