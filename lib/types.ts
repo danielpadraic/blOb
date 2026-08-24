@@ -33,6 +33,15 @@ export type {
   StoryView,
 } from '@/types/social';
 
+export type {
+  ActivityConfig,
+  ActivityMultiplierConfig,
+  ActivityQualifier,
+  ActivityQualifiersConfig,
+  ComparablePointsConfig,
+  ScoringMethod,
+} from '@/lib/comparablePoints';
+
 export type WeightUnit = 'kg' | 'lb';
 
 export type FitnessExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
@@ -113,6 +122,7 @@ export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly' | 'once' | '3x_w
 
 export type ChallengeVisibility = 'public' | 'unlisted' | 'private' | 'friends' | 'invite';
 export type ChallengeDiscoverability = 'invite_only' | 'friends_of_friends';
+export type PrivacyMode = 'public' | 'private' | 'private_corporate';
 
 export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'checkin' | 'honor' | 'hr';
 
@@ -333,6 +343,8 @@ export interface Challenge {
   length_unit?: string | null;
   creator_participating?: boolean;
   cover_image_url?: string | null;
+  sponsor_name?: string | null;
+  sponsor_logo_url?: string | null;
   rules_video_url?: string | null;
   official_started_at?: string | null;
   judging_started_at?: string | null;
@@ -345,6 +357,11 @@ export interface Challenge {
   challenge_type: ChallengeKind | string | null;
   visibility: ChallengeVisibility | string | null;
   discoverability?: ChallengeDiscoverability | string | null;
+  privacy_mode?: PrivacyMode | string | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
+  comparable_points_config?: unknown;
+  scoring_version?: number | null;
   allowed_states?: string[] | null;
   challenge_lane?: ChallengeLane | string | null;
   currency: WalletCurrency | string | null;
@@ -937,6 +954,17 @@ export type Database = {
         Partial<HealthConnection>,
         [Relationship<'health_connections_user_id_fkey', 'user_id', 'profiles', 'id'>]
       >;
+      challenge_scoring_audit: TableDef<
+        {
+          id: string;
+          challenge_id: string;
+          version: number;
+          changed_by: string | null;
+          changed_at: string;
+          summary: string | null;
+          config_snapshot: unknown;
+        }
+      >;
       challenge_checkins: TableDef<
         {
           id: string;
@@ -953,6 +981,7 @@ export type Database = {
           workout_submission_id: string | null;
           started_at: string;
           submitted_at: string | null;
+          scoring_version: number | null;
           created_at: string;
           updated_at: string;
         },
@@ -1476,6 +1505,10 @@ export type Database = {
       };
       submit_checkin: {
         Args: { p_challenge_id: string };
+        Returns: Record<string, unknown>;
+      };
+      publish_scoring_change: {
+        Args: { p_challenge_id: string; p_config: unknown; p_summary?: string | null };
         Returns: Record<string, unknown>;
       };
       cancel_challenge: {

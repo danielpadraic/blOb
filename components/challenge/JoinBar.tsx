@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { formatWalletAmount } from '@/lib/currency';
+import { cashPrizeLabel, FREE_ENTRY_LABEL, formatWalletAmount, isBucksChallenge } from '@/lib/currency';
 import { bucksJoinCta } from '@/lib/joinCta';
 import type { Challenge } from '@/lib/types';
 
@@ -50,7 +50,7 @@ export function JoinBar({
               amount={buyInAmount}
               currency={challenge.currency}
               size={18}
-              freeLabel="Free"
+              freeLabel={FREE_ENTRY_LABEL}
               textClassName="text-2xl font-bold text-charcoal"
             />
           </View>
@@ -58,13 +58,17 @@ export function JoinBar({
         <View className="items-end">
           <AppText className="text-xs uppercase tracking-widest text-muted">Prize</AppText>
           <View className="mt-0.5">
-            <StakeAmount
-              amount={challenge.prize_pool}
-              currency={challenge.currency}
-              size={18}
-              zeroAsNumber
-              textClassName="text-lg font-semibold text-coral"
-            />
+            {isBucksChallenge(challenge) ? (
+              <AppText className="text-lg font-semibold text-coral">{cashPrizeLabel(challenge.prize_pool)}</AppText>
+            ) : (
+              <StakeAmount
+                amount={challenge.prize_pool}
+                currency={challenge.currency}
+                size={18}
+                zeroAsNumber
+                textClassName="text-lg font-semibold text-coral"
+              />
+            )}
           </View>
         </View>
       </View>

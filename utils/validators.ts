@@ -210,6 +210,7 @@ export const createChallengeSchema = z
     category: z.enum(CHALLENGE_CATEGORIES),
     challenge_type: z.enum(['consistency', 'points']),
     visibility: z.enum(['public', 'private', 'friends', 'invite']),
+    privacy_mode: z.enum(['public', 'private', 'private_corporate']),
     duration_days: z.string(),
     duration_type: z.enum(['fixed', 'unlimited']),
     starts_at: z.string(),
@@ -260,6 +261,8 @@ export const createChallengeSchema = z
     payout_mode: z.enum(['even_split_remaining', 'winner_take_all', 'top_places']).optional(),
     format: z.enum(['consistency', 'points', 'lms']).optional(),
     discoverability: z.enum(['invite_only', 'friends_of_friends']).nullable().optional(),
+    scoring_method: z.enum(['comparable_points']).nullable().optional(),
+    scoring_config: z.unknown().nullable().optional(),
     rules: z
       .string()
       .trim()
@@ -499,6 +502,9 @@ export const createChallengeSchema = z
     }
 
     if (values.challenge_type === 'points') {
+      if (values.scoring_method === 'comparable_points') {
+        return;
+      }
       if (values.tasks.length < 1) {
         ctx.addIssue({
           code: 'custom',

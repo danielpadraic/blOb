@@ -103,6 +103,9 @@ export type PublishChallengePayload = {
   timezone?: string | null;
   start_rule?: string;
   discoverability?: string | null;
+  privacy_mode?: string | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
 };
 
 export type PublishChallengeResult = {
@@ -255,6 +258,11 @@ export type Challenge = {
   armed_at?: string | null;
   frequency: string | null;
   target_count: number | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
+  comparable_points_config?: unknown;
+  scoring_version?: number | null;
+  privacy_mode?: string | null;
   created_at: string;
   updated_at: string;
 };

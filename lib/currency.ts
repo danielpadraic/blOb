@@ -53,6 +53,31 @@ export function formatCashCompact(amount: number | null | undefined): string {
   return `$${rounded.toFixed(2)}`;
 }
 
+export const FREE_ENTRY_LABEL = 'FREE Entry';
+
+export function isFreeEntry(amount: number | null | undefined): boolean {
+  return Math.max(Number(amount) || 0, 0) <= 0;
+}
+
+/** $5,000 — whole dollars get a comma, no cents. */
+export function formatCashPrizeAmount(amount: number | null | undefined): string {
+  const value = Number(amount ?? 0);
+  if (!Number.isFinite(value)) {
+    return '$0';
+  }
+  const rounded = Math.round(value * 100) / 100;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: Number.isInteger(rounded) ? 0 : 2,
+    maximumFractionDigits: Number.isInteger(rounded) ? 0 : 2,
+  }).format(rounded);
+}
+
+export function cashPrizeLabel(amount: number | null | undefined): string {
+  return `${formatCashPrizeAmount(amount)} Cash Prize`;
+}
+
 /** Amount without the word “Coins.” Cash: $10.00. Coins: 10.00. */
 export function formatWalletAmount(
   amount: number | null | undefined,

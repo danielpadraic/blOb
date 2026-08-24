@@ -1,24 +1,50 @@
+import { isBucksChallenge, isFreeEntry } from '@/lib/currency';
 import { hasChallengeStarted } from '@/lib/settlement';
 
-export const FIELD_NOTE_KEYS = ['pot', 'buyIn', 'board', 'share', 'startNeeded'] as const;
+export const FIELD_NOTE_KEYS = ['pot', 'potHost', 'buyIn', 'buyInFree', 'board', 'share', 'startNeeded'] as const;
 
 export type FieldNoteKey = (typeof FIELD_NOTE_KEYS)[number];
 
-export const FIELD_NOTE_TITLE: Record<FieldNoteKey, 'note.potTitle' | 'note.buyInTitle' | 'note.boardTitle' | 'note.shareTitle' | 'note.startTitle'> = {
+export const FIELD_NOTE_TITLE: Record<
+  FieldNoteKey,
+  'note.potTitle' | 'note.potHostTitle' | 'note.buyInTitle' | 'note.buyInFreeTitle' | 'note.boardTitle' | 'note.shareTitle' | 'note.startTitle'
+> = {
   pot: 'note.potTitle',
+  potHost: 'note.potHostTitle',
   buyIn: 'note.buyInTitle',
+  buyInFree: 'note.buyInFreeTitle',
   board: 'note.boardTitle',
   share: 'note.shareTitle',
   startNeeded: 'note.startTitle',
 };
 
-export const FIELD_NOTE_BODY: Record<FieldNoteKey, 'note.pot' | 'note.buyIn' | 'note.board' | 'note.share' | 'note.startNeeded'> = {
+export const FIELD_NOTE_BODY: Record<
+  FieldNoteKey,
+  'note.pot' | 'note.potHost' | 'note.buyIn' | 'note.buyInFree' | 'note.board' | 'note.share' | 'note.startNeeded'
+> = {
   pot: 'note.pot',
+  potHost: 'note.potHost',
   buyIn: 'note.buyIn',
+  buyInFree: 'note.buyInFree',
   board: 'note.board',
   share: 'note.share',
   startNeeded: 'note.startNeeded',
 };
+
+export function prizeFieldNote(challenge: {
+  host_funded?: boolean | null;
+  buy_in_amount?: number | null;
+  currency?: string | null;
+}): FieldNoteKey {
+  if (challenge.host_funded || (isBucksChallenge(challenge) && isFreeEntry(challenge.buy_in_amount))) {
+    return 'potHost';
+  }
+  return 'pot';
+}
+
+export function entryFieldNote(challenge: { buy_in_amount?: number | null }): FieldNoteKey {
+  return isFreeEntry(challenge.buy_in_amount) ? 'buyInFree' : 'buyIn';
+}
 
 const STARTED_STATUSES = new Set(['live', 'judging', 'settled', 'cancelled', 'cancelled_underfilled']);
 

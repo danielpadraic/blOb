@@ -284,7 +284,7 @@ export function usesWeek10ProofSentence(challenge: {
   if (challenge.series_id === 'week_10') {
     return true;
   }
-  if (Boolean(challenge.is_official) && String(challenge.category ?? 'fitness').toLowerCase() === 'fitness') {
+  if (Boolean(challenge.is_official) && String(challenge.category ?? '').toLowerCase() === 'fitness') {
     return true;
   }
   return isBeforeAfterHeartRateProofs(resolveChallengeProofs(challenge));
@@ -401,7 +401,7 @@ export function legacyTypeForProof(proof: ChallengeProof): ProofType | null {
   if (isCheckoutProofName(named) || proof.id === 'post') {
     return 'post_selfie';
   }
-  if (isCheckinSelfieName(named) || proof.id === 'pre' || named.includes('pre')) {
+  if (isCheckinSelfieName(named) || proof.id === 'pre') {
     return 'pre_selfie';
   }
   return 'photo';

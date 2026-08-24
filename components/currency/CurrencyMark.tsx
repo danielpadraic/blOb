@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
-import { asWalletCurrency, formatCash } from '@/lib/currency';
+import { asWalletCurrency, formatCash, FREE_ENTRY_LABEL } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 
 const COIN = require('@/assets/currency/blob-coin.png');
@@ -57,7 +57,7 @@ export function StakeAmount({
   amount,
   currency,
   size = 13,
-  freeLabel = 'Free',
+  freeLabel = FREE_ENTRY_LABEL,
   textClassName = 'text-[11px] font-semibold text-charcoal',
   zeroAsNumber = false,
 }: StakeAmountProps) {

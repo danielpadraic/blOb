@@ -43,7 +43,8 @@ export const CONVERSATION_MEMBER_COLUMNS =
 export const MESSAGE_COLUMNS = 'id, conversation_id, sender_id, body, media_url, created_at';
 export const CHALLENGE_FEED_COLUMNS =
   'id, title, status, is_official, buy_in_amount, prize_pool, currency, cover_image_url, created_by, visibility';
-const CHALLENGE_FEED_COLUMNS_LANE = `${CHALLENGE_FEED_COLUMNS}, challenge_lane`;
+const CHALLENGE_FEED_COLUMNS_SPONSOR = `${CHALLENGE_FEED_COLUMNS}, sponsor_name, sponsor_logo_url`;
+const CHALLENGE_FEED_COLUMNS_LANE = `${CHALLENGE_FEED_COLUMNS_SPONSOR}, challenge_lane`;
 const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at, series_id, category, challenge_type`;
 
 export type FollowEdge = Follow & { profile: PublicProfile | null };
@@ -107,6 +108,8 @@ export type FeedChallengePreview = {
   currency: string | null;
   cover_image_url: string | null;
   created_by: string | null;
+  sponsor_name?: string | null;
+  sponsor_logo_url?: string | null;
   visibility?: string | null;
   challenge_lane?: string | null;
   starts_at?: string | null;
@@ -704,6 +707,13 @@ export async function fetchChallengePreviewsByIds(ids: string[]): Promise<FeedCh
     .in('id', unique);
   if (!withLane.error) {
     return (withLane.data ?? []) as FeedChallengePreview[];
+  }
+  const withSponsor = await supabase
+    .from('challenges')
+    .select(CHALLENGE_FEED_COLUMNS_SPONSOR)
+    .in('id', unique);
+  if (!withSponsor.error) {
+    return (withSponsor.data ?? []) as FeedChallengePreview[];
   }
   const { data, error } = await supabase
     .from('challenges')

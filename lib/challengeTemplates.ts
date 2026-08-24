@@ -17,7 +17,13 @@ import {
   type ExtraRule,
 } from '@/lib/consistencyRules';
 import { persistTasksForPublish, minMinutesForPublish, namedProofsForPublish } from '@/lib/challengeCreatePublish';
+import {
+  comparablePointsHeadline,
+  comparablePointsLiveSentence,
+  parseComparablePointsConfig,
+} from '@/lib/comparablePoints';
 import { laneReviewLine, normalizeUserChallengeLane } from '@/lib/challengeLane';
+import { asPrivacyMode } from '@/lib/privacyMode';
 import { formatWalletAmount } from '@/lib/currency';
 import { emptyChallengeTask, createChallengeSchema, type CreateChallengeValues } from '@/utils/validators';
 
@@ -30,6 +36,7 @@ export const CREATE_WIZARD_STEPS = [
   { key: 'type', label: 'Type' },
   { key: 'duration', label: 'Duration' },
   { key: 'prize', label: 'Prize Structure' },
+  { key: 'scoring', label: 'Scoring method' },
   { key: 'funding', label: 'Funding' },
   { key: 'entry', label: 'Entry & Limits' },
   { key: 'rules', label: 'Rules & Proof' },
@@ -45,14 +52,15 @@ export function wizardStepIndex(key: CreateWizardStepKey): number {
 export const CREATE_STEP_FIELDS: Record<number, readonly (keyof CreateChallengeValues)[]> = {
   0: ['challenge_lane'],
   1: [],
-  2: ['title', 'description', 'category', 'visibility', 'task', 'extra_tasks', 'cover_image_url'],
+  2: ['title', 'description', 'category', 'visibility', 'privacy_mode', 'task', 'extra_tasks', 'cover_image_url'],
   3: ['challenge_type'],
   4: ['duration_type', 'duration_days', 'starts_at', 'ends_at', 'end_mode', 'duration_value', 'duration_unit', 'frequency', 'target_count'],
   5: ['prize_structure', 'top_places_mode', 'top_places_value', 'top_places_distribution'],
-  6: ['funding_model', 'creator_contribution'],
-  7: ['buy_in', 'currency', 'participant_cap', 'max_participants', 'creator_participating', 'min_participants', 'misses_allowed', 'proof_review'],
-  8: ['rules', 'proofs', 'tasks', 'frequency', 'target_count', 'rule_activity', 'extra_rules', 'min_minutes', 'rules_video_url'],
-  9: [],
+  6: ['scoring_method', 'scoring_config'],
+  7: ['funding_model', 'creator_contribution'],
+  8: ['buy_in', 'currency', 'participant_cap', 'max_participants', 'creator_participating', 'min_participants', 'misses_allowed', 'proof_review'],
+  9: ['rules', 'proofs', 'tasks', 'frequency', 'target_count', 'rule_activity', 'extra_rules', 'min_minutes', 'rules_video_url'],
+  10: [],
 };
 
 export type ChallengeTemplateId =
@@ -89,8 +97,15 @@ function extra(kind: ExtraRule['kind']): ExtraRule {
 }
 
 function values(partial: CreateChallengeValues): CreateChallengeValues {
+  const privacy_mode =
+    partial.privacy_mode === 'private_corporate'
+      ? 'private_corporate'
+      : partial.visibility === 'private' || partial.visibility === 'invite'
+        ? 'private'
+        : 'public';
   return {
     ...partial,
+    privacy_mode,
     proofs: [...partial.proofs],
     tasks: partial.tasks.map((item) => ({ ...item, proofs: [...(item.proofs ?? [])] })),
     extra_rules: (partial.extra_rules ?? []).map((item) => ({ ...item, proofs: [...(item.proofs ?? [])] })),
@@ -103,6 +118,7 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   category: 'fitness',
   challenge_type: 'consistency',
   visibility: 'public',
+  privacy_mode: 'public',
   discoverability: null,
   challenge_lane: 'coins',
   buy_in: '0',
@@ -139,6 +155,8 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   required_checkins: '6',
   payout_mode: 'even_split_remaining',
   format: 'consistency',
+  scoring_method: null,
+  scoring_config: null,
 };
 
 export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
@@ -355,6 +373,7 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
         hr_minutes: Math.max(Math.round(Number(item?.hr_minutes) || 30), 1),
       }))
     : [];
+  const scoring_config = parseComparablePointsConfig(source?.scoring_config);
   return {
     ...DEFAULT_CREATE_VALUES,
     ...source,
@@ -363,6 +382,9 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
     extra_rules,
     extra_tasks,
     rule_activity: source?.rule_activity?.trim() || DEFAULT_CREATE_VALUES.rule_activity,
+    scoring_method: source?.scoring_method === 'comparable_points' && scoring_config ? 'comparable_points' : null,
+    scoring_config,
+    privacy_mode: asPrivacyMode(source?.privacy_mode, source?.visibility, source?.challenge_lane),
   };
 }
 
@@ -385,28 +407,34 @@ export function wizardMeans(
   const target = Math.max(Number(values.target_count) || 1, 1);
   const points = isPointsDraft(values);
   const unlimited = isUnlimitedDraft(values);
+  const scoring = parseComparablePointsConfig(values.scoring_config);
 
-  switch (step) {
-    case 0:
+  switch (CREATE_WIZARD_STEPS[step]?.key) {
+    case 'lane':
       return normalizeUserChallengeLane(values.challenge_lane) === 'private'
         ? 'Private challenge. Invite-only, and you fund the prize.'
         : 'Coin challenge. Practice and Coins, listed in the Lobby if you keep it public.';
-    case 1:
+    case 'start':
       if (template?.id && template.id !== 'custom') {
         return template.means;
       }
       return 'Start blank, pick a template, or copy a challenge you’ve hosted or joined. Every later slide stays editable.';
-    case 2: {
+    case 'goal': {
       const vis =
-        values.visibility === 'private'
-          ? 'Only invited people will see it.'
-          : 'Anyone in the Lobby can find and join it.';
+        values.privacy_mode === 'private_corporate'
+          ? 'Private Corporate: only participants see activity, and nothing leaves the Lobby.'
+          : values.visibility === 'private' || values.visibility === 'invite'
+            ? 'Only invited people will see it.'
+            : 'Anyone in the Lobby can find and join it.';
       const name = (typeof values.title === 'string' ? values.title.trim() : '') || 'Your challenge';
       return `${name} is a ${challengeCategoryLabel(values.category)} challenge. ${vis}`;
     }
-    case 3:
+    case 'type':
       if (unlimited) {
         return 'Last-man-standing uses Consistency so everyone is judged on staying eligible — not on a point total.';
+      }
+      if (values.scoring_method === 'comparable_points' && scoring) {
+        return `Comparable Points. ${comparablePointsHeadline(scoring)}`;
       }
       if (points) {
         const total = values.tasks.reduce((sum, task) => sum + Math.max(Number(task.points) || 0, 0), 0);
@@ -415,7 +443,7 @@ export function wizardMeans(
         }, ${total} pts). Highest totals rank when it ends.`;
       }
       return consistencyRuleSentence(values);
-    case 4:
+    case 'duration':
       if (unlimited) {
         return `${lastManStandingRequirement({
           frequency: values.frequency,
@@ -426,7 +454,7 @@ export function wizardMeans(
         return `${scheduleSummary(values.starts_at, values.ends_at)}. Then judging and payout.`;
       }
       return `It runs ${days} day${days === 1 ? '' : 's'}, then judging and payout.`;
-    case 5:
+    case 'prize':
       return prizeStructureSummary({
         prize_structure: unlimited ? 'winner_take_all' : values.prize_structure,
         top_places_mode: values.top_places_mode,
@@ -434,14 +462,19 @@ export function wizardMeans(
         top_places_distribution: values.top_places_distribution,
         is_unlimited: unlimited,
       });
-    case 6:
+    case 'scoring':
+      if (values.scoring_method === 'comparable_points' && scoring) {
+        return comparablePointsLiveSentence(scoring);
+      }
+      return 'Comparable Points lets different kinds of work share one leaderboard. Configure it if you want that.';
+    case 'funding':
       return fundingModelSummary({
         funding_model: values.funding_model,
         creator_contribution: values.funding_model === 'participants' ? 0 : contribution,
         buy_in_amount: buyIn,
         currency: values.currency,
       });
-    case 7: {
+    case 'entry': {
       const entry = buyIn > 0 ? `Entry fee is ${formatWalletAmount(buyIn, values.currency)} per competitor.` : 'Competitors enter free.';
       const cap =
         values.participant_cap === 'limited'
@@ -449,13 +482,16 @@ export function wizardMeans(
           : 'Unlimited competitors.';
       return `${entry} ${cap}`;
     }
-    case 8:
+    case 'rules':
+      if (values.scoring_method === 'comparable_points' && scoring) {
+        return comparablePointsHeadline(scoring);
+      }
       if (points) {
         const needingProof = values.tasks.filter((task) => task.proof_required || (task.proofs?.length ?? 0) > 0).length;
         return `${values.tasks.length} task${values.tasks.length === 1 ? '' : 's'}. ${needingProof} require proof.`;
       }
       return composeChallengeRules(values);
-    case 9:
+    case 'review':
       return 'This is the contract competitors see. Publishing creates a real, joinable challenge. You are not entered automatically.';
     default:
       return '';
@@ -480,13 +516,17 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
       ? scheduleSummary(values.starts_at, values.ends_at)
       : `Fixed ${days}-day window.`;
 
-  const scoring = points
-    ? `Points. Competitors complete ${values.tasks.length} task${
-        values.tasks.length === 1 ? '' : 's'
-      } totaling ${values.tasks.reduce((sum, task) => sum + Math.max(Number(task.points) || 0, 0), 0)} pts.`
-    : unlimited
-      ? 'Consistency. Stay eligible on the cadence above or you’re eliminated.'
-      : consistencyRuleSentence(values);
+  const comparable = parseComparablePointsConfig(values.scoring_config);
+  const scoring =
+    values.scoring_method === 'comparable_points' && comparable
+      ? `Comparable Points. ${comparablePointsHeadline(comparable)}`
+      : points
+        ? `Points. Competitors complete ${values.tasks.length} task${
+            values.tasks.length === 1 ? '' : 's'
+          } totaling ${values.tasks.reduce((sum, task) => sum + Math.max(Number(task.points) || 0, 0), 0)} pts.`
+        : unlimited
+          ? 'Consistency. Stay eligible on the cadence above or you’re eliminated.'
+          : consistencyRuleSentence(values);
 
   const proof = points
     ? values.tasks
@@ -565,11 +605,15 @@ export function challengeContractRows(values: CreateChallengeValues): { label: s
     ? 'No end date until one person remains.'
     : scheduleRangeLabel(values.starts_at, values.ends_at);
   const visibility =
-    lane === 'private'
-      ? 'Invite-only'
-      : values.visibility === 'private'
-        ? 'Unlisted'
-        : 'Public';
+    values.privacy_mode === 'private_corporate'
+      ? 'Private Corporate'
+      : lane === 'private'
+        ? 'Invite-only'
+        : values.visibility === 'private' || values.visibility === 'invite'
+          ? 'Unlisted'
+          : values.visibility === 'friends'
+            ? 'Friends'
+            : 'Public';
   const competitors =
     values.participant_cap === 'limited'
       ? `Max ${Math.max(Number(values.max_participants) || 0, 0)}`
@@ -650,12 +694,15 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     category: values.category,
     challenge_type: unlimited ? 'consistency' : values.challenge_type,
     visibility: values.visibility,
+    privacy_mode: values.privacy_mode,
     challenge_lane: values.challenge_lane === 'private' ? 'private' : 'coins',
     currency: values.challenge_lane === 'private' && values.currency === 'bucks' ? 'bucks' : 'coins',
     creator_participating: values.creator_participating !== false,
     cover_image_url: values.cover_image_url?.trim() || null,
     rules_video_url: values.rules_video_url?.trim() || null,
     rules_list: buildRulesStructured(values),
+    scoring_method: values.scoring_method === 'comparable_points' ? 'comparable_points' : null,
+    scoring_config: parseComparablePointsConfig(values.scoring_config),
     task: values.task?.trim() || null,
     created_at: schedule.starts_at,
     updated_at: schedule.starts_at,

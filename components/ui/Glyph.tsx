@@ -53,6 +53,7 @@ export const GLYPH = {
   trash: { ios: 'trash', android: 'delete', web: 'delete' },
   mute: { ios: 'speaker.slash.fill', android: 'volume_off', web: 'volume_off' },
   unmute: { ios: 'speaker.wave.2.fill', android: 'volume_up', web: 'volume_up' },
+  lock: { ios: 'lock.fill', android: 'lock', web: 'lock' },
 } as const satisfies Record<string, GlyphName>;
 
 export type GlyphId = (typeof GLYPH)[keyof typeof GLYPH];

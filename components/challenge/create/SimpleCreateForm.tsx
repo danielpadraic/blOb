@@ -7,6 +7,7 @@ import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhot
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
+import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
@@ -49,7 +50,6 @@ import {
   type SimpleCustomPeriod,
   type SimpleDurationPreset,
   type SimpleFrequency,
-  type SimpleVisibility,
 } from '@/lib/simpleChallenge';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import { formatChallengeEndLine } from '@/lib/challengeSchedule';
@@ -355,7 +355,10 @@ export function SimpleCreateForm() {
                 currency: value,
                 buy_in: value === 'bucks' ? 0 : draft.buy_in,
                 host_budget: value === 'coins' ? 0 : Math.max(draft.host_budget, 1),
-                friends_of_friends: draft.visibility === 'invite' && value === 'coins',
+                friends_of_friends:
+                  draft.privacy_mode === 'private_corporate'
+                    ? false
+                    : draft.visibility === 'invite' && value === 'coins',
               })
             }
           />
@@ -746,23 +749,25 @@ export function SimpleCreateForm() {
           ref={(node) => {
             sectionRefs.current['create-simple-visibility'] = node;
           }}>
-          <SectionLabel>{copy('create.visibility')}</SectionLabel>
-          <SegmentedControl
-            accessibilityLabel={copy('create.visibility')}
-            value={draft.visibility}
-            options={[
-              { value: 'public' as SimpleVisibility, label: copy('create.public') },
-              { value: 'friends' as SimpleVisibility, label: copy('create.friends') },
-              { value: 'invite' as SimpleVisibility, label: copy('create.invite') },
-            ]}
-            onChange={(visibility) =>
+          <PrivacyModePicker
+            showFieldLabel={false}
+            privacyMode={draft.privacy_mode}
+            visibility={draft.visibility === 'invite' ? 'invite' : draft.visibility}
+            challengeLane="coins"
+            participantCount={editId ? editing.data?.participant_count ?? 0 : 0}
+            onChange={(next) =>
               patch({
-                visibility,
-                friends_of_friends: visibility === 'invite' && draft.currency === 'coins',
+                privacy_mode: next.privacy_mode,
+                visibility: next.visibility === 'private' ? 'invite' : next.visibility,
+                friends_of_friends:
+                  next.privacy_mode === 'private_corporate'
+                    ? false
+                    : next.visibility === 'invite' && draft.currency === 'coins',
               })
             }
+            onLockedAttempt={setError}
           />
-          {draft.visibility === 'invite' ? (
+          {draft.visibility === 'invite' && draft.privacy_mode !== 'private_corporate' ? (
             <Pressable
               accessibilityRole="switch"
               accessibilityState={{ checked: draft.friends_of_friends }}

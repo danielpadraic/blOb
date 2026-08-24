@@ -6,10 +6,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
+import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { ChallengeHeroOverflowButton } from '@/components/challenge/ChallengeDetailOverflow';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
-import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
@@ -97,15 +97,11 @@ export function ChallengeHeroCard({
         {challenge.title}
       </AppText>
       {official ? (
-        <View
-          className="flex-row items-center"
-          style={{ gap: 8, minHeight: 28, flexWrap: 'nowrap' }}
-          accessibilityLabel="Sponsored by blOb">
-          <AppText className="text-[13px] font-semibold" numberOfLines={1} style={{ color: muted }}>
-            Sponsored by
-          </AppText>
-          <BlobMascot variant="logo" size={72} />
-        </View>
+        <OfficialSponsorLine
+          challenge={challenge}
+          muted={muted}
+          titleColor={titleColor}
+        />
       ) : host ? (
         <ProfileLink username={host.username} userId={host.id}>
           <AppText className="text-[13px]" style={{ color: muted }}>

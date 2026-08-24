@@ -77,7 +77,8 @@ import {
   isOfficialSeriesChallenge,
   officialAlreadyStartedCopy,
 } from '@/lib/officialSeries';
-import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
+import { entryFieldNote, userStartNeededLabel } from '@/lib/challengeFieldNotes';
+import { canOpenOfficialTools } from '@/lib/officialScoring';
 import { heroRingDays } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
@@ -150,6 +151,11 @@ export default function ChallengeDetailScreen() {
   );
   const isJoined = Boolean(participation);
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
+  const showOfficialTools = canOpenOfficialTools({
+    challenge,
+    viewerId: user?.id,
+    profile,
+  });
   function openInvite() {
     if (!challenge) {
       return;
@@ -465,7 +471,8 @@ export default function ChallengeDetailScreen() {
       : null);
 
   const signupLines = signupProofLines(challenge);
-  const hideBuyIn = isBucksChallenge(challenge) || Boolean(challenge.host_funded);
+  const hideBuyIn =
+    buyInAmount > 0 && (isBucksChallenge(challenge) || Boolean(challenge.host_funded));
   const startNeeded = userStartNeededLabel(challenge, competitorCount);
   const remainingNow = competitorCount;
   const goalLabel = challengeGoalLabel(challenge, {
@@ -585,6 +592,16 @@ export default function ChallengeDetailScreen() {
           </View>
         ) : null}
 
+        {showOfficialTools ? (
+          <View className="mt-4">
+            <Button
+              title="Official tools"
+              variant="outline"
+              onPress={() => router.push(`/challenges/${id}/official`)}
+            />
+          </View>
+        ) : null}
+
         {challenge.is_official ? (
           <>
             <ChallengeDetailsCard challenge={challenge} />
@@ -670,16 +687,16 @@ export default function ChallengeDetailScreen() {
           {hideBuyIn ? null : (
             <View>
               <FieldNoteLabel
-                note="buyIn"
+                note={entryFieldNote(challenge)}
                 textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
-                Entry fee
+                {buyInAmount <= 0 ? 'Entry' : 'Entry fee'}
               </FieldNoteLabel>
               <View className="mt-1">
                 <StakeAmount
                   amount={buyInAmount}
                   currency={challenge.currency}
                   size={18}
-                  freeLabel="Free"
+                  freeLabel={copy('create.freeEntry')}
                   textClassName="text-xl font-bold text-charcoal"
                 />
               </View>

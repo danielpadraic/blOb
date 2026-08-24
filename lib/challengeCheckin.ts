@@ -21,6 +21,7 @@ export type ChallengeCheckin = {
   workout_submission_id?: string | null;
   started_at: string;
   submitted_at?: string | null;
+  scoring_version?: number | null;
   created_at: string;
   updated_at?: string | null;
 };

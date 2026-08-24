@@ -4,6 +4,8 @@ import { discardChallengeDraft } from '@/lib/challengeDraft';
 import { announceCreatedChallenge } from '@/lib/challengeFeedPost';
 import { notifyFriendsOfCreatedChallenge } from '@/lib/notifications';
 import { applyLaneForPublish } from '@/lib/challengeLane';
+import { parseComparablePointsConfig } from '@/lib/comparablePoints';
+import { asPrivacyMode } from '@/lib/privacyMode';
 import { durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
   fetchChallengeById,
@@ -19,9 +21,12 @@ import {
   fetchFeaturedOfficialChallenge,
   fetchOfficialDiscoverChallenges,
   insertUserChallenge,
+  persistPrivacyMode,
   joinChallenge,
   applyChallengeStart,
   nudgeChallengeStart,
+  publishScoringChange,
+  fetchScoringAudit,
   updateUserChallenge,
   withParticipantCounts,
   type FriendChallengeProof,
@@ -796,6 +801,12 @@ export function useCreateChallenge() {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         start_rule: 'at_starts_at',
         discoverability: values.discoverability ?? null,
+        privacy_mode: asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane),
+        scoring_method: values.scoring_method === 'comparable_points' ? 'comparable_points' : null,
+        scoring_config:
+          values.scoring_method === 'comparable_points'
+            ? parseComparablePointsConfig(values.scoring_config)
+            : null,
       });
       await announceCreatedChallenge({
         authorId: user.id,
@@ -963,7 +974,8 @@ export function useUpdateUserChallenge() {
       const durationDays = unlimited ? null : durationDaysFromValues(schedule);
       const targetCount = checkinTargetForStore(values, durationDays);
       const namedProofs = namedProofsForPublish(values);
-      return updateUserChallenge(challengeId, {
+      const privacyMode = asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane);
+      const challenge = await updateUserChallenge(challengeId, {
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
         rules: composeChallengeRules(values) || null,
@@ -985,6 +997,7 @@ export function useUpdateUserChallenge() {
         rules_list: buildRulesStructured(values),
         visibility: values.visibility,
         discoverability: values.discoverability ?? null,
+        privacy_mode: privacyMode,
         task: values.task?.trim() || values.rule_activity.trim() || null,
         length_value: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
@@ -994,6 +1007,15 @@ export function useUpdateUserChallenge() {
         cover_image_url: values.cover_image_url?.trim() || null,
         rules_video_url: values.rules_video_url?.trim() || null,
       });
+      if (user?.id) {
+        await persistPrivacyMode({
+          challengeId,
+          createdBy: user.id,
+          next: privacyMode,
+          current: challenge.privacy_mode,
+        });
+      }
+      return { ...challenge, privacy_mode: privacyMode };
     },
     onSuccess: (challenge) => {
       queryClient.setQueryData<ChallengeWithStats>(['challenge', challenge.id], (current) =>
@@ -1002,6 +1024,49 @@ export function useUpdateUserChallenge() {
       invalidateChallengeCaches(queryClient, challenge.id, user?.id);
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
+  });
+}
+
+export function usePublishScoringChange(challengeId: string | undefined) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (input: { config: unknown; summary?: string | null }) => {
+      if (!challengeId) {
+        throw new Error('Challenge not found');
+      }
+      return publishScoringChange(challengeId, input.config, input.summary);
+    },
+    onSuccess: (result) => {
+      if (!challengeId) {
+        return;
+      }
+      queryClient.setQueryData<ChallengeWithStats>(['challenge', challengeId], (current) =>
+        current
+          ? {
+              ...current,
+              scoring_method: 'comparable_points',
+              scoring_version: result.version,
+              scoring_config: result.scoring_config,
+              comparable_points_config: result.comparable_points_config,
+            }
+          : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['scoring-audit', challengeId] });
+      if (user?.id) {
+        invalidateChallengeCaches(queryClient, challengeId, user.id);
+      }
+    },
+  });
+}
+
+export function useScoringAudit(challengeId: string | undefined) {
+  return useQuery({
+    queryKey: ['scoring-audit', challengeId],
+    enabled: Boolean(challengeId),
+    queryFn: () => fetchScoringAudit(challengeId!),
   });
 }
 

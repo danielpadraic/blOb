@@ -8,6 +8,7 @@ import {
 } from '@/lib/constants';
 import {
   namedProofsFromLegacyTypes,
+  parseChallengeProofs,
   resolveChallengeProofs,
   type ChallengeProof,
 } from '@/lib/challengeProofs';
@@ -30,6 +31,7 @@ import { getCreateChallengeMessage, getErrorMessage, getStartUpdateMessage, isMi
 import { reportAppError } from '@/lib/appErrors';
 import { challengeCurrency, formatWalletAmount } from '@/lib/currency';
 import { applyLaneForPublish, isInviteOnlyChallenge } from '@/lib/challengeLane';
+import { asPrivacyMode, canChangePrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
 import {
   isInviteOnlyDiscoverable,
   isJoinableNotStarted,
@@ -48,11 +50,15 @@ const DEFAULT_PROOFS: ProofRequirement[] = [
   { type: 'hr_monitor', required: true },
 ];
 
+const OFFICIAL_DISPLAY_SELECT =
+  'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, buy_in_amount, prize_pool, currency, host_funded, host_budget, category';
+
 const LOBBY_SELECTS = [
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
   '*',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, created_at, updated_at',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility',
   'id, title, is_official, created_by, buy_in_amount, days_required, status, category, challenge_type, visibility, prize_pool',
@@ -109,6 +115,9 @@ export type CreateChallengeInput = {
   timezone?: string | null;
   start_rule?: string;
   discoverability?: string | null;
+  privacy_mode?: string | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
 };
 
 type ChallengeRow = Record<string, unknown>;
@@ -140,6 +149,29 @@ function asChallengeRows(data: ChallengeRow[] | ChallengeRow | null | undefined)
   return [];
 }
 
+async function hydrateOfficialDisplay(rows: ChallengeRow[]): Promise<ChallengeRow[]> {
+  const officialIds = rows
+    .filter((row) => row.is_official)
+    .map((row) => String(row.id))
+    .filter(Boolean);
+  if (officialIds.length === 0) {
+    return rows;
+  }
+  const { data, error } = await supabase
+    .from('challenges')
+    .select(OFFICIAL_DISPLAY_SELECT)
+    .in('id', officialIds);
+  if (error || !data) {
+    console.log('[blob:hydrate] official display skipped', error?.message);
+    return rows;
+  }
+  const extra = new Map(data.map((row) => [String((row as ChallengeRow).id), row as ChallengeRow]));
+  return rows.map((row) => {
+    const patch = extra.get(String(row.id));
+    return patch ? { ...row, ...patch } : row;
+  });
+}
+
 async function selectChallengeList(
   build: (query: ChallengeListQuery) => ChallengeListQuery,
   label: string,
@@ -152,7 +184,7 @@ async function selectChallengeList(
       console.log('[blob:lobby] select failed', { label, columns, message: error.message });
       continue;
     }
-    return asChallengeRows(data);
+    return hydrateOfficialDisplay(asChallengeRows(data));
   }
   throw new Error(getErrorMessage(lastError));
 }
@@ -492,12 +524,14 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     rules: (row.rules as string | null) ?? null,
     is_official: Boolean(row.is_official),
     created_by: (row.created_by as string | null) ?? null,
-    buy_in_amount: Number(row.buy_in_amount ?? 10),
+    buy_in_amount: Number(row.buy_in_amount ?? 0),
     days_required: daysRequired,
     min_minutes: Number(row.min_minutes ?? 30),
     proof_requirements: Array.isArray(row.proof_requirements)
       ? (row.proof_requirements as ProofRequirement[])
-      : DEFAULT_PROOFS,
+      : row.is_official && String(row.category ?? '').toLowerCase() !== 'fitness'
+        ? []
+        : DEFAULT_PROOFS,
     proofs: resolveChallengeProofs({
       proofs: row.proofs,
       proof_type: row.proof_type,
@@ -547,6 +581,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     length_unit: (row.length_unit as string | null) ?? null,
     creator_participating: row.creator_participating == null ? true : Boolean(row.creator_participating),
     cover_image_url: asOptionalUrl(row.cover_image_url),
+    sponsor_name: typeof row.sponsor_name === 'string' && row.sponsor_name.trim() ? row.sponsor_name.trim() : null,
+    sponsor_logo_url: asOptionalUrl(row.sponsor_logo_url),
     rules_video_url: asOptionalUrl(row.rules_video_url),
     official_started_at: row.official_started_at ? String(row.official_started_at) : null,
     judging_started_at: row.judging_started_at ? String(row.judging_started_at) : null,
@@ -560,6 +596,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     challenge_type: rawType === 'points' ? 'points' : 'consistency',
     visibility: (row.visibility as string | null) ?? null,
     discoverability: (row.discoverability as string | null) ?? null,
+    privacy_mode: asPrivacyMode(row.privacy_mode, row.visibility as string | null, row.challenge_lane as string | null),
     allowed_states: Array.isArray(row.allowed_states) ? (row.allowed_states as string[]) : null,
     challenge_lane: (row.challenge_lane as string | null) ?? null,
     currency: challengeCurrency(row as { currency?: string | null }),
@@ -574,6 +611,10 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     payout_mode: (row.payout_mode as string | null) ?? null,
     timezone: (row.timezone as string | null) ?? null,
     start_rule: (row.start_rule as string | null) ?? null,
+    scoring_method: (row.scoring_method as string | null) ?? null,
+    scoring_config: row.scoring_config ?? row.comparable_points_config ?? null,
+    comparable_points_config: row.comparable_points_config ?? row.scoring_config ?? null,
+    scoring_version: row.scoring_version == null ? null : Number(row.scoring_version),
     cancelled_at: row.cancelled_at ? String(row.cancelled_at) : null,
     cancelled_by: (row.cancelled_by as string | null) ?? null,
     series_id: row.series_id ? String(row.series_id) : null,
@@ -688,7 +729,7 @@ export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<
 
   const listed = await supabase.rpc('list_official_joinable');
   if (!listed.error && listed.data) {
-    const rows = asChallengeRows(listed.data as unknown as ChallengeRow[])
+    const rows = (await hydrateOfficialDisplay(asChallengeRows(listed.data as unknown as ChallengeRow[])))
       .map(normalizeChallenge)
       .filter((row) => row.is_official && row.series_id && (row.status === 'filling' || row.status === 'arming'));
     return sortOfficialFirst(rows);
@@ -727,7 +768,7 @@ export async function fetchFeaturedOfficialChallenge(userId?: string): Promise<C
   let joinable: Challenge[] = [];
   const listed = await supabase.rpc('list_official_joinable');
   if (!listed.error && listed.data) {
-    joinable = asChallengeRows(listed.data as unknown as ChallengeRow[])
+    joinable = (await hydrateOfficialDisplay(asChallengeRows(listed.data as unknown as ChallengeRow[])))
       .map(normalizeChallenge)
       .filter(
         (row) =>
@@ -1014,7 +1055,8 @@ export async function fetchChallengeById(id: string): Promise<Challenge> {
       if (!data) {
         continue;
       }
-      return normalizeChallenge(data);
+      const [hydrated] = await hydrateOfficialDisplay([data]);
+      return normalizeChallenge(hydrated ?? data);
     } catch (caught) {
       lastError = caught instanceof Error ? caught.message : String(caught ?? '');
       console.log('[blob:challenge] select threw', { columns, message: lastError });
@@ -1227,6 +1269,13 @@ export function requiredProofTypes(
 export function requiredChallengeProofs(
   challenge: Pick<Challenge, 'proofs' | 'proof_type' | 'proof_requirements' | 'challenge_type' | 'tasks'> | null | undefined,
 ): ChallengeProof[] {
+  if (parseChallengeProofs(challenge?.proofs).length > 0) {
+    return resolveChallengeProofs({
+      proofs: challenge?.proofs,
+      proof_type: challenge?.proof_type,
+      proof_requirements: challenge?.proof_requirements,
+    });
+  }
   if (isPointsChallenge(challenge)) {
     const types = requiredProofTypes(challenge);
     return namedProofsFromLegacyTypes(types);
@@ -1353,7 +1402,75 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
       console.log('[blob:create] discoverability skipped', error.message);
     }
   }
+  if (input.scoring_method === 'comparable_points' && input.scoring_config) {
+    const { error } = await supabase
+      .from('challenges')
+      .update({
+        scoring_method: 'comparable_points',
+        scoring_config: input.scoring_config,
+        comparable_points_config: input.scoring_config,
+        scoring_version: 1,
+      })
+      .eq('id', result.challenge_id)
+      .eq('created_by', input.created_by);
+    if (error) {
+      console.log('[blob:create] scoring_config skipped', error.message);
+    }
+  }
+  await persistPrivacyMode({
+    challengeId: result.challenge_id,
+    createdBy: input.created_by,
+    next: asPrivacyMode(input.privacy_mode, input.visibility, input.challenge_lane),
+    participantCount: 0,
+  });
   return fetchChallengeById(result.challenge_id);
+}
+
+export async function persistPrivacyMode(input: {
+  challengeId: string;
+  createdBy: string;
+  next: PrivacyMode;
+  current?: string | null;
+  participantCount?: number;
+}): Promise<void> {
+  let participantCount = input.participantCount;
+  if (participantCount == null) {
+    const { count } = await supabase
+      .from('challenge_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('challenge_id', input.challengeId);
+    participantCount = count ?? 0;
+  }
+  const { data: row, error: readError } = await supabase
+    .from('challenges')
+    .select('privacy_mode, visibility, challenge_lane')
+    .eq('id', input.challengeId)
+    .maybeSingle();
+  if (readError) {
+    console.log('[blob:create] privacy_mode skipped', readError.message);
+    return;
+  }
+  const current = asPrivacyMode(
+    row?.privacy_mode ?? input.current,
+    row?.visibility as string | null | undefined,
+    row?.challenge_lane as string | null | undefined,
+  );
+  const gate = canChangePrivacyMode({
+    current,
+    next: input.next,
+    participantCount,
+  });
+  if (!gate.ok) {
+    throw new Error(gate.message);
+  }
+  const { error } = await supabase
+    .from('challenges')
+    .update({ privacy_mode: input.next })
+    .eq('id', input.challengeId)
+    .eq('created_by', input.createdBy);
+  if (error) {
+    console.log('[blob:create] privacy_mode skipped', error.message);
+  }
 }
 
 const START_WRITE_COLUMNS =
@@ -1426,6 +1543,71 @@ export async function nudgeChallengeStart(challengeId: string): Promise<Challeng
     throw new Error(getStartUpdateMessage(error));
   }
   return hydrateStartWrite(challengeId, startWritePatch(challengeId, data));
+}
+
+export type PublishScoringChangeResult = {
+  ok: true;
+  version: number;
+  scoring_version: number;
+  challenge_id: string;
+  comparable_points_config: unknown;
+  scoring_config: unknown;
+};
+
+export async function publishScoringChange(
+  challengeId: string,
+  config: unknown,
+  summary?: string | null,
+): Promise<PublishScoringChangeResult> {
+  const { data, error } = await supabase.rpc('publish_scoring_change', {
+    p_challenge_id: challengeId,
+    p_config: config,
+    p_summary: summary ?? null,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  const row = (data ?? {}) as Record<string, unknown>;
+  return {
+    ok: true,
+    version: Math.max(1, Math.round(Number(row.version ?? row.scoring_version) || 1)),
+    scoring_version: Math.max(1, Math.round(Number(row.scoring_version ?? row.version) || 1)),
+    challenge_id: String(row.challenge_id ?? challengeId),
+    comparable_points_config: row.comparable_points_config ?? config,
+    scoring_config: row.scoring_config ?? config,
+  };
+}
+
+export async function fetchScoringAudit(challengeId: string): Promise<
+  Array<{
+    id: string;
+    challenge_id: string;
+    version: number;
+    changed_by: string | null;
+    changed_at: string;
+    summary: string | null;
+    config_snapshot: unknown;
+  }>
+> {
+  const { data, error } = await supabase
+    .from('challenge_scoring_audit')
+    .select('id, challenge_id, version, changed_by, changed_at, summary, config_snapshot')
+    .eq('challenge_id', challengeId)
+    .order('version', { ascending: false })
+    .limit(12);
+  if (error) {
+    console.log('[blob:scoring-audit]', error.message);
+    return [];
+  }
+  return (data ?? []) as Array<{
+    id: string;
+    challenge_id: string;
+    version: number;
+    changed_by: string | null;
+    changed_at: string;
+    summary: string | null;
+    config_snapshot: unknown;
+  }>;
 }
 
 export async function updateUserChallenge(

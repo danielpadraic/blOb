@@ -28,6 +28,7 @@ import { canHostQuickEdit } from '@/lib/challengeStart';
 import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
+import { canOpenOfficialTools } from '@/lib/officialScoring';
 import { getCancelChallengeMessage, getLeaveChallengeMessage, getStartUpdateMessage } from '@/utils/errors';
 
 let overflowVisible = false;
@@ -65,6 +66,7 @@ export function useChallengeDetailOverflow() {
     user?.id && roster.data?.some((row) => row.user_id === user.id && isLiveCompetitor(row)),
   );
   const canEdit = canHostQuickEdit({ challenge, viewerId: user?.id });
+  const canTools = canOpenOfficialTools({ challenge, viewerId: user?.id, profile });
   const canCancel = canCancelChallenge({
     challenge,
     viewerId: user?.id,
@@ -73,7 +75,7 @@ export function useChallengeDetailOverflow() {
     rosterReady: roster.data != null,
   });
   const canLeave = canParticipantLeave({ challenge, joined });
-  const showOverflow = canEdit || canCancel || canLeave;
+  const showOverflow = canEdit || canTools || canCancel || canLeave;
   const rollPending = Boolean(challenge?.start_roll_pending) && canEdit;
   const rollOpen = rollPending && !rollDismissed;
 
@@ -124,6 +126,18 @@ export function useChallengeDetailOverflow() {
   }
 
   const actions: ChallengeOverflowAction[] = [];
+  if (canTools) {
+    actions.push({
+      key: 'official',
+      label: 'Official tools',
+      onPress: () => {
+        if (!id) {
+          return;
+        }
+        router.push(`/challenges/${id}/official`);
+      },
+    });
+  }
   if (canEdit) {
     actions.push({
       key: 'tomorrow',

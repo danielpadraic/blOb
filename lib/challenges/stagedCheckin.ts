@@ -76,6 +76,10 @@ export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCh
     workout_submission_id: (row.workout_submission_id as string | null) ?? null,
     started_at: String(row.started_at ?? row.created_at ?? new Date().toISOString()),
     submitted_at: (row.submitted_at as string | null) ?? null,
+    scoring_version:
+      row.scoring_version == null || !Number.isFinite(Number(row.scoring_version))
+        ? null
+        : Math.round(Number(row.scoring_version)),
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: (row.updated_at as string | null) ?? null,
   };

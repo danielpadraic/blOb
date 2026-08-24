@@ -2,11 +2,14 @@ import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { officialFitnessProofIcons } from '@/components/challenge/ProofRequirementIcons';
-import { BuckUsdAmount, StakeAmount } from '@/components/currency/CurrencyMark';
+import { CashPrizeAmount } from '@/components/currency/CashPrizeAmount';
+import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
+import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
@@ -18,7 +21,6 @@ import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { isPointsChallenge } from '@/lib/challenges';
 import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
-import { isBucksChallenge } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -158,11 +160,13 @@ export function ChallengeCardVisual({
           {challenge.title}
         </AppText>
         {official ? (
-          <View className="mt-1.5 flex-row items-center" style={{ gap: 8, minHeight: 22 }}>
-            <AppText className="text-[13px] font-semibold" style={{ color: muted }}>
-              Sponsored by
-            </AppText>
-            <BlobMascot variant="logo" size={compact ? 44 : 56} />
+          <View className="mt-1.5">
+            <OfficialSponsorLine
+              challenge={challenge}
+              muted={muted}
+              titleColor={titleColor}
+              compact={compact}
+            />
           </View>
         ) : host ? (
           <View className="mt-1.5 flex-row items-center" style={{ gap: 8 }}>
@@ -405,19 +409,16 @@ function MoneyRow({ challenge, dark }: { challenge: ChallengeWithStats; dark: bo
   const valueColor = dark ? '#FFFFFF' : undefined;
   const cols: Array<{ key: string; label: string; node: ReactNode }> = [];
 
-  if (official || buyIn > 0) {
+  if (official || buyIn >= 0) {
     cols.push({
       key: 'entry',
-      label: copy('create.buyIn'),
-      node: isBucksChallenge(challenge) ? (
-        <BuckUsdAmount amount={buyIn} textClassName={valueClass} color={valueColor} />
-      ) : (
-        <StakeAmount
+      label: buyIn <= 0 ? 'Entry' : copy('create.buyIn'),
+      node: (
+        <EntryFeeAmount
           amount={buyIn}
           currency={challenge.currency}
-          size={16}
-          freeLabel="Free"
           textClassName={valueClass}
+          color={valueColor}
         />
       ),
     });
@@ -432,15 +433,12 @@ function MoneyRow({ challenge, dark }: { challenge: ChallengeWithStats; dark: bo
   cols.push({
     key: 'prize',
     label: copy('board.pot'),
-    node: isBucksChallenge(challenge) ? (
-      <BuckUsdAmount amount={prize} textClassName={valueClass} color={valueColor} />
-    ) : (
-      <StakeAmount
+    node: (
+      <CashPrizeAmount
         amount={prize}
         currency={challenge.currency}
-        size={18}
-        zeroAsNumber
         textClassName={valueClass}
+        color={valueColor}
       />
     ),
   });

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { prizeDistributionLabel } from '@/lib/challenges';
-import { formatCash, isBucksChallenge } from '@/lib/currency';
+import { cashPrizeLabel, isBucksChallenge } from '@/lib/currency';
 import type { Challenge } from '@/lib/types';
 
 export function ChallengePrizeLine({
@@ -25,7 +25,7 @@ export function ChallengePrizeLine({
   if (isBucksChallenge(challenge)) {
     return (
       <AppText className={textClassName}>
-        {formatCash(amount)} · {distribution}
+        {cashPrizeLabel(amount)} · {distribution}
       </AppText>
     );
   }

@@ -1,4 +1,4 @@
-import { CREATE_STEP_FIELDS } from '@/lib/challengeTemplates';
+import { CREATE_STEP_FIELDS, wizardStepIndex } from '@/lib/challengeTemplates';
 import { CHALLENGE_CATEGORIES } from '@/lib/constants';
 import type { ChallengeCategory } from '@/lib/types';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -108,20 +108,26 @@ const STEP_TIPS: Record<number, WizardBobTip[]> = {
     { pose: 'point', tagline: 'Blobs who complete the goal share the prize.' },
     { pose: 'point', tagline: 'Winner take all pays the top.' },
   ],
-  6: [{ pose: 'point', tagline: 'Who puts money in—the host, the competitors, or both?' }],
-  7: [
+  6: [
+    {
+      pose: 'point',
+      tagline: 'Comparable Points puts different kinds of work on one board. Configure it, or skip it.',
+    },
+  ],
+  7: [{ pose: 'point', tagline: 'Who puts money in—the host, the competitors, or both?' }],
+  8: [
     { pose: 'point', tagline: 'Anyone can join without paying.' },
     {
       pose: 'point',
       tagline: 'Each competitor pays Coins from their balance when they enter.',
     },
   ],
-  8: [
+  9: [
     { pose: 'point', tagline: 'Write the rule like a sentence competitors can repeat.' },
     { pose: 'point', tagline: 'Add limits (separate days, min minutes) so people can’t game a single day.' },
     { pose: 'point', tagline: 'Video is OK when a photo isn’t enough.' },
   ],
-  9: [{ pose: 'trophy', tagline: 'Check everything. Publish makes it live in the Lobby.' }],
+  10: [{ pose: 'trophy', tagline: 'Check everything. Publish makes it live in the Lobby.' }],
 };
 
 const LIVE_TIP: WizardBobTip = { pose: 'trophy', tagline: 'Your challenge is live.' };
@@ -134,7 +140,7 @@ export function wizardBobTips(
   if (live) {
     return [LIVE_TIP];
   }
-  if (step === 6 && lane === 'private') {
+  if (step === wizardStepIndex('funding') && lane === 'private') {
     return [
       {
         pose: 'point',
@@ -142,7 +148,7 @@ export function wizardBobTips(
       },
     ];
   }
-  if (step === 7 && lane === 'private') {
+  if (step === wizardStepIndex('entry') && lane === 'private') {
     return [
       {
         pose: 'point',
@@ -150,7 +156,7 @@ export function wizardBobTips(
       },
     ];
   }
-  return STEP_TIPS[step] ?? STEP_TIPS[9];
+  return STEP_TIPS[step] ?? STEP_TIPS[wizardStepIndex('review')];
 }
 
 const OOPS_PREFIXES = ['Oops —', 'Not so fast —', 'Almost —', 'Hold up —'] as const;
@@ -162,6 +168,7 @@ const FIELD_OOPS: Record<string, string> = {
   description: 'tell people who it’s for and what a win looks like.',
   category: 'pick a type so competitors know what they’re signing up for.',
   visibility: 'choose public or private.',
+  privacy_mode: 'choose public, private, or Private Corporate.',
   challenge_type: 'pick Consistency or Points so we know how to score it.',
   duration_type: 'Set when this challenge starts and ends.',
   duration_days: 'keep it to 365 days or less.',
@@ -188,6 +195,8 @@ const FIELD_OOPS: Record<string, string> = {
   rules: 'add the check-in rule (count, activity, and how often).',
   proofs: 'pick at least one proof type.',
   tasks: 'add a task with a name before we go on.',
+  scoring_method: 'save Comparable Points, or leave it unconfigured.',
+  scoring_config: 'name at least one activity and set a full-value quantity.',
   min_minutes: 'set a minimum minutes per check-in.',
   cover_image_url: 'that cover needs a full http(s) link.',
   rules_video_url: 'that video needs a full http(s) link.',
@@ -216,15 +225,15 @@ export function wizardStepForField(field: string, values?: CreateChallengeValues
     return 1;
   }
   if (root === 'bucks' || root === 'skill' || root === 'publish') {
-    return 9;
+    return wizardStepIndex('review');
   }
   if (root === 'wallet') {
-    return 6;
+    return wizardStepIndex('funding');
   }
   if ((root === 'frequency' || root === 'target_count') && values) {
-    return values.duration_type === 'unlimited' ? 4 : 8;
+    return values.duration_type === 'unlimited' ? wizardStepIndex('duration') : wizardStepIndex('rules');
   }
-  let found = 9;
+  let found = wizardStepIndex('review');
   for (const [index, fields] of Object.entries(CREATE_STEP_FIELDS)) {
     if (fields.includes(root as keyof CreateChallengeValues)) {
       found = Math.min(found, Number(index));

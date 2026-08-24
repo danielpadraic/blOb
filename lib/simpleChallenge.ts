@@ -24,6 +24,7 @@ import { emptyExtraCreateTask } from '@/utils/validators';
 import { challengeRulesFromCreateValues } from '@/lib/challengeRuleCopy';
 import { copy } from '@/lib/copy';
 import type { CreateChallengeValues } from '@/utils/validators';
+import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
 
 export type SimpleCurrency = 'coins' | 'bucks';
 export type SimpleVisibility = 'public' | 'friends' | 'invite';
@@ -106,6 +107,7 @@ export type SimpleChallengeDraft = {
   proofs: ChallengeProof[];
   extra_tasks: ExtraCreateTask[];
   visibility: SimpleVisibility;
+  privacy_mode: PrivacyMode;
   friends_of_friends: boolean;
   min_participants: number;
   cover_image_url: string;
@@ -130,6 +132,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     proofs: defaultChallengeProofs(),
     extra_tasks: [],
     visibility: 'public',
+    privacy_mode: 'public',
     friends_of_friends: true,
     min_participants: 2,
     cover_image_url: '',
@@ -137,11 +140,15 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
 }
 
 function withProofSentences(draft: SimpleChallengeDraft): SimpleChallengeDraft {
+  const privacy_mode = asPrivacyMode(draft.privacy_mode, draft.visibility, 'coins');
   return {
     ...draft,
     extra_tasks: Array.isArray(draft.extra_tasks) ? draft.extra_tasks : [],
     proofs: (draft.proofs ?? []).map((item) => ensureProofSentence(item, item.minutes ?? 30)),
     cover_image_url: draft.cover_image_url?.trim() || '',
+    privacy_mode,
+    friends_of_friends: privacy_mode === 'private_corporate' ? false : draft.friends_of_friends,
+    visibility: privacy_mode === 'private_corporate' ? 'invite' : draft.visibility,
   };
 }
 
@@ -350,7 +357,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const days = durationDaysOf(draft);
   const required = requiredCheckinsOf(draft);
   const bucks = draft.currency === 'bucks';
-  const invite = draft.visibility === 'invite';
+  const corporate = draft.privacy_mode === 'private_corporate';
+  const invite = corporate || draft.visibility === 'invite';
   const buyIn = bucks ? 0 : Math.max(Math.floor(draft.buy_in) || 0, 0);
   const hostBudget = bucks ? Math.max(Math.floor(draft.host_budget) || 0, 0) : 0;
   const extra_tasks = filledExtraTasks(draft);
@@ -370,11 +378,14 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     category: type.category,
     challenge_type: 'consistency',
     visibility: invite ? 'invite' : draft.visibility === 'friends' ? 'friends' : 'public',
-    discoverability: resolveDiscoverability({
-      visibility: invite ? 'invite' : draft.visibility,
-      currency: draft.currency,
-      friendsOfFriends: draft.friends_of_friends,
-    }),
+    privacy_mode: corporate ? 'private_corporate' : asPrivacyMode(draft.privacy_mode, invite ? 'invite' : draft.visibility, 'coins'),
+    discoverability: corporate
+      ? 'invite_only'
+      : resolveDiscoverability({
+          visibility: invite ? 'invite' : draft.visibility,
+          currency: draft.currency,
+          friendsOfFriends: draft.friends_of_friends,
+        }),
     challenge_lane: 'coins',
     buy_in: String(buyIn),
     duration_type: 'fixed',
@@ -447,6 +458,7 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
       : challenge.visibility === 'invite' || challenge.visibility === 'private'
         ? 'invite'
         : 'public';
+  const privacy_mode = asPrivacyMode(challenge.privacy_mode, challenge.visibility, challenge.challenge_lane);
   return {
     currency: challenge.currency === 'bucks' ? 'bucks' : 'coins',
     buy_in: Math.max(Number(challenge.buy_in_amount) || 0, 0),
@@ -469,7 +481,9 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
     }),
     extra_tasks: extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task),
     visibility,
-    friends_of_friends: challenge.discoverability === 'friends_of_friends',
+    privacy_mode,
+    friends_of_friends:
+      privacy_mode === 'private_corporate' ? false : challenge.discoverability === 'friends_of_friends',
     min_participants: Math.max(Number(challenge.min_participants) || 2, 2),
     cover_image_url: challenge.cover_image_url?.trim() || '',
   };

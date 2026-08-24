@@ -188,6 +188,7 @@ const STRINGS = {
   'create.totalPrizePool': 'Total prize',
   'create.realMoneyFund': 'For challenges with real money, you fund this amount.',
   'create.buyIn': 'Entry fee',
+  'create.freeEntry': 'FREE Entry',
   'create.type': 'Type',
   'create.titleLabel': 'Title',
   'create.titlePlaceholder': 'Morning miles',
@@ -222,6 +223,13 @@ const STRINGS = {
   'create.public': 'Public',
   'create.friends': 'Friends',
   'create.invite': 'Invite',
+  'create.private': 'Private',
+  'create.privateHelp': 'Invite-only. Not listed in public discovery.',
+  'create.privateCorporate': 'Private Corporate',
+  'create.privateCorporateHelp':
+    'Only participants can see activity. Nothing leaves the Lobby. Required for most company-sponsored contests.',
+  'create.privacyLocked':
+    'Privacy is locked. After someone joins, you cannot turn off or downgrade this setting.',
   'create.submit': 'Create',
   'create.advanced': 'Advanced',
   'create.simple': 'Simple',
@@ -253,8 +261,13 @@ const STRINGS = {
   'note.potTitle': 'Prize',
   'note.pot':
     'Prize grows as people pay the entry fee. On publish it may be only your amount, or $0 until the first join.',
+  'note.potHostTitle': 'Prize',
+  'note.potHost':
+    'This is a host-funded cash prize. Entry is free. The prize does not grow from entry fees.',
   'note.buyInTitle': 'Entry fee',
   'note.buyIn': 'Each person pays this to join. It does not change.',
+  'note.buyInFreeTitle': 'Entry',
+  'note.buyInFree': 'FREE Entry. Joining does not take money from your wallet.',
   'note.boardTitle': 'Board',
   'note.board':
     'Empty until people join and check in. Remaining are still in. Caught Up have finished today’s required proof. Dropped missed or were removed.',

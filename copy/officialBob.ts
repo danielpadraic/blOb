@@ -12,6 +12,24 @@ export const OFFICIAL_DETAILS_LINES = [
   '18+. Void where prohibited. Not medical advice.',
 ] as const;
 
+/** Always prefer stored `rules`. Week_10 fitness lines only if that series has no rules of its own. */
+export function officialDetailsParagraphs(challenge: {
+  rules?: string | null;
+  series_id?: string | null;
+}): string[] {
+  const stored = (challenge.rules ?? '').trim();
+  if (stored) {
+    return stored
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+  }
+  if (challenge.series_id === 'week_10') {
+    return [...OFFICIAL_DETAILS_LINES];
+  }
+  return [];
+}
+
 const BOB_PITCH =
   'I’m Bob. Humans are very good at knowing they should move, and very good at not moving. The couch will still be there. You do not have to be. Finish the week. Split the prize with everyone else who did. Make money, make friends, support each other, and do it again.';
 

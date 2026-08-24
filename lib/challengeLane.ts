@@ -72,6 +72,7 @@ export function applyLaneForPublish(input: {
 export type LaneFormSlice = {
   challenge_lane?: unknown;
   visibility?: string | null;
+  privacy_mode?: string | null;
   currency?: string | null;
   buy_in?: string | number | null;
   funding_model?: string | null;
@@ -79,12 +80,14 @@ export type LaneFormSlice = {
 };
 
 export function applyLaneToFormValues<T extends LaneFormSlice>(values: T, lane: UserChallengeLane): T {
+  const corporate = values.privacy_mode === 'private_corporate';
   if (lane === 'private') {
     const contribution = Math.max(Number(values.creator_contribution) || 0, 0);
     return {
       ...values,
       challenge_lane: 'private',
       visibility: 'private',
+      privacy_mode: corporate ? 'private_corporate' : 'private',
       buy_in: '0',
       funding_model: 'creator',
       creator_contribution: contribution >= 1 ? String(values.creator_contribution) : '10',
@@ -95,10 +98,16 @@ export function applyLaneToFormValues<T extends LaneFormSlice>(values: T, lane: 
     ...values,
     challenge_lane: 'coins',
     currency: 'coins',
-    visibility:
-      values.visibility === 'friends' || values.visibility === 'invite' || values.visibility === 'private'
+    visibility: corporate
+      ? 'invite'
+      : values.visibility === 'friends' || values.visibility === 'invite' || values.visibility === 'private'
         ? values.visibility
         : 'public',
+    privacy_mode: corporate
+      ? 'private_corporate'
+      : values.visibility === 'friends' || values.visibility === 'public'
+        ? 'public'
+        : 'private',
   };
 }
 

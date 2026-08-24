@@ -45,6 +45,26 @@ export default function ChallengeIdLayout() {
             headerRight: () => <WalletBar />,
           }}
         />
+        <Stack.Screen
+          name="official"
+          options={{
+            headerShown: true,
+            title: 'Official tools',
+            headerBackVisible: false,
+            headerLeft: () => <StackBackButton />,
+            headerRight: () => <WalletBar />,
+          }}
+        />
+        <Stack.Screen
+          name="scoring"
+          options={{
+            headerShown: true,
+            title: 'Edit scoring',
+            headerBackVisible: false,
+            headerLeft: () => <StackBackButton />,
+            headerRight: () => <WalletBar />,
+          }}
+        />
       </Stack>
       <ChallengeDetailOverflowHost overflow={overflow} />
     </View>

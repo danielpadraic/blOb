@@ -22,7 +22,9 @@ import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { fetchChallengeById } from '@/lib/challenges';
 import { formatCashCompact, isBucksChallenge } from '@/lib/currency';
+import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { copy } from '@/lib/copy';
+import { namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
 import { isOfficialChallenge } from '@/lib/official';
 import { armingCountdownLabel, officialContestantsNeeded } from '@/lib/officialSeries';
 import { isClosedForLogs, isJoinWindowOpen } from '@/lib/settlement';
@@ -59,7 +61,6 @@ export type InviteChallenge = {
   category?: string | null;
   challenge_type?: string | null;
   cover_image_url?: string | null;
-  /** Present only if a future sponsor column exists. Not queried today. */
   sponsor_logo_url?: string | null;
   sponsor_name?: string | null;
 };
@@ -292,7 +293,8 @@ export function ChallengeInviteCard({
   const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
   const muted = official ? 'rgba(231,247,243,0.72)' : THEME.textMuted;
   const tags = challengeCardTags({ challenge, hosting, joined });
-  const sponsorName = challenge.sponsor_name?.trim() || 'blOb';
+  const namedSponsor = namedOfficialSponsor(challenge);
+  const sponsorName = namedSponsor || officialSponsorName(challenge) || 'blOb';
   const cardLabel = `${challenge.title}. ${status}. ${canCheckIn ? 'View or check-in' : cta}`;
 
   async function openDetail() {
@@ -352,7 +354,7 @@ export function ChallengeInviteCard({
           steps={mediaSteps}
           visual={visual}
           title={challenge.title}
-          category={challenge.category ?? (official ? 'fitness' : undefined)}
+          category={challenge.category ?? undefined}
           typeTipOpen={typeTip.open}
           onTypePress={typeTip.show}
         />
@@ -378,7 +380,14 @@ export function ChallengeInviteCard({
             <AppText className="text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
               Sponsored by
             </AppText>
-            {asHttpUrl(challenge.sponsor_logo_url) ? (
+            {namedSponsor ? (
+              <AppText
+                className="min-w-0 flex-1 text-[12px] font-extrabold"
+                style={{ color: titleColor }}
+                numberOfLines={2}>
+                {namedSponsor}
+              </AppText>
+            ) : asHttpUrl(challenge.sponsor_logo_url) ? (
               <Image
                 source={{ uri: asHttpUrl(challenge.sponsor_logo_url) }}
                 style={{ width: 56, height: 28 }}
@@ -640,6 +649,16 @@ function OfficialBobPanel({ onError }: { onError: () => void }) {
 
 function EntryMark({ challenge, color }: { challenge: InviteChallenge; color: string }) {
   const amount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
+  if (amount <= 0) {
+    return (
+      <EntryFeeAmount
+        amount={0}
+        currency={challenge.currency}
+        textClassName="text-[14px] font-extrabold"
+        color={color}
+      />
+    );
+  }
   if (isBucksChallenge(challenge)) {
     return (
       <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
@@ -651,7 +670,7 @@ function EntryMark({ challenge, color }: { challenge: InviteChallenge; color: st
     <View className="flex-row items-center" style={{ gap: 4 }}>
       <CurrencyMark currency={challenge.currency} size={15} />
       <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
-        {amount <= 0 ? '0' : Number.isInteger(amount) ? String(amount) : amount.toFixed(2)}
+        {Number.isInteger(amount) ? String(amount) : amount.toFixed(2)}
       </AppText>
     </View>
   );

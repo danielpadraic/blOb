@@ -23,7 +23,7 @@ export function officialFitnessProofIcons(challenge: Pick<
   'is_official' | 'category' | 'proofs' | 'proof_type' | 'proof_requirements' | 'challenge_type' | 'tasks'
 >): { camera: boolean; heart: boolean } {
   if (challenge.is_official) {
-    const category = String(challenge.category ?? 'fitness').toLowerCase();
+    const category = String(challenge.category ?? '').toLowerCase();
     if (category === 'fitness') {
       return { camera: true, heart: true };
     }

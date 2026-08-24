@@ -8,6 +8,7 @@ import {
   type ChallengeTemplateId,
   type CreateStartPath,
 } from '@/lib/challengeTemplates';
+import { parseComparablePointsConfig } from '@/lib/comparablePoints';
 import { asExtraRules, extraRulesFromStructured, parseRulesStructured } from '@/lib/consistencyRules';
 import { CREATE_PROOF_TYPES, normalizeChallengeCategory } from '@/lib/constants';
 import {
@@ -277,6 +278,14 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
           : row.challenge_lane === 'private'
             ? 'invite'
             : 'public',
+      privacy_mode:
+        row.privacy_mode === 'private_corporate' || row.privacy_mode === 'private' || row.privacy_mode === 'public'
+          ? row.privacy_mode
+          : row.challenge_lane === 'private' ||
+              row.visibility === 'private' ||
+              row.visibility === 'invite'
+            ? 'private'
+            : 'public',
       challenge_lane: row.challenge_lane === 'private' ? 'private' : 'coins',
       duration_type: row.duration_type === 'unlimited' ? 'unlimited' : 'fixed',
       ...ensureSchedule({
@@ -328,6 +337,8 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       cover_image_url: asString(row.cover_image_url, ''),
       rules_video_url: asString(row.rules_video_url, ''),
       rules: asString(row.rules, ''),
+      scoring_method: row.scoring_method === 'comparable_points' ? 'comparable_points' : null,
+      scoring_config: parseComparablePointsConfig(row.scoring_config),
     };
   } catch {
     return emptyValues();
@@ -395,6 +406,16 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
       challenge.visibility === 'private'
         ? challenge.visibility
         : 'public',
+    privacy_mode:
+      challenge.privacy_mode === 'private_corporate' ||
+      challenge.privacy_mode === 'private' ||
+      challenge.privacy_mode === 'public'
+        ? challenge.privacy_mode
+        : challenge.challenge_lane === 'private' ||
+            challenge.visibility === 'invite' ||
+            challenge.visibility === 'private'
+          ? 'private'
+          : 'public',
     challenge_lane: challenge.challenge_lane === 'private' ? 'private' : 'coins',
     duration_type: 'fixed',
     ...ensureSchedule({
@@ -430,12 +451,15 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     cover_image_url: challenge.cover_image_url ?? '',
     rules_video_url: challenge.rules_video_url ?? '',
     rules: challenge.rules ?? '',
+    scoring_method: challenge.scoring_method === 'comparable_points' ? 'comparable_points' : null,
+    scoring_config: parseComparablePointsConfig(challenge.scoring_config),
   });
 }
 
 const LANE_START_FIELDS = new Set<keyof CreateChallengeValues>([
   'challenge_lane',
   'visibility',
+  'privacy_mode',
   'currency',
   'buy_in',
   'funding_model',

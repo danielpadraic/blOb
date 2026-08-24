@@ -20,6 +20,7 @@ const GOAL = wizardStepIndex('goal');
 const TYPE = wizardStepIndex('type');
 const DURATION = wizardStepIndex('duration');
 const PRIZE = wizardStepIndex('prize');
+const SCORING = wizardStepIndex('scoring');
 const FUNDING = wizardStepIndex('funding');
 const ENTRY = wizardStepIndex('entry');
 const RULES = wizardStepIndex('rules');
@@ -196,6 +197,14 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
     wizardStep: PRIZE,
     title: 'Payout',
     body: 'How the prize splits.',
+  },
+  {
+    id: 'adv-comparable-points',
+    target: 'create-scoring_method',
+    placement: 'below',
+    wizardStep: SCORING,
+    title: 'Scoring method',
+    body: 'Comparable Points compares different kinds of work on one board.',
   },
   {
     id: 'adv-funding',

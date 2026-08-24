@@ -14,6 +14,11 @@ import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { isPointsChallenge } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { previewFromValues } from '@/lib/challengeTemplates';
+import {
+  activityQtyLabel,
+  comparablePointsHeadline,
+  parseComparablePointsConfig,
+} from '@/lib/comparablePoints';
 import { THEME } from '@/lib/theme';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -25,6 +30,7 @@ export type CreateReviewEditKey =
   | 'frequency'
   | 'visibility'
   | 'prize'
+  | 'scoring'
   | 'start';
 
 function EditLink({ onPress }: { onPress: () => void }) {
@@ -54,7 +60,10 @@ export function CreateReviewPreview({
   const signupLines = signupProofLines(challenge);
   const isPoints = isPointsChallenge(challenge);
   const extraTasks = (challenge.tasks ?? []).filter((task) => task.id !== 'primary');
-  const showTasks = isPoints || extraTasks.length > 0 || (challenge.tasks?.length ?? 0) > 1;
+  const comparable = parseComparablePointsConfig(values.scoring_config);
+  const showComparable = values.scoring_method === 'comparable_points' && comparable != null;
+  const showTasks =
+    !showComparable && (isPoints || extraTasks.length > 0 || (challenge.tasks?.length ?? 0) > 1);
   const startNeeded = userStartNeededLabel(challenge);
 
   return (
@@ -122,6 +131,34 @@ export function CreateReviewPreview({
               ))}
             </View>
           ) : null}
+        </Card>
+      ) : null}
+
+      {showComparable ? (
+        <Card>
+          <View className="flex-row items-start justify-between gap-3">
+            <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+              Scoring method
+            </AppText>
+            <EditLink onPress={() => onEdit('scoring')} />
+          </View>
+          <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
+            Comparable Points
+          </AppText>
+          <AppText className="mt-1 text-[13px] leading-5 text-muted">
+            {comparablePointsHeadline(comparable)}
+          </AppText>
+          <View className="mt-3 gap-1.5">
+            {comparable.activities
+              .filter((item) => item.name.trim().length > 0)
+              .map((item) => (
+                <AppText key={item.id} className="text-[14px] leading-5 text-charcoal">
+                  {item.name.trim()} · {activityQtyLabel(item)}
+                  {item.multiplier.enabled ? ' · Multiplier' : ''}
+                  {item.qualifiers.enabled ? ' · Qualifiers' : ''}
+                </AppText>
+              ))}
+          </View>
         </Card>
       ) : null}
 
@@ -227,12 +264,19 @@ export function CreateReviewPreview({
           </AppText>
         </Pressable>
         <AppText className="mt-1 leading-6 text-charcoal">
-          {values.visibility === 'friends'
-            ? copy('create.friends')
-            : values.visibility === 'invite' || values.visibility === 'private'
-              ? copy('create.invite')
-              : copy('create.public')}
+          {values.privacy_mode === 'private_corporate'
+            ? copy('create.privateCorporate')
+            : values.visibility === 'friends'
+              ? copy('create.friends')
+              : values.visibility === 'invite' || values.visibility === 'private'
+                ? copy('create.invite')
+                : copy('create.public')}
         </AppText>
+        {values.privacy_mode === 'private_corporate' ? (
+          <AppText className="mt-1 text-sm leading-5 text-muted">
+            {copy('create.privateCorporateHelp')}
+          </AppText>
+        ) : null}
       </Card>
     </View>
   );

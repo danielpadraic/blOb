@@ -21,6 +21,9 @@ import {
 import { RulesSlide } from '@/components/challenge/create/RulesSlide';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { ExtraTasksEditor } from '@/components/challenge/create/ExtraTasksEditor';
+import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
+import { ComparablePointsEditor } from '@/components/challenge/create/comparablePoints/ComparablePointsEditor';
+import { ComparablePointsMethodCard } from '@/components/challenge/create/comparablePoints/ComparablePointsMethodCard';
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -79,6 +82,7 @@ import {
 import { wizardBobOops, wizardBobTips, wizardEntryTabTipIndex, wizardGoalTypeTipIndex, wizardStepForField, entryTabFromValues, type EntryTab } from '@/lib/createBobCopy';
 import { composeChallengeRules, hasDefinedRules } from '@/lib/consistencyRules';
 import { applyLaneToFormValues, normalizeUserChallengeLane, type UserChallengeLane } from '@/lib/challengeLane';
+import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
 import {
   endsAtFromStartAndDays,
   ensureSchedule,
@@ -89,6 +93,11 @@ import {
   tomorrowMorning,
   withFreshSchedule,
 } from '@/lib/challengeSchedule';
+import {
+  COMPARABLE_POINTS_METHOD,
+  parseComparablePointsConfig,
+} from '@/lib/comparablePoints';
+import { useComparablePointsForm } from '@/hooks/useComparablePointsForm';
 import { THEME } from '@/lib/theme';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { copy } from '@/lib/copy';
@@ -110,6 +119,7 @@ const STEP_GOAL = wizardStepIndex('goal');
 const STEP_TYPE = wizardStepIndex('type');
 const STEP_DURATION = wizardStepIndex('duration');
 const STEP_PRIZE = wizardStepIndex('prize');
+const STEP_SCORING = wizardStepIndex('scoring');
 const STEP_FUNDING = wizardStepIndex('funding');
 const STEP_ENTRY = wizardStepIndex('entry');
 const STEP_RULES = wizardStepIndex('rules');
@@ -172,6 +182,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const [tipIndex, setTipIndex] = useState(0);
   const [entryTab, setEntryTab] = useState<EntryTab>('coins');
   const [skillAck, setSkillAck] = useState(false);
+  const [scoringEditorOpen, setScoringEditorOpen] = useState(false);
+  const [scoringToast, setScoringToast] = useState<string | null>(null);
   const [laneChosen, setLaneChosen] = useState(true);
   const [bobError, setBobError] = useState<{ field: string; line: string } | null>(null);
   const tour = useTourOptional();
@@ -204,7 +216,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   });
 
   const values = watch();
+  const comparableConfig = parseComparablePointsConfig(values.scoring_config);
+  const scoringForm = useComparablePointsForm(comparableConfig);
   const isPoints = isPointsDraft(values);
+  const usesComparablePoints = values.scoring_method === COMPARABLE_POINTS_METHOD && comparableConfig != null;
   const isUnlimited = isUnlimitedDraft(values);
   const isCreatorFunded = values.funding_model === 'creator' || values.funding_model === 'hybrid';
   const contributionAmount = isCreatorFunded ? Math.max(Number(values.creator_contribution) || 0, 0) : 0;
@@ -285,6 +300,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     const next = applyLaneToFormValues(source, lane);
     setValue('challenge_lane', next.challenge_lane, { shouldValidate: true });
     setValue('visibility', next.visibility, { shouldValidate: true });
+    setValue('privacy_mode', asPrivacyMode(next.privacy_mode, next.visibility, next.challenge_lane), {
+      shouldValidate: true,
+    });
     setValue('currency', next.currency, { shouldValidate: true });
     setValue('buy_in', next.buy_in, { shouldValidate: true });
     setValue('funding_model', next.funding_model, { shouldValidate: true });
@@ -747,6 +765,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       if (values.visibility !== 'private') {
         setValue('visibility', 'private', { shouldValidate: true });
       }
+      if (values.privacy_mode === 'public') {
+        setValue('privacy_mode', 'private', { shouldValidate: true });
+      }
       if (Number(values.buy_in) > 0 || entryTab !== 'free') {
         setValue('buy_in', '0', { shouldValidate: true });
         setEntryTab('free');
@@ -905,6 +926,30 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       current.filter((_, itemIndex) => itemIndex !== index),
       { shouldDirty: true, shouldValidate: true },
     );
+  }
+
+  function openScoringEditor() {
+    scoringForm.resetFrom(getValues('scoring_config'));
+    setScoringEditorOpen(true);
+  }
+
+  function closeScoringEditor() {
+    scoringForm.resetFrom(getValues('scoring_config'));
+    setScoringEditorOpen(false);
+  }
+
+  function saveScoringMethod() {
+    const result = scoringForm.validate();
+    if (!result.ok) {
+      showBobIssue({ field: 'scoring_config', step: STEP_SCORING }, result.message);
+      return false;
+    }
+    setValue('scoring_method', COMPARABLE_POINTS_METHOD, { shouldDirty: true, shouldValidate: true });
+    setValue('scoring_config', result.config, { shouldDirty: true, shouldValidate: true });
+    setScoringEditorOpen(false);
+    setScoringToast('Scoring method saved');
+    setTimeout(() => setScoringToast((current) => (current === 'Scoring method saved' ? null : current)), 1800);
+    return true;
   }
 
   function applyStepErrors(targetStep: number): BobIssue | null {
@@ -1107,6 +1152,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       showBobIssue({ field: 'start', step: STEP_START });
       return;
     }
+    if (index !== STEP_SCORING && scoringEditorOpen) {
+      closeScoringEditor();
+    }
     setStep(index);
   }
 
@@ -1119,6 +1167,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       frequency: { step: STEP_DURATION, field: 'frequency' },
       visibility: { step: STEP_GOAL, field: 'visibility' },
       prize: { step: STEP_PRIZE, field: 'prize_structure' },
+      scoring: { step: STEP_SCORING, field: 'scoring_method' },
       start: { step: STEP_DURATION, field: 'starts_at' },
     };
     const target = mapping[key];
@@ -1140,6 +1189,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
     if (step === STEP_START && !hasStartChoice()) {
       showBobIssue({ field: 'start', step: STEP_START });
+      return;
+    }
+    if (step === STEP_SCORING && scoringEditorOpen) {
+      saveScoringMethod();
       return;
     }
     if (reviewReturn && !lastStep) {
@@ -1189,6 +1242,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   function goBack() {
     setFormError(null);
     clearBobError();
+    if (step === STEP_SCORING && scoringEditorOpen) {
+      closeScoringEditor();
+      return;
+    }
     if (reviewReturn && step !== STEP_REVIEW) {
       setReviewReturn(false);
       setStep(STEP_REVIEW);
@@ -1357,7 +1414,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           <WizardProgress
             step={step}
             onStepPress={goToStep}
-            status={savedFlash ? 'Saved' : null}
+            status={scoringToast ?? (savedFlash ? 'Saved' : null)}
             trailing={
               <View className="flex-row items-center gap-1">
                 <TourAnchor id="create-advanced-simple">
@@ -1444,12 +1501,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               errors={errors}
               category={values.category}
               visibility={values.visibility}
+              privacyMode={asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane)}
               challengeLane={values.challenge_lane}
               extraTasks={values.extra_tasks ?? []}
               coverUrl={values.cover_image_url}
               isPoints={isPoints}
               onCategoryChange={onCategoryChange}
-              onVisibilityChange={(value) => setValue('visibility', value, { shouldValidate: true })}
+              onPrivacyChange={(next) => {
+                setValue('privacy_mode', next.privacy_mode, { shouldValidate: true, shouldDirty: true });
+                setValue('visibility', next.visibility, { shouldValidate: true, shouldDirty: true });
+                setValue('discoverability', next.discoverability, { shouldDirty: true });
+              }}
               onExtraTasksChange={(extra_tasks) => setValue('extra_tasks', extra_tasks, { shouldDirty: true })}
               onCoverChange={(cover_image_url) =>
                 setValue('cover_image_url', cover_image_url, { shouldDirty: true, shouldValidate: true })
@@ -1491,6 +1553,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               onDistributionChange={(value) =>
                 setValue('top_places_distribution', value, { shouldValidate: true })
               }
+            />
+          ) : null}
+          {step === STEP_SCORING ? (
+            <ScoringMethodSlide
+              config={usesComparablePoints ? comparableConfig : null}
+              editorOpen={scoringEditorOpen}
+              form={scoringForm}
+              onConfigure={openScoringEditor}
+              onEdit={openScoringEditor}
             />
           ) : null}
           {step === STEP_FUNDING ? (
@@ -1536,7 +1607,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               setValue={setValue}
               getValues={getValues}
               values={values}
-              isPoints={isPoints}
+              isPoints={isPoints && !usesComparablePoints}
               isUnlimited={isUnlimited}
               onFrequencyChange={onFrequencyChange}
               onAddTask={addTask}
@@ -1559,6 +1630,20 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         </ScrollView>
 
         <View className="gap-2 px-4 pb-4 pt-2" style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
+          {scoringToast ? (
+            <View className="items-center">
+              <View
+                className="px-4 py-2.5"
+                style={{
+                  backgroundColor: THEME.primary,
+                  borderRadius: 16,
+                }}>
+                <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
+                  {scoringToast}
+                </AppText>
+              </View>
+            </View>
+          ) : null}
           {formError ? (
             <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
           ) : null}
@@ -1569,11 +1654,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             <View className="flex-1">
               <Button
                 title={
-                  lastStep
-                    ? 'Publish'
-                    : reviewReturn
-                      ? copy('create.backToReview')
-                      : 'Next'
+                  step === STEP_SCORING && scoringEditorOpen
+                    ? 'Save scoring method'
+                    : lastStep
+                      ? 'Publish'
+                      : reviewReturn
+                        ? copy('create.backToReview')
+                        : 'Next'
                 }
                 loading={lastStep && publishing}
                 onPress={() => void goNext()}
@@ -1753,12 +1840,13 @@ function GoalSlide({
   errors,
   category,
   visibility,
+  privacyMode,
   challengeLane,
   extraTasks,
   coverUrl,
   isPoints,
   onCategoryChange,
-  onVisibilityChange,
+  onPrivacyChange,
   onExtraTasksChange,
   onCoverChange,
   onCoverClear,
@@ -1767,17 +1855,22 @@ function GoalSlide({
   errors: ReturnType<typeof useForm<CreateChallengeValues>>['formState']['errors'];
   category: CreateChallengeValues['category'];
   visibility: CreateChallengeValues['visibility'];
+  privacyMode: PrivacyMode;
   challengeLane: CreateChallengeValues['challenge_lane'];
   extraTasks: CreateChallengeValues['extra_tasks'];
   coverUrl?: string | null;
   isPoints: boolean;
   onCategoryChange: (next: CreateChallengeValues['category']) => void;
-  onVisibilityChange: (next: CreateChallengeValues['visibility']) => void;
+  onPrivacyChange: (next: {
+    privacy_mode: PrivacyMode;
+    visibility: CreateChallengeValues['visibility'];
+    discoverability: 'invite_only' | 'friends_of_friends' | null;
+  }) => void;
   onExtraTasksChange: (next: NonNullable<CreateChallengeValues['extra_tasks']>) => void;
   onCoverChange: (url: string) => void;
   onCoverClear: () => void;
 }) {
-  const isPrivateLane = normalizeUserChallengeLane(challengeLane) === 'private';
+  const [privacyLockMessage, setPrivacyLockMessage] = useState<string | null>(null);
   return (
     <View className="gap-4">
       <FieldAnchor name="category">
@@ -1866,26 +1959,17 @@ function GoalSlide({
         )}
       </FieldAnchor>
       <FieldAnchor name="visibility">
-      {isPrivateLane ? (
-        <FieldLabel label="Visibility">
-          <AppText className="text-sm leading-5 text-muted">
-            Invite-only. Not listed in public discovery.
-          </AppText>
-        </FieldLabel>
-      ) : (
-      <FieldLabel label="Visibility" error={errors.visibility?.message}>
-        <SegmentedControl
-          accessibilityLabel="Visibility"
-          value={visibility === 'private' ? 'invite' : visibility}
-          options={[
-            { value: 'public', label: 'Public' },
-            { value: 'friends', label: 'Friends' },
-            { value: 'invite', label: 'Invite' },
-          ]}
-          onChange={onVisibilityChange}
+        <PrivacyModePicker
+          privacyMode={privacyMode}
+          visibility={visibility}
+          challengeLane={normalizeUserChallengeLane(challengeLane)}
+          error={errors.visibility?.message ?? errors.privacy_mode?.message ?? privacyLockMessage ?? undefined}
+          onChange={(next) => {
+            setPrivacyLockMessage(null);
+            onPrivacyChange(next);
+          }}
+          onLockedAttempt={setPrivacyLockMessage}
         />
-      </FieldLabel>
-      )}
       </FieldAnchor>
     </View>
   );
@@ -2139,6 +2223,42 @@ function DurationSlide({
         </>
       ) : null}
     </View>
+  );
+}
+
+function ScoringMethodSlide({
+  config,
+  editorOpen,
+  form,
+  onConfigure,
+  onEdit,
+}: {
+  config: ReturnType<typeof parseComparablePointsConfig>;
+  editorOpen: boolean;
+  form: ReturnType<typeof useComparablePointsForm>;
+  onConfigure: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <FieldAnchor name="scoring_method">
+      <View className="gap-4">
+        <View className="gap-1">
+          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Scoring method
+          </AppText>
+          {editorOpen ? (
+            <AppText className="text-[13px] leading-5 text-muted">
+              Activities first, then optional rules, then shared parity.
+            </AppText>
+          ) : null}
+        </View>
+        {editorOpen ? (
+          <ComparablePointsEditor form={form} />
+        ) : (
+          <ComparablePointsMethodCard config={config} onPress={config ? onEdit : onConfigure} />
+        )}
+      </View>
+    </FieldAnchor>
   );
 }
 

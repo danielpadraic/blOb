@@ -6,11 +6,14 @@ import { ChallengeCardVisual } from '@/components/challenge/ChallengeCardVisual'
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { BuckUsdAmount, StakeAmount } from '@/components/currency/CurrencyMark';
+import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { AppText } from '@/components/ui/AppText';
 import { isLiveCompetitorStatus, isPointsChallenge } from '@/lib/challenges';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { copy } from '@/lib/copy';
+import { entryFieldNote, prizeFieldNote, type FieldNoteKey } from '@/lib/challengeFieldNotes';
+import { cashPrizeLabel } from '@/lib/currency';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
@@ -214,10 +217,17 @@ export function OfficialFillingStats({
     <View>
       <View className="flex-row" style={{ gap: 8 }}>
         <PosterStat
-          label={copy('create.buyIn')}
-          value={<BuckUsdAmount amount={buyIn} textClassName={amountClass} color={amountColor} />}
+          label={buyIn <= 0 ? 'Entry' : copy('create.buyIn')}
+          value={
+            <EntryFeeAmount
+              amount={buyIn}
+              currency={challenge.currency}
+              textClassName={amountClass}
+              color={amountColor}
+            />
+          }
           labelColor={labelColor}
-          note="buyIn"
+          note={entryFieldNote(challenge)}
           tint={hero ? 'light' : 'dark'}
         />
         <PosterStat
@@ -227,9 +237,13 @@ export function OfficialFillingStats({
         />
         <PosterStat
           label={copy('board.pot')}
-          value={<BuckUsdAmount amount={pot} textClassName={amountClass} color={amountColor} />}
+          value={
+            <AppText className={amountClass} style={amountColor ? { color: amountColor } : undefined} numberOfLines={2}>
+              {cashPrizeLabel(pot)}
+            </AppText>
+          }
           labelColor={labelColor}
-          note="pot"
+          note={prizeFieldNote(challenge)}
           tint={hero ? 'light' : 'dark'}
         />
       </View>
@@ -284,7 +298,7 @@ function PosterStat({
   label: string;
   value: ReactNode;
   labelColor?: string;
-  note?: 'pot' | 'buyIn';
+  note?: FieldNoteKey;
   tint?: 'light' | 'dark';
 }) {
   const labelStyle = { color: labelColor ?? THEME.textMuted, letterSpacing: 0.2 };

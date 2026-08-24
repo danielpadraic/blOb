@@ -4,6 +4,9 @@ import { View } from 'react-native';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
+import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
+import { entryFieldNote, prizeFieldNote, type FieldNoteKey } from '@/lib/challengeFieldNotes';
+import { cashPrizeLabel } from '@/lib/currency';
 import { AppText } from '@/components/ui/AppText';
 import { copy } from '@/lib/copy';
 import {
@@ -65,9 +68,19 @@ export function OfficialMoneyBoard({
       {filling ? (
         <>
           <View className="flex-row" style={{ gap: 8 }}>
-            <Stat label={copy('create.buyIn')} value={<BuckUsdAmount amount={buyIn} size={16} />} note="buyIn" />
+            <Stat
+              label={buyIn <= 0 ? 'Entry' : copy('create.buyIn')}
+              value={
+                <EntryFeeAmount
+                  amount={buyIn}
+                  currency={challenge.currency}
+                  textClassName="text-[13px] font-extrabold text-charcoal"
+                />
+              }
+              note={entryFieldNote(challenge)}
+            />
             <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
-            <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} note="pot" />
+            <Stat label={copy('board.pot')} value={cashPrizeLabel(pot)} note={prizeFieldNote(challenge)} />
           </View>
           {startLine ? (
             <View className="flex-row items-start" style={{ gap: 6 }}>
@@ -89,7 +102,7 @@ export function OfficialMoneyBoard({
         <View className="flex-row" style={{ gap: 6 }}>
           <Stat label={copy('board.joined')} value={String(joined)} />
           <Stat label={copy('board.finished')} value={String(Math.max(finished, 0))} />
-          <Stat label={copy('board.pot')} value={<BuckUsdAmount amount={pot} size={16} />} note="pot" />
+          <Stat label={copy('board.pot')} value={cashPrizeLabel(pot)} note={prizeFieldNote(challenge)} />
           <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
         </View>
       )}
@@ -104,7 +117,7 @@ function Stat({
 }: {
   label: string;
   value: ReactNode;
-  note?: 'pot' | 'buyIn';
+  note?: FieldNoteKey;
 }) {
   return (
     <View style={{ flex: 1, minWidth: 0 }}>

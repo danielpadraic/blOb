@@ -16,7 +16,7 @@ import { THEME } from '@/lib/theme';
 import { formatCash, formatWalletNumber, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { bucksJoinCta } from '@/lib/joinCta';
 import { copy } from '@/lib/copy';
-import { officialBob } from '@/copy/officialBob';
+import { officialDetailsParagraphs } from '@/copy/officialBob';
 import { useMyProfile } from '@/hooks/useProfile';
 
 type JoinConfirmModalProps = {
@@ -218,9 +218,15 @@ export function JoinConfirmModal({
             <AppText className="text-2xl font-bold text-charcoal">
               {isFree || !bucks ? 'Join this challenge?' : `Join for ${buyIn}?`}
             </AppText>
-            <AppText className="mt-3 text-[15px] leading-6 text-muted">{officialBob('joinBob')}</AppText>
-            <AppText className="mt-3 text-[15px] leading-6 text-charcoal">{WEEK_10_PROOF_SENTENCE}</AppText>
-            <AppText className="mt-3 text-[13px] leading-5 text-muted">{officialBob('legalAge')}</AppText>
+            <ScrollView
+              style={{ flexGrow: 0, maxHeight: 360 }}
+              showsVerticalScrollIndicator={false}>
+              {officialDetailsParagraphs(challenge).map((paragraph) => (
+                <AppText key={paragraph} className="mt-3 text-[15px] leading-6 text-charcoal">
+                  {paragraph}
+                </AppText>
+              ))}
+            </ScrollView>
             {error ? (
               <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
             ) : null}
