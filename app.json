@@ -25,8 +25,10 @@
         "NSHealthShareUsageDescription": "blOb reads workouts and heart rate only to verify effort in Skill Tournaments.",
         "NSHealthUpdateUsageDescription": "blOb starts or updates a workout session only to verify effort in Skill Tournaments.",
         "UIBackgroundModes": [
+          "remote-notification",
           "remote-notification"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

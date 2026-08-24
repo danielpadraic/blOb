@@ -1,0 +1,548 @@
+=== lib/copy.ts (if it exists) ===
+./lib/copy.ts
+
+=== Quoted UI strings ===
+59:          title="Couldn’t load messages"
+327:          <Button title="Create a Challenge" size="lg" onPress={() => router.push('/challenges/create')} />
+38:            title="Sign in to create"
+58:          title="Couldn’t load that call-out"
+52:          title="Couldn’t load your profile"
+191:          <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
+55:          title="Couldn’t load body metrics"
+23:          title="Couldn’t load your profile"
+34:          title="Couldn’t load fitness history"
+43:          title="Feed took a tumble"
+269:        title="Couldn’t load friends"
+346:        title="Couldn’t load requests"
+58:          title="Sign in to accept"
+60:          actionLabel="Sign in"
+72:          title="Couldn’t accept that invite"
+75:              label="Password"
+88:        <Button title="Sign in" onPress={onSubmit} loading={isSubmitting} size="lg" />
+79:              label="Password"
+107:        <Button title="Create account" onPress={onSubmit} loading={isSubmitting} size="lg" />
+46:        title="Continue with Google"
+54:          title="Continue with Apple"
+62:          title="Continue with Apple"
+80:          label="Home"
+315:              label="Delete"
+101:          title="Couldn’t load that profile"
+220:      <Question label="Aims">
+71:            accessibilityLabel="Create a Challenge">
+67:        title="Feed took a tumble"
+30:          title="Create a challenge"
+37:        title="Feed didn’t load"
+98:          title="Couldn’t load notifications"
+
+=== Alert / title / placeholder ===
+16:        <MascotState kind="loading" title="Signing you in" body="Hang tight — your blob is almost ready." />
+47:          accessibilityLabel="Close messages"
+55:        <MascotState kind="loading" title="Opening your inbox" compact />
+59:          title="Couldn’t load messages"
+87:          accessibilityLabel="Back"
+96:          accessibilityLabel={`${name} profile`}
+277:      <AppHeader title="Lobby" subtitle="Find a challenge. Buy in. Prove the work." />
+282:        placeholder="Search challenges"
+298:        accessibilityLabel="Search challenges"
+327:          <Button title="Create a Challenge" size="lg" onPress={() => router.push('/challenges/create')} />
+352:        <MascotState kind="loading" title="Opening the lobby" body="Looking for open competitions." />
+356:          title="Lobby is unreachable"
+367:          title="Lobby’s quiet"
+29:              accessibilityLabel="Close"
+38:            title="Sign in to create"
+42:            <Button title="Back to Lobby" variant="outline" onPress={() => router.back()} />
+131:          accessibilityLabel="Call-out currency"
+160:              placeholder="Search a username"
+169:                title="Search"
+179:                title="People you follow"
+193:          placeholder="10"
+202:          placeholder="First to 5 miles, most points, etc."
+276:          title="Send call-out"
+282:        <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
+319:    title: 'You both have to accept these terms',
+325:    title: 'Stakes are held after they accept',
+330:    title: 'Payout needs both of you',
+338:    title: 'This is real money, 1:1 with USD',
+343:    title: 'Bucks are deducted when they accept',
+349:    title: 'You cannot reverse a held stake alone',
+361:  title: string;
+48:        <MascotState kind="loading" title="Loading call-out" />
+58:          title="Couldn’t load that call-out"
+153:                  title: `${stakeLabel} is the real-money stake`,
+158:                  title: 'Both stakes leave now',
+163:                  title: 'You cannot reverse this alone',
+191:            title={`Accept for ${stakeLabel}`}
+198:            title="Decline"
+212:            title="Cancel call-out"
+236:            title={`I won · ${pot}`}
+243:            title={`${profileName(them)} won`}
+251:            title={
+14:      <Stack.Screen name="callout/create" options={{ title: 'Call out' }} />
+15:      <Stack.Screen name="callout/[id]" options={{ title: 'Call-out' }} />
+267:          title="Loading challenge"
+279:          title="Challenge not found"
+439:          title: 'Challenge',
+497:              accessibilityLabel={`${challenge.title} cover`}
+513:                title="Invite someone"
+565:              accessibilityLabel="Open rules video">
+833:                  title="Lock results"
+841:                  title="Distribute prizes"
+920:                <Button title={logTitle} size="lg" disabled />
+935:                <Button title="Checking today’s log" size="lg" loading disabled />
+949:                  title={logTitle}
+989:                  title="Add body metrics"
+995:                  title={isFreeEntry ? 'Join free' : `Join for ${money(buyInAmount)}`}
+25:      <Stack.Screen options={{ title: 'Logged' }} />
+38:          <Button title="Back to challenge" size="lg" onPress={onBack} />
+103:        <MascotState kind="loading" title="Opening today’s log" body="Checking what you still owe." />
+113:          title="Join first"
+129:        <Stack.Screen options={{ title: 'Eliminated' }} />
+132:          title="You have been eliminated"
+144:        <Stack.Screen options={{ title: 'Not started' }} />
+147:          title="This challenge hasn’t started yet."
+159:        <Stack.Screen options={{ title: 'Logging closed' }} />
+162:          title="Logging is closed"
+178:      <Stack.Screen options={{ title: 'Log workout' }} />
+205:                  placeholder={type === 'link' ? 'https://' : proofMeta(type).helper}
+229:            title={allReady ? 'Confirm' : `Add ${proofCountLabel}`}
+22:          title: 'Challenge',
+27:      <Stack.Screen name="submit" options={{ headerShown: true, title: 'Log workout' }} />
+40:        <AppHeader title="You" />
+41:        <MascotState kind="loading" title="Loading profile" />
+49:        <AppHeader title="You" />
+52:          title="Couldn’t load your profile"
+76:      <AppHeader title="You" />
+80:        <Button title="Edit profile" size="sm" onPress={() => router.push('/profile/edit')} />
+82:          title="View public profile"
+92:        <Button title="Account" variant="outline" size="sm" onPress={() => router.push('/profile/account')} />
+99:        <Button title="Send Coins or Bucks" variant="outline" onPress={() => wallet?.openSend()} />
+142:            <Button title="Add Physical Details" onPress={() => router.push('/profile/edit')} />
+148:            title="Update fitness history"
+158:            <Button title="Add fitness history" onPress={() => router.push(FITNESS_HISTORY_HREF)} />
+191:          <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
+168:            title="Save username"
+184:            title="Save email"
+217:            title="Save password"
+9:      <Stack.Screen name="edit" options={{ title: 'Edit profile' }} />
+10:      <Stack.Screen name="account" options={{ title: 'Account' }} />
+11:      <Stack.Screen name="send" options={{ title: 'Send' }} />
+12:      <Stack.Screen name="body-metrics" options={{ title: 'Body metrics' }} />
+13:      <Stack.Screen name="fitness-history" options={{ title: 'Fitness history' }} />
+114:          accessibilityLabel="Close send"
+133:          accessibilityLabel="Send currency"
+167:            placeholder="Search by username"
+177:              title="Search results"
+185:                title="Recent"
+190:                title="People you follow"
+208:            placeholder="0.00"
+217:            title="Continue"
+225:          <Button title="Back" variant="ghost" onPress={() => setStep('pick')} />
+250:                placeholder="What’s this for?"
+311:              title={`Send ${amountLabel}`}
+318:              title="Back"
+352:    title: 'The exact amount leaves now',
+358:    title: 'This happens immediately',
+363:    title: 'This cannot be reversed',
+371:    title: 'This is real money, 1:1 with USD',
+377:    title: 'The amount is deducted immediately',
+382:    title: 'This cannot be reversed',
+393:  title: string;
+44:        <MascotState kind="loading" title="Finding your blob" />
+55:          title="Couldn’t load body metrics"
+13:        <MascotState kind="loading" title="Loading profile" compact />
+23:          title="Couldn’t load your profile"
+24:        <MascotState kind="loading" title="Finding your blob" />
+34:          title="Couldn’t load fitness history"
+20:          placeholder="Write a post…"
+43:          title="Feed took a tumble"
+9:      <Stack.Screen name="compose" options={{ title: 'New Post' }} />
+10:      <Stack.Screen name="p/[id]" options={{ title: 'Post' }} />
+22:      <Stack.Screen options={{ ...TAB_STACK_SCREEN_OPTIONS, title: 'Post' }} />
+24:        <MascotState kind="loading" title="Loading post" compact />
+130:          <Tabs.Screen name="feed" options={{ title: 'Home' }} listeners={{ tabPress: closeOverlays }} />
+134:              title: 'Lobby',
+143:              title: '',
+147:          <Tabs.Screen name="friends" options={{ title: 'Friends' }} listeners={{ tabPress: closeOverlays }} />
+148:          <Tabs.Screen name="notifications" options={{ href: null, title: 'Alerts' }} />
+149:          <Tabs.Screen name="messages" options={{ href: null, title: 'Messages' }} />
+150:          <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />
+154:              title: 'You',
+119:  function fail(error: unknown, title: string) {
+173:        accessibilityLabel="Friends sections"
+263:    return <MascotState kind="loading" title="Gathering your people" compact />;
+269:        title="Couldn’t load friends"
+281:        title="No friends yet"
+340:    return <MascotState kind="loading" title="Checking requests" compact />;
+346:        title="Couldn’t load requests"
+358:        title="You’re all caught up"
+457:        placeholder="Name, @username, email, or phone"
+479:          title="No blobs match that"
+491:          title="Find your people"
+44:          title="Invite not found"
+58:          title="Sign in to accept"
+72:          title="Couldn’t accept that invite"
+83:      <MascotState kind="loading" title="Opening invite" body="Checking your access…" />
+11:      <Stack.Screen options={{ title: 'Lost blob' }} />
+15:          title="This path doesn’t exist"
+65:          title="Supabase is not wired up"
+88:        <Button title="Sign in" onPress={onSubmit} loading={isSubmitting} size="lg" />
+107:        <Button title="Create account" onPress={onSubmit} loading={isSubmitting} size="lg" />
+73:    title: 'Profile',
+77:    title: 'Training',
+81:    title: 'Physical Details',
+336:            accessibilityLabel="Add a profile photo">
+463:                  accessibilityLabel="Gender"
+475:              accessibilityLabel="Measurement units"
+499:                        placeholder="5"
+518:                        placeholder="10"
+538:                  placeholder="178"
+556:                placeholder={unit === 'lb' ? '165' : '75'}
+572:                placeholder="Optional"
+614:                      placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
+617:                  <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
+644:            title="Continue"
+651:            title="Finish"
+658:          <Button title="Back" variant="ghost" size="lg" onPress={() => setStep((current) => current - 1)} />
+30:        accessibilityLabel={onClose ? 'Dismiss' : undefined}
+46:        title="Continue with Google"
+54:          title="Continue with Apple"
+62:          title="Continue with Apple"
+17:  title: string;
+32:      accessibilityLabel={accessibilityLabel}
+44:        accessibilityLabel="Decrease"
+56:        accessibilityLabel="Increase"
+27:      accessibilityLabel={accessibilityLabel}
+193:          accessibilityLabel="Close camera"
+218:          accessibilityLabel="Open gallery"
+227:          accessibilityLabel={shutterLabel}
+246:          accessibilityLabel="Flip camera"
+42:        onRetry ? <Button title="Try again" onPress={onRetry} /> : null
+45:          {canAskAgain && onRetry ? <Button title="Allow access" onPress={onRetry} /> : null}
+46:          <Button title="Open Settings" variant={canAskAgain ? 'outline' : 'primary'} onPress={() => void openAppSettings()} />
+300:          accessibilityLabel="Close"
+335:        placeholder="Add a caption"
+382:          accessibilityLabel="Post audience"
+432:        title={mode === 'reel' ? 'Share Reel' : mode === 'post' ? 'Post' : 'Share story'}
+32:        placeholder="Message"
+52:        accessibilityLabel="Send message"
+11:      title="No chats yet"
+22:      accessibilityLabel={conversation.unread ? `${name}, unread` : name}
+86:              accessibilityLabel={row.label}
+127:      accessibilityLabel={label}
+149:      accessibilityLabel="You"
+19:        accessibilityLabel="Quick actions"
+53:      accessibilityLabel="Back"
+11:  title: string;
+56:          title={actionLabel}
+43:      accessibilityLabel={LABELS[pose]}
+70:            placeholder="Search people, Challenges, #tags"
+89:            <Section title="People">
+108:            <Section title="Challenges">
+123:            <Section title="Hashtags">
+136:            <Section title="Posts">
+152:function Section({ title, children }: { title: string; children: ReactNode }) {
+22:  const subtitle =
+38:          accessibilityLabel={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
+58:          accessibilityLabel="Find people"
+66:            title="Decline"
+74:            title="Accept"
+85:            title="Cancel request"
+373:            accessibilityLabel={copy('post.delete')}
+406:                    accessibilityLabel={`Send to ${name}`}
+446:          placeholder="Add a caption…"
+541:        accessibilityLabel="Dismiss"
+584:      accessibilityLabel={label}
+21:  { title: string; variant: 'primary' | 'secondary' | 'outline' | 'mint' | 'ghost' }
+23:  none: { title: 'Add friend', variant: 'primary' },
+24:  following: { title: 'Add friend', variant: 'primary' },
+25:  requested: { title: 'Request sent', variant: 'outline' },
+26:  incoming: { title: 'Accept', variant: 'primary' },
+27:  friends: { title: 'Friends', variant: 'mint' },
+57:            title={action.title}
+59:          title="Message"
+67:          title="View profile"
+169:            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close story">
+193:              accessibilityLabel="Previous story"
+206:              accessibilityLabel="Next story"
+249:      accessibilityLabel={`Open challenge ${challenge.title}`}>
+69:          accessibilityLabel={group.name}>
+83:            accessibilityLabel="Add to your story"
+155:          accessibilityLabel="Close"
+199:            placeholder="Add a line if you want"
+263:          <Button title="Share story" loading={posting} disabled={!draft} onPress={() => void publish()} />
+279:      accessibilityLabel={label}
+60:          accessibilityLabel={accessibilityLabel ?? 'Last done'}
+232:        <Button title="Continue" size="lg" onPress={finish} />
+254:            accessibilityLabel="Gender"
+275:                  placeholder="5"
+293:                  placeholder="10"
+312:              placeholder="178"
+330:            placeholder={units === 'imperial' ? '165' : '75'}
+361:                  placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
+364:              <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
+399:        title="Save & continue"
+404:      {onSkip ? <Button title="Skip for now" variant="ghost" size="lg" onPress={onSkip} /> : null}
+139:      accessibilityLabel={`${gender === 'female' ? 'Barb' : 'Bob'} at about ${Math.round(bodyFatPct)} percent body fat`}
+51:          accessibilityLabel="Body fat percentage"
+20:      accessibilityLabel="Measurement units"
+397:              accessibilityLabel="Change profile photo">
+566:                            accessibilityLabel={`${sportLabel(field.name)} last done`}
+595:                    accessibilityLabel="Gender"
+603:                accessibilityLabel="Measurement units"
+622:                        placeholder="5"
+638:                        placeholder="10"
+655:                    placeholder="178"
+670:                  placeholder={unit === 'lb' ? '165' : '75'}
+685:                  placeholder="Optional"
+720:                        placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
+724:                      title="Set"
+765:            title={copy('profile.update')}
+81:      title: headerTitle,
+90:        <MascotState kind="loading" title="Loading profile" compact />
+101:          title="Couldn’t load that profile"
+171:                  accessibilityLabel="Profile menu"
+200:                <Button title="Edit profile" size="sm" onPress={() => router.push('/profile/edit')} />
+205:                  title={friendTitle}
+212:                  <Button title="Follow" size="sm" variant="outline" disabled />
+215:                  title="Message"
+235:        <SegmentedControl value={tab} options={TABS} onChange={setTab} accessibilityLabel="Profile sections" />
+176:        <Button title="Continue" size="lg" onPress={finish} />
+304:                      accessibilityLabel={`${sportLabel(field.name)} last done`}
+318:              placeholder="e.g. rowing"
+322:          <Button title="Add" size="sm" className="mb-1" onPress={() => addSport(customSport ?? '')} />
+351:                placeholder="8:45"
+389:                placeholder="Whatever you want us to know."
+428:        title="Save & continue"
+433:      {onSkip ? <Button title="Skip for now" variant="ghost" size="lg" onPress={onSkip} /> : null}
+131:            placeholder={`Reply to ${name}…`}
+88:              accessibilityLabel="Post menu"
+139:              placeholder="Write a reply…"
+200:      accessibilityLabel={done ? 'Flagged' : 'Flag proof'}
+243:  const title = challengeId
+255:          <ChallengeTitleLink challengeId={challengeId} title={title} />
+267:              <ChallengeTitleLink challengeId={challengeId} title={title} />
+53:          accessibilityLabel="View all challenges"
+71:            accessibilityLabel="Create a Challenge">
+113:              accessibilityLabel={challenge.title}
+67:        title="Feed took a tumble"
+83:          placeholder={composerPlaceholder}
+102:          title="Warming up the feed"
+107:        empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact={embedded} />
+9:export function FeedHeader({ subtitle = 'Friends, Challenges, and official posts' }: FeedHeaderProps) {
+16:  title: string;
+32:  title: 'Reels coming soon',
+43:    title: reel.caption?.trim() || 'Reel',
+50:    title: challenge.title,
+57:    title: 'New Reel',
+99:      accessibilityLabel={`${item.title} ${item.handle}`}
+18:        title="The arena is quiet"
+23:        <Button title="Join a challenge" onPress={() => router.push('/challenges')} />
+25:          title="Find friends"
+30:          title="Create a challenge"
+50:  placeholder = 'What’s the play today?',
+183:            placeholder={placeholder}
+196:            accessibilityLabel="Write a post"
+200:          title="Post"
+236:          accessibilityLabel="Post audience"
+293:              placeholder="https://"
+301:                <Button title="Cancel" variant="ghost" size="sm" onPress={() => setLinkOpen(false)} />
+304:                <Button title="Add link" size="sm" onPress={addLink} disabled={!linkDraft.trim()} />
+325:      accessibilityLabel={label}
+361:      <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" onPress={onRemove} className="px-2">
+16:  placeholder = 'Write a reply…',
+38:          placeholder={placeholder}
+44:          accessibilityLabel={placeholder}
+48:        title={submitLabel}
+80:      accessibilityLabel={item.name}
+95:      accessibilityLabel="Share"
+130:      accessibilityLabel={count > 0 ? `${label} ${count}` : label}
+27:      accessibilityLabel={challenge.title}
+58:            <Button title={unlocks.length > 1 ? 'Next' : 'Nice'} onPress={dismissUnlock} />
+7:  title: string;
+86:      accessibilityLabel="Open wallet"
+18:  { icon: GLYPH.check, title: 'Finish challenges', body: 'Prize pools pay Coins or Bucks.' },
+19:  { icon: GLYPH.star, title: 'Unlock badges', body: 'Milestones grant bonus Coins.' },
+20:  { icon: GLYPH.streak, title: 'Log your days', body: 'Proofs stack toward streak badges.' },
+21:  { icon: GLYPH.flag, title: 'Host a challenge', body: 'Create one and earn the Host title.' },
+22:  { icon: GLYPH.swords, title: 'Win a call-out', body: '1-on-1 pots pay in the stake currency.' },
+86:              <Button title="Purchase coming soon" variant="outline" disabled onPress={() => undefined} />
+109:              <Button title="Browse challenges" onPress={() => go('/challenges')} />
+111:                title="Send Coins or Bucks"
+118:              <Button title="Close" variant="ghost" onPress={closeWallet} />
+137:      accessibilityLabel={label}
+81:            placeholder="Search by username"
+101:            <Button title="Close" variant="ghost" onPress={close} disabled={invite.isPending} />
+126:              title={judging ? 'Lock results' : 'Distribute prizes'}
+132:            <Button title="Not now" variant="ghost" onPress={close} disabled={loading} />
+40:      title: isFree
+57:      title: unlimited ? 'Last person standing wins everything' : 'How the prize pool is paid out',
+64:      title: points
+97:            title: 'This cannot be reversed',
+211:              title={isFree ? 'Confirm and join free' : `Confirm and pay ${buyIn}`}
+217:            <Button title="Not now" variant="ghost" onPress={close} disabled={loading} />
+131:            accessibilityLabel="Retake video"
+146:            accessibilityLabel="Retake photo"
+158:            accessibilityLabel={isVideo ? 'Record video' : 'Take photo'}
+174:          title={uri ? (isVideo ? 'Re-record' : 'Retake') : isVideo ? 'Record' : 'Take photo'}
+27:        title="Checking the challenge feed"
+37:        title="Feed didn’t load"
+49:        title="Quiet in this challenge"
+70:  title: string;
+80:      accessibilityLabel={title}
+156:        accessibilityLabel={challenge.title}>
+196:            accessibilityLabel={`${challenge.title} cover`}
+239:        <CardCta title="Continue" onPress={onPress} />
+243:            <CardCta title="View" onPress={onPress} variant="secondary" flex={1} />
+245:          {onJoin ? <CardCta title="Join" onPress={onJoin} flex={1.15} /> : null}
+279:        accessibilityLabel={challenge.title}>
+355:        <CardCta title={hostOnly ? 'Manage' : inviteOnly ? 'View' : 'Continue'} onPress={onPress} />
+60:        title={disabledReason ? 'Unavailable' : isFree ? 'Join free' : `Join for ${money(buyInAmount)}`}
+101:          accessibilityLabel={label ? `${label} date` : 'Date and time'}
+193:                        placeholder="e.g. Finish a 5K, read 20 pages"
+207:                        placeholder="10"
+224:              <Button title="Add a task" variant="outline" onPress={onAddTask} />
+242:                        accessibilityLabel="How many logs"
+243:                        placeholder="6"
+282:                              accessibilityLabel="Custom activity"
+283:                              placeholder="e.g. cold plunge"
+395:                      placeholder="e.g. Logs must be on separate calendar days"
+414:            <Button title="Add another rule" variant="outline" onPress={addCustomRule} />
+434:                title={coverBusy ? 'Uploading…' : values.cover_image_url ? 'Replace cover' : 'Upload cover'}
+442:                <Button title="Remove" variant="ghost" onPress={onClearCover} />
+452:                placeholder="https://"
+472:              placeholder="https://"
+372:        console.log('[blob:draft] continue', { id: draft.id, savedStep: draft.step, nextStep, title: hydrated.title });
+1305:                title="View challenge"
+1323:                    accessibilityLabel="Show tips"
+1332:                  accessibilityLabel="Close"
+1498:              <Button title="Back" variant="outline" onPress={goBack} />
+1502:                title={lastStep ? 'Publish' : 'Next'}
+1517:        <Stack.Screen options={{ headerShown: false, title: 'Advanced' }} />
+1527:          title: 'Advanced',
+1551:          title="Coin Challenge"
+1563:          title="Private Challenge"
+1609:        title="Start from scratch"
+1615:        title="Choose template"
+1641:              title={template.title}
+1658:              title={challenge.title}
+1719:            placeholder="e.g. 14-day reading streak"
+1737:            placeholder="Who should join, and what does finishing mean?"
+1757:              placeholder="Run 1 mile"
+1776:          accessibilityLabel="Visibility"
+1814:                title={item.label}
+1898:              placeholder={durationUnit === 'weeks' ? '2' : durationUnit === 'months' ? '1' : '21'}
+1985:              accessibilityLabel="End mode"
+2038:            title="Fixed dates"
+2044:            title="Unlimited (Last Man Standing)  ∞"
+2083:                placeholder={frequency === 'weekly' ? '5' : '1'}
+2141:              title={item.label}
+2159:              accessibilityLabel="Top places mode"
+2174:                placeholder="10"
+2196:                  title={item.label}
+2256:              title={item.label}
+2269:              title="Partner product (soon)"
+2282:              accessibilityLabel="Prize currency"
+2303:              placeholder="10"
+2380:          accessibilityLabel="Entry"
+2397:            placeholder="10"
+2415:          accessibilityLabel="Competitor limit"
+2434:              placeholder="20"
+2457:              placeholder="2"
+2476:              placeholder="0"
+2493:                accessibilityLabel="Proof review"
+136:            accessibilityLabel="Currency"
+156:                  accessibilityLabel="Host prize"
+189:          placeholder="Morning miles"
+197:          placeholder="Optional"
+234:                accessibilityLabel="Duration days"
+250:                accessibilityLabel="Buy-in"
+263:          placeholder="Run 1 mile"
+286:                accessibilityLabel="Custom check-ins"
+318:            accessibilityLabel="Visibility"
+335:        <Button title="Create" loading={create.isPending} onPress={() => void onCreate()} />
+105:            accessibilityLabel="Close challenge creator"
+267:                      accessibilityLabel={paged ? 'Next tip' : undefined}
+292:                  accessibilityLabel={bob.kind === 'error' ? 'Dismiss error' : 'Dismiss tip'}
+308:                    accessibilityLabel="Previous tip"
+319:                    accessibilityLabel="Next tip"
+368:              accessibilityLabel={`${item.label}, step ${index + 1} of ${CREATE_WIZARD_STEPS.length}`}
+406:      <Pressable accessibilityRole="button" accessibilityLabel="Continue draft" onPress={onContinue}>
+415:          <Button title="Continue" accessibilityLabel="Continue draft" onPress={onContinue} />
+419:            title="Discard"
+421:            accessibilityLabel="Discard draft"
+465:  title: string;
+57:        title={copied ? 'Copy another link' : 'Copy invite link'}
+62:      <Button title="Invite by username" variant="outline" onPress={onInvitePerson} />
+27:        accessibilityLabel={kind === 'bucks' ? 'Blob Bucks' : 'Blob Coins'}
+93:        <MascotState compact={compact} kind="loading" title="Checking your inbox" />
+98:          title="Couldn’t load notifications"
+104:        <MascotState compact={compact} kind="empty" title="You’re all caught up." />
+63:export const PROFILE_STACK_TITLE = { title: 'Profile' } as const;
+46:  title: string;
+282:      title: String(row.title ?? '').trim() || `Task ${index + 1}`,
+445:    title: String(row.title ?? 'Untitled challenge'),
+872:    title: input.title,
+192:  title: string;
+12:const COPY: Record<MediaPermissionKind, { title: string; body: string }> = {
+14:    title: 'Camera is off',
+18:    title: 'Microphone is off',
+22:    title: 'Photo library is off',
+66:  title: string;
+85:    title: '',
+156:    title: draft.title.trim(),
+8:  title: string;
+124:        title: typeof item.title === 'string' && item.title ? item.title : item.key,
+176:  title: string;
+230:  title: string;
+525:  title: string;
+650:          title: string | null;
+1097:          newly_awarded: { key: string; title: string; coin_reward: number }[];
+161:  title: 'this one needs a name before we go on.',
+285:  title: OFFICIAL_CHALLENGE_TITLE,
+70:  title: string;
+77:function task(title: string, points: string, proofRequired = true): CreateChallengeValues['tasks'][number] {
+101:  title: '',
+145:    title: 'Weekly Consistency',
+152:      title: 'Weekly Consistency Challenge',
+176:    title: 'Last Man Standing',
+183:      title: 'Last Man Standing',
+207:    title: 'Family / Parent',
+214:      title: 'Family week — show up together',
+239:    title: 'Office / Team',
+246:      title: 'Office team challenge',
+274:    title: 'Skill Showdown',
+281:      title: 'Skill Showdown',
+308:    title: 'Start from scratch',
+329:          title: typeof item?.title === 'string' ? item.title : '',
+391:      const name = (typeof values.title === 'string' ? values.title.trim() : '') || 'Your challenge';
+452:export function challengeReviewSections(values: CreateChallengeValues): { title: string; body: string }[] {
+496:    { title: 'Who it’s for', body: `${values.title.trim()}\n${(values.description ?? '').trim()}\n${vis}` },
+497:    { title: 'How you win', body: scoring },
+498:    { title: 'How long it runs', body: duration },
+500:      title: 'How the prize is paid',
+510:      title: 'Who funds it',
+518:    { title: 'Entry & limits', body: entry },
+520:      title: 'You’re in it',
+523:    { title: 'Rules & proof', body: [proof, composeChallengeRules(values)].filter(Boolean).join('\n\n') },
+588:  const title = typeof values?.title === 'string' ? values.title : '';
+591:    title: String(task?.title ?? '').trim() || `Task ${index + 1}`,
+607:    title: title.trim() || 'Your challenge title',
+91:  title: string;
+739:): Promise<{ id: string; title: string }[]> {
+749:  const byId = new Map<string, { id: string; title: string }>();
+752:    title: string;
+32:  title: string;
+103:  const title = typeof values?.title === 'string' ? values.title.trim() : '';
+179:      nested != null && obj.title == null && obj.buy_in == null && obj.challenge_type == null;
+222:      title: asString(task.title, ''),
+236:      title: asString(row.title, DEFAULT_CREATE_VALUES.title),
+324:    title: task.title,
+343:    title: challenge.title,
+466:  const title = typeof draft.values?.title === 'string' ? draft.values.title.trim() : '';
+474:  const title = typeof draft.values?.title === 'string' ? draft.values.title.trim() : '';
+496:    title: '',
+508:  const title = typeof values.title === 'string' ? values.title.trim() : '';
+545:    const title = asString(rec.title, draftTitle(values));
+588:      title: draft.title,
+667:    title: draft.title || 'Untitled draft',
+740:    title: draftTitle(values, draft.title || 'Untitled draft'),
