@@ -222,10 +222,30 @@ function passwordReasons(error: unknown): string {
   return '';
 }
 
-/** Auth password-update errors for the Account field. Never includes the new password. */
+function extractAuthUserMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return error instanceof Error ? error.message.trim() : '';
+  }
+  const record = error as Record<string, unknown>;
+  if (typeof record.message === 'string' && record.message.trim()) {
+    return record.message.trim();
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  return '';
+}
+
+/** Auth password-update errors. Logs the Auth payload and prefers the real message. */
 export function getPasswordUpdateMessage(error: unknown): string {
+  logPostgrestError('password-update', error);
+  if (error instanceof Error && error.message === 'timeout') {
+    return copy('error.passwordUpdate');
+  }
+
   const code = extractAuthCode(error);
-  const message = `${extractRawMessage(error)} ${passwordReasons(error)}`.toLowerCase();
+  const authMessage = extractAuthUserMessage(error);
+  const message = `${authMessage} ${extractRawMessage(error)} ${passwordReasons(error)}`.toLowerCase();
 
   if (
     code === 'weak_password' ||
@@ -250,15 +270,25 @@ export function getPasswordUpdateMessage(error: unknown): string {
   }
   if (
     code === 'session_not_found' ||
+    code === 'session_expired' ||
     code === 'unauthenticated' ||
+    code === 'reauthentication_needed' ||
+    message.includes('reauthentication') ||
+    message.includes('re-auth') ||
+    message.includes('recent login') ||
+    message.includes('session from the past') ||
     message.includes('not authenticated') ||
     message.includes('auth session missing') ||
     message.includes('session missing') ||
+    message.includes('should be authenticated') ||
     (message.includes('session') && (message.includes('expired') || message.includes('invalid')))
   ) {
     return copy('error.passwordSession');
   }
-  return copy('error.passwordUpdate');
+  if (authMessage && !/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(authMessage) && authMessage.length <= 280) {
+    return authMessage;
+  }
+  return authMessage ? `${copy('error.passwordUpdate')} ${authMessage}` : copy('error.passwordUpdate');
 }
 
 function isNetworkAuthError(blob: string): boolean {

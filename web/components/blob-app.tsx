@@ -19,6 +19,7 @@ import {
   isCorporateChallenge,
   isFitnessOfficialChallenge,
   usesComparablePointsScoring,
+  usesPointsBoard,
 } from '../../lib/challengeExperience';
 import {
   BEFORE_AFTER_HR_PRESET,
@@ -43,8 +44,17 @@ import {
 } from '@/lib/funding';
 import { topUpChallengePrizeWithClient } from '@/lib/funding/rpc';
 import type { ChallengeSettlementView } from '@/lib/types';
+import {
+  capturePasswordRecoveryFromUrl,
+  clearPasswordRecoveryPending,
+  isPasswordRecoveryPending,
+  markPasswordRecoveryPending,
+} from '@/lib/passwordRecovery';
+import { hasAuthSessionTokens, parseAuthRedirectParams } from '@/lib/authRedirectParams';
+
 import { Bob } from '~/components/bob';
 import { ChallengeBoard } from '~/components/challenge-board';
+import { passwordResetRedirectTo, SetPasswordScreen } from '~/components/set-password';
 import { ChallengeLifecycleStatus } from '~/components/challenge-lifecycle-status';
 import { CheckInCamera } from '~/components/check-in-camera';
 import { Button } from '~/components/ui/button';
@@ -149,6 +159,10 @@ function phaseOf(row: ChallengeCheckin | null): CheckinPhase {
 export function BlobApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [recovery, setRecovery] = useState(() =>
+    typeof window === 'undefined' ? false : isPasswordRecoveryPending(),
+  );
+  const [recoveryWaited, setRecoveryWaited] = useState(false);
   const [route, setRoute] = useState<string[]>(pathParts());
 
   useEffect(() => {
@@ -162,16 +176,70 @@ export function BlobApp() {
   }, []);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    capturePasswordRecoveryFromUrl(window.location.href);
+    if (isPasswordRecoveryPending()) {
+      setRecovery(true);
+    }
+
+    void supabase.auth.getSession().then(async ({ data }) => {
+      let next = data.session;
+      if (!next) {
+        const params = parseAuthRedirectParams(window.location.href);
+        if (params.access_token) {
+          const result = await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token ?? '',
+          });
+          next = result.data.session;
+          if (result.error) {
+            console.log('[blob:auth-redirect]', result.error.message);
+          }
+        } else if (params.code && hasAuthSessionTokens(params)) {
+          const result = await supabase.auth.exchangeCodeForSession(params.code);
+          next = result.data.session;
+          if (result.error) {
+            console.log('[blob:auth-redirect]', result.error.message);
+          }
+        }
+      }
+      if (isPasswordRecoveryPending()) {
+        setRecovery(true);
+      }
+      setSession(next);
       setReady(true);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        markPasswordRecoveryPending();
+        setRecovery(true);
+      }
+      setSession(next);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
-  if (!ready) {
+  useEffect(() => {
+    if (!recovery || session) {
+      return;
+    }
+    const timer = window.setTimeout(() => setRecoveryWaited(true), 2000);
+    return () => window.clearTimeout(timer);
+  }, [recovery, session]);
+
+  if (!ready || (recovery && !session && !recoveryWaited)) {
     return <Bob title="blOb" line={CHECKIN_BOB.loading} />;
+  }
+  if (recovery) {
+    return (
+      <SetPasswordScreen
+        expired={!session}
+        onDone={() => {
+          clearPasswordRecoveryPending();
+          setRecovery(false);
+          go('/');
+        }}
+      />
+    );
   }
   if (!session) {
     return <LoginScreen />;
@@ -202,17 +270,34 @@ function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(mode: 'in' | 'up') {
     setBusy(true);
     setError(null);
+    setInfo(null);
     const result =
       mode === 'in'
         ? await supabase.auth.signInWithPassword({ email, password })
         : await supabase.auth.signUp({ email, password });
     if (result.error) {
       setError(result.error.message);
+    }
+    setBusy(false);
+  }
+
+  async function sendReset() {
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: passwordResetRedirectTo(),
+    });
+    if (resetError) {
+      setError(resetError.message);
+    } else {
+      setInfo('Check your inbox for a reset link.');
     }
     setBusy(false);
   }
@@ -229,11 +314,15 @@ function LoginScreen() {
           onChange={(event) => setPassword(event.target.value)}
         />
         {error ? <p className="text-sm text-[#9A3B3B]">{error}</p> : null}
+        {info ? <p className="text-sm font-semibold text-teal">{info}</p> : null}
         <Button type="button" disabled={busy} onClick={() => void submit('in')}>
           Sign in
         </Button>
         <Button type="button" variant="ghost" disabled={busy} onClick={() => void submit('up')}>
           Create account
+        </Button>
+        <Button type="button" variant="ghost" disabled={busy || !email.trim()} onClick={() => void sendReset()}>
+          Forgot password?
         </Button>
       </div>
     </div>
@@ -762,6 +851,7 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
               joined={joined}
               variant="compact"
               corporate={corporate}
+              pointsBoard={usesPointsBoard(challenge)}
               onOpenBoard={() => setTab('board')}
             />
             {challenge.status === 'settling' && !settlement ? (
@@ -849,6 +939,7 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
             joined={joined}
             showReceipt={queryFlag('receipt') === '1'}
             corporate={corporate}
+            pointsBoard={usesPointsBoard(challenge)}
           />
         ) : null}
         {tab === 'feed' ? (

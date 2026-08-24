@@ -15,6 +15,18 @@ export const BOARD_INFO = {
     title: 'Dropped',
     body: 'Missed a required check-in, left, or were removed. They do not share the prize.',
   },
+  contestants: {
+    title: 'Contestants',
+    body: 'How many people are in this challenge.',
+  },
+  yourRank: {
+    title: 'Your Rank',
+    body: 'Your place on the points leaderboard. Join to appear here.',
+  },
+  challengeLeader: {
+    title: 'Challenge Leader',
+    body: 'Whoever has the most points right now.',
+  },
   settled: {
     title: 'Settled',
     body: 'The prize is paid. Remaining on this board are the people who finished.',

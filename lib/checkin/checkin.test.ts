@@ -5,8 +5,10 @@ import { saveCheckinProofWithClient } from '@/lib/checkin/rpc';
 import {
   BEFORE_AFTER_HR_PRESET,
   checkinProofsReady,
+  extraProofImageUrls,
   partSatisfies,
   parseProofParts,
+  proofImageUrls,
   type ChallengeProof,
 } from '@/lib/challengeProofs';
 import {
@@ -112,6 +114,27 @@ describe('check-in composer save', () => {
     );
   });
 
+  it('reads a urls array and still treats a single url as complete', () => {
+    const parts = parseProofParts({
+      photo: {
+        method: 'photo',
+        url: 'https://example.com/one.jpg',
+        urls: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+      },
+    });
+    expect(proofImageUrls(parts.photo)).toEqual([
+      'https://example.com/one.jpg',
+      'https://example.com/two.jpg',
+    ]);
+    expect(partSatisfies({ id: 'photo', name: 'Photo', method: 'photo' }, parts.photo)).toBe(true);
+    expect(
+      extraProofImageUrls([{ id: 'photo', name: 'Photo', method: 'photo' }], parts),
+    ).toEqual(['https://example.com/two.jpg']);
+    expect(proofImageUrls(parseProofParts({ photo: { method: 'photo', url: 'https://old.jpg' } }).photo)).toEqual([
+      'https://old.jpg',
+    ]);
+  });
+
   it('saves caption and extra media without a new proof part', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
     await saveCheckinProofWithClient(
@@ -136,6 +159,38 @@ describe('check-in composer save', () => {
         p_extra_media: ['https://example.com/cheer.gif'],
         p_proof_id: null,
         p_clear_proof: false,
+      }),
+    );
+  });
+
+  it('writes urls onto a photo proof without re-uploading a remote file', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    const upload = vi.fn();
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'photo', name: 'Photo', method: 'photo' },
+        uri: 'https://example.com/one.jpg',
+        urls: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+      },
+      upload,
+      async () => 'https://example.com/unused.jpg',
+    );
+    expect(upload).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      'save_checkin_proof',
+      expect.objectContaining({
+        p_proof_id: 'photo',
+        p_proof_part: {
+          method: 'photo',
+          url: 'https://example.com/one.jpg',
+          urls: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+          fromLibrary: false,
+        },
       }),
     );
   });

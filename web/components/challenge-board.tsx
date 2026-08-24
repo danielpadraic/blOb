@@ -8,6 +8,8 @@ import {
   boardRowTag,
   boardSettledCopy,
   buildBoard,
+  pointsLeader,
+  pointsRank,
   type BoardParticipant,
   type BoardPayout,
 } from '@/lib/board';
@@ -33,6 +35,7 @@ type ChallengeBoardProps = {
   showReceipt?: boolean;
   onOpenBoard?: () => void;
   corporate?: boolean;
+  pointsBoard?: boolean;
 };
 
 export function ChallengeBoard({
@@ -48,6 +51,7 @@ export function ChallengeBoard({
   showReceipt = false,
   onOpenBoard,
   corporate,
+  pointsBoard = false,
 }: ChallengeBoardProps) {
   const [receiptOpen, setReceiptOpen] = useState(showReceipt);
   const [info, setInfo] = useState<keyof typeof BOARD_INFO | null>(null);
@@ -61,13 +65,27 @@ export function ChallengeBoard({
     joined,
   });
   const settled = boardSettledCopy(view);
+  const contestants = view.people.length;
+  const rank = pointsRank(view.people, viewerId);
+  const leader = pointsLeader(view.people);
+  const rankLabel = joined ? (rank != null ? String(rank) : '—') : 'Join to rank';
 
   if (variant === 'compact') {
     return (
       <button type="button" onClick={onOpenBoard} className="flex min-h-11 w-full items-center gap-2">
-        <Chip value={view.remainingCount} label="In" />
-        <Chip value={view.caughtUpCount} label="Done" />
-        <Chip value={view.droppedCount} label="Out" />
+        {pointsBoard ? (
+          <>
+            <Chip value={contestants} label="Contestants" />
+            <Chip value={joined ? rank ?? '—' : '—'} label="Your Rank" />
+            <Chip value={leader?.name ?? '—'} label="Challenge Leader" />
+          </>
+        ) : (
+          <>
+            <Chip value={view.remainingCount} label="In" />
+            <Chip value={view.caughtUpCount} label="Done" />
+            <Chip value={view.droppedCount} label="Out" />
+          </>
+        )}
         {view.settled ? <span className="text-[12px] font-bold text-teal">Settled</span> : null}
       </button>
     );
@@ -81,9 +99,19 @@ export function ChallengeBoard({
       </div>
       {corporate ? <p className="mt-2 text-xs text-muted">This board stays inside the lobby.</p> : null}
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <Stat label="Remaining" value={view.remainingCount} note="remaining" onInfo={setInfo} />
-        <Stat label="Caught Up" value={view.caughtUpCount} note="caughtUp" onInfo={setInfo} />
-        <Stat label="Dropped" value={view.droppedCount} note="dropped" onInfo={setInfo} />
+        {pointsBoard ? (
+          <>
+            <Stat label="Contestants" value={contestants} />
+            <Stat label="Your Rank" value={rankLabel} />
+            <Stat label="Challenge Leader" value={leader?.name ?? 'No score yet'} />
+          </>
+        ) : (
+          <>
+            <Stat label="Remaining" value={view.remainingCount} note="remaining" onInfo={setInfo} />
+            <Stat label="Caught Up" value={view.caughtUpCount} note="caughtUp" onInfo={setInfo} />
+            <Stat label="Dropped" value={view.droppedCount} note="dropped" onInfo={setInfo} />
+          </>
+        )}
       </div>
       {info ? (
         <button
@@ -113,7 +141,8 @@ export function ChallengeBoard({
         </div>
       ) : (
         <p className="mt-3 text-sm text-ink">
-          Share if you finish {formatSettlementAmount(view.shareEstimate, currency)}
+          {pointsBoard ? 'Total prize pool:' : 'Share if you finish'}{' '}
+          {formatSettlementAmount(pointsBoard ? view.prizePool : view.shareEstimate, currency)}
         </p>
       )}
 
@@ -161,28 +190,34 @@ function Stat({
   onInfo,
 }: {
   label: string;
-  value: number;
-  note: keyof typeof BOARD_INFO;
-  onInfo: (note: keyof typeof BOARD_INFO) => void;
+  value: string | number;
+  note?: keyof typeof BOARD_INFO;
+  onInfo?: (note: keyof typeof BOARD_INFO) => void;
 }) {
+  const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
   return (
-    <div className="flex min-h-11 flex-col items-center rounded-2xl bg-teal-soft px-2 py-2">
-      <p className="text-[22px] font-extrabold text-ink">{value}</p>
-      <div className="flex items-center gap-1">
-        <p className="text-[10px] font-semibold text-muted">{label}</p>
+    <div className="flex min-h-[92px] flex-col items-center justify-start rounded-2xl bg-teal-soft px-2 py-3">
+      <p
+        className={`w-full text-center font-extrabold leading-6 text-ink ${
+          numeric ? 'text-[22px]' : 'text-[13px] leading-4'
+        }`}>
+        {value}
+      </p>
+      <p className="mt-2 w-full text-center text-[11px] font-semibold leading-4 text-muted">{label}</p>
+      {note && onInfo ? (
         <button
           type="button"
           aria-label={`About ${label}`}
           onClick={() => onInfo(note)}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-line text-[10px] font-bold text-muted">
+          className="mt-1 flex h-7 w-7 items-center justify-center rounded-full border border-line text-[10px] font-bold text-muted">
           i
         </button>
-      </div>
+      ) : null}
     </div>
   );
 }
 
-function Chip({ value, label }: { value: number; label: string }) {
+function Chip({ value, label }: { value: string | number; label: string }) {
   return (
     <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-teal-soft px-2.5 text-[12px] font-bold text-ink">
       {value} {label}

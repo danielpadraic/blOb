@@ -16,6 +16,7 @@ import { copy } from '@/lib/copy';
 import { replayTutorial, setCreateTourOptOut } from '@/lib/legal';
 import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
 import { useTour } from '@/components/tour/TourContext';
+import { reportAppError } from '@/lib/appErrors';
 import { getErrorMessage, getPasswordUpdateMessage } from '@/utils/errors';
 import {
   getPushPermissionState,
@@ -101,6 +102,10 @@ export default function AccountScreen() {
     setNotice(null);
     setPasswordError(null);
     setConfirmError(null);
+    if (password.length < 8) {
+      setPasswordError(copy('error.passwordMin'));
+      return;
+    }
     if (password !== confirm) {
       setConfirmError(copy('error.passwordMismatch'));
       return;
@@ -119,6 +124,7 @@ export default function AccountScreen() {
       setNotice(copy('account.passwordUpdated'));
       scrollRef.current?.scrollTo({ y: 0 });
     } catch (error) {
+      reportAppError({ route: 'profile/account-password', error });
       setPasswordError(getPasswordUpdateMessage(error));
     } finally {
       if (timer) {

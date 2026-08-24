@@ -31,6 +31,18 @@ export const registerSchema = loginSchema
     path: ['confirmPassword'],
   });
 
+export const forgotPasswordSchema = z.object({ email });
+
+export const setPasswordSchema = z
+  .object({
+    password: z.string().min(8, 'Use at least 8 characters'),
+    confirmPassword: z.string().min(8, 'Confirm your password'),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: 'Those passwords don’t match',
+    path: ['confirmPassword'],
+  });
+
 export const profileSetupSchema = z.object({
   username: z
     .string()
@@ -145,6 +157,8 @@ export const profileSetupSchema = z.object({
 
 export type LoginValues = z.infer<typeof loginSchema>;
 export type RegisterValues = z.infer<typeof registerSchema>;
+export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+export type SetPasswordValues = z.infer<typeof setPasswordSchema>;
 export type ProfileSetupValues = z.infer<typeof profileSetupSchema>;
 
 export const createChallengeTaskSchema = z.object({

@@ -56,6 +56,7 @@ import {
   requiresOfficialBodyMetrics,
   usesComparablePointsScoring,
   usesConsistencyExperience,
+  usesPointsBoard,
 } from '@/lib/challengeExperience';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -829,7 +830,7 @@ export default function ChallengeDetailScreen() {
               <AppText className="mt-1 text-xs leading-4 text-muted">{ruleCopy.totalHint}</AppText>
             )}
           </View>
-          {isPoints || proofSteps.length === 0 ? null : (
+          {isPoints || usesPointsBoard(challenge) || proofSteps.length === 0 ? null : (
             <View>
               <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                 {proofHeadline}

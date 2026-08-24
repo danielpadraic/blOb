@@ -19,10 +19,12 @@ import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   beginCameraProof,
   captureTypeForMethod,
+  extraProofImageUrls,
   legacyTypeForProof,
   partSatisfies,
   proofDisplayName,
   proofsAreHonorOnly,
+  uniqueProofUrls,
   type ChallengeProof,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
@@ -129,6 +131,29 @@ export default function SubmitWorkoutScreen() {
     if (checkinQuery.data?.notes) {
       setCaption((current) => (current.text.trim() ? current : { text: String(checkinQuery.data?.notes), chips: current.chips }));
     }
+    const extraUrls = extraProofImageUrls(steps, parts);
+    if (extraUrls.length > 0) {
+      setExtras((current) => {
+        if (current.some((item) => !item.remoteUrl && item.kind !== 'gif')) {
+          return current;
+        }
+        const known = new Set(current.map((item) => item.remoteUrl ?? item.uri));
+        const incoming = extraUrls.filter((url) => !known.has(url));
+        if (incoming.length === 0 && current.length > 0) {
+          return current;
+        }
+        return [
+          ...current,
+          ...incoming.map((url, index) => ({
+            id: `saved-${index}-${url.slice(-12)}`,
+            uri: url,
+            kind: 'photo' as const,
+            remoteUrl: url,
+            name: 'Photo',
+          })),
+        ];
+      });
+    }
   }, [challenge, checkinQuery.data?.id, checkinQuery.data?.notes, checkinQuery.data?.proof_parts, checkinQuery.data?.updated_at]);
 
   const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
@@ -164,7 +189,7 @@ export default function SubmitWorkoutScreen() {
       throw new Error(copy('checkin.offlineBob'));
     }
     try {
-      await saveProof.mutateAsync({
+      return await saveProof.mutateAsync({
         challengeId: id,
         proof,
         uri: draft?.uri,
@@ -196,6 +221,47 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
+  async function persistExtraMedia(items: CheckinExtra[]) {
+    if (!id) {
+      return;
+    }
+    const remote = uniqueProofUrls(
+      items.map((item) => item.remoteUrl ?? (item.kind === 'gif' ? item.uri : null)),
+    );
+    const photoProof = proofSteps.find(
+      (proof) =>
+        (proof.method === 'photo' || proof.method === 'video') &&
+        partSatisfies(proof, slotPart(proof, drafts[proof.id])),
+    );
+    const primaryRemote = photoProof
+      ? checkinQuery.data?.proof_parts?.[photoProof.id]?.url ??
+        (drafts[photoProof.id]?.uri && /^https?:\/\//i.test(drafts[photoProof.id]?.uri ?? '')
+          ? drafts[photoProof.id]?.uri
+          : null)
+      : null;
+    await saveProof.mutateAsync({
+      challengeId: id,
+      extraMedia: remote,
+      ...(photoProof && primaryRemote
+        ? {
+            proof: photoProof,
+            uri: primaryRemote,
+            urls: uniqueProofUrls([primaryRemote, ...remote]),
+          }
+        : {}),
+    });
+  }
+
+  function handleExtrasChange(next: CheckinExtra[]) {
+    const removed = next.length < extras.length;
+    setExtras(next);
+    if (removed) {
+      void persistExtraMedia(next).catch((caught) => {
+        setError(getErrorMessage(caught));
+      });
+    }
+  }
+
   async function onRemoveProof(proof: ChallengeProof) {
     setDrafts((current) => {
       const next = { ...current };
@@ -224,7 +290,7 @@ export default function SubmitWorkoutScreen() {
       return;
     }
     try {
-      const savedParts = checkinQuery.data?.proof_parts ?? {};
+      let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       for (const proof of proofSteps) {
         if (proof.method === 'honor') {
           continue;
@@ -236,10 +302,14 @@ export default function SubmitWorkoutScreen() {
         if (!partSatisfies(proof, slotPart(proof, draft))) {
           continue;
         }
-        await persistProof(proof, draft);
+        const row = await persistProof(proof, draft);
+        if (row?.proof_parts) {
+          savedParts = row.proof_parts;
+        }
       }
       const uploadedExtras: CheckinExtra[] = [];
       const extraUrls: string[] = [];
+      const failedExtras: string[] = [];
       if (user?.id) {
         for (const [index, extra] of extras.entries()) {
           if (extra.remoteUrl) {
@@ -252,27 +322,57 @@ export default function SubmitWorkoutScreen() {
             uploadedExtras.push({ ...extra, remoteUrl: extra.uri });
             continue;
           }
-          const remoteUrl = await uploadPostAttachment({
-            uri: extra.uri,
-            userId: user.id,
-            fileStem: `checkin-extra-${Date.now()}-${index}`,
-            mimeType: extra.mimeType ?? extra.blob?.type,
-            blob: extra.blob,
-            originalName: extra.name,
-          });
-          extraUrls.push(remoteUrl);
-          uploadedExtras.push({ ...extra, remoteUrl });
+          try {
+            const remoteUrl = await uploadPostAttachment({
+              uri: extra.uri,
+              userId: user.id,
+              fileStem: `checkin-extra-${Date.now()}-${index}`,
+              mimeType: extra.mimeType ?? extra.blob?.type,
+              blob: extra.blob,
+              originalName: extra.name,
+            });
+            extraUrls.push(remoteUrl);
+            uploadedExtras.push({ ...extra, remoteUrl });
+          } catch (uploadError) {
+            failedExtras.push(extra.name ?? 'Photo');
+            console.log('[blob:checkin-extra]', getErrorMessage(uploadError));
+          }
         }
         if (uploadedExtras.length) {
           setExtras(uploadedExtras);
         }
       }
+      const photoProof = proofSteps.find(
+        (proof) =>
+          (proof.method === 'photo' || proof.method === 'video') &&
+          partSatisfies(proof, slotPart(proof, drafts[proof.id])),
+      );
+      const primaryRemote = photoProof
+        ? savedParts[photoProof.id]?.url ||
+          (drafts[photoProof.id]?.uri && /^https?:\/\//i.test(drafts[photoProof.id]?.uri ?? '')
+            ? drafts[photoProof.id]?.uri
+            : null)
+        : null;
       const notes = caption.text.trim() || null;
       await saveProof.mutateAsync({
         challengeId: id,
         notes,
-        extraMedia: extraUrls.length ? extraUrls : null,
+        extraMedia: extraUrls,
+        ...(photoProof && primaryRemote
+          ? {
+              proof: photoProof,
+              uri: primaryRemote,
+              urls: uniqueProofUrls([primaryRemote, ...extraUrls]),
+            }
+          : {}),
       });
+      if (failedExtras.length > 0) {
+        setError(
+          failedExtras.length === 1
+            ? 'One photo didn’t upload. The rest are ready to send.'
+            : `${failedExtras.length} photos didn’t upload. The rest are ready to send.`,
+        );
+      }
       const submitted = await submitCheckin.mutateAsync();
       const mentionIds = [...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id))];
       if (mentionIds.length > 0 && submitted?.id && user?.id) {
@@ -535,7 +635,7 @@ export default function SubmitWorkoutScreen() {
             }
           }}
           onRemoveProof={(proof) => void onRemoveProof(proof)}
-          onExtrasChange={setExtras}
+          onExtrasChange={handleExtrasChange}
           onCaptionChange={setCaption}
           onSend={() => void onSubmit()}
         />

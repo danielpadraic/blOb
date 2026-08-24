@@ -3,7 +3,7 @@ import 'react-native-gesture-handler';
 import '@/lib/nativewind';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Stack, usePathname, useRouter } from 'expo-router';
+import { Stack, usePathname, useRouter, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -52,7 +52,7 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { isLoading, isConfigured, session } = useAuth();
+  const { isLoading, isConfigured, session, isPasswordRecovery } = useAuth();
   const { isBootstrapping, path, profile } = useMyProfile();
   const pathname = usePathname();
   const onOnboarding = pathname.startsWith('/onboarding');
@@ -117,7 +117,8 @@ function RootNavigator() {
 
   return (
     <>
-      <PendingInviteRedirect ready={resolvedPath === 'app'} />
+      <RecoveryRedirect ready={!blocking || bootExpired} active={isPasswordRecovery} />
+      <PendingInviteRedirect ready={resolvedPath === 'app' && !isPasswordRecovery} />
       <Stack screenOptions={ROOT_STACK_OPTIONS}>
         <Stack.Protected guard={resolvedPath === 'auth'}>
           <Stack.Screen name="(auth)" />
@@ -170,6 +171,23 @@ function AppFrame({ children }: { children: ReactNode }) {
       </View>
     </View>
   );
+}
+
+function RecoveryRedirect({ ready, active }: { ready: boolean; active: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!ready || !active) {
+      return;
+    }
+    if (pathname.startsWith('/auth/reset-password')) {
+      return;
+    }
+    router.replace('/auth/reset-password' as Href);
+  }, [active, pathname, ready, router]);
+
+  return null;
 }
 
 function PendingInviteRedirect({ ready }: { ready: boolean }) {

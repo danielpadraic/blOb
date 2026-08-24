@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertsNoBucksWord, boardEmptyCopy, boardSettledCopy, buildBoard } from '@/lib/board';
+import {
+  assertsNoBucksWord,
+  boardEmptyCopy,
+  boardSettledCopy,
+  buildBoard,
+  pointsLeader,
+  pointsRank,
+} from '@/lib/board';
+import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { FORFEIT_RECEIPT } from '@/lib/settlement/receipts';
 
 const roster = [
@@ -96,5 +104,42 @@ describe('settled board', () => {
     expect(view.youPaid).toBe(false);
     expect(boardSettledCopy(view).showBob).toBe(false);
     expect(boardEmptyCopy({ settled: false, spectator: true })).toContain('Participate');
+  });
+});
+
+describe('points board ranking', () => {
+  it('ranks live contestants by points and waits for a scored leader', () => {
+    const view = buildBoard({
+      status: 'live',
+      participants: [
+        { user_id: 'a', points: 0, status: 'joined', display_name: 'Ada' },
+        { user_id: 'b', points: 4, status: 'joined', display_name: 'Bea' },
+        { user_id: 'c', points: 1, status: 'eliminated', eliminated_at: '2026-01-01', display_name: 'Cam' },
+      ],
+      viewerId: 'a',
+      joined: true,
+    });
+    expect(pointsRank(view.people, 'a')).toBe(2);
+    expect(pointsLeader(view.people)?.userId).toBe('b');
+    expect(pointsLeader(view.people)?.name).toBe('Bea');
+  });
+
+  it('has no challenge leader until someone scores', () => {
+    const view = buildBoard({
+      status: 'live',
+      participants: [{ user_id: 'a', points: 0, status: 'joined', display_name: 'Ada' }],
+      viewerId: 'a',
+      joined: true,
+    });
+    expect(pointsLeader(view.people)).toBeNull();
+    expect(pointsRank(view.people, 'z')).toBeNull();
+  });
+});
+
+describe('points goal', () => {
+  it('labels points challenges Score Points', () => {
+    expect(challengeGoalLabel({ scoring_method: 'comparable_points', challenge_type: 'points' })).toBe(
+      'Score Points',
+    );
   });
 });

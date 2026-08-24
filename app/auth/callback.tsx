@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, type Href } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
@@ -9,7 +9,7 @@ import { copy } from '@/lib/copy';
 import { TABS_HREF } from '@/lib/routes';
 
 export default function AuthCallbackScreen() {
-  const { isLoading } = useAuth();
+  const { isLoading, isPasswordRecovery } = useAuth();
   const { isBootstrapping, path } = useMyProfile();
   const tone = useCopyTone();
 
@@ -19,6 +19,10 @@ export default function AuthCallbackScreen() {
         <MascotState kind="loading" title={copy('auth.signingIn', tone)} />
       </Screen>
     );
+  }
+
+  if (isPasswordRecovery) {
+    return <Redirect href={'/auth/reset-password' as Href} />;
   }
 
   if (path === 'auth') {

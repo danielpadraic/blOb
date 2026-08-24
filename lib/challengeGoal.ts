@@ -1,8 +1,4 @@
-import {
-  isFitnessOfficialChallenge,
-  usesComparablePointsScoring,
-} from '@/lib/challengeExperience';
-import { isPointsChallenge, isUnlimitedChallenge } from '@/lib/challenges';
+import { isFitnessOfficialChallenge, usesPointsBoard } from '@/lib/challengeExperience';
 import type { Challenge } from '@/lib/types';
 import { challengeWindowDays } from '@/utils/format';
 
@@ -68,13 +64,10 @@ export function challengeGoalLabel(
   challenge: GoalChallenge,
   extras?: { daysCompleted?: number; taskCount?: number },
 ): string {
-  if (usesComparablePointsScoring(challenge)) {
-    return 'Comparable Points';
+  if (usesPointsBoard(challenge)) {
+    return 'Score Points';
   }
-  if (isPointsChallenge(challenge)) {
-    return 'Score points';
-  }
-  if (isUnlimitedChallenge(challenge)) {
+  if (challenge.is_unlimited) {
     const logs = Math.max(Number(extras?.daysCompleted) || 0, 0);
     return `${logs} check-in${logs === 1 ? '' : 's'}`;
   }
@@ -92,7 +85,7 @@ export function challengeGoalLabel(
 }
 
 export function challengeGoalSubtitle(challenge: GoalChallenge): string | null {
-  if (usesComparablePointsScoring(challenge) || isPointsChallenge(challenge) || isUnlimitedChallenge(challenge)) {
+  if (usesPointsBoard(challenge) || challenge.is_unlimited) {
     return null;
   }
   if (isFitnessOfficialChallenge(challenge)) {

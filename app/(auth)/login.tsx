@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import {
   AuthBackButton,
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
+import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
 import { getAuthFormMessage } from '@/utils/errors';
 import { loginSchema, type LoginValues } from '@/utils/validators';
@@ -31,11 +32,13 @@ export default function LoginScreen() {
   const {
     control,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
+  const emailValue = watch('email');
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -105,6 +108,21 @@ export default function LoginScreen() {
               {formError}
             </AppText>
           ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copy('auth.forgotPassword')}
+            hitSlop={8}
+            onPress={() => {
+              const href = emailValue?.trim()
+                ? `/(auth)/forgot-password?email=${encodeURIComponent(emailValue.trim())}`
+                : '/(auth)/forgot-password';
+              router.push(href as Href);
+            }}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              {copy('auth.forgotPassword')}
+            </AppText>
+          </Pressable>
           <Button title={copy('auth.signIn')} onPress={onSubmit} loading={isSubmitting} size="lg" />
         </View>
       ) : (

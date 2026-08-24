@@ -11,7 +11,7 @@ import {
 } from '@/lib/challengeCheckin';
 import { incrementDaysCompleted } from '@/lib/checkin/progress';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
-import { parseProofParts } from '@/lib/challengeProofs';
+import { parseProofParts, proofImageUrls } from '@/lib/challengeProofs';
 import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/localNudges';
 import { heroRingActive } from '@/lib/challengeStart';
 import { supabase } from '@/lib/supabase';
@@ -102,9 +102,17 @@ async function hydrateCheckin(data: Record<string, unknown>): Promise<ChallengeC
   const parts = { ...parsed.proof_parts };
   await Promise.all(
     Object.entries(parts).map(async ([id, part]) => {
-      if (part.url) {
-        parts[id] = { ...part, url: (await signedProofUrl(part.url)) ?? part.url };
+      const signed = await Promise.all(
+        proofImageUrls(part).map(async (url) => (await signedProofUrl(url)) ?? url),
+      );
+      if (signed.length === 0 && !part.url) {
+        return;
       }
+      parts[id] = {
+        ...part,
+        url: signed[0] ?? ((await signedProofUrl(part.url)) ?? part.url),
+        urls: signed,
+      };
     }),
   );
   return { ...parsed, proof_parts: parts };

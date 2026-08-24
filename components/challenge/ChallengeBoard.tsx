@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
@@ -6,9 +6,18 @@ import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
+import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
-import { boardEmptyCopy, boardRowTag, boardSettledCopy, buildBoard } from '@/lib/board';
+import {
+  boardEmptyCopy,
+  boardRowTag,
+  boardSettledCopy,
+  buildBoard,
+  pointsLeader,
+  pointsRank,
+} from '@/lib/board';
+import { usesPointsBoard } from '@/lib/challengeExperience';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { Challenge, ChallengeParticipantWithProfile, ChallengeSettlementView } from '@/lib/types';
@@ -53,6 +62,7 @@ export function ChallengeBoard({
           joined_at: row.joined_at,
           display_name: row.profile?.display_name,
           username: row.profile?.username,
+          avatar_url: row.profile?.avatar_url,
         })),
         completedUserIds,
         settlement: settlement
@@ -69,6 +79,11 @@ export function ChallengeBoard({
   );
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;
+  const pointsBoard = usesPointsBoard(challenge);
+  const contestants = view.people.length;
+  const rank = pointsRank(view.people, viewerId);
+  const leader = pointsLeader(view.people);
+  const rankLabel = joined ? (rank != null ? String(rank) : '—') : copy('board.joinToRank');
 
   function toggleReceipt() {
     if (onOpenReceipt) {
@@ -86,9 +101,19 @@ export function ChallengeBoard({
         onPress={onOpenReceipt}
         style={{ minHeight: 44 }}>
         <View className="flex-row items-center" style={{ gap: 8 }}>
-          <CompactStat label="In" value={view.remainingCount} />
-          <CompactStat label="Done" value={view.caughtUpCount} />
-          <CompactStat label="Out" value={view.droppedCount} />
+          {pointsBoard ? (
+            <>
+              <CompactStat label={copy('board.contestants')} value={contestants} />
+              <CompactStat label={copy('board.yourRank')} value={joined ? rank ?? '—' : '—'} />
+              <CompactStat label={copy('board.challengeLeader')} value={leader?.name ?? '—'} />
+            </>
+          ) : (
+            <>
+              <CompactStat label="In" value={view.remainingCount} />
+              <CompactStat label="Done" value={view.caughtUpCount} />
+              <CompactStat label="Out" value={view.droppedCount} />
+            </>
+          )}
           {view.settled ? (
             <AppText className="text-[12px] font-bold" style={{ color: THEME.accent }}>
               Settled
@@ -103,17 +128,42 @@ export function ChallengeBoard({
     <Card className="gap-3">
       <View className="flex-row items-center justify-between">
         <FieldNoteLabel
-          note="board"
+          note={pointsBoard ? 'boardPoints' : 'board'}
           textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           Board
         </FieldNoteLabel>
         <ChallengeLifecycleStatus compact status={challenge.status} />
       </View>
 
-      <View className="flex-row" style={{ gap: 8 }}>
-        <Stat note="remaining" label={copy('board.remaining')} value={String(view.remainingCount)} />
-        <Stat note="caughtUp" label={copy('board.caughtUp')} value={String(view.caughtUpCount)} />
-        <Stat note="dropped" label={copy('board.dropped')} value={String(view.droppedCount)} />
+      <View className="flex-row items-stretch" style={{ gap: 8 }}>
+        {pointsBoard ? (
+          <>
+            <Stat label={copy('board.contestants')} value={String(contestants)} />
+            <Stat label={copy('board.yourRank')} value={rankLabel} />
+            <Stat label={copy('board.challengeLeader')}>
+              {leader ? (
+                <View className="items-center" style={{ gap: 6 }}>
+                  <Avatar uri={leader.avatarUrl} name={leader.name} size={32} />
+                  <AppText
+                    className="text-center text-[13px] font-bold leading-4 text-charcoal"
+                    numberOfLines={2}>
+                    {leader.name}
+                  </AppText>
+                </View>
+              ) : (
+                <AppText className="text-center text-[13px] font-bold leading-4 text-muted">
+                  {copy('board.noLeader')}
+                </AppText>
+              )}
+            </Stat>
+          </>
+        ) : (
+          <>
+            <Stat label={copy('board.remaining')} value={String(view.remainingCount)} />
+            <Stat label={copy('board.caughtUp')} value={String(view.caughtUpCount)} />
+            <Stat label={copy('board.dropped')} value={String(view.droppedCount)} />
+          </>
+        )}
       </View>
 
       {view.settled ? (
@@ -143,7 +193,13 @@ export function ChallengeBoard({
           </Pressable>
         </View>
       ) : (
-        <ShareLine challenge={challenge} share={view.shareEstimate} joined={joined} />
+        <ShareLine
+          challenge={challenge}
+          share={view.shareEstimate}
+          prizePool={view.prizePool}
+          joined={joined}
+          pointsBoard={pointsBoard}
+        />
       )}
 
       {error ? (
@@ -195,19 +251,27 @@ export function ChallengeBoard({
 function ShareLine({
   challenge,
   share,
+  prizePool,
   joined,
+  pointsBoard,
 }: {
   challenge: Challenge;
   share: number;
+  prizePool: number;
   joined: boolean;
+  pointsBoard: boolean;
 }) {
   return (
     <View className="flex-row flex-wrap items-center" style={{ gap: 6 }}>
-      <FieldNoteLabel note="share" textClassName="text-sm font-semibold text-charcoal">
-        {copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish')}
+      <FieldNoteLabel
+        note={pointsBoard ? 'prizePool' : 'share'}
+        textClassName="text-sm font-semibold leading-5 text-charcoal">
+        {pointsBoard
+          ? copy('board.totalPrizePool')
+          : copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish')}
       </FieldNoteLabel>
       <StakeAmount
-        amount={share}
+        amount={pointsBoard ? prizePool : share}
         currency={challenge.currency}
         size={16}
         textClassName="text-sm font-semibold text-charcoal"
@@ -218,35 +282,39 @@ function ShareLine({
 }
 
 function Stat({
-  note,
   label,
   value,
+  children,
 }: {
-  note: 'remaining' | 'caughtUp' | 'dropped';
   label: string;
-  value: string;
+  value?: string;
+  children?: ReactNode;
 }) {
   return (
     <View
-      className="min-w-0 flex-1 items-center"
+      className="min-w-0 flex-1 items-center justify-start"
       style={{
         backgroundColor: THEME.accentSoft,
         borderRadius: 16,
-        paddingVertical: 10,
-        paddingHorizontal: 6,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        minHeight: 92,
       }}>
-      <AppText className="text-[26px] font-extrabold leading-8 text-charcoal">{value}</AppText>
-      <FieldNoteLabel
-        note={note}
-        textClassName="text-[10px] font-semibold text-muted"
-        numberOfLines={1}>
+      <View className="min-h-[36px] w-full items-center justify-center">
+        {children ?? (
+          <AppText className="text-center text-[22px] font-extrabold leading-7 text-charcoal">
+            {value}
+          </AppText>
+        )}
+      </View>
+      <AppText className="mt-2 w-full text-center text-[11px] font-semibold leading-4 text-muted">
         {label}
-      </FieldNoteLabel>
+      </AppText>
     </View>
   );
 }
 
-function CompactStat({ label, value }: { label: string; value: number }) {
+function CompactStat({ label, value }: { label: string; value: string | number }) {
   return (
     <View
       className="flex-row items-center"

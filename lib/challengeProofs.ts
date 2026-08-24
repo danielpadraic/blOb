@@ -20,10 +20,59 @@ export type ChallengeProof = {
 export type ChallengeProofPart = {
   method: ChallengeProofMethod;
   url?: string | null;
+  /** All image URLs for this slot. `url` stays the first for older rows. */
+  urls?: string[] | null;
   text?: string | null;
   healthWorkoutId?: string | null;
   fromLibrary?: boolean;
 };
+
+/** Extra photos on top of required proofs. One photo is enough to submit. */
+export const CHECKIN_PHOTO_CAP = 8;
+
+export function uniqueProofUrls(urls: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of urls) {
+    const url = typeof raw === 'string' ? raw.trim() : '';
+    if (!url || seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+    out.push(url);
+  }
+  return out;
+}
+
+export function proofImageUrls(part?: ChallengeProofPart | null): string[] {
+  return uniqueProofUrls([part?.url, ...(part?.urls ?? [])]);
+}
+
+export function extraProofImageUrls(
+  proofs: ChallengeProof[],
+  parts: Record<string, ChallengeProofPart> | null | undefined,
+): string[] {
+  if (!parts) {
+    return [];
+  }
+  const required = new Set<string>();
+  for (const proof of proofs) {
+    const primary = parts[proof.id]?.url?.trim();
+    if (primary) {
+      required.add(primary);
+    }
+  }
+  const extras: string[] = [];
+  for (const proof of proofs) {
+    for (const url of proofImageUrls(parts[proof.id])) {
+      if (required.has(url) || extras.includes(url)) {
+        continue;
+      }
+      extras.push(url);
+    }
+  }
+  return extras;
+}
 
 export const SIMPLE_PROOF_CAP = 4;
 
@@ -155,20 +204,25 @@ export function signupProofLines(challenge: {
     .trim()
     .toLowerCase();
   if (!Array.isArray(challenge.tasks)) {
-    return lines;
+    return uniqueSignupLines(lines);
   }
   for (const raw of challenge.tasks) {
     if (!raw || typeof raw !== 'object') {
       continue;
     }
     const row = raw as {
+      id?: unknown;
       title?: unknown;
       once?: unknown;
       proof_required?: unknown;
       proof_types?: unknown;
     };
     const title = String(row.title ?? '').trim();
+    const taskId = String(row.id ?? '').trim();
     if (!title || title.toLowerCase() === primary) {
+      continue;
+    }
+    if (listed.some((proof) => proofCoversTask(proof, taskId, title))) {
       continue;
     }
     const types = Array.isArray(row.proof_types)
@@ -183,7 +237,39 @@ export function signupProofLines(challenge: {
     const sentence = defaultSentenceForMethod(method, minutes);
     lines.push(row.once ? `Once, for “${title}”: ${sentence}` : `For “${title}”: ${sentence}`);
   }
-  return lines;
+  if (listed.some((proof) => proof.method === 'photo' || proof.method === 'video')) {
+    lines.push('Extra photos or videos are welcome.');
+  }
+  return uniqueSignupLines(lines);
+}
+
+function proofCoversTask(proof: ChallengeProof, taskId: string, title: string): boolean {
+  const id = taskId.toLowerCase();
+  const proofId = proof.id.toLowerCase();
+  const name = proof.name.toLowerCase();
+  const task = title.toLowerCase();
+  if (id && (proofId === id || proofId.startsWith(`${id}_`) || proofId.startsWith(id.split('_')[0] ?? id))) {
+    return true;
+  }
+  if (name.includes(task) || task.includes(name)) {
+    return true;
+  }
+  const words = task.split(/\s+/).filter((word) => word.length > 3);
+  return words.some((word) => name.includes(word) || proofId.includes(word));
+}
+
+function uniqueSignupLines(lines: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    const key = line.trim().toLowerCase();
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(line);
+  }
+  return out;
 }
 
 export function newProofId(): string {
@@ -503,7 +589,7 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
   if (proof.method === 'hr') {
     return Boolean(part?.url?.trim() || part?.healthWorkoutId?.trim());
   }
-  return Boolean(part?.url?.trim());
+  return proofImageUrls(part).length > 0;
 }
 
 export function logHasEveryProof(
@@ -530,9 +616,14 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
     }
     const row = item as Record<string, unknown>;
     const method = isChallengeProofMethod(row.method) ? row.method : methodFromProofType(row.method);
+    const url = typeof row.url === 'string' ? row.url : null;
+    const urls = Array.isArray(row.urls)
+      ? uniqueProofUrls(row.urls.map((item) => (typeof item === 'string' ? item : null)))
+      : [];
     parts[id] = {
       method,
-      url: typeof row.url === 'string' ? row.url : null,
+      url,
+      urls: uniqueProofUrls([url, ...urls]),
       text: typeof row.text === 'string' ? row.text : null,
       healthWorkoutId:
         typeof row.healthWorkoutId === 'string'

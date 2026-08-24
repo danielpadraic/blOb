@@ -1,5 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+import { capturePasswordRecoveryFromUrl } from '@/lib/passwordRecovery';
+
+if (typeof window !== 'undefined') {
+  capturePasswordRecoveryFromUrl(window.location.href);
+}
+
 const url =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const anon =

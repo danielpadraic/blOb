@@ -8,7 +8,7 @@ import { MentionField, type MentionFieldHandle } from '@/components/feed/Mention
 import { useMediaLightboxOptional } from '@/components/feed/MediaLightbox';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { proofDisplayName, type ChallengeProof } from '@/lib/challengeProofs';
+import { CHECKIN_PHOTO_CAP, proofDisplayName, type ChallengeProof } from '@/lib/challengeProofs';
 import {
   ensureCameraPermission,
   ensureLibraryPermission,
@@ -37,9 +37,8 @@ export type CheckinSlotDraft = {
   fromLibrary?: boolean;
 };
 
-const MAX_EXTRAS = 4;
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
-const THUMB = 88;
+const THUMB = 104;
 
 type CheckinComposerProps = {
   proofs: ChallengeProof[];
@@ -94,12 +93,44 @@ export function CheckinComposer({
     ...extras.map((item) => ({ uri: item.uri, label: item.name ?? 'Extra' })),
   ];
 
+  const photoCount =
+    proofs.filter((proof) => {
+      const uri = drafts[proof.id]?.uri;
+      return Boolean(uri && !uri.startsWith('health:'));
+    }).length + extras.filter((item) => item.kind === 'photo' || item.kind === 'gif').length;
+  const remainingSlots = Math.max(0, CHECKIN_PHOTO_CAP - photoCount);
+  const canAddPhoto = remainingSlots > 0 && !busy;
+
   function addExtra(attachment: Omit<CheckinExtra, 'id'>) {
-    if (extras.length >= MAX_EXTRAS) {
-      Alert.alert('That’s a full blob', 'You can attach up to 4 extra things.');
+    if (extras.filter((item) => item.kind !== 'video').length + (attachment.kind === 'video' ? 0 : 1) > CHECKIN_PHOTO_CAP) {
+      Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
+      return;
+    }
+    if (photoCount >= CHECKIN_PHOTO_CAP && attachment.kind !== 'video') {
+      Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
       return;
     }
     onExtrasChange([...extras, { ...attachment, id: `${Date.now()}-${extras.length}` }]);
+  }
+
+  function addMany(attachments: Omit<CheckinExtra, 'id'>[]) {
+    const room = Math.max(0, CHECKIN_PHOTO_CAP - photoCount);
+    const photos = attachments.filter((item) => item.kind !== 'video');
+    const videos = attachments.filter((item) => item.kind === 'video');
+    const accepted = [...photos.slice(0, room), ...videos];
+    if (photos.length > room) {
+      Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
+    }
+    if (accepted.length === 0) {
+      return;
+    }
+    onExtrasChange([
+      ...extras,
+      ...accepted.map((attachment, index) => ({
+        ...attachment,
+        id: `${Date.now()}-${extras.length + index}`,
+      })),
+    ]);
   }
 
   async function pickGallery() {
@@ -116,34 +147,45 @@ export function CheckinComposer({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
         allowsEditing: false,
+        allowsMultipleSelection: remainingSlots > 1,
+        selectionLimit: Math.max(remainingSlots, 1),
         quality: 0.9,
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
-      if (result.canceled || !result.assets[0]?.uri) {
+      if (result.canceled || result.assets.length === 0) {
         return;
       }
-      const asset = result.assets[0];
-      const kind = asGalleryMedia({
-        mimeType: asset.mimeType ?? asset.file?.type,
-        fileName: asset.fileName,
-        uri: asset.uri,
-        type: asset.type,
-      });
-      if (!kind) {
+      const next: Omit<CheckinExtra, 'id'>[] = [];
+      for (const asset of result.assets) {
+        if (!asset.uri) {
+          continue;
+        }
+        const kind = asGalleryMedia({
+          mimeType: asset.mimeType ?? asset.file?.type,
+          fileName: asset.fileName,
+          uri: asset.uri,
+          type: asset.type,
+        });
+        if (!kind) {
+          continue;
+        }
+        if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_FILE_BYTES) {
+          Alert.alert('That file is too large', 'Keep it under 50 MB.');
+          continue;
+        }
+        next.push({
+          uri: asset.uri,
+          kind,
+          mimeType: asset.mimeType ?? asset.file?.type,
+          name: asset.fileName ?? (kind === 'video' ? 'Video' : 'Photo'),
+          blob: asset.file ?? null,
+        });
+      }
+      if (next.length === 0) {
         Alert.alert('Use a photo or video.');
         return;
       }
-      if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_FILE_BYTES) {
-        Alert.alert('That file is too large', 'Keep it under 50 MB.');
-        return;
-      }
-      addExtra({
-        uri: asset.uri,
-        kind,
-        mimeType: asset.mimeType ?? asset.file?.type,
-        name: asset.fileName ?? (kind === 'video' ? 'Video' : 'Photo'),
-        blob: asset.file ?? null,
-      });
+      addMany(next);
     } catch (error) {
       Alert.alert('Couldn’t attach that', getErrorMessage(error));
     }
@@ -184,6 +226,11 @@ export function CheckinComposer({
 
   return (
     <View style={{ gap: 12 }}>
+      {proofs.some((proof) => proof.method === 'photo' || proof.method === 'video') ? (
+        <AppText className="text-[13px] leading-5 text-muted">
+          Required photos first. Extra photos or videos are optional.
+        </AppText>
+      ) : null}
       <View className="flex-row flex-wrap" style={{ gap: 8 }}>
         {proofs.map((proof) => (
           <ProofThumb
@@ -215,6 +262,17 @@ export function CheckinComposer({
             onRemove={() => onExtrasChange(extras.filter((row) => row.id !== item.id))}
           />
         ))}
+        {canAddPhoto ? (
+          <AddPhotoTile
+            onPress={() => {
+              Alert.alert('Add a photo', undefined, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Camera', onPress: () => void pickCamera() },
+                { text: 'Gallery', onPress: () => void pickGallery() },
+              ]);
+            }}
+          />
+        ) : null}
       </View>
 
       <View
@@ -245,10 +303,18 @@ export function CheckinComposer({
       </View>
 
       <View className="flex-row items-center" style={{ minHeight: 44, gap: 2 }}>
-        {allReady ? (
+        {previewItems.length > 0 || allReady ? (
           <>
-            <ComposerIcon glyph={GLYPH.camera} label="Camera" onPress={() => void pickCamera()} />
-            <ComposerIcon glyph={GLYPH.album} label="Gallery" onPress={() => void pickGallery()} />
+            <ComposerIcon
+              glyph={GLYPH.camera}
+              label="Camera"
+              onPress={() => (canAddPhoto ? void pickCamera() : Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`))}
+            />
+            <ComposerIcon
+              glyph={GLYPH.album}
+              label="Gallery"
+              onPress={() => (canAddPhoto ? void pickGallery() : Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`))}
+            />
             <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
           </>
         ) : (
@@ -362,6 +428,35 @@ function ProofThumb({
   );
 }
 
+function AddPhotoTile({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={{ width: THUMB }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Add a photo"
+        onPress={onPress}
+        style={{
+          width: THUMB,
+          height: THUMB,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderStyle: 'dashed',
+          borderColor: THEME.border,
+          backgroundColor: THEME.surface,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <AppText className="text-[28px] font-semibold" style={{ color: THEME.accent, lineHeight: 32 }}>
+          +
+        </AppText>
+      </Pressable>
+      <AppText className="mt-1 text-[11px] text-muted" numberOfLines={1}>
+        Optional
+      </AppText>
+    </View>
+  );
+}
+
 function ExtraThumb({
   extra,
   onPress,
@@ -400,7 +495,7 @@ function ExtraThumb({
         onPress={onRemove}
         hitSlop={6}
         style={{ minHeight: 28, justifyContent: 'center' }}>
-        <AppText className="mt-1 text-[11px] font-semibold text-muted">Remove</AppText>
+        <AppText className="mt-1 text-[11px] font-semibold text-muted">Optional · Remove</AppText>
       </Pressable>
     </View>
   );

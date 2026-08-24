@@ -1,7 +1,6 @@
 import type { Provider, Session, User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { makeRedirectUri } from 'expo-auth-session';
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -16,21 +15,72 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 
+import { reportAppError } from '@/lib/appErrors';
+import { authRedirectUrl } from '@/lib/authRedirect';
+import {
+  hasAuthSessionTokens,
+  parseAuthRedirectParams,
+} from '@/lib/authRedirectParams';
+import {
+  capturePasswordRecoveryFromUrl,
+  clearPasswordRecoveryPending,
+  isPasswordRecoveryPending,
+  markPasswordRecoveryPending,
+} from '@/lib/passwordRecovery';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const redirectTo = makeRedirectUri({
+try {
+  if (typeof window !== 'undefined') {
+    capturePasswordRecoveryFromUrl(window.location.href);
+  }
+} catch {
+  // Native and restricted web runtimes may not expose location.
+}
+
+const oauthRedirectTo = makeRedirectUri({
   scheme: 'blob',
   path: 'auth/callback',
 });
+
+function passwordResetRedirectTo(): string {
+  return authRedirectUrl() ?? oauthRedirectTo;
+}
+
+function currentWebHref(): string | null {
+  if (Platform.OS !== 'web') {
+    return null;
+  }
+  try {
+    return typeof window !== 'undefined' ? window.location.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function stripWebAuthHash() {
+  if (Platform.OS !== 'web') {
+    return;
+  }
+  try {
+    if (typeof window === 'undefined' || !window.location.hash) {
+      return;
+    }
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.history.replaceState(window.history.state, '', next);
+  } catch {
+    // Hash cleanup is best-effort on web.
+  }
+}
 
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   isLoading: boolean;
   isConfigured: boolean;
+  isPasswordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (
     email: string,
@@ -41,33 +91,43 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   updateEmail: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
+  resetPasswordForEmail: (email: string) => Promise<void>;
+  finishPasswordRecovery: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function createSessionFromUrl(url: string): Promise<Session | null> {
-  const { params, errorCode } = QueryParams.getQueryParams(url);
+  const params = parseAuthRedirectParams(url);
+  capturePasswordRecoveryFromUrl(url);
 
-  if (errorCode) {
-    throw new Error(String(params.error_description ?? errorCode));
+  if (params.error) {
+    throw new Error(params.error_description || params.error);
   }
 
-  const accessToken = params.access_token;
-  const refreshToken = params.refresh_token;
-
-  if (!accessToken) {
+  if (!hasAuthSessionTokens(params)) {
     return null;
   }
 
+  if (params.code && !params.access_token) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(params.code);
+    if (error) {
+      throw error;
+    }
+    stripWebAuthHash();
+    return data.session;
+  }
+
   const { data, error } = await supabase.auth.setSession({
-    access_token: accessToken,
-    refresh_token: refreshToken ?? '',
+    access_token: params.access_token ?? '',
+    refresh_token: params.refresh_token ?? '',
   });
 
   if (error) {
-    throw new Error(getErrorMessage(error));
+    throw error;
   }
 
+  stripWebAuthHash();
   return data.session;
 }
 
@@ -75,7 +135,7 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo,
+      redirectTo: oauthRedirectTo,
       skipBrowserRedirect: true,
     },
   });
@@ -84,7 +144,7 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
     throw new Error(getErrorMessage(error ?? new Error('OAuth did not start')));
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  const result = await WebBrowser.openAuthSessionAsync(data.url, oauthRedirectTo);
 
   if (result.type === 'cancel' || result.type === 'dismiss') {
     throw new Error('cancel');
@@ -100,6 +160,7 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPasswordRecovery, setPasswordRecovery] = useState(isPasswordRecoveryPending);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -108,6 +169,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let mounted = true;
+
+    function noteRecoveryFromUrl(url?: string | null) {
+      capturePasswordRecoveryFromUrl(url);
+      if (isPasswordRecoveryPending()) {
+        setPasswordRecovery(true);
+      }
+    }
+
+    function consumeAuthUrl(url?: string | null) {
+      if (!url) {
+        return;
+      }
+      noteRecoveryFromUrl(url);
+      void createSessionFromUrl(url).catch((error) => {
+        reportAppError({ route: 'auth/deep-link', error });
+        console.log('[blob:auth-redirect]', getErrorMessage(error));
+      });
+    }
+
+    noteRecoveryFromUrl(currentWebHref());
 
     void supabase.auth.getSession().then(({ data }) => {
       if (mounted) {
@@ -118,19 +199,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        markPasswordRecoveryPending();
+        setPasswordRecovery(true);
+      }
       setSession(nextSession);
     });
 
     const linking = Linking.addEventListener('url', ({ url }) => {
-      void createSessionFromUrl(url).catch(() => undefined);
+      consumeAuthUrl(url);
     });
 
-    void Linking.getInitialURL().then((url) => {
-      if (url) {
-        void createSessionFromUrl(url).catch(() => undefined);
-      }
-    });
+    void Linking.getInitialURL()
+      .then((url) => {
+        consumeAuthUrl(url);
+        if (Platform.OS === 'web') {
+          consumeAuthUrl(currentWebHref());
+        }
+      })
+      .catch((error) => {
+        reportAppError({ route: 'auth/initial-url', error });
+      });
 
     return () => {
       mounted = false;
@@ -192,6 +282,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    clearPasswordRecoveryPending();
+    setPasswordRecovery(false);
     const { error } = await supabase.auth.signOut();
     if (error) {
       throw new Error(getErrorMessage(error));
@@ -212,12 +304,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const resetPasswordForEmail = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: passwordResetRedirectTo(),
+    });
+    if (error) {
+      throw error;
+    }
+  }, []);
+
+  const finishPasswordRecovery = useCallback(() => {
+    clearPasswordRecoveryPending();
+    setPasswordRecovery(false);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       user: session?.user ?? null,
       isLoading,
       isConfigured: isSupabaseConfigured,
+      isPasswordRecovery,
       signIn,
       signUp,
       signInWithGoogle,
@@ -225,9 +332,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       updateEmail,
       updatePassword,
+      resetPasswordForEmail,
+      finishPasswordRecovery,
     }),
     [
+      finishPasswordRecovery,
       isLoading,
+      isPasswordRecovery,
+      resetPasswordForEmail,
       session,
       signIn,
       signInWithApple,

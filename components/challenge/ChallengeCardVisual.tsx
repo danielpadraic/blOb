@@ -19,7 +19,7 @@ import { parseChallengeProofs } from '@/lib/challengeProofs';
 import { challengeDurationDays, challengeGoalLabel, challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { isPointsChallenge } from '@/lib/challenges';
+import { usesPointsBoard } from '@/lib/challengeExperience';
 import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialGuaranteeAmount, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -133,12 +133,10 @@ export function ChallengeCardVisual({
   const days = Math.max(Number(myDays) || 0, 0);
   const duration = challengeDurationDays(challenge);
   const progress = joinedProgressCopy(challenge, days);
-  const showRing = !official && joined && duration > 0 && !isPointsChallenge(challenge);
-  const goal = official
+  const showRing = !official && joined && duration > 0 && !usesPointsBoard(challenge);
+  const goal = official || usesPointsBoard(challenge)
     ? challengeGoalLabel(challenge, { daysCompleted: days })
-    : isPointsChallenge(challenge)
-      ? challengeGoalLabel(challenge)
-      : `${duration}-Day Consistency`;
+    : `${duration}-Day Consistency`;
   const goalSub = official ? challengeGoalSubtitle(challenge) : null;
   const showGoal = Boolean(goal) && !showRing;
   const officialLive = isOfficialSeriesChallenge(challenge) && challenge.status === 'live';

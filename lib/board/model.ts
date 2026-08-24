@@ -19,6 +19,7 @@ export type BoardParticipant = {
   joined_at?: string | null;
   display_name?: string | null;
   username?: string | null;
+  avatar_url?: string | null;
 };
 
 export type BoardPayout = {
@@ -29,12 +30,37 @@ export type BoardPayout = {
 export type BoardPerson = {
   userId: string;
   name: string;
+  avatarUrl: string | null;
   bucket: BoardBucket;
   days: number;
   points: number;
   payout: number | null;
   you: boolean;
 };
+
+export function pointsStandings(people: BoardPerson[]): BoardPerson[] {
+  return people
+    .filter((row) => row.bucket !== 'dropped')
+    .slice()
+    .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+}
+
+export function pointsRank(people: BoardPerson[], viewerId?: string | null): number | null {
+  if (!viewerId) {
+    return null;
+  }
+  const index = pointsStandings(people).findIndex((row) => row.userId === viewerId);
+  return index >= 0 ? index + 1 : null;
+}
+
+export function pointsLeader(people: BoardPerson[]): BoardPerson | null {
+  const ranked = pointsStandings(people);
+  const first = ranked[0];
+  if (!first || first.points <= 0) {
+    return null;
+  }
+  return first;
+}
 
 export type BoardView = {
   people: BoardPerson[];
@@ -126,6 +152,7 @@ export function buildBoard(input: {
       return {
         userId: row.user_id,
         name: boardDisplayName(row),
+        avatarUrl: row.avatar_url?.trim() || null,
         bucket,
         days: Number(row.days_completed) || 0,
         points: Math.max(Number(row.points) || 0, 0),

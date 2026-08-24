@@ -1,6 +1,7 @@
 import {
   captureTypeForMethod,
   parseProofParts,
+  uniqueProofUrls,
   type ChallengeProof,
   type ChallengeProofPart,
 } from '../challengeProofs';
@@ -36,8 +37,13 @@ export type SaveCheckinProofInput = {
   blob?: Blob | null;
   notes?: string | null;
   extraMedia?: string[] | null;
+  urls?: string[] | null;
   clearProof?: boolean;
 };
+
+function isRemoteMediaUrl(uri: string): boolean {
+  return /^https?:\/\//i.test(uri);
+}
 
 export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCheckin {
   const submittedAt = (row.submitted_at as string | null) ?? null;
@@ -112,18 +118,27 @@ async function proofPartFor(
   if (!uri && !input.blob) {
     throw new Error('Add that proof to continue.');
   }
-  const path = await upload({
-    uri: uri || 'blob:proof',
-    userId,
-    challengeId: input.challengeId,
-    proofType: captureTypeForMethod(proof.method),
-    mimeType: input.mimeType,
-    blob: input.blob,
-  });
-  const url = await resolveUrl(path);
+  const url = isRemoteMediaUrl(uri)
+    ? uri
+    : await resolveUrl(
+        await upload({
+          uri: uri || 'blob:proof',
+          userId,
+          challengeId: input.challengeId,
+          proofType: captureTypeForMethod(proof.method),
+          mimeType: input.mimeType,
+          blob: input.blob,
+        }),
+      );
+  const urls = uniqueProofUrls([url, ...(input.urls ?? [])]);
   return {
     id: proof.id,
-    part: { method: proof.method, url, fromLibrary: input.fromLibrary === true },
+    part: {
+      method: proof.method,
+      url: urls[0] ?? url,
+      urls,
+      fromLibrary: input.fromLibrary === true,
+    },
     healthWorkoutId: null,
   };
 }
