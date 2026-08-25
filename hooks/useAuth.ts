@@ -22,6 +22,12 @@ import {
   parseAuthRedirectParams,
 } from '@/lib/authRedirectParams';
 import {
+  NATIVE_OAUTH_PATH,
+  NATIVE_OAUTH_REDIRECT_URI,
+  NATIVE_OAUTH_SCHEME,
+  resolveOAuthRedirectUri,
+} from '@/lib/oauthRedirect';
+import {
   capturePasswordRecoveryFromUrl,
   clearPasswordRecoveryPending,
   isPasswordRecoveryPending,
@@ -40,13 +46,25 @@ try {
   // Native and restricted web runtimes may not expose location.
 }
 
-const oauthRedirectTo = makeRedirectUri({
-  scheme: 'blob',
-  path: 'auth/callback',
-});
+function oauthRedirectTo(): string {
+  if (Platform.OS === 'web') {
+    return resolveOAuthRedirectUri({
+      platform: 'web',
+      webOrigin: typeof window !== 'undefined' ? window.location.origin : null,
+    });
+  }
+  return resolveOAuthRedirectUri({
+    platform: Platform.OS,
+    computedNative: makeRedirectUri({
+      scheme: NATIVE_OAUTH_SCHEME,
+      path: NATIVE_OAUTH_PATH,
+      native: NATIVE_OAUTH_REDIRECT_URI,
+    }),
+  });
+}
 
 function passwordResetRedirectTo(): string {
-  return authRedirectUrl() ?? oauthRedirectTo;
+  return authRedirectUrl() ?? oauthRedirectTo();
 }
 
 function currentWebHref(): string | null {
@@ -132,10 +150,26 @@ async function createSessionFromUrl(url: string): Promise<Session | null> {
 }
 
 async function signInWithOAuthProvider(provider: Provider): Promise<void> {
+  const redirectTo = oauthRedirectTo();
+
+  if (Platform.OS === 'web') {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo,
+        skipBrowserRedirect: false,
+      },
+    });
+    if (error) {
+      throw new Error(getErrorMessage(error));
+    }
+    return;
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo: oauthRedirectTo,
+      redirectTo,
       skipBrowserRedirect: true,
     },
   });
@@ -144,7 +178,7 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
     throw new Error(getErrorMessage(error ?? new Error('OAuth did not start')));
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, oauthRedirectTo);
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
   if (result.type === 'cancel' || result.type === 'dismiss') {
     throw new Error('cancel');

@@ -57,6 +57,7 @@ import {
   usesComparablePointsScoring,
   usesConsistencyExperience,
   usesPointsBoard,
+  usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -211,7 +212,7 @@ export default function ChallengeDetailScreen() {
   const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
   const daysCompleted = heroRingDays({
     status: challengeQuery.data?.status,
-    submitted: Math.max(submittedCheckins.data ?? 0, loggedToday ? 1 : 0),
+    submitted: Math.max(submittedCheckins.data ?? 0, loggedToday && !usesTotalCountCheckins(challenge) ? 1 : 0),
   });
 
   const joinBlocked = useMemo(() => {
@@ -491,11 +492,17 @@ export default function ChallengeDetailScreen() {
   const comparableConfig = comparable ? comparablePointsFromChallenge(challenge) : null;
   const isPoints = isPointsChallenge(challenge) && !comparable;
   const isUnlimited = isUnlimitedChallenge(challenge);
+  const totalCount = usesTotalCountCheckins(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
   const showDayRing = isJoined && usesConsistencyExperience(challenge);
-  const target = durationDays;
   const checkinTarget = challengeTargetCount(challenge);
-  const logTitle = loggedToday
+  const target = totalCount ? checkinTarget : durationDays;
+  const submittedCount = Math.max(
+    submittedCheckins.data ?? 0,
+    loggedToday && !totalCount ? 1 : 0,
+  );
+  const checkinLocked = totalCount ? submittedCount >= checkinTarget : loggedToday;
+  const logTitle = checkinLocked
     ? copy('checkin.checkedIn')
     : (periodCheckin.data?.ctaTitle ?? copy('checkin.begin'));
   const proofHeadline = comparable
@@ -1084,18 +1091,18 @@ export default function ChallengeDetailScreen() {
         ) : (
           <View className="gap-1.5">
             <Button
-              title={loggedToday ? copy('checkin.checkedIn') : logTitle}
+              title={checkinLocked ? copy('checkin.checkedIn') : logTitle}
               size="md"
-              variant={loggedToday ? 'outline' : 'primary'}
-              disabled={loggedToday}
+              variant={checkinLocked ? 'outline' : 'primary'}
+              disabled={checkinLocked}
               onPress={() => {
-                if (loggedToday) {
+                if (checkinLocked) {
                   return;
                 }
                 router.push(`/challenges/${id}/submit`);
               }}
             />
-            {!loggedToday && watch.visible ? (
+            {!checkinLocked && watch.visible ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={copy('health.startWatch')}

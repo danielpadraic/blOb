@@ -1,3 +1,4 @@
+import { usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { resolveChallengeProofs } from '@/lib/challengeProofs';
 import { challengeDurationDays } from '@/lib/challengeGoal';
 import {
@@ -25,6 +26,9 @@ type RuleChallenge = {
   is_unlimited?: boolean | null;
   is_official?: boolean | null;
   challenge_type?: string | null;
+  scoring_method?: string | null;
+  comparable_points_config?: unknown;
+  scoring_config?: unknown;
   min_minutes?: number | null;
   category?: string | null;
   tasks?: unknown[] | null;
@@ -501,6 +505,10 @@ export function joinedProgressCopy(
   daysCompleted = 0,
 ): JoinedProgressCopy {
   const logged = Math.max(0, Math.floor(Number(daysCompleted) || 0));
+  if (usesTotalCountCheckins(challenge)) {
+    const target = Math.max(Number(challenge.target_count) || 1, 1);
+    return { label: `${logged}/${target} check-ins`, ratio: logged / target };
+  }
   if (challenge.challenge_type === 'points' && !challenge.is_unlimited) {
     const target = Math.max(Array.isArray(challenge.tasks) ? challenge.tasks.length : 1, 1);
     return { label: `${logged}/${target} tasks`, ratio: logged / Math.max(target, 1) };
@@ -516,8 +524,9 @@ export function joinedProgressCopy(
     };
   }
 
-  if (copy.period === 'once') {
-    return { label: `${logged}/${count} check-ins`, ratio: logged / count };
+  if (copy.period === 'once' || copy.period === 'custom') {
+    const target = Math.max(Number(challenge.target_count) || count, 1);
+    return { label: `${logged}/${target} check-ins`, ratio: logged / target };
   }
 
   const total = challengeDurationDays(challenge);

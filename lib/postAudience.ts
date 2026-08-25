@@ -33,3 +33,13 @@ export function audienceLabel(audience: PostAudience): string {
 export function audienceGlyph(audience: PostAudience | DefaultPostAudience) {
   return audience === 'public' ? 'globe' : 'people';
 }
+
+export function feedVisibilityForAudience(audience: PostAudience): 'public' | 'friends' | 'private' {
+  if (audience === 'public') {
+    return 'public';
+  }
+  if (audience === 'friends') {
+    return 'friends';
+  }
+  return 'private';
+}

@@ -253,15 +253,21 @@ export function ProofUploader({
             className="absolute left-4 right-4 flex-row items-center justify-between rounded-2xl px-3 py-2"
             style={{ bottom: fill ? 96 : 24, backgroundColor: 'rgba(16,19,18,0.88)' }}>
             <AppText className="mr-3 flex-1 text-[12px] font-semibold" style={{ color: '#fff' }}>
-              Photo library is off.
+              {Platform.OS === 'web' ? 'Couldn’t open photos. Pick a file instead.' : 'Photo library is off.'}
             </AppText>
-            {Platform.OS !== 'web' ? (
+            {Platform.OS === 'web' ? (
+              <Pressable onPress={() => void openLibrary()}>
+                <AppText className="text-[12px] font-bold" style={{ color: THEME.accentBright }}>
+                  Gallery
+                </AppText>
+              </Pressable>
+            ) : (
               <Pressable onPress={() => void openAppSettings()}>
                 <AppText className="text-[12px] font-bold" style={{ color: THEME.accentBright }}>
                   Open Settings
                 </AppText>
               </Pressable>
-            ) : null}
+            )}
           </View>
         ) : null}
       </View>

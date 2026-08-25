@@ -3,7 +3,7 @@ import { challengeDetailHref, conversationHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
-import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+import { getErrorMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
 import type { Href } from 'expo-router';
 
 export function notificationChallengeId(data?: NotificationData | null): string | undefined {
@@ -306,7 +306,8 @@ export async function inviteToChallenge(
     p_invitee_id: inviteeId,
   });
   if (error) {
-    throw new Error(getErrorMessage(error));
+    logPostgrestError('invite-to-challenge', error);
+    throw error;
   }
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) {

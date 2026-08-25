@@ -30,6 +30,12 @@ export function permissionCopy(kind: MediaPermissionKind) {
   return COPY[kind];
 }
 
+/** Web Round / Wave record needs MediaRecorder. Missing → gallery fallback. */
+export function webMediaRecorderAvailable(): boolean {
+  const Recorder = (globalThis as { MediaRecorder?: { new (...args: never[]): unknown } }).MediaRecorder;
+  return typeof Recorder === 'function';
+}
+
 export async function cameraIsAvailable(): Promise<boolean> {
   if (Platform.OS === 'web') {
     return Boolean(

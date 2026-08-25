@@ -5,6 +5,7 @@ import { Alert } from 'react-native';
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
 import { asQuoteSnapshot } from '@/lib/quotePost';
+import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { asPostAudience, DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
 import { resolvePostsSchema, type PostsSchema } from '@/lib/postsSelect';
 import { supabase } from '@/lib/supabase';
@@ -527,6 +528,23 @@ async function fetchHostedChallengeIds(userId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.id);
 }
 
+async function fetchCorporateChallengeIds(ids: string[]): Promise<Set<string>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) {
+    return new Set();
+  }
+  const { data, error } = await supabase.from('challenges').select('id, privacy_mode').in('id', unique);
+  if (error) {
+    console.log('[blob:feed] privacy lookup skipped', error.message);
+    return new Set();
+  }
+  return new Set(
+    (data ?? [])
+      .filter((row) => !homeFeedAllowsChallengeContent(row.privacy_mode))
+      .map((row) => row.id),
+  );
+}
+
 async function fetchOfficialAuthorIds(): Promise<string[]> {
   const { data, error } = await supabase.from('profiles').select('id').eq('is_official', true);
   if (error) {
@@ -606,12 +624,19 @@ async function fetchPosts(input: {
   const hidden = new Set(hiddenIds);
   const muted = new Set(mutedIds);
   const userId = input.userId;
+  const merged = dedupePosts([people, challengePosts]);
+  const corporateIds = await fetchCorporateChallengeIds(
+    merged.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
+  );
 
   return hydrateAuthors(
     await withSocial(
-      dedupePosts([people, challengePosts])
+      merged
         .filter((post) => {
           if (post.source === 'challenge') {
+            return false;
+          }
+          if (post.challenge_id && corporateIds.has(post.challenge_id)) {
             return false;
           }
           if (hidden.has(post.id)) {
@@ -952,6 +977,7 @@ export function useCreatePost(challengeId?: string | null) {
       }
     },
     onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void queryClient.invalidateQueries({ queryKey: ['feed-events'] });
       void reportBadgeActivity();
     },

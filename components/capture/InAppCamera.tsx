@@ -30,6 +30,7 @@ import {
   ensureCapturePermissions,
   openAppSettings,
   queryWebCameraPermission,
+  webMediaRecorderAvailable,
 } from '@/lib/mediaPermissions';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
@@ -248,11 +249,17 @@ export function InAppCamera({
       if (!stream) {
         return;
       }
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-        ? 'video/webm;codecs=vp8,opus'
-        : MediaRecorder.isTypeSupported('video/webm')
-          ? 'video/webm'
-          : '';
+      if (!webMediaRecorderAvailable()) {
+        onUnavailable?.();
+        return;
+      }
+      const mime =
+        typeof MediaRecorder.isTypeSupported === 'function' &&
+        MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+          ? 'video/webm;codecs=vp8,opus'
+          : typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported('video/webm')
+            ? 'video/webm'
+            : '';
       chunksRef.current = [];
       const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       recorderRef.current = recorder;
@@ -279,7 +286,15 @@ export function InAppCamera({
       };
       recordingRef.current = true;
       setRecording(true);
-      recorder.start(250);
+      try {
+        recorder.start(250);
+      } catch (error) {
+        recordingRef.current = false;
+        setRecording(false);
+        logCameraError(error, 'MediaRecorder.start');
+        onUnavailable?.();
+        return;
+      }
       window.setTimeout(() => {
         if (recorderRef.current === recorder && recorder.state === 'recording') {
           recorder.stop();

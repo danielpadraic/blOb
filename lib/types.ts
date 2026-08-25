@@ -1628,6 +1628,16 @@ export type Database = {
           updated_at: string;
         };
       };
+      create_group_conversation: {
+        Args: { p_member_ids: string[] };
+        Returns: {
+          id: string;
+          is_group: boolean;
+          challenge_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+      };
       create_challenge_invite: {
         Args: { p_challenge_id: string };
         Returns: CreateChallengeInviteResult;

@@ -2,7 +2,7 @@ import { Pressable, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
-import { messagePreview, personDisplayName, type ConversationPreview } from '@/lib/social';
+import { conversationTitle, messagePreview, type ConversationPreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { formatFeedTime } from '@/utils/format';
 
@@ -13,7 +13,7 @@ type ConversationListItemProps = {
 };
 
 export function ConversationListItem({ conversation, userId, onPress }: ConversationListItemProps) {
-  const name = personDisplayName(conversation.peer);
+  const name = conversationTitle(conversation);
   const stamp = conversation.last_message?.created_at ?? conversation.updated_at;
   return (
     <Pressable

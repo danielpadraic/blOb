@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { BackHandler, Pressable } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useGlobalSearchParams, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
 import { AppText } from '@/components/ui/AppText';
-import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
+import { fallbackHref, popToFallback } from '@/lib/stackBack';
 import { THEME } from '@/lib/theme';
 
 type StackBackButtonProps = {
@@ -12,28 +12,7 @@ type StackBackButtonProps = {
   preferHistory?: boolean;
 };
 
-function fallbackHref(returnTo?: string | string[], explicit?: Href): Href {
-  if (explicit) {
-    return explicit;
-  }
-  const value = Array.isArray(returnTo) ? returnTo[0] : returnTo;
-  if (value === 'feed') {
-    return '/feed';
-  }
-  return LOBBY_HREF;
-}
-
-export function popToFallback(router: ReturnType<typeof useRouter>, fallback: Href) {
-  if (fallback === TABS_HREF) {
-    router.dismissTo(fallback);
-    return;
-  }
-  if (router.canGoBack()) {
-    router.back();
-    return;
-  }
-  router.replace(fallback);
-}
+export { popToFallback };
 
 export function useDismissTo(target: Href) {
   const router = useRouter();
@@ -50,8 +29,9 @@ export function useDismissTo(target: Href) {
 
 export function StackBackButton({ fallback, preferHistory = false }: StackBackButtonProps) {
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string }>();
-  const target = fallbackHref(params.returnTo, fallback);
+  const local = useLocalSearchParams<{ returnTo?: string }>();
+  const global = useGlobalSearchParams<{ returnTo?: string }>();
+  const target = fallbackHref(local.returnTo ?? global.returnTo, fallback);
 
   return (
     <Pressable
@@ -59,11 +39,7 @@ export function StackBackButton({ fallback, preferHistory = false }: StackBackBu
       accessibilityLabel="Back"
       hitSlop={8}
       onPress={() => {
-        if (preferHistory && router.canGoBack()) {
-          router.back();
-          return;
-        }
-        popToFallback(router, target);
+        popToFallback(router, target, preferHistory);
       }}
       className="h-11 w-11 items-center justify-center">
       <AppText

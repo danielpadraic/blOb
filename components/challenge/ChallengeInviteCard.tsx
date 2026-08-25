@@ -60,6 +60,12 @@ export type InviteChallenge = {
   challenge_lane?: unknown;
   category?: string | null;
   challenge_type?: string | null;
+  frequency?: string | null;
+  target_count?: number | null;
+  length_value?: number | null;
+  scoring_method?: string | null;
+  comparable_points_config?: unknown;
+  scoring_config?: unknown;
   cover_image_url?: string | null;
   sponsor_logo_url?: string | null;
   sponsor_name?: string | null;
@@ -283,6 +289,14 @@ export function ChallengeInviteCard({
       timezone: challenge.timezone,
       days_required: challenge.days_required,
       day_windows: Array.isArray(challenge.day_windows) ? challenge.day_windows : null,
+      frequency: challenge.frequency,
+      target_count: challenge.target_count,
+      length_value: challenge.length_value,
+      challenge_type: challenge.challenge_type,
+      scoring_method: challenge.scoring_method,
+      comparable_points_config: challenge.comparable_points_config,
+      scoring_config: challenge.scoring_config,
+      category: challenge.category,
     },
   );
   const checkedIn =
@@ -337,10 +351,7 @@ export function ChallengeInviteCard({
   }
 
   return (
-    <Pressable
-      onPress={() => void openDetail()}
-      accessibilityRole="button"
-      accessibilityLabel={cardLabel}
+    <View
       className="flex-row overflow-hidden"
       style={{
         height: HEIGHT,
@@ -356,8 +367,10 @@ export function ChallengeInviteCard({
           steps={mediaSteps}
           visual={visual}
           title={challenge.title}
+          openLabel={cardLabel}
           category={challenge.category ?? undefined}
           typeTipOpen={typeTip.open}
+          onOpen={() => void openDetail()}
           onTypePress={typeTip.show}
         />
       </View>
@@ -366,59 +379,71 @@ export function ChallengeInviteCard({
         style={{ paddingLeft: 10, paddingRight: 10, paddingVertical: 10, justifyContent: 'space-between' }}>
         <View>
           <ChallengeTagRow tags={tags} compact />
-          <AppText
-            className="mt-1 min-w-0 text-[16px] font-semibold leading-5"
-            style={{ color: titleColor }}
-            numberOfLines={1}>
-            {challenge.title}
-          </AppText>
+          <Pressable
+            onPress={() => void openDetail()}
+            accessibilityRole="button"
+            accessibilityLabel={cardLabel}
+            style={{ marginTop: 4 }}>
+            <AppText
+              className="min-w-0 text-[16px] font-semibold leading-5"
+              style={{ color: titleColor }}
+              numberOfLines={1}>
+              {challenge.title}
+            </AppText>
+          </Pressable>
         </View>
 
-        {official ? (
-          <View
-            className="flex-row items-center"
-            style={{ gap: 8, minHeight: 32 }}
-            accessibilityLabel={`Sponsored by ${sponsorName}`}>
-            <AppText className="text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
-              Sponsored by
-            </AppText>
-            {namedSponsor ? (
-              <AppText
-                className="min-w-0 flex-1 text-[12px] font-extrabold"
-                style={{ color: titleColor }}
-                numberOfLines={2}>
-                {namedSponsor}
+        <Pressable
+          onPress={() => void openDetail()}
+          accessibilityRole="button"
+          accessibilityLabel={cardLabel}
+          style={{ minHeight: 28, justifyContent: 'center' }}>
+          {official ? (
+            <View
+              className="flex-row items-center"
+              style={{ gap: 8, minHeight: 32 }}
+              accessibilityLabel={`Sponsored by ${sponsorName}`}>
+              <AppText className="text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
+                Sponsored by
               </AppText>
-            ) : asHttpUrl(challenge.sponsor_logo_url) ? (
-              <Image
-                source={{ uri: asHttpUrl(challenge.sponsor_logo_url) }}
-                style={{ width: 56, height: 28 }}
-                contentFit="contain"
-                accessibilityLabel={sponsorName}
-              />
-            ) : (
-              <Image
-                source={BLOB_WORDMARK}
-                style={{ width: 64, height: 26, backgroundColor: 'transparent' }}
-                contentFit="contain"
-                tintColor="#F7FFFC"
-                accessibilityLabel="blOb"
-              />
-            )}
-          </View>
-        ) : host ? (
-          <View className="flex-row items-center" style={{ gap: 6, minHeight: 28 }}>
-            <Avatar uri={host.avatarUrl} name={host.name} size={20} />
-            <AppText className="min-w-0 flex-1 text-[12px]" style={{ color: muted }} numberOfLines={1}>
-              Hosted by{' '}
-              <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
-                {host.name}
+              {namedSponsor ? (
+                <AppText
+                  className="min-w-0 flex-1 text-[12px] font-extrabold"
+                  style={{ color: titleColor }}
+                  numberOfLines={2}>
+                  {namedSponsor}
+                </AppText>
+              ) : asHttpUrl(challenge.sponsor_logo_url) ? (
+                <Image
+                  source={{ uri: asHttpUrl(challenge.sponsor_logo_url) }}
+                  style={{ width: 56, height: 28 }}
+                  contentFit="contain"
+                  accessibilityLabel={sponsorName}
+                />
+              ) : (
+                <Image
+                  source={BLOB_WORDMARK}
+                  style={{ width: 64, height: 26, backgroundColor: 'transparent' }}
+                  contentFit="contain"
+                  tintColor="#F7FFFC"
+                  accessibilityLabel="blOb"
+                />
+              )}
+            </View>
+          ) : host ? (
+            <View className="flex-row items-center" style={{ gap: 6, minHeight: 28 }}>
+              <Avatar uri={host.avatarUrl} name={host.name} size={20} />
+              <AppText className="min-w-0 flex-1 text-[12px]" style={{ color: muted }} numberOfLines={1}>
+                Hosted by{' '}
+                <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
+                  {host.name}
+                </AppText>
               </AppText>
-            </AppText>
-          </View>
-        ) : (
-          <View style={{ minHeight: 28 }} />
-        )}
+            </View>
+          ) : (
+            <View style={{ minHeight: 28 }} />
+          )}
+        </Pressable>
 
         <View style={{ gap: canCheckIn ? 6 : 0 }}>
           <View className="flex-row items-center" style={{ gap: 8 }}>
@@ -462,7 +487,7 @@ export function ChallengeInviteCard({
           ) : null}
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -524,15 +549,19 @@ function MediaPanel({
   steps,
   visual,
   title,
+  openLabel,
   category,
   typeTipOpen,
+  onOpen,
   onTypePress,
 }: {
   steps: InviteMedia[];
   visual: InviteVisualTheme;
   title: string;
+  openLabel: string;
   category?: string | null;
   typeTipOpen: boolean;
+  onOpen: () => void;
   onTypePress: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -562,54 +591,58 @@ function MediaPanel({
         overflow: 'hidden',
         backgroundColor: visual === 'official' ? THEME_WASH.official[0] : THEME_WASH[visual][0],
       }}>
-      {resolved.kind === 'photo' ? (
-        <View style={{ flex: 1 }}>
-          <Image
-            source={{ uri: resolved.uri }}
-            style={{ width: '100%', height: '100%' }}
-            contentFit="cover"
-            contentPosition="center"
-            cachePolicy="memory-disk"
-            onError={failThrough}
-            accessibilityLabel={`${title} cover`}
-          />
-          <View
-            pointerEvents="none"
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: TINT[visual] }}
-          />
-          <LinearGradient
-            pointerEvents="none"
-            colors={
-              resolved.official
-                ? ['rgba(12,28,26,0.08)', 'rgba(12,28,26,0.28)']
-                : ['rgba(255,255,255,0.04)', 'rgba(16,19,18,0.16)']
-            }
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-          />
-        </View>
-      ) : resolved.kind === 'sponsor' ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 10 }}>
-          <Image
-            source={{ uri: resolved.uri }}
-            style={{ width: '86%', height: '70%' }}
-            contentFit="contain"
-            onError={failThrough}
-            accessibilityLabel={resolved.name}
-          />
-        </View>
-      ) : resolved.kind === 'bob' ? (
-        <OfficialBobPanel onError={failThrough} />
-      ) : (
-        <ChallengeTypePlaceholder category={category} onPress={onTypePress} />
-      )}
-      {showTypeBadge ? (
-        <>
-          <ChallengeTypeBadge category={category} onPress={onTypePress} />
-          <ChallengeTypeTip category={category} visible={typeTipOpen} />
-        </>
-      ) : (
-        <ChallengeTypeTip category={category} visible={typeTipOpen} anchor="panel" />
-      )}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={openLabel}
+        onPress={onOpen}
+        style={{ flex: 1 }}>
+        {resolved.kind === 'photo' ? (
+          <View style={{ flex: 1 }} pointerEvents="none">
+            <Image
+              source={{ uri: resolved.uri }}
+              style={{ width: '100%', height: '100%' }}
+              contentFit="cover"
+              contentPosition="center"
+              cachePolicy="memory-disk"
+              onError={failThrough}
+              accessibilityLabel={`${title} cover`}
+            />
+            <View
+              pointerEvents="none"
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: TINT[visual] }}
+            />
+            <LinearGradient
+              pointerEvents="none"
+              colors={
+                resolved.official
+                  ? ['rgba(12,28,26,0.08)', 'rgba(12,28,26,0.28)']
+                  : ['rgba(255,255,255,0.04)', 'rgba(16,19,18,0.16)']
+              }
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+            />
+          </View>
+        ) : resolved.kind === 'sponsor' ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 10 }} pointerEvents="none">
+            <Image
+              source={{ uri: resolved.uri }}
+              style={{ width: '86%', height: '70%' }}
+              contentFit="contain"
+              onError={failThrough}
+              accessibilityLabel={resolved.name}
+            />
+          </View>
+        ) : resolved.kind === 'bob' ? (
+          <OfficialBobPanel onError={failThrough} />
+        ) : (
+          <ChallengeTypePlaceholder category={category} />
+        )}
+      </Pressable>
+      <ChallengeTypeBadge category={category} onPress={onTypePress} />
+      <ChallengeTypeTip
+        category={category}
+        visible={typeTipOpen}
+        anchor={showTypeBadge ? 'badge' : 'panel'}
+      />
     </View>
   );
 }

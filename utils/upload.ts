@@ -134,6 +134,13 @@ async function toTypedBlob(input: {
   return new Blob([buffer], { type: input.contentType });
 }
 
+async function blobToArrayBuffer(blob: Blob, uri: string): Promise<ArrayBuffer> {
+  if (blob && typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer();
+  }
+  return uriToArrayBuffer(uri);
+}
+
 function asNamedFile(blob: Blob, fileName: string, contentType: string): Blob {
   try {
     const FileCtor = globalThis.File;
@@ -260,7 +267,7 @@ async function uploadObject(input: {
       upsert,
     });
 
-  const primary = Platform.OS === 'web' ? typed : await typed.arrayBuffer();
+  const primary = Platform.OS === 'web' ? typed : await blobToArrayBuffer(typed, uri);
   const first = await send(primary);
   if (!first.error) {
     return path;
@@ -276,7 +283,7 @@ async function uploadObject(input: {
     first.error.message,
   );
 
-  const secondary = Platform.OS === 'web' ? await typed.arrayBuffer() : typed;
+  const secondary = Platform.OS === 'web' ? await blobToArrayBuffer(typed, uri) : typed;
   const alt = await send(secondary);
   if (!alt.error) {
     return path;
@@ -289,7 +296,7 @@ async function uploadObject(input: {
 
   const jpegPath = withExtension(path, 'jpg');
   const jpegBody = asNamedFile(typed, jpegPath.split('/').pop() ?? 'photo.jpg', 'image/jpeg');
-  const jpegPayload = Platform.OS === 'web' ? jpegBody : await jpegBody.arrayBuffer();
+  const jpegPayload = Platform.OS === 'web' ? jpegBody : await blobToArrayBuffer(jpegBody, uri);
   const retry = await send(jpegPayload, jpegPath, 'image/jpeg');
   if (retry.error) {
     throw new Error(humanStorageError(first.error, kind));
@@ -359,8 +366,9 @@ export async function uploadChallengeCover(input: {
   uri: string;
   userId: string;
   mimeType?: string | null;
+  blob?: Blob | null;
 }): Promise<string> {
-  const contentType = coerceImageContentType(input.mimeType, input.uri);
+  const contentType = coerceImageContentType(input.mimeType ?? input.blob?.type, input.uri);
   const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
   if (contentType === 'application/pdf' || contentType.includes('pdf') || !allowed.has(contentType)) {
     throw new Error('Use a JPEG, PNG, WebP, or HEIC photo.');
@@ -370,6 +378,7 @@ export async function uploadChallengeCover(input: {
     userId: input.userId,
     fileStem: `covers/${Date.now()}`,
     mimeType: contentType,
+    blob: input.blob,
   });
 }
 

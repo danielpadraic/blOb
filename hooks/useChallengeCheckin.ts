@@ -13,6 +13,7 @@ import { incrementDaysCompleted } from '@/lib/checkin/progress';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
 import { parseProofParts, proofImageUrls } from '@/lib/challengeProofs';
 import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/localNudges';
+import { usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { heroRingActive } from '@/lib/challengeStart';
 import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
@@ -32,7 +33,18 @@ import { signedProofUrl } from '@/utils/upload';
 const CHECKIN_COLUMNS =
   'id, user_id, challenge_id, period_key, status, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, health_workout_id, workout_submission_id, started_at, submitted_at, created_at, updated_at';
 
-type PeriodChallenge = CheckinPeriodChallenge;
+type PeriodChallenge = CheckinPeriodChallenge & {
+  frequency?: string | null;
+  target_count?: number | null;
+  days_required?: number | null;
+  length_value?: number | null;
+  challenge_type?: string | null;
+  scoring_method?: string | null;
+  comparable_points_config?: unknown;
+  scoring_config?: unknown;
+  is_official?: boolean | null;
+  category?: string | null;
+};
 
 export type ChallengeCheckinView = ChallengeCheckin & {
   phase: CheckinPhase;
@@ -79,6 +91,8 @@ async function fetchPeriodCheckin(
     .eq('challenge_id', challengeId)
     .eq('user_id', userId)
     .eq('period_key', date)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (result.error) {
     if (isMissingRelation(result.error.message)) {
@@ -148,7 +162,7 @@ export async function fetchCurrentPeriodCheckin(
 ): Promise<ChallengeCheckin | null> {
   const key = normalizePeriodKey(date ?? periodKeyFor(challenge));
   const exact = key ? await fetchPeriodCheckin(challengeId, userId, key) : null;
-  if (exact) {
+  if (exact && !(usesTotalCountCheckins(challenge) && isSubmittedCheckin(exact))) {
     return exact;
   }
   const recent = await supabase
@@ -166,6 +180,15 @@ export async function fetchCurrentPeriodCheckin(
   }
   const candidates = new Set(checkinPeriodKeyCandidates(challenge).map(normalizePeriodKey));
   const rows = (recent.data ?? []) as Record<string, unknown>[];
+  const open = rows.find(
+    (row) =>
+      candidates.has(normalizePeriodKey(row.period_key)) &&
+      String(row.status ?? '') !== 'submitted' &&
+      !row.submitted_at,
+  );
+  if (open) {
+    return hydrateCheckin(open);
+  }
   const match =
     rows.find((row) => candidates.has(normalizePeriodKey(row.period_key))) ??
     rows.find((row) =>
@@ -178,7 +201,13 @@ export async function fetchCurrentPeriodCheckin(
         challenge,
       ),
     );
-  return match ? hydrateCheckin(match) : null;
+  if (!match) {
+    return null;
+  }
+  if (usesTotalCountCheckins(challenge) && isSubmittedCheckin(match)) {
+    return null;
+  }
+  return hydrateCheckin(match);
 }
 
 function phaseFromRow(row: ChallengeCheckin | null): CheckinPhase {
@@ -318,7 +347,12 @@ export function useSubmitCheckin(challengeId: string | undefined) {
         return;
       }
       if (row && user?.id) {
-        writeCheckinCache(queryClient, challengeId, user.id, row);
+        const cachedChallenge = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
+        if (usesTotalCountCheckins(cachedChallenge)) {
+          queryClient.setQueriesData({ queryKey: checkinQueryKey(challengeId, user.id) }, asView(null));
+        } else {
+          writeCheckinCache(queryClient, challengeId, user.id, row);
+        }
         queryClient.setQueryData<ChallengeParticipantLike[]>(
           ['challenge-participants', challengeId],
           (current) =>

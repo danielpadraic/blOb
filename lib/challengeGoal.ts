@@ -1,4 +1,8 @@
-import { isFitnessOfficialChallenge, usesPointsBoard } from '@/lib/challengeExperience';
+import {
+  isFitnessOfficialChallenge,
+  usesPointsBoard,
+  usesTotalCountCheckins,
+} from '@/lib/challengeExperience';
 import type { Challenge } from '@/lib/types';
 import { challengeWindowDays } from '@/utils/format';
 
@@ -19,6 +23,7 @@ type GoalChallenge = Pick<
   | 'scoring_method'
   | 'scoring_config'
   | 'comparable_points_config'
+  | 'frequency'
 >;
 
 /** Calendar days the host saved. Never a check-in product or a 100 fallback. */
@@ -67,6 +72,11 @@ export function challengeGoalLabel(
   if (usesPointsBoard(challenge)) {
     return 'Score Points';
   }
+  if (usesTotalCountCheckins(challenge)) {
+    const target = Math.max(Math.floor(Number(challenge.target_count) || 1), 1);
+    const done = Math.max(Number(extras?.daysCompleted) || 0, 0);
+    return `${done} of ${target} Check-Ins`;
+  }
   if (challenge.is_unlimited) {
     const logs = Math.max(Number(extras?.daysCompleted) || 0, 0);
     return `${logs} check-in${logs === 1 ? '' : 's'}`;
@@ -85,7 +95,7 @@ export function challengeGoalLabel(
 }
 
 export function challengeGoalSubtitle(challenge: GoalChallenge): string | null {
-  if (usesPointsBoard(challenge) || challenge.is_unlimited) {
+  if (usesPointsBoard(challenge) || usesTotalCountCheckins(challenge) || challenge.is_unlimited) {
     return null;
   }
   if (isFitnessOfficialChallenge(challenge)) {

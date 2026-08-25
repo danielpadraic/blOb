@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -220,6 +220,10 @@ export function CheckinComposer({
         blob: asset.file ?? null,
       });
     } catch (error) {
+      if (Platform.OS === 'web') {
+        await pickGallery();
+        return;
+      }
       Alert.alert('Couldn’t attach that', getErrorMessage(error));
     }
   }

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # blOb design lock
 
-All new UI uses the prototype tokens in `lib/theme.ts`. Do not reintroduce bulky gray blocks or a white/matte fill behind Bob.
+All new UI uses the prototype tokens in `lib/theme.ts` on iOS, Android, and Web. Do not reintroduce bulky gray blocks or a white/matte fill behind Bob. Prefer RN styles and shared components — no platform-only CSS or DOM styling without an RN equivalent.
 
 - **bg** `#F7F7F5` · **surface** `#FFFFFF` · **line** `#E8EBE8`
 - **teal** `#2C9B89` · **tealSoft** `#E7F7F3` · **teal2** `#72D9CB`

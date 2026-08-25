@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { Platform, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTourOptional } from '@/components/tour/TourContext';
+import { measureInWindowSafe } from '@/lib/measureWindow';
 
 type TourAnchorProps = {
   id: string;
@@ -17,29 +18,17 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
     if (!tour) {
       return;
     }
-    viewRef.current?.measureInWindow((x, y, width, height) => {
-      tour.register(id, { x, y, width, height });
+    const node = viewRef.current;
+    if (node == null) {
+      return;
+    }
+    if (typeof node.measureInWindow !== 'function') {
+      return;
+    }
+    measureInWindowSafe(node, (rect) => {
+      tour.register(id, rect);
     });
   }, [id, tour]);
-
-  const onLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      if (!tour) {
-        return;
-      }
-      const node = event.target as unknown as {
-        measureInWindow?: (cb: (x: number, y: number, width: number, height: number) => void) => void;
-      };
-      if (typeof node.measureInWindow === 'function') {
-        node.measureInWindow((x, y, width, height) => {
-          tour.register(id, { x, y, width, height });
-        });
-        return;
-      }
-      report();
-    },
-    [id, report, tour],
-  );
 
   useEffect(() => {
     if (!tour?.active && !tour?.createActive) {
@@ -54,15 +43,21 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
       return;
     }
     if (Platform.OS === 'web' && !tour.createActive) {
-      const node = viewRef.current as unknown as { scrollIntoView?: (opts: ScrollIntoViewOptions) => void };
-      node?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      const node = viewRef.current;
+      if (node != null && typeof (node as unknown as { scrollIntoView?: unknown }).scrollIntoView === 'function') {
+        (node as unknown as { scrollIntoView: (opts: ScrollIntoViewOptions) => void }).scrollIntoView({
+          block: 'nearest',
+          inline: 'nearest',
+          behavior: 'smooth',
+        });
+      }
     }
     const handle = setTimeout(report, 360);
     return () => clearTimeout(handle);
   }, [id, report, tour?.active, tour?.createActive, tour?.targetId]);
 
   return (
-    <View ref={viewRef} collapsable={false} nativeID={id} onLayout={onLayout} style={style}>
+    <View ref={viewRef} collapsable={false} nativeID={id} onLayout={report} style={style}>
       {children}
     </View>
   );

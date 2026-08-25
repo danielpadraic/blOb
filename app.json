@@ -37,6 +37,7 @@
         "foregroundImage": "./assets/mascot/bob-wave.png"
       },
       "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "app.blob.mobile",
       "permissions": [
         "android.permission.CAMERA",

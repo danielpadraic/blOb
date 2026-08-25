@@ -41,7 +41,7 @@ export default function ChallengeIdLayout() {
             headerShown: true,
             title: 'Check in',
             headerBackVisible: false,
-            headerLeft: () => <StackBackButton />,
+            headerLeft: () => <StackBackButton preferHistory />,
             headerRight: () => <WalletBar />,
           }}
         />
@@ -51,7 +51,7 @@ export default function ChallengeIdLayout() {
             headerShown: true,
             title: 'Official tools',
             headerBackVisible: false,
-            headerLeft: () => <StackBackButton />,
+            headerLeft: () => <StackBackButton preferHistory />,
             headerRight: () => <WalletBar />,
           }}
         />
@@ -61,7 +61,7 @@ export default function ChallengeIdLayout() {
             headerShown: true,
             title: 'Edit details',
             headerBackVisible: false,
-            headerLeft: () => <StackBackButton />,
+            headerLeft: () => <StackBackButton preferHistory />,
             headerRight: () => <WalletBar />,
           }}
         />
@@ -71,7 +71,7 @@ export default function ChallengeIdLayout() {
             headerShown: true,
             title: 'Edit scoring',
             headerBackVisible: false,
-            headerLeft: () => <StackBackButton />,
+            headerLeft: () => <StackBackButton preferHistory />,
             headerRight: () => <WalletBar />,
           }}
         />

@@ -19,7 +19,7 @@ import { parseChallengeProofs } from '@/lib/challengeProofs';
 import { challengeDurationDays, challengeGoalLabel, challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { usesPointsBoard } from '@/lib/challengeExperience';
+import { usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialGuaranteeAmount, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -133,10 +133,12 @@ export function ChallengeCardVisual({
   const days = Math.max(Number(myDays) || 0, 0);
   const duration = challengeDurationDays(challenge);
   const progress = joinedProgressCopy(challenge, days);
-  const showRing = !official && joined && duration > 0 && !usesPointsBoard(challenge);
-  const goal = official || usesPointsBoard(challenge)
-    ? challengeGoalLabel(challenge, { daysCompleted: days })
-    : `${duration}-Day Consistency`;
+  const showRing =
+    !official && joined && duration > 0 && !usesPointsBoard(challenge) && !usesTotalCountCheckins(challenge);
+  const goal =
+    official || usesPointsBoard(challenge) || usesTotalCountCheckins(challenge)
+      ? challengeGoalLabel(challenge, { daysCompleted: days })
+      : `${duration}-Day Consistency`;
   const goalSub = official ? challengeGoalSubtitle(challenge) : null;
   const showGoal = Boolean(goal) && !showRing;
   const officialLive = isOfficialSeriesChallenge(challenge) && challenge.status === 'live';
@@ -145,12 +147,8 @@ export function ChallengeCardVisual({
   const muted = dark ? 'rgba(231,247,243,0.72)' : THEME.textMuted;
   const accent = dark ? '#9EE8DC' : THEME.accent;
 
-  const body = (
+  const openBody = (
     <View style={{ gap: compact ? 8 : 10 }}>
-      <View style={{ paddingRight: 36 }}>
-        <ChallengeTagRow tags={tags} tone={dark ? 'dark' : 'light'} />
-      </View>
-
       <View>
         <AppText
           className={compact ? 'text-[17px] font-extrabold leading-5' : 'text-[20px] font-extrabold leading-6'}
@@ -268,66 +266,69 @@ export function ChallengeCardVisual({
         </View>
       ) : null}
 
-      {showOfficialShare || primaryLabel ? (
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          {showOfficialShare ? (
-            <View style={{ flex: primaryLabel ? 0.72 : 1 }}>
-              <OfficialInviteButton
-                challengeId={challenge.id}
-                challengeTitle={challenge.title}
-                tone={dark ? 'hero' : 'card'}
-                embedded
-              />
-            </View>
-          ) : null}
-          {primaryLabel && onPrimary ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={primaryLabel}
-              onPress={(event) => {
-                event.stopPropagation();
-                onPrimary();
-              }}
-              style={{
-                flex: 1,
-                minHeight: 44,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 12,
-                backgroundColor: THEME.primary,
-                borderWidth: 1,
-                borderColor: dark ? THEME.accentBright : THEME.primary,
-                ...(dark
-                  ? {
-                      shadowColor: THEME.accent,
-                      shadowOpacity: 0.45,
-                      shadowRadius: 10,
-                      shadowOffset: { width: 0, height: 0 },
-                    }
-                  : null),
-              }}>
-              <AppText
-                className="text-[14px] font-extrabold"
-                style={{ color: THEME.primaryForeground }}>
-                {primaryLabel}
-              </AppText>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
       <CardBoardStrip challenge={challenge} dark={dark} />
     </View>
   );
 
+  const actions =
+    showOfficialShare || primaryLabel ? (
+      <View className="flex-row items-center" style={{ gap: 8 }}>
+        {showOfficialShare ? (
+          <View style={{ flex: primaryLabel ? 0.72 : 1 }}>
+            <OfficialInviteButton
+              challengeId={challenge.id}
+              challengeTitle={challenge.title}
+              tone={dark ? 'hero' : 'card'}
+              embedded
+            />
+          </View>
+        ) : null}
+        {primaryLabel && onPrimary ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={primaryLabel}
+            onPress={onPrimary}
+            style={{
+              flex: 1,
+              minHeight: 44,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 12,
+              backgroundColor: THEME.primary,
+              borderWidth: 1,
+              borderColor: dark ? THEME.accentBright : THEME.primary,
+              ...(dark
+                ? {
+                    shadowColor: THEME.accent,
+                    shadowOpacity: 0.45,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 0 },
+                  }
+                : null),
+            }}>
+            <AppText className="text-[14px] font-extrabold" style={{ color: THEME.primaryForeground }}>
+              {primaryLabel}
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
+    ) : null;
+
   const inner = (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={challenge.title}
-      style={{ padding: compact ? 12 : 14 }}>
-      {body}
-    </Pressable>
+    <View style={{ padding: compact ? 12 : 14, gap: compact ? 8 : 10 }}>
+      <View style={{ paddingRight: 36 }}>
+        <ChallengeTagRow tags={tags} tone={dark ? 'dark' : 'light'} />
+      </View>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={challenge.title}
+        disabled={!onPress}>
+        {openBody}
+      </Pressable>
+      {actions}
+    </View>
   );
 
   if (dark) {

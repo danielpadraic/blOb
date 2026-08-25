@@ -26,6 +26,51 @@ export function getLeaveChallengeMessage(error: unknown): string {
   return copy('error.leaveChallenge');
 }
 
+export function getInviteErrorMessage(error: unknown): string {
+  logPostgrestError('invite-to-challenge', error);
+  const raw = extractRawMessage(error);
+  const text = getErrorMessage(error);
+  const blob = `${text} ${raw}`.toLowerCase();
+  if (blob.includes('already invited')) {
+    return 'You already invited them.';
+  }
+  if (blob.includes('already in this challenge')) {
+    return 'They’re already in this challenge.';
+  }
+  if (blob.includes('only the host can invite')) {
+    return 'Only the host can invite people.';
+  }
+  if (blob.includes('can’t invite yourself') || blob.includes('cannot invite yourself')) {
+    return 'You can’t invite yourself.';
+  }
+  if (blob.includes('add a friend first') || blob.includes('are_accepted_friends')) {
+    return 'Add a friend first';
+  }
+  if (blob.includes('pick someone to invite')) {
+    return 'Pick someone to invite.';
+  }
+  if (blob.includes('challenge not found')) {
+    return 'This challenge could not be found.';
+  }
+  if (blob.includes('isn’t on the map') || blob.includes('isnt on the map')) {
+    return 'That person isn’t on the map.';
+  }
+  if (
+    /couldn.?t complete that just now|something went sideways/i.test(text) ||
+    /42883|pgrst202|profile_display_name|could not find the function|no function matches/i.test(blob)
+  ) {
+    const code =
+      error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+        ? String((error as { code: string }).code)
+        : '';
+    if (typeof __DEV__ !== 'undefined' && __DEV__ && (code || raw)) {
+      return `Couldn’t send that invite. ${code || raw}`.trim();
+    }
+    return 'Couldn’t send that invite. The host can invite friends to this challenge — try again.';
+  }
+  return text || 'Couldn’t send that invite.';
+}
+
 export function getJoinChallengeMessage(error: unknown): string {
   logPostgrestError('join-challenge', error);
   const text = getErrorMessage(error);
@@ -494,6 +539,9 @@ function humanize(raw: string): string {
   }
   if (message.includes('invite_revoked')) {
     return 'That invite is no longer valid.';
+  }
+  if (message.includes('add a friend first')) {
+    return 'Add a friend first';
   }
   if (message.includes('already invited')) {
     return 'You already invited them.';

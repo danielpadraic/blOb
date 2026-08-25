@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
+import { usesAdvancedCreateEdit, usesTotalCountCheckins } from '@/lib/challengeExperience';
 
 describe('usesAdvancedCreateEdit', () => {
   it('sends Comparable Points and points challenges to Advanced edit', () => {
@@ -23,6 +23,36 @@ describe('usesAdvancedCreateEdit', () => {
         challenge_lane: 'coins',
         scoring_method: null,
         tasks: [],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('usesTotalCountCheckins', () => {
+  it('treats once/custom target totals as check-in counts, not daily days', () => {
+    expect(
+      usesTotalCountCheckins({
+        frequency: 'custom',
+        target_count: 6,
+        days_required: 7,
+        challenge_type: 'consistency',
+      }),
+    ).toBe(true);
+    expect(
+      usesTotalCountCheckins({
+        frequency: 'once',
+        target_count: 6,
+        length_value: 7,
+      }),
+    ).toBe(true);
+  });
+
+  it('leaves daily consistency on per-day rules', () => {
+    expect(
+      usesTotalCountCheckins({
+        frequency: 'daily',
+        target_count: 7,
+        days_required: 7,
       }),
     ).toBe(false);
   });

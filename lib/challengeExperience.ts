@@ -14,6 +14,10 @@ export type ExperienceChallenge = {
   challenge_lane?: string | null;
   format?: string | null;
   tasks?: unknown;
+  frequency?: string | null;
+  target_count?: number | null;
+  days_required?: number | null;
+  length_value?: number | null;
 };
 
 /** Advanced create/edit only — never open the Simple form for these. */
@@ -67,12 +71,38 @@ export function requiresOfficialBodyMetrics(challenge?: ExperienceChallenge | nu
   return isFitnessOfficialChallenge(challenge);
 }
 
+/**
+ * Total workouts / check-ins over the whole window — not one required day.
+ * Simple create “6 over the whole challenge” lands here (`once` or `custom`).
+ */
+export function usesTotalCountCheckins(challenge?: ExperienceChallenge | null): boolean {
+  if (!challenge || usesPointsBoard(challenge) || isFitnessOfficialChallenge(challenge)) {
+    return false;
+  }
+  const freq = String(challenge.frequency ?? '').toLowerCase();
+  if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === '3x_week') {
+    return false;
+  }
+  const target = Math.floor(Number(challenge.target_count) || 0);
+  if (target <= 0) {
+    return false;
+  }
+  if (freq === 'once' || freq === 'custom') {
+    return true;
+  }
+  const days = Math.floor(Number(challenge.days_required) || Number(challenge.length_value) || 0);
+  return days > 0 && target !== days;
+}
+
 /** Day / In-Done board and “don’t miss a day” language. */
 export function usesConsistencyExperience(challenge?: ExperienceChallenge | null): boolean {
   if (usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)) {
     return false;
   }
   if (challenge?.challenge_type === 'points') {
+    return false;
+  }
+  if (usesTotalCountCheckins(challenge)) {
     return false;
   }
   return true;

@@ -63,6 +63,7 @@ export type ConversationPreview = Conversation & {
   last_message: Message | null;
   unread: boolean;
   peer: PublicProfile | null;
+  people: PublicProfile[];
 };
 
 export type CreateFeedEventInput = {
@@ -141,6 +142,25 @@ export function personDisplayName(profile?: Pick<PublicProfile, 'display_name' |
     return 'Someone';
   }
   return profile.display_name?.trim() || profile.username;
+}
+
+export function conversationTitle(
+  conversation: Pick<ConversationPreview, 'is_group' | 'peer' | 'people'>,
+): string {
+  if (conversation.is_group) {
+    const names = conversation.people.map(personDisplayName).filter(Boolean);
+    if (names.length === 0) {
+      return 'Group';
+    }
+    if (names.length === 1) {
+      return names[0];
+    }
+    if (names.length === 2) {
+      return `${names[0]} and ${names[1]}`;
+    }
+    return `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
+  }
+  return personDisplayName(conversation.peer);
 }
 
 export type PeopleSearchKind = 'name' | 'email' | 'phone';
@@ -932,7 +952,7 @@ export async function fetchReel(id: string): Promise<ReelItem | null> {
 }
 
 export async function createReel(userId: string, input: CreateReelInput): Promise<Reel> {
-  const videoUrl = input.video_url.trim();
+  const videoUrl = typeof input.video_url === 'string' ? input.video_url.trim() : '';
   if (!videoUrl) {
     throw new Error('Add a video first.');
   }
@@ -1023,19 +1043,33 @@ export async function fetchConversations(userId: string): Promise<ConversationPr
         last_message: lastMessage,
         unread: conversationHasUnread(membership, lastMessage, userId),
         peer: null as PublicProfile | null,
+        people: [] as PublicProfile[],
       };
     })
     .filter((row): row is ConversationPreview => Boolean(row))
     .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
 
-  const peerIds = previews
-    .map((row) => otherConversationUserId(row.members, userId))
-    .filter((id): id is string => Boolean(id));
-  const profiles = await fetchPublicProfilesByIds(peerIds);
+  const otherIds = [
+    ...new Set(
+      previews.flatMap((row) =>
+        row.members.map((member) => member.user_id).filter((id) => id !== userId),
+      ),
+    ),
+  ];
+  const profiles = await fetchPublicProfilesByIds(otherIds);
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
   return previews.map((row) => {
+    const people = row.members
+      .map((member) => member.user_id)
+      .filter((id) => id !== userId)
+      .map((id) => profileById.get(id))
+      .filter((profile): profile is PublicProfile => Boolean(profile));
     const peerId = otherConversationUserId(row.members, userId);
-    return { ...row, peer: peerId ? profileById.get(peerId) ?? null : null };
+    return {
+      ...row,
+      people,
+      peer: peerId ? profileById.get(peerId) ?? people[0] ?? null : people[0] ?? null,
+    };
   });
 }
 
@@ -1073,8 +1107,8 @@ export async function fetchConversation(
   if (!membership) {
     return null;
   }
-  const peerId = otherConversationUserId(memberRows, userId);
-  const profiles = peerId ? await fetchPublicProfilesByIds([peerId]) : [];
+  const otherIds = memberRows.map((row) => row.user_id).filter((id) => id !== userId);
+  const profiles = otherIds.length > 0 ? await fetchPublicProfilesByIds(otherIds) : [];
   const { data: lastRows, error: lastError } = await supabase
     .from('messages')
     .select(MESSAGE_COLUMNS)
@@ -1092,6 +1126,7 @@ export async function fetchConversation(
     last_message: lastMessage,
     unread: conversationHasUnread(membership, lastMessage, userId),
     peer: profiles[0] ?? null,
+    people: profiles,
   };
 }
 
@@ -1225,6 +1260,24 @@ export async function getOrCreateDirectConversation(
   });
   throwIfError(otherError);
   return conversation;
+}
+
+export async function createGroupConversation(memberIds: string[]): Promise<Conversation> {
+  const ids = [...new Set(memberIds.filter(Boolean))];
+  if (ids.length < 2) {
+    throw new Error('Pick at least two friends for a group.');
+  }
+  const { data, error } = await supabase.rpc('create_group_conversation', {
+    p_member_ids: ids,
+  });
+  if (error) {
+    throwIfError(error);
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as Conversation | null;
+  if (!row?.id) {
+    throw new Error('Couldn’t start that group chat.');
+  }
+  return row;
 }
 
 export async function fetchStoryReactions(storyId: string): Promise<StoryReaction[]> {

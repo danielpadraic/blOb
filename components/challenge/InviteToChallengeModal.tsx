@@ -11,7 +11,7 @@ import { useInviteToChallenge } from '@/hooks/useNotifications';
 import { useFriends } from '@/hooks/useSocial';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
+import { getInviteErrorMessage } from '@/utils/errors';
 
 type InviteToChallengeModalProps = {
   visible: boolean;
@@ -93,7 +93,7 @@ export function InviteToChallengeModal({
         .filter((person) => result.sent.includes(person.id))
         .map(personName);
       if (result.failed.length > 0 && sentNames.length === 0) {
-        Alert.alert('Couldn’t invite', getErrorMessage(result.failed[0]?.error));
+        Alert.alert('Couldn’t invite', getInviteErrorMessage(result.failed[0]?.error));
         return;
       }
       if (sentNames.length === 1) {
@@ -104,14 +104,14 @@ export function InviteToChallengeModal({
       if (result.failed.length > 0) {
         Alert.alert(
           'Some invites didn’t send',
-          result.failed.map((row) => getErrorMessage(row.error)).join('\n'),
+          result.failed.map((row) => getInviteErrorMessage(row.error)).join('\n'),
         );
       }
       setQuery('');
       setSelected(new Set());
       onClose();
     } catch (error) {
-      Alert.alert('Couldn’t invite', getErrorMessage(error));
+      Alert.alert('Couldn’t invite', getInviteErrorMessage(error));
     }
   }
 

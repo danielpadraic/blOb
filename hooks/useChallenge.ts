@@ -862,6 +862,7 @@ export function useCreateChallenge() {
         visibility: challenge.visibility ?? lane.visibility,
         challenge_lane: challenge.challenge_lane ?? lane.challenge_lane,
         is_official: challenge.is_official,
+        privacy_mode: challenge.privacy_mode,
       });
       void notifyFriendsOfCreatedChallenge(challenge.id);
       return challenge;

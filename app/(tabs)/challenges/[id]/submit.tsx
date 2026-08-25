@@ -33,6 +33,7 @@ import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
+import { usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
@@ -95,7 +96,9 @@ export default function SubmitWorkoutScreen() {
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
-  const phase = checkinQuery.data?.phase ?? 'none';
+  const totalCount = usesTotalCountCheckins(challenge);
+  const rawPhase = checkinQuery.data?.phase ?? 'none';
+  const phase = totalCount && rawPhase === 'submitted' ? 'none' : rawPhase;
   const honorOnly = proofsAreHonorOnly(proofSteps);
 
   useEffect(() => {
@@ -107,6 +110,9 @@ export default function SubmitWorkoutScreen() {
   }, [challenge]);
 
   useEffect(() => {
+    if (usesTotalCountCheckins(challenge) && checkinQuery.data?.phase === 'submitted') {
+      return;
+    }
     const parts = checkinQuery.data?.proof_parts;
     if (!parts) {
       return;

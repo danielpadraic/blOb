@@ -1,0 +1,30 @@
+---
+description: blOb is one Expo app — iOS, Android, and Web must share every user-facing change.
+alwaysApply: true
+---
+
+# iOS + Android + Web parity
+
+The consumer product is the Expo Router tree (`app/`, `components/`, `hooks/`, `lib/`). All three platforms run it. Full policy: `AGENTS.md`.
+
+- Do **not** add social / feed / challenge UX to `web/components/blob-app.tsx` or a Next-only UI.
+- Default to React Native primitives + `Platform.OS` / feature detection. No separate screens per OS unless required.
+- Native-only (Health, push) must keep Web/Android/iOS usable: photo proof, in-app alerts, or an honest empty state — never a dead control.
+- Camera / Wave / Round needs a Web path (`getUserMedia` or gallery).
+- Auth: `blob://auth/callback` + `blob://oauthredirect` (native) and https `/auth/callback` (Web). Never fix one platform only.
+- Chrome: shared `tabBarLift` / `ChromeOverlay` (never RN `Modal` for sheets). Mouse and touch.
+- One Supabase project. `EXPO_PUBLIC_*` for EAS and Vercel. Deploy user-facing work on the team branch (e.g. `blob-beta-three`).
+
+```tsx
+// ❌ BAD — consumer feature only on the thin web harness
+// web/components/blob-app.tsx
+
+// ❌ BAD — Web dead end
+if (Platform.OS !== 'ios') return null;
+
+// ✅ GOOD — shared screen, gated native extra
+<ProofUploader />
+{Platform.OS === 'ios' ? <UseWorkoutChip /> : null}
+```
+
+**Done only when** the same primary journey works on iOS, Android, and Web (or a documented fallback), and the implementer states all three.

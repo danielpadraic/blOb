@@ -206,9 +206,11 @@ export function AuthBackButton({ onPress }: { onPress: () => void }) {
 
 function EnvelopeIcon() {
   return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" accessibilityElementsHidden>
-      <Rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
-      <Path d="M4 7l8 6 8-6" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinejoin="round" />
-    </Svg>
+    <View accessible={false} importantForAccessibility="no" pointerEvents="none">
+      <Svg width={18} height={18} viewBox="0 0 24 24" focusable={false}>
+        <Rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
+        <Path d="M4 7l8 6 8-6" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinejoin="round" />
+      </Svg>
+    </View>
   );
 }

@@ -79,10 +79,7 @@ export function FeaturedOfficialStrip() {
 
   return (
     <TourAnchor id="tour-official">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${title}. ${meta}. ${joinLabel}`}
-        onPress={openDetail}
+      <View
         style={{
           minHeight: 58,
           borderRadius: 18,
@@ -94,47 +91,56 @@ export function FeaturedOfficialStrip() {
           paddingRight: 8,
           paddingLeft: 10,
         }}>
-        <View
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${title}. ${meta}`}
+          onPress={openDetail}
           style={{
-            width: 3,
-            alignSelf: 'stretch',
-            marginVertical: 6,
-            marginRight: 8,
-            borderRadius: 2,
-            backgroundColor: THEME.accent,
-          }}
-        />
-        <Image
-          source={BLOB_WORDMARK}
-          style={{ width: 56, height: 22, backgroundColor: 'transparent' }}
-          contentFit="contain"
-          tintColor="#F7FFFC"
-          accessibilityLabel="blOb"
-        />
-        <View className="min-w-0 flex-1" style={{ paddingHorizontal: 10 }}>
-          <AppText
-            className="text-[16px] font-extrabold"
-            numberOfLines={1}
-            style={{ color: '#FFFFFF' }}>
-            {title}
-          </AppText>
-          {meta ? (
+            flex: 1,
+            minWidth: 0,
+            minHeight: 42,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}>
+          <View
+            style={{
+              width: 3,
+              alignSelf: 'stretch',
+              marginVertical: 6,
+              marginRight: 8,
+              borderRadius: 2,
+              backgroundColor: THEME.accent,
+            }}
+          />
+          <Image
+            source={BLOB_WORDMARK}
+            style={{ width: 56, height: 22, backgroundColor: 'transparent' }}
+            contentFit="contain"
+            tintColor="#F7FFFC"
+            accessibilityLabel="blOb"
+          />
+          <View className="min-w-0 flex-1" style={{ paddingHorizontal: 10 }}>
             <AppText
-              className="mt-0.5 text-[12px] font-semibold"
+              className="text-[16px] font-extrabold"
               numberOfLines={1}
-              style={{ color: 'rgba(231, 247, 243, 0.72)' }}>
-              {meta}
+              style={{ color: '#FFFFFF' }}>
+              {title}
             </AppText>
-          ) : null}
-        </View>
+            {meta ? (
+              <AppText
+                className="mt-0.5 text-[12px] font-semibold"
+                numberOfLines={1}
+                style={{ color: 'rgba(231, 247, 243, 0.72)' }}>
+                {meta}
+              </AppText>
+            ) : null}
+          </View>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={joinLabel}
           disabled={joinSheet.loading}
-          onPress={(event) => {
-            event.stopPropagation();
-            onJoin();
-          }}
+          onPress={onJoin}
           style={{
             minHeight: 36,
             paddingHorizontal: 14,
@@ -148,7 +154,7 @@ export function FeaturedOfficialStrip() {
             {joinLabel}
           </AppText>
         </Pressable>
-      </Pressable>
+      </View>
     </TourAnchor>
   );
 }

@@ -203,6 +203,10 @@ export function InlineComposer({
       });
       setExpanded(true);
     } catch (error) {
+      if (Platform.OS === 'web') {
+        await pickGallery();
+        return;
+      }
       Alert.alert('Couldn’t attach that', getErrorMessage(error));
     }
   }

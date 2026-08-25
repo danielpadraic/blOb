@@ -16,20 +16,12 @@ const TIP_MS = 2200;
 
 export function ChallengeTypePlaceholder({
   category,
-  onPress,
 }: {
   category?: string | null;
-  onPress: () => void;
 }) {
-  const label = challengeTypeIconLabel(category);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={(event) => {
-        event.stopPropagation();
-        onPress();
-      }}
+    <View
+      pointerEvents="none"
       style={{
         flex: 1,
         alignItems: 'center',
@@ -42,9 +34,8 @@ export function ChallengeTypePlaceholder({
         contentFit="contain"
         contentPosition="center"
         recyclingKey={challengeTypeIconKey(category)}
-        accessibilityLabel={label}
       />
-    </Pressable>
+    </View>
   );
 }
 

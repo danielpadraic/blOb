@@ -37,6 +37,7 @@ import {
   otherFriendshipUserId,
   searchPeople,
   followUser,
+  createGroupConversation,
   getOrCreateDirectConversation,
   markConversationRead,
   rejectFriendRequest,
@@ -1113,6 +1114,20 @@ export function useGetOrCreateConversation() {
       const userId = requireUserId(user?.id);
       return getOrCreateDirectConversation(userId, otherUserId);
     },
+    onSettled: () => {
+      if (user?.id) {
+        void queryClient.invalidateQueries({ queryKey: socialKeys.conversations(user.id) });
+      }
+    },
+  });
+}
+
+export function useCreateGroupConversation() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (memberIds: string[]) => createGroupConversation(memberIds),
     onSettled: () => {
       if (user?.id) {
         void queryClient.invalidateQueries({ queryKey: socialKeys.conversations(user.id) });

@@ -59,6 +59,11 @@ export function isPrivateCorporate(
   return value.privacy_mode === 'private_corporate' || value.privacyMode === 'private_corporate';
 }
 
+/** Corporate lobby posts stay off Home, even for participants. */
+export function homeFeedAllowsChallengeContent(privacyMode?: string | null): boolean {
+  return privacyMode !== 'private_corporate';
+}
+
 /** Future posts and check-ins stay inside the Lobby when corporate. */
 export function contentAudienceForPrivacyMode(mode: PrivacyMode): ContentAudience {
   if (mode === 'private_corporate') {

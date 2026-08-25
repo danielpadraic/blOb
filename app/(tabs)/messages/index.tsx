@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { ConversationListItem } from '@/components/messages/ConversationListItem';
 import { EmptyConversations } from '@/components/messages/EmptyConversations';
+import { NewConversationModal } from '@/components/messages/NewConversationModal';
 import { MascotState } from '@/components/mascot/MascotState';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
@@ -17,7 +20,8 @@ export default function MessagesScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const conversations = useConversations();
-  const rows = (conversations.data ?? []).filter((row) => !row.is_group);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const rows = conversations.data ?? [];
   const unread = rows.filter((row) => row.unread).length;
   const refreshing = conversations.isRefetching && !conversations.isLoading;
 
@@ -38,18 +42,28 @@ export default function MessagesScreen() {
             {unread > 0
               ? `${unread} unread`
               : rows.length > 0
-                ? 'Direct, simple, no group pile-on yet'
+                ? 'Direct chats and groups'
                 : 'Say hi to someone you compete with'}
           </AppText>
         </View>
-        <Pressable
-          onPress={close}
-          accessibilityRole="button"
-          accessibilityLabel="Close messages"
-          className="h-8 w-8 items-center justify-center rounded-full"
-          style={{ backgroundColor: THEME.surface, borderWidth: 1, borderColor: THEME.border }}>
-          <AppText className="text-[18px] font-semibold text-muted">×</AppText>
-        </Pressable>
+        <View className="flex-row items-center gap-2">
+          <Pressable
+            onPress={() => setComposeOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="New message"
+            className="h-8 w-8 items-center justify-center rounded-full"
+            style={{ backgroundColor: THEME.surface, borderWidth: 1, borderColor: THEME.border }}>
+            <Glyph name={GLYPH.plus} color={THEME.textPrimary} size={16} />
+          </Pressable>
+          <Pressable
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel="Close messages"
+            className="h-8 w-8 items-center justify-center rounded-full"
+            style={{ backgroundColor: THEME.surface, borderWidth: 1, borderColor: THEME.border }}>
+            <AppText className="text-[18px] font-semibold text-muted">×</AppText>
+          </Pressable>
+        </View>
       </View>
 
       {conversations.isLoading ? (
@@ -64,7 +78,10 @@ export default function MessagesScreen() {
           compact
         />
       ) : rows.length === 0 ? (
-        <EmptyConversations onFindFriends={() => router.replace('/friends')} />
+        <EmptyConversations
+          onFindFriends={() => router.replace('/friends')}
+          onNewMessage={() => setComposeOpen(true)}
+        />
       ) : (
         <ScrollView
           className="flex-1"
@@ -88,6 +105,7 @@ export default function MessagesScreen() {
           ))}
         </ScrollView>
       )}
+      <NewConversationModal visible={composeOpen} onClose={() => setComposeOpen(false)} />
     </Screen>
   );
 }

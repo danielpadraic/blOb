@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tabs, usePathname, useRouter, useSegments, type Href } from 'expo-router';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, Platform, StyleSheet, View, type AppStateStatus } from 'react-native';
 
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
 import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
@@ -34,6 +34,7 @@ import { CAPTURE_REEL_HREF, LOBBY_HREF } from '@/lib/routes';
 import { primeCameraFromGesture } from '@/lib/cameraSession';
 import { rememberLastCapture } from '@/lib/lastCapture';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
+import { shouldReturnHomeOnResume } from '@/lib/appResume';
 import { THEME } from '@/lib/theme';
 
 export { AppErrorBoundary as ErrorBoundary };
@@ -96,7 +97,8 @@ function TabLayoutInner() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
   const loggable = useLoggableChallenges();
-  const leftApp = useRef(false);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundedAt = useRef<number | null>(null);
   useNotificationsRealtime();
   usePushNotifications();
   useTickUserGrants(true);
@@ -171,25 +173,29 @@ function TabLayoutInner() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'background' || next === 'inactive') {
-        leftApp.current = true;
-        return;
+      const previous = appState.current;
+      if (next === 'background') {
+        backgroundedAt.current = Date.now();
       }
-      if (next !== 'active' || !leftApp.current) {
-        return;
-      }
-      leftApp.current = false;
       if (
-        pathname.startsWith('/onboarding') ||
-        pathname.includes('/capture') ||
-        pathname.includes('/submit')
+        shouldReturnHomeOnResume({
+          previous,
+          next,
+          backgroundedAt: backgroundedAt.current,
+          now: Date.now(),
+          pathname,
+          platform: Platform.OS,
+        })
       ) {
+        backgroundedAt.current = null;
+        appState.current = next;
+        router.replace('/feed');
         return;
       }
-      if (pathname === '/feed' || pathname === '/feed/') {
-        return;
+      if (next === 'active') {
+        backgroundedAt.current = null;
       }
-      router.replace('/feed');
+      appState.current = next;
     });
     return () => sub.remove();
   }, [pathname, router]);

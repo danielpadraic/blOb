@@ -1,4 +1,7 @@
-import { isInviteOnlyChallenge } from '@/lib/challengeLane';
+import {
+  challengeAnnounceCopy,
+  feedAudienceForChallenge,
+} from '@/lib/challengeFeedAudience';
 import { challengeShareUrl } from '@/lib/officialShare';
 import { DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
 import { resolvePostsSchema, type PostsSchema } from '@/lib/postsSelect';
@@ -6,28 +9,7 @@ import { supabase } from '@/lib/supabase';
 import type { Post } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
-export function challengeAnnounceCopy(title: string | null | undefined): string {
-  const name = title?.trim() || 'this challenge';
-  return `${name} Join.`;
-}
-
-export function feedAudienceForChallenge(input: {
-  visibility?: string | null;
-  challenge_lane?: unknown;
-  is_official?: boolean | null;
-}): PostAudience | null {
-  if (!input.is_official && isInviteOnlyChallenge(input)) {
-    return null;
-  }
-  const visibility = String(input.visibility ?? '').toLowerCase();
-  if (visibility === 'invite' || visibility === 'private') {
-    return null;
-  }
-  if (visibility === 'friends') {
-    return 'friends';
-  }
-  return 'public';
-}
+export { challengeAnnounceCopy, feedAudienceForChallenge };
 
 function postInsertPayload(
   schema: PostsSchema,
@@ -90,6 +72,7 @@ export async function announceCreatedChallenge(input: {
   visibility?: string | null;
   challenge_lane?: unknown;
   is_official?: boolean | null;
+  privacy_mode?: string | null;
 }): Promise<Post | null> {
   const audience = feedAudienceForChallenge(input);
   if (!audience) {

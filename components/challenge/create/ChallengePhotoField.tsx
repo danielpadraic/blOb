@@ -3,9 +3,12 @@ import { Alert, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
+import { ChallengeCoverCrop } from '@/components/challenge/create/ChallengeCoverCrop';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
+import { cropLobbyCover } from '@/lib/cropLobbyCover';
+import { LOBBY_COVER_ASPECT } from '@/lib/lobbyCover';
 import {
   ensureCameraPermission,
   ensureLibraryPermission,
@@ -18,7 +21,6 @@ import { coerceImageContentType, uploadChallengeCover } from '@/utils/upload';
 import { getErrorMessage } from '@/utils/errors';
 
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
-const PREVIEW_RATIO = 5 / 4;
 
 type ChallengePhotoFieldProps = {
   uri?: string | null;
@@ -36,26 +38,42 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [pending, setPending] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const message = error || localError;
 
-  async function uploadPicked(asset: ImagePicker.ImagePickerAsset) {
-    if (!user) {
-      setLocalError(copy('create.signIn'));
-      return;
-    }
+  function takeAsset(asset: ImagePicker.ImagePickerAsset) {
     if (!isAllowedImage(asset.mimeType ?? asset.file?.type, asset.uri)) {
       setLocalError('Use a JPEG, PNG, WebP, or HEIC photo.');
+      return;
+    }
+    setLocalError(null);
+    setPending(asset);
+  }
+
+  async function confirmCrop() {
+    if (!pending) {
+      return;
+    }
+    if (!user) {
+      setLocalError(copy('create.signIn'));
       return;
     }
     setBusy(true);
     setLocalError(null);
     try {
+      const cropped = await cropLobbyCover({
+        uri: pending.uri,
+        width: pending.width,
+        height: pending.height,
+      });
       const url = await uploadChallengeCover({
-        uri: asset.uri,
+        uri: cropped.uri,
         userId: user.id,
-        mimeType: asset.mimeType ?? asset.file?.type,
+        mimeType: 'image/jpeg',
+        blob: cropped.blob,
       });
       onChange(url);
+      setPending(null);
     } catch (err) {
       setLocalError(getErrorMessage(err) || 'Couldn’t upload that photo.');
     } finally {
@@ -75,15 +93,14 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 5],
-      quality: 0.85,
+      allowsEditing: false,
+      quality: 0.92,
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
     if (result.canceled || !result.assets[0]?.uri) {
       return;
     }
-    await uploadPicked(result.assets[0]);
+    takeAsset(result.assets[0]);
   }
 
   async function pickCamera() {
@@ -100,14 +117,13 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 5],
-        quality: 0.85,
+        allowsEditing: false,
+        quality: 0.92,
       });
       if (result.canceled || !result.assets[0]?.uri) {
         return;
       }
-      await uploadPicked(result.assets[0]);
+      takeAsset(result.assets[0]);
     } catch {
       if (Platform.OS === 'web') {
         await pickGallery();
@@ -135,7 +151,7 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
         onPress={() => void onAdd()}
         style={{
           width: 128,
-          aspectRatio: 1 / PREVIEW_RATIO,
+          aspectRatio: LOBBY_COVER_ASPECT,
           borderRadius: 16,
           overflow: 'hidden',
           backgroundColor: THEME.surface,
@@ -196,6 +212,12 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
       </View>
       <AppText className="text-[12px] leading-5 text-muted">{copy('create.photoHelper')}</AppText>
       {message ? <AppText className="text-sm text-coral-dark">{message}</AppText> : null}
+      <ChallengeCoverCrop
+        uri={pending?.uri ?? null}
+        busy={busy}
+        onCancel={() => setPending(null)}
+        onConfirm={() => void confirmCrop()}
+      />
     </View>
   );
 }

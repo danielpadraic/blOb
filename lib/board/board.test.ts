@@ -142,4 +142,13 @@ describe('points goal', () => {
       'Score Points',
     );
   });
+
+  it('labels total-count fitness as N of T Check-Ins', () => {
+    expect(
+      challengeGoalLabel(
+        { frequency: 'custom', target_count: 6, days_required: 7, challenge_type: 'consistency' },
+        { daysCompleted: 1 },
+      ),
+    ).toBe('1 of 6 Check-Ins');
+  });
 });

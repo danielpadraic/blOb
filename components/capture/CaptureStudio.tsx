@@ -8,13 +8,12 @@ import { useRouter } from 'expo-router';
 import { InAppCamera } from '@/components/capture/InAppCamera';
 import { rememberLastCapture } from '@/lib/lastCapture';
 import { captureKindFor, type CapturedMedia, type CaptureMode } from '@/components/capture/types';
-import { AudienceIconButton } from '@/components/feed/AudienceSheet';
+import { AudienceIconButton, AudienceSheet } from '@/components/feed/AudienceSheet';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
-import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreatePost } from '@/hooks/useFeed';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -27,6 +26,8 @@ import {
 import { cameraIsAvailable, ensureCapturePermissions, ensureLibraryPermission, openAppSettings, type MediaPermissionResult } from '@/lib/mediaPermissions';
 import {
   asDefaultPostAudience,
+  audienceLabel,
+  feedVisibilityForAudience,
   type PostAudience,
 } from '@/lib/postAudience';
 import { copy } from '@/lib/copy';
@@ -38,7 +39,7 @@ import {
   resolveMediaDurationMs,
   waveClipWindows,
 } from '@/lib/waveClips';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { asGalleryMedia } from '@/utils/media';
 import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
 
@@ -59,11 +60,11 @@ export function CaptureStudio({
   const router = useRouter();
   const { user } = useAuth();
   const { profile } = useMyProfile();
-  const social = useSocialSheetsOptional();
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [audienceOpen, setAudienceOpen] = useState(false);
   const createStory = useCreateStory();
   const createReel = useCreateReel();
-  const createPost = useCreatePost(challengeId);
+  const createPost = useCreatePost();
   const createFeedEvent = useCreateFeedEvent();
   const challenges = useStoryChallengeOptions();
 
@@ -244,21 +245,40 @@ export function CaptureStudio({
           }));
       setProgress(88);
       if (mode === 'reel') {
+        const captionText = caption.trim();
         const reel = await createReel.mutateAsync({
           video_url: mediaUrl,
-          caption: caption.trim() || null,
+          caption: captionText || null,
           challenge_id: challengeId,
           duration_ms: draft.durationMs ?? null,
         });
+        try {
+          await createPost.mutateAsync({
+            content: captionText,
+            mediaUrls: [mediaUrl],
+            audience,
+            audienceUserIds: audience === 'specific' ? audienceUserIds : [],
+            challengeId: challengeId ?? undefined,
+            source: 'feed',
+          });
+        } catch (postError) {
+          logPostgrestError('round-feed-post', postError);
+        }
         try {
           await createFeedEvent.mutateAsync({
             event_type: 'reel_posted',
             target_type: 'reel',
             target_id: reel.id,
             challenge_id: reel.challenge_id,
+            visibility: feedVisibilityForAudience(audience),
+            metadata: {
+              caption: captionText || null,
+              audience,
+              audience_user_ids: audience === 'specific' ? audienceUserIds : [],
+            },
           });
         } catch {
-          // Round is live even if the feed card does not land.
+          // Round is live even if the activity card does not land.
         }
       } else if (mode === 'post') {
         await createPost.mutateAsync({
@@ -266,6 +286,7 @@ export function CaptureStudio({
           mediaUrls: [mediaUrl],
           audience,
           audienceUserIds: audience === 'specific' ? audienceUserIds : [],
+          challengeId: challengeId ?? undefined,
         });
       } else {
         const clips = waveClips.map((clip, index) => ({
@@ -299,7 +320,13 @@ export function CaptureStudio({
       close();
     } catch (caught) {
       setProgress(0);
-      setError(getErrorMessage(caught));
+      logPostgrestError('share-round', caught);
+      const message = getErrorMessage(caught);
+      setError(
+        /undefined is not a function/i.test(message)
+          ? 'Couldn’t share that Round. Try again.'
+          : message,
+      );
     } finally {
       clearInterval(tick);
     }
@@ -345,15 +372,21 @@ export function CaptureStudio({
             className="absolute bottom-24 left-4 right-4 flex-row items-center justify-between rounded-2xl px-3 py-2"
             style={{ backgroundColor: 'rgba(16,19,18,0.88)' }}>
             <AppText className="mr-3 flex-1 text-[12px] font-semibold" style={{ color: '#fff' }}>
-              Photo library is off.
+              {Platform.OS === 'web' ? 'Couldn’t open photos. Pick a file instead.' : 'Photo library is off.'}
             </AppText>
-            {Platform.OS !== 'web' ? (
+            {Platform.OS === 'web' ? (
+              <Pressable onPress={() => void openLibrary()}>
+                <AppText className="text-[12px] font-bold" style={{ color: THEME.accentBright }}>
+                  Gallery
+                </AppText>
+              </Pressable>
+            ) : (
               <Pressable onPress={() => void openAppSettings()}>
                 <AppText className="text-[12px] font-bold" style={{ color: THEME.accentBright }}>
                   Open Settings
                 </AppText>
               </Pressable>
-            ) : null}
+            )}
           </View>
         ) : null}
       </View>
@@ -361,6 +394,7 @@ export function CaptureStudio({
   }
 
   return (
+    <View className="flex-1">
     <ScrollView
       className="flex-1"
       contentContainerClassName="gap-4 px-4 pb-6 pt-3"
@@ -474,21 +508,28 @@ export function CaptureStudio({
         </View>
       ) : null}
 
-      <View className="flex-row items-center justify-between">
+      <View className="gap-1">
         <AppText className="text-sm font-semibold text-charcoal">Who can see this</AppText>
-        <AudienceIconButton
-          audience={audience}
-          onPress={() =>
-            social?.openAudience({
-              audience,
-              audienceUserIds,
-              onSave: (next, ids) => {
-                setAudience(next);
-                setAudienceUserIds(ids);
-              },
-            })
-          }
-        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Audience, ${audienceLabel(audience)}`}
+          onPress={() => setAudienceOpen(true)}
+          className="flex-row items-center justify-between px-3"
+          style={{
+            minHeight: 48,
+            borderRadius: THEME.radius,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.surface,
+          }}>
+          <AppText className="text-[15px] font-semibold text-charcoal">
+            {audienceLabel(audience)}
+            {audience === 'specific' && audienceUserIds.length > 0
+              ? ` · ${audienceUserIds.length}`
+              : ''}
+          </AppText>
+          <AudienceIconButton audience={audience} />
+        </Pressable>
       </View>
 
       {progress > 0 ? (
@@ -515,6 +556,20 @@ export function CaptureStudio({
         onPress={() => void publish()}
       />
     </ScrollView>
+    {audienceOpen ? (
+      <AudienceSheet
+        draft={{
+          audience,
+          audienceUserIds,
+          onSave: (next, ids) => {
+            setAudience(next);
+            setAudienceUserIds(ids);
+          },
+        }}
+        onClose={() => setAudienceOpen(false)}
+      />
+    ) : null}
+    </View>
   );
 }
 
