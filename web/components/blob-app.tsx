@@ -334,6 +334,8 @@ function LoginScreen() {
 
 function CreateScreen({ userId }: { userId: string }) {
   const [title, setTitle] = useState('Morning miles');
+  const [task, setTask] = useState('Run 1 mile');
+  const [constraint, setConstraint] = useState('');
   const [entryFee, setEntryFee] = useState(5);
   const [hostAdd, setHostAdd] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -372,7 +374,8 @@ function CreateScreen({ userId }: { userId: string }) {
         frequency: 'daily',
         min_participants: 2,
         creator_participating: true,
-        task: 'Run 1 mile',
+        task: task.trim() || 'Run 1 mile',
+        rules: constraint.trim().length >= 2 ? constraint.trim() : null,
         proof_type: 'photo',
         created_by: userId,
       },
@@ -411,7 +414,24 @@ function CreateScreen({ userId }: { userId: string }) {
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted">{FUNDING_COPY.entryHelp}</p>
           <p className="text-sm text-muted">{FUNDING_COPY.prizeHelp}</p>
+          <label className="text-sm font-bold text-ink">Title</label>
           <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
+          <label className="text-sm font-bold text-ink">Task</label>
+          <p className="text-xs text-muted">What people do — the action they check in for.</p>
+          <Input
+            value={task}
+            onChange={(event) => setTask(event.target.value)}
+            placeholder="Run 1 mile"
+          />
+          <label className="text-sm font-bold text-ink">Rule</label>
+          <p className="text-xs text-muted">
+            Optional constraint on that action (separate days, min minutes, or a custom limit). Not another task.
+          </p>
+          <Input
+            value={constraint}
+            onChange={(event) => setConstraint(event.target.value)}
+            placeholder="e.g. Check-ins must be on separate calendar days"
+          />
           <label className="text-sm font-bold text-ink">{FUNDING_COPY.entryFee} $</label>
           <Input
             type="number"

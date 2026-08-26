@@ -26,7 +26,7 @@ import type { Challenge } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
 import { MAX_CHALLENGE_DURATION_DAYS, asDurationUnit, asEndMode, ensureSchedule } from '@/lib/challengeSchedule';
 import { extraTasksFromStored } from '@/lib/challengeCreatePublish';
-import { emptyChallengeTask, emptyExtraCreateTask, type CreateChallengeValues, type ExtraCreateTask } from '@/utils/validators';
+import { emptyChallengeTask, type CreateChallengeValues, type ExtraCreateTask } from '@/utils/validators';
 
 export type ChallengeDraft = {
   id: string | null;
@@ -151,7 +151,6 @@ function emptyValues(): CreateChallengeValues {
     extra_tasks: [],
     tasks: DEFAULT_CREATE_VALUES.tasks.map((task) => ({
       ...task,
-      id: emptyChallengeTask().id,
       proofs: [...(task.proofs ?? [])],
     })),
   };
@@ -216,7 +215,7 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.flatMap((item) => {
+  return value.flatMap((item, index) => {
     if (!item || typeof item !== 'object') {
       return [];
     }
@@ -232,8 +231,7 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
         : 'photo';
     return [
       {
-        ...emptyExtraCreateTask(),
-        id: asString(row.id, emptyExtraCreateTask().id),
+        id: asString(row.id, `xtask-${index + 1}`),
         title,
         once: Boolean(row.once),
         proof_method,
@@ -245,7 +243,10 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
 
 function asTasks(value: unknown): CreateChallengeValues['tasks'] {
   if (!Array.isArray(value) || value.length === 0) {
-    return DEFAULT_CREATE_VALUES.tasks.map((task) => ({ ...task, id: emptyChallengeTask().id }));
+    return DEFAULT_CREATE_VALUES.tasks.map((task) => ({
+      ...task,
+      proofs: [...(task.proofs ?? [])],
+    }));
   }
   return value.map((item, index) => {
     const task = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
@@ -270,6 +271,7 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       ...DEFAULT_CREATE_VALUES,
       title: asString(row.title, DEFAULT_CREATE_VALUES.title),
       description: asString(row.description, DEFAULT_CREATE_VALUES.description ?? ''),
+      task: asString(row.task, DEFAULT_CREATE_VALUES.task ?? ''),
       category,
       challenge_type: row.challenge_type === 'points' ? 'points' : 'consistency',
       visibility:

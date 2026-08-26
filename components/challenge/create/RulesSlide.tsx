@@ -1,8 +1,9 @@
+import { useContext, useState } from 'react';
 import { Controller, type UseFormReturn } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
 import { HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
-import { FieldAnchor, FieldLabel } from '@/components/challenge/create/wizardUi';
+import { FieldAnchor, FieldLabel, WizardFocusContext } from '@/components/challenge/create/wizardUi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -10,14 +11,14 @@ import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import {
   EXTRA_RULE_PRESETS,
-  RULE_ACTIVITY_PRESETS,
   consistencyRuleSentence,
   emptyExtraRule,
-  isActivityPreset,
   type ExtraRuleKind,
 } from '@/lib/consistencyRules';
 import { CREATE_PROOF_TYPES, proofMeta } from '@/lib/constants';
 import { heartRateProofSentence } from '@/lib/challengeProofs';
+import { copy } from '@/lib/copy';
+import { THEME } from '@/lib/theme';
 import type { ChallengeFrequency, ProofType } from '@/lib/types';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -41,6 +42,8 @@ export function RulesSlide({
   onFrequencyChange,
   onAddTask,
   onRemoveTask,
+  onEditGoal,
+  registerFlush,
 }: {
   control: Form['control'];
   errors: Form['formState']['errors'];
@@ -52,13 +55,37 @@ export function RulesSlide({
   onFrequencyChange: (next: ChallengeFrequency) => void;
   onAddTask: () => void;
   onRemoveTask: (index: number) => void;
+  onEditGoal: () => void;
+  registerFlush?: (flush: () => void) => void;
 }) {
+  const focus = useContext(WizardFocusContext);
   const extraRules = values.extra_rules ?? [];
-  const activityIsCustom = !isActivityPreset(values.rule_activity);
+  const [constraintsOpen, setConstraintsOpen] = useState(extraRules.length > 0);
+  const [customDraft, setCustomDraft] = useState('');
+  const [customOpen, setCustomOpen] = useState(false);
   const periods = isUnlimited
     ? PERIODS.filter((item) => item.value === 'daily' || item.value === 'weekly')
     : PERIODS;
   const preview = consistencyRuleSentence(values);
+  const taskLine = (values.task ?? '').trim() || values.rule_activity.trim() || 'your check-in';
+  const showConstraints = constraintsOpen || extraRules.length > 0 || customOpen;
+
+  function flushCustomDraft() {
+    const text = customDraft.trim();
+    if (text.length < 2) {
+      setCustomDraft('');
+      setCustomOpen(false);
+      return;
+    }
+    setValue('extra_rules', [...getValues('extra_rules'), { ...emptyExtraRule('custom'), text }], {
+      shouldValidate: false,
+      shouldDirty: true,
+    });
+    setCustomDraft('');
+    setCustomOpen(false);
+    setConstraintsOpen(true);
+  }
+  registerFlush?.(flushCustomDraft);
 
   function toggleProof(type: ProofType) {
     const current = getValues('proofs');
@@ -107,10 +134,6 @@ export function RulesSlide({
     );
   }
 
-  function setActivity(next: string) {
-    setValue('rule_activity', next, { shouldValidate: true, shouldDirty: true });
-  }
-
   function togglePresetRule(kind: ExtraRuleKind) {
     const current = getValues('extra_rules');
     const existing = current.findIndex((item) => item.kind === kind);
@@ -122,18 +145,16 @@ export function RulesSlide({
       );
       return;
     }
-    const next = [...current, emptyExtraRule(kind)];
-    setValue('extra_rules', next, { shouldValidate: true, shouldDirty: true });
+    setValue('extra_rules', [...current, emptyExtraRule(kind)], { shouldValidate: true, shouldDirty: true });
+    setConstraintsOpen(true);
     if (kind === 'min_minutes') {
       setValue('min_minutes', '30', { shouldDirty: true });
     }
   }
 
-  function addCustomRule() {
-    setValue('extra_rules', [...getValues('extra_rules'), emptyExtraRule('custom')], {
-      shouldValidate: true,
-      shouldDirty: true,
-    });
+  function openCustomConstraint() {
+    setConstraintsOpen(true);
+    setCustomOpen(true);
   }
 
   function removeRule(index: number) {
@@ -172,43 +193,50 @@ export function RulesSlide({
           <FieldLabel
             label="Tasks"
             error={errors.tasks?.message ?? errors.tasks?.root?.message}
-            hint="Each task has its own points and proof. Highest totals win.">
+            hint="Each task is an action people check in for. Highest totals win.">
             <View className="gap-3">
               {values.tasks.map((task, index) => (
                 <Card key={task.id} className="gap-3">
                   <View className="flex-row items-center justify-between">
                     <AppText className="text-sm font-semibold text-charcoal">Task {index + 1}</AppText>
                     {values.tasks.length > 1 ? (
-                      <Pressable onPress={() => onRemoveTask(index)} accessibilityRole="button">
+                      <Pressable
+                        onPress={() => onRemoveTask(index)}
+                        accessibilityRole="button"
+                        style={{ minHeight: 44, justifyContent: 'center' }}>
                         <AppText className="text-sm font-semibold text-coral-dark">Remove</AppText>
                       </Pressable>
                     ) : null}
                   </View>
-                  <Controller
-                    control={control}
-                    name={`tasks.${index}.title`}
-                    render={({ field: { onChange, onBlur, value } }) => (
-                      <Input
-                        label="What they do"
-                        placeholder="e.g. Finish a 5K, read 20 pages"
-                        value={value}
-                        onChangeText={onChange}
-                        onBlur={onBlur}
-                        error={errors.tasks?.[index]?.title?.message}
-                      />
-                    )}
-                  />
+                  <FieldAnchor name={`tasks.${index}.title`}>
+                    <Controller
+                      control={control}
+                      name={`tasks.${index}.title`}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <Input
+                          label="What they do"
+                          placeholder="e.g. Finish a 5K, read 20 pages"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          onFocus={() => focus?.onFieldFocus(`tasks.${index}.title`)}
+                          error={errors.tasks?.[index]?.title?.message}
+                        />
+                      )}
+                    />
+                  </FieldAnchor>
                   <Controller
                     control={control}
                     name={`tasks.${index}.points`}
                     render={({ field: { onChange, onBlur, value } }) => (
                       <Input
                         label="Points"
-                        placeholder="10"
+                        placeholder="1"
                         keyboardType="number-pad"
                         value={value}
                         onChangeText={onChange}
                         onBlur={onBlur}
+                        onFocus={() => focus?.onFieldFocus(`tasks.${index}.points`)}
                         error={errors.tasks?.[index]?.points?.message}
                       />
                     )}
@@ -227,10 +255,43 @@ export function RulesSlide({
         </FieldAnchor>
       ) : (
         <>
+          <FieldAnchor name="task">
+            <View
+              className="gap-2"
+              style={{
+                backgroundColor: THEME.surface,
+                borderRadius: THEME.radius,
+                borderWidth: 1,
+                borderColor: THEME.border,
+                padding: 14,
+              }}>
+              <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                Task
+              </AppText>
+              <View className="flex-row items-start justify-between gap-3">
+                <AppText className="flex-1 text-[15px] font-medium leading-6 text-charcoal">
+                  {taskLine}
+                </AppText>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit task on Goal"
+                  onPress={onEditGoal}
+                  style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+                    Edit
+                  </AppText>
+                </Pressable>
+              </View>
+              <AppText className="text-xs leading-5 text-muted">
+                The action people check in for. Constraints belong below — not a second task.
+              </AppText>
+            </View>
+          </FieldAnchor>
+
           <FieldAnchor name="rules">
           <FieldAnchor name="target_count">
             <View className="gap-3">
-              <AppText className="text-[15px] leading-6 text-charcoal">Competitors must check in</AppText>
+              <AppText className="text-[15px] leading-6 text-charcoal">How often</AppText>
               <View className="flex-row flex-wrap items-start gap-2">
                 <View style={{ width: 76 }}>
                   <Controller
@@ -245,59 +306,16 @@ export function RulesSlide({
                         value={value}
                         onChangeText={onChange}
                         onBlur={onBlur}
+                        onFocus={() => focus?.onFieldFocus('target_count')}
                         error={errors.target_count?.message}
                       />
                     )}
                   />
                 </View>
-                <View className="min-w-[180px] flex-1">
-                  <FieldAnchor name="rule_activity">
-                    <ChipRow>
-                      {RULE_ACTIVITY_PRESETS.map((item) => (
-                        <Chip
-                          key={item}
-                          label={item}
-                          selected={values.rule_activity === item}
-                          onPress={() => setActivity(item)}
-                        />
-                      ))}
-                      <Chip
-                        label="custom"
-                        selected={activityIsCustom}
-                        onPress={() => {
-                          if (!activityIsCustom) {
-                            setActivity('');
-                          }
-                        }}
-                      />
-                    </ChipRow>
-                    {activityIsCustom ? (
-                      <View className="mt-2">
-                        <Controller
-                          control={control}
-                          name="rule_activity"
-                          render={({ field: { onChange, onBlur, value, ref } }) => (
-                            <Input
-                              ref={ref}
-                              accessibilityLabel="Custom activity"
-                              placeholder="e.g. cold plunge"
-                              value={value}
-                              onChangeText={onChange}
-                              onBlur={onBlur}
-                              error={errors.rule_activity?.message}
-                            />
-                          )}
-                        />
-                      </View>
-                    ) : errors.rule_activity?.message ? (
-                      <AppText className="mt-1 text-xs text-coral-dark">
-                        {errors.rule_activity.message}
-                      </AppText>
-                    ) : null}
-                  </FieldAnchor>
+                <View className="min-w-[180px] flex-1 justify-center">
+                  <AppText className="text-[15px] leading-6 text-charcoal">check-ins every</AppText>
                 </View>
               </View>
-              <AppText className="text-[15px] leading-6 text-charcoal">every</AppText>
               <FieldAnchor name="frequency">
                 <ChipRow>
                   {periods.map((item) => (
@@ -364,72 +382,120 @@ export function RulesSlide({
 
       <FieldAnchor name="extra_rules">
         <FieldLabel
-          label="Additional rules"
+          label="Constraints"
+          hint="A constraint limits the task — separate days, min minutes, or a custom limit. Not another task."
           error={typeof errors.extra_rules?.message === 'string' ? errors.extra_rules.message : undefined}>
           <View className="gap-3">
-            {isPoints ? null : (
-              <ChipRow>
-                {EXTRA_RULE_PRESETS.map((item) => (
-                  <Chip
-                    key={item.kind}
-                    label={item.kind === 'separate_days' ? 'Separate days' : 'Min 30 minutes'}
-                    selected={extraRules.some((rule) => rule.kind === item.kind)}
-                    onPress={() => togglePresetRule(item.kind)}
-                  />
-                ))}
-              </ChipRow>
-            )}
-            {extraRules.map((rule, index) => (
-              <Card key={rule.id} className="gap-3">
-                <View className="flex-row items-center justify-between">
-                  <AppText className="text-sm font-semibold text-charcoal">Rule {index + 1}</AppText>
-                  <Pressable onPress={() => removeRule(index)} accessibilityRole="button">
-                    <AppText className="text-sm font-semibold text-coral-dark">Remove</AppText>
-                  </Pressable>
-                </View>
+            {showConstraints ? (
+              <>
                 {isPoints ? null : (
                   <ChipRow>
                     {EXTRA_RULE_PRESETS.map((item) => (
                       <Chip
                         key={item.kind}
                         label={item.kind === 'separate_days' ? 'Separate days' : 'Min 30 minutes'}
-                        selected={rule.kind === item.kind}
-                        onPress={() => setRuleKind(index, item.kind)}
+                        selected={extraRules.some((rule) => rule.kind === item.kind)}
+                        onPress={() => togglePresetRule(item.kind)}
                       />
                     ))}
-                    <Chip
-                      label="Custom"
-                      selected={rule.kind === 'custom'}
-                      onPress={() => setRuleKind(index, 'custom')}
-                    />
+                    <Chip label="Custom" selected={customOpen} onPress={openCustomConstraint} />
                   </ChipRow>
                 )}
-                <Controller
-                  control={control}
-                  name={`extra_rules.${index}.text`}
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
+                {extraRules.map((rule, index) => (
+                  <Card key={rule.id} className="gap-3">
+                    <View className="flex-row items-center justify-between">
+                      <AppText className="text-sm font-semibold text-charcoal">
+                        {rule.kind === 'custom' ? 'Custom limit' : `Constraint ${index + 1}`}
+                      </AppText>
+                      <Pressable
+                        onPress={() => removeRule(index)}
+                        accessibilityRole="button"
+                        style={{ minHeight: 44, justifyContent: 'center' }}>
+                        <AppText className="text-sm font-semibold text-coral-dark">Remove</AppText>
+                      </Pressable>
+                    </View>
+                    {isPoints ? null : (
+                      <ChipRow>
+                        {EXTRA_RULE_PRESETS.map((item) => (
+                          <Chip
+                            key={item.kind}
+                            label={item.kind === 'separate_days' ? 'Separate days' : 'Min 30 minutes'}
+                            selected={rule.kind === item.kind}
+                            onPress={() => setRuleKind(index, item.kind)}
+                          />
+                        ))}
+                        <Chip
+                          label="Custom"
+                          selected={rule.kind === 'custom'}
+                          onPress={() => setRuleKind(index, 'custom')}
+                        />
+                      </ChipRow>
+                    )}
+                    <FieldAnchor name={`extra_rules.${index}.text`}>
+                      <Controller
+                        control={control}
+                        name={`extra_rules.${index}.text`}
+                        render={({ field: { onChange, onBlur, value, ref } }) => (
+                          <Input
+                            ref={ref}
+                            placeholder="e.g. Check-ins must be on separate calendar days"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            onFocus={() => focus?.onFieldFocus(`extra_rules.${index}.text`)}
+                            error={errors.extra_rules?.[index]?.text?.message}
+                            multiline
+                            textAlignVertical="top"
+                            style={{ minHeight: 72 }}
+                          />
+                        )}
+                      />
+                    </FieldAnchor>
+                    <ProofPicker
+                      label="Proof for this constraint"
+                      selected={rule.proofs}
+                      optional
+                      onToggle={(type) => toggleExtraProof(index, type)}
+                    />
+                  </Card>
+                ))}
+                {customOpen ? (
+                  <FieldAnchor name="extra_rules.custom">
                     <Input
-                      ref={ref}
-                      placeholder="e.g. Check-ins must be on separate calendar days"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.extra_rules?.[index]?.text?.message}
+                      placeholder="e.g. At least 20 minutes each check-in"
+                      value={customDraft}
+                      onChangeText={setCustomDraft}
+                      onBlur={flushCustomDraft}
+                      onFocus={() => focus?.onFieldFocus('extra_rules')}
                       multiline
                       textAlignVertical="top"
                       style={{ minHeight: 72 }}
                     />
-                  )}
-                />
-                <ProofPicker
-                  label="Proof for this rule"
-                  selected={rule.proofs}
-                  optional
-                  onToggle={(type) => toggleExtraProof(index, type)}
-                />
-              </Card>
-            ))}
-            <Button title="Add another rule" variant="outline" onPress={addCustomRule} />
+                    <AppText className="mt-1 text-xs leading-5 text-muted">
+                      Leave blank if you don’t need a custom limit. Next still works.
+                    </AppText>
+                  </FieldAnchor>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={openCustomConstraint}
+                    style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+                      {copy('create.addConstraint')}
+                    </AppText>
+                  </Pressable>
+                )}
+              </>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={openCustomConstraint}
+                style={{ minHeight: 44, justifyContent: 'center' }}>
+                <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+                  {copy('create.addConstraint')}
+                </AppText>
+              </Pressable>
+            )}
           </View>
         </FieldLabel>
       </FieldAnchor>
@@ -446,6 +512,7 @@ export function RulesSlide({
               value={value ?? ''}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={() => focus?.onFieldFocus('rules_video_url')}
               error={errors.rules_video_url?.message}
               autoCapitalize="none"
               autoCorrect={false}

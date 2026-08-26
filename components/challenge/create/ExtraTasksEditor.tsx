@@ -34,10 +34,12 @@ export function ExtraTasksEditor({
   tasks,
   onChange,
   onTitleFocus,
+  hint,
 }: {
   tasks: ExtraCreateTask[];
   onChange: (next: ExtraCreateTask[]) => void;
   onTitleFocus?: () => void;
+  hint?: string;
 }) {
   function patch(index: number, partial: Partial<ExtraCreateTask>) {
     onChange(tasks.map((item, itemIndex) => (itemIndex === index ? { ...item, ...partial } : item)));
@@ -120,6 +122,9 @@ export function ExtraTasksEditor({
           {copy('create.addTask')}
         </AppText>
       </Pressable>
+      {hint ? (
+        <AppText className="text-xs leading-5 text-muted">{hint}</AppText>
+      ) : null}
     </View>
   );
 }

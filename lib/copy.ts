@@ -269,6 +269,8 @@ const STRINGS = {
   'create.needTask': 'Add a task.',
   'create.needExtraTask': 'Name each extra task, or remove it.',
   'create.addTask': 'Add another task',
+  'create.addTaskHint': 'Another action people can check in for.',
+  'create.addConstraint': 'Add a constraint',
   'create.taskOnce': 'Once',
   'create.hrMinutes': 'Elevated heart rate',
   'create.review': 'Review',

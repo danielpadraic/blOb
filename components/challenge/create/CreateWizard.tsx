@@ -145,8 +145,10 @@ const FOCUSABLE_FIELDS = new Set([
   'max_participants',
   'min_minutes',
   'rules',
+  'extra_rules',
   'cover_image_url',
   'rules_video_url',
+  'tasks',
 ]);
 
 export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
@@ -180,7 +182,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const [templateId, setTemplateId] = useState<ChallengeTemplateId | null>(null);
   const [sourceChallengeId, setSourceChallengeId] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
-  const [savedFlash, setSavedFlash] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [bucksAcks, setBucksAcks] = useState<Record<string, boolean>>({});
@@ -297,8 +298,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     values: CreateChallengeValues;
   } | null>(null);
   const persistChainRef = useRef(Promise.resolve());
-  const savedFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistDraftRef = useRef<() => Promise<void>>(async () => {});
+  const flushRulesDraftRef = useRef<() => void>(() => {});
   const snapshotRef = useRef({
     step,
     startPath,
@@ -630,17 +631,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     return isPastStartChooser(snapshot.step) || hasMeaningfulDraftEdits(snapshot.values);
   }
 
-  function flashSaved() {
-    setSavedFlash(true);
-    if (savedFlashTimerRef.current) {
-      clearTimeout(savedFlashTimerRef.current);
-    }
-    savedFlashTimerRef.current = setTimeout(() => {
-      setSavedFlash(false);
-      savedFlashTimerRef.current = null;
-    }, 1600);
-  }
-
   async function persistDraft() {
     const run = persistChainRef.current.then(async () => {
       if (!shouldPersistDraft()) {
@@ -649,12 +639,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       const snapshot = { ...snapshotRef.current, id: draftIdRef.current };
       try {
         const saved = await saveDraft.mutateAsync(snapshot);
-        if (saved.id) {
+        if (saved.id && saved.id !== draftIdRef.current) {
           draftIdRef.current = saved.id;
           setDraftId(saved.id);
+        } else if (saved.id) {
+          draftIdRef.current = saved.id;
         }
         rememberPersisted({ ...snapshot, id: saved.id ?? snapshot.id });
-        flashSaved();
       } catch (error) {
         console.log('[blob:draft] save failed', getErrorMessage(error));
       }
@@ -720,11 +711,19 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
       tour?.setCreateScrollY(0);
     }
-  }, [step, liveChallengeId]);
+  }, [step]);
 
   useEffect(() => {
     void persistDraftRef.current();
   }, [step]);
+
+  const persistKey = useMemo(() => {
+    try {
+      return JSON.stringify({ ...values, rules: '' });
+    } catch {
+      return '';
+    }
+  }, [values]);
 
   useEffect(() => {
     if (liveChallengeId || skipSaveRef.current || discardedRef.current) {
@@ -737,7 +736,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       void persistDraftRef.current();
     }, AUTOSAVE_MS);
     return () => clearTimeout(handle);
-  }, [values]);
+  }, [persistKey, liveChallengeId]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -764,14 +763,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (savedFlashTimerRef.current) {
-        clearTimeout(savedFlashTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (!bobError) {
       return;
     }
@@ -794,7 +785,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     const next = composeChallengeRules(values);
-    if ((values.rules ?? '') !== next) {
+    if ((getValues('rules') ?? '') !== next) {
       setValue('rules', next, { shouldDirty: false, shouldValidate: false });
     }
   }, [
@@ -804,9 +795,21 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     values.duration_type,
     values.extra_rules,
     values.challenge_type,
-    values.rules,
+    values.task,
+    values.extra_tasks,
+    getValues,
     setValue,
   ]);
+
+  useEffect(() => {
+    if (values.challenge_type === 'points') {
+      return;
+    }
+    const task = (values.task ?? '').trim();
+    if (task.length >= 2 && values.rule_activity !== task) {
+      setValue('rule_activity', task, { shouldDirty: false, shouldValidate: false });
+    }
+  }, [values.task, values.challenge_type, values.rule_activity, setValue]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (event) => {
@@ -880,14 +883,58 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  function seedPointsTaskFromGoal() {
+    if (getValues('challenge_type') !== 'points') {
+      return;
+    }
+    const goalTask = (getValues('task') ?? '').trim();
+    const tasks = getValues('tasks');
+    const first = tasks[0] ?? emptyChallengeTask();
+    const nextFirst = { ...first };
+    let changed = tasks.length === 0;
+    if (!nextFirst.title.trim() && goalTask) {
+      nextFirst.title = goalTask;
+      changed = true;
+    }
+    if (!String(nextFirst.points ?? '').trim()) {
+      nextFirst.points = '1';
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+    setValue('tasks', [nextFirst, ...tasks.slice(1)], { shouldDirty: false, shouldValidate: false });
+  }
+
+  function stripBlankExtraRules() {
+    const extras = getValues('extra_rules') ?? [];
+    const next = extras.filter((rule) => rule.text.trim().length > 0);
+    if (next.length !== extras.length) {
+      setValue('extra_rules', next, { shouldDirty: false, shouldValidate: false });
+    }
+  }
+
+  function stripBlankExtraTasks() {
+    const extras = getValues('extra_tasks') ?? [];
+    const next = extras.filter((item) => item.title.trim().length > 0);
+    if (next.length !== extras.length) {
+      setValue('extra_tasks', next, { shouldDirty: false, shouldValidate: false });
+    }
+  }
+
   function onTypeChange(next: CreateChallengeValues['challenge_type']) {
     if (getValues('duration_type') === 'unlimited' && next === 'points') {
       return;
     }
     setValue('challenge_type', next, { shouldValidate: true });
-    if (next === 'points' && getValues('tasks').length === 0) {
+    if (next !== 'points') {
+      return;
+    }
+    const tasks = getValues('tasks');
+    if (tasks.length === 0) {
       setValue('tasks', [emptyChallengeTask()], { shouldValidate: false });
     }
+    seedPointsTaskFromGoal();
   }
 
   function applySchedule(patch: Partial<CreateChallengeValues>) {
@@ -1057,7 +1104,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         const name = issue.path.join('.') as FieldPath<CreateChallengeValues>;
         setError(name, { type: 'validate', message: issue.message });
         if (!first) {
-          first = { field: root, step: targetStep };
+          first = { field: name, step: targetStep };
         }
       }
     }
@@ -1111,6 +1158,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   function firstPublishIssue(): BobIssue | null {
+    flushRulesDraftRef.current();
+    stripBlankExtraRules();
+    stripBlankExtraTasks();
+    seedPointsTaskFromGoal();
     syncComposedRules();
     const entryIssue = coinEntryIssue();
     if (entryIssue) {
@@ -1200,7 +1251,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       run();
     }
     const focusName = name.split('.')[0];
-    if (FOCUSABLE_FIELDS.has(focusName) || focusName === 'tasks') {
+    if (FOCUSABLE_FIELDS.has(focusName) || focusName === 'tasks' || focusName === 'extra_rules') {
       requestAnimationFrame(() => {
         try {
           setFocus((name.includes('.') ? name : focusName) as FieldPath<CreateChallengeValues>);
@@ -1297,6 +1348,14 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return;
     }
     if (reviewReturn && !lastStep) {
+      if (step === STEP_GOAL) {
+        stripBlankExtraTasks();
+      }
+      if (step === STEP_RULES) {
+        flushRulesDraftRef.current();
+        stripBlankExtraRules();
+        seedPointsTaskFromGoal();
+      }
       syncComposedRules();
       const issue = (step === STEP_ENTRY ? coinEntryIssue(step) : null) ?? applyStepErrors(step);
       if (issue) {
@@ -1308,6 +1367,14 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return;
     }
     if (!lastStep) {
+      if (step === STEP_GOAL) {
+        stripBlankExtraTasks();
+      }
+      if (step === STEP_RULES) {
+        flushRulesDraftRef.current();
+        stripBlankExtraRules();
+        seedPointsTaskFromGoal();
+      }
       syncComposedRules();
       const issue = (step === STEP_ENTRY ? coinEntryIssue(step) : null) ?? applyStepErrors(step);
       if (issue) {
@@ -1337,7 +1404,16 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       await onPublish();
       return;
     }
-    setStep((current) => current + 1);
+    setStep((current) => {
+      if (
+        current === STEP_PRIZE &&
+        getValues('scoring_method') !== COMPARABLE_POINTS_METHOD &&
+        !scoringEditorOpen
+      ) {
+        return STEP_FUNDING;
+      }
+      return current + 1;
+    });
   }
 
   function goBack() {
@@ -1530,7 +1606,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           <WizardProgress
             step={step}
             onStepPress={goToStep}
-            status={scoringToast ?? (savedFlash ? 'Saved' : null)}
+            status={scoringToast}
             trailing={
               <View className="flex-row items-center gap-1">
                 {isEditing ? null : (
@@ -1749,6 +1825,14 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               onFrequencyChange={onFrequencyChange}
               onAddTask={addTask}
               onRemoveTask={removeTask}
+              onEditGoal={() => {
+                pendingAnchor.current = 'task';
+                setReviewReturn(false);
+                setStep(STEP_GOAL);
+              }}
+              registerFlush={(flush) => {
+                flushRulesDraftRef.current = flush;
+              }}
             />
           ) : null}
           {step === STEP_REVIEW ? (
@@ -2116,6 +2200,7 @@ function GoalSlide({
               tasks={extraTasks ?? []}
               onChange={onExtraTasksChange}
               onTitleFocus={onTaskFocus}
+              hint={copy('create.addTaskHint')}
             />
           </View>
         )}

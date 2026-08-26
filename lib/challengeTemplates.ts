@@ -345,8 +345,8 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
   const proofs = Array.isArray(source?.proofs) ? [...source.proofs] : [...DEFAULT_CREATE_VALUES.proofs];
   const tasks =
     Array.isArray(source?.tasks) && source.tasks.length > 0
-      ? source.tasks.map((item) => ({
-          id: item?.id || emptyChallengeTask().id,
+      ? source.tasks.map((item, index) => ({
+          id: item?.id || `task-${index + 1}`,
           title: typeof item?.title === 'string' ? item.title : '',
           points: item?.points != null ? String(item.points) : '10',
           proof_required: Boolean(item?.proof_required),
@@ -358,16 +358,20 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
                 ? (['photo'] as CreateChallengeValues['proofs'])
                 : [],
         }))
-      : DEFAULT_CREATE_VALUES.tasks.map((task) => ({ ...task, id: emptyChallengeTask().id }));
+      : DEFAULT_CREATE_VALUES.tasks.map((task) => ({
+          ...task,
+          proofs: [...(task.proofs ?? [])],
+        }));
   const extra_rules = Array.isArray(source?.extra_rules)
-    ? source.extra_rules.map((item) => ({
+    ? source.extra_rules.map((item, index) => ({
         ...item,
+        id: item?.id || `rule-${index + 1}`,
         proofs: [...(item.proofs ?? [])],
       }))
     : [];
   const extra_tasks = Array.isArray(source?.extra_tasks)
-    ? source.extra_tasks.map((item) => ({
-        id: item?.id || `xtask-${Math.random().toString(36).slice(2, 8)}`,
+    ? source.extra_tasks.map((item, index) => ({
+        id: item?.id || `xtask-${index + 1}`,
         title: typeof item?.title === 'string' ? item.title : '',
         once: Boolean(item?.once),
         proof_method: item?.proof_method ?? 'photo',
