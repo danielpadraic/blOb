@@ -24,9 +24,21 @@ import {
 import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
-import { MAX_CHALLENGE_DURATION_DAYS, asDurationUnit, asEndMode, ensureSchedule } from '@/lib/challengeSchedule';
+import {
+  MAX_CHALLENGE_DURATION_DAYS,
+  asDurationUnit,
+  asEndMode,
+  asStartPreset,
+  ensureSchedule,
+  startPresetFromValues,
+  type StartPreset,
+} from '@/lib/challengeSchedule';
 import { extraTasksFromStored } from '@/lib/challengeCreatePublish';
+import { clearPersistedSimpleDraft, parseSimpleChallengeDraft, type SimpleChallengeDraft } from '@/lib/simpleChallenge';
 import { emptyChallengeTask, type CreateChallengeValues, type ExtraCreateTask } from '@/utils/validators';
+import type { ChallengeProof } from '@/lib/challengeProofs';
+
+export type CreateDraftMode = 'simple' | 'advanced';
 
 export type ChallengeDraft = {
   id: string | null;
@@ -37,6 +49,9 @@ export type ChallengeDraft = {
   templateId: ChallengeTemplateId | null;
   sourceChallengeId: string | null;
   values: CreateChallengeValues;
+  createMode: CreateDraftMode;
+  startPreset: StartPreset;
+  simple?: SimpleChallengeDraft | null;
   updatedAt: string;
   corrupt?: boolean;
 };
@@ -242,6 +257,83 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
   });
 }
 
+function asChallengeProofs(value: unknown): ChallengeProof[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+    const row = item as Record<string, unknown>;
+    const method = row.method;
+    if (method !== 'photo' && method !== 'video' && method !== 'checkin' && method !== 'honor' && method !== 'hr') {
+      return [];
+    }
+    const name = asString(row.name, '');
+    const id = asString(row.id, name.trim() ? `proof-${index + 1}` : '');
+    if (!id && !name.trim()) {
+      return [];
+    }
+    const minutes = Number(row.minutes);
+    return [
+      {
+        id: id || `proof-${index + 1}`,
+        name,
+        method,
+        minutes: Number.isFinite(minutes) && minutes >= 1 ? Math.round(minutes) : undefined,
+      },
+    ];
+  });
+}
+
+function asBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return fallback;
+}
+
+function asCreateMode(value: unknown, simplePresent: boolean): CreateDraftMode {
+  if (value === 'simple' || simplePresent) {
+    return 'simple';
+  }
+  return 'advanced';
+}
+
+export function isSimpleCreateDraft(
+  draft: Pick<ChallengeDraft, 'createMode' | 'simple'>,
+): boolean {
+  return draft.createMode === 'simple' || Boolean(draft.simple && draft.createMode !== 'advanced');
+}
+
+export function pickSimpleDraft(drafts: ChallengeDraft[], draftId?: string | null): ChallengeDraft | null {
+  if (draftId) {
+    const match = drafts.find((item) => item.id === draftId && isSimpleCreateDraft(item));
+    if (match) {
+      return match;
+    }
+  }
+  return drafts.find((item) => isSimpleCreateDraft(item)) ?? null;
+}
+
+export function createHrefForDraft(
+  draft: Pick<ChallengeDraft, 'id' | 'createMode' | 'simple'>,
+  extra?: { returnTo?: string },
+): { pathname: '/challenges/create'; params: Record<string, string> } {
+  const params: Record<string, string> = { resume: '1' };
+  if (draft.id) {
+    params.draftId = draft.id;
+  }
+  if (!isSimpleCreateDraft(draft)) {
+    params.mode = 'advanced';
+  }
+  if (extra?.returnTo) {
+    params.returnTo = extra.returnTo;
+  }
+  return { pathname: '/challenges/create', params };
+}
+
 function asTasks(value: unknown): CreateChallengeValues['tasks'] {
   if (!Array.isArray(value) || value.length === 0) {
     return DEFAULT_CREATE_VALUES.tasks.map((task) => ({
@@ -268,8 +360,15 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
   try {
     const { row } = unwrapDraftRecord(raw);
     const category = normalizeChallengeCategory(asString(row.category, DEFAULT_CREATE_VALUES.category));
-    return {
-      ...DEFAULT_CREATE_VALUES,
+    const extraRules = (() => {
+      const stored = asExtraRules(row.extra_rules);
+      if (stored.length > 0) {
+        return stored;
+      }
+      return extraRulesFromStructured(parseRulesStructured(row.rules_structured ?? row.rules_list));
+    })();
+    const next: CreateChallengeValues = {
+      ...emptyValues(),
       title: asString(row.title, DEFAULT_CREATE_VALUES.title),
       description: asString(row.description, DEFAULT_CREATE_VALUES.description ?? ''),
       task: asString(row.task, DEFAULT_CREATE_VALUES.task ?? ''),
@@ -289,6 +388,12 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
               row.visibility === 'invite'
             ? 'private'
             : 'public',
+      discoverability:
+        row.discoverability === 'invite_only' || row.discoverability === 'friends_of_friends'
+          ? row.discoverability
+          : row.discoverability === null
+            ? null
+            : DEFAULT_CREATE_VALUES.discoverability,
       challenge_lane: row.challenge_lane === 'private' ? 'private' : 'coins',
       duration_type: row.duration_type === 'unlimited' ? 'unlimited' : 'fixed',
       ...ensureSchedule({
@@ -302,13 +407,7 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       target_count: asString(row.target_count, DEFAULT_CREATE_VALUES.target_count),
       frequency: normalizeFrequency(row.frequency),
       rule_activity: asString(row.rule_activity, DEFAULT_CREATE_VALUES.rule_activity) || DEFAULT_CREATE_VALUES.rule_activity,
-      extra_rules: (() => {
-        const stored = asExtraRules(row.extra_rules);
-        if (stored.length > 0) {
-          return stored;
-        }
-        return extraRulesFromStructured(parseRulesStructured(row.rules_structured ?? row.rules_list));
-      })(),
+      extra_rules: extraRules,
       proofs: asProofs(row.proofs ?? row.proof_requirements),
       tasks: asTasks(row.tasks),
       extra_tasks: asExtraTasks(row.extra_tasks),
@@ -334,7 +433,9 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
           ? row.currency === 'bucks'
             ? 'bucks'
             : 'coins'
-          : 'coins',
+          : row.currency === 'bucks'
+            ? 'bucks'
+            : 'coins',
       creator_participating: (row.creator_participating ?? row.creator_participates) !== false,
       min_minutes: asString(row.min_minutes, DEFAULT_CREATE_VALUES.min_minutes),
       cover_image_url: asString(row.cover_image_url, ''),
@@ -342,11 +443,44 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       rules: asString(row.rules, ''),
       scoring_method: row.scoring_method === 'comparable_points' ? 'comparable_points' : null,
       scoring_config: parseComparablePointsConfig(row.scoring_config),
+      min_participants: asString(row.min_participants, DEFAULT_CREATE_VALUES.min_participants),
+      misses_allowed: asString(row.misses_allowed, DEFAULT_CREATE_VALUES.misses_allowed),
+      proof_type:
+        row.proof_type === 'video' ||
+        row.proof_type === 'check_in' ||
+        row.proof_type === 'checkin' ||
+        row.proof_type === 'honor' ||
+        row.proof_type === 'hr'
+          ? row.proof_type
+          : DEFAULT_CREATE_VALUES.proof_type,
+      proof_review: row.proof_review === 'host' ? 'host' : DEFAULT_CREATE_VALUES.proof_review,
+      host_funded: asBoolean(row.host_funded, DEFAULT_CREATE_VALUES.host_funded ?? false),
+      host_budget: asString(row.host_budget, DEFAULT_CREATE_VALUES.host_budget ?? '0'),
       guarantee_enabled:
         typeof row.guarantee_enabled === 'boolean'
           ? row.guarantee_enabled
           : row.privacy_mode !== 'private_corporate',
+      required_checkins: asString(row.required_checkins, DEFAULT_CREATE_VALUES.required_checkins ?? '6'),
+      payout_mode:
+        row.payout_mode === 'winner_take_all' ||
+        row.payout_mode === 'top_places' ||
+        row.payout_mode === 'even_split_remaining'
+          ? row.payout_mode
+          : DEFAULT_CREATE_VALUES.payout_mode,
+      format:
+        row.format === 'points' || row.format === 'lms' || row.format === 'consistency'
+          ? row.format
+          : DEFAULT_CREATE_VALUES.format,
     };
+    if (row.challenge_proofs != null) {
+      next.challenge_proofs = asChallengeProofs(row.challenge_proofs);
+    }
+    for (const key of Object.keys(DEFAULT_CREATE_VALUES) as (keyof CreateChallengeValues)[]) {
+      if (!(key in next) || next[key] === undefined) {
+        (next as Record<string, unknown>)[key] = DEFAULT_CREATE_VALUES[key];
+      }
+    }
+    return next;
   } catch {
     return emptyValues();
   }
@@ -546,6 +680,11 @@ export function isVisibleDraft(draft: ChallengeDraft): boolean {
   if (draft.corrupt) {
     return true;
   }
+  if (isSimpleCreateDraft(draft)) {
+    const title = (draft.simple?.title ?? draft.values?.title ?? '').trim();
+    const task = (draft.simple?.task ?? draft.values?.task ?? '').trim();
+    return Boolean(title) || Boolean(task) || hasMeaningfulDraftEdits(draft.values);
+  }
   if (clampDraftStep(draft.step) < wizardStepIndex('goal')) {
     return false;
   }
@@ -557,7 +696,12 @@ export function draftPreviewLabel(draft: ChallengeDraft): string {
   if (draft.corrupt) {
     return 'This draft can’t be opened';
   }
-  const title = typeof draft.values?.title === 'string' ? draft.values.title.trim() : '';
+  const title =
+    (isSimpleCreateDraft(draft) ? draft.simple?.title : null)?.trim() ||
+    (typeof draft.values?.title === 'string' ? draft.values.title.trim() : '');
+  if (isSimpleCreateDraft(draft)) {
+    return title ? `${title} · Simple` : 'Simple';
+  }
   const step = CREATE_WIZARD_STEPS[draft.step];
   const stepLabel = step ? `Step ${draft.step + 1} · ${step.label}` : `Step ${draft.step + 1}`;
   return title ? `${title} · ${stepLabel}` : stepLabel;
@@ -585,6 +729,9 @@ function fallbackDraft(userId: string, corrupt = true): ChallengeDraft {
     templateId: null,
     sourceChallengeId: null,
     values,
+    createMode: 'advanced',
+    startPreset: startPresetFromValues(values.starts_at),
+    simple: null,
     updatedAt: new Date().toISOString(),
     corrupt,
   };
@@ -597,7 +744,7 @@ function draftTitle(values: CreateChallengeValues, fallback = ''): string {
 
 function wizardMeta(
   values: CreateChallengeValues,
-  draft: Pick<ChallengeDraft, 'step' | 'startPath' | 'templateId' | 'sourceChallengeId'>,
+  draft: Pick<ChallengeDraft, 'step' | 'startPath' | 'templateId' | 'sourceChallengeId' | 'createMode' | 'startPreset' | 'simple'>,
 ): Record<string, unknown> {
   return {
     ...values,
@@ -606,6 +753,9 @@ function wizardMeta(
     start_path: draft.startPath,
     template_id: draft.templateId,
     source_challenge_id: draft.sourceChallengeId,
+    create_mode: draft.createMode,
+    start_preset: draft.startPreset,
+    ...(draft.simple ? { simple: draft.simple } : {}),
   };
 }
 
@@ -628,7 +778,12 @@ export function parseChallengeDraft(userId: string, row: unknown): ChallengeDraf
     const sourceId = rec.source_challenge_id ?? rec.sourceChallengeId ?? nested.source_challenge_id;
     const id = typeof rec.id === 'string' && rec.id ? rec.id : null;
     const values = hydrateDraftValues(nested);
-    const title = asString(rec.title, draftTitle(values));
+    const simple = parseSimpleChallengeDraft(nested.simple ?? rec.simple);
+    const createMode = asCreateMode(rec.create_mode ?? nested.create_mode, Boolean(simple));
+    const startPreset =
+      asStartPreset(rec.start_preset ?? nested.start_preset) ??
+      (simple?.start_preset ?? startPresetFromValues(values.starts_at));
+    const title = asString(rec.title, draftTitle(values, simple?.title ?? ''));
     const draft: ChallengeDraft = {
       id,
       userId,
@@ -641,6 +796,9 @@ export function parseChallengeDraft(userId: string, row: unknown): ChallengeDraf
       templateId: asTemplateId(rec.template_id ?? rec.templateId ?? nested.template_id),
       sourceChallengeId: typeof sourceId === 'string' && sourceId ? sourceId : null,
       values,
+      createMode,
+      startPreset,
+      simple,
       updatedAt: asString(rec.updated_at ?? rec.updatedAt, new Date().toISOString()),
       corrupt: unwrapped.corrupt,
     };
@@ -677,6 +835,8 @@ async function writeLocalDraft(draft: ChallengeDraft): Promise<void> {
       start_path: draft.startPath,
       template_id: draft.templateId,
       source_challenge_id: draft.sourceChallengeId,
+      create_mode: draft.createMode,
+      start_preset: draft.startPreset,
       payload: wizardMeta(draft.values, draft),
       updated_at: draft.updatedAt,
     }),
@@ -823,7 +983,10 @@ export async function saveChallengeDraft(draft: ChallengeDraft): Promise<Challen
     id: asDraftId(draft.id),
     step: clampDraftStep(draft.step),
     values,
-    title: draftTitle(values, draft.title || 'Untitled draft'),
+    createMode: draft.createMode === 'simple' || draft.simple ? 'simple' : 'advanced',
+    startPreset: asStartPreset(draft.startPreset) ?? startPresetFromValues(values.starts_at),
+    simple: draft.simple ?? null,
+    title: draftTitle(values, draft.simple?.title || draft.title || 'Untitled draft'),
     updatedAt: new Date().toISOString(),
   };
   await writeLocalDraft(next);
@@ -841,6 +1004,9 @@ export async function discardChallengeDraft(userId: string, draftId?: string | n
   const local = await readLocalDraft(userId);
   if (!draftId || !local?.id || local.id === draftId) {
     await clearLocalDraft(userId);
+  }
+  if (!draftId || (local && isSimpleCreateDraft(local) && local.id === draftId)) {
+    clearPersistedSimpleDraft();
   }
   if (draftId) {
     const byId = await supabase.from('challenge_drafts').delete().eq('id', draftId);

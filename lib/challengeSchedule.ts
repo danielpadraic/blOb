@@ -239,6 +239,40 @@ export function startPresetFor(iso: string, now = new Date()): StartPreset {
   return 'custom';
 }
 
+/** Old drafts without start_preset still classify via the 2-minute window. */
+export function startPresetFromValues(startsAt: string | null | undefined, now = new Date()): StartPreset {
+  return startPresetFor(startsAt ?? '', now);
+}
+
+export function asStartPreset(value: unknown): StartPreset | null {
+  if (value === 'hour' || value === 'tomorrow' || value === 'custom') {
+    return value;
+  }
+  return null;
+}
+
+/** Hour / tomorrow are live presets. Custom keeps the saved ISO, even if it is in the past. */
+export function resolveStartForPublish(input: {
+  preset?: StartPreset | null;
+  starts_at?: string | null;
+  duration_days?: string | number | null;
+  now?: Date;
+}): { starts_at: string; ends_at: string } {
+  const now = input.now ?? new Date();
+  const preset = input.preset ?? startPresetFromValues(input.starts_at, now);
+  const start =
+    preset === 'hour'
+      ? inOneHour(now)
+      : preset === 'tomorrow'
+        ? tomorrowMorning(now)
+        : parseScheduleDate(input.starts_at) ?? inOneHour(now);
+  const starts_at = start.toISOString();
+  return {
+    starts_at,
+    ends_at: endsAtFromStartAndDays(starts_at, Number(input.duration_days) || 7),
+  };
+}
+
 export function toLocalInputValue(iso: string): string {
   const date = parseScheduleDate(iso) ?? defaultChallengeStart();
   const pad = (value: number) => String(value).padStart(2, '0');

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
@@ -15,6 +15,7 @@ import { StackBackButton, useDismissTo } from '@/components/navigation/StackBack
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
 import { Button } from '@/components/ui/Button';
+import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -25,8 +26,15 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useCreateChallenge, useChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
+import { useChallengeDrafts, useSaveChallengeDraft } from '@/hooks/useChallengeDraft';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
+import { wizardStepIndex } from '@/lib/challengeTemplates';
+import {
+  createHrefForDraft,
+  isSimpleCreateDraft,
+  pickSimpleDraft,
+} from '@/lib/challengeDraft';
 import {
   SIMPLE_CUSTOM_PERIODS,
   SIMPLE_DURATION_CHIPS,
@@ -42,6 +50,7 @@ import {
   frequencyHintOf,
   persistSimpleDraft,
   readPersistedSimpleDraft,
+  refreshSimpleDraftStart,
   removeSimpleProof,
   simpleDraftFromChallenge,
   simpleDraftToCreateValues,
@@ -56,7 +65,13 @@ import {
 } from '@/lib/simpleChallenge';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
-import { formatChallengeEndLine } from '@/lib/challengeSchedule';
+import {
+  formatChallengeEndLine,
+  inOneHour,
+  resolveStartForPublish,
+  tomorrowMorning,
+  type StartPreset,
+} from '@/lib/challengeSchedule';
 import { SIMPLE_PROOF_CAP, ensureProofSentence, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
@@ -109,31 +124,39 @@ function SectionLabel({ children }: { children: string }) {
 
 export function SimpleCreateForm() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string; funded?: string; editId?: string }>();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    funded?: string;
+    editId?: string;
+    resume?: string;
+    draftId?: string;
+  }>();
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const funded = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
+  const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
   const { user } = useAuth();
   const { profile, refetch, isFetched } = useMyProfile();
   const walletSheet = useWalletOptional();
   const create = useCreateChallenge();
   const update = useUpdateUserChallenge();
+  const saveDraft = useSaveChallengeDraft();
+  const draftsQuery = useChallengeDrafts();
   const editing = useChallenge(editId);
   const originalStart = editing.data?.starts_at ?? null;
+  const simpleDraftIdRef = useRef<string | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRef = useRef<SimpleChallengeDraft>(defaultSimpleDraft());
+  const hydratedRemote = useRef(false);
+  const editedRef = useRef(false);
   const [draft, setDraft] = useState<SimpleChallengeDraft>(() => {
     if (editId) {
       return defaultSimpleDraft();
     }
     const stored = readPersistedSimpleDraft();
-    if (!stored) {
-      return defaultSimpleDraft();
-    }
-    const base = defaultSimpleDraft();
-    const start = new Date(stored.starts_at);
-    const starts_at =
-      Number.isNaN(start.getTime()) || start.getTime() <= Date.now() ? base.starts_at : stored.starts_at;
-    return { ...base, ...stored, extra_tasks: stored.extra_tasks ?? [], starts_at, min_participants: stored.min_participants ?? 2 };
+    return stored ?? defaultSimpleDraft();
   });
+  draftRef.current = draft;
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'form' | 'review'>('form');
   const [focusSection, setFocusSection] = useState<string | null>(null);
@@ -152,16 +175,90 @@ export function SimpleCreateForm() {
     tour?.setCreateCurrency(draft.currency);
   }, [draft.currency, tour]);
 
+  function persistServerDraft(next: SimpleChallengeDraft) {
+    if (editId || !user) {
+      return;
+    }
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+    }
+    persistTimerRef.current = setTimeout(() => {
+      void saveDraft
+        .mutateAsync({
+          id: simpleDraftIdRef.current,
+          step: wizardStepIndex('goal'),
+          startPath: 'scratch',
+          templateId: null,
+          sourceChallengeId: null,
+          createMode: 'simple',
+          startPreset: next.start_preset,
+          simple: next,
+          values: simpleDraftToCreateValues(next),
+        })
+        .then((saved) => {
+          if (saved.id) {
+            simpleDraftIdRef.current = saved.id;
+          }
+        })
+        .catch(() => {
+          // Local cache still holds the draft.
+        });
+    }, 2000);
+  }
+
   function patch(partial: Partial<SimpleChallengeDraft>) {
     setDraft((current) => {
       const next = { ...current, ...partial };
       if (!editId) {
+        editedRef.current = true;
         persistSimpleDraft(next);
+        persistServerDraft(next);
       }
       return next;
     });
     setError(null);
   }
+
+  useEffect(() => {
+    if (editId || hydratedRemote.current || editedRef.current || draftsQuery.isLoading) {
+      return;
+    }
+    const remote = pickSimpleDraft(draftsQuery.data ?? [], resumeDraftId);
+    if (remote && !isSimpleCreateDraft(remote)) {
+      router.replace(createHrefForDraft(remote, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
+      return;
+    }
+    if (remote && isSimpleCreateDraft(remote)) {
+      hydratedRemote.current = true;
+      simpleDraftIdRef.current = remote.id;
+      const next = refreshSimpleDraftStart(remote.simple ?? draftRef.current);
+      setDraft(next);
+      persistSimpleDraft(next);
+      return;
+    }
+    if ((draftsQuery.data ?? []).some((item) => item.id === resumeDraftId && !isSimpleCreateDraft(item))) {
+      const advanced = (draftsQuery.data ?? []).find((item) => item.id === resumeDraftId);
+      if (advanced) {
+        router.replace(createHrefForDraft(advanced, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
+      }
+    }
+  }, [draftsQuery.data, draftsQuery.isLoading, editId, resumeDraftId, returnTo, router]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (editId || (state !== 'background' && state !== 'inactive')) {
+        return;
+      }
+      persistSimpleDraft(draftRef.current);
+      persistServerDraft(draftRef.current);
+    });
+    return () => {
+      sub.remove();
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, [editId, user]);
 
   useEffect(() => {
     if (!editId || !editing.data) {
@@ -305,7 +402,20 @@ export function SimpleCreateForm() {
         router.replace(`/challenges/${challenge.id}`);
         return;
       }
-      const challenge = await create.mutateAsync(simpleDraftToCreateValues(draft));
+      const schedule = resolveStartForPublish({
+        preset: draft.start_preset,
+        starts_at: draft.starts_at,
+        duration_days: draft.duration_preset === 'custom' ? draft.duration_days : draft.duration_preset,
+      });
+      const toPublish = { ...draft, starts_at: schedule.starts_at };
+      if (toPublish.start_preset === 'custom') {
+        const start = Date.parse(toPublish.starts_at);
+        if (Number.isFinite(start) && start <= Date.now()) {
+          setError(copy('create.startFuture'));
+          return;
+        }
+      }
+      const challenge = await create.mutateAsync(simpleDraftToCreateValues(toPublish));
       clearPersistedSimpleDraft();
       router.replace(`/challenges/${challenge.id}`);
     } catch (err) {
@@ -551,10 +661,31 @@ export function SimpleCreateForm() {
             sectionRefs.current['create-simple-start'] = node;
           }}>
           <SectionLabel>{copy('create.start')}</SectionLabel>
+          <ChipRow>
+            <Chip
+              label="In 1 hour"
+              selected={draft.start_preset === 'hour'}
+              onPress={() =>
+                patch({ start_preset: 'hour' as StartPreset, starts_at: inOneHour().toISOString() })
+              }
+            />
+            <Chip
+              label="Tomorrow morning"
+              selected={draft.start_preset === 'tomorrow'}
+              onPress={() =>
+                patch({ start_preset: 'tomorrow' as StartPreset, starts_at: tomorrowMorning().toISOString() })
+              }
+            />
+            <Chip
+              label="Custom"
+              selected={draft.start_preset === 'custom'}
+              onPress={() => patch({ start_preset: 'custom' })}
+            />
+          </ChipRow>
           <DateTimeField
             value={draft.starts_at}
             minimumDate={editId ? undefined : new Date()}
-            onChange={(starts_at) => patch({ starts_at })}
+            onChange={(starts_at) => patch({ starts_at, start_preset: 'custom' })}
           />
           <StepperField
             label={copy('create.minToStart')}

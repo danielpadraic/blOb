@@ -47,9 +47,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
+  createHrefForDraft,
   hasMeaningfulDraftEdits,
   hydrateDraftValues,
   isDraftDirty,
+  isSimpleCreateDraft,
   isVisibleDraft,
   resumeWizardStep,
   valuesFromChallenge,
@@ -101,9 +103,11 @@ import {
   formatChallengeEndLine,
   inOneHour,
   MAX_CHALLENGE_DURATION_DAYS,
-  startPresetFor,
+  resolveStartForPublish,
+  startPresetFromValues,
   tomorrowMorning,
   withFreshSchedule,
+  type StartPreset,
 } from '@/lib/challengeSchedule';
 import {
   COMPARABLE_POINTS_METHOD,
@@ -204,6 +208,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const [scoringEditorOpen, setScoringEditorOpen] = useState(false);
   const [scoringToast, setScoringToast] = useState<string | null>(null);
   const [laneChosen, setLaneChosen] = useState(true);
+  const [startPreset, setStartPreset] = useState<StartPreset>(() =>
+    startPresetFromValues(DEFAULT_CREATE_VALUES.starts_at),
+  );
   const [bobError, setBobError] = useState<{ field: string; line: string } | null>(null);
   const tour = useTourOptional();
   const setCreatePeek = tour?.setCreatePeek;
@@ -306,6 +313,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     templateId: ChallengeTemplateId | null;
     sourceChallengeId: string | null;
     values: CreateChallengeValues;
+    startPreset: StartPreset;
   } | null>(null);
   const persistChainRef = useRef(Promise.resolve());
   const persistDraftRef = useRef<() => Promise<void>>(async () => {});
@@ -317,8 +325,19 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     sourceChallengeId,
     values,
     id: draftId,
+    createMode: 'advanced' as const,
+    startPreset,
   });
-  snapshotRef.current = { step, startPath, templateId, sourceChallengeId, values, id: draftId };
+  snapshotRef.current = {
+    step,
+    startPath,
+    templateId,
+    sourceChallengeId,
+    values,
+    id: draftId,
+    createMode: 'advanced',
+    startPreset,
+  };
   draftIdRef.current = draftId;
   footerDockHeight.current = footerH;
   keyboardHeightRef.current = keyboardHeight;
@@ -370,6 +389,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     templateId: ChallengeTemplateId | null;
     sourceChallengeId: string | null;
     values: CreateChallengeValues;
+    startPreset: StartPreset;
   }) {
     lastPersistedRef.current = {
       ...snapshot,
@@ -491,13 +511,22 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         return false;
       }
       const hydrated = hydrateDraftValues(draft.values);
+      const preset = draft.startPreset ?? startPresetFromValues(hydrated.starts_at);
+      const opened =
+        preset === 'custom'
+          ? hydrated
+          : { ...hydrated, ...resolveStartForPublish({
+              preset,
+              starts_at: hydrated.starts_at,
+              duration_days: hydrated.duration_days,
+            }) };
       const nextStep = Math.max(
         STEP_GOAL,
-        jumpToSavedStep ? resumeWizardStep({ ...draft, values: hydrated }) : STEP_GOAL,
+        jumpToSavedStep ? resumeWizardStep({ ...draft, values: opened }) : STEP_GOAL,
       );
       const nextPath = draft.startPath ?? 'scratch';
       if (__DEV__) {
-        console.log('[blob:draft] continue', { id: draft.id, savedStep: draft.step, nextStep, title: hydrated.title });
+        console.log('[blob:draft] continue', { id: draft.id, savedStep: draft.step, nextStep, title: opened.title });
       }
       discardedRef.current = false;
       restoredDraftRef.current = true;
@@ -506,20 +535,22 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       setStartPath(nextPath);
       setTemplateId(draft.templateId);
       setSourceChallengeId(draft.sourceChallengeId);
+      setStartPreset(preset);
       setRestoredDraft(true);
       setLaneChosen(true);
       setFormError(null);
       setBobError(null);
-      reset(cloneTemplateValues(hydrated));
-      setEntryTab(entryTabFromValues(hydrated));
-      captureBaseline(hydrated, nextStep);
+      reset(cloneTemplateValues(opened));
+      setEntryTab(entryTabFromValues(opened));
+      captureBaseline(opened, nextStep);
       rememberPersisted({
         id: draft.id,
         step: nextStep,
         startPath: nextPath,
         templateId: draft.templateId,
         sourceChallengeId: draft.sourceChallengeId,
-        values: hydrated,
+        values: opened,
+        startPreset: preset,
       });
       setStep(nextStep);
       return true;
@@ -542,6 +573,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     const next = draft ?? draftsQuery.data?.[0];
     if (!next) {
       setFormError('No draft to continue.');
+      return;
+    }
+    if (isSimpleCreateDraft(next)) {
+      router.replace(createHrefForDraft(next, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
       return;
     }
     applyDraft(next, true);
@@ -611,6 +646,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       last.startPath === snapshot.startPath &&
       last.templateId === snapshot.templateId &&
       last.sourceChallengeId === snapshot.sourceChallengeId &&
+      last.startPreset === snapshot.startPreset &&
       !isDraftDirty(snapshot.values, last.values)
     ) {
       return false;
@@ -694,6 +730,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       : draftsQuery.data?.[0];
     if (resumeOnOpen && existing && !didResumeRef.current) {
       didResumeRef.current = true;
+      if (isSimpleCreateDraft(existing)) {
+        router.replace(createHrefForDraft(existing, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
+        return;
+      }
       applyDraft(existing, true);
     }
   }, [draftsQuery.isLoading, draftsQuery.data, resumeOnOpen, resumeDraftId]);
@@ -1155,6 +1195,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (entryIssue) {
       return entryIssue;
     }
+    if (startPreset === 'custom') {
+      const start = Date.parse(getValues('starts_at'));
+      if (Number.isFinite(start) && start <= Date.now()) {
+        setError('starts_at', { type: 'validate', message: copy('create.startFuture') });
+        return { field: 'starts_at', step: STEP_DURATION };
+      }
+    }
     const formValues = getValues();
     const parsed = createChallengeSchema.safeParse(formValues);
     if (!parsed.success) {
@@ -1479,7 +1526,26 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           router.replace(`/challenges/${editId}`);
           return;
         }
-        const challenge = await create.mutateAsync({ ...formValues, rules, draft_id: draftId });
+        const schedule = resolveStartForPublish({
+          preset: startPreset,
+          starts_at: formValues.starts_at,
+          duration_days: formValues.duration_days || formValues.duration_value,
+        });
+        if (startPreset === 'custom') {
+          const start = Date.parse(schedule.starts_at);
+          if (Number.isFinite(start) && start <= Date.now()) {
+            skipSaveRef.current = false;
+            setFormError(copy('create.startFuture'));
+            showBobIssue({ field: 'starts_at', step: STEP_DURATION }, copy('create.startFuture'));
+            return;
+          }
+        }
+        const challenge = await create.mutateAsync({
+          ...formValues,
+          ...schedule,
+          rules,
+          draft_id: draftId,
+        });
         setBobError(null);
         setTutorialOn(true);
         setBobTipOpen(true);
@@ -1731,11 +1797,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             errors={errors}
             isUnlimited={isUnlimited}
             startsAt={values.starts_at}
+            startPreset={startPreset}
             durationDays={values.duration_value || values.duration_days || '7'}
             frequency={values.frequency}
               onDurationTypeChange={onDurationTypeChange}
               onFrequencyChange={onFrequencyChange}
-              onScheduleChange={applySchedule}
+              onScheduleChange={(patch, preset) => {
+                if (preset) {
+                  setStartPreset(preset);
+                }
+                applySchedule(patch);
+              }}
             />
           ) : null}
           {step === STEP_PRIZE ? (
@@ -2314,6 +2386,7 @@ function DurationSlide({
   errors,
   isUnlimited,
   startsAt,
+  startPreset,
   durationDays,
   frequency,
   onDurationTypeChange,
@@ -2324,14 +2397,14 @@ function DurationSlide({
   errors: ReturnType<typeof useForm<CreateChallengeValues>>['formState']['errors'];
   isUnlimited: boolean;
   startsAt: string;
+  startPreset: StartPreset;
   durationDays: string;
   frequency: ChallengeFrequency;
   onDurationTypeChange: (next: CreateChallengeValues['duration_type']) => void;
   onFrequencyChange: (next: ChallengeFrequency) => void;
-  onScheduleChange: (patch: Partial<CreateChallengeValues>) => void;
+  onScheduleChange: (patch: Partial<CreateChallengeValues>, preset?: StartPreset) => void;
 }) {
   const onDurationFocus = useWizardFieldFocus('duration_value');
-  const startPreset = startPresetFor(startsAt);
   const endLine = formatChallengeEndLine(
     endsAtFromStartAndDays(startsAt, Number(durationDays) || 7),
   );
@@ -2348,23 +2421,23 @@ function DurationSlide({
               <Chip
                 label="In 1 hour"
                 selected={startPreset === 'hour'}
-                onPress={() => onScheduleChange({ starts_at: inOneHour().toISOString() })}
+                onPress={() => onScheduleChange({ starts_at: inOneHour().toISOString() }, 'hour')}
               />
               <Chip
                 label="Tomorrow morning"
                 selected={startPreset === 'tomorrow'}
-                onPress={() => onScheduleChange({ starts_at: tomorrowMorning().toISOString() })}
+                onPress={() => onScheduleChange({ starts_at: tomorrowMorning().toISOString() }, 'tomorrow')}
               />
               <Chip
                 label="Custom"
                 selected={startPreset === 'custom'}
-                onPress={() => undefined}
+                onPress={() => onScheduleChange({}, 'custom')}
               />
             </ChipRow>
             <DateTimeField
               value={startsAt}
               error={errors.starts_at?.message}
-              onChange={(iso) => onScheduleChange({ starts_at: iso })}
+              onChange={(iso) => onScheduleChange({ starts_at: iso }, 'custom')}
             />
           </View>
         </FieldLabel>

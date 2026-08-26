@@ -1,4 +1,11 @@
-import { defaultChallengeStart, endsAtFromStartAndDays } from '@/lib/challengeSchedule';
+import {
+  asStartPreset,
+  endsAtFromStartAndDays,
+  inOneHour,
+  resolveStartForPublish,
+  startPresetFromValues,
+  type StartPreset,
+} from '@/lib/challengeSchedule';
 import type { Challenge, ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
 import {
@@ -99,6 +106,7 @@ export type SimpleChallengeDraft = {
   title: string;
   description: string;
   starts_at: string;
+  start_preset: StartPreset;
   duration_preset: SimpleDurationPreset;
   duration_days: number;
   task: string;
@@ -115,7 +123,7 @@ export type SimpleChallengeDraft = {
 };
 
 export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
-  const starts = defaultChallengeStart(now);
+  const starts = inOneHour(now);
   return {
     currency: 'coins',
     buy_in: 0,
@@ -125,6 +133,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     title: '',
     description: '',
     starts_at: starts.toISOString(),
+    start_preset: 'hour',
     duration_preset: 7,
     duration_days: 7,
     task: '',
@@ -159,11 +168,86 @@ function withProofSentences(draft: SimpleChallengeDraft): SimpleChallengeDraft {
 }
 
 const SIMPLE_DRAFT_KEY = 'blob.simpleCreateDraft';
-const SIMPLE_DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
 let simpleDraftMemory: { draft: SimpleChallengeDraft; savedAt: number } | null = null;
 
-function isFreshSimpleDraft(savedAt: number): boolean {
-  return Date.now() - savedAt < SIMPLE_DRAFT_TTL_MS;
+export function refreshSimpleDraftStart(draft: SimpleChallengeDraft, now = new Date()): SimpleChallengeDraft {
+  const preset = draft.start_preset ?? startPresetFromValues(draft.starts_at, now);
+  if (preset === 'custom') {
+    return { ...draft, start_preset: 'custom' };
+  }
+  const resolved = resolveStartForPublish({
+    preset,
+    starts_at: draft.starts_at,
+    duration_days: durationDaysOf(draft),
+    now,
+  });
+  return { ...draft, start_preset: preset, starts_at: resolved.starts_at };
+}
+
+export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const row = raw as Record<string, unknown>;
+  const base = defaultSimpleDraft();
+  const type = SIMPLE_TYPES.some((item) => item.value === row.type)
+    ? (row.type as SimpleChallengeType)
+    : base.type;
+  const currency: SimpleCurrency = row.currency === 'bucks' ? 'bucks' : 'coins';
+  const visibility: SimpleVisibility =
+    row.visibility === 'friends' || row.visibility === 'invite' ? row.visibility : 'public';
+  const frequency: SimpleFrequency =
+    row.frequency === 'once' || row.frequency === 'daily' || row.frequency === '3x_week' || row.frequency === 'custom'
+      ? row.frequency
+      : base.frequency;
+  const custom_period: SimpleCustomPeriod =
+    row.custom_period === 'day' ||
+    row.custom_period === 'week' ||
+    row.custom_period === 'month' ||
+    row.custom_period === 'duration'
+      ? row.custom_period
+      : base.custom_period;
+  const duration_preset: SimpleDurationPreset =
+    row.duration_preset === 1 ||
+    row.duration_preset === 7 ||
+    row.duration_preset === 30 ||
+    row.duration_preset === 'custom'
+      ? row.duration_preset
+      : row.duration_preset === '1'
+        ? 1
+        : row.duration_preset === '7'
+          ? 7
+          : row.duration_preset === '30'
+            ? 30
+            : base.duration_preset;
+  const starts_at = typeof row.starts_at === 'string' && row.starts_at.trim() ? row.starts_at : base.starts_at;
+  const start_preset = asStartPreset(row.start_preset) ?? startPresetFromValues(starts_at);
+  const proofs = Array.isArray(row.proofs) && row.proofs.length > 0 ? (row.proofs as SimpleChallengeDraft['proofs']) : base.proofs;
+  return withProofSentences({
+    ...base,
+    currency,
+    buy_in: Math.max(Number(row.buy_in) || 0, 0),
+    host_budget: Math.max(Number(row.host_budget) || 0, 0),
+    guarantee_enabled: typeof row.guarantee_enabled === 'boolean' ? row.guarantee_enabled : base.guarantee_enabled,
+    type,
+    title: typeof row.title === 'string' ? row.title : base.title,
+    description: typeof row.description === 'string' ? row.description : base.description,
+    starts_at,
+    start_preset,
+    duration_preset,
+    duration_days: Math.max(Number(row.duration_days) || base.duration_days, 1),
+    task: typeof row.task === 'string' ? row.task : base.task,
+    frequency,
+    custom_checkins: Math.max(Number(row.custom_checkins) || base.custom_checkins, 1),
+    custom_period,
+    proofs,
+    extra_tasks: Array.isArray(row.extra_tasks) ? (row.extra_tasks as SimpleChallengeDraft['extra_tasks']) : [],
+    visibility,
+    privacy_mode: asPrivacyMode(row.privacy_mode, visibility, 'coins'),
+    friends_of_friends: row.friends_of_friends !== false,
+    min_participants: Math.max(Number(row.min_participants) || 2, 2),
+    cover_image_url: typeof row.cover_image_url === 'string' ? row.cover_image_url : '',
+  });
 }
 
 export function persistSimpleDraft(draft: SimpleChallengeDraft) {
@@ -172,26 +256,27 @@ export function persistSimpleDraft(draft: SimpleChallengeDraft) {
   try {
     sessionStorage.setItem(SIMPLE_DRAFT_KEY, JSON.stringify(payload));
   } catch {
-    // Native / private mode — memory is enough for this session.
+    // Native / private mode — memory is enough until challenge_drafts saves.
   }
 }
 
-export function readPersistedSimpleDraft(): SimpleChallengeDraft | null {
+export function readPersistedSimpleDraft(now = new Date()): SimpleChallengeDraft | null {
   try {
     const raw = sessionStorage.getItem(SIMPLE_DRAFT_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as { draft?: SimpleChallengeDraft; savedAt?: number };
-      if (parsed?.draft && typeof parsed.savedAt === 'number' && isFreshSimpleDraft(parsed.savedAt)) {
-        const draft = withProofSentences(parsed.draft);
-        simpleDraftMemory = { draft, savedAt: parsed.savedAt };
-        return draft;
+      const parsed = JSON.parse(raw) as { draft?: unknown };
+      const draft = parseSimpleChallengeDraft(parsed?.draft);
+      if (draft) {
+        const next = refreshSimpleDraftStart(draft, now);
+        simpleDraftMemory = { draft: next, savedAt: Date.now() };
+        return next;
       }
     }
   } catch {
     // Ignore unavailable storage.
   }
-  if (simpleDraftMemory && isFreshSimpleDraft(simpleDraftMemory.savedAt)) {
-    return withProofSentences(simpleDraftMemory.draft);
+  if (simpleDraftMemory?.draft) {
+    return refreshSimpleDraftStart(withProofSentences(simpleDraftMemory.draft), now);
   }
   return null;
 }
@@ -478,6 +563,7 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
     title: challenge.title,
     description: challenge.description ?? '',
     starts_at: challenge.starts_at,
+    start_preset: startPresetFromValues(challenge.starts_at),
     duration_preset,
     duration_days: days,
     task: challenge.task ?? '',

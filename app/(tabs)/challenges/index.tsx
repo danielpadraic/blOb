@@ -26,7 +26,7 @@ import {
   useOfficialDiscoverChallenges,
 } from '@/hooks/useChallenge';
 import { useChallengeDrafts, useDiscardChallengeDraft } from '@/hooks/useChallengeDraft';
-import { isVisibleDraft } from '@/lib/challengeDraft';
+import { createHrefForDraft, isVisibleDraft } from '@/lib/challengeDraft';
 import { isJoinableNotStarted } from '@/lib/challengeDiscoverability';
 import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -254,13 +254,7 @@ export default function ChallengesScreen() {
             <ContinueDraftCard
               key={item.id ?? item.updatedAt}
               draft={item}
-              onContinue={() =>
-                router.push(
-                  item.id
-                    ? `/challenges/create?resume=1&draftId=${encodeURIComponent(item.id)}`
-                    : '/challenges/create?resume=1',
-                )
-              }
+              onContinue={() => router.push(createHrefForDraft(item))}
               onDiscard={() => {
                 void discardDraft.mutateAsync(item.id);
               }}

@@ -1,0 +1,35 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  inOneHour,
+  resolveStartForPublish,
+  startPresetFromValues,
+} from '@/lib/challengeSchedule';
+
+describe('challenge start presets', () => {
+  it('resolves hour at T+3h to about 1 hour from then, not the original stamp', () => {
+    const savedAt = new Date('2026-08-26T12:00:00.000Z');
+    const original = inOneHour(savedAt).toISOString();
+    const later = new Date(savedAt.getTime() + 3 * 60 * 60 * 1000);
+    const resolved = resolveStartForPublish({
+      preset: 'hour',
+      starts_at: original,
+      duration_days: 7,
+      now: later,
+    });
+    expect(Math.abs(new Date(resolved.starts_at).getTime() - inOneHour(later).getTime())).toBeLessThan(2000);
+    expect(resolved.starts_at).not.toBe(original);
+  });
+
+  it('keeps a custom start in the past as custom', () => {
+    const past = '2020-01-01T15:00:00.000Z';
+    const resolved = resolveStartForPublish({
+      preset: 'custom',
+      starts_at: past,
+      duration_days: 7,
+      now: new Date('2026-08-26T18:00:00.000Z'),
+    });
+    expect(resolved.starts_at).toBe(new Date(past).toISOString());
+    expect(startPresetFromValues(past, new Date('2026-08-26T18:00:00.000Z'))).toBe('custom');
+  });
+});
