@@ -965,6 +965,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       setValue('tasks', [emptyChallengeTask()], { shouldValidate: false });
     }
     seedPointsTaskFromGoal();
+    setValue('misses_allowed', '0', { shouldDirty: false, shouldValidate: false });
   }
 
   function applySchedule(patch: Partial<CreateChallengeValues>) {
@@ -1868,6 +1869,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               challengeLane={values.challenge_lane}
               participantCap={values.participant_cap}
               creatorParticipating={values.creator_participating}
+              isPoints={isPoints}
               onEntryTabChange={onEntryTabChange}
               onCapChange={(value) => setValue('participant_cap', value, { shouldValidate: true })}
               onCreatorParticipatingChange={(value) =>
@@ -2843,6 +2845,7 @@ function EntrySlide({
   challengeLane,
   participantCap,
   creatorParticipating,
+  isPoints,
   onEntryTabChange,
   onCapChange,
   onCreatorParticipatingChange,
@@ -2853,6 +2856,7 @@ function EntrySlide({
   challengeLane: CreateChallengeValues['challenge_lane'];
   participantCap: CreateChallengeValues['participant_cap'];
   creatorParticipating: boolean;
+  isPoints: boolean;
   onEntryTabChange: (next: EntryTab) => void;
   onCapChange: (value: CreateChallengeValues['participant_cap']) => void;
   onCreatorParticipatingChange: (value: boolean) => void;
@@ -2978,6 +2982,7 @@ function EntrySlide({
           )}
         />
       </FieldAnchor>
+      {isPoints ? null : (
       <FieldAnchor name="misses_allowed">
         <Controller
           control={control}
@@ -2997,6 +3002,7 @@ function EntrySlide({
           )}
         />
       </FieldAnchor>
+      )}
       <FieldAnchor name="proof_review">
         <Controller
           control={control}

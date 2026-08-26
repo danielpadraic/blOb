@@ -397,6 +397,25 @@ export function isPointsDraft(values: Pick<CreateChallengeValues, 'challenge_typ
   return values.challenge_type === 'points' && values.duration_type !== 'unlimited';
 }
 
+export function missesAllowedForPublish(
+  values: Pick<CreateChallengeValues, 'challenge_type' | 'duration_type' | 'misses_allowed'>,
+): number {
+  if (isPointsDraft(values)) {
+    return 0;
+  }
+  return Math.max(Number(values.misses_allowed) || 0, 0);
+}
+
+export function missesAllowedReviewLine(
+  values: Pick<CreateChallengeValues, 'challenge_type' | 'duration_type' | 'misses_allowed'>,
+): string | null {
+  if (isPointsDraft(values)) {
+    return null;
+  }
+  const n = missesAllowedForPublish(values);
+  return `${n} miss${n === 1 ? '' : 'es'} allowed`;
+}
+
 export function isUnlimitedDraft(values: Pick<CreateChallengeValues, 'duration_type'>): boolean {
   return values.duration_type === 'unlimited';
 }
@@ -485,7 +504,8 @@ export function wizardMeans(
         values.participant_cap === 'limited'
           ? `Max ${Math.max(Number(values.max_participants) || 0, 0)} competitors.`
           : 'Unlimited competitors.';
-      return `${entry} ${cap}`;
+      const misses = missesAllowedReviewLine(values);
+      return misses ? `${entry} ${cap} ${misses}.` : `${entry} ${cap}`;
     }
     case 'rules':
       if (values.scoring_method === 'comparable_points' && scoring) {
@@ -542,6 +562,7 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
         .join('\n')
     : `Proof each check-in: ${values.proofs.join(', ') || 'none'}.`;
 
+  const misses = missesAllowedReviewLine(values);
   const entry =
     values.participant_cap === 'limited'
       ? `${buyIn > 0 ? `${formatWalletAmount(buyIn, values.currency)} to enter` : 'Free to enter'}. Max ${Math.max(
@@ -549,6 +570,7 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
           0,
         )} competitors.`
       : `${buyIn > 0 ? `${formatWalletAmount(buyIn, values.currency)} to enter` : 'Free to enter'}. Unlimited competitors.`;
+  const entryBody = misses ? `${entry} ${misses}.` : entry;
 
   return [
     { title: 'Who it’s for', body: `${values.title.trim()}\n${(values.description ?? '').trim()}\n${vis}` },
@@ -573,7 +595,7 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
         currency: values.currency,
       }),
     },
-    { title: 'Entry & limits', body: entry },
+    { title: 'Entry & limits', body: entryBody },
     {
       title: 'You’re in it',
       body: values.creator_participating ? 'You’re competing too.' : 'You’re hosting only',
@@ -623,6 +645,7 @@ export function challengeContractRows(values: CreateChallengeValues): { label: s
     values.participant_cap === 'limited'
       ? `Max ${Math.max(Number(values.max_participants) || 0, 0)}`
       : 'Unlimited';
+  const misses = missesAllowedReviewLine(values);
 
   return [
     { label: 'Lane', body: lane === 'private' ? 'Private Challenge' : 'Coin Challenge' },
@@ -634,6 +657,7 @@ export function challengeContractRows(values: CreateChallengeValues): { label: s
     { label: 'Prize structure', body: shortPrizeLabel(values) },
     { label: 'Visibility', body: visibility },
     { label: 'Competitors', body: competitors },
+    ...(misses ? [{ label: 'Misses allowed', body: misses }] : []),
     {
       label: 'You',
       body: values.creator_participating ? 'You’re competing too.' : 'You’re hosting only',
@@ -698,6 +722,7 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     is_unlimited: unlimited,
     category: values.category,
     challenge_type: unlimited ? 'consistency' : values.challenge_type,
+    misses_allowed: missesAllowedForPublish(values),
     visibility: values.visibility,
     privacy_mode: values.privacy_mode,
     challenge_lane: values.challenge_lane === 'private' ? 'private' : 'coins',

@@ -833,7 +833,7 @@ export function useCreateChallenge() {
         format: unlimited ? 'lms' : values.format ?? values.challenge_type,
         task: values.task?.trim() || values.rule_activity.trim() || null,
         required_checkins: Number(values.required_checkins) || targetCount,
-        misses_allowed: Math.max(Number(values.misses_allowed) || 0, 0),
+        misses_allowed: isPoints ? 0 : Math.max(Number(values.misses_allowed) || 0, 0),
         proof_type:
           values.proof_type ??
           proofTypeFromMethod(firstProofMethod(namedProofs)),
@@ -1049,7 +1049,7 @@ export function useUpdateUserChallenge() {
         length_value: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
         required_checkins: Number(values.required_checkins) || targetCount,
-        misses_allowed: Math.max(Number(values.misses_allowed) || 0, 0),
+        misses_allowed: isPoints ? 0 : Math.max(Number(values.misses_allowed) || 0, 0),
         proof_type: values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),
         cover_image_url: values.cover_image_url?.trim() || null,
         rules_video_url: values.rules_video_url?.trim() || null,
