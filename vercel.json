@@ -1,6 +1,8 @@
 {
-  "buildCommand": "npm --prefix web install && npm --prefix web run build",
-  "outputDirectory": "web/out",
+  "buildCommand": "npx expo export --platform web",
+  "outputDirectory": "dist",
+  "devCommand": "npx expo start --web",
+  "installCommand": "npm install",
   "framework": null,
   "cleanUrls": true,
   "rewrites": [
