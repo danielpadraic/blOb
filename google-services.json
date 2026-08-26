@@ -1,45 +1,67 @@
 {
   "project_info": {
-    "project_number": "737566491083",
-    "project_id": "bl0b-3f4ce",
-    "storage_bucket": "bl0b-3f4ce.firebasestorage.app"
+    "project_number": "49251028054",
+    "project_id": "blob-505616",
+    "storage_bucket": "blob-505616.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:737566491083:android:fdcea099fb80e5e9c1764e",
+        "mobilesdk_app_id": "1:49251028054:android:38dca4a4ef3c945705bff7",
         "android_client_info": {
           "package_name": "app.blob.mobile"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "49251028054-drkl16k6is971l315jpum9pbndkp36ds.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.blob.mobile",
+            "certificate_hash": "ce0a488e12bf7cd1da210debbf4c59ea3019f31d"
+          }
+        },
+        {
+          "client_id": "49251028054-ju4n8l2iuulsf74nqpvqmamm5p3i6ir5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.blob.mobile",
+            "certificate_hash": "23b7bf7f72f38b51f3905bf32f481ebfdc2efc6f"
+          }
+        },
+        {
+          "client_id": "49251028054-lkqdmhd57hlslk03arh0k6chqvqgu7li.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.blob.mobile",
+            "certificate_hash": "7a22187c5a51eb388712650efa4460a2efeac8ee"
+          }
+        },
+        {
+          "client_id": "49251028054-d21t852ji7nh32m3dhghafk533tpsp3e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyA9gYFxMP6iVukWH2F3OEmEqmQoXmaYb44"
+          "current_key": "AIzaSyCpK975D5wxoGgukA5rKdJYcotBKmns9QE"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:737566491083:android:88bb4a35700a681bc1764e",
-        "android_client_info": {
-          "package_name": "com.example.bl0b"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyA9gYFxMP6iVukWH2F3OEmEqmQoXmaYb44"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "49251028054-d21t852ji7nh32m3dhghafk533tpsp3e.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "49251028054-54pin15flhs2uhhtqhnjkblmdte62bka.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.blob.tournament"
+              }
+            }
+          ]
         }
       }
     }
