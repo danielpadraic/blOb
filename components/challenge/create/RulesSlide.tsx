@@ -60,7 +60,8 @@ export function RulesSlide({
 }) {
   const focus = useContext(WizardFocusContext);
   const extraRules = values.extra_rules ?? [];
-  const [constraintsOpen, setConstraintsOpen] = useState(extraRules.length > 0);
+  const hasConstraintCopy = extraRules.some((rule) => (rule.text ?? '').trim().length >= 2);
+  const [constraintsOpen, setConstraintsOpen] = useState(hasConstraintCopy);
   const [customDraft, setCustomDraft] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
   const periods = isUnlimited
@@ -68,7 +69,7 @@ export function RulesSlide({
     : PERIODS;
   const preview = consistencyRuleSentence(values);
   const taskLine = (values.task ?? '').trim() || values.rule_activity.trim() || 'your check-in';
-  const showConstraints = constraintsOpen || extraRules.length > 0 || customOpen;
+  const showConstraints = constraintsOpen || hasConstraintCopy || customOpen;
 
   function flushCustomDraft() {
     const text = customDraft.trim();

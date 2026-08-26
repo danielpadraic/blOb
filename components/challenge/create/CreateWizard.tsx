@@ -86,6 +86,7 @@ import { composeChallengeRules } from '@/lib/consistencyRules';
 import {
   nextCreateWizardStep,
   prevCreateWizardStep,
+  rulesStepBlockingIssue,
   rulesStepIsReady,
   seedPointsTasksFromGoal,
   stripBlankExtraRules as dropBlankExtraRules,
@@ -770,6 +771,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (next !== errorSnapshotRef.current) {
       const field = bobError.field;
       setBobError(null);
+      setFormError(null);
       if (
         field !== 'start' &&
         field !== 'challenge_lane' &&
@@ -1333,15 +1335,35 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       saveScoringMethod();
       return;
     }
+    if (step === STEP_RULES) {
+      flushRulesDraftRef.current();
+      stripBlankExtraRules();
+      stripBlankExtraTasks();
+      seedPointsTaskFromGoal();
+      syncRuleActivityFromTask();
+      syncComposedRules();
+      const rulesIssue = rulesStepBlockingIssue(getValues());
+      if (rulesIssue) {
+        setError(rulesIssue.field as FieldPath<CreateChallengeValues>, {
+          type: 'validate',
+          message: rulesIssue.message,
+        });
+        setFormError(rulesIssue.message);
+        showBobIssue({ field: rulesIssue.field, step: STEP_RULES }, rulesIssue.message);
+        return;
+      }
+      if (reviewReturn) {
+        setReviewReturn(false);
+        setStep(STEP_REVIEW);
+        return;
+      }
+      setStep((current) => nextCreateWizardStep(current, getValues(), scoringEditorOpen));
+      return;
+    }
     if (reviewReturn && !lastStep) {
       if (step === STEP_GOAL) {
         stripBlankExtraTasks();
         syncRuleActivityFromTask();
-      }
-      if (step === STEP_RULES) {
-        flushRulesDraftRef.current();
-        stripBlankExtraRules();
-        seedPointsTaskFromGoal();
       }
       syncComposedRules();
       const issue = (step === STEP_ENTRY ? coinEntryIssue(step) : null) ?? applyStepErrors(step);
@@ -1357,11 +1379,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       if (step === STEP_GOAL) {
         stripBlankExtraTasks();
         syncRuleActivityFromTask();
-      }
-      if (step === STEP_RULES) {
-        flushRulesDraftRef.current();
-        stripBlankExtraRules();
-        seedPointsTaskFromGoal();
       }
       syncComposedRules();
       const issue = (step === STEP_ENTRY ? coinEntryIssue(step) : null) ?? applyStepErrors(step);
@@ -1878,6 +1895,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                 }
                 loading={lastStep && publishing}
                 onPress={() => void goNext()}
+                style={{ minHeight: 44 }}
               />
             </View>
           </View>

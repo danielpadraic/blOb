@@ -4,6 +4,7 @@ import { nextCreateItemId } from '@/lib/createItemIds';
 import {
   nextCreateWizardStep,
   prevCreateWizardStep,
+  rulesStepBlockingIssue,
   rulesStepIsReady,
   seedPointsTasksFromGoal,
   shouldSkipScoringStep,
@@ -103,5 +104,72 @@ describe('create wizard flow', () => {
         frequency: 'weekly',
       }),
     ).toBe(true);
+  });
+
+  it('lets Points Rules Next pass when Task 1 is named and pointed with empty extra_rules', () => {
+    const values = {
+      challenge_type: 'points' as const,
+      duration_type: 'fixed' as const,
+      task: '',
+      tasks: [{ ...blankTask, title: 'Finish a 5K', points: '10' }],
+      target_count: '6',
+      rule_activity: 'workout',
+      frequency: 'weekly' as const,
+    };
+    expect(stripBlankExtraRules([])).toEqual([]);
+    expect(rulesStepIsReady(values)).toBe(true);
+    expect(rulesStepBlockingIssue(values)).toBeNull();
+  });
+
+  it('blocks Points Rules Next when Task 1 and Goal.task are both empty', () => {
+    const values = {
+      challenge_type: 'points' as const,
+      duration_type: 'fixed' as const,
+      task: '',
+      tasks: [blankTask],
+      target_count: '6',
+      rule_activity: 'workout',
+      frequency: 'weekly' as const,
+    };
+    expect(rulesStepIsReady(values)).toBe(false);
+    expect(rulesStepBlockingIssue(values)).toEqual({
+      field: 'tasks.0.title',
+      message: 'Give this task a short name',
+    });
+  });
+
+  it('seeds Points Task 1 from Goal.task then treats Rules as ready', () => {
+    const values = {
+      challenge_type: 'points' as const,
+      duration_type: 'fixed' as const,
+      task: 'Pray for somebody…',
+      tasks: [blankTask],
+      target_count: '6',
+      rule_activity: 'workout',
+      frequency: 'weekly' as const,
+    };
+    const seeded = seedPointsTasksFromGoal(values);
+    expect(seeded?.[0]?.title).toBe('Pray for somebody…');
+    expect(rulesStepIsReady({ ...values, tasks: seeded ?? values.tasks })).toBe(true);
+    expect(rulesStepBlockingIssue(values)).toBeNull();
+  });
+
+  it('strips a blank extra rule and still lets Consistency Rules Next pass', () => {
+    const extras = [
+      { id: 'blank', text: '' },
+      { id: 'space', text: ' ' },
+    ];
+    expect(stripBlankExtraRules(extras)).toEqual([]);
+    const values = {
+      challenge_type: 'consistency' as const,
+      duration_type: 'fixed' as const,
+      task: 'Run 1 mile',
+      tasks: [blankTask],
+      target_count: '6',
+      rule_activity: 'Run 1 mile',
+      frequency: 'weekly' as const,
+    };
+    expect(rulesStepIsReady(values)).toBe(true);
+    expect(rulesStepBlockingIssue(values)).toBeNull();
   });
 });
