@@ -38,6 +38,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "app.blob.mobile",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 8,
       "intentFilters": [
         {
