@@ -393,6 +393,15 @@ export function getAuthFormMessage(error: unknown): string {
   if (isNetworkAuthError(blob)) {
     return copy('auth.network');
   }
+  if (blob.includes('play services')) {
+    return 'Google Play Services is missing or out of date. Update Play Services and try again.';
+  }
+  if (blob.includes('did not return a sign-in token') || blob.includes('no idtoken')) {
+    return 'Google did not return a sign-in token. Try again.';
+  }
+  if (blob.includes('google sign-in is not configured')) {
+    return 'Google sign-in is not configured. Add the Web and iOS client IDs and rebuild.';
+  }
 
   const human = humanize(raw);
   if (!human || leaksAuthCode(human)) {

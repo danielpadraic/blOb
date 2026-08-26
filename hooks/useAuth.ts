@@ -41,6 +41,7 @@ import {
   isPasswordRecoveryPending,
   markPasswordRecoveryPending,
 } from '@/lib/passwordRecovery';
+import { signInWithNativeGoogle } from '@/lib/googleNativeAuth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -546,6 +547,10 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
     return;
   }
 
+  if (provider === 'google') {
+    throw new Error('Native Google uses signInWithIdToken, not blob:// OAuth.');
+  }
+
   const nativeRedirect = resolveOAuthRedirectUri({
     platform: Platform.OS,
     computedNative: makeRedirectUri({
@@ -675,7 +680,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async () => {
     setOauthLoading(true);
     try {
-      await signInWithOAuthProvider('google');
+      if (Platform.OS === 'web') {
+        await signInWithOAuthProvider('google');
+        return;
+      }
+      await signInWithNativeGoogle();
     } finally {
       setOauthLoading(false);
     }

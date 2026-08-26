@@ -71,7 +71,22 @@ export default function LoginScreen() {
       if (isAuthCancelled(error)) {
         return;
       }
-      reportAppError({ route: 'auth/login-google', error });
+      reportAppError({
+        route: 'auth/login-google',
+        error,
+        payload:
+          error instanceof Error
+            ? {
+                resultType: 'resultType' in error ? String(error.resultType) : error.name,
+                hasIdToken: 'hasIdToken' in error ? Boolean(error.hasIdToken) : null,
+                hasCode: 'hasCode' in error ? Boolean(error.hasCode) : null,
+                exchangeMessage:
+                  'exchangeMessage' in error && typeof error.exchangeMessage === 'string'
+                    ? error.exchangeMessage
+                    : error.message,
+              }
+            : { resultType: 'unknown', hasIdToken: false, hasCode: false },
+      });
       setFormError(getAuthFormMessage(error));
     }
   }

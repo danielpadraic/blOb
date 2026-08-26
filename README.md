@@ -32,6 +32,26 @@ npm install
 npx expo start
 ```
 
+## Native Google (iOS + Android)
+
+Use the official Sign-In SDK + `signInWithIdToken`. Do not send Custom Tabs / ASWebAuthenticationSession to `blob://` for Google.
+
+```json
+[
+  "@react-native-google-signin/google-signin",
+  {
+    "iosUrlScheme": "com.googleusercontent.apps.49251028054-54pin15flhs2uhhtqhnjkblmdte62bka"
+  }
+]
+```
+
+`YOUR_IOS_CLIENT_ID` is `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` without `.apps.googleusercontent.com`. Set on EAS and in `.env`:
+
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — same Web client as Supabase Google provider
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` — iOS client, bundle `com.blob.tournament`
+
+Web Google stays HTTPS `/auth/callback`. Needs a new EAS binary after the plugin + URL scheme change.
+
 ## Auth & onboarding
 
 - Sign up creates `auth.users` and a stub `profiles` row (`blob_<id>`).
