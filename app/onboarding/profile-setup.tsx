@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter, Redirect } from 'expo-router';
 import type { Href } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
 import { BfpSliderCopy, MotivationToneChips } from '@/components/profile/MotivationToneChips';
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
-import { Screen } from '@/components/ui/Screen';
+import { KeyboardField, KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SetupProgress } from '@/components/ui/SetupProgress';
 import { AppText } from '@/components/ui/AppText';
@@ -52,6 +53,7 @@ import {
   feetInchesToCm,
   prettyNumber,
 } from '@/utils/units';
+import { normalizeUsername, usernameHandleLabel } from '@/lib/username';
 import {
   PROFILE_STEP_FIELDS,
   hasAcceptedLegal,
@@ -96,7 +98,6 @@ export function ProfileSetupWizard() {
   const [exactOpen, setExactOpen] = useState(false);
   const [exactDraft, setExactDraft] = useState(String(BODY_FAT_DEFAULT));
   const [tone, setTone] = useState<CopyTone>(() => asCopyTone(profile?.motivation_tone));
-  const scrollRef = useRef<ScrollView>(null);
 
   const defaults = useMemo(() => buildDefaults(profile), [profile]);
 
@@ -123,10 +124,6 @@ export function ProfileSetupWizard() {
       setTone(asCopyTone(profile.motivation_tone));
     }
   }, [profile?.motivation_tone]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ y: 0 });
-  }, [step]);
 
   const username = watch('username');
   const activities = watch('primary_activities');
@@ -273,7 +270,7 @@ export function ProfileSetupWizard() {
 
     try {
       await completeProfile.mutateAsync({
-        username: values.username,
+        username: normalizeUsername(values.username),
         display_name: values.display_name,
         avatar_url: profile?.avatar_url,
         bio: values.bio || null,
@@ -301,6 +298,7 @@ export function ProfileSetupWizard() {
     }
   });
 
+  const handleLabel = usernameHandleLabel(username);
   const usernameHint = availability.isChecking
     ? 'Checking…'
     : availability.isTaken
@@ -318,7 +316,35 @@ export function ProfileSetupWizard() {
   }
 
   return (
-    <Screen scroll scrollRef={scrollRef}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: THEME.background }} edges={['top', 'left', 'right']}>
+    <KeyboardFormShell
+      scrollToTopKey={step}
+      paddingHorizontal={16}
+      footer={
+        <View className="gap-3">
+          {formError ? (
+            <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
+          ) : null}
+          {step < 2 ? (
+            <Button
+              title="Continue"
+              size="lg"
+              onPress={() => void goNext()}
+              disabled={step === 0 && (availability.isTaken || availability.isChecking)}
+            />
+          ) : (
+            <Button
+              title="Finish"
+              size="lg"
+              onPress={onSubmit}
+              loading={isSubmitting || completeProfile.isPending}
+            />
+          )}
+          {step > 0 ? (
+            <Button title="Back" variant="ghost" size="lg" onPress={() => setStep((current) => current - 1)} />
+          ) : null}
+        </View>
+      }>
       <View className="items-center pt-2">
         <BlobMascot size={132} motion="float" />
         <AppText className="mt-5 text-3xl font-bold text-charcoal">{stepCopy.title}</AppText>
@@ -355,7 +381,7 @@ export function ProfileSetupWizard() {
                 autoCorrect={false}
                 textContentType="username"
                 value={value}
-                onChangeText={onChange}
+                onChangeText={(text) => onChange(normalizeUsername(text))}
                 onBlur={onBlur}
                 error={
                   errors.username?.message ??
@@ -365,6 +391,11 @@ export function ProfileSetupWizard() {
               />
             )}
           />
+          {handleLabel ? (
+            <AppText className="text-xs font-semibold" style={{ color: THEME.accent }}>
+              {handleLabel}
+            </AppText>
+          ) : null}
           <Controller
             control={control}
             name="display_name"
@@ -591,40 +622,42 @@ export function ProfileSetupWizard() {
           {metricsReady && (gender === 'male' || gender === 'female') ? (
             <View>
               <MorphingBlob gender={gender} bodyFatPct={bodyFat} />
-              <View className="mt-1 gap-2">
-                <BfpSliderCopy tone={tone} />
-                <Controller
-                  control={control}
-                  name="body_fat_pct"
-                  render={({ field: { value, onChange } }) => (
-                    <BodyFatSlider
-                      value={value}
-                      onChange={(next) => onChange(clampBodyFat(next))}
-                    />
-                  )}
-                />
-              </View>
-              {exactOpen ? (
-                <View className="mt-2 flex-row items-end gap-2">
-                  <View className="flex-1">
-                    <Input
-                      label={copy('bfp.exactLabel')}
-                      keyboardType="decimal-pad"
-                      inputMode="decimal"
-                      value={exactDraft}
-                      onChangeText={setExactDraft}
-                      placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
-                    />
-                  </View>
-                  <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
+              <KeyboardField>
+                <View className="mt-1 gap-2">
+                  <BfpSliderCopy tone={tone} />
+                  <Controller
+                    control={control}
+                    name="body_fat_pct"
+                    render={({ field: { value, onChange } }) => (
+                      <BodyFatSlider
+                        value={value}
+                        onChange={(next) => onChange(clampBodyFat(next))}
+                      />
+                    )}
+                  />
                 </View>
-              ) : (
-                <Pressable className="mt-2" onPress={() => setExactOpen(true)} accessibilityRole="button">
-                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                    {copy('bfp.enterExact')}
-                  </AppText>
-                </Pressable>
-              )}
+                {exactOpen ? (
+                  <View className="mt-2 flex-row items-end gap-2">
+                    <View className="flex-1">
+                      <Input
+                        label={copy('bfp.exactLabel')}
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                        value={exactDraft}
+                        onChangeText={setExactDraft}
+                        placeholder={`${BODY_FAT_MIN}–${BODY_FAT_MAX}`}
+                      />
+                    </View>
+                    <Button title="Set" size="sm" className="mb-1" onPress={applyExact} />
+                  </View>
+                ) : (
+                  <Pressable className="mt-2" onPress={() => setExactOpen(true)} accessibilityRole="button">
+                    <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                      {copy('bfp.enterExact')}
+                    </AppText>
+                  </Pressable>
+                )}
+              </KeyboardField>
             </View>
           ) : (
             <Card>
@@ -635,32 +668,8 @@ export function ProfileSetupWizard() {
           )}
         </View>
       ) : null}
-
-      {formError ? (
-        <AppText className="mt-5 text-sm leading-5 text-coral-dark">{formError}</AppText>
-      ) : null}
-
-      <View className="mt-8 gap-3 pb-4">
-        {step < 2 ? (
-          <Button
-            title="Continue"
-            size="lg"
-            onPress={() => void goNext()}
-            disabled={step === 0 && (availability.isTaken || availability.isChecking)}
-          />
-        ) : (
-          <Button
-            title="Finish"
-            size="lg"
-            onPress={onSubmit}
-            loading={isSubmitting || completeProfile.isPending}
-          />
-        )}
-        {step > 0 ? (
-          <Button title="Back" variant="ghost" size="lg" onPress={() => setStep((current) => current - 1)} />
-        ) : null}
-      </View>
-    </Screen>
+    </KeyboardFormShell>
+    </SafeAreaView>
   );
 }
 

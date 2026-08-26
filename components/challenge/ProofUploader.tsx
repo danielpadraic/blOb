@@ -9,6 +9,7 @@ import { HealthWorkoutSheet } from '@/components/challenge/HealthWorkoutSheet';
 import { AppText } from '@/components/ui/AppText';
 import { proofMeta } from '@/lib/constants';
 import { copy } from '@/lib/copy';
+import type { ChallengeProof } from '@/lib/challengeProofs';
 import {
   cameraIsAvailable,
   ensureCapturePermissions,
@@ -18,6 +19,7 @@ import {
 import { THEME } from '@/lib/theme';
 import type { ProofType } from '@/lib/types';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
+import { challengeAcceptsWorkoutProof } from '@/lib/health/acceptsWorkout';
 import { getHealthProvider, type HealthWorkout } from '@/services/health';
 import type { Challenge } from '@/lib/types';
 
@@ -36,6 +38,7 @@ type ProofUploaderProps = {
     startsAt?: string | null;
     userId?: string;
     attaching?: boolean;
+    proof?: ChallengeProof | null;
     challenge?: Pick<
       Challenge,
       | 'id'
@@ -85,7 +88,12 @@ export function ProofUploader({
   const [libraryDenied, setLibraryDenied] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const healthChip = Boolean(type === 'hr_monitor' && health && getHealthProvider()?.isAvailable());
+  const healthChip = Boolean(
+    Platform.OS === 'ios' &&
+      health &&
+      getHealthProvider()?.isAvailable() &&
+      (type === 'hr_monitor' || challengeAcceptsWorkoutProof(health.challenge)),
+  );
   const faceHint =
     type === 'pre_selfie' || type === 'post_selfie' || type === 'photo' ? copy('health.faceHint') : null;
   const watch = useStartOnWatch(
@@ -225,6 +233,7 @@ export function ProofUploader({
             dayWindows={health.challenge?.day_windows}
             userId={health.userId}
             attaching={health.attaching}
+            proof={health.proof}
             onClose={() => setHealthOpen(false)}
             onDenied={() => {
               setHealthOpen(false);

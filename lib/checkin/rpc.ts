@@ -5,6 +5,7 @@ import {
   type ChallengeProof,
   type ChallengeProofPart,
 } from '../challengeProofs';
+import type { CheckinHealthProof } from '../health/checkinHealthProof';
 import { asCheckinStatus, type ChallengeCheckin } from '../challengeCheckin';
 import { normalizePeriodKey } from '../checkinPeriod';
 import { mapCheckinRpcError } from './errors';
@@ -39,6 +40,7 @@ export type SaveCheckinProofInput = {
   extraMedia?: string[] | null;
   urls?: string[] | null;
   clearProof?: boolean;
+  health?: CheckinHealthProof | null;
 };
 
 function isRemoteMediaUrl(uri: string): boolean {
@@ -111,7 +113,7 @@ async function proofPartFor(
     const healthWorkoutId = uri.slice('health:'.length);
     return {
       id: proof.id,
-      part: { method: proof.method, url: '', healthWorkoutId },
+      part: { method: proof.method, url: '', healthWorkoutId, health: input.health ?? null },
       healthWorkoutId,
     };
   }

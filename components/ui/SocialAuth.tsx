@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { isAuthCancelled } from '@/components/auth/AuthShell';
+import { getAuthFormMessage } from '@/utils/errors';
 
 type SocialAuthProps = {
   onError: (message: string) => void;
@@ -21,11 +22,7 @@ export function SocialAuth({ onError, busy }: SocialAuthProps) {
       if (isAuthCancelled(error)) {
         return;
       }
-      onError(
-        error instanceof Error
-          ? error.message
-          : 'That sign-in didn’t finish. Please try again.',
-      );
+      onError(getAuthFormMessage(error));
     }
   }
 

@@ -194,4 +194,46 @@ describe('check-in composer save', () => {
       }),
     );
   });
+
+  it('stores a Health snapshot on the check-in proof part', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    const health = {
+      startedAt: '2026-08-26T13:02:00.000Z',
+      endedAt: '2026-08-26T13:41:00.000Z',
+      durationSec: 2340,
+      activityType: 'running',
+      sourceName: 'Apple Watch',
+      avgHrBpm: 148,
+      maxHrBpm: 172,
+    };
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'hr', name: 'Heart rate', method: 'hr' },
+        uri: 'health:hw-1',
+        health,
+      },
+      async () => {
+        throw new Error('should not upload');
+      },
+      async () => 'https://example.com/unused.jpg',
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      'save_checkin_proof',
+      expect.objectContaining({
+        p_proof_id: 'hr',
+        p_health_workout_id: 'hw-1',
+        p_proof_part: {
+          method: 'hr',
+          url: '',
+          healthWorkoutId: 'hw-1',
+          health,
+        },
+      }),
+    );
+  });
 });

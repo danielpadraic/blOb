@@ -41,6 +41,8 @@ import {
   isPasswordRecoveryPending,
   markPasswordRecoveryPending,
 } from '@/lib/passwordRecovery';
+import { GOOGLE_NOT_CONFIGURED } from '@/lib/googleSignInConfig';
+import { emailAuthRedirectTo } from '@/lib/authRedirect';
 import { signInWithNativeGoogle } from '@/lib/googleNativeAuth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
@@ -441,7 +443,15 @@ async function followAuthorizeToProvider(
   return takeProviderAuthorizeUrl(followedResponse.url);
 }
 
+function isGoogleBrowserOAuthUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return lower.includes('accounts.google.com') || /[?&]provider=google(?:&|$)/.test(lower);
+}
+
 async function resolveNativeOAuthBrowserUrl(startUrl: string, signal: AbortSignal): Promise<string> {
+  if (isGoogleBrowserOAuthUrl(startUrl)) {
+    throw new Error(GOOGLE_NOT_CONFIGURED);
+  }
   if (!isExpectedOAuthStartUrl(startUrl)) {
     throw new Error('Sign-in did not start from Google or Supabase.');
   }
@@ -490,6 +500,9 @@ async function resolveNativeOAuthBrowserUrl(startUrl: string, signal: AbortSigna
 }
 
 async function completeNativeOAuth(authorizeUrl: string, redirectTo: string): Promise<void> {
+  if (isGoogleBrowserOAuthUrl(authorizeUrl)) {
+    throw new Error(GOOGLE_NOT_CONFIGURED);
+  }
   const incoming = waitForNativeAuthCallback(180_000);
   try {
     let result: { type: string; url?: string | null };
@@ -548,7 +561,7 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
   }
 
   if (provider === 'google') {
-    throw new Error('Native Google uses signInWithIdToken, not blob:// OAuth.');
+    throw new Error(GOOGLE_NOT_CONFIGURED);
   }
 
   const nativeRedirect = resolveOAuthRedirectUri({
@@ -664,12 +677,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
+    const emailRedirectTo = emailAuthRedirectTo();
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: oauthRedirectTo(),
-      },
+      ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
     });
     if (error) {
       throw error;
@@ -757,9 +769,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetPasswordForEmail = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: oauthRedirectTo(),
-    });
+    const redirectTo = emailAuthRedirectTo();
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo ? { redirectTo } : undefined,
+    );
     if (error) {
       throw error;
     }

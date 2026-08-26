@@ -1,6 +1,7 @@
 import { Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
 
@@ -11,15 +12,17 @@ type ComposeTabButtonProps = {
 };
 
 export function ComposeTabButton({ open, onPress, style }: ComposeTabButtonProps) {
+  const tourLocked = Boolean(useTourOptional()?.active);
   return (
     <View style={[style, { alignItems: 'center', justifyContent: 'flex-start', overflow: 'visible' }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Quick actions"
-        accessibilityState={{ expanded: open }}
+        accessibilityState={{ expanded: open, disabled: tourLocked }}
+        disabled={tourLocked}
         onPress={onPress}
         hitSlop={4}
-        pointerEvents={open ? 'none' : 'auto'}
+        pointerEvents={open || tourLocked ? 'none' : 'auto'}
         className="items-center justify-start"
         style={{ minWidth: 44, minHeight: 44, opacity: open ? 0 : 1 }}>
         <TourAnchor id="tour-tab-create">

@@ -4,6 +4,7 @@ import {
   usesComparablePointsScoring,
 } from '@/lib/challengeExperience';
 import { copy } from '@/lib/copy';
+import { parseCheckinHealthProof, type CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import type { ProofType } from '@/lib/types';
 
 export const CHALLENGE_PROOF_METHODS = ['photo', 'video', 'checkin', 'honor', 'hr'] as const;
@@ -25,6 +26,8 @@ export type ChallengeProofPart = {
   text?: string | null;
   healthWorkoutId?: string | null;
   fromLibrary?: boolean;
+  /** Watch/Health snapshot on this check-in. Not a profile field. */
+  health?: CheckinHealthProof | null;
 };
 
 /** Extra photos on top of required proofs. One photo is enough to submit. */
@@ -589,7 +592,7 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
   if (proof.method === 'hr') {
     return Boolean(part?.url?.trim() || part?.healthWorkoutId?.trim());
   }
-  return proofImageUrls(part).length > 0;
+  return proofImageUrls(part).length > 0 || Boolean(part?.healthWorkoutId?.trim());
 }
 
 export function logHasEveryProof(
@@ -632,6 +635,7 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
             ? row.health_workout_id
             : null,
       fromLibrary: row.fromLibrary === true || row.from_library === true,
+      health: parseCheckinHealthProof(row.health),
     };
   }
   return parts;

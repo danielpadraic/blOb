@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LegalAcceptSheet, type LegalSheetId } from '@/components/legal/LegalAcceptSheet';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
-import { Screen } from '@/components/ui/Screen';
+import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { LEGAL_PRIVACY_VERSION, LEGAL_TOS_VERSION } from '@/copy/legalDocs';
@@ -27,7 +27,6 @@ const ROWS: { id: LegalSheetId; title: string }[] = [
 
 export default function LegalAcceptScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile, refetch } = useMyProfile();
@@ -84,13 +83,19 @@ export default function LegalAcceptScreen() {
   }
 
   return (
-    <Screen padded={false}>
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="grow px-5 pb-6 pt-6"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        <AppText className="text-[22px] font-extrabold text-charcoal">Legal</AppText>
+    <SafeAreaView style={{ flex: 1, backgroundColor: THEME.background }} edges={['top', 'left', 'right']}>
+      <KeyboardFormShell
+        paddingHorizontal={20}
+        footer={
+          <Button
+            title="Continue"
+            size="lg"
+            disabled={!ready}
+            loading={busy}
+            onPress={() => void submit()}
+          />
+        }>
+        <AppText className="pt-6 text-[22px] font-extrabold text-charcoal">Legal</AppText>
         <AppText className="mt-2 text-[14px] leading-6 text-muted">
           Read each document, then confirm. This is required before you can use blOb.
         </AppText>
@@ -114,25 +119,7 @@ export default function LegalAcceptScreen() {
             {error}
           </AppText>
         ) : null}
-      </ScrollView>
-
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 10,
-          paddingBottom: Math.max(insets.bottom, 16),
-          borderTopWidth: 1,
-          borderTopColor: THEME.border,
-          backgroundColor: THEME.background,
-        }}>
-        <Button
-          title="Continue"
-          size="lg"
-          disabled={!ready}
-          loading={busy}
-          onPress={() => void submit()}
-        />
-      </View>
+      </KeyboardFormShell>
 
       <LegalAcceptSheet
         doc={openDoc}
@@ -142,7 +129,7 @@ export default function LegalAcceptScreen() {
           setOpenDoc(null);
         }}
       />
-    </Screen>
+    </SafeAreaView>
   );
 }
 

@@ -21,15 +21,25 @@ import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
+import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
 import { getAuthFormMessage } from '@/utils/errors';
 import { loginSchema, type LoginValues } from '@/utils/validators';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn, signInWithGoogle, oauthLoading } = useAuth();
-  const { authError } = useLocalSearchParams<{ authError?: string | string[] }>();
-  const [emailStep, setEmailStep] = useState(false);
+  const { authError, email, inbox } = useLocalSearchParams<{
+    authError?: string | string[];
+    email?: string | string[];
+    inbox?: string | string[];
+  }>();
+  const inboxHint = (Array.isArray(inbox) ? inbox[0] : inbox) === '1';
+  const prefillEmail = (Array.isArray(email) ? email[0] : email)?.trim() ?? '';
+  const [emailStep, setEmailStep] = useState(inboxHint || Boolean(prefillEmail));
   const [formError, setFormError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(
+    inboxHint ? copy('auth.checkInboxThenSignIn') : null,
+  );
 
   useEffect(() => {
     const raw = Array.isArray(authError) ? authError[0] : authError;
@@ -46,12 +56,26 @@ export default function LoginScreen() {
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: prefillEmail, password: '' },
   });
   const emailValue = watch('email');
+
+  useEffect(() => {
+    if (prefillEmail) {
+      setValue('email', prefillEmail);
+    }
+    setValue('password', '');
+    if (inboxHint || prefillEmail) {
+      setEmailStep(true);
+      if (inboxHint) {
+        setInfo(copy('auth.checkInboxThenSignIn'));
+      }
+    }
+  }, [inboxHint, prefillEmail, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -74,25 +98,20 @@ export default function LoginScreen() {
       reportAppError({
         route: 'auth/login-google',
         error,
-        payload:
-          error instanceof Error
-            ? {
-                resultType: 'resultType' in error ? String(error.resultType) : error.name,
-                hasIdToken: 'hasIdToken' in error ? Boolean(error.hasIdToken) : null,
-                hasCode: 'hasCode' in error ? Boolean(error.hasCode) : null,
-                exchangeMessage:
-                  'exchangeMessage' in error && typeof error.exchangeMessage === 'string'
-                    ? error.exchangeMessage
-                    : error.message,
-              }
-            : { resultType: 'unknown', hasIdToken: false, hasCode: false },
+        payload: googleAuthErrorPayload(error),
       });
       setFormError(getAuthFormMessage(error));
     }
   }
 
   return (
-    <AuthShell>
+    <AuthShell
+      scrollToTopKey={emailStep ? 'email' : 'gate'}
+      footer={
+        emailStep ? (
+          <Button title={copy('auth.signIn')} onPress={onSubmit} loading={isSubmitting} size="lg" />
+        ) : undefined
+      }>
       {emailStep ? (
         <View className="mt-8 gap-4">
           <AuthBackButton onPress={() => setEmailStep(false)} />
@@ -131,6 +150,11 @@ export default function LoginScreen() {
               />
             )}
           />
+          {info ? (
+            <AppText className="text-sm" style={{ color: THEME.accentBright }}>
+              {info}
+            </AppText>
+          ) : null}
           {formError ? (
             <AppText className="text-sm" style={{ color: '#E8A0A0' }}>
               {formError}
@@ -151,7 +175,6 @@ export default function LoginScreen() {
               {copy('auth.forgotPassword')}
             </AppText>
           </Pressable>
-          <Button title={copy('auth.signIn')} onPress={onSubmit} loading={isSubmitting} size="lg" />
         </View>
       ) : (
         <>

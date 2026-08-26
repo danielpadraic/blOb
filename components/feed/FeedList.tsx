@@ -115,6 +115,7 @@ export function FeedList({
 }: FeedListProps) {
   const listRef = useRef<FlatList<PostWithMeta>>(null);
   const tour = useTourOptional();
+  const tourLocked = Boolean(tour?.active);
   const tone = useCopyTone();
   const visiblePosts = useMemo(() => posts.filter((post) => !post.deleted_at), [posts]);
   const challengeFeed = composeSource === 'challenge';
@@ -191,7 +192,7 @@ export function FeedList({
   if (isLoading) {
     return (
       <View className="gap-3" style={embedded ? undefined : { flex: 1 }}>
-        {composer}
+        <View pointerEvents={tourLocked ? 'none' : 'auto'}>{composer}</View>
         {listHeader}
         <MascotState kind="loading" title={copy('home.loading', tone)} compact={embedded} />
       </View>
@@ -225,12 +226,17 @@ export function FeedList({
 
   return (
     <View style={{ flex: 1 }}>
-      {composer ? <View style={{ marginBottom: 12 }}>{composer}</View> : null}
+      {composer ? (
+        <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: 12 }}>
+          {composer}
+        </View>
+      ) : null}
       <FlatList
         ref={(node) => {
           listRef.current = node;
           tour?.setHomeScroll(node as unknown as ScrollView);
         }}
+        scrollEnabled={!tourLocked}
         data={visiblePosts}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}

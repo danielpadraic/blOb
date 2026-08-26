@@ -3,6 +3,7 @@ import { AppState, Pressable, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTourOptional } from '@/components/tour/TourContext';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -10,6 +11,7 @@ import { useWalletOptional } from '@/hooks/useWallet';
 import { supabase } from '@/lib/supabase';
 import { copy } from '@/lib/copy';
 import { formatCash } from '@/lib/currency';
+import { headerCoinsForTour } from '@/lib/homeTour';
 import { isOfficialAccount } from '@/lib/official';
 import { countUpValues } from '@/lib/topup';
 import { THEME } from '@/lib/theme';
@@ -18,9 +20,11 @@ import { formatCoins } from '@/utils/format';
 export function WalletBar() {
   const { profile } = useMyProfile();
   const wallet = useWalletOptional();
+  const tour = useTourOptional();
+  const tourLocked = Boolean(tour?.active);
   const queryClient = useQueryClient();
   const official = isOfficialAccount(profile);
-  const coins = Number(profile?.coins ?? profile?.credits ?? 0);
+  const coins = headerCoinsForTour(profile);
   const bucks = Number(profile?.bucks ?? 0);
   const lastShownCoins = Number(profile?.last_shown_coin_balance ?? coins);
   const lastShownBucks = Number(profile?.last_shown_bucks_balance ?? bucks);
@@ -35,10 +39,15 @@ export function WalletBar() {
     if (!profile || official) {
       return;
     }
-    if (shownCoins.current === coins || coins <= lastShownCoins) {
+    if (
+      shownCoins.current === coins ||
+      coins <= lastShownCoins ||
+      tourLocked ||
+      !profile.tutorial_completed_at
+    ) {
       setDisplayCoins(coins);
       shownCoins.current = coins;
-      if (coins < lastShownCoins) {
+      if (profile.tutorial_completed_at && coins < lastShownCoins) {
         void markCoinsShown();
       }
       return;
@@ -53,7 +62,7 @@ export function WalletBar() {
         markCoinsShown,
       );
     }
-  }, [coins, lastShownCoins, official, profile?.id]);
+  }, [coins, lastShownCoins, official, profile?.id, profile?.tutorial_completed_at, tourLocked]);
 
   useEffect(() => {
     if (!profile || official) {
@@ -126,7 +135,8 @@ export function WalletBar() {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Open wallet"
-      onPress={wallet.openWallet}
+      disabled={tourLocked}
+      onPress={tourLocked ? undefined : wallet.openWallet}
       className="flex-row items-center"
       style={{
         backgroundColor: THEME.surface,

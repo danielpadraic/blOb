@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +8,7 @@ import Svg, { Path, Rect } from 'react-native-svg';
 
 import { LoginHero } from '@/components/auth/LoginHero';
 import { AppText } from '@/components/ui/AppText';
+import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { THEME } from '@/lib/theme';
 
 export const AUTH_BG = '#000000';
@@ -21,35 +22,42 @@ export function isAuthCancelled(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes('cancel');
 }
 
-export function AuthShell({ children }: { children: ReactNode }) {
+export function AuthShell({
+  children,
+  footer,
+  scrollToTopKey,
+}: {
+  children: ReactNode;
+  footer?: ReactNode;
+  scrollToTopKey?: string | number;
+}) {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: AUTH_BG }} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: AUTH_BG }} edges={['top', 'left', 'right']}>
       <Stack.Screen options={{ contentStyle: { backgroundColor: AUTH_BG } }} />
       <StatusBar style="light" />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          style={{ flex: 1, backgroundColor: AUTH_BG }}
-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 22, paddingBottom: 16 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
-          <View className="items-center pt-4">
-            <AppText className="text-[34px] font-extrabold tracking-tight" style={{ color: '#FFFFFF' }}>
-              bl
-              <AppText className="text-[34px] font-extrabold" style={{ color: THEME.accent }}>
-                O
-              </AppText>
-              b
+      <KeyboardFormShell
+        footer={footer}
+        scrollToTopKey={scrollToTopKey}
+        backgroundColor={AUTH_BG}
+        tone="dark"
+        paddingHorizontal={22}>
+        <View className="items-center pt-4">
+          <AppText className="text-[34px] font-extrabold tracking-tight" style={{ color: '#FFFFFF' }}>
+            bl
+            <AppText className="text-[34px] font-extrabold" style={{ color: THEME.accent }}>
+              O
             </AppText>
-            <AppText className="mt-2 text-[15px] font-medium" style={{ color: '#FFFFFF' }}>
-              Movement. Community. Growth.
-            </AppText>
-            <AppText className="mt-1 text-[14px] font-semibold" style={{ color: THEME.accent }}>
-              Small decisions. Big future.
-            </AppText>
-          </View>
-          {children}
+            b
+          </AppText>
+          <AppText className="mt-2 text-[15px] font-medium" style={{ color: '#FFFFFF' }}>
+            Movement. Community. Growth.
+          </AppText>
+          <AppText className="mt-1 text-[14px] font-semibold" style={{ color: THEME.accent }}>
+            Small decisions. Big future.
+          </AppText>
+        </View>
+        {children}
+        {footer ? null : (
           <View className="mt-auto items-center pt-8">
             <AppText className="text-center text-[12px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
               <AppText style={{ color: THEME.accent }}>♥ </AppText>
@@ -59,8 +67,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
               You’ve got this.
             </AppText>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        )}
+      </KeyboardFormShell>
     </SafeAreaView>
   );
 }

@@ -1,7 +1,8 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useRef, useState } from 'react';
 import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { useKeyboardForm } from '@/components/ui/KeyboardFormShell';
 import { THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
 
@@ -18,9 +19,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   ref,
 ) {
   const [focused, setFocused] = useState(false);
+  const boxRef = useRef<View>(null);
+  const form = useKeyboardForm();
 
   return (
-    <View className="w-full gap-1.5">
+    <View ref={boxRef} collapsable={false} className="w-full gap-1.5">
       {label ? (
         <AppText
           className={inverted ? 'text-sm font-semibold' : 'text-sm font-semibold text-charcoal'}
@@ -47,6 +50,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         onFocus={(event) => {
           setFocused(true);
           onFocus?.(event);
+          if (boxRef.current) {
+            form?.scrollFieldIntoView(boxRef.current);
+          }
         }}
         onBlur={(event) => {
           setFocused(false);

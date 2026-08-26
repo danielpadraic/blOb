@@ -46,7 +46,10 @@ export default function ForgotPasswordScreen() {
   });
 
   return (
-    <AuthShell>
+    <AuthShell
+      footer={
+        <Button title={copy('auth.sendResetLink')} onPress={onSubmit} loading={isSubmitting} size="lg" />
+      }>
       <View className="mt-8 gap-4">
         <AuthBackButton onPress={() => router.back()} />
         <AppText className="text-[22px] font-extrabold" style={{ color: '#FFFFFF' }}>
@@ -83,7 +86,6 @@ export default function ForgotPasswordScreen() {
             {info}
           </AppText>
         ) : null}
-        <Button title={copy('auth.sendResetLink')} onPress={onSubmit} loading={isSubmitting} size="lg" />
       </View>
     </AuthShell>
   );

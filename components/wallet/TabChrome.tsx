@@ -7,6 +7,7 @@ import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTourOptional } from '@/components/tour/TourContext';
 import { WalletBar } from '@/components/wallet/WalletBar';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useConversations } from '@/hooks/useSocial';
@@ -98,6 +99,7 @@ export function TabChromeHeader({
   const conversations = useConversations();
   const unreadCount = unread.data ?? 0;
   const unreadMessages = (conversations.data ?? []).filter((row) => row.unread).length;
+  const tourLocked = Boolean(useTourOptional()?.active);
 
   return (
     <View
@@ -125,7 +127,10 @@ export function TabChromeHeader({
           }}
         />
       ) : null}
-      <View className="flex-row items-center px-4 pb-2.5 pt-2" style={{ zIndex: 2 }}>
+      <View
+        pointerEvents={tourLocked ? 'none' : 'auto'}
+        className="flex-row items-center px-4 pb-2.5 pt-2"
+        style={{ zIndex: 2 }}>
           <View>
             <Pressable
               accessibilityRole="button"

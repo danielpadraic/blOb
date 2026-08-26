@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, Platform, ScrollView, View } from 'react-native';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -31,6 +32,13 @@ import {
 import { successHaptic } from '@/lib/haptics';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
+import {
+  composeCheckinNotes,
+  proofPrefersHealthAttach,
+  stripHealthSummaryFromNotes,
+  toCheckinHealthProof,
+  type CheckinHealthProof,
+} from '@/lib/health/attachProof';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
 import { usesTotalCountCheckins } from '@/lib/challengeExperience';
@@ -45,6 +53,7 @@ type SlotDraft = {
   mimeType?: string | null;
   text?: string;
   fromLibrary?: boolean;
+  health?: CheckinHealthProof | null;
 };
 
 function LoggedState({ onBack }: { onBack: () => void }) {
@@ -70,7 +79,12 @@ function slotPart(proof: ChallengeProof, draft: SlotDraft | undefined): Challeng
     return { method: 'checkin', text: draft?.text ?? draft?.uri ?? '' };
   }
   const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
-  return { method: proof.method, url: healthWorkoutId ? '' : draft?.uri ?? '', healthWorkoutId };
+  return {
+    method: proof.method,
+    url: healthWorkoutId ? '' : draft?.uri ?? '',
+    healthWorkoutId,
+    health: draft?.health ?? null,
+  };
 }
 
 export default function SubmitWorkoutScreen() {
@@ -90,6 +104,7 @@ export default function SubmitWorkoutScreen() {
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
+  const [preferCamera, setPreferCamera] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
@@ -130,12 +145,15 @@ export default function SubmitWorkoutScreen() {
           mimeType: current[proof.id]?.mimeType,
           text: part.text ?? current[proof.id]?.text,
           fromLibrary: part.fromLibrary ?? current[proof.id]?.fromLibrary,
+          health: part.health ?? current[proof.id]?.health ?? null,
         };
       }
       return next;
     });
     if (checkinQuery.data?.notes) {
-      setCaption((current) => (current.text.trim() ? current : { text: String(checkinQuery.data?.notes), chips: current.chips }));
+      const snapshot = Object.values(parts).map((part) => part.health).find(Boolean) ?? null;
+      const text = stripHealthSummaryFromNotes(String(checkinQuery.data.notes), snapshot);
+      setCaption((current) => (current.text.trim() ? current : { text, chips: current.chips }));
     }
     const extraUrls = extraProofImageUrls(steps, parts);
     if (extraUrls.length > 0) {
@@ -183,6 +201,16 @@ export default function SubmitWorkoutScreen() {
     setError(null);
   }
 
+  function attachedHealth(): CheckinHealthProof | null {
+    for (const proof of proofSteps) {
+      const health = drafts[proof.id]?.health;
+      if (health) {
+        return health;
+      }
+    }
+    return null;
+  }
+
   async function persistProof(proof: ChallengeProof, draft?: SlotDraft) {
     if (!id) {
       return;
@@ -202,6 +230,7 @@ export default function SubmitWorkoutScreen() {
         mimeType: draft?.mimeType,
         text: draft?.text,
         fromLibrary: draft?.fromLibrary,
+        health: draft?.health ?? null,
       });
     } catch (caught) {
       const kind = classifyCheckinError(caught);
@@ -359,7 +388,7 @@ export default function SubmitWorkoutScreen() {
             ? drafts[photoProof.id]?.uri
             : null)
         : null;
-      const notes = caption.text.trim() || null;
+      const notes = composeCheckinNotes(caption.text, attachedHealth());
       await saveProof.mutateAsync({
         challengeId: id,
         notes,
@@ -412,7 +441,7 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
-  async function onAttachHealth(workout: HealthWorkout) {
+  async function onAttachHealth(workout: HealthWorkout, proof?: ChallengeProof | null) {
     if (!id || busy) {
       return;
     }
@@ -421,18 +450,28 @@ export default function SubmitWorkoutScreen() {
       return;
     }
     setError(null);
-    const hrProof = proofSteps.find((proof) => proof.method === 'hr');
-    if (hrProof && user?.id) {
-      try {
-        const provider = getHealthProvider();
-        const enriched = provider?.enrichHeartRate
-          ? await provider.enrichHeartRate(workout)
-          : workout;
-        const healthWorkoutId = await upsertHealthWorkout(user.id, enriched);
-        await onCaptured(hrProof, `health:${healthWorkoutId}`);
-      } catch (caught) {
-        setError(getErrorMessage(caught));
-      }
+    const target =
+      proof ??
+      proofSteps.find((item) => item.method === 'hr') ??
+      proofSteps.find((item) => item.method === 'photo' || item.method === 'video');
+    if (!target || !user?.id) {
+      return;
+    }
+    try {
+      const provider = getHealthProvider();
+      const enriched = provider?.enrichHeartRate
+        ? await provider.enrichHeartRate(workout)
+        : workout;
+      const snapshot = toCheckinHealthProof(enriched);
+      const healthWorkoutId = await upsertHealthWorkout(user.id, enriched);
+      const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
+      setDrafts((current) => ({ ...current, [target.id]: { ...current[target.id], ...draft } }));
+      setCaptureId(null);
+      setSkippedAuto(true);
+      setPreferCamera(false);
+      await persistProof(target, draft);
+    } catch (caught) {
+      setError(getErrorMessage(caught));
     }
   }
 
@@ -547,10 +586,65 @@ export default function SubmitWorkoutScreen() {
   }
 
   const missing = proofSteps.filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id])));
+  const iosHealthReady = Platform.OS === 'ios' && Boolean(getHealthProvider()?.isAvailable());
+  const firstEmptyMedia =
+    missing.find((proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') ?? null;
+  const firstHealth = firstEmptyMedia && proofPrefersHealthAttach(firstEmptyMedia, challenge) ? firstEmptyMedia : null;
+  const shouldAutoHealth =
+    phase === 'none' &&
+    !skippedAuto &&
+    !preferCamera &&
+    iosHealthReady &&
+    Boolean(firstHealth) &&
+    !drafts[firstHealth?.id ?? '']?.uri;
   const shouldAutoOpen =
-    phase === 'none' && !skippedAuto && !honorOnly && Boolean(firstCamera) && !drafts[firstCamera?.id ?? '']?.uri;
-  const activeCaptureId = captureId ?? (shouldAutoOpen ? firstCamera?.id ?? null : null);
+    phase === 'none' &&
+    !skippedAuto &&
+    !honorOnly &&
+    Boolean(firstCamera) &&
+    !drafts[firstCamera?.id ?? '']?.uri &&
+    !shouldAutoHealth;
+  const activeCaptureId =
+    captureId ?? (shouldAutoHealth ? firstHealth?.id ?? null : shouldAutoOpen ? firstCamera?.id ?? null : null);
   const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;
+  const showHealthFirst =
+    Boolean(activeProof) &&
+    iosHealthReady &&
+    !preferCamera &&
+    proofPrefersHealthAttach(activeProof, challenge);
+
+  if (showHealthFirst && activeProof) {
+    return (
+      <Screen padded={false} edges={TAB_ROOT_EDGES}>
+        <Stack.Screen options={{ title: 'Check-in' }} />
+        <HealthWorkoutPicker
+          challengeTitle={challenge.title}
+          challenge={challenge}
+          proof={activeProof}
+          minMinutes={challenge.min_minutes}
+          frequency={challenge.frequency}
+          startsAt={challenge.starts_at}
+          isOfficial={challenge.is_official}
+          seriesId={challenge.series_id}
+          timezone={challenge.timezone}
+          daysRequired={challenge.days_required}
+          dayWindows={challenge.day_windows}
+          userId={user?.id}
+          attaching={saveProof.isPending}
+          onAttach={(workout) => onAttachHealth(workout, activeProof)}
+          onAddPhoto={() => setPreferCamera(true)}
+          onClose={() => {
+            setCaptureId(null);
+            setSkippedAuto(true);
+            setPreferCamera(false);
+            if (phase === 'none' && !captureId) {
+              router.back();
+            }
+          }}
+        />
+      </Screen>
+    );
+  }
 
   if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr')) {
     return (
@@ -569,15 +663,22 @@ export default function SubmitWorkoutScreen() {
             startsAt: challenge.starts_at,
             userId: user?.id,
             attaching: saveProof.isPending,
+            proof: activeProof,
             challenge,
-            onAttach: onAttachHealth,
+            onAttach: (workout) => onAttachHealth(workout, activeProof),
           }}
           onPicked={(uri, mimeType, meta) => {
             void onCaptured(activeProof, uri, mimeType, meta?.fromLibrary);
           }}
           onCancel={() => {
+            if (iosHealthReady && proofPrefersHealthAttach(activeProof, challenge)) {
+              setPreferCamera(false);
+              setSkippedAuto(true);
+              return;
+            }
             setCaptureId(null);
             setSkippedAuto(true);
+            setPreferCamera(false);
             if (phase === 'none') {
               router.back();
             }
@@ -631,12 +732,13 @@ export default function SubmitWorkoutScreen() {
           proofs={composerProofs}
           drafts={drafts}
           extras={extras}
-          initialCaption={checkinQuery.data?.notes ?? ''}
+          initialCaption={stripHealthSummaryFromNotes(checkinQuery.data?.notes ?? '', attachedHealth())}
           allReady={allReady}
           busy={busy}
           canSend={allReady && phase !== 'submitted'}
           onAddProof={(proof) => {
             if (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') {
+              setPreferCamera(Platform.OS !== 'ios' || !proofPrefersHealthAttach(proof, challenge));
               setCaptureId(proof.id);
             }
           }}

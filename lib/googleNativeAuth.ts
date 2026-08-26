@@ -8,7 +8,15 @@ import {
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import { Platform } from 'react-native';
 
-import { iosUrlSchemeFromClientId } from '@/lib/googleSignInConfig';
+import {
+  GOOGLE_NOT_CONFIGURED,
+  googleNativeConfigureKeysPresent,
+  googleNativeSignInConfig,
+  iosUrlSchemeFromClientId,
+  isGoogleClientConfigError,
+  peekGoogleIdTokenClaims,
+} from '@/lib/googleSignInConfig';
+import { reportAppError } from '@/lib/appErrors';
 import { logOAuthStage } from '@/lib/oauthRedirect';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
@@ -19,14 +27,16 @@ export const GOOGLE_CANCELLED = 'Sign-in was cancelled.';
 export const GOOGLE_NO_TOKEN = 'Google did not return a sign-in token. Try again.';
 export const GOOGLE_PLAY_SERVICES =
   'Google Play Services is missing or out of date. Update Play Services and try again.';
-export const GOOGLE_NOT_CONFIGURED =
-  'Google sign-in is not configured. Add the Web and iOS client IDs and rebuild.';
+export { GOOGLE_NOT_CONFIGURED };
 
 export type GoogleNativeAuthDetail = {
   resultType: string;
   hasIdToken: boolean;
   hasCode: boolean;
   exchangeMessage?: string;
+  idTokenAud?: string | null;
+  idTokenAzp?: string | null;
+  idTokenIss?: string | null;
 };
 
 export class GoogleNativeAuthError extends Error {
@@ -35,6 +45,9 @@ export class GoogleNativeAuthError extends Error {
   readonly hasCode: boolean;
   readonly exchangeMessage?: string;
   readonly code?: string;
+  readonly idTokenAud?: string | null;
+  readonly idTokenAzp?: string | null;
+  readonly idTokenIss?: string | null;
 
   constructor(message: string, detail: GoogleNativeAuthDetail & { code?: string }) {
     super(message);
@@ -44,7 +57,45 @@ export class GoogleNativeAuthError extends Error {
     this.hasCode = detail.hasCode;
     this.exchangeMessage = detail.exchangeMessage;
     this.code = detail.code;
+    this.idTokenAud = detail.idTokenAud ?? null;
+    this.idTokenAzp = detail.idTokenAzp ?? null;
+    this.idTokenIss = detail.idTokenIss ?? null;
   }
+}
+
+export function googleAuthLogFields(detail: {
+  resultType: string;
+  hasIdToken: boolean;
+  tokenAud?: string | null;
+  supabaseMessage?: string | null;
+}): Record<string, unknown> {
+  const keys = googleNativeConfigureKeysPresent();
+  return {
+    platform: Platform.OS,
+    hasWebClientId: keys.webClientId,
+    hasIosClientId: keys.iosClientId,
+    resultType: detail.resultType,
+    hasIdToken: detail.hasIdToken,
+    tokenAud: detail.tokenAud ?? null,
+    supabaseMessage: detail.supabaseMessage ?? null,
+  };
+}
+
+export function googleAuthErrorPayload(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return googleAuthLogFields({
+      resultType: 'unknown',
+      hasIdToken: false,
+    });
+  }
+  const detail = error as GoogleNativeAuthError;
+  return googleAuthLogFields({
+    resultType: typeof detail.resultType === 'string' ? detail.resultType : error.name,
+    hasIdToken: Boolean(detail.hasIdToken),
+    tokenAud: detail.idTokenAud ?? null,
+    supabaseMessage:
+      typeof detail.exchangeMessage === 'string' ? detail.exchangeMessage : error.message,
+  });
 }
 
 /**
@@ -58,10 +109,9 @@ export async function googleIdTokenNonce(): Promise<{ rawNonce: string; nonceDig
   return { rawNonce, nonceDigest };
 }
 
-function configuredClientIds(): { webClientId: string; iosClientId?: string } {
-  const webClientId = (process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '').trim();
-  const iosClientId = (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '').trim();
-  if (!webClientId) {
+function requireNativeConfig(): { webClientId: string; iosClientId?: string } {
+  const config = googleNativeSignInConfig();
+  if (!config?.webClientId) {
     throw new GoogleNativeAuthError(GOOGLE_NOT_CONFIGURED, {
       resultType: 'config',
       hasIdToken: false,
@@ -69,7 +119,7 @@ function configuredClientIds(): { webClientId: string; iosClientId?: string } {
       code: 'GOOGLE_NOT_CONFIGURED',
     });
   }
-  return { webClientId, iosClientId: iosClientId || undefined };
+  return config;
 }
 
 let configured = false;
@@ -78,10 +128,10 @@ function ensureConfigured() {
   if (configured) {
     return;
   }
-  const { webClientId, iosClientId } = configuredClientIds();
+  const { webClientId, iosClientId } = requireNativeConfig();
   GoogleSignin.configure({
     webClientId,
-    iosClientId,
+    ...(Platform.OS === 'ios' && iosClientId ? { iosClientId } : {}),
     scopes: ['openid', 'profile', 'email'],
     offlineAccess: false,
   });
@@ -116,7 +166,7 @@ export async function signInWithNativeGoogle(): Promise<void> {
         exchangeMessage: getErrorMessage(error),
       };
       logNativeGoogle(detail);
-      throw new GoogleNativeAuthError(GOOGLE_PLAY_SERVICES, {
+      throw new GoogleNativeAuthError(GOOGLE_NOT_CONFIGURED, {
         ...detail,
         code: isErrorWithCode(error) ? error.code : statusCodes.PLAY_SERVICES_NOT_AVAILABLE,
       });
@@ -139,14 +189,24 @@ export async function signInWithNativeGoogle(): Promise<void> {
       });
     }
     if (isErrorWithCode(error) && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-      throw new GoogleNativeAuthError(GOOGLE_PLAY_SERVICES, {
+      throw new GoogleNativeAuthError(GOOGLE_NOT_CONFIGURED, {
         resultType: 'play-services',
         hasIdToken: false,
         hasCode: false,
         code: error.code,
       });
     }
-    throw error;
+    const message = getErrorMessage(error);
+    throw new GoogleNativeAuthError(
+      isGoogleClientConfigError(message) ? GOOGLE_NOT_CONFIGURED : message || GOOGLE_NOT_CONFIGURED,
+      {
+        resultType: 'sign-in',
+        hasIdToken: false,
+        hasCode: false,
+        exchangeMessage: message,
+        code: isErrorWithCode(error) ? error.code : undefined,
+      },
+    );
   }
 
   if (isCancelledResponse(response)) {
@@ -180,6 +240,16 @@ export async function signInWithNativeGoogle(): Promise<void> {
     throw new GoogleNativeAuthError(GOOGLE_NO_TOKEN, detail);
   }
 
+  const claims = peekGoogleIdTokenClaims(idToken);
+  reportAppError({
+    route: 'auth/login-google',
+    message: 'google id token claims',
+    payload: googleAuthLogFields({
+      resultType: 'id-token-claims',
+      hasIdToken: true,
+      tokenAud: claims.aud,
+    }),
+  });
   logOAuthStage('got google host', { host: 'native-id-token' });
   const { error } = await supabase.auth.signInWithIdToken({
     provider: 'google',
@@ -187,15 +257,29 @@ export async function signInWithNativeGoogle(): Promise<void> {
   });
 
   if (error) {
+    const exchangeMessage = getErrorMessage(error);
     const detail: GoogleNativeAuthDetail = {
       resultType: 'success',
       hasIdToken: true,
       hasCode,
-      exchangeMessage: getErrorMessage(error),
+      exchangeMessage,
+      idTokenAud: claims.aud,
+      idTokenAzp: claims.azp,
+      idTokenIss: claims.iss,
     };
     logNativeGoogle(detail);
+    reportAppError({
+      route: 'auth/login-google',
+      error,
+      payload: googleAuthLogFields({
+        resultType: 'id-token-exchange',
+        hasIdToken: true,
+        tokenAud: claims.aud,
+        supabaseMessage: exchangeMessage,
+      }),
+    });
     throw new GoogleNativeAuthError(
-      getErrorMessage(error) || 'Google sign-in was rejected. Try again.',
+      isGoogleClientConfigError(exchangeMessage) ? GOOGLE_NOT_CONFIGURED : exchangeMessage || GOOGLE_NOT_CONFIGURED,
       detail,
     );
   }

@@ -7,6 +7,8 @@ import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay';
 import { useTour } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
+import { useAuth } from '@/hooks/useAuth';
+import { markHomeTourCompleted } from '@/lib/homeTour';
 import { completeTutorial } from '@/lib/legal';
 import { TOUR_STEPS } from '@/lib/tour';
 import { THEME } from '@/lib/theme';
@@ -17,6 +19,7 @@ type TourHostProps = {
 
 export function TourHost({ onFinished }: TourHostProps) {
   const tour = useTour();
+  const { user } = useAuth();
   const router = useRouter();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [index, setIndex] = useState(0);
@@ -66,14 +69,15 @@ export function TourHost({ onFinished }: TourHostProps) {
   }, [bump, rawRect, step?.target, tour.active]);
 
   const finish = useCallback(async () => {
+    markHomeTourCompleted(user?.id);
+    stop();
     try {
       await completeTutorial();
     } catch {
-      // Do not block Home if the write fails this session.
+      // Session flag already set; do not restart this session or after background.
     }
-    stop();
     onFinished();
-  }, [onFinished, stop]);
+  }, [onFinished, stop, user?.id]);
 
   if (!tour.active || !step) {
     return null;

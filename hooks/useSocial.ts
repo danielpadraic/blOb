@@ -20,6 +20,7 @@ import {
   fetchFollowers,
   fetchFollowing,
   fetchFriendRequests,
+  fetchBlockedPeerIds,
   fetchFriends,
   fetchFriendshipSnapshot,
   fetchMessages,
@@ -82,6 +83,7 @@ export const socialKeys = {
   requests: (userId: string) => ['friend-requests', userId] as const,
   peopleSearch: (userId: string, term: string) => ['people-search', userId, term] as const,
   friendship: (userId: string, targetId: string) => ['friendship', userId, targetId] as const,
+  blockedPeers: (userId: string) => ['blocked-peers', userId] as const,
   follow: (userId: string, targetId: string) => ['follow', userId, targetId] as const,
   followCounts: (userId: string) => ['follow-counts', userId] as const,
   feed: (limit: number) => ['feed-events', limit] as const,
@@ -129,6 +131,8 @@ function invalidateFriendship(
   void queryClient.invalidateQueries({ queryKey: socialKeys.friends(targetUserId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.requests(userId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.requests(targetUserId) });
+  void queryClient.invalidateQueries({ queryKey: socialKeys.blockedPeers(userId) });
+  void queryClient.invalidateQueries({ queryKey: socialKeys.blockedPeers(targetUserId) });
   void queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
 }
 
@@ -189,6 +193,15 @@ export function useFriendshipStatus(targetUserId?: string | null) {
     queryKey: socialKeys.friendship(user?.id ?? '', targetUserId ?? ''),
     enabled: Boolean(user?.id && targetUserId && user.id !== targetUserId),
     queryFn: () => fetchFriendshipSnapshot(user!.id, targetUserId!),
+  });
+}
+
+export function useBlockedPeerIds() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: socialKeys.blockedPeers(user?.id ?? ''),
+    enabled: Boolean(user?.id),
+    queryFn: () => fetchBlockedPeerIds(user!.id),
   });
 }
 

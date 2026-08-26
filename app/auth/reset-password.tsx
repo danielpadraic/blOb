@@ -3,11 +3,13 @@ import { Redirect, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Alert, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/hooks/useAuth';
 import { reportAppError } from '@/lib/appErrors';
@@ -92,59 +94,64 @@ export default function ResetPasswordScreen() {
   });
 
   return (
-    <Screen scroll>
-      <View className="gap-4 pt-2">
-        <AppText className="text-[22px] font-extrabold" style={{ color: THEME.textPrimary }}>
-          {copy('auth.setPasswordTitle')}
-        </AppText>
-        <AppText className="text-sm leading-5" style={{ color: THEME.textMuted }}>
-          {copy('auth.setPasswordBody')}
-        </AppText>
-        {notice ? (
-          <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
-            {notice}
+    <SafeAreaView style={{ flex: 1, backgroundColor: THEME.background }} edges={['top', 'left', 'right']}>
+      <KeyboardFormShell
+        paddingHorizontal={16}
+        footer={
+          <Button title={copy('auth.setPasswordTitle')} onPress={onSubmit} loading={isSubmitting} size="lg" />
+        }>
+        <View className="gap-4 pt-2">
+          <AppText className="text-[22px] font-extrabold" style={{ color: THEME.textPrimary }}>
+            {copy('auth.setPasswordTitle')}
           </AppText>
-        ) : null}
-        <Controller
-          control={control}
-          name="password"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label="New password"
-              secureTextEntry
-              autoComplete="new-password"
-              textContentType="newPassword"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.password?.message}
-              hint={errors.password?.message ? undefined : copy('account.passwordHint')}
-            />
-          )}
-        />
-        <Controller
-          control={control}
-          name="confirmPassword"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label="Confirm password"
-              secureTextEntry
-              autoComplete="new-password"
-              textContentType="newPassword"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.confirmPassword?.message}
-            />
-          )}
-        />
-        {formError ? (
-          <AppText className="text-sm" style={{ color: THEME.danger }}>
-            {formError}
+          <AppText className="text-sm leading-5" style={{ color: THEME.textMuted }}>
+            {copy('auth.setPasswordBody')}
           </AppText>
-        ) : null}
-        <Button title={copy('auth.setPasswordTitle')} onPress={onSubmit} loading={isSubmitting} size="lg" />
-      </View>
-    </Screen>
+          {notice ? (
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              {notice}
+            </AppText>
+          ) : null}
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="New password"
+                secureTextEntry
+                autoComplete="new-password"
+                textContentType="newPassword"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.password?.message}
+                hint={errors.password?.message ? undefined : copy('account.passwordHint')}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="confirmPassword"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Confirm password"
+                secureTextEntry
+                autoComplete="new-password"
+                textContentType="newPassword"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.confirmPassword?.message}
+              />
+            )}
+          />
+          {formError ? (
+            <AppText className="text-sm" style={{ color: THEME.danger }}>
+              {formError}
+            </AppText>
+          ) : null}
+        </View>
+      </KeyboardFormShell>
+    </SafeAreaView>
   );
 }

@@ -42,8 +42,7 @@ export function challengeHealthWindow(challenge?: {
         : null,
     });
     if (!current) {
-      const empty = new Date(0);
-      return { from: empty, to: empty };
+      return last24Hours();
     }
     const now = Date.now();
     return {
@@ -73,9 +72,14 @@ export function challengeHealthWindow(challenge?: {
     }
   }
   if (from > to) {
-    from = startOfDay(to);
+    return last24Hours();
   }
   return { from, to };
+}
+
+/** When the check-in period cannot be resolved, query the last 24 hours. */
+export function last24Hours(now = new Date()): { from: Date; to: Date } {
+  return { from: new Date(now.getTime() - 24 * 60 * 60 * 1000), to: now };
 }
 
 export function workoutOverlapsPeriod(

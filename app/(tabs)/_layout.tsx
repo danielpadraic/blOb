@@ -30,6 +30,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
+import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
 import { CAPTURE_REEL_HREF, LOBBY_HREF } from '@/lib/routes';
 import { primeCameraFromGesture } from '@/lib/cameraSession';
 import { rememberLastCapture } from '@/lib/lastCapture';
@@ -52,14 +53,30 @@ export default function TabLayout() {
 }
 
 function FirstRunTourLauncher() {
-  const { profile } = useMyProfile();
+  const { profile, isFetched } = useMyProfile();
   const tour = useTour();
   const router = useRouter();
   const pathname = usePathname();
   const started = useRef(false);
+  const [walletWaitExpired, setWalletWaitExpired] = useState(false);
   const start = tour.start;
   const active = tour.active;
   const onOnboarding = pathname.startsWith('/onboarding');
+  const walletReady = isWalletReadyForHomeTour(profile);
+  const alreadyDone = wasHomeTourCompleted(profile?.id, profile?.tutorial_completed_at);
+
+  useEffect(() => {
+    started.current = false;
+    setWalletWaitExpired(false);
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!isFetched || !profile || walletReady || alreadyDone) {
+      return;
+    }
+    const handle = setTimeout(() => setWalletWaitExpired(true), 2500);
+    return () => clearTimeout(handle);
+  }, [alreadyDone, isFetched, profile, walletReady]);
 
   useEffect(() => {
     if (
@@ -67,20 +84,33 @@ function FirstRunTourLauncher() {
       active ||
       tour.createActive ||
       !profile ||
-      profile.tutorial_completed_at
+      alreadyDone ||
+      !isFetched ||
+      (!walletReady && !walletWaitExpired)
     ) {
       return;
     }
     router.navigate('/feed');
     const handle = setTimeout(() => {
-      if (started.current || tour.createActive) {
+      if (started.current || tour.createActive || wasHomeTourCompleted(profile.id, profile.tutorial_completed_at)) {
         return;
       }
       started.current = true;
       start();
     }, 450);
     return () => clearTimeout(handle);
-  }, [active, onOnboarding, profile?.id, profile?.tutorial_completed_at, router, start, tour.createActive]);
+  }, [
+    active,
+    alreadyDone,
+    isFetched,
+    onOnboarding,
+    profile,
+    router,
+    start,
+    tour.createActive,
+    walletReady,
+    walletWaitExpired,
+  ]);
 
   return null;
 }
@@ -347,9 +377,11 @@ function TabLayoutInner() {
       </View>
       {onOnboarding ? null : (
         <>
-          {profile && !profile.tutorial_completed_at ? <FirstRunTourLauncher /> : null}
-          <TourHost onFinished={() => void refetch()} />
-          <CreateTourHost />
+          <FirstRunTourLauncher />
+          <View pointerEvents="box-none" style={styles.tourLayer}>
+            <TourHost onFinished={() => void refetch()} />
+            <CreateTourHost />
+          </View>
         </>
       )}
     </View>
@@ -375,5 +407,14 @@ const styles = StyleSheet.create({
     left: 0,
     zIndex: 210,
     elevation: 210,
+  },
+  tourLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 4000,
+    elevation: 4000,
   },
 });

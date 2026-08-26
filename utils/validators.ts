@@ -632,6 +632,8 @@ export function parseOptionalNumber(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export { normalizeUsername, usernameHandleLabel } from '@/lib/username';
+
 export function isGeneratedUsername(username: string | null | undefined): boolean {
   return Boolean(username?.startsWith('blob_'));
 }

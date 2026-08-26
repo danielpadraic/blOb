@@ -1,4 +1,5 @@
 import { LEGAL_PRIVACY_VERSION, LEGAL_TOS_VERSION, SKILL_ATTESTATION } from '@/copy/legalDocs';
+import { clearHomeTourCompleted, markHomeTourCompleted } from '@/lib/homeTour';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
@@ -81,7 +82,20 @@ export async function acceptLegal(): Promise<void> {
   }
 }
 
+function patchTutorialCompleted(at: string | null) {
+  queryClient.setQueriesData({ queryKey: ['profile'] }, (current) => {
+    if (!current || typeof current !== 'object') {
+      return current;
+    }
+    return { ...current, tutorial_completed_at: at };
+  });
+}
+
 export async function completeTutorial(): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getUser();
+  const userId = sessionData.user?.id;
+  markHomeTourCompleted(userId);
+  patchTutorialCompleted(new Date().toISOString());
   const { error } = await supabase.rpc('complete_tutorial');
   if (error) {
     throw new Error(getErrorMessage(error));
@@ -89,6 +103,9 @@ export async function completeTutorial(): Promise<void> {
 }
 
 export async function replayTutorial(): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getUser();
+  clearHomeTourCompleted(sessionData.user?.id);
+  patchTutorialCompleted(null);
   const { error } = await supabase.rpc('replay_tutorial');
   if (error) {
     throw new Error(getErrorMessage(error));

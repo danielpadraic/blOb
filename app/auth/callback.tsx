@@ -1,20 +1,26 @@
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
-import { Redirect, useLocalSearchParams, type Href } from 'expo-router';
+import { Platform, View } from 'react-native';
+import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import * as Linking from 'expo-linking';
 
 import { MascotState } from '@/components/mascot/MascotState';
+import { AppText } from '@/components/ui/AppText';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { createSessionFromUrl, useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
 import { useMyProfile } from '@/hooks/useProfile';
 import { reportAppError } from '@/lib/appErrors';
-import { loginHrefWithAuthError } from '@/lib/authRedirect';
+import { blobAuthCallbackDeepLink, loginHrefWithAuthError } from '@/lib/authRedirect';
 import { hasAuthCallbackPayload, parseAuthRedirectParams } from '@/lib/authRedirectParams';
 import { copy } from '@/lib/copy';
 import { nativeCallbackUrlFromParams, pickCanonicalAuthCallbackUrl } from '@/lib/oauthRedirect';
 import { TABS_HREF } from '@/lib/routes';
-import { getErrorMessage } from '@/utils/errors';
+import { THEME } from '@/lib/theme';
+import { supabase } from '@/lib/supabase';
+import { getAuthFormMessage, getErrorMessage } from '@/utils/errors';
+
+const EXCHANGE_MS = 15_000;
 
 function currentWebHref(): string | null {
   if (Platform.OS !== 'web') {
@@ -27,8 +33,13 @@ function currentWebHref(): string | null {
   }
 }
 
+function isEmailConfirmType(type: string | null): boolean {
+  return type === 'signup' || type === 'invite' || type === 'email';
+}
+
 export default function AuthCallbackScreen() {
-  const { isLoading, isPasswordRecovery } = useAuth();
+  const router = useRouter();
+  const { isLoading, isPasswordRecovery, session } = useAuth();
   const { isBootstrapping, path } = useMyProfile();
   const tone = useCopyTone();
   const params = useLocalSearchParams<{
@@ -45,6 +56,8 @@ export default function AuthCallbackScreen() {
   const linkingUrl = Linking.useLinkingURL();
   const [exchanging, setExchanging] = useState(false);
   const [callbackError, setCallbackError] = useState<string | null>(null);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   useEffect(() => {
     const url = pickCanonicalAuthCallbackUrl([
@@ -53,35 +66,53 @@ export default function AuthCallbackScreen() {
       Linking.getLinkingURL(),
       currentWebHref(),
     ]);
-    if (!url) {
-      return;
-    }
-    const parsed = parseAuthRedirectParams(url);
-    if (!hasAuthCallbackPayload(parsed) && !parsed.error) {
+    const parsed = url ? parseAuthRedirectParams(url) : parseAuthRedirectParams(null);
+    if (!url || (!hasAuthCallbackPayload(parsed) && !parsed.error)) {
       return;
     }
 
     let cancelled = false;
     setExchanging(true);
     setCallbackError(null);
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        setExchanging(false);
+        setCallbackError(copy('auth.confirmLinkBad'));
+      }
+    }, EXCHANGE_MS);
+
     void createSessionFromUrl(url)
-      .then(() => {
-        if (!cancelled) {
-          setExchanging(false);
+      .then((next) => {
+        if (cancelled) {
+          return;
+        }
+        clearTimeout(timer);
+        setExchanging(false);
+        if (parsed.type === 'recovery') {
+          return;
+        }
+        if (parsed.token_hash || isEmailConfirmType(parsed.type)) {
+          setEmailConfirmed(true);
+          return;
+        }
+        if (!next && !parsed.code && !parsed.access_token) {
+          setCallbackError(copy('auth.confirmLinkBad'));
         }
       })
       .catch((error) => {
-        const message = getErrorMessage(error);
+        const message = getAuthFormMessage(error) || getErrorMessage(error);
         reportAppError({ route: 'auth/callback', error });
         console.log('[blob:auth-callback]', message);
         if (!cancelled) {
+          clearTimeout(timer);
           setExchanging(false);
-          setCallbackError(message);
+          setCallbackError(message || copy('auth.confirmLinkBad'));
         }
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [
     linkingUrl,
@@ -95,11 +126,53 @@ export default function AuthCallbackScreen() {
     params.error,
   ]);
 
+  async function openBlob() {
+    setOpenError(null);
+    const current = session ?? (await supabase.auth.getSession()).data.session;
+    const deepLink = blobAuthCallbackDeepLink(
+      current
+        ? { access_token: current.access_token, refresh_token: current.refresh_token }
+        : null,
+    );
+    try {
+      await Linking.openURL(deepLink);
+    } catch (error) {
+      setOpenError(getErrorMessage(error) || copy('auth.confirmLinkBad'));
+    }
+  }
+
   if (callbackError) {
     return (
       <Screen>
-        <MascotState kind="error" title={copy('auth.signingIn', tone)} body={callbackError} />
-        <Redirect href={loginHrefWithAuthError(callbackError) as Href} />
+        <MascotState
+          kind="error"
+          title={copy('auth.signIn')}
+          body={callbackError}
+          actionLabel={copy('auth.signIn')}
+          onAction={() => router.replace(loginHrefWithAuthError(callbackError) as Href)}
+        />
+      </Screen>
+    );
+  }
+
+  if (emailConfirmed && Platform.OS === 'web') {
+    return (
+      <Screen className="items-center justify-center">
+        <MascotState kind="success" title={copy('auth.emailConfirmed')} compact />
+        {openError ? (
+          <AppText className="mb-3 text-center text-sm" style={{ color: THEME.danger }}>
+            {openError}
+          </AppText>
+        ) : null}
+        <View style={{ width: '100%', gap: 12, paddingHorizontal: 8 }}>
+          <Button title={copy('auth.openBlob')} size="lg" onPress={() => void openBlob()} />
+          <Button
+            title={copy('auth.continueInBrowser')}
+            size="lg"
+            variant="ghost"
+            onPress={() => router.replace(TABS_HREF)}
+          />
+        </View>
       </Screen>
     );
   }
@@ -114,6 +187,10 @@ export default function AuthCallbackScreen() {
 
   if (isPasswordRecovery) {
     return <Redirect href={'/auth/reset-password' as Href} />;
+  }
+
+  if (emailConfirmed) {
+    return <Redirect href={TABS_HREF} />;
   }
 
   if (path === 'auth') {

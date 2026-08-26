@@ -225,6 +225,17 @@ export interface ChallengeProofPart {
   url?: string | null;
   text?: string | null;
   healthWorkoutId?: string | null;
+  health?: {
+    startedAt: string;
+    endedAt: string;
+    durationSec: number;
+    activityType: string;
+    sourceName: string;
+    avgHrBpm?: number;
+    maxHrBpm?: number;
+    activeEnergyKcal?: number;
+    distanceMeters?: number;
+  } | null;
 }
 
 export interface ChallengeTask {

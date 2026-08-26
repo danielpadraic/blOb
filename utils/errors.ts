@@ -1,4 +1,6 @@
 import { copy } from '@/lib/copy';
+import { dmOpenUserMessage } from '@/lib/dmOpen';
+import { GOOGLE_NOT_CONFIGURED, isGoogleClientConfigError } from '@/lib/googleSignInConfig';
 
 const CHECKIN_SUBMIT_FAIL = 'Couldn’t submit this check-in. Try again.';
 
@@ -9,6 +11,10 @@ function isDevBuild(): boolean {
 export function getErrorMessage(error: unknown): string {
   const raw = extractRawMessage(error);
   return humanize(raw);
+}
+
+export function getDmOpenMessage(error: unknown): string {
+  return dmOpenUserMessage(extractRawMessage(error) || getErrorMessage(error));
 }
 
 export function getStartUpdateMessage(error: unknown): string {
@@ -394,13 +400,13 @@ export function getAuthFormMessage(error: unknown): string {
     return copy('auth.network');
   }
   if (blob.includes('play services')) {
-    return 'Google Play Services is missing or out of date. Update Play Services and try again.';
+    return GOOGLE_NOT_CONFIGURED;
   }
   if (blob.includes('did not return a sign-in token') || blob.includes('no idtoken')) {
     return 'Google did not return a sign-in token. Try again.';
   }
-  if (blob.includes('google sign-in is not configured')) {
-    return 'Google sign-in is not configured. Add the Web and iOS client IDs and rebuild.';
+  if (isGoogleClientConfigError(`${code} ${raw}`)) {
+    return GOOGLE_NOT_CONFIGURED;
   }
 
   const human = humanize(raw);
@@ -415,6 +421,21 @@ function humanize(raw: string): string {
 
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
+  }
+  if (
+    message.includes('can’t message this person') ||
+    message.includes("can't message this person") ||
+    message.includes('dm_blocked') ||
+    message.includes('direct_thread_is_blocked') ||
+    message.includes('friendship_is_blocked')
+  ) {
+    return copy('messages.blocked');
+  }
+  if (message.includes('you can only message accepted friends')) {
+    return copy('messages.openFailed');
+  }
+  if (message.includes('groups are for accepted friends')) {
+    return 'Groups are for accepted friends.';
   }
   if (
     message.includes('42883') ||
@@ -763,6 +784,9 @@ function humanize(raw: string): string {
   if (message.includes('network') || message.includes('fetch')) {
     return 'We couldn’t reach blOb just now. Check your connection and try again.';
   }
+  if (isGoogleClientConfigError(raw)) {
+    return GOOGLE_NOT_CONFIGURED;
+  }
   if (message.includes('oauth') || message.includes('provider')) {
     return 'That sign-in didn’t finish. Please try again.';
   }
@@ -819,5 +843,9 @@ function humanize(raw: string): string {
     return 'Couldn’t complete that just now. Try again.';
   }
 
+  const withoutCode = raw.replace(/\bP0001\b/gi, '').replace(/^[:\s.,-]+/, '').trim();
+  if (withoutCode && withoutCode !== raw) {
+    return withoutCode;
+  }
   return raw;
 }

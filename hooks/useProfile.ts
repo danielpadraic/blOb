@@ -5,6 +5,7 @@ import { asCopyTone, copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProfileUpdate, PublicProfile } from '@/lib/types';
 import { getErrorMessage, isUnknownColumnError } from '@/utils/errors';
+import { normalizeUsername } from '@/lib/username';
 import { isProfileComplete } from '@/utils/validators';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchPublicProfileById } from '@/hooks/usePublicProfile';
@@ -280,7 +281,9 @@ export function useCompleteProfile() {
 
       const row = {
         id: user.id,
-        username: patch.username ?? `blob_${user.id.replace(/-/g, '').slice(0, 10)}`,
+        username: patch.username
+          ? normalizeUsername(patch.username)
+          : `blob_${user.id.replace(/-/g, '').slice(0, 10)}`,
         display_name: patch.display_name ?? null,
         avatar_url: patch.avatar_url ?? null,
         bio: patch.bio ?? null,

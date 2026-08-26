@@ -24,11 +24,13 @@ import {
   useMessages,
   useSendMessage,
 } from '@/hooks/useSocial';
+import { copy } from '@/lib/copy';
+import { DM_BLOCKED_COPY } from '@/lib/dmOpen';
 import { conversationHref } from '@/lib/routes';
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 import { conversationTitle, fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { TAB_BAR_GUTTER, TAB_BAR_HEIGHT, TAB_BAR_PEEK, THEME } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
+import { getDmOpenMessage } from '@/utils/errors';
 import type { PublicProfile } from '@/lib/types';
 import type { Message } from '@/types/social';
 
@@ -65,8 +67,8 @@ export default function ConversationScreen() {
   const opening = Boolean(!conversationId && peerIdParam && startChat.isPending);
   const threadError =
     openError ??
-    (conversation.error instanceof Error ? conversation.error.message : null) ??
-    (messages.error instanceof Error ? messages.error.message : null);
+    (conversation.error ? getDmOpenMessage(conversation.error) : null) ??
+    (messages.error ? getDmOpenMessage(messages.error) : null);
 
   const createThread = startChat.mutateAsync;
 
@@ -110,7 +112,7 @@ export default function ConversationScreen() {
       return;
     }
     if (!peerIdParam || !user?.id) {
-      setOpenError('Couldn’t open this chat. Try again.');
+      setOpenError(copy('messages.openFailed'));
       return;
     }
     let cancelled = false;
@@ -124,7 +126,7 @@ export default function ConversationScreen() {
       },
       (error) => {
         if (!cancelled) {
-          setOpenError(getErrorMessage(error) || 'Couldn’t open this chat. Try again.');
+          setOpenError(getDmOpenMessage(error));
         }
       },
     );
@@ -175,12 +177,12 @@ export default function ConversationScreen() {
       return;
     }
     if (!peerIdParam) {
-      setOpenError('Couldn’t open this chat. Try again.');
+      setOpenError(copy('messages.openFailed'));
       return;
     }
     void startChat.mutateAsync(peerIdParam).then(
       (row) => router.replace(conversationHref(row.id, { peerId: peerIdParam, focus: true })),
-      (error) => setOpenError(getErrorMessage(error) || 'Couldn’t open this chat. Try again.'),
+      (error) => setOpenError(getDmOpenMessage(error)),
     );
   }
 
@@ -191,7 +193,7 @@ export default function ConversationScreen() {
     sendMessage.mutate(
       { conversation_id: conversationId, body },
       {
-        onError: (error) => Alert.alert('Couldn’t send that', getErrorMessage(error)),
+        onError: (error) => Alert.alert('Couldn’t send that', getDmOpenMessage(error)),
       },
     );
   }
@@ -253,9 +255,12 @@ export default function ConversationScreen() {
       {showOpenError ? (
         <View className="flex-1 items-center justify-center px-8">
           <AppText className="text-center text-[16px] font-bold text-charcoal">
-            Couldn’t open this chat. Try again.
+            {threadError === DM_BLOCKED_COPY ? DM_BLOCKED_COPY : copy('messages.openFailed')}
           </AppText>
-          {threadError && threadError !== 'Couldn’t open this chat.' ? (
+          {threadError &&
+          threadError !== DM_BLOCKED_COPY &&
+          threadError !== copy('messages.openFailed') &&
+          !/p0001|sqlstate|postgres/i.test(threadError) ? (
             <AppText className="mt-1 text-center text-[13px] text-muted">{threadError}</AppText>
           ) : null}
           <View className="mt-4 w-full">

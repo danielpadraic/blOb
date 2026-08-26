@@ -21,6 +21,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
+import { loginHrefAfterSignup } from '@/lib/authRedirect';
+import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
 import { getAuthFormMessage } from '@/utils/errors';
 import { registerSchema, type RegisterValues } from '@/utils/validators';
 
@@ -57,7 +59,8 @@ export default function RegisterScreen() {
       try {
         const result = await signUp(values.email.trim(), values.password);
         if (result.needsEmailConfirmation) {
-          setInfo('Check your inbox to confirm your email, then come back to sign in.');
+          router.replace(loginHrefAfterSignup(values.email.trim()));
+          return;
         }
       } catch (error) {
         reportAppError({ route: 'auth/register', error });
@@ -92,18 +95,7 @@ export default function RegisterScreen() {
       reportAppError({
         route: 'auth/register-google',
         error,
-        payload:
-          error instanceof Error
-            ? {
-                resultType: 'resultType' in error ? String(error.resultType) : error.name,
-                hasIdToken: 'hasIdToken' in error ? Boolean(error.hasIdToken) : null,
-                hasCode: 'hasCode' in error ? Boolean(error.hasCode) : null,
-                exchangeMessage:
-                  'exchangeMessage' in error && typeof error.exchangeMessage === 'string'
-                    ? error.exchangeMessage
-                    : error.message,
-              }
-            : { resultType: 'unknown', hasIdToken: false, hasCode: false },
+        payload: googleAuthErrorPayload(error),
       });
       setFormError(getAuthFormMessage(error));
     }
@@ -116,7 +108,34 @@ export default function RegisterScreen() {
   }
 
   return (
-    <AuthShell>
+    <AuthShell
+      scrollToTopKey={emailStep ? 'email' : 'gate'}
+      footer={
+        emailStep ? (
+          <View className="gap-3">
+            <Button
+              title="Create an Account"
+              onPress={onCreateAccount}
+              loading={isSubmitting}
+              disabled={isSubmitting || lockedUntil > Date.now()}
+              size="lg"
+            />
+            <View className="flex-row justify-center gap-1">
+              <AppText style={{ color: 'rgba(255,255,255,0.55)' }}>Already competing?</AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy('auth.signIn')}
+                onPress={() => router.replace('/(auth)/login')}
+                hitSlop={8}
+                style={{ minHeight: 44, justifyContent: 'center' }}>
+                <AppText className="font-semibold" style={{ color: THEME.accent }}>
+                  {copy('auth.signIn')}
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
+        ) : undefined
+      }>
       {emailStep ? (
         <View className="mt-8 gap-4">
           <AuthBackButton onPress={() => setEmailStep(false)} />
@@ -183,26 +202,6 @@ export default function RegisterScreen() {
               {info}
             </AppText>
           ) : null}
-          <Button
-            title="Create an Account"
-            onPress={onCreateAccount}
-            loading={isSubmitting}
-            disabled={isSubmitting || lockedUntil > Date.now()}
-            size="lg"
-          />
-          <View className="mt-2 flex-row justify-center gap-1">
-            <AppText style={{ color: 'rgba(255,255,255,0.55)' }}>Already competing?</AppText>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={copy('auth.signIn')}
-              onPress={() => router.replace('/(auth)/login')}
-              hitSlop={8}
-              style={{ minHeight: 44, justifyContent: 'center' }}>
-              <AppText className="font-semibold" style={{ color: THEME.accent }}>
-                {copy('auth.signIn')}
-              </AppText>
-            </Pressable>
-          </View>
         </View>
       ) : (
         <>

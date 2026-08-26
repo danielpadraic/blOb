@@ -76,20 +76,17 @@ export function CoachMarkOverlay({
         ...(Platform.OS === 'web' ? ({ isolation: 'isolate' } as object) : null),
       }}>
       <DimWithHole hole={hole} />
-      {hole ? (
-        <View
-          pointerEvents="auto"
-          style={{
-            position: 'absolute',
-            top: hole.y,
-            left: hole.x,
-            width: hole.width,
-            height: hole.height,
-            borderRadius: holeRadius(hole),
-            backgroundColor: Platform.OS === 'web' ? 'rgba(247, 247, 245, 0.02)' : 'transparent',
-          }}
-        />
-      ) : null}
+      <View
+        pointerEvents="auto"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          backgroundColor: 'rgba(16, 19, 18, 0.01)',
+        }}
+      />
       {hole ? (
         <View
           pointerEvents="none"

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ComposeTabButton } from '@/components/navigation/ComposeTabButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTourOptional } from '@/components/tour/TourContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { useMyProfile } from '@/hooks/useProfile';
 import { LOBBY_HREF } from '@/lib/routes';
@@ -23,6 +24,8 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const tour = useTourOptional();
+  const tourLocked = Boolean(tour?.active);
   const tabBottom = Math.max(insets.bottom, 10);
   const active = activeTab(pathname);
 
@@ -66,6 +69,7 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
         elevation: 80,
       }}>
       <View
+        pointerEvents={tourLocked ? 'none' : 'auto'}
         className="flex-row items-center"
         style={{
           height: 70,

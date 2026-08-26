@@ -21,7 +21,8 @@ import type {
   StoryReaction,
   StoryReactionType,
 } from '@/types/social';
-import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+import { DM_BLOCKED_COPY, DM_SELF_COPY } from '@/lib/dmOpen';
+import { getDmOpenMessage, getErrorMessage, isMissingRelationError } from '@/utils/errors';
 
 export const STORY_TTL_HOURS = 24;
 export const SOCIAL_PAGE_SIZE = 40;
@@ -1165,7 +1166,7 @@ export async function sendMessage(senderId: string, input: SendMessageInput): Pr
     })
     .select(MESSAGE_COLUMNS)
     .single();
-  throwIfError(error);
+  throwDmOpen(error);
   const now = new Date().toISOString();
   await supabase
     .from('conversations')
@@ -1191,12 +1192,45 @@ export async function markConversationRead(userId: string, conversationId: strin
   throwIfError(error);
 }
 
+function throwDmOpen(error: unknown) {
+  if (error) {
+    throw new Error(getDmOpenMessage(error));
+  }
+}
+
+export async function fetchBlockedPeerIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('friendships')
+    .select('user_a_id, user_b_id, status')
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
+    .eq('status', 'blocked');
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return new Set();
+    }
+    throwIfError(error);
+  }
+  const ids = new Set<string>();
+  for (const row of data ?? []) {
+    const other = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
+    if (other) {
+      ids.add(other);
+    }
+  }
+  return ids;
+}
+
 export async function getOrCreateDirectConversation(
   userId: string,
   otherUserId: string,
 ): Promise<Conversation> {
   if (userId === otherUserId) {
-    throw new Error('You can’t message yourself.');
+    throw new Error(DM_SELF_COPY);
+  }
+
+  const snapshot = await fetchFriendshipSnapshot(userId, otherUserId);
+  if (snapshot.status === 'blocked') {
+    throw new Error(DM_BLOCKED_COPY);
   }
 
   const { data: rpcData, error: rpcError } = await supabase.rpc(
@@ -1208,14 +1242,14 @@ export async function getOrCreateDirectConversation(
     return rpcRow;
   }
   if (rpcError && !isMissingRelationError(rpcError)) {
-    throwIfError(rpcError);
+    throwDmOpen(rpcError);
   }
 
   const { data: mine, error: mineError } = await supabase
     .from('conversation_members')
     .select('conversation_id')
     .eq('user_id', userId);
-  throwIfError(mineError);
+  throwDmOpen(mineError);
   const myIds = (mine ?? []).map((row) => row.conversation_id);
 
   if (myIds.length > 0) {
@@ -1224,7 +1258,7 @@ export async function getOrCreateDirectConversation(
       .select('conversation_id')
       .eq('user_id', otherUserId)
       .in('conversation_id', myIds);
-    throwIfError(sharedError);
+    throwDmOpen(sharedError);
     const sharedIds = [...new Set((shared ?? []).map((row) => row.conversation_id))];
     if (sharedIds.length > 0) {
       const { data: existing, error: existingError } = await supabase
@@ -1235,7 +1269,7 @@ export async function getOrCreateDirectConversation(
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
-      throwIfError(existingError);
+      throwDmOpen(existingError);
       if (existing) {
         return existing as Conversation;
       }
@@ -1247,18 +1281,18 @@ export async function getOrCreateDirectConversation(
     .insert({ is_group: false, challenge_id: null })
     .select(CONVERSATION_COLUMNS)
     .single();
-  throwIfError(createError);
+  throwDmOpen(createError);
   const conversation = created as Conversation;
   const { error: selfError } = await supabase.from('conversation_members').insert({
     conversation_id: conversation.id,
     user_id: userId,
   });
-  throwIfError(selfError);
+  throwDmOpen(selfError);
   const { error: otherError } = await supabase.from('conversation_members').insert({
     conversation_id: conversation.id,
     user_id: otherUserId,
   });
-  throwIfError(otherError);
+  throwDmOpen(otherError);
   return conversation;
 }
 

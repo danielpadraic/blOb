@@ -285,12 +285,18 @@ export default function PublicProfileScreen() {
                   loading={!official && (sendRequest.isPending || acceptRequest.isPending)}
                   onPress={friendAction}
                 />
-                <Button
-                  title="Message"
-                  size="sm"
-                  variant="outline"
-                  onPress={() => router.push(directMessageHref(profile.id))}
-                />
+                {relation?.status === 'blocked' ? (
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.muted }}>
+                    {copy('messages.blocked')}
+                  </AppText>
+                ) : (
+                  <Button
+                    title="Message"
+                    size="sm"
+                    variant="outline"
+                    onPress={() => router.push(directMessageHref(profile.id))}
+                  />
+                )}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Report a problem"
