@@ -4,6 +4,8 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
+import { useVideoPoster } from '@/hooks/useVideoPoster';
+
 import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
@@ -614,6 +616,7 @@ function MediaFrame({
 
 function PostVideo({ uri }: { uri: string }) {
   const [playing, setPlaying] = useState(false);
+  const poster = useVideoPoster(uri);
   if (!playing) {
     return (
       <Pressable
@@ -626,7 +629,15 @@ function PostVideo({ uri }: { uri: string }) {
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: THEME.primary,
+          overflow: 'hidden',
         }}>
+        {poster ? (
+          <Image
+            source={{ uri: poster }}
+            contentFit="cover"
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+        ) : null}
         <View
           style={{
             width: 44,

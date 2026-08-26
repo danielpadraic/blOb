@@ -1,14 +1,19 @@
+import { useEffect } from 'react';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { useAuth } from '@/hooks/useAuth';
 import { useReels } from '@/hooks/useSocial';
+import { useVideoPoster } from '@/hooks/useVideoPoster';
 import { copy } from '@/lib/copy';
 import { CAPTURE_REEL_HREF, reelHref } from '@/lib/routes';
-import { personDisplayName } from '@/lib/social';
-import { themeShadow } from '@/lib/theme';
+import { persistReelThumbnail, personDisplayName } from '@/lib/social';
+import { persistGeneratedPoster } from '@/lib/videoPoster';
+import { THEME, themeShadow } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
 
 /** Row component name stays ReelsRow; user-facing title is Rounds. Capture URL stays mode=reel. */
@@ -22,6 +27,8 @@ type MomentItem = {
   variant: MomentVariant;
   href: Href;
   thumbUrl?: string | null;
+  videoUrl?: string | null;
+  ownerId?: string | null;
 };
 
 const VARIANTS: MomentVariant[] = ['teal', 'dark', 'dark', 'soft'];
@@ -50,6 +57,8 @@ export function ReelsRow() {
     variant: VARIANTS[index % VARIANTS.length],
     href: reelHref(reel.id),
     thumbUrl: reel.thumbnail_url?.trim() || null,
+    videoUrl: reel.video_url,
+    ownerId: reel.user_id,
   }));
   const createCard: MomentItem = {
     id: 'new-reel',
@@ -87,17 +96,38 @@ function MomentCard({
   item: MomentItem;
   onPress: () => void;
 }) {
-  const light = item.variant === 'soft' && !item.thumbUrl;
+  const { user } = useAuth();
+  const generated = useVideoPoster(item.videoUrl, item.thumbUrl);
+  const thumbUrl = item.thumbUrl || generated;
+  const hasStill = Boolean(thumbUrl) || Boolean(item.videoUrl);
+  const light = item.variant === 'soft' && !hasStill;
   const color = light ? '#12332D' : '#FFFFFF';
+
+  useEffect(() => {
+    if (!item.videoUrl || item.thumbUrl || !generated || !user?.id || item.ownerId !== user.id) {
+      return;
+    }
+    void persistGeneratedPoster({
+      id: item.id,
+      videoUrl: item.videoUrl,
+      localUri: generated,
+      userId: user.id,
+      kind: 'reel',
+    }).then((url) => {
+      if (url) {
+        void persistReelThumbnail(item.id, url);
+      }
+    });
+  }, [generated, item.id, item.ownerId, item.thumbUrl, item.videoUrl, user?.id]);
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${item.title} ${item.handle}`}
-      style={{ ...themeShadow('card') }}>
+      style={{ minWidth: 44, minHeight: 44, ...themeShadow('card') }}>
       <LinearGradient
-        colors={[...GRADIENTS[item.variant]]}
+        colors={hasStill ? [THEME.primary, THEME.primary] : [...GRADIENTS[item.variant]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
@@ -108,14 +138,14 @@ function MomentCard({
           justifyContent: 'space-between',
           overflow: 'hidden',
         }}>
-        {item.thumbUrl ? (
+        {thumbUrl ? (
           <Image
-            source={{ uri: item.thumbUrl }}
+            source={{ uri: thumbUrl }}
             contentFit="cover"
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
           />
         ) : null}
-        {item.thumbUrl ? (
+        {hasStill ? (
           <LinearGradient
             colors={['rgba(16,19,18,0.15)', 'rgba(16,19,18,0.55)']}
             start={{ x: 0, y: 0 }}
@@ -136,12 +166,27 @@ function MomentCard({
             }}
           />
         )}
-        <AppText className="text-[11px] font-bold" style={{ color, opacity: 0.9 }}>
+        {hasStill ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Glyph name={GLYPH.play} color="#FFFFFF" size={22} />
+          </View>
+        ) : null}
+        <AppText className="text-[11px] font-bold" style={{ color, opacity: 0.9, zIndex: 1 }}>
           {item.handle}
         </AppText>
         <AppText
           className="text-[16px] font-extrabold"
-          style={{ color, letterSpacing: -0.3, lineHeight: 18 }}
+          style={{ color, letterSpacing: -0.3, lineHeight: 18, zIndex: 1 }}
           numberOfLines={3}>
           {item.title}
         </AppText>

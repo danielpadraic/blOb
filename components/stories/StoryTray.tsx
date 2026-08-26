@@ -1,13 +1,18 @@
+import { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { StoryRing } from '@/components/stories/StoryRing';
 import { AppText } from '@/components/ui/AppText';
+import { useAuth } from '@/hooks/useAuth';
 import { useStoryGroups } from '@/hooks/useSocial';
+import { useVideoPoster } from '@/hooks/useVideoPoster';
 import { copy } from '@/lib/copy';
 import { storyHref } from '@/lib/routes';
+import { persistStoryThumbnail, type StoryGroup } from '@/lib/social';
+import { persistGeneratedPoster } from '@/lib/videoPoster';
+import { previewFromStory } from '@/lib/wavePreview';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
-import type { StoryGroup } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
 export function StoryTray() {
@@ -50,6 +55,49 @@ export function StoryTray() {
   );
 }
 
+function WaveRing({ group, seen }: { group: StoryGroup; seen: boolean }) {
+  const { user } = useAuth();
+  const latest = group.stories[group.stories.length - 1];
+  const stored = latest ? previewFromStory(latest) : null;
+  const generated = useVideoPoster(
+    latest?.media_type === 'video' ? latest.media_url : null,
+    latest?.thumbnail_url,
+  );
+  const previewUri = stored || generated;
+
+  useEffect(() => {
+    if (!latest || latest.media_type !== 'video' || latest.thumbnail_url || !generated || !user?.id) {
+      return;
+    }
+    if (!group.isOwn || latest.user_id !== user.id) {
+      return;
+    }
+    void persistGeneratedPoster({
+      id: latest.id,
+      videoUrl: latest.media_url,
+      localUri: generated,
+      userId: user.id,
+      kind: 'story',
+    }).then((url) => {
+      if (url) {
+        void persistStoryThumbnail(latest.id, url);
+      }
+    });
+  }, [generated, group.isOwn, latest, user?.id]);
+
+  return (
+    <StoryRing
+      uri={group.avatar}
+      previewUri={previewUri}
+      name={group.name}
+      size={54}
+      seen={seen}
+      showAdd={group.isOwn && group.stories.length === 0}
+      showPlay={latest?.media_type === 'video' && Boolean(previewUri)}
+    />
+  );
+}
+
 function StoryBubble({
   group,
   seen,
@@ -68,14 +116,9 @@ function StoryBubble({
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={group.name}>
-          <StoryRing
-            uri={group.avatar}
-            name={group.name}
-            size={54}
-            seen={seen}
-            showAdd={showAdd && group.stories.length === 0}
-          />
+          accessibilityLabel={group.name}
+          style={{ minWidth: 44, minHeight: 44 }}>
+          <WaveRing group={group} seen={seen} />
         </Pressable>
         {showAdd && group.stories.length > 0 ? (
           <Pressable

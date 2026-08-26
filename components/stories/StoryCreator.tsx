@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCreateFeedEvent, useCreateStory, useStoryChallengeOptions } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
+import { uploadPosterFromVideo } from '@/lib/videoPoster';
 import { getErrorMessage } from '@/utils/errors';
 import { uploadStoryMedia } from '@/utils/upload';
 
@@ -108,9 +109,18 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
         blob: draft.blob,
       });
       setProgress(88);
+      const posterUrl =
+        draft.mediaType === 'video'
+          ? await uploadPosterFromVideo({
+              videoUri: draft.uri,
+              userId: user.id,
+              fileStem: `stories/${Date.now()}-poster`,
+            })
+          : null;
       const stories = await createStory.mutateAsync({
         media_url: mediaUrl,
         media_type: draft.mediaType,
+        thumbnail_url: posterUrl,
         caption: caption.trim() || null,
         challenge_id: challengeId,
       });

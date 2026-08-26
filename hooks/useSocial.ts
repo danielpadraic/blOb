@@ -773,6 +773,7 @@ export function useCreateStory() {
           sequence_index: index,
           clip_start_ms: clip.startMs,
           clip_duration_ms: clip.durationMs,
+          thumbnail_url: input.thumbnail_url ?? null,
         })) as Story[];
         queryClient.setQueryData<Story[]>(socialKeys.stories(), [...optimistic, ...(previous ?? [])]);
       }

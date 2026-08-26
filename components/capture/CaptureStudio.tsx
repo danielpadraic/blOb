@@ -39,6 +39,7 @@ import {
   resolveMediaDurationMs,
   waveClipWindows,
 } from '@/lib/waveClips';
+import { uploadPosterFromVideo } from '@/lib/videoPoster';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { asGalleryMedia } from '@/utils/media';
 import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
@@ -244,10 +245,19 @@ export function CaptureStudio({
             blob: draft.blob,
           }));
       setProgress(88);
+      const posterUrl =
+        draft.mediaType === 'video'
+          ? await uploadPosterFromVideo({
+              videoUri: draft.uri,
+              userId: user.id,
+              fileStem: `${mode === 'reel' ? 'reels' : 'stories'}/${Date.now()}-poster`,
+            })
+          : null;
       if (mode === 'reel') {
         const captionText = caption.trim();
         const reel = await createReel.mutateAsync({
           video_url: mediaUrl,
+          thumbnail_url: posterUrl,
           caption: captionText || null,
           challenge_id: challengeId,
           duration_ms: draft.durationMs ?? null,
@@ -296,6 +306,7 @@ export function CaptureStudio({
         const stories = await createStory.mutateAsync({
           media_url: mediaUrl,
           media_type: draft.mediaType,
+          thumbnail_url: posterUrl,
           caption: multiClip ? null : caption.trim() || null,
           challenge_id: challengeId,
           clips,

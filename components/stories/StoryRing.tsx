@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -7,16 +8,26 @@ import { THEME } from '@/lib/theme';
 
 type StoryRingProps = {
   uri?: string | null;
+  previewUri?: string | null;
   name?: string | null;
   size?: number;
   seen?: boolean;
   showAdd?: boolean;
+  showPlay?: boolean;
 };
 
-export function StoryRing({ uri, name, size = 54, seen = false, showAdd = false }: StoryRingProps) {
+export function StoryRing({
+  uri,
+  previewUri,
+  name,
+  size = 54,
+  seen = false,
+  showAdd = false,
+  showPlay = false,
+}: StoryRingProps) {
   const inner = size - 8;
   return (
-    <View style={{ width: size, height: size }}>
+    <View style={{ width: size, height: size, minWidth: 44, minHeight: 44 }}>
       <LinearGradient
         colors={seen ? [THEME.border, THEME.border] : [THEME.accentBright, THEME.accent]}
         start={{ x: 0, y: 0 }}
@@ -37,8 +48,32 @@ export function StoryRing({ uri, name, size = 54, seen = false, showAdd = false 
             backgroundColor: THEME.background,
             alignItems: 'center',
             justifyContent: 'center',
+            overflow: 'hidden',
           }}>
-          <Avatar uri={uri} name={name} size={inner} />
+          {previewUri ? (
+            <Image
+              source={{ uri: previewUri }}
+              contentFit="cover"
+              style={{ width: inner, height: inner, borderRadius: inner / 2 }}
+            />
+          ) : (
+            <Avatar uri={uri} name={name} size={inner} />
+          )}
+          {showPlay && previewUri ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Glyph name={GLYPH.play} color="#FFFFFF" size={16} />
+            </View>
+          ) : null}
         </View>
       </LinearGradient>
       {showAdd ? (

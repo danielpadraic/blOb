@@ -53,6 +53,7 @@ export type Story = {
   sequence_index?: number | null;
   clip_start_ms?: number | null;
   clip_duration_ms?: number | null;
+  thumbnail_url?: string | null;
 };
 
 export type StoryReactionType = 'like' | 'love' | 'fire' | 'strong';

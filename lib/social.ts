@@ -33,7 +33,7 @@ export const FRIENDSHIP_COLUMNS =
 export const FEED_EVENT_COLUMNS =
   'id, actor_id, event_type, target_type, target_id, challenge_id, metadata, visibility, created_at';
 export const STORY_COLUMNS =
-  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, sequence_id, sequence_index, clip_start_ms, clip_duration_ms';
+  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, sequence_id, sequence_index, clip_start_ms, clip_duration_ms, thumbnail_url';
 export const STORY_REACTION_COLUMNS = 'id, story_id, user_id, reaction_type, created_at';
 export const STORY_COMMENT_COLUMNS = 'id, story_id, user_id, body, created_at';
 export const REEL_COLUMNS =
@@ -83,6 +83,7 @@ export type CreateStoryInput = {
   caption?: string | null;
   expires_at?: string;
   clips?: WaveClipWindow[];
+  thumbnail_url?: string | null;
 };
 
 export type CreateReelInput = {
@@ -807,10 +808,10 @@ export async function fetchActiveStories(): Promise<Story[]> {
     .order('created_at', { ascending: false })
     .limit(80);
   const result =
-    query.error && /sequence_id|clip_start_ms|schema cache/i.test(query.error.message)
+    query.error && /sequence_id|clip_start_ms|thumbnail_url|schema cache/i.test(query.error.message)
       ? await supabase
           .from('stories')
-          .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at')
+          .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, thumbnail_url')
           .gt('expires_at', new Date().toISOString())
           .order('created_at', { ascending: false })
           .limit(80)
@@ -890,6 +891,7 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     user_id: userId,
     media_url: mediaUrl,
     media_type: input.media_type,
+    thumbnail_url: input.thumbnail_url ?? null,
     challenge_id: input.challenge_id ?? null,
     caption:
       clip.caption?.trim() ||
@@ -901,24 +903,45 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     clip_duration_ms: clip.durationMs || null,
   }));
   const { data, error } = await supabase.from('stories').insert(rows).select(STORY_COLUMNS);
-  if (error && /sequence_id|clip_start_ms|clip_duration_ms|schema cache/i.test(error.message)) {
+  if (error && /sequence_id|clip_start_ms|clip_duration_ms|thumbnail_url|schema cache/i.test(error.message)) {
     const fallback = await supabase
       .from('stories')
       .insert({
         user_id: userId,
         media_url: mediaUrl,
         media_type: input.media_type,
+        thumbnail_url: input.thumbnail_url ?? null,
         challenge_id: input.challenge_id ?? null,
         caption: input.caption?.trim() || null,
         expires_at: expiresAt,
       })
-      .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at')
+      .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, thumbnail_url')
       .single();
     throwIfError(fallback.error);
     return [fallback.data as Story];
   }
   throwIfError(error);
   return ((data ?? []) as Story[]).sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0));
+}
+
+export async function persistStoryThumbnail(storyId: string, thumbnailUrl: string): Promise<void> {
+  const { error } = await supabase
+    .from('stories')
+    .update({ thumbnail_url: thumbnailUrl })
+    .eq('id', storyId);
+  if (error && !/thumbnail_url|schema cache/i.test(error.message)) {
+    console.log('[blob:wave] poster save skipped', error.message);
+  }
+}
+
+export async function persistReelThumbnail(reelId: string, thumbnailUrl: string): Promise<void> {
+  const { error } = await supabase
+    .from('reels')
+    .update({ thumbnail_url: thumbnailUrl })
+    .eq('id', reelId);
+  if (error) {
+    console.log('[blob:round] poster save skipped', error.message);
+  }
 }
 
 export async function viewStory(userId: string, storyId: string): Promise<void> {
