@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Keyboard, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
-import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
+import { useChallenge, useChallengeParticipants, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
 import type { HealthWorkout } from '@/services/health/types';
@@ -86,7 +86,7 @@ function slotPart(proof: ChallengeProof, draft: SlotDraft | undefined): Challeng
     return { method: 'honor' };
   }
   if (proof.method === 'checkin') {
-    return { method: 'checkin', text: draft?.text ?? draft?.uri ?? '' };
+    return { method: 'checkin', text: draft?.text ?? '' };
   }
   const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
   return {
@@ -103,6 +103,7 @@ export default function SubmitWorkoutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const challengeQuery = useChallenge(id);
+  const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
@@ -127,6 +128,18 @@ export default function SubmitWorkoutScreen() {
   const rawPhase = checkinQuery.data?.phase ?? 'none';
   const phase = totalCount && rawPhase === 'submitted' ? 'none' : rawPhase;
   const honorOnly = proofsAreHonorOnly(proofSteps);
+  const mentionAudienceIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (challenge?.created_by) {
+      ids.add(challenge.created_by);
+    }
+    for (const row of roster.data ?? []) {
+      if (row.user_id) {
+        ids.add(row.user_id);
+      }
+    }
+    return [...ids];
+  }, [challenge?.created_by, roster.data]);
 
   useEffect(() => {
     if (!challenge || !isOfficialSeriesChallenge(challenge) || challenge.status !== 'live') {
@@ -771,6 +784,7 @@ export default function SubmitWorkoutScreen() {
           proofs={composerProofs}
           drafts={drafts}
           extras={extras}
+          audienceUserIds={mentionAudienceIds}
           initialCaption={stripHealthSummaryFromNotes(checkinQuery.data?.notes ?? '', attachedHealth())}
           allReady={allReady}
           busy={busy}
@@ -802,7 +816,8 @@ export default function SubmitWorkoutScreen() {
                 {textProofs.map((proof) => (
                   <View key={proof.id} className="mb-3">
                     <Input
-                      placeholder={proofDisplayName(proof) || 'What did you do?'}
+                      label="Note"
+                      placeholder="Write a short note that you did the work."
                       value={drafts[proof.id]?.text ?? ''}
                       onChangeText={(value) => onText(proof.id, value)}
                       onBlur={() => {
@@ -812,6 +827,9 @@ export default function SubmitWorkoutScreen() {
                         }
                       }}
                       editable={!busy && phase !== 'submitted'}
+                      multiline
+                      textAlignVertical="top"
+                      style={{ minHeight: 88 }}
                     />
                   </View>
                 ))}

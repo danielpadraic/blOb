@@ -114,6 +114,25 @@ describe('official weekly proofs', () => {
     expect(canSendCheckin(false, true, 'ready', true)).toBe(false);
   });
 
+  it('Note proof needs written text; a URL does not count', () => {
+    const note: ChallengeProof = { id: 'note', name: 'Note', method: 'checkin' };
+    expect(partSatisfies(note, { method: 'checkin', text: 'Did the work' })).toBe(true);
+    expect(partSatisfies(note, { method: 'checkin', url: 'https://example.com/note.jpg' })).toBe(false);
+    expect(partSatisfies(note, { method: 'checkin', text: '   ' })).toBe(false);
+    expect(partSatisfies(note, { method: 'checkin', text: 'Did the work', url: 'https://example.com/x.jpg' })).toBe(
+      true,
+    );
+    expect(checkinProofsReady([note], parseProofParts({}))).toBe(false);
+    expect(
+      checkinProofsReady([note], parseProofParts({ note: { method: 'checkin', url: 'https://example.com/x.jpg' } })),
+    ).toBe(false);
+    expect(
+      checkinProofsReady([note], parseProofParts({ note: { method: 'checkin', text: 'Did the work' } })),
+    ).toBe(true);
+    expect(canSendCheckin(false, false, 'none', false)).toBe(false);
+    expect(canSendCheckin(false, true, 'none', false)).toBe(true);
+  });
+
   it('counts a Health attach as the heart-rate slot', () => {
     const hr: ChallengeProof = { id: 'hr', name: 'Heart rate', method: 'hr' };
     expect(partSatisfies(hr, { method: 'hr', healthWorkoutId: 'hw-1' })).toBe(true);

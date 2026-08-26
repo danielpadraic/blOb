@@ -117,7 +117,7 @@ export function defaultSentenceForMethod(method: ChallengeProofMethod, minutes =
     return 'Post a video of the work.';
   }
   if (method === 'checkin') {
-    return 'Write a check-in of what you completed.';
+    return 'Write a short note that you did the work.';
   }
   if (method === 'honor') {
     return 'Confirm on your honor that you did the work.';
@@ -131,6 +131,7 @@ const SHORT_PROOF_LABELS = new Set([
   'video',
   'check-in',
   'checkin',
+  'note',
   'honor',
   'heart rate',
   'hr',
@@ -587,7 +588,7 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
     return true;
   }
   if (proof.method === 'checkin') {
-    return Boolean(part?.text?.trim() || part?.url?.trim());
+    return Boolean(part?.text?.trim());
   }
   if (proof.method === 'hr') {
     return Boolean(part?.url?.trim() || part?.healthWorkoutId?.trim() || part?.health);

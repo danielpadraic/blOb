@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { signupProofLines } from '@/lib/challengeProofs';
+import {
+  defaultSentenceForMethod,
+  methodLabel,
+  partSatisfies,
+  proofTypeFromMethod,
+  signupProofLines,
+} from '@/lib/challengeProofs';
+import { SIMPLE_PROOF_METHODS } from '@/lib/simpleChallenge';
 
 describe('signupProofLines', () => {
   it('does not duplicate Kids Chore proof lines from matching tasks', () => {
@@ -25,5 +32,20 @@ describe('signupProofLines', () => {
       'Screenshot of the completed Bible reading plan for the day.',
       'Extra photos or videos are welcome.',
     ]);
+  });
+});
+
+describe('Note proof method', () => {
+  it('labels Simple checkin as Note and needs written text', () => {
+    expect(SIMPLE_PROOF_METHODS.some((item) => item.value === 'checkin' && item.label === 'Note')).toBe(true);
+    expect(defaultSentenceForMethod('checkin')).toBe('Write a short note that you did the work.');
+    expect(methodLabel('checkin')).toBe('Note');
+    expect(proofTypeFromMethod('checkin')).toBe('check_in');
+    expect(partSatisfies({ id: 'n', name: 'Note', method: 'checkin' }, { method: 'checkin', text: 'Done' })).toBe(
+      true,
+    );
+    expect(
+      partSatisfies({ id: 'n', name: 'Note', method: 'checkin' }, { method: 'checkin', url: 'https://x.test/n' }),
+    ).toBe(false);
   });
 });

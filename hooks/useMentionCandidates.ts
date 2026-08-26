@@ -5,11 +5,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFollowing, useFriends } from '@/hooks/useSocial';
 import { isCreatorAccount } from '@/lib/creator';
 import { asPostAudience, type PostAudience } from '@/lib/postAudience';
-import { searchPeople } from '@/lib/social';
+import { fetchPublicProfilesByIds, searchPeople } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
 
-export type MentionCandidate = PublicProfile & { rank: 'friend' | 'creator' | 'search' };
+export type MentionCandidate = PublicProfile & { rank: 'friend' | 'creator' | 'search' | 'audience' };
 
 export function useMentionCandidates(input: {
   query: string;
@@ -56,9 +56,16 @@ export function useMentionCandidates(input: {
 
   const searched = useQuery({
     queryKey: ['mention-search', user?.id, query],
-    enabled: Boolean(user?.id && pickerOpen && query.length >= 2),
+    enabled: Boolean(user?.id && pickerOpen && query.length >= 2 && input.audienceUserIds.length === 0),
     staleTime: 30_000,
     queryFn: () => searchPeople(query, user!.id),
+  });
+
+  const scoped = useQuery({
+    queryKey: ['mention-audience', [...input.audienceUserIds].sort().join(',')],
+    enabled: Boolean(pickerOpen && input.audienceUserIds.length > 0),
+    staleTime: 30_000,
+    queryFn: () => fetchPublicProfilesByIds(input.audienceUserIds),
   });
 
   const rows = useMemo(() => {
@@ -81,10 +88,10 @@ export function useMentionCandidates(input: {
       if (!profile.id || seen.has(profile.id) || exclude.has(profile.id) || blockedIds.has(profile.id)) {
         return;
       }
-      if (audience === 'friends' && rank !== 'friend') {
+      if (audience === 'friends' && rank !== 'friend' && rank !== 'audience') {
         return;
       }
-      if (audience === 'specific' && !input.audienceUserIds.includes(profile.id)) {
+      if (audience === 'specific' && rank !== 'audience' && !input.audienceUserIds.includes(profile.id)) {
         return;
       }
       if (query && !matchesQuery(profile, query) && rank !== 'search') {
@@ -92,6 +99,13 @@ export function useMentionCandidates(input: {
       }
       seen.add(profile.id);
       out.push({ ...profile, rank });
+    }
+
+    if (input.audienceUserIds.length > 0) {
+      for (const profile of scoped.data ?? []) {
+        take(profile, 'audience');
+      }
+      return out;
     }
 
     for (const profile of friendProfiles) {
@@ -112,13 +126,16 @@ export function useMentionCandidates(input: {
     input.audienceUserIds,
     input.excludeIds,
     query,
+    scoped.data,
     searched.data,
     user?.id,
   ]);
 
   return {
     data: rows,
-    isLoading: pickerOpen && (friends.isLoading || following.isLoading),
+    isLoading:
+      pickerOpen &&
+      (input.audienceUserIds.length > 0 ? scoped.isLoading : friends.isLoading || following.isLoading),
   };
 }
 

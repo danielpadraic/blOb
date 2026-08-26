@@ -295,6 +295,7 @@ export default function OfficialDetailsScreen() {
                     <Chip
                       key={item.value}
                       label={item.label}
+                      minHeight={44}
                       selected={proof.method === item.value}
                       onPress={() =>
                         patch({

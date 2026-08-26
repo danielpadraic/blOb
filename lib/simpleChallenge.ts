@@ -92,7 +92,7 @@ export const SIMPLE_FREQUENCY_CHIPS: { value: SimpleFrequency; label: string }[]
 export const SIMPLE_PROOF_METHODS: { value: ChallengeProofMethod; label: string; icon: string }[] = [
   { value: 'photo', label: 'Photo', icon: '📷' },
   { value: 'video', label: 'Video', icon: '🎥' },
-  { value: 'checkin', label: 'Check-in', icon: '✓' },
+  { value: 'checkin', label: 'Note', icon: '✎' },
   { value: 'honor', label: 'Honor', icon: '🤝' },
   { value: 'hr', label: 'Heart rate', icon: '♥' },
 ];

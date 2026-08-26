@@ -244,7 +244,7 @@ const STRINGS = {
   'create.proofFallback': 'Post a photo of the work.',
   'create.proofPhoto': 'Photo',
   'create.proofVideo': 'Video',
-  'create.proofCheckin': 'Check-in',
+  'create.proofCheckin': 'Note',
   'create.proofHonor': 'Honor',
   'create.proofHr': 'Heart rate',
   'create.visibility': 'Visibility',

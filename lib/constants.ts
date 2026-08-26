@@ -249,8 +249,8 @@ export const PROOF_META: Record<
     short: 'Screenshot',
   },
   text_note: {
-    label: 'Write a check-in of what you completed.',
-    helper: 'A short written check-in of what you completed.',
+    label: 'Write a short note that you did the work.',
+    helper: 'A short written note of what you completed.',
     short: 'Note',
   },
   link: {

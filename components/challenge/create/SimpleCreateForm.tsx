@@ -101,7 +101,7 @@ function IconChip({
         backgroundColor: selected ? THEME.accentSoft : THEME.surface,
         borderWidth: 1,
         borderColor: selected ? THEME.accent : THEME.border,
-        minHeight: 36,
+        minHeight: 44,
         gap: 6,
       }}>
       {glyph ? <Glyph name={glyph} color={color} size={14} /> : icon ? <AppText className="text-[14px]">{icon}</AppText> : null}

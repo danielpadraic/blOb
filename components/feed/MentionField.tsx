@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { Avatar } from '@/components/ui/Avatar';
 import { useMentionCandidates } from '@/hooks/useMentionCandidates';
 import { copy } from '@/lib/copy';
 import {
@@ -261,11 +262,24 @@ function MentionFieldInner(
                   },
                 }
               : null)}
-            style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }}>
-            <AppText className="text-[14px] font-semibold text-charcoal" numberOfLines={1}>
-              {personDisplayName(row)}
-            </AppText>
-            <AppText className="text-[12px] text-muted">@{row.username}</AppText>
+            style={{
+              minHeight: 44,
+              paddingHorizontal: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+            <Avatar uri={row.avatar_url} name={personDisplayName(row)} size={28} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AppText className="text-[14px] font-semibold text-charcoal" numberOfLines={1}>
+                {row.username}
+              </AppText>
+              {personDisplayName(row) !== row.username ? (
+                <AppText className="text-[12px] text-muted" numberOfLines={1}>
+                  {personDisplayName(row)}
+                </AppText>
+              ) : null}
+            </View>
           </Pressable>
         ))
       )}

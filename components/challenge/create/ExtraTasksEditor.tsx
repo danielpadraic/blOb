@@ -89,6 +89,7 @@ export function ExtraTasksEditor({
               <Chip
                 key={item.value}
                 label={item.label}
+                minHeight={44}
                 selected={task.proof_method === item.value}
                 onPress={() =>
                   patch(index, {

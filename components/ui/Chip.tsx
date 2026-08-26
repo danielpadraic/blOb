@@ -8,9 +8,10 @@ type ChipProps = {
   label: string;
   selected?: boolean;
   onPress?: () => void;
+  minHeight?: number;
 };
 
-export function Chip({ label, selected, onPress }: ChipProps) {
+export function Chip({ label, selected, onPress, minHeight = 36 }: ChipProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -21,7 +22,7 @@ export function Chip({ label, selected, onPress }: ChipProps) {
         backgroundColor: selected ? THEME.accent : THEME.surface,
         borderWidth: 1,
         borderColor: selected ? THEME.accent : THEME.border,
-        minHeight: 36,
+        minHeight,
         flexShrink: 0,
       }}>
       <AppText

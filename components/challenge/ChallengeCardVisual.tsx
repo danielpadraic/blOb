@@ -70,7 +70,7 @@ function proofChips(challenge: ChallengeWithStats): ProofChip[] {
       chips.push({ key: 'honor', label: 'Honor', glyph: GLYPH.check });
     }
     if (proof.method === 'checkin' && !chips.some((chip) => chip.key === 'checkin')) {
-      chips.push({ key: 'checkin', label: 'Check-in', glyph: GLYPH.strong });
+      chips.push({ key: 'checkin', label: 'Note', glyph: GLYPH.strong });
     }
   }
   return chips;

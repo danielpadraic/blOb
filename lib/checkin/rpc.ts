@@ -104,7 +104,7 @@ async function proofPartFor(
   if (proof.method === 'checkin') {
     return {
       id: proof.id,
-      part: { method: 'checkin', text: (input.text ?? input.uri ?? '').trim() || null },
+      part: { method: 'checkin', text: (input.text ?? '').trim() || null },
       healthWorkoutId: null,
     };
   }

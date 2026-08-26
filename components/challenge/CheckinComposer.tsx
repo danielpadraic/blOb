@@ -45,6 +45,7 @@ type CheckinComposerProps = {
   drafts: Record<string, CheckinSlotDraft>;
   extras: CheckinExtra[];
   initialCaption?: string;
+  audienceUserIds?: string[];
   allReady: boolean;
   busy?: boolean;
   canSend: boolean;
@@ -62,6 +63,7 @@ export function CheckinComposer({
   drafts,
   extras,
   initialCaption,
+  audienceUserIds = [],
   allReady,
   busy,
   canSend,
@@ -104,29 +106,29 @@ export function CheckinComposer({
     }).length + extras.filter((item) => item.kind === 'photo' || item.kind === 'gif').length;
   const remainingSlots = Math.max(0, CHECKIN_PHOTO_CAP - photoCount);
   const canAddPhoto = remainingSlots > 0 && !busy;
-  const emptyRequired = proofs.find((proof) => {
-    const draft = drafts[proof.id];
-    return (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') && !draft?.uri && !draft?.text;
-  });
+  const canAddVideo = !busy;
 
-  function onFooterCamera() {
-    if (emptyRequired) {
-      onAddProof(emptyRequired);
+  function extraPhotoSheet() {
+    if (!canAddPhoto) {
+      Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
       return;
     }
-    if (canAddPhoto) {
-      void pickCamera();
-      return;
-    }
-    Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
+    Alert.alert('Extra photo', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Camera', onPress: () => void pickCamera('photo') },
+      { text: 'Gallery', onPress: () => void pickGallery('photo') },
+    ]);
   }
 
-  function onFooterGallery() {
-    if (canAddPhoto) {
-      void pickGallery();
+  function extraVideoSheet() {
+    if (!canAddVideo) {
       return;
     }
-    Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
+    Alert.alert('Extra video', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Camera', onPress: () => void pickCamera('video') },
+      { text: 'Gallery', onPress: () => void pickGallery('video') },
+    ]);
   }
 
   function addExtra(attachment: Omit<CheckinExtra, 'id'>) {
@@ -161,7 +163,7 @@ export function CheckinComposer({
     ]);
   }
 
-  async function pickGallery() {
+  async function pickGallery(requested: 'photo' | 'video' | 'any' = 'any') {
     const permission = await ensureLibraryPermission();
     if (!permission.ok) {
       const copyBlock = permissionCopy('library');
@@ -173,10 +175,10 @@ export function CheckinComposer({
     }
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos'],
+        mediaTypes: requested === 'photo' ? ['images'] : requested === 'video' ? ['videos'] : ['images', 'videos'],
         allowsEditing: false,
-        allowsMultipleSelection: remainingSlots > 1,
-        selectionLimit: Math.max(remainingSlots, 1),
+        allowsMultipleSelection: requested !== 'video' && remainingSlots > 1,
+        selectionLimit: requested === 'video' ? 1 : Math.max(remainingSlots, 1),
         quality: 0.9,
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
@@ -197,6 +199,9 @@ export function CheckinComposer({
         if (!kind) {
           continue;
         }
+        if (requested !== 'any' && kind !== requested) {
+          continue;
+        }
         if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_FILE_BYTES) {
           Alert.alert('That file is too large', 'Keep it under 50 MB.');
           continue;
@@ -205,7 +210,7 @@ export function CheckinComposer({
           uri: asset.uri,
           kind,
           mimeType: asset.mimeType ?? asset.file?.type,
-          name: asset.fileName ?? (kind === 'video' ? 'Video' : 'Photo'),
+          name: 'Extra',
           blob: asset.file ?? null,
         });
       }
@@ -219,20 +224,20 @@ export function CheckinComposer({
     }
   }
 
-  async function pickCamera() {
+  async function pickCamera(kind: 'photo' | 'video' = 'photo') {
     const permission = await ensureCameraPermission();
     if (!permission.ok) {
       const copyBlock = permissionCopy('camera');
       Alert.alert(copyBlock.title, copyBlock.body, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Settings', onPress: () => void openAppSettings() },
-        { text: 'Gallery', onPress: () => void pickGallery() },
+        { text: 'Gallery', onPress: () => void pickGallery(kind) },
       ]);
       return;
     }
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
+        mediaTypes: kind === 'video' ? ['videos'] : ['images'],
         allowsEditing: false,
         quality: 0.9,
       });
@@ -242,14 +247,14 @@ export function CheckinComposer({
       const asset = result.assets[0];
       addExtra({
         uri: asset.uri,
-        kind: 'photo',
+        kind,
         mimeType: asset.mimeType ?? asset.file?.type,
-        name: asset.fileName ?? 'Photo',
+        name: 'Extra',
         blob: asset.file ?? null,
       });
     } catch (error) {
       if (Platform.OS === 'web') {
-        await pickGallery();
+        await pickGallery(kind);
         return;
       }
       Alert.alert('Couldn’t attach that', getErrorMessage(error));
@@ -294,17 +299,7 @@ export function CheckinComposer({
             onRemove={() => onExtrasChange(extras.filter((row) => row.id !== item.id))}
           />
         ))}
-        {canAddPhoto ? (
-          <AddPhotoTile
-            onPress={() => {
-              Alert.alert('Add a photo', undefined, [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Camera', onPress: () => void pickCamera() },
-                { text: 'Gallery', onPress: () => void pickGallery() },
-              ]);
-            }}
-          />
-        ) : null}
+        {canAddPhoto ? <AddPhotoTile onPress={extraPhotoSheet} /> : null}
       </View>
     </View>
   );
@@ -325,33 +320,29 @@ export function CheckinComposer({
           ref={fieldRef}
           compact
           initialText={initialCaption}
-          placeholder="How did it go? Tag a friend…"
-          audience="public"
-          audienceUserIds={[]}
+          placeholder="Say something."
+          audience="specific"
+          audienceUserIds={audienceUserIds}
+          pickerPlacement="above"
           onChange={onDocChange}
           onSubmit={() => {
             if (!busy) {
               onSend();
             }
           }}
-          accessibilityLabel="Check-in caption"
+          accessibilityLabel="Say something"
         />
       </View>
 
       <View className="flex-row items-center" style={{ minHeight: 44, gap: 2 }}>
-        <ComposerIcon
-          glyph={GLYPH.camera}
-          label="Camera"
-          dimmed={!canAddPhoto && !emptyRequired}
-          onPress={onFooterCamera}
+        <CheckinExtrasBar
+          canAddPhoto={canAddPhoto}
+          canAddVideo={canAddVideo}
+          onExtraPhoto={extraPhotoSheet}
+          onExtraVideo={extraVideoSheet}
+          onTag={() => fieldRef.current?.insertAt()}
+          onGif={() => setGifOpen((open) => !open)}
         />
-        <ComposerIcon
-          glyph={GLYPH.album}
-          label="Gallery"
-          dimmed={!canAddPhoto && !emptyRequired}
-          onPress={onFooterGallery}
-        />
-        <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
         <View className="flex-1" />
         <Pressable
           accessibilityRole="button"
@@ -484,7 +475,7 @@ function AddPhotoTile({ onPress }: { onPress: () => void }) {
     <View style={{ width: THUMB }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Add a photo"
+        accessibilityLabel="Extra photo"
         onPress={onPress}
         style={{
           width: THUMB,
@@ -502,8 +493,43 @@ function AddPhotoTile({ onPress }: { onPress: () => void }) {
         </AppText>
       </Pressable>
       <AppText className="mt-1 text-[11px] text-muted" numberOfLines={1}>
-        Optional
+        Extra
       </AppText>
+    </View>
+  );
+}
+
+function CheckinExtrasBar({
+  canAddPhoto,
+  canAddVideo,
+  onExtraPhoto,
+  onExtraVideo,
+  onTag,
+  onGif,
+}: {
+  canAddPhoto: boolean;
+  canAddVideo: boolean;
+  onExtraPhoto: () => void;
+  onExtraVideo: () => void;
+  onTag: () => void;
+  onGif: () => void;
+}) {
+  return (
+    <View className="flex-row items-center" style={{ minHeight: 44, gap: 2 }}>
+      <ComposerIcon
+        glyph={GLYPH.camera}
+        label="Extra photo"
+        dimmed={!canAddPhoto}
+        onPress={onExtraPhoto}
+      />
+      <ComposerIcon
+        glyph={GLYPH.video}
+        label="Extra video"
+        dimmed={!canAddVideo}
+        onPress={onExtraVideo}
+      />
+      <ComposerIcon mark="@" label="Tag" onPress={onTag} />
+      <ComposerIcon mark="GIF" label="GIF" onPress={onGif} />
     </View>
   );
 }
@@ -546,7 +572,7 @@ function ExtraThumb({
         onPress={onRemove}
         hitSlop={6}
         style={{ minHeight: 28, justifyContent: 'center' }}>
-        <AppText className="mt-1 text-[11px] font-semibold text-muted">Optional · Remove</AppText>
+        <AppText className="mt-1 text-[11px] font-semibold text-muted">Extra · Remove</AppText>
       </Pressable>
     </View>
   );
