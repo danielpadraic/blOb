@@ -610,8 +610,8 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
             className="mt-8 gap-4 pb-4">
             <AppText className="text-[18px] font-extrabold text-charcoal">Physical Details</AppText>
             <AppText className="text-[13px] leading-5 text-muted">
-              Private unless you share them. Used for Official fitness matching — not required to save a
-              name or photo.
+              Always private. Used for Challenge recommendations and competition placement. Not required
+              to save a name or photo.
             </AppText>
             <View className="gap-2">
               <AppText className="text-sm font-semibold text-charcoal">Gender</AppText>

@@ -239,7 +239,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
       <View>
         <AppText className="text-[22px] font-extrabold text-charcoal">Physical Details</AppText>
         <AppText className="mt-1 text-[14px] leading-5 text-muted">
-          Private unless you share them. Used for Challenge recommendations and competition placement.
+          Always private. Used for Challenge recommendations and competition placement.
         </AppText>
       </View>
 

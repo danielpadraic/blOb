@@ -1,6 +1,8 @@
 import { Pressable, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
+import { useMediaLightboxOptional } from '@/components/feed/MediaLightbox';
 import { AppText } from '@/components/ui/AppText';
 import { storyHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -15,15 +17,17 @@ type MessageBubbleProps = {
 
 export function MessageBubble({ message, mine }: MessageBubbleProps) {
   const router = useRouter();
-  const text = message.body?.trim() || (message.media_url ? 'Sent a photo' : '');
+  const lightbox = useMediaLightboxOptional();
+  const photo = message.media_url?.trim() || null;
+  const text = message.body?.trim() || '';
   const storyId = text ? storyIdFromShareText(text) : null;
-  if (!text) {
+  if (!text && !photo) {
     return null;
   }
 
   const bubble = (
     <View
-      className="px-3.5 py-2.5"
+      className="overflow-hidden"
       style={{
         backgroundColor: mine ? THEME.primary : THEME.surface,
         borderRadius: 20,
@@ -32,11 +36,36 @@ export function MessageBubble({ message, mine }: MessageBubbleProps) {
         borderWidth: mine ? 0 : 1,
         borderColor: THEME.border,
       }}>
-      <AppText
-        className="text-[15px] leading-5"
-        style={{ color: mine ? THEME.primaryForeground : THEME.textPrimary }}>
-        {storyId ? 'Open this Wave' : text}
-      </AppText>
+      {photo ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open photo"
+          onPress={() => lightbox?.openLightbox([{ uri: photo, label: 'Photo' }])}
+          disabled={!lightbox}
+          style={{
+            width: 220,
+            maxWidth: '100%',
+            aspectRatio: 1,
+            backgroundColor: THEME.surface,
+          }}>
+          <Image
+            source={{ uri: photo }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            recyclingKey={photo}
+          />
+        </Pressable>
+      ) : null}
+      {text ? (
+        <View className="px-3.5 py-2.5">
+          <AppText
+            className="text-[15px] leading-5"
+            style={{ color: mine ? THEME.primaryForeground : THEME.textPrimary }}>
+            {storyId ? 'Open this Wave' : text}
+          </AppText>
+        </View>
+      ) : null}
     </View>
   );
 

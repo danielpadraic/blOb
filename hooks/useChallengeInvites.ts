@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   acceptChallengeInvite,
   createChallengeInvite,
+  declineChallengeInvite,
   fetchPendingChallengeInvites,
 } from '@/lib/challengeInvites';
 
@@ -35,6 +36,19 @@ export function useAcceptChallengeInvite() {
 
   return useMutation({
     mutationFn: acceptChallengeInvite,
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
+      void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
+      void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+    },
+  });
+}
+
+export function useDeclineChallengeInvite() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: declineChallengeInvite,
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });

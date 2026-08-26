@@ -1657,6 +1657,10 @@ export type Database = {
         Args: { p_token: string };
         Returns: AcceptChallengeInviteResult;
       };
+      decline_challenge_invite: {
+        Args: { p_token: string };
+        Returns: { ok: boolean; challenge_id: string };
+      };
       user_can_access_challenge: {
         Args: { p_challenge_id: string; p_user_id?: string };
         Returns: boolean;

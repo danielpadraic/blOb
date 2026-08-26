@@ -345,7 +345,7 @@ const STRINGS = {
   'board.yourShare': 'Your share if you finish',
   'proof.flag': 'Flag proof',
   'proof.flagged': 'Flagged',
-  'proof.flagReason': 'HR proof missing / not 30 min / not their workout.',
+  'proof.flagReason': 'Heart-rate proof missing / not 30 min / not their workout.',
   'official.dayOf': 'Day {n} of {total}',
   'official.dayEndsCentral': 'Day ends 11:59 p.m. Central',
   'official.dayEndsLocal': 'That’s {time} where you are.',

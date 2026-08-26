@@ -1,14 +1,16 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { Alert, View } from 'react-native';
 
 import { MascotState } from '@/components/mascot/MascotState';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
-import { useAcceptChallengeInvite } from '@/hooks/useChallengeInvites';
-import { stashPendingInviteToken, takePendingInviteToken } from '@/lib/challengeInvites';
+import { useAcceptChallengeInvite, useDeclineChallengeInvite } from '@/hooks/useChallengeInvites';
+import { stashPendingInviteToken } from '@/lib/challengeInvites';
 import { challengeDetailHref } from '@/lib/routes';
-import { getErrorMessage } from '@/utils/errors';
+import { getInviteAcceptMessage } from '@/utils/errors';
 
 export default function InviteTokenScreen() {
   const params = useLocalSearchParams<{ token: string }>();
@@ -17,24 +19,49 @@ export default function InviteTokenScreen() {
   const { user } = useAuth();
   const { path } = useMyProfile();
   const accept = useAcceptChallengeInvite();
-  const started = useRef(false);
+  const decline = useDeclineChallengeInvite();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const busy = accept.isPending || decline.isPending;
 
-  useEffect(() => {
-    if (!token || started.current) {
+  function onAccept() {
+    if (!token || busy) {
       return;
     }
-    if (path !== 'app' || !user) {
-      void stashPendingInviteToken(token);
-      return;
-    }
-    started.current = true;
-    void takePendingInviteToken();
+    setActionError(null);
     accept.mutate(token, {
       onSuccess: (result) => {
         router.replace(challengeDetailHref(result.challenge_id));
       },
+      onError: (error) => {
+        setActionError(getInviteAcceptMessage(error));
+      },
     });
-  }, [accept, path, router, token, user]);
+  }
+
+  function onDecline() {
+    if (!token || busy) {
+      return;
+    }
+    Alert.alert('Decline this invite?', '', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Decline',
+        style: 'destructive',
+        onPress: () => {
+          setActionError(null);
+          decline.mutate(token, {
+            onSuccess: () => {
+              Alert.alert('', 'Invite declined');
+              router.replace('/challenges');
+            },
+            onError: (error) => {
+              setActionError(getInviteAcceptMessage(error));
+            },
+          });
+        },
+      },
+    ]);
+  }
 
   if (!token) {
     return (
@@ -42,7 +69,7 @@ export default function InviteTokenScreen() {
         <MascotState
           kind="error"
           title="Invite not found"
-          body="That link is missing an invite token."
+          body={getInviteAcceptMessage(new Error('invite_not_found'))}
           actionLabel="Go to Lobby"
           onAction={() => router.replace('/challenges')}
         />
@@ -58,21 +85,10 @@ export default function InviteTokenScreen() {
           title="Sign in to accept"
           body="This invite is waiting for you. Sign in, then we’ll open the challenge."
           actionLabel="Sign in"
-          onAction={() => router.replace('/(auth)/login')}
-        />
-      </Screen>
-    );
-  }
-
-  if (accept.isError) {
-    return (
-      <Screen>
-        <MascotState
-          kind="error"
-          title="Couldn’t accept that invite"
-          body={getErrorMessage(accept.error)}
-          actionLabel="Go to Lobby"
-          onAction={() => router.replace('/challenges')}
+          onAction={() => {
+            void stashPendingInviteToken(token);
+            router.replace('/(auth)/login');
+          }}
         />
       </Screen>
     );
@@ -80,7 +96,17 @@ export default function InviteTokenScreen() {
 
   return (
     <Screen>
-      <MascotState kind="loading" title="Opening invite" body="Checking your access…" />
+      <View className="flex-1 justify-center gap-4 px-2">
+        <MascotState
+          kind={actionError ? 'error' : 'empty'}
+          title={actionError ? 'Couldn’t use that invite' : 'You’re invited'}
+          body={actionError ?? 'Accept to join this challenge, or decline if it’s not for you.'}
+          compact
+        />
+        <Button title="Accept" loading={accept.isPending} disabled={busy} onPress={onAccept} />
+        <Button title="Decline" variant="outline" loading={decline.isPending} disabled={busy} onPress={onDecline} />
+        <Button title="Go to Lobby" variant="ghost" disabled={busy} onPress={() => router.replace('/challenges')} />
+      </View>
     </Screen>
   );
 }

@@ -46,7 +46,10 @@ describe('shouldReturnHomeOnResume', () => {
     expect(shouldReturnHomeOnResume({ ...base, pathname: '/feed' })).toBe(false);
   });
 
-  it('never treats a web tab hide as leaving the app', () => {
-    expect(shouldReturnHomeOnResume({ ...base, platform: 'web' })).toBe(false);
+  it('uses the same resume rules on Expo Web as native', () => {
+    expect(shouldReturnHomeOnResume({ ...base, platform: 'web' })).toBe(true);
+    expect(shouldReturnHomeOnResume({ ...base, platform: 'web', pathname: '/challenges/create' })).toBe(
+      false,
+    );
   });
 });

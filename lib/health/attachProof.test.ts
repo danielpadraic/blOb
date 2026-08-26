@@ -82,7 +82,7 @@ describe('check-in health snapshot', () => {
     });
     expect(snapshot).not.toHaveProperty('route');
     expect(healthCompleteSummaryLine(snapshot)).toMatch(/39 min/);
-    expect(healthCompleteSummaryLine(snapshot)).toMatch(/Avg HR 148/);
+    expect(healthCompleteSummaryLine(snapshot)).toMatch(/Average heart rate 148/);
   });
 
   it('omits HR and energy when the workout has no samples', () => {
@@ -95,7 +95,7 @@ describe('check-in health snapshot', () => {
     });
     expect(snapshot.avgHrBpm).toBeUndefined();
     expect(snapshot.activeEnergyKcal).toBeUndefined();
-    expect(healthCompleteSummaryLine(snapshot)).not.toMatch(/Avg HR/);
+    expect(healthCompleteSummaryLine(snapshot)).not.toMatch(/Average heart rate/);
   });
 
   it('keeps the user caption and prepends the summary on the check-in notes', () => {

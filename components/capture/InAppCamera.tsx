@@ -540,7 +540,7 @@ export function InAppCamera({
         {hrScreenshot ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="HR screenshot"
+            accessibilityLabel="Heart-rate screenshot"
             onPress={onOpenGallery}
             className="mb-3 self-center items-center justify-center rounded-full px-4"
             style={{
@@ -550,7 +550,7 @@ export function InAppCamera({
               borderColor: 'rgba(255,255,255,0.35)',
             }}>
             <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
-              HR screenshot
+              Heart-rate screenshot
             </AppText>
           </Pressable>
         ) : null}

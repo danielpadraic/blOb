@@ -8,7 +8,7 @@ import type {
   CreateChallengeInviteResult,
   PublicProfile,
 } from '@/lib/types';
-import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+import { getErrorMessage, getInviteAcceptMessage, isMissingRelationError } from '@/utils/errors';
 
 const PENDING_INVITE_KEY = 'pending_invite_token';
 
@@ -64,13 +64,28 @@ export async function acceptChallengeInvite(token: string): Promise<AcceptChalle
     p_token: token.trim(),
   });
   if (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(getInviteAcceptMessage(error));
   }
   const row = (Array.isArray(data) ? data[0] : data) as AcceptChallengeInviteResult | null;
   if (!row?.challenge_id) {
     throw new Error('That invite link is not valid.');
   }
   return row;
+}
+
+export async function declineChallengeInvite(token: string): Promise<{ challenge_id: string }> {
+  const trimmed = token.trim();
+  const { data, error } = await supabase.rpc('decline_challenge_invite', {
+    p_token: trimmed,
+  });
+  if (error) {
+    throw new Error(getInviteAcceptMessage(error));
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as { challenge_id?: string } | null;
+  if (row?.challenge_id) {
+    return { challenge_id: row.challenge_id };
+  }
+  return { challenge_id: '' };
 }
 
 type InviteRow = {

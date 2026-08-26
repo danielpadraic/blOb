@@ -2476,13 +2476,14 @@ as $$
 declare
   v_name text;
   v_amount text;
-  v_noun text;
   v_body text;
 begin
   v_name := public.profile_display_name(new.sender_id);
   v_amount := to_char(coalesce(new.amount, 0), 'FM999999990.00');
-  v_noun := case when public.normalize_wallet_currency(new.currency) = 'bucks' then 'Bucks' else 'Coins' end;
-  v_body := v_name || ' sent you ' || v_amount || ' ' || v_noun || '.';
+  v_body := case
+    when public.normalize_wallet_currency(new.currency) = 'bucks' then v_name || ' sent you $' || v_amount || '.'
+    else v_name || ' sent you ' || v_amount || ' Coins.'
+  end;
   perform public.notify_user(
     new.recipient_id,
     new.sender_id,

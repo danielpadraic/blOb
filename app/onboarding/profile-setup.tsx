@@ -83,7 +83,7 @@ const STEP_COPY = [
   },
   {
     title: 'Physical Details',
-    body: 'Private unless you share them. Used for Challenge recommendations and competition placement.',
+    body: 'Always private. Used for Challenge recommendations and competition placement.',
   },
 ] as const;
 

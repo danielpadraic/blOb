@@ -81,6 +81,46 @@ export function getInviteErrorMessage(error: unknown): string {
   return text || 'Couldn’t send that invite.';
 }
 
+/** Invitee accept / decline / token errors. Never raw Postgres. */
+export function getInviteAcceptMessage(error: unknown): string {
+  logPostgrestError('accept-challenge-invite', error);
+  const raw = extractRawMessage(error);
+  const text = getErrorMessage(error);
+  const blob = `${text} ${raw}`.toLowerCase();
+  if (blob.includes('expired')) {
+    return 'This invite has expired.';
+  }
+  if (blob.includes('invite_revoked') || blob.includes('invite is no longer valid') || /\brevoked\b/.test(blob)) {
+    return 'That invite is no longer valid.';
+  }
+  if (
+    blob.includes('already_joined') ||
+    blob.includes('already_accepted') ||
+    blob.includes('already in this challenge') ||
+    blob.includes('already in')
+  ) {
+    return 'You’re already in this challenge.';
+  }
+  if (blob.includes('not_invited') || blob.includes('not invited')) {
+    return 'This challenge is private. Ask the host for an invite.';
+  }
+  if (blob.includes('invite_used') || blob.includes('already used')) {
+    return 'That invite was already used.';
+  }
+  if (
+    blob.includes('invite_not_found') ||
+    blob.includes('invite link is not valid') ||
+    blob.includes('invalid link') ||
+    blob.includes('missing an invite token')
+  ) {
+    return 'That invite link is not valid.';
+  }
+  if (/postgres|pgrst|sqlstate|p0001|42883|22p02/i.test(blob) || !text) {
+    return 'That invite link is not valid.';
+  }
+  return text;
+}
+
 export function getJoinChallengeMessage(error: unknown): string {
   logPostgrestError('join-challenge', error);
   const text = getErrorMessage(error);

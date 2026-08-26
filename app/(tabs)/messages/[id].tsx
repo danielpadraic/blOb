@@ -186,12 +186,12 @@ export default function ConversationScreen() {
     );
   }
 
-  function onSend(body: string) {
+  function onSend(payload: { body: string; media_url?: string | null }) {
     if (!conversationId) {
       return;
     }
     sendMessage.mutate(
-      { conversation_id: conversationId, body },
+      { conversation_id: conversationId, body: payload.body, media_url: payload.media_url },
       {
         onError: (error) => Alert.alert('Couldn’t send that', getDmOpenMessage(error)),
       },

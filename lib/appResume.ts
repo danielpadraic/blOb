@@ -15,9 +15,6 @@ export function shouldReturnHomeOnResume(input: {
   minBackgroundMs?: number;
   platform?: string;
 }): boolean {
-  if (input.platform === 'web') {
-    return false;
-  }
   if (input.next !== 'active') {
     return false;
   }

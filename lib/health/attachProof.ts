@@ -152,7 +152,7 @@ export function healthCompleteSummaryLine(snapshot: CheckinHealthProof): string 
   const bits = [
     window,
     formatHealthDuration(snapshot.durationSec),
-    snapshot.avgHrBpm && snapshot.avgHrBpm > 0 ? `Avg HR ${Math.round(snapshot.avgHrBpm)}` : null,
+    snapshot.avgHrBpm && snapshot.avgHrBpm > 0 ? `Average heart rate ${Math.round(snapshot.avgHrBpm)}` : null,
   ].filter(Boolean);
   return bits.join(' · ');
 }

@@ -30,7 +30,7 @@ export function healthProofLines(input: {
   const primary = `${input.activityLabel} · ${formatHealthDuration(input.durationSec)} · ${healthSourceLabel(input.confidence)}`;
   const bits: string[] = [];
   if (input.hrAvg && input.hrAvg > 0) {
-    bits.push(`Avg HR ${Math.round(input.hrAvg)}`);
+    bits.push(`Average heart rate ${Math.round(input.hrAvg)}`);
   }
   if (input.caloriesKcal && input.caloriesKcal > 0) {
     bits.push(`${Math.round(input.caloriesKcal)} cal`);
