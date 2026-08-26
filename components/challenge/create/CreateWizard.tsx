@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
-import { AppState, BackHandler, Dimensions, Keyboard, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { BackHandler, Dimensions, Keyboard, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
@@ -12,6 +12,7 @@ import { useTourOptional } from '@/components/tour/TourContext';
 import {
   ChoiceCard,
   ContinueDraftCard,
+  CreateActionsFooter,
   FieldAnchor,
   FieldLabel,
   useWizardFieldFocus,
@@ -36,21 +37,16 @@ import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { useChallenge, useCreateChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
-import { useAuth } from '@/hooks/useAuth';
 import {
-  challengeDraftsQueryKey,
   useChallengeDrafts,
   useDiscardChallengeDraft,
   useReusableChallenges,
   useSaveChallengeDraft,
 } from '@/hooks/useChallengeDraft';
-import { useQueryClient } from '@tanstack/react-query';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
   createHrefForDraft,
-  hasMeaningfulDraftEdits,
   hydrateDraftValues,
-  isDraftDirty,
   isSimpleCreateDraft,
   isVisibleDraft,
   resumeWizardStep,
@@ -142,7 +138,6 @@ const STEP_RULES = wizardStepIndex('rules');
 const STEP_REVIEW = wizardStepIndex('review');
 
 const TUTORIAL_KEY = 'blob:create-tutorial';
-const AUTOSAVE_MS = 2000;
 
 type BobIssue = { field: string; step: number };
 
@@ -167,7 +162,6 @@ const FOCUSABLE_FIELDS = new Set([
 
 export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{
     resume?: string | string[];
     draftId?: string | string[];
@@ -180,8 +174,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const dismissFallback = returnTo === 'feed' ? TABS_HREF : LOBBY_HREF;
   const { profile } = useMyProfile();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
   const create = useCreateChallenge();
   const update = useUpdateUserChallenge();
   const editing = useChallenge(editId);
@@ -315,9 +307,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     values: CreateChallengeValues;
     startPreset: StartPreset;
   } | null>(null);
-  const persistChainRef = useRef(Promise.resolve());
-  const persistDraftRef = useRef<() => Promise<void>>(async () => {});
   const flushRulesDraftRef = useRef<() => void>(() => {});
+  const draftFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draftFlash, setDraftFlash] = useState(false);
   const snapshotRef = useRef({
     step,
     startPath,
@@ -512,18 +504,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       }
       const hydrated = hydrateDraftValues(draft.values);
       const preset = draft.startPreset ?? startPresetFromValues(hydrated.starts_at);
-      const opened =
-        preset === 'custom'
-          ? hydrated
-          : { ...hydrated, ...resolveStartForPublish({
-              preset,
-              starts_at: hydrated.starts_at,
-              duration_days: hydrated.duration_days,
-            }) };
-      const nextStep = Math.max(
-        STEP_GOAL,
-        jumpToSavedStep ? resumeWizardStep({ ...draft, values: opened }) : STEP_GOAL,
-      );
+      const opened = hydrated;
+      const nextStep = jumpToSavedStep ? resumeWizardStep({ ...draft, values: opened }) : STEP_GOAL;
       const nextPath = draft.startPath ?? 'scratch';
       if (__DEV__) {
         console.log('[blob:draft] continue', { id: draft.id, savedStep: draft.step, nextStep, title: opened.title });
@@ -625,100 +607,37 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     return startPath === 'template' && Boolean(templateId && templateId !== 'custom');
   }
 
-  function isPastStartChooser(nextStep = snapshotRef.current.step): boolean {
-    return nextStep >= STEP_GOAL;
+  function flashDraftSaved() {
+    setDraftFlash(true);
+    if (draftFlashTimerRef.current) {
+      clearTimeout(draftFlashTimerRef.current);
+    }
+    draftFlashTimerRef.current = setTimeout(() => {
+      setDraftFlash(false);
+    }, 1600);
   }
 
-  function hasUserEdits(nextValues: CreateChallengeValues = snapshotRef.current.values): boolean {
-    return isDraftDirty(nextValues, baselineRef.current);
-  }
-
-  function shouldPersistDraft(): boolean {
-    if (skipSaveRef.current || discardedRef.current || liveChallengeId || isEditing) {
-      return false;
-    }
-    const snapshot = { ...snapshotRef.current, id: draftIdRef.current };
-    const last = lastPersistedRef.current;
-    if (
-      last &&
-      last.id === snapshot.id &&
-      last.step === snapshot.step &&
-      last.startPath === snapshot.startPath &&
-      last.templateId === snapshot.templateId &&
-      last.sourceChallengeId === snapshot.sourceChallengeId &&
-      last.startPreset === snapshot.startPreset &&
-      !isDraftDirty(snapshot.values, last.values)
-    ) {
-      return false;
-    }
-    if (!hasUserEdits(snapshot.values)) {
-      return false;
-    }
-    return isPastStartChooser(snapshot.step) || hasMeaningfulDraftEdits(snapshot.values);
-  }
-
-  function shouldSaveOnExit(): boolean {
-    if (skipSaveRef.current || discardedRef.current || liveChallengeId || isEditing) {
-      return false;
-    }
-    const snapshot = { ...snapshotRef.current, id: draftIdRef.current };
-    if (!hasUserEdits(snapshot.values)) {
-      return false;
-    }
-    return isPastStartChooser(snapshot.step) || hasMeaningfulDraftEdits(snapshot.values);
-  }
-
-  async function persistDraft() {
-    const run = persistChainRef.current.then(async () => {
-      if (!shouldPersistDraft()) {
-        return;
-      }
-      const snapshot = { ...snapshotRef.current, id: draftIdRef.current };
-      try {
-        const saved = await saveDraft.mutateAsync(snapshot);
-        if (saved.id && saved.id !== draftIdRef.current) {
-          draftIdRef.current = saved.id;
-          setDraftId(saved.id);
-        } else if (saved.id) {
-          draftIdRef.current = saved.id;
-        }
-        rememberPersisted({ ...snapshot, id: saved.id ?? snapshot.id });
-      } catch (error) {
-        console.log('[blob:draft] save failed', getErrorMessage(error));
-      }
-    });
-    persistChainRef.current = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
-  }
-  persistDraftRef.current = persistDraft;
-
-  async function abandonSessionDraft() {
-    const id = draftIdRef.current;
-    if (!id) {
-      clearSessionDraft();
+  async function onSaveDraft() {
+    if (isEditing || liveChallengeId || saveDraft.isPending) {
       return;
     }
-    if (restoredDraftRef.current) {
-      return;
-    }
-    skipSaveRef.current = true;
+    const snapshot = {
+      ...snapshotRef.current,
+      id: draftIdRef.current ?? draftsQuery.data?.[0]?.id ?? null,
+    };
     try {
-      await discardDraft.mutateAsync(id);
+      const saved = await saveDraft.mutateAsync(snapshot);
+      if (saved.id) {
+        draftIdRef.current = saved.id;
+        setDraftId(saved.id);
+      }
+      restoredDraftRef.current = true;
+      rememberPersisted({ ...snapshot, id: saved.id ?? snapshot.id });
+      flashDraftSaved();
     } catch (error) {
-      console.log('[blob:draft] abandon skipped', getErrorMessage(error));
+      console.log('[blob:draft] save failed', getErrorMessage(error));
+      setFormError(getErrorMessage(error) || 'Couldn’t save the draft.');
     }
-    clearSessionDraft();
-  }
-
-  async function flushDraftOnLeave() {
-    if (shouldSaveOnExit()) {
-      await persistDraft();
-      return;
-    }
-    await abandonSessionDraft();
   }
 
   useEffect(() => {
@@ -753,55 +672,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       tour?.setCreateScrollY(0);
     }
   }, [step]);
-
-  useEffect(() => {
-    void persistDraftRef.current();
-  }, [step]);
-
-  const persistKey = useMemo(() => {
-    try {
-      return JSON.stringify({ ...values, rules: '' });
-    } catch {
-      return '';
-    }
-  }, [values]);
-
-  useEffect(() => {
-    if (liveChallengeId || skipSaveRef.current || discardedRef.current) {
-      return;
-    }
-    if (!shouldPersistDraft()) {
-      return;
-    }
-    const handle = setTimeout(() => {
-      void persistDraftRef.current();
-    }, AUTOSAVE_MS);
-    return () => clearTimeout(handle);
-  }, [persistKey, liveChallengeId]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background' || state === 'inactive') {
-        void persistDraftRef.current();
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') {
-      return;
-    }
-    const flush = () => {
-      void persistDraftRef.current();
-    };
-    window.addEventListener('pagehide', flush);
-    window.addEventListener('beforeunload', flush);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      window.removeEventListener('beforeunload', flush);
-    };
-  }, []);
 
   useEffect(() => {
     if (!bobError) {
@@ -842,23 +712,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     getValues,
     setValue,
   ]);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
-      if (leavingRef.current || skipSaveRef.current || discardedRef.current || liveChallengeId || isEditing) {
-        return;
-      }
-      event.preventDefault();
-      leavingRef.current = true;
-      void flushDraftOnLeave()
-        .then(() => queryClient.invalidateQueries({ queryKey: challengeDraftsQueryKey(user?.id) }))
-        .finally(() => {
-          skipSaveRef.current = true;
-          navigation.dispatch(event.data.action);
-        });
-    });
-    return unsubscribe;
-  }, [navigation, liveChallengeId]);
 
   useEffect(() => {
     if (!liveChallengeId) {
@@ -1503,12 +1356,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return;
     }
     leavingRef.current = true;
-    void flushDraftOnLeave()
-      .then(() => queryClient.invalidateQueries({ queryKey: challengeDraftsQueryKey(user?.id) }))
-      .finally(() => {
-        skipSaveRef.current = true;
-        router.dismissTo(dismissFallback);
-      });
+    skipSaveRef.current = true;
+    router.dismissTo(dismissFallback);
   }
 
   const onPublish = handleSubmit(
@@ -1950,29 +1799,26 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           {formError ? (
             <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
           ) : null}
-          <View className="flex-row gap-2">
-            <View className="flex-1">
-              <Button title="Back" variant="outline" onPress={goBack} />
-            </View>
-            <View className="flex-1">
-              <Button
-                title={
-                  step === STEP_SCORING && scoringEditorOpen
-                    ? 'Save scoring method'
-                    : lastStep
-                      ? isEditing
-                        ? copy('create.save')
-                        : 'Publish'
-                      : reviewReturn
-                        ? copy('create.backToReview')
-                        : 'Next'
-                }
-                loading={lastStep && publishing}
-                onPress={() => void goNext()}
-                style={{ minHeight: 44 }}
-              />
-            </View>
-          </View>
+          <CreateActionsFooter
+            onBack={goBack}
+            onSaveDraft={() => void onSaveDraft()}
+            onNext={() => void goNext()}
+            nextTitle={
+              step === STEP_SCORING && scoringEditorOpen
+                ? 'Save scoring method'
+                : lastStep
+                  ? isEditing
+                    ? copy('create.save')
+                    : 'Publish'
+                  : reviewReturn
+                    ? copy('create.backToReview')
+                    : 'Next'
+            }
+            nextLoading={lastStep && publishing}
+            savePending={saveDraft.isPending}
+            showSave={!isEditing && step >= STEP_GOAL}
+            draftFlash={draftFlash}
+          />
         </View>
           </WizardFocusContext.Provider>
         )}

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
+import { CreateActionsFooter } from '@/components/challenge/create/wizardUi';
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
@@ -48,9 +49,6 @@ import {
   defaultSimpleDraft,
   endsAtOf,
   frequencyHintOf,
-  persistSimpleDraft,
-  readPersistedSimpleDraft,
-  refreshSimpleDraftStart,
   removeSimpleProof,
   simpleDraftFromChallenge,
   simpleDraftToCreateValues,
@@ -145,17 +143,13 @@ export function SimpleCreateForm() {
   const editing = useChallenge(editId);
   const originalStart = editing.data?.starts_at ?? null;
   const simpleDraftIdRef = useRef<string | null>(null);
-  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef<SimpleChallengeDraft>(defaultSimpleDraft());
   const hydratedRemote = useRef(false);
   const editedRef = useRef(false);
-  const [draft, setDraft] = useState<SimpleChallengeDraft>(() => {
-    if (editId) {
-      return defaultSimpleDraft();
-    }
-    const stored = readPersistedSimpleDraft();
-    return stored ?? defaultSimpleDraft();
-  });
+  const draftFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draftFlash, setDraftFlash] = useState(false);
+  const [footerH, setFooterH] = useState(88);
+  const [draft, setDraft] = useState<SimpleChallengeDraft>(() => defaultSimpleDraft());
   draftRef.current = draft;
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'form' | 'review'>('form');
@@ -175,35 +169,39 @@ export function SimpleCreateForm() {
     tour?.setCreateCurrency(draft.currency);
   }, [draft.currency, tour]);
 
-  function persistServerDraft(next: SimpleChallengeDraft) {
-    if (editId || !user) {
+  function flashDraftSaved() {
+    setDraftFlash(true);
+    if (draftFlashTimerRef.current) {
+      clearTimeout(draftFlashTimerRef.current);
+    }
+    draftFlashTimerRef.current = setTimeout(() => {
+      setDraftFlash(false);
+    }, 1600);
+  }
+
+  async function onSaveDraft() {
+    if (editId || !user || saveDraft.isPending) {
       return;
     }
-    if (persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current);
+    try {
+      const saved = await saveDraft.mutateAsync({
+        id: simpleDraftIdRef.current ?? draftsQuery.data?.[0]?.id ?? null,
+        step: wizardStepIndex('goal'),
+        startPath: 'scratch',
+        templateId: null,
+        sourceChallengeId: null,
+        createMode: 'simple',
+        startPreset: draft.start_preset,
+        simple: draft,
+        values: simpleDraftToCreateValues(draft),
+      });
+      if (saved.id) {
+        simpleDraftIdRef.current = saved.id;
+      }
+      flashDraftSaved();
+    } catch (err) {
+      setError(getCreateChallengeMessage(err));
     }
-    persistTimerRef.current = setTimeout(() => {
-      void saveDraft
-        .mutateAsync({
-          id: simpleDraftIdRef.current,
-          step: wizardStepIndex('goal'),
-          startPath: 'scratch',
-          templateId: null,
-          sourceChallengeId: null,
-          createMode: 'simple',
-          startPreset: next.start_preset,
-          simple: next,
-          values: simpleDraftToCreateValues(next),
-        })
-        .then((saved) => {
-          if (saved.id) {
-            simpleDraftIdRef.current = saved.id;
-          }
-        })
-        .catch(() => {
-          // Local cache still holds the draft.
-        });
-    }, 2000);
   }
 
   function patch(partial: Partial<SimpleChallengeDraft>) {
@@ -211,8 +209,6 @@ export function SimpleCreateForm() {
       const next = { ...current, ...partial };
       if (!editId) {
         editedRef.current = true;
-        persistSimpleDraft(next);
-        persistServerDraft(next);
       }
       return next;
     });
@@ -231,9 +227,8 @@ export function SimpleCreateForm() {
     if (remote && isSimpleCreateDraft(remote)) {
       hydratedRemote.current = true;
       simpleDraftIdRef.current = remote.id;
-      const next = refreshSimpleDraftStart(remote.simple ?? draftRef.current);
+      const next = remote.simple ?? draftRef.current;
       setDraft(next);
-      persistSimpleDraft(next);
       return;
     }
     if ((draftsQuery.data ?? []).some((item) => item.id === resumeDraftId && !isSimpleCreateDraft(item))) {
@@ -243,22 +238,6 @@ export function SimpleCreateForm() {
       }
     }
   }, [draftsQuery.data, draftsQuery.isLoading, editId, resumeDraftId, returnTo, router]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (editId || (state !== 'background' && state !== 'inactive')) {
-        return;
-      }
-      persistSimpleDraft(draftRef.current);
-      persistServerDraft(draftRef.current);
-    });
-    return () => {
-      sub.remove();
-      if (persistTimerRef.current) {
-        clearTimeout(persistTimerRef.current);
-      }
-    };
-  }, [editId, user]);
 
   useEffect(() => {
     if (!editId || !editing.data) {
@@ -415,7 +394,10 @@ export function SimpleCreateForm() {
           return;
         }
       }
-      const challenge = await create.mutateAsync(simpleDraftToCreateValues(toPublish));
+      const challenge = await create.mutateAsync({
+        ...simpleDraftToCreateValues(toPublish),
+        draft_id: simpleDraftIdRef.current,
+      });
       clearPersistedSimpleDraft();
       router.replace(`/challenges/${challenge.id}`);
     } catch (err) {
@@ -423,8 +405,13 @@ export function SimpleCreateForm() {
     }
   }
 
+  function closeSimple() {
+    router.dismissTo(returnTo === 'feed' ? TABS_HREF : LOBBY_HREF);
+  }
+
   return (
     <ChallengeNotesProvider>
+    <View style={{ flex: 1, backgroundColor: THEME.background }}>
     <Screen
       scroll
       padded
@@ -435,7 +422,7 @@ export function SimpleCreateForm() {
       }}
       onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
       contentPaddingBottom={
-        (tour?.createActive ? 220 : 24) + keyboardOverlap + tabBarLift(insets.bottom, 'sticky')
+        (tour?.createActive ? 220 : 24) + keyboardOverlap + footerH
       }>
       <View ref={contentRef} className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'} collapsable={false}>
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
@@ -467,13 +454,6 @@ export function SimpleCreateForm() {
                 ) : null}
               </View>
             ) : null}
-            <Button
-              title={editId ? copy('create.save') : copy('create.publish')}
-              loading={editId ? update.isPending : create.isPending}
-              disabled={!editId && poolShortfall > 0}
-              onPress={() => void onCreate()}
-            />
-            <Button title="Back" variant="outline" onPress={() => setView('form')} />
           </>
         ) : null}
 
@@ -583,7 +563,6 @@ export function SimpleCreateForm() {
                 <Button
                   title={`Add ${formatCash(poolShortfall)}`}
                   onPress={() => {
-                    persistSimpleDraft(draft);
                     walletSheet?.openTopUp({ amount: poolShortfall, returnCreate: true });
                   }}
                 />
@@ -1000,11 +979,6 @@ export function SimpleCreateForm() {
           <AppText className="text-sm text-coral-dark">{costHint}</AppText>
         ) : null}
 
-        <Button
-          title={error ? 'Try again' : focusSection ? copy('create.backToReview') : copy('create.review')}
-          disabled={!editId && poolShortfall > 0}
-          onPress={() => onReview()}
-        />
         <TourAnchor id="create-simple-advanced">
         {editId ? null : (
         <Pressable
@@ -1026,6 +1000,50 @@ export function SimpleCreateForm() {
         ) : null}
       </View>
     </Screen>
+    <View
+      onLayout={(event) => {
+        setFooterH(Math.max(88, event.nativeEvent.layout.height));
+      }}
+      className="gap-2 px-4 pt-2"
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 4,
+        backgroundColor: THEME.surface,
+        borderTopWidth: 1,
+        borderTopColor: THEME.border,
+        paddingBottom: keyboardOverlap > 0 ? Math.max(keyboardOverlap, 8) : tabBarLift(insets.bottom, 'sticky') + 8,
+      }}>
+      <CreateActionsFooter
+        onBack={view === 'review' ? () => setView('form') : closeSimple}
+        onSaveDraft={() => void onSaveDraft()}
+        onNext={() => {
+          if (view === 'review') {
+            void onCreate();
+            return;
+          }
+          onReview();
+        }}
+        nextTitle={
+          view === 'review'
+            ? editId
+              ? copy('create.save')
+              : copy('create.publish')
+            : error
+              ? 'Try again'
+              : focusSection
+                ? copy('create.backToReview')
+                : copy('create.review')
+        }
+        nextLoading={view === 'review' && (editId ? update.isPending : create.isPending)}
+        savePending={saveDraft.isPending}
+        showSave={!editId}
+        draftFlash={draftFlash}
+      />
+    </View>
+    </View>
     </ChallengeNotesProvider>
   );
 }

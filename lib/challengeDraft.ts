@@ -94,7 +94,7 @@ function asStepIndex(value: unknown): number | null {
   return Math.min(Math.floor(numeric), LAST_WIZARD_STEP);
 }
 
-function parseStoredWizardStep(step: unknown, stepKey?: unknown): number {
+export function parseStoredWizardStep(step: unknown, stepKey?: unknown): number {
   const fromKey = asStepIndex(stepKey);
   if (fromKey != null) {
     return fromKey;
@@ -106,32 +106,18 @@ function parseStoredWizardStep(step: unknown, stepKey?: unknown): number {
     }
   }
   const numeric = typeof step === 'number' ? step : Number(step);
-  if (!Number.isFinite(numeric) || numeric < 0) {
-    return 0;
+  if (Number.isFinite(numeric) && numeric >= 0 && numeric <= LAST_WIZARD_STEP) {
+    return Math.floor(numeric);
   }
-  return Math.min(Math.floor(numeric) + 1, LAST_WIZARD_STEP);
+  return 0;
 }
 
 export function clampDraftStep(step: unknown): number {
   return asStepIndex(step) ?? 0;
 }
 
-function firstIncompleteAfterStart(values: ChallengeDraft['values']): number {
-  const title = typeof values?.title === 'string' ? values.title.trim() : '';
-  const description = typeof values?.description === 'string' ? values.description.trim() : '';
-  if (title.length >= 3 && description.length >= 8) {
-    return wizardStepIndex('type');
-  }
-  return wizardStepIndex('goal');
-}
-
-/** Continue never lands on the Lane or Start chooser. */
 export function resumeWizardStep(draft: Pick<ChallengeDraft, 'step' | 'values'>): number {
-  const saved = clampDraftStep(draft.step);
-  if (saved > wizardStepIndex('start')) {
-    return saved;
-  }
-  return firstIncompleteAfterStart(draft.values);
+  return clampDraftStep(draft.step);
 }
 
 function asStartPath(value: unknown): CreateStartPath {
@@ -680,6 +666,9 @@ export function isVisibleDraft(draft: ChallengeDraft): boolean {
   if (draft.corrupt) {
     return true;
   }
+  if (draft.id) {
+    return true;
+  }
   if (isSimpleCreateDraft(draft)) {
     const title = (draft.simple?.title ?? draft.values?.title ?? '').trim();
     const task = (draft.simple?.task ?? draft.values?.task ?? '').trim();
@@ -692,19 +681,31 @@ export function isVisibleDraft(draft: ChallengeDraft): boolean {
   return Boolean(title) || hasMeaningfulDraftEdits(draft.values);
 }
 
+export function draftContinueTitle(draft: ChallengeDraft): string {
+  const title =
+    (isSimpleCreateDraft(draft) ? draft.simple?.title : null)?.trim() ||
+    (typeof draft.values?.title === 'string' ? draft.values.title.trim() : '') ||
+    draft.title.trim();
+  return title || 'Untitled draft';
+}
+
+export function draftContinueSubtitle(draft: ChallengeDraft): string {
+  if (draft.corrupt) {
+    return 'This draft can’t be opened';
+  }
+  if (isSimpleCreateDraft(draft)) {
+    return 'Simple';
+  }
+  const index = clampDraftStep(draft.step);
+  const step = CREATE_WIZARD_STEPS[index];
+  return step ? `Step ${index + 1} · ${step.label}` : `Step ${index + 1}`;
+}
+
 export function draftPreviewLabel(draft: ChallengeDraft): string {
   if (draft.corrupt) {
     return 'This draft can’t be opened';
   }
-  const title =
-    (isSimpleCreateDraft(draft) ? draft.simple?.title : null)?.trim() ||
-    (typeof draft.values?.title === 'string' ? draft.values.title.trim() : '');
-  if (isSimpleCreateDraft(draft)) {
-    return title ? `${title} · Simple` : 'Simple';
-  }
-  const step = CREATE_WIZARD_STEPS[draft.step];
-  const stepLabel = step ? `Step ${draft.step + 1} · ${step.label}` : `Step ${draft.step + 1}`;
-  return title ? `${title} · ${stepLabel}` : stepLabel;
+  return `${draftContinueTitle(draft)} · ${draftContinueSubtitle(draft)}`;
 }
 
 let loggedDraftOnce = false;
@@ -887,14 +888,14 @@ export async function fetchChallengeDrafts(userId: string): Promise<ChallengeDra
       return owner;
     }
     const local = await readLocalDraft(userId);
-    return local && !local.id && isVisibleDraft(local) ? [local] : [];
+    return local && local.id && isVisibleDraft(local) ? [local] : [];
   }
   const legacy = await fetchLegacyDraft(userId);
   if (legacy && isVisibleDraft(legacy)) {
     return [legacy];
   }
   const local = await readLocalDraft(userId);
-  return local && isVisibleDraft(local) ? [local] : [];
+  return local && local.id && isVisibleDraft(local) ? [local] : [];
 }
 
 export async function fetchChallengeDraft(userId: string): Promise<ChallengeDraft | null> {

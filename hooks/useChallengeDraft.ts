@@ -71,6 +71,10 @@ export function useSaveChallengeDraft() {
     },
     onSuccess: (draft) => {
       queryClient.setQueryData(challengeDraftQueryKey(user?.id), draft);
+      queryClient.setQueryData(challengeDraftsQueryKey(user?.id), (current: ChallengeDraft[] | undefined) => {
+        const rest = (current ?? []).filter((item) => item.id && item.id !== draft.id);
+        return [draft, ...rest];
+      });
     },
   });
 }

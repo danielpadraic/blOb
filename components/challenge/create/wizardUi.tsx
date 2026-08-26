@@ -13,7 +13,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { BobPose, type BobPoseName } from '@/components/mascot/BobPose';
 import { CREATE_WIZARD_STEPS } from '@/lib/challengeTemplates';
-import { draftPreviewLabel, type ChallengeDraft } from '@/lib/challengeDraft';
+import { draftContinueSubtitle, draftContinueTitle, type ChallengeDraft } from '@/lib/challengeDraft';
 import { bobExampleLine } from '@/lib/createBobCopy';
 import { THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
@@ -388,6 +388,74 @@ export function WizardProgress({
   );
 }
 
+const FOOTER_BTN = { minHeight: 44, height: 44 } as const;
+
+export function CreateActionsFooter({
+  onBack,
+  onSaveDraft,
+  onNext,
+  nextTitle,
+  nextLoading = false,
+  savePending = false,
+  showSave = true,
+  draftFlash = false,
+}: {
+  onBack: () => void;
+  onSaveDraft?: () => void;
+  onNext: () => void;
+  nextTitle: string;
+  nextLoading?: boolean;
+  savePending?: boolean;
+  showSave?: boolean;
+  draftFlash?: boolean;
+}) {
+  const { width } = useWindowDimensions();
+  const stacked = showSave && width < 400;
+  const saveButton = showSave ? (
+    <Button
+      title="Save Draft"
+      variant="outline"
+      accessibilityLabel="Save Draft"
+      disabled={savePending}
+      loading={savePending}
+      onPress={onSaveDraft}
+      style={FOOTER_BTN}
+    />
+  ) : null;
+  return (
+    <View className="gap-2">
+      {draftFlash ? (
+        <AppText className="text-center text-sm font-semibold" style={{ color: THEME.accent }}>
+          Draft saved.
+        </AppText>
+      ) : null}
+      {stacked ? (
+        <>
+          {saveButton}
+          <View className="flex-row gap-2">
+            <View className="flex-1">
+              <Button title="Back" variant="outline" onPress={onBack} style={FOOTER_BTN} />
+            </View>
+            <View className="flex-1">
+              <Button title={nextTitle} loading={nextLoading} onPress={onNext} style={FOOTER_BTN} />
+            </View>
+          </View>
+        </>
+      ) : (
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button title="Back" variant="outline" onPress={onBack} style={FOOTER_BTN} />
+          </View>
+          {showSave ? <View className="flex-1">{saveButton}</View> : null}
+          <View className="flex-1">
+            <Button title={nextTitle} loading={nextLoading} onPress={onNext} style={FOOTER_BTN} />
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export function ContinueDraftCard({
   draft,
   onContinue,
@@ -410,8 +478,8 @@ export function ContinueDraftCard({
         <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
           Draft
         </AppText>
-        <AppText className="mt-1 font-semibold text-charcoal">Continue draft</AppText>
-        <AppText className="mt-1 text-sm leading-5 text-muted">{draftPreviewLabel(draft)}</AppText>
+        <AppText className="mt-1 font-semibold text-charcoal">{draftContinueTitle(draft)}</AppText>
+        <AppText className="mt-1 text-sm leading-5 text-muted">{draftContinueSubtitle(draft)}</AppText>
       </Pressable>
       <View className="mt-3 flex-row gap-2">
         <View style={{ flex: 1 }}>

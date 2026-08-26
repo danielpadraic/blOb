@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
-import { hydrateDraftValues, parseChallengeDraft } from '@/lib/challengeDraft';
+import { DEFAULT_CREATE_VALUES, wizardStepIndex } from '@/lib/challengeTemplates';
+import {
+  hydrateDraftValues,
+  parseChallengeDraft,
+  parseStoredWizardStep,
+  resumeWizardStep,
+} from '@/lib/challengeDraft';
 import { emptyExtraCreateTask } from '@/utils/validators';
 
 describe('challenge drafts', () => {
@@ -65,5 +70,18 @@ describe('challenge drafts', () => {
     expect(fromSimple.createMode).toBe('simple');
     expect(fromSimple.simple?.title).toBe('Lift club');
     expect(fromSimple.simple?.host_budget).toBe(40);
+  });
+
+  it('restores the stored step without bumping it', () => {
+    const rules = wizardStepIndex('rules');
+    expect(parseStoredWizardStep(rules, 'rules')).toBe(rules);
+    expect(parseStoredWizardStep(rules)).toBe(rules);
+    expect(parseStoredWizardStep(9)).toBe(9);
+    expect(
+      resumeWizardStep({
+        step: rules,
+        values: { ...DEFAULT_CREATE_VALUES, title: 'Pray week' },
+      }),
+    ).toBe(rules);
   });
 });

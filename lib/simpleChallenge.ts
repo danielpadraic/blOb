@@ -250,34 +250,11 @@ export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | 
   });
 }
 
-export function persistSimpleDraft(draft: SimpleChallengeDraft) {
-  const payload = { draft, savedAt: Date.now() };
-  simpleDraftMemory = payload;
-  try {
-    sessionStorage.setItem(SIMPLE_DRAFT_KEY, JSON.stringify(payload));
-  } catch {
-    // Native / private mode — memory is enough until challenge_drafts saves.
-  }
+export function persistSimpleDraft(_draft?: SimpleChallengeDraft) {
+  // Explicit Save Draft only. Session storage is not a draft source.
 }
 
-export function readPersistedSimpleDraft(now = new Date()): SimpleChallengeDraft | null {
-  try {
-    const raw = sessionStorage.getItem(SIMPLE_DRAFT_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { draft?: unknown };
-      const draft = parseSimpleChallengeDraft(parsed?.draft);
-      if (draft) {
-        const next = refreshSimpleDraftStart(draft, now);
-        simpleDraftMemory = { draft: next, savedAt: Date.now() };
-        return next;
-      }
-    }
-  } catch {
-    // Ignore unavailable storage.
-  }
-  if (simpleDraftMemory?.draft) {
-    return refreshSimpleDraftStart(withProofSentences(simpleDraftMemory.draft), now);
-  }
+export function readPersistedSimpleDraft(_now = new Date()): SimpleChallengeDraft | null {
   return null;
 }
 
