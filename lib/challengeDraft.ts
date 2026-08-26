@@ -157,33 +157,87 @@ function emptyValues(): CreateChallengeValues {
   };
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasMeaningfulDraftValue(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  return value != null;
+}
+
+function shouldKeepExistingDraftValue(existing: unknown, incoming: unknown): boolean {
+  if (incoming == null) {
+    return true;
+  }
+  if (typeof incoming === 'string' && incoming.trim() === '' && hasMeaningfulDraftValue(existing)) {
+    return true;
+  }
+  if (Array.isArray(incoming) && incoming.length === 0 && hasMeaningfulDraftValue(existing)) {
+    return true;
+  }
+  return false;
+}
+
+function collectDraftLayers(raw: unknown, depth = 0): { layers: Record<string, unknown>[]; corrupt: boolean } {
+  if (depth > 5) {
+    return { layers: [], corrupt: false };
+  }
+  if (raw == null) {
+    return { layers: [], corrupt: false };
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === '{}') {
+      return { layers: [], corrupt: false };
+    }
+    try {
+      return collectDraftLayers(JSON.parse(trimmed) as unknown, depth + 1);
+    } catch {
+      return { layers: [], corrupt: true };
+    }
+  }
+  if (!isPlainRecord(raw)) {
+    return { layers: [], corrupt: true };
+  }
+  const layers = [raw];
+  let corrupt = false;
+  for (const nested of [raw.payload, raw.values]) {
+    if (nested == null || Array.isArray(nested)) {
+      continue;
+    }
+    const next = collectDraftLayers(nested, depth + 1);
+    layers.push(...next.layers);
+    corrupt = corrupt || next.corrupt;
+  }
+  return { layers, corrupt };
+}
+
+function mergeDraftLayers(layers: Record<string, unknown>[]): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  for (const layer of layers) {
+    for (const [key, value] of Object.entries(layer)) {
+      if (key === 'payload' || key === 'values') {
+        continue;
+      }
+      if (shouldKeepExistingDraftValue(row[key], value)) {
+        continue;
+      }
+      row[key] = value;
+    }
+  }
+  return row;
+}
+
 function unwrapDraftRecord(raw: unknown): { row: Record<string, unknown>; corrupt: boolean } {
   try {
-    if (raw == null) {
-      return { row: {}, corrupt: false };
-    }
-    if (typeof raw === 'string') {
-      const trimmed = raw.trim();
-      if (!trimmed || trimmed === '{}') {
-        return { row: {}, corrupt: false };
-      }
-      try {
-        return unwrapDraftRecord(JSON.parse(trimmed) as unknown);
-      } catch {
-        return { row: {}, corrupt: true };
-      }
-    }
-    if (typeof raw !== 'object' || Array.isArray(raw)) {
-      return { row: {}, corrupt: true };
-    }
-    const obj = raw as Record<string, unknown>;
-    const nested = obj.payload ?? obj.values;
-    const looksLikeWrapper =
-      nested != null && obj.title == null && obj.buy_in == null && obj.challenge_type == null;
-    if (looksLikeWrapper) {
-      return unwrapDraftRecord(nested);
-    }
-    return { row: obj, corrupt: false };
+    const collected = collectDraftLayers(raw);
+    return { row: mergeDraftLayers(collected.layers), corrupt: collected.corrupt };
   } catch {
     return { row: {}, corrupt: true };
   }
@@ -666,19 +720,17 @@ export function isVisibleDraft(draft: ChallengeDraft): boolean {
   if (draft.corrupt) {
     return true;
   }
-  if (draft.id) {
-    return true;
-  }
-  if (isSimpleCreateDraft(draft)) {
-    const title = (draft.simple?.title ?? draft.values?.title ?? '').trim();
-    const task = (draft.simple?.task ?? draft.values?.task ?? '').trim();
-    return Boolean(title) || Boolean(task) || hasMeaningfulDraftEdits(draft.values);
-  }
-  if (clampDraftStep(draft.step) < wizardStepIndex('goal')) {
-    return false;
-  }
-  const title = typeof draft.values?.title === 'string' ? draft.values.title.trim() : '';
-  return Boolean(title) || hasMeaningfulDraftEdits(draft.values);
+  const title =
+    (isSimpleCreateDraft(draft) ? draft.simple?.title : null)?.trim() ||
+    (typeof draft.values?.title === 'string' ? draft.values.title.trim() : '') ||
+    draft.title.trim();
+  const namedTask =
+    (isSimpleCreateDraft(draft) ? draft.simple?.task : null)?.trim() ||
+    (draft.values?.task ?? '').trim() ||
+    (draft.values?.tasks ?? []).some((item) => Boolean(item.title?.trim())) ||
+    (draft.values?.extra_tasks ?? []).some((item) => Boolean(item.title?.trim())) ||
+    Boolean((draft.values?.description ?? '').trim());
+  return Boolean(title) || Boolean(namedTask);
 }
 
 export function draftContinueTitle(draft: ChallengeDraft): string {
@@ -710,13 +762,18 @@ export function draftPreviewLabel(draft: ChallengeDraft): string {
 
 let loggedDraftOnce = false;
 
-function logDraftOnce(row: unknown, draft: ChallengeDraft) {
+function logDraftOnce(row: unknown, draft: ChallengeDraft, payloadKeys: string[] = []) {
   if (!__DEV__ || loggedDraftOnce) {
     return;
   }
   loggedDraftOnce = true;
-  console.log('[blob:draft] loaded row', row);
-  console.log('[blob:draft] hydrated', draft);
+  console.log('[blob:draft] hydrate', {
+    payloadKeys,
+    title: draft.values.title,
+    task1: draft.values.tasks[0],
+    step: draft.step,
+    rowTitle: draft.title,
+  });
 }
 
 function fallbackDraft(userId: string, corrupt = true): ChallengeDraft {
@@ -743,20 +800,35 @@ function draftTitle(values: CreateChallengeValues, fallback = ''): string {
   return title || fallback;
 }
 
-function wizardMeta(
+export function draftPersistPayload(
   values: CreateChallengeValues,
   draft: Pick<ChallengeDraft, 'step' | 'startPath' | 'templateId' | 'sourceChallengeId' | 'createMode' | 'startPreset' | 'simple'>,
 ): Record<string, unknown> {
+  const step = clampDraftStep(draft.step);
   return {
     ...values,
-    step: draft.step,
-    step_key: CREATE_WIZARD_STEPS[draft.step]?.key,
+    step,
+    step_key: CREATE_WIZARD_STEPS[step]?.key,
     start_path: draft.startPath,
     template_id: draft.templateId,
     source_challenge_id: draft.sourceChallengeId,
     create_mode: draft.createMode,
     start_preset: draft.startPreset,
     ...(draft.simple ? { simple: draft.simple } : {}),
+  };
+}
+
+function wizardMeta(
+  values: CreateChallengeValues,
+  draft: Pick<ChallengeDraft, 'step' | 'startPath' | 'templateId' | 'sourceChallengeId' | 'createMode' | 'startPreset' | 'simple'>,
+): Record<string, unknown> {
+  return draftPersistPayload(values, draft);
+}
+
+export function resumeDraftForm(draft: ChallengeDraft): { values: CreateChallengeValues; step: number } {
+  return {
+    values: cloneTemplateValues(hydrateDraftValues(draft.values)),
+    step: clampDraftStep(draft.step),
   };
 }
 
@@ -773,28 +845,31 @@ function isSchemaMismatch(message: string): boolean {
 export function parseChallengeDraft(userId: string, row: unknown): ChallengeDraft {
   try {
     const rec = row && typeof row === 'object' && !Array.isArray(row) ? (row as Record<string, unknown>) : {};
-    const payload = rec.payload ?? rec.values ?? rec;
-    const unwrapped = unwrapDraftRecord(payload);
+    const unwrapped = unwrapDraftRecord(rec);
     const nested = unwrapped.row;
     const sourceId = rec.source_challenge_id ?? rec.sourceChallengeId ?? nested.source_challenge_id;
     const id = typeof rec.id === 'string' && rec.id ? rec.id : null;
-    const values = hydrateDraftValues(nested);
-    const simple = parseSimpleChallengeDraft(nested.simple ?? rec.simple);
-    const createMode = asCreateMode(rec.create_mode ?? nested.create_mode, Boolean(simple));
+    const values = hydrateDraftValues(unwrapped.row);
+    if (!values.title.trim() && typeof rec.title === 'string' && rec.title.trim()) {
+      values.title = rec.title.trim();
+    }
+    const simple = parseSimpleChallengeDraft(unwrapped.row.simple ?? rec.simple);
+    const createMode = asCreateMode(rec.create_mode ?? unwrapped.row.create_mode, Boolean(simple));
     const startPreset =
-      asStartPreset(rec.start_preset ?? nested.start_preset) ??
+      asStartPreset(rec.start_preset ?? unwrapped.row.start_preset) ??
       (simple?.start_preset ?? startPresetFromValues(values.starts_at));
-    const title = asString(rec.title, draftTitle(values, simple?.title ?? ''));
+    const title =
+      (typeof rec.title === 'string' ? rec.title.trim() : '') || draftTitle(values, simple?.title ?? '');
     const draft: ChallengeDraft = {
       id,
       userId,
       title,
       step: parseStoredWizardStep(
-        rec.step ?? rec.wizard_step ?? nested.step ?? nested.wizard_step,
-        rec.step_key ?? nested.step_key,
+        rec.step ?? rec.wizard_step ?? unwrapped.row.step ?? unwrapped.row.wizard_step,
+        rec.step_key ?? unwrapped.row.step_key,
       ),
-      startPath: asStartPath(rec.start_path ?? rec.startPath ?? nested.start_path),
-      templateId: asTemplateId(rec.template_id ?? rec.templateId ?? nested.template_id),
+      startPath: asStartPath(rec.start_path ?? rec.startPath ?? unwrapped.row.start_path),
+      templateId: asTemplateId(rec.template_id ?? rec.templateId ?? unwrapped.row.template_id),
       sourceChallengeId: typeof sourceId === 'string' && sourceId ? sourceId : null,
       values,
       createMode,
@@ -803,7 +878,7 @@ export function parseChallengeDraft(userId: string, row: unknown): ChallengeDraf
       updatedAt: asString(rec.updated_at ?? rec.updatedAt, new Date().toISOString()),
       corrupt: unwrapped.corrupt,
     };
-    logDraftOnce(row, draft);
+    logDraftOnce(row, draft, Object.keys(unwrapped.row));
     return draft;
   } catch {
     const draft = fallbackDraft(userId, true);
@@ -987,7 +1062,7 @@ export async function saveChallengeDraft(draft: ChallengeDraft): Promise<Challen
     createMode: draft.createMode === 'simple' || draft.simple ? 'simple' : 'advanced',
     startPreset: asStartPreset(draft.startPreset) ?? startPresetFromValues(values.starts_at),
     simple: draft.simple ?? null,
-    title: draftTitle(values, draft.simple?.title || draft.title || 'Untitled draft'),
+    title: values.title.trim() || 'Untitled draft',
     updatedAt: new Date().toISOString(),
   };
   await writeLocalDraft(next);

@@ -45,11 +45,11 @@ import {
 } from '@/hooks/useChallengeDraft';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
+  clampDraftStep,
   createHrefForDraft,
   hydrateDraftValues,
   isSimpleCreateDraft,
   isVisibleDraft,
-  resumeWizardStep,
   valuesFromChallenge,
   type ChallengeDraft,
   type ReusableChallenge,
@@ -306,26 +306,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const flushRulesDraftRef = useRef<() => void>(() => {});
   const draftFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draftFlash, setDraftFlash] = useState(false);
-  const snapshotRef = useRef({
-    step,
-    startPath,
-    templateId,
-    sourceChallengeId,
-    values,
-    id: draftId,
-    createMode: 'advanced' as const,
-    startPreset,
-  });
-  snapshotRef.current = {
-    step,
-    startPath,
-    templateId,
-    sourceChallengeId,
-    values,
-    id: draftId,
-    createMode: 'advanced',
-    startPreset,
-  };
   draftIdRef.current = draftId;
   footerDockHeight.current = footerH;
   keyboardHeightRef.current = keyboardHeight;
@@ -500,8 +480,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       }
       const hydrated = hydrateDraftValues(draft.values);
       const preset = draft.startPreset ?? startPresetFromValues(hydrated.starts_at);
-      const opened = hydrated;
-      const nextStep = jumpToSavedStep ? resumeWizardStep({ ...draft, values: opened }) : STEP_GOAL;
+      const opened = cloneTemplateValues(hydrated);
+      const nextStep = jumpToSavedStep ? clampDraftStep(draft.step) : STEP_GOAL;
       const nextPath = draft.startPath ?? 'scratch';
       if (__DEV__) {
         console.log('[blob:draft] continue', { id: draft.id, savedStep: draft.step, nextStep, title: opened.title });
@@ -557,6 +537,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       router.replace(createHrefForDraft(next, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
       return;
     }
+    skipSaveRef.current = true;
     applyDraft(next, true);
   }
 
@@ -617,9 +598,18 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (isEditing || liveChallengeId || saveDraft.isPending) {
       return;
     }
+    flushRulesDraftRef.current();
+    const live = getValues();
     const snapshot = {
-      ...snapshotRef.current,
       id: draftIdRef.current ?? draftsQuery.data?.[0]?.id ?? null,
+      step,
+      startPath,
+      templateId,
+      sourceChallengeId,
+      values: live,
+      createMode: 'advanced' as const,
+      startPreset,
+      title: live.title.trim() || 'Untitled draft',
     };
     try {
       const saved = await saveDraft.mutateAsync(snapshot);
@@ -640,17 +630,21 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (draftsQuery.isLoading) {
       return;
     }
-    const existing = resumeDraftId
-      ? draftsQuery.data?.find((item) => item.id === resumeDraftId) ?? draftsQuery.data?.[0]
-      : draftsQuery.data?.[0];
-    if (resumeOnOpen && existing && !didResumeRef.current) {
-      didResumeRef.current = true;
-      if (isSimpleCreateDraft(existing)) {
-        router.replace(createHrefForDraft(existing, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
-        return;
-      }
-      applyDraft(existing, true);
+    if (!resumeOnOpen || didResumeRef.current) {
+      return;
     }
+    const existing = resumeDraftId
+      ? draftsQuery.data?.find((item) => item.id === resumeDraftId)
+      : draftsQuery.data?.[0];
+    if (!existing) {
+      return;
+    }
+    didResumeRef.current = true;
+    if (isSimpleCreateDraft(existing)) {
+      router.replace(createHrefForDraft(existing, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
+      return;
+    }
+    applyDraft(existing, true);
   }, [draftsQuery.isLoading, draftsQuery.data, resumeOnOpen, resumeDraftId]);
 
   useEffect(() => {

@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_CREATE_VALUES, wizardStepIndex } from '@/lib/challengeTemplates';
 import {
+  clampDraftStep,
+  draftPersistPayload,
   hydrateDraftValues,
+  isVisibleDraft,
   parseChallengeDraft,
   parseStoredWizardStep,
+  resumeDraftForm,
   resumeWizardStep,
 } from '@/lib/challengeDraft';
-import { emptyExtraCreateTask } from '@/utils/validators';
+import { emptyChallengeTask, emptyExtraCreateTask } from '@/utils/validators';
 
 describe('challenge drafts', () => {
   it('round-trips title, task, extra_tasks, proofs, buy_in, host_budget, points tasks, and privacy_mode', () => {
@@ -83,5 +87,77 @@ describe('challenge drafts', () => {
         values: { ...DEFAULT_CREATE_VALUES, title: 'Pray week' },
       }),
     ).toBe(rules);
+  });
+
+  it('saveChallengeDraft payload keeps Dawn run, Hill repeats, and step 9', () => {
+    const values = {
+      ...DEFAULT_CREATE_VALUES,
+      title: 'Dawn run',
+      challenge_type: 'points' as const,
+      tasks: [{ ...emptyChallengeTask('task-1'), title: 'Hill repeats', points: '10' }],
+    };
+    const draft = {
+      id: 'draft-dawn',
+      userId: 'user-1',
+      title: values.title.trim() || 'Untitled draft',
+      step: 9,
+      startPath: 'scratch' as const,
+      templateId: null,
+      sourceChallengeId: null,
+      values,
+      createMode: 'advanced' as const,
+      startPreset: 'hour' as const,
+      updatedAt: new Date().toISOString(),
+    };
+    const row = {
+      id: draft.id,
+      title: draft.title,
+      payload: draftPersistPayload(hydrateDraftValues(values), draft),
+    };
+    const parsed = parseChallengeDraft('user-1', row);
+    expect(parsed.values.title).toBe('Dawn run');
+    expect(parsed.values.tasks[0]?.title).toBe('Hill repeats');
+    expect(parsed.step).toBe(9);
+
+    const applied = resumeDraftForm(parsed);
+    expect(applied.values.title).toBe('Dawn run');
+    expect(applied.values.tasks[0]?.title).toBe('Hill repeats');
+    expect(applied.step).toBe(9);
+    expect(applied.step).toBe(clampDraftStep(9));
+    expect(applied.values).not.toEqual(DEFAULT_CREATE_VALUES);
+    expect(applied.step).not.toBe(wizardStepIndex('goal'));
+  });
+
+  it('reads form fields from a double-wrapped payload even when the row title is set', () => {
+    const parsed = parseChallengeDraft('user-1', {
+      id: 'draft-wrap',
+      title: 'Dawn run',
+      payload: {
+        values: {
+          title: '',
+          description: 'Sunrise miles',
+          task: 'Run the hill',
+          challenge_type: 'points',
+          tasks: [{ ...emptyChallengeTask('task-1'), title: 'Hill repeats', points: '8' }],
+          proofs: ['photo'],
+        },
+      },
+    });
+    expect(parsed.title).toBe('Dawn run');
+    expect(parsed.values.title).toBe('Dawn run');
+    expect(parsed.values.description).toBe('Sunrise miles');
+    expect(parsed.values.task).toBe('Run the hill');
+    expect(parsed.values.tasks[0]?.title).toBe('Hill repeats');
+    expect(parsed.values.proofs).toEqual(['photo']);
+  });
+
+  it('hides empty id-only rows that have a step but no title or edits', () => {
+    const empty = parseChallengeDraft('user-1', {
+      id: 'draft-empty',
+      title: '',
+      payload: { step: 9, step_key: 'rules', create_mode: 'advanced' },
+    });
+    expect(empty.id).toBe('draft-empty');
+    expect(isVisibleDraft(empty)).toBe(false);
   });
 });
