@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { BackHandler, Dimensions, Keyboard, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -208,13 +208,21 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const tour = useTourOptional();
   const setCreatePeek = tour?.setCreatePeek;
   const hydratedEdit = useRef(false);
-  useCreateChallengeTour('advanced', !liveChallengeId && !isEditing);
+  useCreateChallengeTour(
+    'advanced',
+    !liveChallengeId && !isEditing && !resumeOnOpen && !restoredDraft,
+  );
 
   useEffect(() => {
     if (!setCreatePeek) {
       return;
     }
-    setCreatePeek((index) => setStep(index));
+    setCreatePeek((index) => {
+      if (restoredDraftRef.current) {
+        return;
+      }
+      setStep(index);
+    });
     return () => setCreatePeek(null);
   }, [setCreatePeek]);
 
@@ -471,6 +479,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
 
   function applyDraft(draft: ChallengeDraft, jumpToSavedStep = true): boolean {
     skipSaveRef.current = true;
+    restoredDraftRef.current = true;
+    tour?.stopCreate?.();
     try {
       if (draft.corrupt) {
         setRestoredDraft(false);
@@ -626,7 +636,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (draftsQuery.isLoading) {
       return;
     }
