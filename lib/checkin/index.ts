@@ -28,6 +28,8 @@ export {
   CHECKIN_STAGE_LABELS,
   checkinStageFromPhase,
   checkinStageHint,
+  checkinSendWhyNot,
+  canSendCheckin,
   checkinStageIndex,
   checkinStageLabel,
   type CheckinStageId,

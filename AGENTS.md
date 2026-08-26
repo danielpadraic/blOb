@@ -2,6 +2,14 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
+# Role & Behavior
+
+### Operator skill level (non-negotiable)
+Daniel is the product owner, not a programmer. Assume zero programming knowledge.
+Any task he does himself (Google Cloud, Play Console, App Store Connect, Supabase, EAS, Vercel, Terminal) must be a numbered list: exact URL, clicks in order, what to paste, what not to click, what the page shows when done, and what to do if a common extra prompt appears.
+Never say “configure”, “bump”, “add the SHA-1”, or “check credentials” without the clicks.
+Code = Cursor prompt. Dashboard/terminal = separate numbered list in the same message.
+
 # Design lock
 
 UI tokens, floating tab bar, and header wallet/bell live in `lib/theme.ts` and `.cursor/rules/blob-design-lock.mdc`. New screens must use those tokens. Bob stays transparent — no white matte or bulky gray blocks.

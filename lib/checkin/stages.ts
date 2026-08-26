@@ -53,3 +53,18 @@ export function checkinStageHint(phase: CheckinPhase, remaining: string[]): stri
   }
   return `Still needed: ${remaining.join(', ')}.`;
 }
+
+/** Grey Send tap: Alert title is “Still needed”; this is the name list only. */
+export function checkinSendWhyNot(remaining: string[]): string {
+  return remaining.filter(Boolean).join(', ');
+}
+
+/** Solid Send only when honor-only or every required proof is in. One proof is not enough. */
+export function canSendCheckin(
+  honorOnly: boolean,
+  allReady: boolean,
+  phase: CheckinPhase,
+  busy: boolean,
+): boolean {
+  return (honorOnly || allReady) && phase !== 'submitted' && !busy;
+}

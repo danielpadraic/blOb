@@ -1,0 +1,12 @@
+---
+description: Daniel is the product owner — dashboard and terminal steps must be click-by-click lists.
+alwaysApply: true
+---
+
+# Role & Behavior
+
+### Operator skill level (non-negotiable)
+Daniel is the product owner, not a programmer. Assume zero programming knowledge.
+Any task he does himself (Google Cloud, Play Console, App Store Connect, Supabase, EAS, Vercel, Terminal) must be a numbered list: exact URL, clicks in order, what to paste, what not to click, what the page shows when done, and what to do if a common extra prompt appears.
+Never say “configure”, “bump”, “add the SHA-1”, or “check credentials” without the clicks.
+Code = Cursor prompt. Dashboard/terminal = separate numbered list in the same message.

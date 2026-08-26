@@ -13,6 +13,8 @@ import {
 } from '@/lib/challengeProofs';
 import {
   boardProgressLabel,
+  canSendCheckin,
+  checkinSendWhyNot,
   checkinStageLabel,
   classifyCheckinError,
   didAdvanceBoard,
@@ -73,9 +75,61 @@ describe('official weekly proofs', () => {
     expect(classifyCheckinError(new Error('ALREADY_LOGGED_TODAY'))).toBe('already');
   });
 
-  it('treats a one-proof send as posted when SQL still wants the full set', () => {
+  it('maps MISSING_PROOFS to a missing-proof failure, not a successful post', () => {
     expect(classifyCheckinError(new Error('MISSING_PROOFS'))).toBe('missing');
     expect(classifyCheckinError(new Error('Add every required proof to submit.'))).toBe('missing');
+  });
+
+  it('keeps Send off until every required proof is filled; extras do not count', () => {
+    const onePhoto: ChallengeProof[] = [{ id: 'pre', name: 'Pre-workout selfie', method: 'photo' }];
+    const twoRequired: ChallengeProof[] = [
+      { id: 'pre', name: 'Pre-workout selfie', method: 'photo' },
+      { id: 'post', name: 'Post-workout selfie', method: 'photo' },
+    ];
+    const honorOnly: ChallengeProof[] = [{ id: 'honor', name: 'Honor', method: 'honor' }];
+    expect(checkinProofsReady(onePhoto, parseProofParts({}))).toBe(false);
+    expect(
+      checkinProofsReady(
+        twoRequired,
+        parseProofParts({ pre: { method: 'photo', url: 'https://example.com/pre.jpg' } }),
+      ),
+    ).toBe(false);
+    expect(
+      checkinProofsReady(
+        twoRequired,
+        parseProofParts({
+          pre: { method: 'photo', url: 'https://example.com/pre.jpg' },
+          post: { method: 'photo', url: 'https://example.com/post.jpg' },
+        }),
+      ),
+    ).toBe(true);
+    expect(checkinProofsReady(honorOnly, {})).toBe(true);
+    expect(checkinSendWhyNot(['Pre-workout selfie', 'Post-workout selfie'])).toBe(
+      'Pre-workout selfie, Post-workout selfie',
+    );
+    expect(canSendCheckin(false, false, 'in_progress', false)).toBe(false);
+    expect(canSendCheckin(false, true, 'in_progress', false)).toBe(true);
+    expect(canSendCheckin(true, false, 'none', false)).toBe(true);
+    expect(canSendCheckin(true, true, 'submitted', false)).toBe(false);
+    expect(canSendCheckin(false, true, 'ready', true)).toBe(false);
+  });
+
+  it('counts a Health attach as the heart-rate slot', () => {
+    const hr: ChallengeProof = { id: 'hr', name: 'Heart rate', method: 'hr' };
+    expect(partSatisfies(hr, { method: 'hr', healthWorkoutId: 'hw-1' })).toBe(true);
+    expect(
+      partSatisfies(hr, {
+        method: 'hr',
+        health: {
+          startedAt: '2026-08-26T13:02:00.000Z',
+          endedAt: '2026-08-26T13:41:00.000Z',
+          durationSec: 2340,
+          activityType: 'running',
+          sourceName: 'Apple Watch',
+        },
+      }),
+    ).toBe(true);
+    expect(partSatisfies(hr, { method: 'hr' })).toBe(false);
   });
 });
 

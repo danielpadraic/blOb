@@ -48,6 +48,7 @@ type CheckinComposerProps = {
   allReady: boolean;
   busy?: boolean;
   canSend: boolean;
+  blockedHint?: string;
   onAddProof: (proof: ChallengeProof) => void;
   onRemoveProof: (proof: ChallengeProof) => void;
   onExtrasChange: (extras: CheckinExtra[]) => void;
@@ -61,9 +62,10 @@ export function CheckinComposer({
   drafts,
   extras,
   initialCaption,
-  allReady: _allReady,
+  allReady,
   busy,
   canSend,
+  blockedHint,
   onAddProof,
   onRemoveProof,
   onExtrasChange,
@@ -328,7 +330,7 @@ export function CheckinComposer({
           audienceUserIds={[]}
           onChange={onDocChange}
           onSubmit={() => {
-            if (canSend && !busy) {
+            if (!busy) {
               onSend();
             }
           }}
@@ -354,14 +356,22 @@ export function CheckinComposer({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Send"
-          disabled={!canSend || busy}
-          onPress={onSend}
+          accessibilityHint={
+            !canSend && !busy && !allReady && blockedHint ? `Still needed: ${blockedHint}` : undefined
+          }
+          accessibilityState={{ busy: Boolean(busy), disabled: Boolean(busy) }}
+          disabled={Boolean(busy)}
+          onPress={() => {
+            if (!busy) {
+              onSend();
+            }
+          }}
           style={{
             minHeight: 44,
             paddingHorizontal: 18,
             borderRadius: 999,
             backgroundColor: THEME.primary,
-            opacity: !canSend || busy ? 0.38 : 1,
+            opacity: canSend ? 1 : 0.38,
             alignItems: 'center',
             justifyContent: 'center',
           }}>

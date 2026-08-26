@@ -30,7 +30,7 @@ export type ChallengeProofPart = {
   health?: CheckinHealthProof | null;
 };
 
-/** Extra photos on top of required proofs. One photo is enough to submit. */
+/** Extra photos on top of required proofs. Extras are optional and never unlock Send. */
 export const CHECKIN_PHOTO_CAP = 8;
 
 export function uniqueProofUrls(urls: Array<string | null | undefined>): string[] {
@@ -590,7 +590,7 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
     return Boolean(part?.text?.trim() || part?.url?.trim());
   }
   if (proof.method === 'hr') {
-    return Boolean(part?.url?.trim() || part?.healthWorkoutId?.trim());
+    return Boolean(part?.url?.trim() || part?.healthWorkoutId?.trim() || part?.health);
   }
   return proofImageUrls(part).length > 0 || Boolean(part?.healthWorkoutId?.trim());
 }

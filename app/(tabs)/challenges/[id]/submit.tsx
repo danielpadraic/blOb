@@ -16,7 +16,15 @@ import { useChallenge, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
 import type { HealthWorkout } from '@/services/health/types';
-import { CHECKIN_BOB, checkinStageHint, checkinStageLabel, classifyCheckinError, isLikelyOffline } from '@/lib/checkin';
+import {
+  CHECKIN_BOB,
+  canSendCheckin,
+  checkinSendWhyNot,
+  checkinStageHint,
+  checkinStageLabel,
+  classifyCheckinError,
+  isLikelyOffline,
+} from '@/lib/checkin';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   beginCameraProof,
@@ -49,8 +57,6 @@ import type { MentionDoc } from '@/lib/mentions';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
 import { uploadPostAttachment } from '@/utils/upload';
-
-const PARTIAL_POSTED = 'Posted. Add the rest when you have them.';
 
 type SlotDraft = {
   uri?: string;
@@ -189,7 +195,7 @@ export default function SubmitWorkoutScreen() {
   const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
   const busy = saveProof.isPending || submitCheckin.isPending;
-  const canSend = (honorOnly || filledCount >= 1) && phase !== 'submitted' && !busy;
+  const canSend = canSendCheckin(honorOnly, allReady, phase, busy);
   const firstCamera = beginCameraProof(proofSteps);
   const tabLift = tabBarLift(insets.bottom, 'sticky');
 
@@ -348,8 +354,23 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
+  function explainSendBlocked() {
+    const remaining = proofSteps
+      .filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id])))
+      .map((proof) => proofDisplayName(proof));
+    const names = checkinSendWhyNot(remaining);
+    Alert.alert('Still needed', names ? `${names}.` : copy('checkin.emptyBob'));
+  }
+
   async function onSubmit() {
-    if (!id || !canSend || phase === 'submitted') {
+    if (!id || phase === 'submitted') {
+      return;
+    }
+    if (busy) {
+      return;
+    }
+    if (!honorOnly && !allReady) {
+      explainSendBlocked();
       return;
     }
     setError(null);
@@ -472,8 +493,7 @@ export default function SubmitWorkoutScreen() {
     } catch (caught) {
       const kind = classifyCheckinError(caught);
       if (kind === 'missing') {
-        Alert.alert('', PARTIAL_POSTED);
-        router.replace(`/challenges/${id}`);
+        explainSendBlocked();
         return;
       }
       setFailKind(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : null);
@@ -755,6 +775,7 @@ export default function SubmitWorkoutScreen() {
           allReady={allReady}
           busy={busy}
           canSend={canSend}
+          blockedHint={checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)))}
           onAddProof={(proof) => {
             if (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') {
               setPreferCamera(Platform.OS !== 'ios' || !proofPrefersHealthAttach(proof, challenge));
