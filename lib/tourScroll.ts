@@ -1,6 +1,14 @@
 import { Platform, type ScrollView, type LayoutRectangle } from 'react-native';
 
 import { TAB_BAR_PEEK, tabBarLift } from '@/lib/theme';
+import { scrollToSafe } from '@/lib/tourScrollSafe';
+
+export {
+  flashScrollIndicatorsSafe,
+  scrollToEndSafe,
+  scrollToOffsetSafe,
+  scrollToSafe,
+} from '@/lib/tourScrollSafe';
 
 /** Tab chrome body under the status bar: logo row + padding. */
 export const TAB_CHROME_BODY = 74;
@@ -24,12 +32,12 @@ export function createTourViewport(
 export function scrollViewToY(scroll: ScrollView, y: number, duration = TOUR_SCROLL_MS) {
   const next = Math.max(0, y);
   if (Platform.OS !== 'web') {
-    scroll.scrollTo({ y: next, animated: true });
+    scrollToSafe(scroll, { y: next, animated: true });
     return;
   }
   const node = webScroller(scroll);
   if (!node) {
-    scroll.scrollTo({ y: next, animated: false });
+    scrollToSafe(scroll, { y: next, animated: false });
     return;
   }
   const start = node.scrollTop;

@@ -11,6 +11,7 @@ import { type LayoutRectangle, type ScrollView } from 'react-native';
 
 import type { CreateTourTrack } from '@/lib/createTour';
 import { scrollDeltaToCenter, scrollViewToY } from '@/lib/tourScroll';
+import { scrollToSafe } from '@/lib/tourScrollSafe';
 import type { SimpleCurrency } from '@/lib/simpleChallenge';
 
 export type TourRect = LayoutRectangle;
@@ -91,7 +92,14 @@ export function TourProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const scrollHomeToTop = useCallback(() => {
-    homeScroll.current?.scrollTo({ y: 0, animated: true });
+    const node = homeScroll.current as { scrollTo?: unknown; scrollToOffset?: unknown } | null;
+    if (node == null) {
+      return;
+    }
+    if (typeof node.scrollTo !== 'function' && typeof node.scrollToOffset !== 'function') {
+      return;
+    }
+    scrollToSafe(node, { y: 0, animated: true });
   }, []);
 
   const setCreateScroll = useCallback((node: ScrollView | null) => {
