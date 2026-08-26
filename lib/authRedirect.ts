@@ -1,14 +1,19 @@
 export const AUTH_CALLBACK_PATH = '/auth/callback';
+export const AUTH_LOGIN_PATH = '/(auth)/login';
+
+export function loginHrefWithAuthError(message: string): string {
+  const safe = message.replace(/\s+/g, ' ').trim().slice(0, 180);
+  return `${AUTH_LOGIN_PATH}?authError=${encodeURIComponent(safe)}`;
+}
 
 /**
- * Redirect target for password-recovery emails.
+ * HTTPS callback used when a web origin is available, or as an optional
+ * EXPO_PUBLIC_AUTH_REDIRECT_URL fallback for the thin web harness.
  *
- * Web uses the current origin so production Vercel, preview, and local
- * Expo/Next hosts each generate an allow-listed URL.
- * Native builds should set EXPO_PUBLIC_AUTH_REDIRECT_URL to the production
- * https callback — email clients cannot open blob:// links.
- * That env URL is for password-reset email only. Google Sign-In on iOS/Android
- * always uses blob://oauthredirect (see lib/oauthRedirect.ts).
+ * Native sign-up and password-reset emails use blob://auth/callback
+ * (see resolveOAuthRedirectUri) so the app can complete the session.
+ * Do not set Site URL to blob://. Google’s redirect_uri must stay
+ * https://<project>.supabase.co/auth/v1/callback.
  *
  * Supabase Dashboard → Authentication → URL Configuration must include:
  * - Site URL: production https origin

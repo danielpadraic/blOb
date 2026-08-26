@@ -2,7 +2,7 @@
   "expo": {
     "name": "blOb",
     "slug": "blob",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/mascot/app-icon.png",
     "scheme": "blob",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.blob.tournament",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.healthkit": true,
@@ -25,7 +25,6 @@
         "NSHealthShareUsageDescription": "blOb reads workouts and heart rate only to verify effort in Skill Tournaments.",
         "NSHealthUpdateUsageDescription": "blOb starts or updates a workout session only to verify effort in Skill Tournaments.",
         "UIBackgroundModes": [
-          "remote-notification",
           "remote-notification"
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -39,7 +38,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "app.blob.mobile",
-      "versionCode": 5,
+      "versionCode": 6,
       "intentFilters": [
         {
           "action": "VIEW",

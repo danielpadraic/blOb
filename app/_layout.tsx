@@ -10,6 +10,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
@@ -39,16 +40,18 @@ const ROOT_STACK_OPTIONS = {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <WalletProvider>
-            <StatusBar style="dark" />
-            <AppFrame>
-              <RootNavigator />
-            </AppFrame>
-          </WalletProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <WalletProvider>
+              <StatusBar style="dark" />
+              <AppFrame>
+                <RootNavigator />
+              </AppFrame>
+            </WalletProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

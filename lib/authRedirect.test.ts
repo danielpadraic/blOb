@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AUTH_CALLBACK_PATH, authRedirectUrl } from '@/lib/authRedirect';
+import { AUTH_CALLBACK_PATH, authRedirectUrl, loginHrefWithAuthError } from '@/lib/authRedirect';
 
 const ENV_KEY = 'EXPO_PUBLIC_AUTH_REDIRECT_URL';
 
@@ -27,5 +27,11 @@ describe('authRedirectUrl', () => {
 
   it('keeps the callback path constant', () => {
     expect(AUTH_CALLBACK_PATH).toBe('/auth/callback');
+  });
+
+  it('encodes a safe login error query', () => {
+    expect(loginHrefWithAuthError('Code expired\ntry again')).toBe(
+      '/(auth)/login?authError=Code%20expired%20try%20again',
+    );
   });
 });

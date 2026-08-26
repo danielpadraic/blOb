@@ -30,6 +30,9 @@ export const supabase = createClient<Database>(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      // PKCE returns ?code= so Expo Router / native deep links keep the payload.
+      // Implicit hash tokens are dropped on blob://auth/callback.
+      flowType: 'pkce',
     },
     realtime: getRealtimeTransport(),
   },

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isRecoveryRedirect, parseAuthRedirectParams } from '@/lib/authRedirectParams';
+import {
+  authSessionFlightKey,
+  hasAuthCallbackPayload,
+  isRecoveryRedirect,
+  parseAuthRedirectParams,
+} from '@/lib/authRedirectParams';
 import { getPasswordUpdateMessage } from '@/utils/errors';
 
 describe('parseAuthRedirectParams', () => {
@@ -28,6 +33,42 @@ describe('parseAuthRedirectParams', () => {
     expect(params.code).toBe('abc123');
     expect(params.type).toBe('recovery');
     expect(isRecoveryRedirect(params)).toBe(true);
+  });
+
+  it('reads signup and recovery token_hash links', () => {
+    const signup = parseAuthRedirectParams(
+      'blob://auth/callback?token_hash=abc&type=signup',
+    );
+    expect(signup.token_hash).toBe('abc');
+    expect(signup.type).toBe('signup');
+    expect(hasAuthCallbackPayload(signup)).toBe(true);
+    expect(isRecoveryRedirect(signup)).toBe(false);
+
+    const recovery = parseAuthRedirectParams(
+      'blob://auth/callback#token_hash=def&type=recovery',
+    );
+    expect(recovery.token_hash).toBe('def');
+    expect(isRecoveryRedirect(recovery)).toBe(true);
+  });
+
+  it('treats legacy token+type+email as a payload and ignores token without email', () => {
+    const ready = parseAuthRedirectParams(
+      'blob://auth/callback?token=otp&type=magiclink&email=a@b.com',
+    );
+    expect(ready.token).toBe('otp');
+    expect(ready.email).toBe('a@b.com');
+    expect(hasAuthCallbackPayload(ready)).toBe(true);
+    expect(
+      hasAuthCallbackPayload(
+        parseAuthRedirectParams('blob://auth/callback?token=otp&type=magiclink'),
+      ),
+    ).toBe(false);
+  });
+
+  it('uses the same flight key for the same PKCE code on different URLs', () => {
+    expect(authSessionFlightKey('blob://auth/callback?code=abc')).toBe(
+      authSessionFlightKey('blob:///auth/callback?code=abc&type=signup'),
+    );
   });
 
   it('returns empty params for missing or malformed URLs', () => {

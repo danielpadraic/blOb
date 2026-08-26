@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter, type Href } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
@@ -27,8 +27,21 @@ import { loginSchema, type LoginValues } from '@/utils/validators';
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn, signInWithGoogle } = useAuth();
+  const { authError } = useLocalSearchParams<{ authError?: string | string[] }>();
   const [emailStep, setEmailStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const raw = Array.isArray(authError) ? authError[0] : authError;
+    if (!raw) {
+      return;
+    }
+    try {
+      setFormError(decodeURIComponent(raw).replace(/\s+/g, ' ').trim().slice(0, 180));
+    } catch {
+      setFormError(raw.replace(/\s+/g, ' ').trim().slice(0, 180));
+    }
+  }, [authError]);
   const {
     control,
     handleSubmit,

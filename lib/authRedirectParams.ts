@@ -5,6 +5,9 @@ export type AuthRedirectParams = {
   access_token: string | null;
   refresh_token: string | null;
   code: string | null;
+  token_hash: string | null;
+  token: string | null;
+  email: string | null;
   error: string | null;
   error_description: string | null;
 };
@@ -14,6 +17,9 @@ const EMPTY: AuthRedirectParams = {
   access_token: null,
   refresh_token: null,
   code: null,
+  token_hash: null,
+  token: null,
+  email: null,
   error: null,
   error_description: null,
 };
@@ -61,6 +67,9 @@ export function parseAuthRedirectParams(url?: string | null): AuthRedirectParams
       access_token: params.get('access_token') ?? null,
       refresh_token: params.get('refresh_token') ?? null,
       code: params.get('code') ?? null,
+      token_hash: params.get('token_hash') ?? null,
+      token: params.get('token') ?? null,
+      email: params.get('email') ?? null,
       error: params.get('error') ?? params.get('errorCode') ?? null,
       error_description: params.get('error_description') ?? null,
     };
@@ -70,9 +79,41 @@ export function parseAuthRedirectParams(url?: string | null): AuthRedirectParams
 }
 
 export function isRecoveryRedirect(params: AuthRedirectParams): boolean {
-  return params.type === 'recovery' && Boolean(params.access_token || params.code);
+  return params.type === 'recovery' && hasAuthCallbackPayload(params);
+}
+
+export function hasAuthCallbackPayload(params: AuthRedirectParams): boolean {
+  if (params.access_token || params.code) {
+    return true;
+  }
+  if (params.token_hash && params.type) {
+    return true;
+  }
+  // verifyOtp({ token }) requires email + type.
+  return Boolean(params.token && params.type && params.email);
+}
+
+/** Dedupes AuthProvider + callback so the same PKCE/OTP secret is exchanged once. */
+export function authSessionFlightKey(url: string): string {
+  const params = parseAuthRedirectParams(url);
+  if (params.code) {
+    return `code:${params.code}`;
+  }
+  if (params.access_token) {
+    return `access:${params.access_token}`;
+  }
+  if (params.token_hash) {
+    return `th:${params.token_hash}`;
+  }
+  if (params.token) {
+    return `token:${params.token}`;
+  }
+  if (params.error) {
+    return `error:${params.error}`;
+  }
+  return url;
 }
 
 export function hasAuthSessionTokens(params: AuthRedirectParams): boolean {
-  return Boolean(params.access_token || params.code);
+  return hasAuthCallbackPayload(params);
 }
