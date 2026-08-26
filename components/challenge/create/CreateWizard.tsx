@@ -82,6 +82,7 @@ import {
 import { wizardBobOops, wizardBobTips, wizardEntryTabTipIndex, wizardGoalTypeTipIndex, wizardStepForField, entryTabFromValues, type EntryTab } from '@/lib/createBobCopy';
 import { composeChallengeRules } from '@/lib/consistencyRules';
 import {
+  defaultRulesTargetCount,
   nextCreateWizardStep,
   prevCreateWizardStep,
   rulesStepBlockingIssue,
@@ -219,7 +220,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
 
   const {
     control,
-    handleSubmit,
     watch,
     setValue,
     getValues,
@@ -252,10 +252,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     isCreatorFunded && extraNeeded > walletCredits
       ? `You need ${formatWallet(extraNeeded, values.currency)} to fund this pool. You have ${formatWallet(walletCredits, values.currency)}.`
       : null;
-  const bucksReady =
-    values.currency !== 'bucks' ||
-    (Boolean(bucksAcks.amount) && Boolean(bucksAcks.immediate) && Boolean(bucksAcks.irreversible));
-
   const publishing = isSubmitting || create.isPending || update.isPending;
 
   useEffect(() => {
@@ -1038,43 +1034,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     return { field: 'buy_in', step: targetStep };
   }
 
-  function firstPublishIssue(): BobIssue | null {
-    flushRulesDraftRef.current();
-    stripBlankExtraRules();
-    stripBlankExtraTasks();
-    seedPointsTaskFromGoal();
-    syncRuleActivityFromTask();
-    syncComposedRules();
-    const entryIssue = coinEntryIssue();
-    if (entryIssue) {
-      return entryIssue;
-    }
-    if (startPreset === 'custom') {
-      const start = Date.parse(getValues('starts_at'));
-      if (Number.isFinite(start) && start <= Date.now()) {
-        setError('starts_at', { type: 'validate', message: copy('create.startFuture') });
-        return { field: 'starts_at', step: STEP_DURATION };
-      }
-    }
-    const formValues = getValues();
-    const parsed = createChallengeSchema.safeParse(formValues);
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        const root = issue.path[0];
-        if (typeof root !== 'string') {
-          continue;
-        }
-        const name = issue.path.join('.') as FieldPath<CreateChallengeValues>;
-        setError(name, { type: 'validate', message: issue.message });
-        return { field: root, step: wizardStepForField(root, formValues) };
-      }
-    }
-    if (!skillAck) {
-      return { field: 'skill', step: STEP_REVIEW };
-    }
-    return missingRulesIssue(STEP_REVIEW);
-  }
-
   function snapshotField(field: string): unknown {
     if (field === 'start') {
       return startPath;
@@ -1242,6 +1201,12 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       stripBlankExtraTasks();
       seedPointsTaskFromGoal();
       syncRuleActivityFromTask();
+      if (!String(getValues('target_count') ?? '').trim()) {
+        setValue('target_count', defaultRulesTargetCount(getValues('target_count')), {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
+      }
       syncComposedRules();
       const rulesIssue = rulesStepBlockingIssue(getValues());
       if (rulesIssue) {
@@ -1253,12 +1218,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         showBobIssue({ field: rulesIssue.field, step: STEP_RULES }, rulesIssue.message);
         return;
       }
-      if (reviewReturn) {
-        setReviewReturn(false);
-        setStep(STEP_REVIEW);
-        return;
-      }
-      setStep((current) => nextCreateWizardStep(current, getValues(), scoringEditorOpen));
+      setReviewReturn(false);
+      setStep(STEP_REVIEW);
       return;
     }
     if (reviewReturn && !lastStep) {
@@ -1291,20 +1252,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (lastStep) {
       syncComposedRules();
       if (!skillAck) {
-        showBobIssue({ field: 'skill', step: STEP_REVIEW });
-        return;
-      }
-      if (!bucksReady) {
-        showBobIssue({ field: 'bucks', step: STEP_REVIEW });
-        return;
-      }
-      if (contributionShort) {
-        showBobIssue({ field: 'wallet', step: STEP_FUNDING });
-        return;
-      }
-      const issue = firstPublishIssue();
-      if (issue) {
-        showBobIssue(issue);
+        const message = wizardBobOops('skill');
+        setFormError(message);
+        showBobIssue({ field: 'skill', step: STEP_REVIEW }, message);
         return;
       }
       await onPublish();
@@ -1360,72 +1310,81 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     router.dismissTo(dismissFallback);
   }
 
-  const onPublish = handleSubmit(
-    async (formValues) => {
-      setFormError(null);
-      if (contributionShort) {
-        showBobIssue({ field: 'wallet', step: STEP_FUNDING });
+  function revealPublishIssue(issue: BobIssue, message: string) {
+    setFormError(message);
+    if (issue.step === STEP_REVIEW) {
+      showBobIssue(issue, message);
+      return;
+    }
+    setTimeout(() => {
+      showBobIssue(issue, message);
+    }, 120);
+  }
+
+  async function onPublish() {
+    flushRulesDraftRef.current();
+    stripBlankExtraRules();
+    stripBlankExtraTasks();
+    seedPointsTaskFromGoal();
+    syncRuleActivityFromTask();
+    if (!String(getValues('target_count') ?? '').trim()) {
+      setValue('target_count', defaultRulesTargetCount(getValues('target_count')), {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+    const rules = syncComposedRules();
+    const formValues = { ...getValues(), rules };
+    const parsed = createChallengeSchema.safeParse(formValues);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      const message = first?.message || 'Check the red note and try again.';
+      const root = typeof first?.path[0] === 'string' ? String(first.path[0]) : 'title';
+      const name = (first?.path.join('.') || root) as FieldPath<CreateChallengeValues>;
+      setError(name, { type: 'validate', message });
+      revealPublishIssue({ field: root, step: wizardStepForField(root, formValues) }, message);
+      return;
+    }
+    try {
+      skipSaveRef.current = true;
+      if (editId) {
+        await update.mutateAsync({ challengeId: editId, values: { ...formValues, rules } });
+        setBobError(null);
+        router.replace(`/challenges/${editId}`);
         return;
       }
-      try {
-        skipSaveRef.current = true;
-        const rules = syncComposedRules();
-        if (editId) {
-          await update.mutateAsync({ challengeId: editId, values: { ...formValues, rules } });
-          setBobError(null);
-          router.replace(`/challenges/${editId}`);
+      const schedule = resolveStartForPublish({
+        preset: startPreset,
+        starts_at: formValues.starts_at,
+        duration_days: formValues.duration_days || formValues.duration_value,
+      });
+      if (startPreset === 'custom') {
+        const start = Date.parse(schedule.starts_at);
+        if (Number.isFinite(start) && start <= Date.now()) {
+          skipSaveRef.current = false;
+          revealPublishIssue({ field: 'starts_at', step: STEP_DURATION }, copy('create.startFuture'));
           return;
         }
-        const schedule = resolveStartForPublish({
-          preset: startPreset,
-          starts_at: formValues.starts_at,
-          duration_days: formValues.duration_days || formValues.duration_value,
-        });
-        if (startPreset === 'custom') {
-          const start = Date.parse(schedule.starts_at);
-          if (Number.isFinite(start) && start <= Date.now()) {
-            skipSaveRef.current = false;
-            setFormError(copy('create.startFuture'));
-            showBobIssue({ field: 'starts_at', step: STEP_DURATION }, copy('create.startFuture'));
-            return;
-          }
-        }
-        const challenge = await create.mutateAsync({
-          ...formValues,
-          ...schedule,
-          rules,
-          draft_id: draftId,
-        });
-        setBobError(null);
-        setTutorialOn(true);
-        setBobTipOpen(true);
-        setTipIndex(0);
-        setLiveChallengeId(challenge.id);
-        scrollRef.current?.scrollTo({ y: 0 });
-      } catch (error) {
-        skipSaveRef.current = false;
-        const message = getCreateChallengeMessage(error);
-        setFormError(message);
-        showBobIssue({ field: 'publish', step: STEP_REVIEW }, `Oops — ${message}`);
       }
-    },
-    (invalid) => {
-      const roots = Object.keys(invalid);
-      const formValues = getValues();
-      let nextStep = STEP_REVIEW;
-      let field = roots[0] ?? 'title';
-      for (const name of roots) {
-        const root = name.split('.')[0] as keyof CreateChallengeValues;
-        const candidate = wizardStepForField(root, formValues);
-        if (candidate < nextStep) {
-          nextStep = candidate;
-          field = root;
-        }
-      }
-      const issue = firstPublishIssue() ?? { field, step: nextStep };
-      showBobIssue(issue);
-    },
-  );
+      const challenge = await create.mutateAsync({
+        ...formValues,
+        ...schedule,
+        rules,
+        draft_id: draftId,
+      });
+      setBobError(null);
+      setTutorialOn(true);
+      setBobTipOpen(true);
+      setTipIndex(0);
+      setLiveChallengeId(challenge.id);
+      scrollRef.current?.scrollTo({ y: 0 });
+    } catch (error) {
+      skipSaveRef.current = false;
+      const message = getCreateChallengeMessage(error);
+      setFormError(message);
+      showBobIssue({ field: 'publish', step: STEP_REVIEW }, `Oops — ${message}`);
+    }
+  }
 
   const tips = wizardBobTips(step, Boolean(liveChallengeId), values.challenge_lane);
   const tipCount = Math.max(tips.length, 1);

@@ -79,15 +79,18 @@ export function prevCreateWizardStep(
   return current - 1;
 }
 
-function consistencyCadenceReady(
+const RULES_PERIODS = new Set(['daily', 'weekly', 'monthly', 'once', '3x_week', 'custom']);
+
+export function defaultRulesTargetCount(value: string | null | undefined): string {
+  return String(value ?? '').trim() || '1';
+}
+
+export function consistencyCadenceReady(
   values: Pick<CreateChallengeValues, 'target_count' | 'rule_activity' | 'task' | 'frequency'>,
 ): boolean {
-  const count = Number(values.target_count);
-  const activity = (values.rule_activity ?? values.task ?? '').trim();
-  const period = values.frequency;
-  const validPeriod =
-    period === 'daily' || period === 'weekly' || period === 'monthly' || period === 'once';
-  return Number.isFinite(count) && count >= 1 && activity.length >= 2 && validPeriod;
+  const count = Number(defaultRulesTargetCount(values.target_count));
+  const activity = (values.rule_activity || values.task || '').trim();
+  return Number.isFinite(count) && count >= 1 && activity.length >= 2 && RULES_PERIODS.has(values.frequency);
 }
 
 type RulesStepValues = Pick<
@@ -99,11 +102,7 @@ export type RulesStepIssue = { field: string; message: string };
 
 /** Extra constraints are optional. Points Task 1 can come from Goal.task. */
 export function rulesStepIsReady(values: RulesStepValues): boolean {
-  if (values.challenge_type === 'points' && values.duration_type !== 'unlimited') {
-    const title = (values.tasks[0]?.title ?? values.task ?? '').trim();
-    return title.length >= 2;
-  }
-  return consistencyCadenceReady(values);
+  return rulesStepBlockingIssue(values) == null;
 }
 
 /** Step 10 gate. Blank extra_rules, unused min_minutes, and leftover Goal proofs do not block. */
@@ -124,12 +123,9 @@ export function rulesStepBlockingIssue(values: RulesStepValues): RulesStepIssue 
     return null;
   }
 
-  if (rulesStepIsReady(next)) {
-    return null;
-  }
-  const activity = (next.rule_activity ?? next.task ?? '').trim();
+  const activity = (next.rule_activity || next.task || '').trim();
   if (activity.length < 2) {
     return { field: 'task', message: 'Add a task' };
   }
-  return { field: 'target_count', message: 'Say how many times they must check in' };
+  return null;
 }

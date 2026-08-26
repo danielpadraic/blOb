@@ -131,7 +131,7 @@ export function RulesSlide({
     setValue(
       'extra_rules',
       current.map((item, itemIndex) => (itemIndex === index ? { ...item, proofs } : item)),
-      { shouldValidate: true, shouldDirty: true },
+      { shouldValidate: false, shouldDirty: true },
     );
   }
 
@@ -142,11 +142,11 @@ export function RulesSlide({
       setValue(
         'extra_rules',
         current.filter((_, index) => index !== existing),
-        { shouldValidate: true, shouldDirty: true },
+        { shouldValidate: false, shouldDirty: true },
       );
       return;
     }
-    setValue('extra_rules', [...current, emptyExtraRule(kind)], { shouldValidate: true, shouldDirty: true });
+    setValue('extra_rules', [...current, emptyExtraRule(kind)], { shouldValidate: false, shouldDirty: true });
     setConstraintsOpen(true);
     if (kind === 'min_minutes') {
       setValue('min_minutes', '30', { shouldDirty: true });
@@ -162,7 +162,7 @@ export function RulesSlide({
     setValue(
       'extra_rules',
       getValues('extra_rules').filter((_, itemIndex) => itemIndex !== index),
-      { shouldValidate: true, shouldDirty: true },
+      { shouldValidate: false, shouldDirty: true },
     );
   }
 
@@ -180,7 +180,7 @@ export function RulesSlide({
             }
           : item,
       ),
-      { shouldValidate: true, shouldDirty: true },
+      { shouldValidate: false, shouldDirty: true },
     );
     if (kind === 'min_minutes') {
       setValue('min_minutes', '30', { shouldDirty: true });
@@ -365,7 +365,7 @@ export function RulesSlide({
               <HeartRateMinutesRow
                 value={Math.max(Number(values.min_minutes) || 30, 1)}
                 onChange={(minutes) => {
-                  setValue('min_minutes', String(minutes), { shouldDirty: true, shouldValidate: true });
+                  setValue('min_minutes', String(minutes), { shouldDirty: true, shouldValidate: false });
                   const extras = getValues('extra_rules') ?? [];
                   setValue(
                     'extra_rules',

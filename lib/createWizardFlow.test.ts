@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { wizardStepIndex } from '@/lib/challengeTemplates';
 import { nextCreateItemId } from '@/lib/createItemIds';
 import {
+  consistencyCadenceReady,
+  defaultRulesTargetCount,
   nextCreateWizardStep,
   prevCreateWizardStep,
   rulesStepBlockingIssue,
@@ -171,5 +174,59 @@ describe('create wizard flow', () => {
     };
     expect(rulesStepIsReady(values)).toBe(true);
     expect(rulesStepBlockingIssue(values)).toBeNull();
+  });
+
+  it('keeps Rules at index 9 and Review at 10', () => {
+    expect(wizardStepIndex('rules')).toBe(9);
+    expect(wizardStepIndex('review')).toBe(10);
+  });
+
+  it('treats empty target_count as 1 and accepts 3x_week and custom cadence', () => {
+    expect(defaultRulesTargetCount('')).toBe('1');
+    expect(defaultRulesTargetCount('  ')).toBe('1');
+    expect(
+      consistencyCadenceReady({
+        task: 'Run 1 mile',
+        rule_activity: 'Run 1 mile',
+        target_count: '',
+        frequency: '3x_week',
+      }),
+    ).toBe(true);
+    expect(
+      consistencyCadenceReady({
+        task: 'Run 1 mile',
+        rule_activity: 'Run 1 mile',
+        target_count: '',
+        frequency: 'custom',
+      }),
+    ).toBe(true);
+  });
+
+  it('lets Consistency Rules Next pass on 3x_week or custom without a target_count', () => {
+    const base = {
+      challenge_type: 'consistency' as const,
+      duration_type: 'fixed' as const,
+      task: 'Run 1 mile',
+      tasks: [blankTask],
+      target_count: '',
+      rule_activity: '',
+      frequency: '3x_week' as const,
+    };
+    expect(rulesStepBlockingIssue(base)).toBeNull();
+    expect(rulesStepBlockingIssue({ ...base, frequency: 'custom' })).toBeNull();
+  });
+
+  it('blocks Consistency Rules Next only when the task and activity are blank', () => {
+    expect(
+      rulesStepBlockingIssue({
+        challenge_type: 'consistency',
+        duration_type: 'fixed',
+        task: '',
+        tasks: [blankTask],
+        target_count: '',
+        rule_activity: '',
+        frequency: 'weekly',
+      }),
+    ).toEqual({ field: 'task', message: 'Add a task' });
   });
 });
