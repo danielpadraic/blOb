@@ -27,7 +27,7 @@ import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-import { useCreatePost, useDeletePost } from '@/hooks/useFeed';
+import { useCreatePost } from '@/hooks/useFeed';
 import {
   useBlockUser,
   useHidePost,
@@ -41,7 +41,6 @@ import { copy } from '@/lib/copy';
 import { postShareUrl } from '@/lib/postShare';
 import { snapshotFromPost } from '@/lib/quotePost';
 import { personDisplayName } from '@/lib/social';
-import { isCheckinPost } from '@/lib/checkinPost';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -304,42 +303,13 @@ function OverflowPopover({
 }) {
   const hide = useHidePost();
   const report = useReportPost();
-  const removePost = useDeletePost();
   const removeFromWall = useRemoveFromWall();
   const friends = useFriends();
   const startChat = useGetOrCreateConversation();
   const send = useSendMessage();
   const [busy, setBusy] = useState(false);
   const mine = Boolean(userId && userId === post.author_id);
-  const canDelete = mine && !isCheckinPost(post);
   const host = Boolean(userId && post.wall_host_id && userId === post.wall_host_id && !post.wall_removed_at);
-
-  function onDelete() {
-    if (!canDelete || busy) {
-      return;
-    }
-    Alert.alert(copy('post.delete'), copy('post.deleteConfirm'), [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: copy('post.delete'),
-        style: 'destructive',
-        onPress: () => {
-          setBusy(true);
-          removePost.mutate(post.id, {
-            onSuccess: () => {
-              onClose();
-            },
-            onError: (error) => {
-              Alert.alert(copy('error.deletePost'), getErrorMessage(error));
-            },
-            onSettled: () => {
-              setBusy(false);
-            },
-          });
-        },
-      },
-    ]);
-  }
 
   async function onRemoveFromWall() {
     if (busy) {
@@ -395,14 +365,6 @@ function OverflowPopover({
                 icon={GLYPH.flag}
                 color={THEME.danger}
                 onPress={() => onPanel('report')}
-              />
-            ) : null}
-            {canDelete ? (
-              <IconAction
-                label={copy('post.delete')}
-                icon={GLYPH.trash}
-                color={THEME.danger}
-                onPress={onDelete}
               />
             ) : null}
           </View>

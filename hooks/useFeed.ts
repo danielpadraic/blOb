@@ -6,7 +6,7 @@ import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
-import { asPostAudience, DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
+import { asPostAudience, DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { resolvePostsSchema, type PostsSchema } from '@/lib/postsSelect';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -265,19 +265,10 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
     unique.length
       ? supabase.from('profiles').select('id, username, display_name, avatar_url, is_official').in('id', unique)
       : Promise.resolve({ data: [] as { id: string; username: string; display_name: string | null }[], error: null }),
-    viewerId && unique.length
-      ? supabase
-          .from('friendships')
-          .select('user_a_id, user_b_id')
-          .eq('status', 'blocked')
-          .or(`user_a_id.eq.${viewerId},user_b_id.eq.${viewerId}`)
-      : Promise.resolve({ data: [] as { user_a_id: string; user_b_id: string }[], error: null }),
+    viewerId && unique.length ? fetchBlockedUserIds(viewerId) : Promise.resolve([] as string[]),
   ]);
   const byId = new Map((profiles.data ?? []).map((row) => [row.id, row]));
-  const blockedIds = new Set<string>();
-  for (const row of blocked.data ?? []) {
-    blockedIds.add(row.user_a_id === viewerId ? row.user_b_id : row.user_a_id);
-  }
+  const blockedIds = new Set(blocked);
 
   const mentionsByPost = new Map<string, PostMention[]>();
   for (const row of postMentions) {
@@ -411,7 +402,7 @@ function dedupePosts(groups: PostWithMeta[][]): PostWithMeta[] {
   );
 }
 
-/** Same visibility as Home for one author: public, friends-if-accepted, official exception. */
+/** Profile wall: same audience rule as Home, plus wall-host / hide filters. */
 function viewerCanSeeProfilePost(
   post: PostWithMeta,
   input: {
@@ -431,33 +422,32 @@ function viewerCanSeeProfilePost(
   if (post.wall_host_id && post.wall_host_id !== input.profileId) {
     return false;
   }
-  if (input.viewerId && post.author_id === input.viewerId) {
-    return true;
-  }
-  if (input.officialAuthor && post.author_id === input.profileId) {
-    return true;
-  }
-  if (input.friendsWithAuthor && post.author_id === input.profileId) {
-    return true;
-  }
   if (post.wall_host_id === input.profileId) {
     return true;
   }
-  const audience = asPostAudience(post.audience);
-  if (audience === 'public') {
-    return true;
+  return viewerCanSeeHomePost({
+    viewerId: input.viewerId,
+    authorId: post.author_id,
+    audience: post.audience,
+    audienceUserIds: post.audience_user_ids,
+    friendsWithAuthor: input.friendsWithAuthor,
+    officialAuthor: input.officialAuthor && post.author_id === input.profileId,
+  });
+}
+
+async function fetchBlockedUserIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('friendships')
+    .select('user_a_id, user_b_id')
+    .eq('status', 'blocked')
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
+  if (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:feed] blocked lookup skipped', error.message);
+    }
+    return [];
   }
-  if (audience === 'friends' && input.friendsWithAuthor) {
-    return true;
-  }
-  if (
-    audience === 'specific' &&
-    input.viewerId &&
-    (post.audience_user_ids ?? []).includes(input.viewerId)
-  ) {
-    return true;
-  }
-  return false;
+  return (data ?? []).map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id));
 }
 
 async function fetchHiddenPostIds(userId: string): Promise<string[]> {
@@ -599,7 +589,7 @@ async function fetchPosts(input: {
     return [];
   }
 
-  const [joinedIds, hostedIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds] =
+  const [joinedIds, hostedIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
     await Promise.all([
       fetchJoinedChallengeIds(input.userId),
       fetchHostedChallengeIds(input.userId),
@@ -608,6 +598,7 @@ async function fetchPosts(input: {
       fetchRecommendedCreatorIds(input.userId),
       fetchHiddenPostIds(input.userId),
       fetchMutedUserIds(input.userId),
+      fetchBlockedUserIds(input.userId),
     ]);
   const challengeIds = [...new Set([...joinedIds, ...hostedIds])];
   const challengeIdSet = new Set(challengeIds);
@@ -623,6 +614,7 @@ async function fetchPosts(input: {
 
   const hidden = new Set(hiddenIds);
   const muted = new Set(mutedIds);
+  const blocked = new Set(blockedIds);
   const userId = input.userId;
   const merged = dedupePosts([people, challengePosts]);
   const corporateIds = await fetchCorporateChallengeIds(
@@ -643,6 +635,21 @@ async function fetchPosts(input: {
             return false;
           }
           if (post.author_id !== userId && muted.has(post.author_id) && !official.has(post.author_id)) {
+            return false;
+          }
+          if (post.author_id !== userId && blocked.has(post.author_id)) {
+            return false;
+          }
+          if (
+            !viewerCanSeeHomePost({
+              viewerId: userId,
+              authorId: post.author_id,
+              audience: post.audience,
+              audienceUserIds: post.audience_user_ids,
+              friendsWithAuthor: friends.has(post.author_id),
+              officialAuthor: official.has(post.author_id),
+            })
+          ) {
             return false;
           }
           if (official.has(post.author_id) || post.author_id === userId || friends.has(post.author_id)) {

@@ -43,3 +43,36 @@ export function feedVisibilityForAudience(audience: PostAudience): 'public' | 'f
   }
   return 'private';
 }
+
+/** Home and profile wall share this so specific / friends / public cannot drift. */
+export function viewerCanSeeHomePost(input: {
+  viewerId?: string | null;
+  authorId: string;
+  audience: unknown;
+  audienceUserIds?: string[] | null;
+  friendsWithAuthor: boolean;
+  officialAuthor?: boolean;
+}): boolean {
+  const viewerId = input.viewerId ?? undefined;
+  if (viewerId && input.authorId === viewerId) {
+    return true;
+  }
+  if (input.officialAuthor) {
+    return true;
+  }
+  const audience = asPostAudience(input.audience);
+  if (audience === 'public') {
+    return true;
+  }
+  if (audience === 'friends' && (input.authorId === viewerId || input.friendsWithAuthor)) {
+    return true;
+  }
+  if (
+    audience === 'specific' &&
+    viewerId &&
+    (input.authorId === viewerId || (input.audienceUserIds ?? []).includes(viewerId))
+  ) {
+    return true;
+  }
+  return false;
+}

@@ -602,7 +602,7 @@ function MediaFrame({
         <Image
           source={{ uri }}
           style={{ width: '100%', height: '100%' }}
-          contentFit="cover"
+          contentFit="contain"
           contentPosition="center"
           cachePolicy="memory-disk"
           recyclingKey={uri}
@@ -654,7 +654,7 @@ function PostVideoPlayer({ uri }: { uri: string }) {
     <VideoView
       player={player}
       style={{ width: '100%', height: '100%', backgroundColor: THEME.surface }}
-      contentFit="cover"
+      contentFit="contain"
       nativeControls
     />
   );
