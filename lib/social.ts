@@ -438,6 +438,15 @@ export async function followUser(followerId: string, followingId: string): Promi
   if (followerId === followingId) {
     throw new Error('You can’t follow yourself.');
   }
+  const { data: target, error: profileError } = await supabase
+    .from('profiles')
+    .select('is_creator')
+    .eq('id', followingId)
+    .maybeSingle();
+  throwIfError(profileError);
+  if (!target?.is_creator) {
+    throw new Error('You can only follow Creators.');
+  }
   const { data, error } = await supabase
     .from('follows')
     .insert({ follower_id: followerId, following_id: followingId })
@@ -651,6 +660,20 @@ export async function rejectFriendRequest(userId: string, otherUserId: string): 
   const snapshot = await fetchFriendshipSnapshot(userId, otherUserId);
   if (!snapshot.friendship || snapshot.friendship.status !== 'pending') {
     throw new Error('There’s no request to decline.');
+  }
+  const pair = orderedFriendshipIds(userId, otherUserId);
+  const { error } = await supabase
+    .from('friendships')
+    .delete()
+    .eq('user_a_id', pair.user_a_id)
+    .eq('user_b_id', pair.user_b_id);
+  throwIfError(error);
+}
+
+export async function unfriendUser(userId: string, otherUserId: string): Promise<void> {
+  const snapshot = await fetchFriendshipSnapshot(userId, otherUserId);
+  if (!snapshot.friendship || snapshot.friendship.status !== 'accepted') {
+    throw new Error('You’re not friends.');
   }
   const pair = orderedFriendshipIds(userId, otherUserId);
   const { error } = await supabase

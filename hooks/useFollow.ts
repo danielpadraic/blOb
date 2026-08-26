@@ -66,6 +66,17 @@ export function useToggleFollow(userId?: string | null) {
         throw new Error('You need to be signed in.');
       }
       if (nextFollowing) {
+        const { data: target, error: profileError } = await supabase
+          .from('profiles')
+          .select('is_creator')
+          .eq('id', userId)
+          .maybeSingle();
+        if (profileError) {
+          throw new Error(getErrorMessage(profileError));
+        }
+        if (!target?.is_creator) {
+          throw new Error('You can only follow Creators.');
+        }
         const { error } = await supabase.from('follows').insert({
           follower_id: user.id,
           following_id: userId,

@@ -2810,7 +2810,16 @@ create policy "Follows are readable"
 create policy "Users follow as themselves"
   on public.follows for insert
   to authenticated
-  with check (auth.uid() = follower_id);
+  with check (
+    auth.uid() = follower_id
+    and follower_id <> following_id
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = following_id
+        and p.is_creator = true
+    )
+  );
 
 create policy "Users can unfollow"
   on public.follows for delete

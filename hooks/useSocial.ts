@@ -43,6 +43,7 @@ import {
   markConversationRead,
   rejectFriendRequest,
   sendFriendRequest,
+  unfriendUser,
   sendMessage,
   toggleStoryReaction,
   unfollowUser,
@@ -502,6 +503,57 @@ export function useRejectFriendRequest() {
     onSettled: (_data, _error, otherUserId) => {
       if (user?.id) {
         invalidateFriendship(queryClient, user.id, otherUserId);
+      }
+    },
+  });
+}
+
+export function useUnfriend() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (otherUserId: string) => {
+      const userId = requireUserId(user?.id);
+      await unfriendUser(userId, otherUserId);
+    },
+    onMutate: async (otherUserId) => {
+      const userId = user?.id;
+      if (!userId) {
+        return;
+      }
+      await queryClient.cancelQueries({ queryKey: socialKeys.friendship(userId, otherUserId) });
+      await queryClient.cancelQueries({ queryKey: socialKeys.friends(userId) });
+      const previous = queryClient.getQueryData<FriendshipSnapshot>(
+        socialKeys.friendship(userId, otherUserId),
+      );
+      const previousFriends = queryClient.getQueryData<FriendEdge[]>(socialKeys.friends(userId));
+      queryClient.setQueryData<FriendshipSnapshot>(socialKeys.friendship(userId, otherUserId), {
+        status: 'none',
+        friendship: null,
+        incoming: false,
+      });
+      queryClient.setQueryData<FriendEdge[]>(socialKeys.friends(userId), (current) =>
+        (current ?? []).filter((row) => otherFriendshipUserId(row, userId) !== otherUserId),
+      );
+      return { previous, previousFriends, userId };
+    },
+    onError: (_error, otherUserId, context) => {
+      if (!context?.userId) {
+        return;
+      }
+      if (context.previous) {
+        queryClient.setQueryData(socialKeys.friendship(context.userId, otherUserId), context.previous);
+      }
+      if (context.previousFriends) {
+        queryClient.setQueryData(socialKeys.friends(context.userId), context.previousFriends);
+      }
+    },
+    onSettled: (_data, _error, otherUserId) => {
+      if (user?.id) {
+        invalidateFriendship(queryClient, user.id, otherUserId);
+        void queryClient.invalidateQueries({ queryKey: ['feed'] });
+        void queryClient.invalidateQueries({ queryKey: ['friends'] });
       }
     },
   });

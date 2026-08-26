@@ -16,7 +16,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-import { useFollowState } from '@/hooks/useFollow';
+import { useFollowState, useToggleFollow } from '@/hooks/useFollow';
 import { useCopyTone } from '@/hooks/useCopy';
 import {
   useCreateComment,
@@ -29,11 +29,13 @@ import {
   useFriends,
   useFriendshipStatus,
   useSendFriendRequest,
+  useUnfriend,
 } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { canPostOnProfile } from '@/lib/profileWall';
 import { directMessageHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
+import { isCreatorAccount } from '@/lib/creator';
 import { isOfficialAccount, isAdminViewer } from '@/lib/official';
 import { ADMIN_HREF } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -78,8 +80,10 @@ export default function PublicProfileScreen() {
   const friendsQuery = useFriends(profile?.id);
   const friendship = useFriendshipStatus(profile?.id);
   const follow = useFollowState(profile?.id);
+  const toggleFollow = useToggleFollow(profile?.id);
   const sendRequest = useSendFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
+  const unfriend = useUnfriend();
   const toggleReaction = useToggleReaction();
   const createComment = useCreateComment();
   const social = useSocialSheetsOptional();
@@ -159,11 +163,53 @@ export default function PublicProfileScreen() {
     blocked: relation?.status === 'blocked',
   });
 
+  function confirmUnfriend() {
+    if (!profile || unfriend.isPending) {
+      return;
+    }
+    Alert.alert('Unfriend?', '', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Unfriend',
+        style: 'destructive',
+        onPress: () => {
+          unfriend.mutate(profile.id, {
+            onError: (error) => Alert.alert('Couldn’t unfriend', getErrorMessage(error)),
+          });
+        },
+      },
+    ]);
+  }
+
+  function followAction() {
+    if (!profile || toggleFollow.isPending) {
+      return;
+    }
+    if (follow.isFollowing) {
+      Alert.alert('Unfollow?', '', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unfollow',
+          onPress: () => {
+            toggleFollow.mutate(false, {
+              onError: (error) => Alert.alert('Couldn’t unfollow', getErrorMessage(error)),
+            });
+          },
+        },
+      ]);
+      return;
+    }
+    toggleFollow.mutate(true, {
+      onError: (error) => Alert.alert('Couldn’t follow', getErrorMessage(error)),
+    });
+  }
+
   function friendAction() {
     if (!profile || isSelf || official) {
       return;
     }
     if (relation?.status === 'accepted') {
+      confirmUnfriend();
       return;
     }
     if (relation?.incoming) {
@@ -282,9 +328,21 @@ export default function PublicProfileScreen() {
                       : 'primary'
                   }
                   disabled={official}
-                  loading={!official && (sendRequest.isPending || acceptRequest.isPending)}
+                  loading={
+                    !official &&
+                    (sendRequest.isPending || acceptRequest.isPending || unfriend.isPending)
+                  }
                   onPress={friendAction}
                 />
+                {isCreatorAccount(profile) ? (
+                  <Button
+                    title={follow.isFollowing ? 'Following' : 'Follow'}
+                    size="sm"
+                    variant="outline"
+                    loading={toggleFollow.isPending}
+                    onPress={followAction}
+                  />
+                ) : null}
                 {relation?.status === 'blocked' ? (
                   <AppText className="text-[13px] font-semibold" style={{ color: THEME.muted }}>
                     {copy('messages.blocked')}

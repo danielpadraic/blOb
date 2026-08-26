@@ -36,7 +36,13 @@ import {
   useReportPost,
   useToggleMute,
 } from '@/hooks/usePostModeration';
-import { useFriends, useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
+import {
+  useFriends,
+  useFriendshipStatus,
+  useGetOrCreateConversation,
+  useSendMessage,
+  useUnfriend,
+} from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { postShareUrl } from '@/lib/postShare';
 import { snapshotFromPost } from '@/lib/quotePost';
@@ -504,9 +510,35 @@ function ProfileMuteMenu({
 }) {
   const toggle = useToggleMute();
   const block = useBlockUser();
+  const unfriend = useUnfriend();
+  const friendship = useFriendshipStatus(userId);
   const bugReport = useBugReport();
+  const accepted = friendship.data?.status === 'accepted';
   return (
     <View style={{ minWidth: 140 }}>
+      {accepted ? (
+        <ListRow
+          label="Unfriend"
+          onPress={() => {
+            Alert.alert('Unfriend?', '', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Unfriend',
+                style: 'destructive',
+                onPress: () => {
+                  unfriend.mutate(userId, {
+                    onSuccess: () => {
+                      onClose();
+                      onToast('Unfriended.');
+                    },
+                    onError: (error) => Alert.alert('Couldn’t unfriend', getErrorMessage(error)),
+                  });
+                },
+              },
+            ]);
+          }}
+        />
+      ) : null}
       <ListRow
         label="Report a problem"
         onPress={() => {
