@@ -365,7 +365,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const bucks = draft.currency === 'bucks';
   const corporate = draft.privacy_mode === 'private_corporate';
   const invite = corporate || draft.visibility === 'invite';
-  const buyIn = corporate ? 0 : Math.max(Number(draft.buy_in) || 0, 0);
+  const buyIn = bucks || corporate ? 0 : Math.max(Number(draft.buy_in) || 0, 0);
   const hostContribution = Math.max(Number(draft.host_budget) || 0, 0);
   const fundingModel =
     buyIn > 0 && hostContribution > 0 ? 'hybrid' : hostContribution > 0 ? 'creator' : 'participants';
@@ -421,7 +421,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     proof_review: 'auto',
     proof_type: proofTypeFromMethod(firstProofMethod(proofs)) as CreateChallengeValues['proof_type'],
     task: draft.task.trim(),
-    host_funded: hostContribution > 0,
+    host_funded: bucks || hostContribution > 0,
     host_budget: String((draft.guarantee_enabled ?? false) ? hostContribution : 0),
     guarantee_enabled: draft.guarantee_enabled ?? !corporate,
     required_checkins: String(required),
@@ -470,7 +470,8 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
   const privacy_mode = asPrivacyMode(challenge.privacy_mode, challenge.visibility, challenge.challenge_lane);
   return {
     currency: challenge.currency === 'bucks' ? 'bucks' : 'coins',
-    buy_in: Math.max(Number(challenge.buy_in_amount) || 0, 0),
+    buy_in:
+      challenge.currency === 'bucks' ? 0 : Math.max(Number(challenge.buy_in_amount) || 0, 0),
     host_budget: Math.max(Number(challenge.creator_contribution) || 0, 0),
     guarantee_enabled: Math.max(Number(challenge.host_budget) || 0, 0) > 0,
     type: type.value,
@@ -530,6 +531,9 @@ export function validateSimpleDraft(
   }
   if (draft.frequency === 'custom' && requiredCheckinsOf(draft) < 1) {
     return copy('create.needCheckins');
+  }
+  if (draft.currency === 'bucks' && Math.max(Number(draft.buy_in) || 0, 0) > 0) {
+    return 'The host funds the prize. Participants do not pay an entry.';
   }
   return null;
 }

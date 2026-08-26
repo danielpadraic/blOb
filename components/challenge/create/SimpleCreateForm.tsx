@@ -140,6 +140,7 @@ export function SimpleCreateForm() {
   const sectionRefs = useRef<Record<string, View | null>>({});
   const contentRef = useRef<View>(null);
   const hydratedEdit = useRef(false);
+  const coinBuyInRef = useRef(0);
   useDismissTo(returnTo === 'feed' ? TABS_HREF : LOBBY_HREF);
   useCreateChallengeTour('simple');
   const tour = useTourOptional();
@@ -194,7 +195,9 @@ export function SimpleCreateForm() {
   const endLine = formatChallengeEndLine(endsAtOf(draft));
   const wallet = walletBalance(profile, draft.currency);
   const hostCost = Math.max(draft.host_budget, 0);
-  const creatorBuyIn = draft.privacy_mode === 'private_corporate' ? 0 : Math.max(draft.buy_in, 0);
+  const cash = draft.currency === 'bucks';
+  const corporate = draft.privacy_mode === 'private_corporate';
+  const creatorBuyIn = cash || corporate ? 0 : Math.max(draft.buy_in, 0);
   const needed = hostCost + creatorBuyIn;
   const poolShortfall =
     isFetched && draft.currency === 'bucks' && needed > 0 ? Math.max(needed - wallet, 0) : 0;
@@ -338,12 +341,19 @@ export function SimpleCreateForm() {
             {error ? <AppText className="text-sm text-coral-dark">{error}</AppText> : null}
             {!editId && needed > 0 ? (
               <View className="gap-1">
-                {draft.currency === 'bucks' ? (
+                {cash ? (
                   <AppText className="text-[13px] text-muted">{copy('money.realUsd')}</AppText>
                 ) : null}
-                <AppText className="text-[13px] text-muted">{copy('create.realMoneyFund')}</AppText>
-                {creatorBuyIn > 0 ? (
+                {cash ? (
+                  <AppText className="text-[13px] text-muted">{copy('create.youFundPrize')}</AppText>
+                ) : (
+                  <AppText className="text-[13px] text-muted">{copy('create.realMoneyFund')}</AppText>
+                )}
+                {!cash && creatorBuyIn > 0 ? (
                   <AppText className="text-[13px] text-muted">{copy('note.buyIn')}</AppText>
+                ) : null}
+                {cash ? (
+                  <AppText className="text-[13px] text-muted">{copy('money.leavesNow')}</AppText>
                 ) : null}
               </View>
             ) : null}
@@ -370,15 +380,30 @@ export function SimpleCreateForm() {
               { value: 'coins' as SimpleCurrency, label: copy('create.coins') },
               { value: 'bucks' as SimpleCurrency, label: '$' },
             ]}
-            onChange={(value) =>
+            onChange={(value) => {
+              if (value === 'bucks') {
+                if (draft.currency === 'coins') {
+                  coinBuyInRef.current = draft.buy_in;
+                }
+                patch({
+                  currency: value,
+                  buy_in: 0,
+                  friends_of_friends:
+                    draft.privacy_mode === 'private_corporate'
+                      ? false
+                      : draft.visibility === 'invite' && value === 'coins',
+                });
+                return;
+              }
               patch({
                 currency: value,
+                buy_in: draft.currency === 'bucks' ? coinBuyInRef.current : draft.buy_in,
                 friends_of_friends:
                   draft.privacy_mode === 'private_corporate'
                     ? false
                     : draft.visibility === 'invite' && value === 'coins',
-              })
-            }
+              });
+            }}
           />
           <TourAnchor id="create-simple-buyin">
           <View
@@ -388,17 +413,16 @@ export function SimpleCreateForm() {
             ref={(node) => {
               sectionRefs.current['create-simple-buyin'] = node;
             }}>
-            {draft.privacy_mode === 'private_corporate' ? (
+            {corporate ? (
               <AppText className="text-[13px] leading-5 text-muted">
                 Private / Corporate Skill Tournaments do not charge an entry fee. The host funds the prize.
               </AppText>
-            ) : (
+            ) : cash ? null : (
               <StepperField
                 label={copy('create.buyIn')}
                 value={draft.buy_in}
                 min={0}
                 max={10_000}
-                formatValue={draft.currency === 'bucks' ? formatCash : undefined}
                 onChange={(buy_in) => patch({ buy_in })}
               />
             )}
@@ -410,7 +434,9 @@ export function SimpleCreateForm() {
               formatValue={draft.currency === 'bucks' ? formatCash : undefined}
               onChange={(host_budget) => patch({ host_budget })}
             />
-            <AppText className="text-[13px] leading-5 text-muted">{copy('create.realMoneyFund')}</AppText>
+            <AppText className="text-[13px] leading-5 text-muted">
+              {cash ? copy('create.youFundPrize') : copy('create.realMoneyFund')}
+            </AppText>
             <AppText className="text-[13px] leading-5 text-muted">{copy('create.hostContributionHelp')}</AppText>
             {draft.currency === 'bucks' ? (
               <Pressable

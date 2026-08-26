@@ -10,7 +10,7 @@ import { AppText } from '@/components/ui/AppText';
 import { signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
-import { userStartNeededLabel } from '@/lib/challengeFieldNotes';
+import { entryFieldNote, prizeFieldNote, userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { isPointsChallenge } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { previewFromValues } from '@/lib/challengeTemplates';
@@ -55,7 +55,14 @@ export function CreateReviewPreview({
   values: CreateChallengeValues;
   onEdit: (key: CreateReviewEditKey) => void;
 }) {
-  const challenge = previewFromValues(values);
+  const preview = previewFromValues(values);
+  const challenge = {
+    ...preview,
+    currency: values.currency === 'bucks' ? 'bucks' : preview.currency,
+    host_funded:
+      Boolean(values.host_funded) || Math.max(Number(values.creator_contribution) || 0, 0) > 0,
+    buy_in_amount: Math.max(Number(values.buy_in) || 0, 0),
+  };
   const ruleCopy = challengeRuleCopy(challenge);
   const signupLines = signupProofLines(challenge);
   const isPoints = isPointsChallenge(challenge);
@@ -198,7 +205,7 @@ export function CreateReviewPreview({
       <Card>
         <View className="flex-row items-start justify-between gap-3">
           <FieldNoteLabel
-            note="pot"
+            note={prizeFieldNote(challenge)}
             textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Prize
           </FieldNoteLabel>
@@ -211,9 +218,9 @@ export function CreateReviewPreview({
 
       <Card>
         <FieldNoteLabel
-          note="buyIn"
+          note={entryFieldNote(challenge)}
           textClassName="text-[11px] font-semibold uppercase tracking-widest text-muted">
-          Entry fee
+          {challenge.buy_in_amount > 0 ? 'Entry fee' : 'Entry'}
         </FieldNoteLabel>
         <View className="mt-2">
           <StakeAmount
