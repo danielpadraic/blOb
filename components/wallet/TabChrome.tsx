@@ -130,7 +130,7 @@ export function TabChromeHeader({
       <View
         pointerEvents={tourLocked ? 'none' : 'auto'}
         className="flex-row items-center px-4 pb-2.5 pt-2"
-        style={{ zIndex: 2 }}>
+        style={{ zIndex: 2, overflow: 'visible' }}>
           <View>
             <Pressable
               accessibilityRole="button"
@@ -174,7 +174,7 @@ export function TabChromeHeader({
               </View>
             ) : null}
           </View>
-          <TourAnchor id="tour-search">
+          <TourAnchor id="tour-search" style={{ overflow: 'visible' }}>
             <HeaderIcon
               label={searchOpen ? 'Close search' : 'Search'}
               active={searchOpen}
@@ -183,33 +183,41 @@ export function TabChromeHeader({
             </HeaderIcon>
           </TourAnchor>
           <View className="flex-1" />
-          <WalletBar />
-          <TourAnchor id="tour-dm">
-            <HeaderIcon
-              label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
-              onPress={() => {
-                wallet?.closeAll();
-                router.push(MESSAGES_HREF);
-              }}>
-              <Glyph name={GLYPH.reply} color={THEME.textPrimary} size={20} />
-              {unreadMessages > 0 ? <UnreadDot count={unreadMessages} /> : null}
-            </HeaderIcon>
-          </TourAnchor>
-          <TourAnchor id="tour-bell">
-            <HeaderIcon
-              label={
-                alertsOpen
-                  ? 'Close alerts'
-                  : unreadCount > 0
-                    ? `Alerts, ${unreadCount} unread`
-                    : 'Alerts'
-              }
-              active={alertsOpen}
-              onPress={onToggleAlerts}>
-              <Glyph name={GLYPH.bell} color={alertsOpen ? THEME.accent : THEME.textPrimary} size={20} />
-              {unreadCount > 0 ? <UnreadDot count={unreadCount} /> : null}
-            </HeaderIcon>
-          </TourAnchor>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              overflow: 'visible',
+              paddingTop: 6,
+            }}>
+            <WalletBar />
+            <TourAnchor id="tour-dm" style={{ overflow: 'visible' }}>
+              <HeaderIcon
+                label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
+                badge={unreadMessages > 0 ? <UnreadDot count={unreadMessages} /> : null}
+                onPress={() => {
+                  wallet?.closeAll();
+                  router.push(MESSAGES_HREF);
+                }}>
+                <Glyph name={GLYPH.reply} color={THEME.textPrimary} size={20} />
+              </HeaderIcon>
+            </TourAnchor>
+            <TourAnchor id="tour-bell" style={{ overflow: 'visible' }}>
+              <HeaderIcon
+                label={
+                  alertsOpen
+                    ? 'Close alerts'
+                    : unreadCount > 0
+                      ? `Alerts, ${unreadCount} unread`
+                      : 'Alerts'
+                }
+                active={alertsOpen}
+                badge={unreadCount > 0 ? <UnreadDot count={unreadCount} /> : null}
+                onPress={onToggleAlerts}>
+                <Glyph name={GLYPH.bell} color={alertsOpen ? THEME.accent : THEME.textPrimary} size={20} />
+              </HeaderIcon>
+            </TourAnchor>
+          </View>
         </View>
     </View>
   );
@@ -219,49 +227,78 @@ function HeaderIcon({
   label,
   active,
   onPress,
+  badge,
   children,
 }: {
   label: string;
   active?: boolean;
   onPress?: () => void;
+  badge?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ expanded: Boolean(active) }}
-      onPress={onPress}
-      hitSlop={8}
-      className="ml-2 h-9 w-9 items-center justify-center"
+    <View
       style={{
-        borderRadius: 12,
-        backgroundColor: THEME.surface,
-        borderWidth: 1,
-        borderColor: active ? THEME.accent : THEME.border,
+        overflow: 'visible',
+        paddingTop: 6,
+        paddingRight: 6,
+        marginLeft: 8,
       }}>
-      {children}
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ expanded: Boolean(active) }}
+        onPress={onPress}
+        style={{
+          width: 44,
+          height: 44,
+          minWidth: 44,
+          minHeight: 44,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 12,
+          backgroundColor: THEME.surface,
+          borderWidth: 1,
+          borderColor: active ? THEME.accent : THEME.border,
+        }}>
+        {children}
+      </Pressable>
+      {badge}
+    </View>
   );
 }
 
 function UnreadDot({ count }: { count: number }) {
+  const label = count > 9 ? '9+' : String(count);
   return (
     <View
-      className="absolute items-center justify-center"
+      pointerEvents="none"
       style={{
-        top: -2,
-        right: -2,
-        minWidth: 16,
-        height: 16,
-        paddingHorizontal: 3,
+        position: 'absolute',
+        top: 2,
+        right: 2,
+        minWidth: 18,
+        height: 18,
+        paddingHorizontal: 4,
         borderRadius: 999,
         backgroundColor: THEME.accent,
         borderWidth: 2,
-        borderColor: THEME.background,
+        borderColor: THEME.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2,
+        elevation: 2,
       }}>
-      <AppText className="text-[8px] font-extrabold" style={{ color: '#fff' }}>
-        {count > 99 ? '99+' : count}
+      <AppText
+        style={{
+          fontSize: 11,
+          fontWeight: '700',
+          lineHeight: 13,
+          color: '#fff',
+          textAlign: 'center',
+          fontVariant: ['tabular-nums'],
+        }}>
+        {label}
       </AppText>
     </View>
   );
