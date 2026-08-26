@@ -38,6 +38,14 @@
           }
         },
         {
+          "client_id": "49251028054-qrofvrk2kss28h6o24lkeav9sho06fk3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.blob.mobile",
+            "certificate_hash": "207721a5aeb0373080ed847da4776cce2c92867f"
+          }
+        },
+        {
           "client_id": "49251028054-d21t852ji7nh32m3dhghafk533tpsp3e.apps.googleusercontent.com",
           "client_type": 3
         }

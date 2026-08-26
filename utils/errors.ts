@@ -442,6 +442,9 @@ export function getAuthFormMessage(error: unknown): string {
   if (blob.includes('play services')) {
     return GOOGLE_NOT_CONFIGURED;
   }
+  if (code === '10' || code === 'developer_error' || blob.includes('developer_error')) {
+    return GOOGLE_NOT_CONFIGURED;
+  }
   if (blob.includes('did not return a sign-in token') || blob.includes('no idtoken')) {
     return 'Google did not return a sign-in token. Try again.';
   }

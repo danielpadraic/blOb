@@ -14,6 +14,12 @@ export function googleWebClientId(): string {
   return (process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '').trim();
 }
 
+/** First 20 characters only — enough to confirm which Web client was inlined. Never log the full ID. */
+export function googleWebClientIdPrefix(): string | null {
+  const id = googleWebClientId();
+  return id ? id.slice(0, 20) : null;
+}
+
 export function googleIosClientId(): string {
   return (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '').trim();
 }
@@ -39,6 +45,8 @@ export function webClientIdIsNativeClient(webClientId: string): boolean {
  * Native GoogleSignin.configure() input.
  * `webClientId` is the Web application client ONLY (ID token `aud` / Supabase secret).
  * Never the iOS or Android client. `iosClientId` is iOS-only.
+ * Android error 10 (DEVELOPER_ERROR) = package + SHA-1 of THIS apk must match an
+ * Android OAuth client in GCP project 49251028054.
  */
 export function googleNativeSignInConfig(): { webClientId: string; iosClientId?: string } | null {
   const webClientId = googleWebClientId();
@@ -97,8 +105,24 @@ export function isGoogleClientConfigError(message: string): boolean {
     blob.includes("isn't configured in this build") ||
     blob.includes('isn’t set up for this app build') ||
     blob.includes("isn't set up for this app build") ||
-    blob.includes('google sign-in is not configured')
+    blob.includes('google sign-in is not configured') ||
+    blob.includes('developer_error')
   );
+}
+
+/** Play Services status 10 / DEVELOPER_ERROR — do not show the raw "10 10 DEVELOPER_ERROR" text. */
+export function isGoogleDeveloperError(error: unknown): boolean {
+  if (typeof error === 'object' && error) {
+    const code = 'code' in error ? String((error as { code: unknown }).code) : '';
+    if (code === '10' || code.toUpperCase() === 'DEVELOPER_ERROR') {
+      return true;
+    }
+  }
+  const text =
+    error instanceof Error
+      ? `${'code' in error ? String((error as { code?: unknown }).code ?? '') : ''} ${error.message}`
+      : String(error ?? '');
+  return /developer_error/i.test(text);
 }
 
 function claimString(value: unknown): string | null {

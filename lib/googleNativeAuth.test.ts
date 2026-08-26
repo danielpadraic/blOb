@@ -4,7 +4,9 @@ import {
   GOOGLE_NOT_CONFIGURED,
   googleNativeConfigureKeysPresent,
   googleNativeSignInConfig,
+  googleWebClientIdPrefix,
   iosUrlSchemeFromClientId,
+  isGoogleDeveloperError,
   peekGoogleIdTokenClaims,
 } from '@/lib/googleSignInConfig';
 import { getAuthFormMessage } from '@/utils/errors';
@@ -110,5 +112,22 @@ describe('Google client config errors', () => {
       getAuthFormMessage(new Error('Access blocked: The OAuth client was not found. 401 invalid_client')),
     ).toBe(GOOGLE_NOT_CONFIGURED);
     expect(getAuthFormMessage(new Error(GOOGLE_NOT_CONFIGURED))).toBe(GOOGLE_NOT_CONFIGURED);
+  });
+
+  it('maps Android DEVELOPER_ERROR / code 10 to configure copy', () => {
+    const raw = Object.assign(new Error('10: '), { code: '10', message: '10 DEVELOPER_ERROR' });
+    expect(isGoogleDeveloperError(raw)).toBe(true);
+    expect(getAuthFormMessage(raw)).toBe(GOOGLE_NOT_CONFIGURED);
+    expect(getAuthFormMessage(Object.assign(new Error('DEVELOPER_ERROR'), { code: 'DEVELOPER_ERROR' }))).toBe(
+      GOOGLE_NOT_CONFIGURED,
+    );
+    expect(getAuthFormMessage(new Error('10 10 DEVELOPER_ERROR'))).toBe(GOOGLE_NOT_CONFIGURED);
+  });
+
+  it('prefixes the Web client id to 20 characters for diagnostics', () => {
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID =
+      '49251028054-d21t852ji7nh32m3dhghafk533tpsp3e.apps.googleusercontent.com';
+    expect(googleWebClientIdPrefix()).toBe('49251028054-d21t852j');
+    expect(googleWebClientIdPrefix()?.length).toBe(20);
   });
 });

@@ -12,8 +12,10 @@ import {
   GOOGLE_NOT_CONFIGURED,
   googleNativeConfigureKeysPresent,
   googleNativeSignInConfig,
+  googleWebClientIdPrefix,
   iosUrlSchemeFromClientId,
   isGoogleClientConfigError,
+  isGoogleDeveloperError,
   peekGoogleIdTokenClaims,
 } from '@/lib/googleSignInConfig';
 import { reportAppError } from '@/lib/appErrors';
@@ -74,6 +76,8 @@ export function googleAuthLogFields(detail: {
     platform: Platform.OS,
     hasWebClientId: keys.webClientId,
     hasIosClientId: keys.iosClientId,
+    webClientIdPrefix: googleWebClientIdPrefix(),
+    ...(Platform.OS === 'android' ? { package: 'app.blob.mobile' } : {}),
     resultType: detail.resultType,
     hasIdToken: detail.hasIdToken,
     tokenAud: detail.tokenAud ?? null,
@@ -95,6 +99,21 @@ export function googleAuthErrorPayload(error: unknown): Record<string, unknown> 
     tokenAud: detail.idTokenAud ?? null,
     supabaseMessage:
       typeof detail.exchangeMessage === 'string' ? detail.exchangeMessage : error.message,
+  });
+}
+
+function reportAndroidGoogleFailure(resultType: string, error: unknown) {
+  if (Platform.OS !== 'android') {
+    return;
+  }
+  reportAppError({
+    route: 'auth/login-google',
+    error,
+    payload: googleAuthLogFields({
+      resultType,
+      hasIdToken: false,
+      supabaseMessage: getErrorMessage(error),
+    }),
   });
 }
 
@@ -166,6 +185,7 @@ export async function signInWithNativeGoogle(): Promise<void> {
         exchangeMessage: getErrorMessage(error),
       };
       logNativeGoogle(detail);
+      reportAndroidGoogleFailure('play-services', error);
       throw new GoogleNativeAuthError(GOOGLE_NOT_CONFIGURED, {
         ...detail,
         code: isErrorWithCode(error) ? error.code : statusCodes.PLAY_SERVICES_NOT_AVAILABLE,
@@ -189,6 +209,7 @@ export async function signInWithNativeGoogle(): Promise<void> {
       });
     }
     if (isErrorWithCode(error) && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      reportAndroidGoogleFailure('play-services', error);
       throw new GoogleNativeAuthError(GOOGLE_NOT_CONFIGURED, {
         resultType: 'play-services',
         hasIdToken: false,
@@ -197,16 +218,23 @@ export async function signInWithNativeGoogle(): Promise<void> {
       });
     }
     const message = getErrorMessage(error);
-    throw new GoogleNativeAuthError(
-      isGoogleClientConfigError(message) ? GOOGLE_NOT_CONFIGURED : message || GOOGLE_NOT_CONFIGURED,
-      {
-        resultType: 'sign-in',
-        hasIdToken: false,
-        hasCode: false,
-        exchangeMessage: message,
-        code: isErrorWithCode(error) ? error.code : undefined,
-      },
-    );
+    const developerError =
+      isGoogleDeveloperError(error) ||
+      (isErrorWithCode(error) &&
+        (error.code === '10' || String(error.code).toUpperCase() === 'DEVELOPER_ERROR')) ||
+      /developer_error/i.test(message);
+    const userMessage =
+      developerError || isGoogleClientConfigError(message)
+        ? GOOGLE_NOT_CONFIGURED
+        : message || GOOGLE_NOT_CONFIGURED;
+    reportAndroidGoogleFailure('sign-in', error);
+    throw new GoogleNativeAuthError(userMessage, {
+      resultType: 'sign-in',
+      hasIdToken: false,
+      hasCode: false,
+      exchangeMessage: message,
+      code: isErrorWithCode(error) ? error.code : undefined,
+    });
   }
 
   if (isCancelledResponse(response)) {
