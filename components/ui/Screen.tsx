@@ -27,6 +27,8 @@ type ScreenProps = ViewProps & {
   scrollRef?: Ref<ScrollView>;
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   contentPaddingBottom?: number;
+  /** When false, skip the Screen KeyboardAvoidingView (embedded wizards handle the keyboard themselves). */
+  keyboardAvoiding?: boolean;
 };
 
 export function Screen({
@@ -38,6 +40,7 @@ export function Screen({
   scrollRef,
   onScroll,
   contentPaddingBottom,
+  keyboardAvoiding = true,
   style,
   ...props
 }: ScreenProps) {
@@ -62,7 +65,8 @@ export function Screen({
       <KeyboardAvoidingView
         className="flex-1"
         style={{ minHeight: 0 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        enabled={keyboardAvoiding}
+        behavior={keyboardAvoiding && Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (
           <ScrollView
             ref={scrollRef}
@@ -72,6 +76,7 @@ export function Screen({
             contentContainerStyle={{
               paddingBottom: contentPaddingBottom ?? (insideChrome ? 24 + TAB_BAR_PEEK : 24),
             }}
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
             keyboardShouldPersistTaps="handled"
             onScroll={onScroll}
             scrollEventThrottle={onScroll ? 16 : undefined}

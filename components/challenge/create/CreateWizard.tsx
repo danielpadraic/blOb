@@ -2,7 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
-import { AppState, BackHandler, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { AppState, BackHandler, Dimensions, Keyboard, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
@@ -13,6 +14,7 @@ import {
   ContinueDraftCard,
   FieldAnchor,
   FieldLabel,
+  useWizardFieldFocus,
   WizardFocusContext,
   WizardModalShell,
   WizardProgress,
@@ -98,7 +100,7 @@ import {
   parseComparablePointsConfig,
 } from '@/lib/comparablePoints';
 import { useComparablePointsForm } from '@/hooks/useComparablePointsForm';
-import { THEME } from '@/lib/theme';
+import { tabBarLift, THEME } from '@/lib/theme';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { copy } from '@/lib/copy';
 import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from '@/lib/types';
@@ -133,6 +135,7 @@ type BobIssue = { field: string; step: number };
 const FOCUSABLE_FIELDS = new Set([
   'title',
   'description',
+  'task',
   'duration_days',
   'duration_value',
   'target_count',
@@ -264,6 +267,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     });
   }, [editId, editing.data, reset]);
   const lastStep = step === CREATE_WIZARD_STEPS.length - 1;
+  const insets = useSafeAreaInsets();
   const skipSaveRef = useRef(false);
   const didResumeRef = useRef(false);
   const discardedRef = useRef(false);
@@ -274,6 +278,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const anchorRefs = useRef<Record<string, View | null>>({});
   const pendingAnchor = useRef<string | null>(null);
   const scrollToAnchorRef = useRef<(name: string) => void>(() => {});
+  const scrollY = useRef(0);
+  const footerDockHeight = useRef(72);
+  const keyboardHeightRef = useRef(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [footerH, setFooterH] = useState(72);
   const oopsRotateRef = useRef(0);
   const errorSnapshotRef = useRef<unknown>(undefined);
   const baselineRef = useRef(cloneTemplateValues(DEFAULT_CREATE_VALUES));
@@ -300,6 +309,52 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   });
   snapshotRef.current = { step, startPath, templateId, sourceChallengeId, values, id: draftId };
   draftIdRef.current = draftId;
+  footerDockHeight.current = footerH;
+  keyboardHeightRef.current = keyboardHeight;
+
+  useEffect(() => {
+    function apply(height: number) {
+      setKeyboardHeight(Math.max(0, height));
+    }
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (event) => apply(event.endCoordinates.height),
+    );
+    const change = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidChangeFrame',
+      (event) => apply(event.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => apply(0),
+    );
+    const webView = Platform.OS === 'web' && typeof window !== 'undefined' ? window.visualViewport : null;
+    function onViewport() {
+      if (!webView) {
+        return;
+      }
+      apply(Math.max(0, window.innerHeight - webView.height - webView.offsetTop));
+    }
+    webView?.addEventListener('resize', onViewport);
+    webView?.addEventListener('scroll', onViewport);
+    return () => {
+      show.remove();
+      change.remove();
+      hide.remove();
+      webView?.removeEventListener('resize', onViewport);
+      webView?.removeEventListener('scroll', onViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (keyboardHeight <= 0 || !pendingAnchor.current) {
+      return;
+    }
+    const name = pendingAnchor.current;
+    requestAnimationFrame(() => {
+      setTimeout(() => scrollToAnchorRef.current(name), Platform.OS === 'android' ? 80 : 40);
+    });
+  }, [keyboardHeight]);
 
   function captureBaseline(nextValues: CreateChallengeValues, nextStep: number) {
     baselineRef.current = cloneTemplateValues(nextValues);
@@ -1116,17 +1171,33 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (!node || !scroll) {
       return;
     }
-    const run = (y: number) => {
-      scroll.scrollTo({ y: Math.max(y - 16, 0), animated: true });
+    const run = () => {
+      node.measureInWindow((_x, y, _w, h) => {
+        const windowH = Dimensions.get('window').height;
+        const reserved = footerDockHeight.current + keyboardHeightRef.current + 16;
+        const visibleBottom = windowH - reserved;
+        const fieldBottom = y + h;
+        const topGuard = 24;
+        let delta = 0;
+        if (fieldBottom > visibleBottom) {
+          delta = fieldBottom - visibleBottom;
+        } else if (y < topGuard) {
+          delta = y - topGuard;
+        }
+        if (delta !== 0) {
+          scroll.scrollTo({
+            y: Math.max(0, scrollY.current + delta),
+            animated: true,
+          });
+        }
+      });
     };
     if (content && typeof node.measureLayout === 'function') {
-      node.measureLayout(
-        content as never,
-        (_x, y) => run(y),
-        () => run(0),
-      );
+      requestAnimationFrame(() => {
+        setTimeout(run, Platform.OS === 'android' ? 80 : 40);
+      });
     } else {
-      run(0);
+      run();
     }
     const focusName = name.split('.')[0];
     if (FOCUSABLE_FIELDS.has(focusName) || focusName === 'tasks') {
@@ -1391,6 +1462,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           scrollToAnchorRef.current(name);
         }
       },
+      onFieldFocus: (name) => {
+        pendingAnchor.current = name;
+        requestAnimationFrame(() => {
+          setTimeout(
+            () => scrollToAnchorRef.current(name),
+            keyboardHeightRef.current > 0 ? 40 : 280,
+          );
+        });
+      },
     }),
     [],
   );
@@ -1501,10 +1581,21 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           }}
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
-          contentContainerStyle={{ paddingBottom: tour?.createActive ? 220 : 24 }}
+          contentContainerStyle={{
+            paddingBottom: tour?.createActive
+              ? 220
+              : 24 +
+                (keyboardHeight > 0
+                  ? footerH + keyboardHeight + tabBarLift(insets.bottom, 'sticky')
+                  : 0),
+          }}
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           keyboardShouldPersistTaps="always"
           nestedScrollEnabled
-          onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
+          onScroll={(event) => {
+            scrollY.current = event.nativeEvent.contentOffset.y;
+            tour?.setCreateScrollY(event.nativeEvent.contentOffset.y);
+          }}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}>
           <View
@@ -1675,7 +1766,20 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           </View>
         </ScrollView>
 
-        <View className="gap-2 px-4 pb-4 pt-2" style={{ borderTopWidth: 1, borderTopColor: THEME.border }}>
+        <View
+          onLayout={(event) => {
+            const height = event.nativeEvent.layout.height;
+            const chrome = Math.max(72, height - (keyboardHeightRef.current > 0 ? keyboardHeightRef.current : 0));
+            setFooterH(chrome);
+            footerDockHeight.current = chrome;
+          }}
+          className="gap-2 px-4 pt-2"
+          style={{
+            backgroundColor: THEME.surface,
+            borderTopWidth: 1,
+            borderTopColor: THEME.border,
+            paddingBottom: keyboardHeight > 0 ? Math.max(keyboardHeight, 8) : tabBarLift(insets.bottom, 'sticky') + 8,
+          }}>
           {scoringToast ? (
             <View className="items-center">
               <View
@@ -1919,6 +2023,9 @@ function GoalSlide({
   onCoverClear: () => void;
 }) {
   const [privacyLockMessage, setPrivacyLockMessage] = useState<string | null>(null);
+  const onTitleFocus = useWizardFieldFocus('title');
+  const onDescriptionFocus = useWizardFieldFocus('description');
+  const onTaskFocus = useWizardFieldFocus('task');
   return (
     <View className="gap-4">
       <FieldAnchor name="category">
@@ -1950,6 +2057,7 @@ function GoalSlide({
             value={value}
             onChangeText={onChange}
             onBlur={onBlur}
+            onFocus={onTitleFocus}
             error={errors.title?.message}
             maxLength={80}
           />
@@ -1968,6 +2076,7 @@ function GoalSlide({
             value={value ?? ''}
             onChangeText={onChange}
             onBlur={onBlur}
+            onFocus={onDescriptionFocus}
             error={errors.description?.message}
             multiline
             textAlignVertical="top"
@@ -1996,13 +2105,18 @@ function GoalSlide({
               value={value ?? ''}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={onTaskFocus}
               error={errors.task?.message}
             />
           )}
         />
         {isPoints ? null : (
           <View className="mt-3">
-            <ExtraTasksEditor tasks={extraTasks ?? []} onChange={onExtraTasksChange} />
+            <ExtraTasksEditor
+              tasks={extraTasks ?? []}
+              onChange={onExtraTasksChange}
+              onTitleFocus={onTaskFocus}
+            />
           </View>
         )}
       </FieldAnchor>
@@ -2135,6 +2249,7 @@ function DurationSlide({
   onFrequencyChange: (next: ChallengeFrequency) => void;
   onScheduleChange: (patch: Partial<CreateChallengeValues>) => void;
 }) {
+  const onDurationFocus = useWizardFieldFocus('duration_value');
   const startPreset = startPresetFor(startsAt);
   const endLine = formatChallengeEndLine(
     endsAtFromStartAndDays(startsAt, Number(durationDays) || 7),
@@ -2255,6 +2370,7 @@ function DurationSlide({
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
+                onFocus={onDurationFocus}
                 error={errors.target_count?.message}
                 hint={
                   frequency === 'weekly'
@@ -2444,6 +2560,7 @@ function FundingSlide({
   onGuaranteeChange: (next: boolean) => void;
   onCurrencyChange: (next: CreateChallengeValues['currency']) => void;
 }) {
+  const onContributionFocus = useWizardFieldFocus('creator_contribution');
   const isPrivateLane = normalizeUserChallengeLane(challengeLane) === 'private';
   const noun = currency === 'bucks' ? '$' : 'Coins';
   const models = isPrivateLane
@@ -2517,6 +2634,7 @@ function FundingSlide({
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={onContributionFocus}
               error={errors.creator_contribution?.message ?? contributionShort ?? undefined}
               hint={`Taken from your wallet when you publish. You have ${formatWallet(walletCredits, currency)}.`}
             />
@@ -2585,6 +2703,10 @@ function EntrySlide({
   onCapChange: (value: CreateChallengeValues['participant_cap']) => void;
   onCreatorParticipatingChange: (value: boolean) => void;
 }) {
+  const onBuyInFocus = useWizardFieldFocus('buy_in');
+  const onMaxFocus = useWizardFieldFocus('max_participants');
+  const onMinFocus = useWizardFieldFocus('min_participants');
+  const onMissesFocus = useWizardFieldFocus('misses_allowed');
   const lane = normalizeUserChallengeLane(challengeLane);
   const isPrivateLane = lane === 'private';
   const isFree = isPrivateLane || entryTab === 'free';
@@ -2633,6 +2755,7 @@ function EntrySlide({
             value={value}
             onChangeText={onChange}
             onBlur={onBlur}
+            onFocus={onBuyInFocus}
             error={errors.buy_in?.message}
             hint="Each person pays this to participate. It goes into the prize. Leave before live and it comes back in full."
           />
@@ -2670,6 +2793,7 @@ function EntrySlide({
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={onMaxFocus}
               error={errors.max_participants?.message}
             />
           )}
@@ -2693,6 +2817,7 @@ function EntrySlide({
               value={value ?? '2'}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={onMinFocus}
               error={errors.min_participants?.message}
               hint="If fewer people have joined at start, it waits and the start moves to the next day."
             />
@@ -2712,6 +2837,7 @@ function EntrySlide({
               value={value ?? '0'}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={onMissesFocus}
               error={errors.misses_allowed?.message}
             />
           )}

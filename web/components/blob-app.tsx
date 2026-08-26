@@ -338,6 +338,7 @@ function CreateScreen({ userId }: { userId: string }) {
   const [hostAdd, setHostAdd] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const footerPad = useViewportBottomPad(20);
 
   async function publish() {
     setBusy(true);
@@ -398,34 +399,38 @@ function CreateScreen({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
-      <div className="mb-4 flex items-center justify-between">
-        <button type="button" className="min-h-11 text-sm font-bold text-teal" onClick={() => go('/')}>
-          Back
-        </button>
-        <p className="text-[13px] font-bold text-ink">{FUNDING_COPY.createTitle}</p>
-        <span className="min-w-11" />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 overflow-y-auto px-5 pb-28 pt-6">
+        <div className="mb-4 flex items-center justify-between">
+          <button type="button" className="min-h-11 text-sm font-bold text-teal" onClick={() => go('/')}>
+            Back
+          </button>
+          <p className="text-[13px] font-bold text-ink">{FUNDING_COPY.createTitle}</p>
+          <span className="min-w-11" />
+        </div>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted">{FUNDING_COPY.entryHelp}</p>
+          <p className="text-sm text-muted">{FUNDING_COPY.prizeHelp}</p>
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
+          <label className="text-sm font-bold text-ink">{FUNDING_COPY.entryFee} $</label>
+          <Input
+            type="number"
+            min={0}
+            value={entryFee}
+            onChange={(event) => setEntryFee(Math.max(Number(event.target.value) || 0, 0))}
+          />
+          <label className="text-sm font-bold text-ink">{FUNDING_COPY.hostContribution} $</label>
+          <Input
+            type="number"
+            min={0}
+            value={hostAdd}
+            onChange={(event) => setHostAdd(Math.max(Number(event.target.value) || 0, 0))}
+          />
+          <p className="text-sm text-muted">{FUNDING_COPY.hostHelp}</p>
+          {error ? <p className="text-sm text-[#9A3B3B]">{error}</p> : null}
+        </div>
       </div>
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted">{FUNDING_COPY.entryHelp}</p>
-        <p className="text-sm text-muted">{FUNDING_COPY.prizeHelp}</p>
-        <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
-        <label className="text-sm font-bold text-ink">{FUNDING_COPY.entryFee} $</label>
-        <Input
-          type="number"
-          min={0}
-          value={entryFee}
-          onChange={(event) => setEntryFee(Math.max(Number(event.target.value) || 0, 0))}
-        />
-        <label className="text-sm font-bold text-ink">{FUNDING_COPY.hostContribution} $</label>
-        <Input
-          type="number"
-          min={0}
-          value={hostAdd}
-          onChange={(event) => setHostAdd(Math.max(Number(event.target.value) || 0, 0))}
-        />
-        <p className="text-sm text-muted">{FUNDING_COPY.hostHelp}</p>
-        {error ? <p className="text-sm text-[#9A3B3B]">{error}</p> : null}
+      <div className="absolute inset-x-0 bottom-0 bg-bg px-5 pt-2" style={{ paddingBottom: footerPad }}>
         <Button type="button" disabled={busy} onClick={() => void publish()}>
           Publish
         </Button>

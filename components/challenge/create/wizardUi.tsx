@@ -8,6 +8,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
@@ -65,9 +66,15 @@ export type BobGuideState = {
 export type WizardFocusApi = {
   registerAnchor: (name: string, node: View | null) => void;
   onAnchorLayout: (name: string) => void;
+  onFieldFocus: (name: string) => void;
 };
 
 export const WizardFocusContext = createContext<WizardFocusApi | null>(null);
+
+export function useWizardFieldFocus(name: string) {
+  const focus = useContext(WizardFocusContext);
+  return () => focus?.onFieldFocus(name);
+}
 
 export function FieldAnchor({ name, children }: { name: string; children: ReactNode }) {
   const focus = useContext(WizardFocusContext);
@@ -92,16 +99,19 @@ export function WizardModalShell({
   onClose: () => void;
   bob?: BobGuideState | null;
 }) {
+  const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const cardWidth = Math.min(width - 24, 560);
   const bobSize = width < 400 ? BOB_SIZE_NARROW : BOB_SIZE;
   const bubbleMaxHeight = Math.min(132, Math.max(72, Math.round(height * 0.22)));
+  const keyboardOffset = insets.top + 8 + (bob ? bobSize + 16 : 0);
 
   return (
     <View className="flex-1" style={{ backgroundColor: 'transparent' }}>
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={keyboardOffset}>
         <View className="flex-1">
           <Pressable
             accessibilityRole="button"

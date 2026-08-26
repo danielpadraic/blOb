@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
@@ -58,7 +61,7 @@ import { SIMPLE_PROOF_CAP, ensureProofSentence, proofNameForMethodChange, type C
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
-import { THEME } from '@/lib/theme';
+import { tabBarLift, THEME } from '@/lib/theme';
 import { getCreateChallengeMessage } from '@/utils/errors';
 
 function IconChip({
@@ -141,6 +144,8 @@ export function SimpleCreateForm() {
   useCreateChallengeTour('simple');
   const tour = useTourOptional();
   const scrollRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
+  const keyboardOverlap = useKeyboardOverlap();
 
   useEffect(() => {
     tour?.setCreateCurrency(draft.currency);
@@ -316,7 +321,9 @@ export function SimpleCreateForm() {
         tour?.setCreateScroll(node);
       }}
       onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
-      contentPaddingBottom={tour?.createActive ? 220 : undefined}>
+      contentPaddingBottom={
+        (tour?.createActive ? 220 : 24) + keyboardOverlap + tabBarLift(insets.bottom, 'sticky')
+      }>
       <View ref={contentRef} className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'} collapsable={false}>
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
           <StackBackButton fallback={returnTo === 'feed' ? TABS_HREF : LOBBY_HREF} />

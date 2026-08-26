@@ -33,9 +33,11 @@ export function HeartRateMinutesRow({
 export function ExtraTasksEditor({
   tasks,
   onChange,
+  onTitleFocus,
 }: {
   tasks: ExtraCreateTask[];
   onChange: (next: ExtraCreateTask[]) => void;
+  onTitleFocus?: () => void;
 }) {
   function patch(index: number, partial: Partial<ExtraCreateTask>) {
     onChange(tasks.map((item, itemIndex) => (itemIndex === index ? { ...item, ...partial } : item)));
@@ -60,6 +62,7 @@ export function ExtraTasksEditor({
                 placeholder={index === 0 ? 'Workout B' : copy('create.extraTaskPlaceholder')}
                 value={task.title}
                 onChangeText={(title) => patch(index, { title })}
+                onFocus={onTitleFocus}
                 maxLength={80}
               />
             </View>
