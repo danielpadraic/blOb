@@ -2,6 +2,10 @@ import { copy } from '@/lib/copy';
 
 const CHECKIN_SUBMIT_FAIL = 'Couldn’t submit this check-in. Try again.';
 
+function isDevBuild(): boolean {
+  return Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
+}
+
 export function getErrorMessage(error: unknown): string {
   const raw = extractRawMessage(error);
   return humanize(raw);
@@ -63,7 +67,7 @@ export function getInviteErrorMessage(error: unknown): string {
       error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
         ? String((error as { code: string }).code)
         : '';
-    if (typeof __DEV__ !== 'undefined' && __DEV__ && (code || raw)) {
+    if (isDevBuild() && (code || raw)) {
       return `Couldn’t send that invite. ${code || raw}`.trim();
     }
     return 'Couldn’t send that invite. The host can invite friends to this challenge — try again.';

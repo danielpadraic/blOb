@@ -73,7 +73,7 @@ Never ship a stub that only works on one platform without a fallback or honest e
 ## Deploy
 
 - Mobile: EAS builds consume the Expo app.
-- Web: prefer Expo web export of the **same** app. Do not ship consumer UX “on Vercel via `web/blob-app` only.”
+- Web: Vercel builds `npx expo export --platform web` to `dist/` (see root `vercel.json`). Do not ship consumer UX “on Vercel via `web/blob-app` only.”
 - User-facing work targets the team’s deploy branch (e.g. `blob-beta-three`) when applicable.
 
 ## When implementing

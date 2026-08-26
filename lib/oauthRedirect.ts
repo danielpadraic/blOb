@@ -206,6 +206,23 @@ export function logOAuthAuthorizeUrl(url: string) {
   });
 }
 
+/** Host/stage only — never log the full authorize URL (tokens, state, client_id). */
+export function logOAuthStage(
+  stage:
+    | 'started fetch'
+    | 'got google host'
+    | 'openAuthSession'
+    | 'fallback supabase authorize'
+    | 'recover callback'
+    | 'error',
+  extra?: { host?: string | null; name?: string },
+) {
+  if (!__DEV__) {
+    return;
+  }
+  console.log('[blob:oauth]', { stage, host: extra?.host ?? null, name: extra?.name ?? null });
+}
+
 /**
  * Standalone iOS/Android must use blob://auth/callback.
  * makeRedirectUri can return exp://, https, triple-slash, or oauthredirect.

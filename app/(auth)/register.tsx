@@ -26,7 +26,7 @@ import { registerSchema, type RegisterValues } from '@/utils/validators';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signUp, signInWithGoogle } = useAuth();
+  const { signUp, signInWithGoogle, oauthLoading } = useAuth();
   const [emailStep, setEmailStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -198,12 +198,16 @@ export default function RegisterScreen() {
                 {formError}
               </AppText>
             ) : null}
-            <AuthEmailButton disabled={isSubmitting} onPress={openEmail} />
-            <AuthGoogleButton disabled={isSubmitting} onPress={() => void runGoogle()} />
+            <AuthEmailButton disabled={isSubmitting || oauthLoading} onPress={openEmail} />
+            <AuthGoogleButton
+              disabled={isSubmitting || oauthLoading}
+              loading={oauthLoading}
+              onPress={() => void runGoogle()}
+            />
             <AuthOrDivider />
             <AuthOutlineButton
               title="Create an Account"
-              disabled={isSubmitting}
+              disabled={isSubmitting || oauthLoading}
               onPress={openEmail}
             />
           </View>

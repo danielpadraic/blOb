@@ -12,7 +12,7 @@ type SocialAuthProps = {
 
 /** Google only. Apple is not offered on unauthenticated entry. */
 export function SocialAuth({ onError, busy }: SocialAuthProps) {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, oauthLoading } = useAuth();
 
   async function run() {
     try {
@@ -35,7 +35,8 @@ export function SocialAuth({ onError, busy }: SocialAuthProps) {
         title="Continue with Google"
         variant="ghost"
         size="lg"
-        disabled={busy}
+        disabled={busy || oauthLoading}
+        loading={oauthLoading}
         onPress={() => void run()}
       />
     </View>

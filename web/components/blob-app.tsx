@@ -1,5 +1,7 @@
 'use client';
 
+/** Not the consumer app. Production Web is the Expo Router export (`app/`). Do not add product UX here. */
+
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 

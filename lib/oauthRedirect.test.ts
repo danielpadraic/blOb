@@ -111,6 +111,16 @@ describe('isNativeOAuthCallbackUrl', () => {
       ]),
     ).toBe('blob://auth/callback?code=abc');
   });
+
+  it('recovers a blob callback with tokens from getInitialURL-style candidates', () => {
+    expect(
+      pickCanonicalAuthCallbackUrl([
+        null,
+        'blob://auth/callback',
+        'blob://auth/callback#access_token=tok&refresh_token=ref',
+      ]),
+    ).toBe('blob://auth/callback#access_token=tok&refresh_token=ref');
+  });
 });
 
 describe('sanitizeOAuthBrowserUrl', () => {

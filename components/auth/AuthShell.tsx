@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -121,15 +121,19 @@ export function AuthEmailButton({
 export function AuthGoogleButton({
   onPress,
   disabled,
+  loading,
 }: {
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
 }) {
+  const isDisabled = Boolean(disabled || loading);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Continue with Google"
-      disabled={disabled}
+      accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}
+      disabled={isDisabled}
       onPress={onPress}
       style={{
         minHeight: 56,
@@ -137,11 +141,15 @@ export function AuthGoogleButton({
         backgroundColor: '#1C1C1E',
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: disabled ? 0.38 : 1,
+        opacity: isDisabled ? 0.38 : 1,
       }}>
-      <AppText className="text-[16px] font-semibold" style={{ color: '#FFFFFF' }}>
-        Continue with Google
-      </AppText>
+      {loading ? (
+        <ActivityIndicator color="#FFFFFF" />
+      ) : (
+        <AppText className="text-[16px] font-semibold" style={{ color: '#FFFFFF' }}>
+          Continue with Google
+        </AppText>
+      )}
     </Pressable>
   );
 }

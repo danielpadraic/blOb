@@ -49,4 +49,37 @@ npx expo start
 ```sh
 npm start
 npm run typecheck
+npm run export:web
 ```
+
+## Web / Vercel
+
+Production Web is the **Expo Router** app (`app/`), not the Next harness in `web/`.
+
+```sh
+npx expo export --platform web
+```
+
+That writes a static bundle to `dist/`. Root `vercel.json` uses that command and `outputDirectory: dist`, with a SPA rewrite so routes like `/auth/callback` serve `index.html`.
+
+### Vercel dashboard (must match the repo)
+
+If Project Settings override `vercel.json`, set:
+
+| Setting | Value |
+|---|---|
+| Root Directory | `.` (repo root — **not** `web`) |
+| Framework Preset | Other |
+| Install Command | `npm install` |
+| Build Command | `npx expo export --platform web` |
+| Output Directory | `dist` |
+| Node.js Version | 20.x |
+
+### Environment variables (plaintext)
+
+Same `EXPO_PUBLIC_*` as EAS, for Production and Preview:
+
+- **Required:** `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- **Optional:** `EXPO_PUBLIC_PAYMENTS_PROVIDER`, `EXPO_PUBLIC_TENOR_KEY`, `EXPO_PUBLIC_GIPHY_KEY`
+
+Web OAuth uses `https://<origin>/auth/callback` (never `blob://`). Add that HTTPS callback in Supabase → Authentication → URL Configuration.

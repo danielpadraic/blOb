@@ -2,7 +2,7 @@
   "expo": {
     "name": "blOb",
     "slug": "blob",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/mascot/app-icon.png",
     "scheme": "blob",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.blob.tournament",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.healthkit": true,
@@ -38,7 +38,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "app.blob.mobile",
-      "versionCode": 6,
+      "versionCode": 7,
       "intentFilters": [
         {
           "action": "VIEW",

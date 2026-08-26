@@ -26,7 +26,7 @@ import { loginSchema, type LoginValues } from '@/utils/validators';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, oauthLoading } = useAuth();
   const { authError } = useLocalSearchParams<{ authError?: string | string[] }>();
   const [emailStep, setEmailStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -148,17 +148,21 @@ export default function LoginScreen() {
               </AppText>
             ) : null}
             <AuthEmailButton
-              disabled={isSubmitting}
+              disabled={isSubmitting || oauthLoading}
               onPress={() => {
                 setFormError(null);
                 setEmailStep(true);
               }}
             />
-            <AuthGoogleButton disabled={isSubmitting} onPress={() => void runGoogle()} />
+            <AuthGoogleButton
+              disabled={isSubmitting || oauthLoading}
+              loading={oauthLoading}
+              onPress={() => void runGoogle()}
+            />
             <AuthOrDivider />
             <AuthOutlineButton
               title="Create an Account"
-              disabled={isSubmitting}
+              disabled={isSubmitting || oauthLoading}
               onPress={() => router.push('/(auth)/register')}
             />
           </View>

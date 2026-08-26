@@ -25,10 +25,13 @@ import {
   NATIVE_OAUTH_PATH,
   NATIVE_OAUTH_SCHEME,
   authorizeUrlHasBlobRedirectUri,
+  authorizeUrlHost,
   isExpectedOAuthStartUrl,
   isNativeOAuthCallbackUrl,
   isProviderAuthorizeUrl,
   logOAuthAuthorizeUrl,
+  logOAuthStage,
+  pickCanonicalAuthCallbackUrl,
   resolveOAuthRedirectUri,
   sanitizeOAuthBrowserUrl,
 } from '@/lib/oauthRedirect';
@@ -52,6 +55,8 @@ try {
 }
 
 const SIGN_IN_UNFINISHED = 'Sign-in didn’t finish. Try again.';
+const SIGN_IN_TIMEOUT = 'Sign-in timed out. Check your connection and try again.';
+const OAUTH_RESOLVE_MS = 15_000;
 const NATIVE_REDIRECT = 'blob://auth/callback';
 
 function oauthRedirectTo(): string {
@@ -121,6 +126,7 @@ type AuthContextValue = {
   isLoading: boolean;
   isConfigured: boolean;
   isPasswordRecovery: boolean;
+  oauthLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (
     email: string,
@@ -155,13 +161,16 @@ function isCapturableAuthUrl(url?: string | null): url is string {
   return isNativeOAuthCallbackUrl(url) && hasAuthCallbackPayload(parseAuthRedirectParams(url));
 }
 
+const AUTH_SHEET_RECOVER_MS = 2_500;
+
 function waitForNativeAuthCallback(ms: number): { promise: Promise<string | null>; cancel: () => void } {
   let settled = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let linking: { remove: () => void } | undefined;
   let appState: { remove: () => void } | undefined;
+  let resolvePromise: (value: string | null) => void = () => undefined;
 
-  const finish = (url: string | null, resolve: (value: string | null) => void) => {
+  const finish = (url: string | null) => {
     if (settled) {
       return;
     }
@@ -171,18 +180,20 @@ function waitForNativeAuthCallback(ms: number): { promise: Promise<string | null
     }
     linking?.remove();
     appState?.remove();
-    resolve(url);
+    resolvePromise(url);
+  };
+
+  const take = (url?: string | null) => {
+    if (!isCapturableAuthUrl(url)) {
+      return;
+    }
+    dismissNativeAuthSheet();
+    finish(url);
   };
 
   const promise = new Promise<string | null>((resolve) => {
-    const take = (url?: string | null) => {
-      if (!isCapturableAuthUrl(url)) {
-        return;
-      }
-      dismissNativeAuthSheet();
-      finish(url, resolve);
-    };
-
+    resolvePromise = resolve;
+    // Subscribe before openAuthSessionAsync so blob://auth/callback is not missed.
     linking = Linking.addEventListener('url', ({ url }) => take(url));
     appState = AppState.addEventListener('change', (state) => {
       if (state !== 'active') {
@@ -193,20 +204,54 @@ function waitForNativeAuthCallback(ms: number): { promise: Promise<string | null
     });
     take(Linking.getLinkingURL());
     void Linking.getInitialURL().then(take).catch(() => undefined);
-    timer = setTimeout(() => finish(null, resolve), ms);
+    timer = setTimeout(() => finish(null), ms);
   });
 
   return {
     promise,
-    cancel: () => {
-      if (timer) {
-        clearTimeout(timer);
-      }
-      linking?.remove();
-      appState?.remove();
-      settled = true;
-    },
+    cancel: () => finish(null),
   };
+}
+
+async function lookupNativeCallbackUrl(): Promise<string | null> {
+  let initial: string | null = null;
+  try {
+    initial = await Linking.getInitialURL();
+  } catch {
+    initial = null;
+  }
+  const picked = pickCanonicalAuthCallbackUrl([Linking.getLinkingURL(), initial]);
+  return isCapturableAuthUrl(picked) ? picked : null;
+}
+
+async function sessionFromCallbackUrl(url?: string | null): Promise<Session | null> {
+  if (!url) {
+    return null;
+  }
+  const params = parseAuthRedirectParams(url);
+  if (params.error) {
+    throw new Error(params.error_description || params.error);
+  }
+  if (!isCapturableAuthUrl(url) && !hasAuthCallbackPayload(params)) {
+    return null;
+  }
+  return createSessionFromUrl(url);
+}
+
+async function recoverSessionAfterAuthSheet(incoming: Promise<string | null>): Promise<Session | null> {
+  logOAuthStage('recover callback');
+  const linked = await Promise.race([
+    incoming,
+    new Promise<string | null>((resolve) => setTimeout(() => resolve(null), AUTH_SHEET_RECOVER_MS)),
+  ]);
+  const session =
+    (await sessionFromCallbackUrl(linked)) ??
+    (await sessionFromCallbackUrl(await lookupNativeCallbackUrl()));
+  if (session) {
+    return session;
+  }
+  const { data } = await supabase.auth.getSession();
+  return data.session;
 }
 
 async function createSessionFromUrlInner(url: string, flightKey: string): Promise<Session | null> {
@@ -293,7 +338,109 @@ async function createSessionFromUrl(url: string): Promise<Session | null> {
   return flight;
 }
 
-async function resolveNativeOAuthBrowserUrl(startUrl: string): Promise<string> {
+function takeProviderAuthorizeUrl(candidate?: string | null): string | null {
+  if (!candidate || !isExpectedOAuthStartUrl(candidate)) {
+    return null;
+  }
+  const cleaned = sanitizeOAuthBrowserUrl(candidate);
+  logOAuthAuthorizeUrl(cleaned);
+  if (authorizeUrlHasBlobRedirectUri(cleaned)) {
+    throw new Error('Google OAuth is misconfigured: redirect_uri must stay on Supabase HTTPS.');
+  }
+  return isProviderAuthorizeUrl(cleaned) ? cleaned : null;
+}
+
+async function withOAuthResolveTimeout<T>(
+  work: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work(controller.signal),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(SIGN_IN_TIMEOUT));
+          controller.abort();
+        }, OAUTH_RESOLVE_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * Resolve Supabase /authorize to accounts.google.com so we can strip redirect_to=blob.
+ * iOS fetch often hides Location (opaque redirect). If follow finishes without a Google
+ * host, open the original Supabase authorize URL in the auth sheet instead of hanging.
+ * Tradeoff: Google may see extra redirect_to=blob (Android 400 risk) vs infinite spin.
+ */
+async function followAuthorizeToProvider(
+  authorizeUrl: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const headers = { Accept: 'text/html,application/xhtml+xml' };
+  logOAuthStage('started fetch', { host: authorizeUrlHost(authorizeUrl) });
+
+  // iOS: do not follow to Google (loading that HTML often hangs). Read Location/url;
+  // if the host is not Google, caller opens the original Supabase authorize URL.
+  if (Platform.OS === 'ios') {
+    try {
+      const response = await fetch(authorizeUrl, {
+        method: 'GET',
+        redirect: 'manual',
+        headers,
+        signal,
+      });
+      const location = response.headers.get('Location') ?? response.headers.get('location') ?? '';
+      const followed = typeof response.url === 'string' ? response.url : '';
+      return takeProviderAuthorizeUrl(location) ?? takeProviderAuthorizeUrl(followed);
+    } catch (error) {
+      const name = error instanceof Error ? error.name : 'Error';
+      if (name === 'AbortError' || (error instanceof Error && error.message === SIGN_IN_TIMEOUT)) {
+        throw new Error(SIGN_IN_TIMEOUT);
+      }
+      if (error instanceof Error && /misconfigured/i.test(error.message)) {
+        throw error;
+      }
+      logOAuthStage('error', { name });
+      return null;
+    }
+  }
+
+  try {
+    const response = await fetch(authorizeUrl, {
+      method: 'GET',
+      redirect: 'manual',
+      headers,
+      signal,
+    });
+    const location = response.headers.get('Location') ?? response.headers.get('location') ?? '';
+    const followed = typeof response.url === 'string' ? response.url : '';
+    const cleaned = takeProviderAuthorizeUrl(location) ?? takeProviderAuthorizeUrl(followed);
+    if (cleaned) {
+      return cleaned;
+    }
+  } catch (error) {
+    if (error instanceof Error && /misconfigured/i.test(error.message)) {
+      throw error;
+    }
+    logOAuthStage('error', { name: error instanceof Error ? error.name : 'Error' });
+  }
+
+  const followedResponse = await fetch(authorizeUrl, {
+    method: 'GET',
+    redirect: 'follow',
+    headers,
+    signal,
+  });
+  return takeProviderAuthorizeUrl(followedResponse.url);
+}
+
+async function resolveNativeOAuthBrowserUrl(startUrl: string, signal: AbortSignal): Promise<string> {
   if (!isExpectedOAuthStartUrl(startUrl)) {
     throw new Error('Sign-in did not start from Google or Supabase.');
   }
@@ -305,55 +452,37 @@ async function resolveNativeOAuthBrowserUrl(startUrl: string): Promise<string> {
   }
 
   if (isProviderAuthorizeUrl(cleanedStart)) {
+    logOAuthStage('got google host', { host: authorizeUrlHost(cleanedStart) });
     return cleanedStart;
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12_000);
-  const takeProviderUrl = (candidate?: string | null) => {
-    if (!candidate || !isExpectedOAuthStartUrl(candidate)) {
-      return null;
-    }
-    const cleaned = sanitizeOAuthBrowserUrl(candidate);
-    logOAuthAuthorizeUrl(cleaned);
-    if (authorizeUrlHasBlobRedirectUri(cleaned)) {
-      throw new Error('Google OAuth is misconfigured: redirect_uri must stay on Supabase HTTPS.');
-    }
-    return isProviderAuthorizeUrl(cleaned) ? cleaned : null;
-  };
-
+  let resolved: string | null = null;
   try {
-    try {
-      const response = await fetch(cleanedStart, {
-        method: 'GET',
-        redirect: 'manual',
-        headers: { Accept: 'text/html,application/xhtml+xml' },
-        signal: controller.signal,
-      });
-      const location = response.headers.get('Location') ?? response.headers.get('location') ?? '';
-      const followed = typeof response.url === 'string' ? response.url : '';
-      const cleaned = takeProviderUrl(location) ?? takeProviderUrl(followed);
-      if (cleaned) {
-        return cleaned;
-      }
-    } catch (error) {
-      if (error instanceof Error && /misconfigured/i.test(error.message)) {
-        throw error;
-      }
+    resolved = await followAuthorizeToProvider(cleanedStart, signal);
+  } catch (error) {
+    const name = error instanceof Error ? error.name : 'Error';
+    logOAuthStage('error', { name });
+    if (error instanceof Error && error.message === SIGN_IN_TIMEOUT) {
+      throw error;
     }
+    if (name === 'AbortError') {
+      throw new Error(SIGN_IN_TIMEOUT);
+    }
+    if (error instanceof Error && /misconfigured/i.test(error.message)) {
+      throw error;
+    }
+    throw new Error(getErrorMessage(error) || 'Could not start Google sign-in. Try again.');
+  }
 
-    const followedResponse = await fetch(cleanedStart, {
-      method: 'GET',
-      redirect: 'follow',
-      headers: { Accept: 'text/html,application/xhtml+xml' },
-      signal: controller.signal,
-    });
-    const cleaned = takeProviderUrl(followedResponse.url);
-    if (cleaned) {
-      return cleaned;
-    }
-  } finally {
-    clearTimeout(timer);
+  if (resolved) {
+    logOAuthStage('got google host', { host: authorizeUrlHost(resolved) });
+    return resolved;
+  }
+
+  // Fetch finished but Location/final URL was not accounts.google.com (opaque iOS hop).
+  if (Platform.OS === 'ios') {
+    logOAuthStage('fallback supabase authorize', { host: authorizeUrlHost(cleanedStart) });
+    return cleanedStart;
   }
 
   throw new Error('Could not start Google sign-in. Try again.');
@@ -362,48 +491,37 @@ async function resolveNativeOAuthBrowserUrl(startUrl: string): Promise<string> {
 async function completeNativeOAuth(authorizeUrl: string, redirectTo: string): Promise<void> {
   const incoming = waitForNativeAuthCallback(180_000);
   try {
-    const raced = await Promise.race([
-      WebBrowser.openAuthSessionAsync(
+    let result: { type: string; url?: string | null };
+    try {
+      result = await WebBrowser.openAuthSessionAsync(
         authorizeUrl,
         redirectTo,
-        Platform.OS === 'android' ? { createTask: false } : { preferHttps: false },
-      ).then((result) => {
-        if (__DEV__) {
-          console.log('[blob:oauth]', { redirectTo, resultType: result.type });
-        }
-        return {
-          kind: 'sheet' as const,
-          result,
-        };
-      }),
-      incoming.promise.then((url) => ({ kind: 'link' as const, url })),
-    ]);
+        Platform.OS === 'android' ? { createTask: false } : undefined,
+      );
+    } catch (error) {
+      logOAuthStage('error', { name: error instanceof Error ? error.name : 'Error' });
+      const recovered = await recoverSessionAfterAuthSheet(incoming.promise);
+      if (recovered) {
+        return;
+      }
+      throw error;
+    }
 
-    if (raced.kind === 'link' && raced.url) {
-      const session = await createSessionFromUrl(raced.url);
+    logOAuthStage('openAuthSession', {
+      host: authorizeUrlHost(authorizeUrl),
+      name: result.type,
+    });
+
+    if (result.type === 'success' && result.url) {
+      const session = await sessionFromCallbackUrl(result.url);
       if (session) {
         return;
       }
     }
 
-    if (raced.kind === 'sheet') {
-      const { result } = raced;
-      if (result.type === 'success' && result.url) {
-        const session = await createSessionFromUrl(result.url);
-        if (session) {
-          return;
-        }
-      }
-      const linked = await Promise.race([
-        incoming.promise,
-        new Promise<string | null>((resolve) => setTimeout(() => resolve(null), 2000)),
-      ]);
-      if (linked) {
-        const session = await createSessionFromUrl(linked);
-        if (session) {
-          return;
-        }
-      }
+    const recovered = await recoverSessionAfterAuthSheet(incoming.promise);
+    if (recovered) {
+      return;
     }
 
     throw new Error(SIGN_IN_UNFINISHED);
@@ -436,23 +554,22 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
       native: NATIVE_REDIRECT,
     }),
   });
-  if (__DEV__) {
-    console.log('[blob:oauth]', { redirectTo: nativeRedirect });
-  }
+  const browserUrl = await withOAuthResolveTimeout(async (signal) => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: nativeRedirect,
+        skipBrowserRedirect: true,
+      },
+    });
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: {
-      redirectTo: nativeRedirect,
-      skipBrowserRedirect: true,
-    },
+    if (error || !data.url) {
+      throw new Error(getErrorMessage(error ?? new Error('OAuth did not start')));
+    }
+
+    return resolveNativeOAuthBrowserUrl(data.url, signal);
   });
-
-  if (error || !data.url) {
-    throw new Error(getErrorMessage(error ?? new Error('OAuth did not start')));
-  }
-
-  const browserUrl = await resolveNativeOAuthBrowserUrl(data.url);
+  logOAuthStage('openAuthSession', { host: authorizeUrlHost(browserUrl) });
   await completeNativeOAuth(browserUrl, nativeRedirect);
 }
 
@@ -461,6 +578,7 @@ export { createSessionFromUrl };
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [isPasswordRecovery, setPasswordRecovery] = useState(isPasswordRecoveryPending);
 
   useEffect(() => {
@@ -555,18 +673,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    await signInWithOAuthProvider('google');
+    setOauthLoading(true);
+    try {
+      await signInWithOAuthProvider('google');
+    } finally {
+      setOauthLoading(false);
+    }
   }, []);
 
   const signInWithApple = useCallback(async () => {
     if (Platform.OS !== 'ios') {
-      await signInWithOAuthProvider('apple');
+      setOauthLoading(true);
+      try {
+        await signInWithOAuthProvider('apple');
+      } finally {
+        setOauthLoading(false);
+      }
       return;
     }
 
     const available = await AppleAuthentication.isAvailableAsync();
     if (!available) {
-      await signInWithOAuthProvider('apple');
+      setOauthLoading(true);
+      try {
+        await signInWithOAuthProvider('apple');
+      } finally {
+        setOauthLoading(false);
+      }
       return;
     }
 
@@ -635,6 +768,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isConfigured: isSupabaseConfigured,
       isPasswordRecovery,
+      oauthLoading,
       signIn,
       signUp,
       signInWithGoogle,
@@ -649,6 +783,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       finishPasswordRecovery,
       isLoading,
       isPasswordRecovery,
+      oauthLoading,
       resetPasswordForEmail,
       session,
       signIn,
