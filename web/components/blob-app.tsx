@@ -425,7 +425,7 @@ function CreateScreen({ userId }: { userId: string }) {
           />
           <label className="text-sm font-bold text-ink">Rule</label>
           <p className="text-xs text-muted">
-            Optional constraint on that action (separate days, min minutes, or a custom limit). Not another task.
+            Optional. A constraint on the task (separate days, min minutes, or a custom limit). Not another task.
           </p>
           <Input
             value={constraint}

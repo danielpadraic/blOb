@@ -7,6 +7,7 @@ import {
   challengeLengthDays,
   parseScheduleDate,
 } from '@/lib/challengeSchedule';
+import { nextCreateItemId } from '@/lib/createItemIds';
 import { EXTRA_RULE_KINDS } from '@/lib/consistencyRules';
 import { ACTIVITY_OPTIONS, CHALLENGE_CATEGORIES, CREATE_PROOF_TYPES, isImageProof } from '@/lib/constants';
 import type { Profile } from '@/lib/types';
@@ -170,9 +171,9 @@ export const createChallengeTaskSchema = z.object({
   once: z.boolean().optional(),
 });
 
-export function emptyChallengeTask(): z.infer<typeof createChallengeTaskSchema> {
+export function emptyChallengeTask(existingId?: string): z.infer<typeof createChallengeTaskSchema> {
   return {
-    id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: nextCreateItemId('task', existingId),
     title: '',
     points: '10',
     proof_required: true,
@@ -191,9 +192,9 @@ export const extraCreateTaskSchema = z.object({
 
 export type ExtraCreateTask = z.infer<typeof extraCreateTaskSchema>;
 
-export function emptyExtraCreateTask(): ExtraCreateTask {
+export function emptyExtraCreateTask(existingId?: string): ExtraCreateTask {
   return {
-    id: `xtask-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    id: nextCreateItemId('xtask', existingId),
     title: '',
     once: false,
     proof_method: 'photo',
@@ -251,7 +252,7 @@ export const createChallengeSchema = z
     min_minutes: z.string(),
     cover_image_url: z.string().trim().optional().or(z.literal('')),
     rules_video_url: z.string().trim().optional().or(z.literal('')),
-    rule_activity: z.string().trim().max(40, 'Keep the activity name under 40 characters'),
+    rule_activity: z.string().trim().max(80, 'Keep the activity name under 80 characters'),
     extra_rules: z.array(extraRuleSchema),
     extra_tasks: z.array(extraCreateTaskSchema).optional(),
     task: z.string().trim().max(80).optional().or(z.literal('')),
@@ -375,16 +376,6 @@ export const createChallengeSchema = z
         message: 'Keep session length at 600 minutes or less',
       });
     }
-
-    values.extra_rules?.forEach((rule, index) => {
-      if (!rule.text.trim()) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['extra_rules', index, 'text'],
-          message: 'Add a line of text, or remove this rule',
-        });
-      }
-    });
 
     const cover = values.cover_image_url?.trim();
     if (cover && !/^https?:\/\//i.test(cover)) {

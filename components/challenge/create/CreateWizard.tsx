@@ -82,7 +82,16 @@ import {
   TOP_PLACES_MODES,
 } from '@/lib/constants';
 import { wizardBobOops, wizardBobTips, wizardEntryTabTipIndex, wizardGoalTypeTipIndex, wizardStepForField, entryTabFromValues, type EntryTab } from '@/lib/createBobCopy';
-import { composeChallengeRules, hasDefinedRules } from '@/lib/consistencyRules';
+import { composeChallengeRules } from '@/lib/consistencyRules';
+import {
+  nextCreateWizardStep,
+  prevCreateWizardStep,
+  rulesStepIsReady,
+  seedPointsTasksFromGoal,
+  stripBlankExtraRules as dropBlankExtraRules,
+  stripBlankExtraTasks as dropBlankExtraTasks,
+} from '@/lib/createWizardFlow';
+import { subscribeVisualViewport } from '@/lib/visualViewport';
 import { applyLaneToFormValues, normalizeUserChallengeLane, type UserChallengeLane } from '@/lib/challengeLane';
 import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
 import {
@@ -128,7 +137,7 @@ const STEP_RULES = wizardStepIndex('rules');
 const STEP_REVIEW = wizardStepIndex('review');
 
 const TUTORIAL_KEY = 'blob:create-tutorial';
-const AUTOSAVE_MS = 1100;
+const AUTOSAVE_MS = 2000;
 
 type BobIssue = { field: string; step: number };
 
@@ -329,21 +338,12 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => apply(0),
     );
-    const webView = Platform.OS === 'web' && typeof window !== 'undefined' ? window.visualViewport : null;
-    function onViewport() {
-      if (!webView) {
-        return;
-      }
-      apply(Math.max(0, window.innerHeight - webView.height - webView.offsetTop));
-    }
-    webView?.addEventListener('resize', onViewport);
-    webView?.addEventListener('scroll', onViewport);
+    const unsubViewport = Platform.OS === 'web' ? subscribeVisualViewport(apply) : () => undefined;
     return () => {
       show.remove();
       change.remove();
       hide.remove();
-      webView?.removeEventListener('resize', onViewport);
-      webView?.removeEventListener('scroll', onViewport);
+      unsubViewport();
     };
   }, []);
 
@@ -802,16 +802,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   ]);
 
   useEffect(() => {
-    if (values.challenge_type === 'points') {
-      return;
-    }
-    const task = (values.task ?? '').trim();
-    if (task.length >= 2 && values.rule_activity !== task) {
-      setValue('rule_activity', task, { shouldDirty: false, shouldValidate: false });
-    }
-  }, [values.task, values.challenge_type, values.rule_activity, setValue]);
-
-  useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (event) => {
       if (leavingRef.current || skipSaveRef.current || discardedRef.current || liveChallengeId || isEditing) {
         return;
@@ -883,32 +873,30 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  function syncRuleActivityFromTask() {
+    if (getValues('challenge_type') === 'points') {
+      return;
+    }
+    const task = (getValues('task') ?? '').trim();
+    if (task.length < 2) {
+      return;
+    }
+    if (getValues('rule_activity') !== task) {
+      setValue('rule_activity', task, { shouldDirty: false, shouldValidate: false });
+    }
+  }
+
   function seedPointsTaskFromGoal() {
-    if (getValues('challenge_type') !== 'points') {
+    const next = seedPointsTasksFromGoal(getValues());
+    if (!next) {
       return;
     }
-    const goalTask = (getValues('task') ?? '').trim();
-    const tasks = getValues('tasks');
-    const first = tasks[0] ?? emptyChallengeTask();
-    const nextFirst = { ...first };
-    let changed = tasks.length === 0;
-    if (!nextFirst.title.trim() && goalTask) {
-      nextFirst.title = goalTask;
-      changed = true;
-    }
-    if (!String(nextFirst.points ?? '').trim()) {
-      nextFirst.points = '1';
-      changed = true;
-    }
-    if (!changed) {
-      return;
-    }
-    setValue('tasks', [nextFirst, ...tasks.slice(1)], { shouldDirty: false, shouldValidate: false });
+    setValue('tasks', next, { shouldDirty: false, shouldValidate: false });
   }
 
   function stripBlankExtraRules() {
     const extras = getValues('extra_rules') ?? [];
-    const next = extras.filter((rule) => rule.text.trim().length > 0);
+    const next = dropBlankExtraRules(extras);
     if (next.length !== extras.length) {
       setValue('extra_rules', next, { shouldDirty: false, shouldValidate: false });
     }
@@ -916,7 +904,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
 
   function stripBlankExtraTasks() {
     const extras = getValues('extra_tasks') ?? [];
-    const next = extras.filter((item) => item.title.trim().length > 0);
+    const next = dropBlankExtraTasks(extras);
     if (next.length !== extras.length) {
       setValue('extra_tasks', next, { shouldDirty: false, shouldValidate: false });
     }
@@ -1125,19 +1113,16 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return null;
     }
     const formValues = getValues();
-    const composed = syncComposedRules();
-    if (hasDefinedRules({ ...formValues, rules: composed || formValues.rules })) {
+    syncComposedRules();
+    if (rulesStepIsReady(formValues)) {
       return null;
     }
-    const buyIn = Math.max(Number(formValues.buy_in) || 0, 0);
-    if (buyIn <= 0 && isPointsDraft(formValues)) {
-      return null;
-    }
-    setError('rules', {
+    const field = isPointsDraft(formValues) ? 'tasks.0.title' : 'task';
+    setError(isPointsDraft(formValues) ? 'tasks.0.title' : 'task', {
       type: 'validate',
-      message: 'Add the check-in rule (count, activity, and how often).',
+      message: isPointsDraft(formValues) ? 'Give this task a short name' : 'Add a task',
     });
-    return { field: 'rules', step: STEP_RULES };
+    return { field, step: STEP_RULES };
   }
 
   function coinEntryIssue(targetStep = STEP_ENTRY): BobIssue | null {
@@ -1162,6 +1147,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     stripBlankExtraRules();
     stripBlankExtraTasks();
     seedPointsTaskFromGoal();
+    syncRuleActivityFromTask();
     syncComposedRules();
     const entryIssue = coinEntryIssue();
     if (entryIssue) {
@@ -1350,6 +1336,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (reviewReturn && !lastStep) {
       if (step === STEP_GOAL) {
         stripBlankExtraTasks();
+        syncRuleActivityFromTask();
       }
       if (step === STEP_RULES) {
         flushRulesDraftRef.current();
@@ -1369,6 +1356,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     if (!lastStep) {
       if (step === STEP_GOAL) {
         stripBlankExtraTasks();
+        syncRuleActivityFromTask();
       }
       if (step === STEP_RULES) {
         flushRulesDraftRef.current();
@@ -1404,16 +1392,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       await onPublish();
       return;
     }
-    setStep((current) => {
-      if (
-        current === STEP_PRIZE &&
-        getValues('scoring_method') !== COMPARABLE_POINTS_METHOD &&
-        !scoringEditorOpen
-      ) {
-        return STEP_FUNDING;
-      }
-      return current + 1;
-    });
+    setStep((current) => nextCreateWizardStep(current, getValues(), scoringEditorOpen));
   }
 
   function goBack() {
@@ -1432,7 +1411,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       leaveWizard();
       return;
     }
-    setStep((current) => current - 1);
+    setStep((current) => prevCreateWizardStep(current, getValues(), scoringEditorOpen));
   }
 
   function closeWizard() {
@@ -1606,7 +1585,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           <WizardProgress
             step={step}
             onStepPress={goToStep}
-            status={scoringToast}
             trailing={
               <View className="flex-row items-center gap-1">
                 {isEditing ? null : (
@@ -1658,14 +1636,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
           contentContainerStyle={{
-            paddingBottom: tour?.createActive
-              ? 220
-              : 24 +
-                (keyboardHeight > 0
-                  ? footerH + keyboardHeight + tabBarLift(insets.bottom, 'sticky')
-                  : 0),
+            paddingBottom: tour?.createActive ? 220 : 24 + footerH,
           }}
-          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          automaticallyAdjustKeyboardInsets
           keyboardShouldPersistTaps="always"
           nestedScrollEnabled
           onScroll={(event) => {
@@ -1859,6 +1832,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           }}
           className="gap-2 px-4 pt-2"
           style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 4,
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,

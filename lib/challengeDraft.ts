@@ -220,8 +220,9 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
       return [];
     }
     const row = item as Record<string, unknown>;
-    const title = asString(row.title, '').trim();
-    if (!title) {
+    const title = asString(row.title, '');
+    const id = asString(row.id, title.trim() ? `xtask-${index + 1}` : '');
+    if (!title.trim() && !id) {
       return [];
     }
     const method = row.proof_method;
@@ -231,7 +232,7 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
         : 'photo';
     return [
       {
-        id: asString(row.id, `xtask-${index + 1}`),
+        id: id || `xtask-${index + 1}`,
         title,
         once: Boolean(row.once),
         proof_method,
@@ -373,7 +374,7 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     : (challenge.proof_requirements ?? []).map((item) => item.type)
   ).filter((type): type is CreateChallengeValues['proofs'][number] => PROOF_SET.has(type));
   const tasks = normalizeTasks(challenge.tasks).map((task) => ({
-    ...emptyChallengeTask(),
+    ...emptyChallengeTask(task.id),
     title: task.title,
     points: String(Math.max(task.points, 0) || 10),
     proof_required: Boolean(task.proof_required) || (task.proof_types?.length ?? 0) > 0,

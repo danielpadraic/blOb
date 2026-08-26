@@ -1,3 +1,4 @@
+import { nextCreateItemId } from '@/lib/createItemIds';
 import { CREATE_PROOF_TYPES } from '@/lib/constants';
 import type { ChallengeFrequency, ProofType } from '@/lib/types';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -38,10 +39,10 @@ export type RulesStructured = {
 
 const PROOF_SET = new Set<string>(CREATE_PROOF_TYPES);
 
-export function emptyExtraRule(kind: ExtraRuleKind = 'custom'): ExtraRule {
+export function emptyExtraRule(kind: ExtraRuleKind = 'custom', existingId?: string): ExtraRule {
   const preset = EXTRA_RULE_PRESETS.find((item) => item.kind === kind);
   return {
-    id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: nextCreateItemId('rule', existingId),
     kind,
     text: preset?.text ?? '',
     proofs: [],
@@ -296,12 +297,16 @@ export function asExtraRules(value: unknown): ExtraRule[] {
       typeof row.text === 'string' && row.text.trim()
         ? row.text.trim()
         : preset?.text ?? '';
+    const id = typeof row.id === 'string' && row.id ? row.id : text ? `rule-${index + 1}` : '';
     if (!text && kind === 'custom') {
-      return [];
+      if (!id) {
+        return [];
+      }
+      return [{ id, kind, text: '', proofs: asProofList(row.proofs ?? row.proof) }];
     }
     return [
       {
-        id: typeof row.id === 'string' && row.id ? row.id : `rule-${index + 1}`,
+        id: id || `rule-${index + 1}`,
         kind,
         text,
         proofs: asProofList(row.proofs ?? row.proof),
