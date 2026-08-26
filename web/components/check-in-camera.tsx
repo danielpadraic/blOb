@@ -6,6 +6,42 @@ import { Button } from '~/components/ui/button';
 
 const FACE_HINT = 'Same outfit. Face in frame.';
 
+function useViewportBottomPad(base = 24) {
+  const [pad, setPad] = useState(base);
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) {
+      return;
+    }
+    const sync = () => {
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setPad(Math.max(base, overlap + 12));
+    };
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    sync();
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+    };
+  }, [base]);
+  return pad;
+}
+
+function waitForVideoFrame(video: HTMLVideoElement) {
+  if (video.videoWidth > 0) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      video.removeEventListener('loadedmetadata', done);
+      resolve();
+    };
+    video.addEventListener('loadedmetadata', done);
+    window.setTimeout(done, 1500);
+  });
+}
+
 export function CheckInCamera({
   onCaptured,
   onCancel,
@@ -17,6 +53,7 @@ export function CheckInCamera({
   const streamRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [denied, setDenied] = useState(false);
+  const chromePad = useViewportBottomPad(24);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,9 +82,15 @@ export function CheckInCamera({
     };
   }, []);
 
-  function capture() {
+  async function capture() {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) {
+    if (!video) {
+      return;
+    }
+    if (!video.videoWidth) {
+      await waitForVideoFrame(video);
+    }
+    if (!video.videoWidth) {
       return;
     }
     const canvas = document.createElement('canvas');
@@ -58,11 +101,15 @@ export function CheckInCamera({
       return;
     }
     ctx.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (blob) {
-        onCaptured(blob, false);
-      }
-    }, 'image/jpeg', 0.86);
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          onCaptured(blob, false);
+        }
+      },
+      'image/jpeg',
+      0.86,
+    );
   }
 
   if (denied) {
@@ -93,11 +140,19 @@ export function CheckInCamera({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-black">
-      <video ref={videoRef} playsInline muted autoPlay className="h-full w-full flex-1 object-cover" />
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        autoPlay
+        className="h-full w-full flex-1 object-cover"
+      />
       <p className="pointer-events-none absolute inset-x-0 top-10 text-center text-[13px] font-semibold text-white">
         {FACE_HINT}
       </p>
-      <div className="absolute inset-x-0 bottom-6 flex items-center justify-between px-6">
+      <div
+        className="sticky inset-x-0 bottom-0 flex items-center justify-between px-6"
+        style={{ paddingBottom: chromePad, paddingTop: 12 }}>
         <button
           type="button"
           aria-label="Open gallery"
@@ -108,8 +163,8 @@ export function CheckInCamera({
         <button
           type="button"
           aria-label="Take photo"
-          className="h-[72px] w-[72px] rounded-full border-4 border-white bg-white/20"
-          onClick={capture}
+          className="h-[72px] w-[72px] rounded-full border-4 border-white bg-white"
+          onClick={() => void capture()}
         />
         <button type="button" aria-label="Close camera" className="h-12 min-w-12 text-sm font-bold text-white" onClick={onCancel}>
           Close
@@ -125,8 +180,10 @@ export function CheckInCamera({
           if (file) {
             onCaptured(file, true);
           }
-        }}
-      />
+          }}
+        />
     </div>
   );
 }
+
+export { useViewportBottomPad };

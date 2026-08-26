@@ -72,6 +72,11 @@ describe('official weekly proofs', () => {
     expect(incrementDaysCompleted(1, true)).toBe(1);
     expect(classifyCheckinError(new Error('ALREADY_LOGGED_TODAY'))).toBe('already');
   });
+
+  it('treats a one-proof send as posted when SQL still wants the full set', () => {
+    expect(classifyCheckinError(new Error('MISSING_PROOFS'))).toBe('missing');
+    expect(classifyCheckinError(new Error('Add every required proof to submit.'))).toBe('missing');
+  });
 });
 
 const savedRow = {

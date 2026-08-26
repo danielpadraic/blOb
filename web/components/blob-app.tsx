@@ -28,6 +28,7 @@ import {
   partSatisfies,
   parseChallengeProofs,
   proofDisplayName,
+  proofsAreHonorOnly,
   resolveChallengeProofs,
   type ChallengeProof,
 } from '../../lib/challengeProofs';
@@ -58,7 +59,7 @@ import { Bob } from '~/components/bob';
 import { ChallengeBoard } from '~/components/challenge-board';
 import { passwordResetRedirectTo, SetPasswordScreen } from '~/components/set-password';
 import { ChallengeLifecycleStatus } from '~/components/challenge-lifecycle-status';
-import { CheckInCamera } from '~/components/check-in-camera';
+import { CheckInCamera, useViewportBottomPad } from '~/components/check-in-camera';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
@@ -1015,6 +1016,7 @@ function CheckInScreen({ challengeId, userId }: { challengeId: string; userId: s
   const proofs = useMemo(() => (challenge ? requiredProofs(challenge) : []), [challenge]);
   const phase = phaseOf(checkin);
   const target = Math.max(Number(challenge?.days_required || challenge?.target_count) || 7, 1);
+  const footerPad = useViewportBottomPad(20);
 
   async function load() {
     const ch = await supabase
@@ -1094,6 +1096,12 @@ function CheckInScreen({ challengeId, userId }: { challengeId: string; userId: s
       setFail('success');
     } catch (caught) {
       const kind = classifyCheckinError(caught);
+      if (kind === 'missing') {
+        window.alert('Posted. Add the rest when you have them.');
+        go(`/challenges/${challengeId}/`);
+        setBusy(false);
+        return;
+      }
       setFail(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : null);
       setError(caught instanceof Error ? caught.message : 'Couldn’t submit this check-in.');
     }
@@ -1161,43 +1169,47 @@ function CheckInScreen({ challengeId, userId }: { challengeId: string; userId: s
   }
 
   const missing = proofs.filter((proof) => !partSatisfies(proof, checkin?.proof_parts[proof.id]));
-  const ready = proofs.length > 0 && missing.length === 0;
+  const filledCount = proofs.filter((proof) => partSatisfies(proof, checkin?.proof_parts[proof.id])).length;
+  const honorOnly = proofsAreHonorOnly(proofs);
+  const canSend = (honorOnly || filledCount >= 1) && phase !== 'submitted' && !busy;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-5 pt-4">
-      <button type="button" className="self-start text-sm font-bold text-teal" onClick={() => go(`/challenges/${challengeId}/`)}>
-        Back
-      </button>
-      <h1 className="mt-3 text-center text-xl font-bold text-ink">{checkinStageLabel(phase)}</h1>
-      <p className="mt-2 text-center text-sm text-muted">
-        {checkinStageHint(
-          phase,
-          missing.map((proof) => proofDisplayName(proof)),
-        )}
-      </p>
-      <div className="mt-5 flex flex-col gap-3 overflow-y-auto pb-4">
-        {proofs.map((proof) => {
-          const done = partSatisfies(proof, checkin?.proof_parts[proof.id]);
-          return (
-            <Card key={proof.id}>
-              <p className="text-[15px] font-bold text-ink">{proofDisplayName(proof)}</p>
-              {done ? (
-                <p className="mt-1 text-sm text-teal">Attached</p>
-              ) : (
-                <Button type="button" variant="ghost" className="mt-2 px-0" onClick={() => setCaptureId(proof.id)}>
-                  Add this proof
-                </Button>
-              )}
-            </Card>
-          );
-        })}
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 overflow-y-auto px-5 pb-28 pt-4">
+        <button type="button" className="self-start text-sm font-bold text-teal" onClick={() => go(`/challenges/${challengeId}/`)}>
+          Back
+        </button>
+        <h1 className="mt-3 text-center text-xl font-bold text-ink">{checkinStageLabel(phase)}</h1>
+        <p className="mt-2 text-center text-sm text-muted">
+          {checkinStageHint(
+            phase,
+            missing.map((proof) => proofDisplayName(proof)),
+          )}
+        </p>
+        <div className="mt-5 flex flex-col gap-3">
+          {proofs.map((proof) => {
+            const done = partSatisfies(proof, checkin?.proof_parts[proof.id]);
+            return (
+              <Card key={proof.id}>
+                <p className="text-[15px] font-bold text-ink">{proofDisplayName(proof)}</p>
+                {done ? (
+                  <p className="mt-1 text-sm text-teal">Attached</p>
+                ) : (
+                  <Button type="button" variant="ghost" className="mt-2 px-0" onClick={() => setCaptureId(proof.id)}>
+                    Add this proof
+                  </Button>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+        {error ? <p className="mt-3 text-sm text-[#9A3B3B]">{error}</p> : null}
       </div>
-      {error ? <p className="text-sm text-[#9A3B3B]">{error}</p> : null}
-      {ready ? (
-        <Button type="button" disabled={busy} onClick={() => void submit()}>
+      <div className="absolute inset-x-0 bottom-0 bg-bg px-4 pt-2" style={{ paddingBottom: footerPad }}>
+        <Button type="button" disabled={!canSend} onClick={() => void submit()} style={{ opacity: canSend ? 1 : 0.38 }}>
           Submit
         </Button>
-      ) : null}
+      </div>
     </div>
   );
 }

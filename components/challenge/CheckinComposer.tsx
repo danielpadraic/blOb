@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -53,6 +53,7 @@ type CheckinComposerProps = {
   onExtrasChange: (extras: CheckinExtra[]) => void;
   onCaptionChange: (doc: MentionDoc) => void;
   onSend: () => void;
+  children?: (parts: { media: ReactNode; footer: ReactNode }) => ReactNode;
 };
 
 export function CheckinComposer({
@@ -60,7 +61,7 @@ export function CheckinComposer({
   drafts,
   extras,
   initialCaption,
-  allReady,
+  allReady: _allReady,
   busy,
   canSend,
   onAddProof,
@@ -68,6 +69,7 @@ export function CheckinComposer({
   onExtrasChange,
   onCaptionChange,
   onSend,
+  children,
 }: CheckinComposerProps) {
   const fieldRef = useRef<MentionFieldHandle>(null);
   const lightbox = useMediaLightboxOptional();
@@ -100,6 +102,30 @@ export function CheckinComposer({
     }).length + extras.filter((item) => item.kind === 'photo' || item.kind === 'gif').length;
   const remainingSlots = Math.max(0, CHECKIN_PHOTO_CAP - photoCount);
   const canAddPhoto = remainingSlots > 0 && !busy;
+  const emptyRequired = proofs.find((proof) => {
+    const draft = drafts[proof.id];
+    return (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') && !draft?.uri && !draft?.text;
+  });
+
+  function onFooterCamera() {
+    if (emptyRequired) {
+      onAddProof(emptyRequired);
+      return;
+    }
+    if (canAddPhoto) {
+      void pickCamera();
+      return;
+    }
+    Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
+  }
+
+  function onFooterGallery() {
+    if (canAddPhoto) {
+      void pickGallery();
+      return;
+    }
+    Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
+  }
 
   function addExtra(attachment: Omit<CheckinExtra, 'id'>) {
     if (extras.filter((item) => item.kind !== 'video').length + (attachment.kind === 'video' ? 0 : 1) > CHECKIN_PHOTO_CAP) {
@@ -228,7 +254,7 @@ export function CheckinComposer({
     }
   }
 
-  return (
+  const media = (
     <View style={{ gap: 12 }}>
       {proofs.some((proof) => proof.method === 'photo' || proof.method === 'video') ? (
         <AppText className="text-[13px] leading-5 text-muted">
@@ -278,10 +304,14 @@ export function CheckinComposer({
           />
         ) : null}
       </View>
+    </View>
+  );
 
+  const footer = (
+    <View style={{ gap: 10 }}>
       <View
         style={{
-          backgroundColor: THEME.background,
+          backgroundColor: THEME.surface,
           borderWidth: 1,
           borderColor: THEME.border,
           borderRadius: 18,
@@ -307,23 +337,19 @@ export function CheckinComposer({
       </View>
 
       <View className="flex-row items-center" style={{ minHeight: 44, gap: 2 }}>
-        {previewItems.length > 0 || allReady ? (
-          <>
-            <ComposerIcon
-              glyph={GLYPH.camera}
-              label="Camera"
-              onPress={() => (canAddPhoto ? void pickCamera() : Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`))}
-            />
-            <ComposerIcon
-              glyph={GLYPH.album}
-              label="Gallery"
-              onPress={() => (canAddPhoto ? void pickGallery() : Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`))}
-            />
-            <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
-          </>
-        ) : (
-          <AppText className="flex-1 text-[13px] text-muted">Add required proof first.</AppText>
-        )}
+        <ComposerIcon
+          glyph={GLYPH.camera}
+          label="Camera"
+          dimmed={!canAddPhoto && !emptyRequired}
+          onPress={onFooterCamera}
+        />
+        <ComposerIcon
+          glyph={GLYPH.album}
+          label="Gallery"
+          dimmed={!canAddPhoto && !emptyRequired}
+          onPress={onFooterGallery}
+        />
+        <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
         <View className="flex-1" />
         <Pressable
           accessibilityRole="button"
@@ -355,6 +381,17 @@ export function CheckinComposer({
           }}
         />
       ) : null}
+    </View>
+  );
+
+  if (children) {
+    return <>{children({ media, footer })}</>;
+  }
+
+  return (
+    <View style={{ gap: 12 }}>
+      {media}
+      {footer}
     </View>
   );
 }
@@ -510,12 +547,15 @@ function ComposerIcon({
   mark,
   label,
   onPress,
+  dimmed,
 }: {
   glyph?: (typeof GLYPH)[keyof typeof GLYPH];
   mark?: string;
   label: string;
   onPress: () => void;
+  dimmed?: boolean;
 }) {
+  const color = dimmed ? THEME.textMuted : THEME.textPrimary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -523,13 +563,13 @@ function ComposerIcon({
       onPress={onPress}
       hitSlop={4}
       className="items-center justify-center"
-      style={{ width: 44, height: 44 }}>
+      style={{ width: 44, height: 44, minWidth: 44, minHeight: 44, opacity: dimmed ? 0.45 : 1 }}>
       {mark ? (
-        <AppText className="text-[11px] font-extrabold" style={{ color: THEME.textMuted }}>
+        <AppText className="text-[11px] font-extrabold" style={{ color }}>
           {mark}
         </AppText>
       ) : glyph ? (
-        <Glyph name={glyph} color={THEME.textMuted} size={18} />
+        <Glyph name={glyph} color={color} size={18} />
       ) : null}
     </Pressable>
   );

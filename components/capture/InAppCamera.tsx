@@ -87,7 +87,7 @@ export function InAppCamera({
   const chunksRef = useRef<Blob[]>([]);
   const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing(facingKind));
   const [capture, setCapture] = useState<CaptureMedia>(captureProp);
-  const [ready, setReady] = useState(false);
+  const [, setReady] = useState(false);
   const [fail, setFail] = useState<CameraFail>(null);
   const [retry, setRetry] = useState(0);
   const [recording, setRecording] = useState(false);
@@ -98,8 +98,9 @@ export function InAppCamera({
   const video = capture === 'video';
   const web = Platform.OS === 'web';
   const parentBlocked = blocked || webFallback;
-  const live = !parentBlocked && fail == null && ready;
-  const shutterEnabled = live && !busy;
+  const previewOk = !parentBlocked && fail == null;
+  const shutterEnabled = previewOk && !busy;
+  const shutterOpaque = recording || previewOk;
   const bottomPad = chromeInset ? TAB_BAR_PEEK : Math.max(insets.bottom, 16) + 8;
   const needCopy = deniedTitle ?? 'Camera is off.';
 
@@ -160,7 +161,10 @@ export function InAppCamera({
       }
       if (!permission.ok) {
         setFail(permission.kind === 'camera' || permission.kind === 'microphone' ? 'denied' : 'denied');
+        return;
       }
+      setReady(true);
+      setFail(null);
     })();
 
     return () => {
@@ -175,6 +179,16 @@ export function InAppCamera({
       }
     };
   }, [facing, parentBlocked, retry, video, web]);
+
+  useEffect(() => {
+    if (parentBlocked || fail != null) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setReady(true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [fail, facing, parentBlocked, retry, video, web]);
 
   const attachWebVideo = useCallback((node: HTMLVideoElement | null) => {
     webVideoRef.current = node;
@@ -193,6 +207,26 @@ export function InAppCamera({
     setFail(null);
   }, []);
 
+  async function waitOneFrame() {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }
+
+  async function waitWebVideoFrame(node: HTMLVideoElement) {
+    if (node.videoWidth > 0) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        node.removeEventListener('loadedmetadata', finish);
+        resolve();
+      };
+      node.addEventListener('loadedmetadata', finish);
+      setTimeout(finish, 1200);
+    });
+  }
+
   const onCameraDenied = useCallback(() => setFail('denied'), []);
   const onCameraMissing = useCallback(() => setFail('missing'), []);
 
@@ -204,7 +238,13 @@ export function InAppCamera({
     try {
       if (web) {
         const node = webVideoRef.current;
-        if (!node || node.videoWidth <= 0) {
+        if (!node) {
+          return;
+        }
+        if (node.videoWidth <= 0) {
+          await waitWebVideoFrame(node);
+        }
+        if (node.videoWidth <= 0) {
           return;
         }
         const canvas = document.createElement('canvas');
@@ -224,7 +264,11 @@ export function InAppCamera({
         });
         return;
       }
-      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
+      let photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
+      if (!photo?.uri) {
+        await waitOneFrame();
+        photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
+      }
       if (photo?.uri) {
         onCaptured({
           uri: photo.uri,
@@ -558,7 +602,7 @@ export function InAppCamera({
                 borderWidth: 4,
                 borderColor: '#fff',
                 backgroundColor: video ? '#FF3B30' : '#fff',
-                opacity: shutterEnabled || recording ? 1 : 0.45,
+                opacity: shutterOpaque ? 1 : 0.45,
               }}
             />
           </View>

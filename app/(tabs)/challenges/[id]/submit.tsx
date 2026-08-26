@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, View } from 'react-native';
+import { Alert, Keyboard, Platform, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
 import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
@@ -45,8 +46,11 @@ import { usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
+import { tabBarLift, THEME } from '@/lib/theme';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
 import { uploadPostAttachment } from '@/utils/upload';
+
+const PARTIAL_POSTED = 'Posted. Add the rest when you have them.';
 
 type SlotDraft = {
   uri?: string;
@@ -91,6 +95,7 @@ export default function SubmitWorkoutScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const challengeQuery = useChallenge(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
@@ -108,6 +113,7 @@ export default function SubmitWorkoutScreen() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
+  const [keyboardPad, setKeyboardPad] = useState(0);
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
@@ -183,7 +189,36 @@ export default function SubmitWorkoutScreen() {
   const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
   const busy = saveProof.isPending || submitCheckin.isPending;
+  const canSend = (honorOnly || filledCount >= 1) && phase !== 'submitted' && !busy;
   const firstCamera = beginCameraProof(proofSteps);
+  const tabLift = tabBarLift(insets.bottom, 'sticky');
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (event) => setKeyboardPad(event.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardPad(0),
+    );
+    const webView = Platform.OS === 'web' && typeof window !== 'undefined' ? window.visualViewport : null;
+    function onViewport() {
+      if (!webView) {
+        return;
+      }
+      const overlap = Math.max(0, window.innerHeight - webView.height - webView.offsetTop);
+      setKeyboardPad(overlap);
+    }
+    webView?.addEventListener('resize', onViewport);
+    webView?.addEventListener('scroll', onViewport);
+    return () => {
+      show.remove();
+      hide.remove();
+      webView?.removeEventListener('resize', onViewport);
+      webView?.removeEventListener('scroll', onViewport);
+    };
+  }, []);
 
   function onMedia(proofId: string, uri: string, mimeType?: string | null, fromLibrary?: boolean) {
     if (busy) {
@@ -314,7 +349,7 @@ export default function SubmitWorkoutScreen() {
   }
 
   async function onSubmit() {
-    if (!id || !allReady || busy || phase === 'submitted') {
+    if (!id || !canSend || phase === 'submitted') {
       return;
     }
     setError(null);
@@ -436,6 +471,11 @@ export default function SubmitWorkoutScreen() {
       setJustSubmitted(true);
     } catch (caught) {
       const kind = classifyCheckinError(caught);
+      if (kind === 'missing') {
+        Alert.alert('', PARTIAL_POSTED);
+        router.replace(`/challenges/${id}`);
+        return;
+      }
       setFailKind(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : null);
       setError(getCheckinSubmitMessage(caught));
     }
@@ -690,44 +730,23 @@ export default function SubmitWorkoutScreen() {
 
   const composerProofs = proofSteps.filter((proof) => proof.method !== 'honor' && proof.method !== 'checkin');
   const textProofs = proofSteps.filter((proof) => proof.method === 'checkin');
+  const footerBottom = keyboardPad > 0 ? (Platform.OS === 'ios' ? 8 : keyboardPad) : tabLift;
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
       <Stack.Screen options={{ title: 'Check-in' }} />
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="px-5 pb-10 pt-2"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+      <View className="flex-1" style={{ minHeight: 0 }}>
         {challenge && isOfficialSeriesChallenge(challenge) ? (
-          <View className="mb-4">
+          <View className="px-5 pt-2">
             <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="page" />
           </View>
         ) : null}
-        <AppText className="mb-3 text-center text-sm text-muted">
+        <AppText className="px-5 pb-2 pt-3 text-center text-sm text-muted">
           {checkinStageHint(
             phase,
             missing.map((proof) => proofDisplayName(proof)),
           ) || copy('checkin.emptyBob')}
         </AppText>
-
-        {textProofs.map((proof) => (
-          <View key={proof.id} className="mb-3">
-            <Input
-              placeholder={proofDisplayName(proof) || 'What did you do?'}
-              value={drafts[proof.id]?.text ?? ''}
-              onChangeText={(value) => onText(proof.id, value)}
-              onBlur={() => {
-                const text = drafts[proof.id]?.text?.trim() ?? '';
-                if (text) {
-                  void persistProof(proof, { text });
-                }
-              }}
-              editable={!busy && phase !== 'submitted'}
-            />
-          </View>
-        ))}
-
         <CheckinComposer
           proofs={composerProofs}
           drafts={drafts}
@@ -735,7 +754,7 @@ export default function SubmitWorkoutScreen() {
           initialCaption={stripHealthSummaryFromNotes(checkinQuery.data?.notes ?? '', attachedHealth())}
           allReady={allReady}
           busy={busy}
-          canSend={allReady && phase !== 'submitted'}
+          canSend={canSend}
           onAddProof={(proof) => {
             if (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') {
               setPreferCamera(Platform.OS !== 'ios' || !proofPrefersHealthAttach(proof, challenge));
@@ -745,13 +764,56 @@ export default function SubmitWorkoutScreen() {
           onRemoveProof={(proof) => void onRemoveProof(proof)}
           onExtrasChange={handleExtrasChange}
           onCaptionChange={setCaption}
-          onSend={() => void onSubmit()}
-        />
-
-        {error ? (
-          <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
-        ) : null}
-      </ScrollView>
+          onSend={() => void onSubmit()}>
+          {({ media, footer }) => (
+            <>
+              <ScrollView
+                className="flex-1"
+                style={{ minHeight: 0 }}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                  paddingTop: 4,
+                  paddingBottom: 12,
+                }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                showsVerticalScrollIndicator={false}>
+                {textProofs.map((proof) => (
+                  <View key={proof.id} className="mb-3">
+                    <Input
+                      placeholder={proofDisplayName(proof) || 'What did you do?'}
+                      value={drafts[proof.id]?.text ?? ''}
+                      onChangeText={(value) => onText(proof.id, value)}
+                      onBlur={() => {
+                        const text = drafts[proof.id]?.text?.trim() ?? '';
+                        if (text) {
+                          void persistProof(proof, { text });
+                        }
+                      }}
+                      editable={!busy && phase !== 'submitted'}
+                    />
+                  </View>
+                ))}
+                {media}
+                {error ? (
+                  <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
+                ) : null}
+              </ScrollView>
+              <View
+                style={{
+                  paddingHorizontal: 20,
+                  paddingTop: 8,
+                  paddingBottom: footerBottom,
+                  backgroundColor: THEME.background,
+                  borderTopWidth: 1,
+                  borderTopColor: THEME.border,
+                }}>
+                {footer}
+              </View>
+            </>
+          )}
+        </CheckinComposer>
+      </View>
     </Screen>
   );
 }
