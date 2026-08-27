@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { checkinCardCaption } from '@/lib/checkinPost';
 import {
-  canHideCheckinUrl,
+  canRemoveCheckinExtra,
   hiddenUrlsFromParts,
   isHiddenMedia,
   isPersistedMediaUrl,
@@ -12,18 +12,25 @@ import {
 } from '@/lib/postEdit';
 
 describe('post edit lock', () => {
-  it('allows hide as blur-in-place on the last required selfie', () => {
+  it('blocks removing the last photo in a required category', () => {
     const required = { pre: ['https://example.com/pre.jpg'] };
     expect(
-      canHideCheckinUrl({
+      canRemoveCheckinExtra({
         url: 'https://example.com/pre.jpg',
-        hidden: [],
+        mediaUrls: ['https://example.com/pre.jpg', 'https://example.com/extra.jpg'],
+        required,
+      }),
+    ).toBe(false);
+    expect(
+      canRemoveCheckinExtra({
+        url: 'https://example.com/extra.jpg',
+        mediaUrls: ['https://example.com/pre.jpg', 'https://example.com/extra.jpg'],
         required,
       }),
     ).toBe(true);
   });
 
-  it('keeps hidden URLs off the public grid', () => {
+  it('keeps hidden URLs off a derived list without using them on lobby cards', () => {
     expect(
       visiblePostMedia(
         ['https://a.jpg', 'https://b.jpg', 'https://a.jpg'],
@@ -33,15 +40,15 @@ describe('post edit lock', () => {
     expect(isHiddenMedia('https://cdn.example/a.jpg?x=1', ['https://cdn.example/a.jpg?x=2'])).toBe(true);
   });
 
-  it('treats hide as unchanged when flags already match', () => {
+  it('treats caption and media as unchanged when they already match', () => {
     expect(
       postEditUnchanged({
         caption: 'Hi',
         originalCaption: 'Hi',
         mediaUrls: ['https://a.jpg'],
         originalMediaUrls: ['https://a.jpg'],
-        hidden: ['https://a.jpg'],
-        originalHidden: ['https://a.jpg'],
+        hidden: [],
+        originalHidden: [],
       }),
     ).toBe(true);
     expect(
@@ -56,7 +63,7 @@ describe('post edit lock', () => {
     ).toBe(false);
   });
 
-  it('reads hidden urls from proof json', () => {
+  it('reads hidden urls from proof json as legacy only', () => {
     expect(
       hiddenUrlsFromParts({
         pre: { method: 'photo', url: 'https://a.jpg', hidden_urls: ['https://a.jpg'] },

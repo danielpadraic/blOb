@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
@@ -11,20 +11,14 @@ import { AppText } from '@/components/ui/AppText';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallenge } from '@/hooks/useChallenge';
-import { applyEditedPostToFeeds, useEditPost } from '@/hooks/usePostEdit';
+import { applyEditedPostToFeeds, useEditPost, useHidePostFromHome } from '@/hooks/usePostEdit';
 import { useQueryClient } from '@tanstack/react-query';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import { saveCapturedProofLocally } from '@/lib/checkin';
 import { isCheckinPost } from '@/lib/checkinPost';
 import { proofDisplayName, uniqueProofUrls, type ChallengeProofPart } from '@/lib/challengeProofs';
 import { copy } from '@/lib/copy';
-import {
-  hiddenUrlsFromParts,
-  isHiddenMedia,
-  isPersistedMediaUrl,
-  postEditUnchanged,
-  requiredProofUrls,
-} from '@/lib/postEdit';
+import { canRemoveCheckinExtra, postEditUnchanged, requiredProofUrls } from '@/lib/postEdit';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -51,9 +45,10 @@ export function PostEditor({
 }) {
   const { user } = useAuth();
   const edit = useEditPost();
+  const hideHome = useHidePostFromHome();
   const queryClient = useQueryClient();
-  const originalHidden = uniqueProofUrls(post.hidden_media_urls ?? []);
   const originalCaption = post.content ?? '';
+  const originalMedia = uniqueProofUrls(post.media_urls ?? []);
   const checkin = isCheckinPost(post);
   const challenge = useChallenge(checkin && post.challenge_id ? post.challenge_id : undefined);
   const checkinRow = useQuery({
@@ -77,56 +72,29 @@ export function PostEditor({
     [checkinRow.data, proofs],
   );
   const [caption, setCaption] = useState(post.content ?? '');
-  const [mediaUrls, setMediaUrls] = useState(uniqueProofUrls(post.media_urls ?? []));
-  const [hidden, setHidden] = useState(uniqueProofUrls(post.hidden_media_urls ?? []));
+  const [mediaUrls, setMediaUrls] = useState(originalMedia);
   const [drafts, setDrafts] = useState<DraftAsset[]>([]);
   const [busy, setBusy] = useState(false);
-  const mergedHidden = useRef(false);
-
-  useEffect(() => {
-    if (!checkinRow.data || mergedHidden.current) {
-      return;
-    }
-    mergedHidden.current = true;
-    setHidden((current) => uniqueProofUrls([...current, ...hiddenUrlsFromParts(checkinRow.data)]));
-  }, [checkinRow.data]);
+  const hiddenFromHome = Boolean(post.hidden_from_home);
 
   const extras = mediaUrls.filter((url) => !Object.values(required).some((urls) => urls.includes(url)));
-
-  function patchHidden(nextHidden: string[]) {
-    setHidden(nextHidden);
-    applyEditedPostToFeeds(queryClient, {
-      id: post.id,
-      hidden_media_urls: nextHidden,
-    });
-  }
-
-  function hideUrl(url: string) {
-    console.log('[blob:hide]', url);
-    if (!isPersistedMediaUrl(url)) {
-      onToast?.(copy('post.savePhotoFirst'));
-      return;
-    }
-    patchHidden(uniqueProofUrls([...hidden, url]));
-  }
-
-  function unhideUrl(url: string) {
-    patchHidden(hidden.filter((item) => !isHiddenMedia(item, [url]) && item !== url));
-  }
 
   function closeWithoutSave() {
     applyEditedPostToFeeds(queryClient, {
       id: post.id,
       content: originalCaption,
-      hidden_media_urls: originalHidden,
+      media_urls: originalMedia,
       edited_at: post.edited_at,
     });
     onClose();
   }
 
-  function removeRegular(url: string) {
+  function removeExtra(url: string) {
+    if (checkin && !canRemoveCheckinExtra({ url, mediaUrls, required })) {
+      onToast?.(copy('post.keepOneProof'));
+      return;
+    }
     setMediaUrls((current) => current.filter((item) => item !== url));
-    setHidden((current) => current.filter((item) => item !== url));
   }
 
   async function pickMedia(proofId?: string) {
@@ -172,11 +140,8 @@ export function PostEditor({
         originalCaption: post.content ?? '',
         mediaUrls,
         originalMediaUrls: post.media_urls ?? [],
-        hidden,
-        originalHidden: uniqueProofUrls([
-          ...(post.hidden_media_urls ?? []),
-          ...hiddenUrlsFromParts(checkinRow.data),
-        ]),
+        hidden: [],
+        originalHidden: [],
       });
     if (unchanged) {
       onToast?.(copy('post.noChanges'));
@@ -204,18 +169,10 @@ export function PostEditor({
         postId: post.id,
         caption,
         mediaUrls: nextMedia,
-        hiddenMediaUrls: hidden,
+        hiddenMediaUrls: [],
         proofReplacements: replacements,
         checkinId: post.checkin_id,
       });
-      if (__DEV__) {
-        console.log('[blob:edit-save]', {
-          postId: post.id,
-          hidden,
-          hiddenCount: hidden.length,
-          payloadChars: JSON.stringify({ caption, nextMedia, hidden }).length,
-        });
-      }
       onSaved?.();
       onClose();
     } catch {
@@ -255,6 +212,35 @@ export function PostEditor({
             multiline
             placeholder="Write a caption…"
           />
+          <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
+            {hiddenFromHome ? copy('post.hiddenFromHome') : copy('post.hideFromHome')}
+          </AppText>
+          <WebTapButton
+            accessibilityLabel={hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')}
+            onPress={() => {
+              hideHome.mutate(
+                { postId: post.id, hidden: !hiddenFromHome },
+                {
+                  onError: () => onToast?.(copy('post.saveFailed')),
+                },
+              );
+            }}
+            style={{
+              height: 44,
+              minHeight: 44,
+              minWidth: 72,
+              paddingHorizontal: 12,
+              borderRadius: THEME.radiusSm,
+              borderWidth: 1,
+              borderColor: THEME.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'flex-start',
+            }}>
+            <AppText className="text-[14px] font-semibold" style={{ color: THEME.primary }}>
+              {hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')}
+            </AppText>
+          </WebTapButton>
           {checkin
             ? proofs.map((proof) => {
                 const urls = required[proof.id] ?? [];
@@ -270,35 +256,13 @@ export function PostEditor({
                     </AppText>
                     {shown.map((url) => (
                       <View key={url} style={{ gap: 8 }}>
-                        <EditorFrame uri={url} hidden={!draft && isHiddenMedia(url, hidden)} />
+                        <EditorFrame uri={url} />
                         <View className="flex-row" style={{ gap: 8 }}>
                           <Button
                             title="Replace"
                             variant="outline"
                             size="sm"
                             onPress={() => void pickMedia(proof.id)}
-                          />
-                          <HideControl
-                            url={url}
-                            hidden={!draft && isHiddenMedia(url, hidden)}
-                            blocked={
-                              draft
-                                ? copy('post.savePhotoFirst')
-                                : !isPersistedMediaUrl(url)
-                                  ? copy('post.replaceFirst')
-                                  : null
-                            }
-                            onPress={() => {
-                              if (draft || !isPersistedMediaUrl(url)) {
-                                onToast?.(draft ? copy('post.savePhotoFirst') : copy('post.replaceFirst'));
-                                return;
-                              }
-                              if (isHiddenMedia(url, hidden)) {
-                                unhideUrl(url);
-                                return;
-                              }
-                              hideUrl(url);
-                            }}
                           />
                         </View>
                       </View>
@@ -309,20 +273,13 @@ export function PostEditor({
             : null}
           {(checkin ? extras : mediaUrls).map((url) => (
             <View key={url} style={{ gap: 8 }}>
-              <EditorFrame uri={url} hidden={isHiddenMedia(url, hidden)} />
+              <EditorFrame uri={url} />
               <View className="flex-row" style={{ gap: 8 }}>
-                {checkin ? (
-                  <HideControl
-                    url={url}
-                    hidden={isHiddenMedia(url, hidden)}
-                    blocked={!isPersistedMediaUrl(url) ? copy('post.savePhotoFirst') : null}
-                    onPress={() =>
-                      isHiddenMedia(url, hidden) ? unhideUrl(url) : hideUrl(url)
-                    }
-                  />
-                ) : (
-                  <Button title="Remove" variant="ghost" size="sm" onPress={() => removeRegular(url)} />
-                )}
+                <RemoveControl
+                  disabled={checkin && !canRemoveCheckinExtra({ url, mediaUrls, required })}
+                  onPress={() => removeExtra(url)}
+                  onBlocked={() => onToast?.(copy('post.keepOneProof'))}
+                />
               </View>
             </View>
           ))}
@@ -331,10 +288,8 @@ export function PostEditor({
             .map((row) => (
               <View key={row.uri} style={{ gap: 8 }}>
                 <EditorFrame uri={row.uri} />
-                <HideControl
-                  url={row.uri}
-                  blocked={copy('post.savePhotoFirst')}
-                  onPress={() => onToast?.(copy('post.savePhotoFirst'))}
+                <RemoveControl
+                  onPress={() => setDrafts((current) => current.filter((item) => item.uri !== row.uri))}
                 />
               </View>
             ))}
@@ -350,24 +305,23 @@ export function PostEditor({
   );
 }
 
-function HideControl({
-  url,
-  hidden,
-  blocked,
+function RemoveControl({
+  disabled,
   onPress,
+  onBlocked,
 }: {
-  url: string;
-  hidden?: boolean;
-  blocked?: string | null;
+  disabled?: boolean;
   onPress: () => void;
+  onBlocked?: () => void;
 }) {
-  const title = hidden ? copy('post.unhide') : 'Hide';
-  const faded = Boolean(blocked && !hidden);
   return (
     <WebTapButton
-      accessibilityLabel={`${title} ${url}`}
+      accessibilityLabel="Remove"
       onPress={() => {
-        console.log('[blob:hide]', url);
+        if (disabled) {
+          onBlocked?.();
+          return;
+        }
         onPress();
       }}
       style={{
@@ -377,25 +331,19 @@ function HideControl({
         paddingHorizontal: 12,
         borderRadius: THEME.radiusSm,
         borderWidth: 1,
-        borderColor: faded ? THEME.border : THEME.primary,
+        borderColor: disabled ? THEME.border : THEME.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: faded ? 0.38 : 1,
+        opacity: disabled ? 0.38 : 1,
       }}>
-      <AppText className="text-[14px] font-semibold" style={{ color: faded ? THEME.textMuted : THEME.primary }}>
-        {title}
+      <AppText className="text-[14px] font-semibold" style={{ color: disabled ? THEME.textMuted : THEME.primary }}>
+        Remove
       </AppText>
     </WebTapButton>
   );
 }
 
-function EditorFrame({
-  uri,
-  hidden,
-}: {
-  uri: string;
-  hidden?: boolean;
-}) {
+function EditorFrame({ uri }: { uri: string }) {
   return (
     <View
       style={{
@@ -404,45 +352,7 @@ function EditorFrame({
         overflow: 'hidden',
         backgroundColor: THEME.background,
       }}>
-      <Image
-        source={{ uri }}
-        style={{
-          width: '100%',
-          height: '100%',
-          ...(hidden && Platform.OS === 'web' ? ({ filter: 'blur(16px)' } as object) : null),
-        }}
-        contentFit="contain"
-        blurRadius={hidden ? 36 : 0}
-      />
-      {hidden ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(16,19,18,0.28)',
-            ...(Platform.OS === 'web'
-              ? ({ backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } as object)
-              : null),
-          }}>
-          <View
-            style={{
-              backgroundColor: 'rgba(16,19,18,0.72)',
-              borderRadius: 12,
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-            }}>
-            <AppText className="text-[12px] font-semibold" style={{ color: THEME.surface }}>
-              {copy('post.hiddenByAuthor')}
-            </AppText>
-          </View>
-        </View>
-      ) : null}
+      <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
     </View>
   );
 }

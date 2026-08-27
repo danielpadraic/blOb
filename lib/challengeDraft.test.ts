@@ -5,6 +5,7 @@ import {
   clampDraftStep,
   draftPersistPayload,
   hydrateDraftValues,
+  isDraftWorthSaving,
   isVisibleDraft,
   parseChallengeDraft,
   parseStoredWizardStep,
@@ -149,6 +150,17 @@ describe('challenge drafts', () => {
     expect(parsed.values.task).toBe('Run the hill');
     expect(parsed.values.tasks[0]?.title).toBe('Hill repeats');
     expect(parsed.values.proofs).toEqual(['photo']);
+  });
+
+  it('counts a titled Simple form as worth saving', () => {
+    expect(
+      isDraftWorthSaving({
+        step: wizardStepIndex('goal'),
+        startPath: 'scratch',
+        values: DEFAULT_CREATE_VALUES,
+        simple: { title: 'Morning miles', task: 'Run 1 mile' } as never,
+      }),
+    ).toBe(true);
   });
 
   it('hides empty id-only rows that have a step but no title or edits', () => {

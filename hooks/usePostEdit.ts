@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { patchFeedPosts } from '@/hooks/useFeed';
+import { patchFeedPosts, removePostFromHomeFeeds } from '@/hooks/useFeed';
 import type { ChallengeProofPart } from '@/lib/challengeProofs';
 import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { parsePostEdits } from '@/lib/postEdit';
@@ -57,6 +57,7 @@ export function applyEditedPostToFeeds(
     content: post.content !== undefined ? post.content : row.content,
     media_urls: post.media_urls ?? row.media_urls,
     hidden_media_urls: post.hidden_media_urls ?? row.hidden_media_urls ?? [],
+    hidden_from_home: post.hidden_from_home ?? row.hidden_from_home ?? false,
     edited_at: post.edited_at !== undefined ? post.edited_at : row.edited_at,
   }));
 }
@@ -70,27 +71,6 @@ function rowFromEdit(input: EditPostInput, row?: Post | null): Post {
     hidden_media_urls: uniqueProofUrls(input.hiddenMediaUrls),
     edited_at: row?.edited_at ?? new Date().toISOString(),
   };
-}
-
-async function stampCheckinHidden(checkinId: string, hidden: string[]) {
-  const { data, error } = await db
-    .from('challenge_checkins')
-    .select('proof_parts')
-    .eq('id', checkinId)
-    .maybeSingle();
-  if (error || !data?.proof_parts) {
-    return;
-  }
-  const skip = new Set(uniqueProofUrls(hidden));
-  const next: Record<string, ChallengeProofPart> = {};
-  for (const [key, part] of Object.entries(data.proof_parts)) {
-    const urls = uniqueProofUrls([part?.url, ...(part?.urls ?? [])]);
-    next[key] = {
-      ...part,
-      hidden_urls: urls.filter((url) => skip.has(url)),
-    };
-  }
-  await supabase.from('challenge_checkins').update({ proof_parts: next }).eq('id', checkinId);
 }
 
 async function persistEditedPost(input: EditPostInput): Promise<Post> {
@@ -107,9 +87,6 @@ async function persistEditedPost(input: EditPostInput): Promise<Post> {
         : null,
   });
   if (!error && data) {
-    if (input.checkinId) {
-      await stampCheckinHidden(input.checkinId, hidden);
-    }
     return rowFromEdit(input, data);
   }
 
@@ -132,9 +109,6 @@ async function persistEditedPost(input: EditPostInput): Promise<Post> {
       throw new Error('Replace this photo first.');
     }
     throw new Error(getErrorMessage(fallback.error ?? error));
-  }
-  if (input.checkinId) {
-    await stampCheckinHidden(input.checkinId, hidden);
   }
   return rowFromEdit(input, fallback.data as Post);
 }
@@ -194,31 +168,41 @@ export function useEditPost() {
   });
 }
 
-export function useHidePostMedia() {
+export function useHidePostFromHome() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      postId: string;
-      hiddenMediaUrls: string[];
-      checkinId?: string | null;
-    }) => {
+    mutationFn: async (input: { postId: string; hidden: boolean }) => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      return persistEditedPost({
-        postId: input.postId,
-        hiddenMediaUrls: input.hiddenMediaUrls,
-        checkinId: input.checkinId,
+      const { data, error } = await db.rpc('set_post_hidden_from_home', {
+        p_post_id: input.postId,
+        p_hidden: input.hidden,
       });
+      if (error || !data) {
+        const fallback = await supabase
+          .from('posts')
+          .update({ hidden_from_home: input.hidden })
+          .eq('id', input.postId)
+          .select('*')
+          .single();
+        if (fallback.error || !fallback.data) {
+          throw new Error(getErrorMessage(fallback.error ?? error));
+        }
+        return fallback.data as Post;
+      }
+      return data;
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: ['feed'] });
       const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
+      if (input.hidden) {
+        removePostFromHomeFeeds(queryClient, input.postId);
+      }
       applyEditedPostToFeeds(queryClient, {
         id: input.postId,
-        hidden_media_urls: uniqueProofUrls(input.hiddenMediaUrls),
-        edited_at: new Date().toISOString(),
+        hidden_from_home: input.hidden,
       });
       return { previous };
     },
@@ -227,14 +211,20 @@ export function useHidePostMedia() {
         queryClient.setQueryData(queryKey, data);
       }
     },
-    onSuccess: (row, input) => {
-      applyEditedPostToFeeds(queryClient, rowFromEdit({
-        postId: input.postId,
-        hiddenMediaUrls: input.hiddenMediaUrls,
-        checkinId: input.checkinId,
-      }, row));
-      void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
-      void queryClient.invalidateQueries({ queryKey: ['edit-checkin'] });
+    onSuccess: (row) => {
+      applyEditedPostToFeeds(queryClient, {
+        id: row.id,
+        hidden_from_home: row.hidden_from_home ?? false,
+      });
+      if (row.hidden_from_home) {
+        removePostFromHomeFeeds(queryClient, row.id);
+      } else {
+        void queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === 'feed' &&
+            (query.queryKey[1] === 'global' || query.queryKey[1] === 'author'),
+        });
+      }
     },
   });
 }

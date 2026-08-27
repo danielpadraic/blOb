@@ -1,10 +1,11 @@
-import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, type PressableProps } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
 
+import { WebTapButton } from '@/components/ui/WebTapButton';
 import { THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
 
@@ -58,6 +59,7 @@ export function Button({
   loading = false,
   disabled,
   className,
+  onPress,
   onPressIn,
   onPressOut,
   style,
@@ -69,9 +71,54 @@ export function Button({
   }));
   const isDisabled = Boolean(disabled || loading);
   const height = sizeHeight[size];
+  const face = loading ? (
+    <ActivityIndicator color={variantText[variant]} />
+  ) : (
+    <Text
+      style={{
+        color: variantText[variant],
+        fontSize: sizeFont[size],
+        fontWeight: '600',
+        textAlign: 'center',
+        includeFontPadding: false,
+        textAlignVertical: 'center',
+        lineHeight: sizeFont[size] + 2,
+      }}>
+      {title}
+    </Text>
+  );
+  const box = {
+    height,
+    backgroundColor: variantBg[variant],
+    borderRadius: THEME.radiusSm,
+    opacity: isDisabled ? 0.38 : 1,
+    borderWidth: variant === 'ghost' || variant === 'outline' ? 1 : 0,
+    borderColor:
+      variant === 'outline' ? THEME.border : variant === 'ghost' ? THEME.primary : 'transparent',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: size === 'sm' ? 12 : 16,
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <WebTapButton
+        accessibilityLabel={title}
+        disabled={isDisabled}
+        onPress={() => {
+          if (typeof onPress === 'function') {
+            onPress({} as never);
+          }
+        }}
+        style={[box, size === 'lg' || size === 'md' ? { width: '100%' } : null, typeof style === 'function' ? undefined : style]}>
+        {face}
+      </WebTapButton>
+    );
+  }
 
   return (
     <AnimatedPressable
+      onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
@@ -107,22 +154,7 @@ export function Button({
         onPressOut?.(event);
       }}
       {...props}>
-      {loading ? (
-        <ActivityIndicator color={variantText[variant]} />
-      ) : (
-        <Text
-          style={{
-            color: variantText[variant],
-            fontSize: sizeFont[size],
-            fontWeight: '600',
-            textAlign: 'center',
-            includeFontPadding: false,
-            textAlignVertical: 'center',
-            lineHeight: sizeFont[size] + 2,
-          }}>
-          {title}
-        </Text>
-      )}
+      {face}
     </AnimatedPressable>
   );
 }

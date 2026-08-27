@@ -77,8 +77,9 @@ export function useWizardFieldFocus(name: string) {
 export function FieldAnchor({ name, children }: { name: string; children: ReactNode }) {
   const focus = useContext(WizardFocusContext);
   return (
-    <TourAnchor id={`create-${name}`}>
+    <TourAnchor id={`create-${name}`} style={{ pointerEvents: 'box-none' }}>
       <View
+        pointerEvents="box-none"
         collapsable={false}
         ref={(node) => focus?.registerAnchor(name, node)}
         onLayout={() => focus?.onAnchorLayout(name)}>
@@ -401,7 +402,7 @@ export function CreateActionsFooter({
   draftFlash = false,
 }: {
   onBack: () => void;
-  onSaveDraft?: () => void;
+  onSaveDraft: () => void;
   onNext: () => void;
   nextTitle: string;
   nextLoading?: boolean;

@@ -127,6 +127,9 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
     }
     return query;
   }
+  if (select.includes('hidden_from_home')) {
+    query = query.eq('hidden_from_home', false);
+  }
   if (scope.kind === 'ids') {
     return query.in('challenge_id', scope.challengeIds);
   }
@@ -422,6 +425,9 @@ function viewerCanSeeProfilePost(
   if (input.hidden.has(post.id)) {
     return false;
   }
+  if (post.hidden_from_home) {
+    return false;
+  }
   if (post.wall_removed_at) {
     return false;
   }
@@ -631,6 +637,9 @@ async function fetchPosts(input: {
     await withSocial(
       merged
         .filter((post) => {
+          if (post.hidden_from_home) {
+            return false;
+          }
           if (post.source === 'challenge') {
             return false;
           }
@@ -1151,6 +1160,31 @@ export function useToggleReaction() {
 
 function optimisticReactionId(type: ReactionType, targetId: string, userId: string) {
   return `optimistic-${type}-${targetId}-${userId}`;
+}
+
+export function isHomeSocialFeedKey(queryKey: readonly unknown[]): boolean {
+  return (
+    queryKey[0] === 'feed' &&
+    (queryKey[1] === 'global' || queryKey[1] === 'author' || queryKey[1] === 'post')
+  );
+}
+
+export function removePostFromHomeFeeds(queryClient: QueryClient, postId: string) {
+  queryClient.setQueriesData(
+    { predicate: (query) => isHomeSocialFeedKey(query.queryKey) },
+    (current) => {
+      if (!current) {
+        return current;
+      }
+      if (Array.isArray(current)) {
+        return current.filter((post) => !post || (post as PostWithMeta).id !== postId);
+      }
+      if (typeof current === 'object' && (current as PostWithMeta).id === postId) {
+        return null;
+      }
+      return current;
+    },
+  );
 }
 
 export function patchFeedPosts(

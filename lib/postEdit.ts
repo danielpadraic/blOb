@@ -54,13 +54,21 @@ export function requiredProofUrls(
   return out;
 }
 
-/** Hide is blur-in-place. The file stays. Always allowed. */
-export function canHideCheckinUrl(_input?: {
+/** Extra check-in photos may leave the post if every required category still has a file. */
+export function canRemoveCheckinExtra(input: {
   url: string;
-  hidden: string[];
-  replacements?: Record<string, string>;
+  mediaUrls: string[];
   required: Record<string, string[]>;
 }): boolean {
+  const remaining = uniqueProofUrls(input.mediaUrls.filter((item) => item !== input.url));
+  for (const urls of Object.values(input.required)) {
+    if (urls.length === 0) {
+      continue;
+    }
+    if (!urls.some((url) => remaining.includes(url))) {
+      return false;
+    }
+  }
   return true;
 }
 

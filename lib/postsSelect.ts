@@ -5,7 +5,7 @@ export const POSTS_CORE_COLUMNS =
 
 /** Default posts select. Quote / deleted_at are added only if a limit-0 probe succeeds. */
 export const POSTS_FEED_SELECT =
-  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, created_at, edited_at, hidden_media_urls';
+  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, created_at, edited_at, hidden_media_urls, hidden_from_home';
 
 export type PostsSchema = {
   select: string;
@@ -16,6 +16,7 @@ export type PostsSchema = {
   hasWall: boolean;
   hasCheckin: boolean;
   hasSource: boolean;
+  hasHiddenFromHome: boolean;
 };
 
 const CORE_SCHEMA: PostsSchema = {
@@ -27,6 +28,7 @@ const CORE_SCHEMA: PostsSchema = {
   hasWall: false,
   hasCheckin: false,
   hasSource: false,
+  hasHiddenFromHome: false,
 };
 
 let cached: Promise<PostsSchema> | null = null;
@@ -41,6 +43,7 @@ function schemaFromSelect(select: string): PostsSchema {
     hasWall: select.includes('wall_host_id'),
     hasCheckin: select.includes('checkin_id'),
     hasSource: /(^|,\s*)source(,|$)/.test(select),
+    hasHiddenFromHome: select.includes('hidden_from_home'),
   };
 }
 
@@ -96,7 +99,10 @@ async function loadPostsSchema(): Promise<PostsSchema> {
   working = place.ok ? withPlace : working;
   const withEdits = `${working}, edited_at, hidden_media_urls`;
   const edits = await trySelect(withEdits);
-  return schemaFromSelect(edits.ok ? withEdits : working);
+  working = edits.ok ? withEdits : working;
+  const withHomeHide = `${working}, hidden_from_home`;
+  const homeHide = await trySelect(withHomeHide);
+  return schemaFromSelect(homeHide.ok ? withHomeHide : working);
 }
 
 /** No RPC. Probe with limit 0, then cache the working select list. */

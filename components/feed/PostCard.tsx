@@ -27,10 +27,11 @@ import { AppText } from '@/components/ui/AppText';
 import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { useUpdatePostAudience } from '@/hooks/useFeed';
-import { checkinCardCaption, isCheckinCompleteStage, isCheckinPost, postLocality } from '@/lib/checkinPost';
+import { checkinCardCaption, isCheckinPost, postLocality } from '@/lib/checkinPost';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { PROOF_META } from '@/lib/constants';
-import { isHiddenMedia } from '@/lib/postEdit';
+import { useHidePostFromHome } from '@/hooks/usePostEdit';
+import { WebTapButton } from '@/components/ui/WebTapButton';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
@@ -87,7 +88,8 @@ function PostCardInner({
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
   const checkin = isCheckinPost(post);
-  const checkinComplete = checkin && isCheckinCompleteStage(post.checkin_stage);
+  const hideHome = useHidePostFromHome();
+  const mine = Boolean(currentUserId && currentUserId === post.author_id);
   const tagged = Boolean(post.challenge_id);
   const hidePromoCard =
     Boolean(challengeFeed) ||
@@ -180,6 +182,21 @@ function PostCardInner({
         ) : (
           <AudienceIconButton audience={audience} />
         )}
+        {mine && !challengeFeed ? (
+          <WebTapButton
+            accessibilityLabel={
+              post.hidden_from_home ? copy('post.unhideOnHome') : copy('post.hideFromHome')
+            }
+            onPress={() => {
+              hideHome.mutate(
+                { postId: post.id, hidden: !post.hidden_from_home },
+                { onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)) },
+              );
+            }}
+            style={{ height: 44, width: 44, minWidth: 44, minHeight: 44 }}>
+            <Glyph name={GLYPH.hide} color={THEME.textMuted} size={16} />
+          </WebTapButton>
+        ) : null}
         {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
           <ProofFlagButton postId={post.id} />
         ) : null}
@@ -201,11 +218,6 @@ function PostCardInner({
       </View>
 
       <View style={{ gap: 10, marginTop: 6 }}>
-        {checkinComplete ? (
-          <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-            Check-in Complete
-          </AppText>
-        ) : null}
         {caption ? (
           <PostBody
             content={caption}
@@ -264,12 +276,7 @@ function PostCardInner({
           />
         ) : null}
 
-        <ProofMedia
-          urls={post.media_urls ?? []}
-          hiddenUrls={post.hidden_media_urls}
-          owner={currentUserId === post.author_id}
-          proof={checkin}
-        />
+        <ProofMedia urls={post.media_urls ?? []} proof={checkin} />
 
         <ReactionBar
           createdAt={post.created_at}
@@ -605,27 +612,20 @@ function MediaFrame({
   height,
   radius,
   label,
-  hidden,
-  owner,
   onPress,
 }: {
   uri: string;
   height: number;
   radius: number;
   label?: string;
-  hidden?: boolean;
-  owner?: boolean;
   onPress?: () => void;
 }) {
   const kind = mediaKind(uri);
-  const blur = Boolean(hidden);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={
-        hidden ? (owner ? copy('post.hidden') : copy('post.hiddenByAuthor')) : label ? `Open ${label}` : 'Open photo'
-      }
-      disabled={!onPress || blur}
+      accessibilityLabel={label ? `Open ${label}` : 'Open photo'}
+      disabled={!onPress}
       onPress={onPress}
       style={{
         height,
@@ -635,52 +635,17 @@ function MediaFrame({
         backgroundColor: THEME.surface,
       }}>
       {kind === 'video' ? (
-        blur ? (
-          <View style={{ flex: 1, backgroundColor: THEME.background }} />
-        ) : (
-          <PostVideo uri={uri} />
-        )
+        <PostVideo uri={uri} />
       ) : (
         <Image
           source={{ uri }}
-          style={{
-            width: '100%',
-            height: '100%',
-            ...(blur && Platform.OS === 'web' ? ({ filter: 'blur(16px)' } as object) : null),
-          }}
+          style={{ width: '100%', height: '100%' }}
           contentFit="contain"
           contentPosition="center"
           cachePolicy="memory-disk"
           recyclingKey={uri}
-          blurRadius={blur ? 36 : 0}
         />
       )}
-      {hidden ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: blur ? 'rgba(16,19,18,0.28)' : 'transparent',
-          }}>
-          <View
-            style={{
-              backgroundColor: 'rgba(16,19,18,0.72)',
-              borderRadius: 12,
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-            }}>
-            <AppText className="text-[12px] font-semibold" style={{ color: THEME.surface }}>
-              {owner ? copy('post.hidden') : copy('post.hiddenByAuthor')}
-            </AppText>
-          </View>
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -744,13 +709,9 @@ function PostVideoPlayer({ uri }: { uri: string }) {
 
 function ProofMedia({
   urls,
-  hiddenUrls,
-  owner,
   proof,
 }: {
   urls: string[];
-  hiddenUrls?: string[] | null;
-  owner?: boolean;
   proof?: boolean;
 }) {
   const lightbox = useMediaLightboxOptional();
@@ -785,8 +746,6 @@ function ProofMedia({
           uri={visuals[0]}
           height={SINGLE_IMAGE_HEIGHT}
           radius={14}
-          hidden={isHiddenMedia(visuals[0], hiddenUrls)}
-          owner={owner}
           onPress={lightbox ? () => openAt(0) : undefined}
         />
       ) : visuals.length > 1 ? (
@@ -801,8 +760,6 @@ function ProofMedia({
                       uri={uri}
                       height={TILE_HEIGHT}
                       radius={12}
-                      hidden={isHiddenMedia(uri, hiddenUrls)}
-                      owner={owner}
                       onPress={lightbox ? () => openAt(itemIndex) : undefined}
                     />
                   </View>

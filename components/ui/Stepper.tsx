@@ -50,7 +50,7 @@ export function StepperField({
   ...stepper
 }: StepperProps & { label: string; hint?: string }) {
   return (
-    <View className="w-full gap-1.5" style={{ overflow: 'visible' }}>
+    <View className="w-full gap-1.5" style={{ overflow: 'visible', minWidth: 168, flexWrap: 'nowrap' }}>
       <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
       <Stepper {...stepper} accessibilityLabel={stepper.accessibilityLabel ?? label} />
       {hint ? <AppText className="text-[13px] leading-5 text-muted">{hint}</AppText> : null}

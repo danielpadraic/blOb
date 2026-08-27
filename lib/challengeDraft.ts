@@ -770,8 +770,22 @@ export function hasMeaningfulDraftEdits(
   }
 }
 
-export function isDraftWorthSaving(draft: Pick<ChallengeDraft, 'step' | 'startPath' | 'values'>): boolean {
+export function isDraftWorthSaving(
+  draft: Pick<ChallengeDraft, 'step' | 'startPath' | 'values'> & {
+    simple?: ChallengeDraft['simple'];
+  },
+): boolean {
   try {
+    const simpleTitle = draft.simple?.title?.trim();
+    const simpleTask = draft.simple?.task?.trim();
+    if (simpleTitle || simpleTask) {
+      return true;
+    }
+    const title = typeof draft.values?.title === 'string' ? draft.values.title.trim() : '';
+    const task = (draft.values?.task ?? '').trim();
+    if (title || task) {
+      return true;
+    }
     const step = clampDraftStep(draft.step);
     if (step < wizardStepIndex('goal')) {
       return hasMeaningfulDraftEdits(draft.values);

@@ -40,7 +40,7 @@ import {
   useSoftDeletePost,
   useToggleMute,
 } from '@/hooks/usePostModeration';
-import { usePostEdits } from '@/hooks/usePostEdit';
+import { useHidePostFromHome, usePostEdits } from '@/hooks/usePostEdit';
 import { isCheckinPost } from '@/lib/checkinPost';
 import {
   useFriends,
@@ -366,6 +366,7 @@ function OverflowPopover({
   onEdit: () => void;
 }) {
   const hide = useHidePost();
+  const hideHome = useHidePostFromHome();
   const report = useReportPost();
   const removeFromWall = useRemoveFromWall();
   const softDelete = useSoftDeletePost();
@@ -412,6 +413,21 @@ function OverflowPopover({
                 label={copy('post.edit')}
                 icon={GLYPH.pencil}
                 onPress={onEdit}
+              />
+            ) : null}
+            {mine ? (
+              <IconAction
+                label={post.hidden_from_home ? copy('post.unhideOnHome') : copy('post.hideFromHome')}
+                icon={GLYPH.hide}
+                onPress={() => {
+                  hideHome.mutate(
+                    { postId: post.id, hidden: !post.hidden_from_home },
+                    {
+                      onSuccess: () => onClose(),
+                      onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)),
+                    },
+                  );
+                }}
               />
             ) : null}
             <IconAction

@@ -581,6 +581,7 @@ export interface Post {
   system_kind?: string | null;
   edited_at?: string | null;
   hidden_media_urls?: string[] | null;
+  hidden_from_home?: boolean | null;
   created_at: string;
 }
 
