@@ -1,30 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import { canHideCheckinUrl, parsePostEdits, visiblePostMedia } from '@/lib/postEdit';
+import { checkinCardCaption } from '@/lib/checkinPost';
+import {
+  canHideCheckinUrl,
+  hiddenUrlsFromParts,
+  isPersistedMediaUrl,
+  parsePostEdits,
+  postEditUnchanged,
+  visiblePostMedia,
+} from '@/lib/postEdit';
 
 describe('post edit lock', () => {
-  it('hides extras but not the last required selfie without a replacement', () => {
+  it('allows hide as blur-in-place on the last required selfie', () => {
     const required = { pre: ['https://example.com/pre.jpg'] };
     expect(
       canHideCheckinUrl({
-        url: 'https://example.com/cheer.gif',
-        hidden: [],
-        required,
-      }),
-    ).toBe(true);
-    expect(
-      canHideCheckinUrl({
         url: 'https://example.com/pre.jpg',
         hidden: [],
         required,
-      }),
-    ).toBe(false);
-    expect(
-      canHideCheckinUrl({
-        url: 'https://example.com/pre.jpg',
-        hidden: [],
-        required,
-        replacements: { pre: 'https://example.com/new.jpg' },
       }),
     ).toBe(true);
   });
@@ -36,6 +29,46 @@ describe('post edit lock', () => {
         ['https://a.jpg'],
       ),
     ).toEqual(['https://b.jpg']);
+  });
+
+  it('treats hide as unchanged when flags already match', () => {
+    expect(
+      postEditUnchanged({
+        caption: 'Hi',
+        originalCaption: 'Hi',
+        mediaUrls: ['https://a.jpg'],
+        originalMediaUrls: ['https://a.jpg'],
+        hidden: ['https://a.jpg'],
+        originalHidden: ['https://a.jpg'],
+      }),
+    ).toBe(true);
+    expect(
+      postEditUnchanged({
+        caption: 'New',
+        originalCaption: 'Hi',
+        mediaUrls: ['https://a.jpg'],
+        originalMediaUrls: ['https://a.jpg'],
+        hidden: [],
+        originalHidden: [],
+      }),
+    ).toBe(false);
+  });
+
+  it('reads hidden urls from proof json', () => {
+    expect(
+      hiddenUrlsFromParts({
+        pre: { method: 'photo', url: 'https://a.jpg', hidden_urls: ['https://a.jpg'] },
+      }),
+    ).toEqual(['https://a.jpg']);
+    expect(isPersistedMediaUrl('https://a.jpg')).toBe(true);
+    expect(isPersistedMediaUrl('file:///tmp/x.jpg')).toBe(false);
+  });
+
+  it('shows the saved caption after an owner edit', () => {
+    expect(checkinCardCaption('Sam is laundry!', 'Laundry', null)).toBe('');
+    expect(checkinCardCaption('Sam is laundry!', 'Laundry', '2026-08-27T12:00:00.000Z')).toBe(
+      'Sam is laundry!',
+    );
   });
 
   it('reads owner edit history captions', () => {

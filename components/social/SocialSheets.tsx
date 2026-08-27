@@ -293,7 +293,14 @@ function SheetView({
     return <QuoteSheet post={sheet.post} onClose={onClose} />;
   }
   if (sheet.kind === 'edit') {
-    return <PostEditor post={sheet.post} onClose={onClose} onSaved={() => onToast('Saved.')} />;
+    return (
+      <PostEditor
+        post={sheet.post}
+        onClose={onClose}
+        onToast={onToast}
+        onSaved={() => onToast('Saved.')}
+      />
+    );
   }
   if (sheet.kind === 'history') {
     return <HistorySheet post={sheet.post} onClose={onClose} />;

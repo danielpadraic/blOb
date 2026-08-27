@@ -27,7 +27,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { useUpdatePostAudience } from '@/hooks/useFeed';
-import { checkinExtraCaption, isCheckinCompleteStage, isCheckinPost, postLocality } from '@/lib/checkinPost';
+import { checkinCardCaption, isCheckinCompleteStage, isCheckinPost, postLocality } from '@/lib/checkinPost';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { PROOF_META } from '@/lib/constants';
 import { postHref } from '@/lib/postShare';
@@ -96,7 +96,7 @@ function PostCardInner({
   const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
   const challengeTitle = preview.data?.title?.trim() || null;
   const city = postLocality(post);
-  const caption = checkin ? checkinExtraCaption(content, challengeTitle) : content;
+  const caption = checkin ? checkinCardCaption(content, challengeTitle, post.edited_at) : content;
   const showInLine = Boolean(tagged && !challengeFeed && hidePromoCard);
 
   return (
@@ -617,12 +617,12 @@ function MediaFrame({
   onPress?: () => void;
 }) {
   const kind = mediaKind(uri);
-  const blur = hidden && !owner;
+  const blur = Boolean(hidden);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={
-        hidden ? copy('post.hiddenByAuthor') : label ? `Open ${label}` : 'Open photo'
+        hidden ? (owner ? copy('post.hidden') : copy('post.hiddenByAuthor')) : label ? `Open ${label}` : 'Open photo'
       }
       disabled={!onPress || blur}
       onPress={onPress}
@@ -671,7 +671,7 @@ function MediaFrame({
               paddingVertical: 5,
             }}>
             <AppText className="text-[12px] font-semibold" style={{ color: THEME.surface }}>
-              {copy('post.hiddenByAuthor')}
+              {owner ? copy('post.hidden') : copy('post.hiddenByAuthor')}
             </AppText>
           </View>
         </View>

@@ -92,6 +92,18 @@ export function checkinExtraCaption(
   return withoutTitle;
 }
 
+/** After an owner edit, show the saved caption as stored. */
+export function checkinCardCaption(
+  content: string | null | undefined,
+  challengeTitle?: string | null,
+  editedAt?: string | null,
+): string {
+  if (editedAt) {
+    return content?.trim() ?? '';
+  }
+  return checkinExtraCaption(content, challengeTitle);
+}
+
 /** City / locality when the post already carries it. Omit missing or “Unknown”. */
 export function postLocality(post: object): string | null {
   const raw = post as Record<string, unknown>;

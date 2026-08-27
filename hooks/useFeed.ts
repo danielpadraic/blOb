@@ -1153,7 +1153,7 @@ function optimisticReactionId(type: ReactionType, targetId: string, userId: stri
   return `optimistic-${type}-${targetId}-${userId}`;
 }
 
-function patchFeedPosts(
+export function patchFeedPosts(
   queryClient: QueryClient,
   postId: string,
   updater: (post: PostWithMeta) => PostWithMeta,

@@ -40,6 +40,8 @@ export type ChallengeProofPart = {
   url?: string | null;
   /** All image URLs for this slot. `url` stays the first for older rows. */
   urls?: string[] | null;
+  /** Media URLs on this part that the author hid (blur-in-place). File stays. */
+  hidden_urls?: string[] | null;
   text?: string | null;
   healthWorkoutId?: string | null;
   fromLibrary?: boolean;

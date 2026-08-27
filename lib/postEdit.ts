@@ -18,6 +18,26 @@ export function visiblePostMedia(urls?: string[] | null, hidden?: string[] | nul
   return uniqueProofUrls(urls ?? []).filter((url) => !skip.has(url));
 }
 
+export function hiddenUrlsFromParts(
+  parts?: Record<string, ChallengeProofPart> | null,
+): string[] {
+  if (!parts) {
+    return [];
+  }
+  const urls: string[] = [];
+  for (const part of Object.values(parts)) {
+    if (!part) {
+      continue;
+    }
+    urls.push(...(part.hidden_urls ?? []));
+  }
+  return uniqueProofUrls(urls);
+}
+
+export function isPersistedMediaUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url.trim());
+}
+
 export function requiredProofUrls(
   proofs: ChallengeProof[],
   parts?: Record<string, ChallengeProofPart> | null,
@@ -34,24 +54,35 @@ export function requiredProofUrls(
   return out;
 }
 
-export function canHideCheckinUrl(input: {
+/** Hide is blur-in-place. The file stays. Always allowed. */
+export function canHideCheckinUrl(_input?: {
   url: string;
   hidden: string[];
   replacements?: Record<string, string>;
   required: Record<string, string[]>;
 }): boolean {
-  const nextHidden = hiddenMediaSet([...input.hidden, input.url]);
-  for (const [proofId, urls] of Object.entries(input.required)) {
-    const replacement = input.replacements?.[proofId]?.trim();
-    const visible = urls.filter((url) => !nextHidden.has(url));
-    if (replacement && !nextHidden.has(replacement)) {
-      continue;
-    }
-    if (visible.length === 0) {
-      return false;
-    }
-  }
   return true;
+}
+
+export function sameUrlList(left: string[], right: string[]): boolean {
+  const a = uniqueProofUrls(left);
+  const b = uniqueProofUrls(right);
+  return a.length === b.length && a.every((url, index) => url === b[index]);
+}
+
+export function postEditUnchanged(input: {
+  caption: string;
+  originalCaption: string;
+  mediaUrls: string[];
+  originalMediaUrls: string[];
+  hidden: string[];
+  originalHidden: string[];
+}): boolean {
+  return (
+    input.caption.trim() === input.originalCaption.trim() &&
+    sameUrlList(input.mediaUrls, input.originalMediaUrls) &&
+    sameUrlList(input.hidden, input.originalHidden)
+  );
 }
 
 export function parsePostEdits(rows: unknown): PostEditHistoryRow[] {
