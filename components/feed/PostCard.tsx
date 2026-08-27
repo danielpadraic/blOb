@@ -548,6 +548,7 @@ const PROOF_LABELS = [
   PROOF_META.pre_selfie.short,
   PROOF_META.post_selfie.short,
   PROOF_META.hr_monitor.short,
+  PROOF_META.distance.short,
 ];
 
 const SINGLE_IMAGE_HEIGHT = 220;

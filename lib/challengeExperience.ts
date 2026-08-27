@@ -99,7 +99,10 @@ export function usesConsistencyExperience(challenge?: ExperienceChallenge | null
   if (usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)) {
     return false;
   }
-  if (challenge?.challenge_type === 'points') {
+  if (challenge?.challenge_type === 'points' || challenge?.challenge_type === 'cumulative') {
+    return false;
+  }
+  if (challenge?.format === 'cumulative') {
     return false;
   }
   if (usesTotalCountCheckins(challenge)) {
@@ -111,4 +114,8 @@ export function usesConsistencyExperience(challenge?: ExperienceChallenge | null
 /** Ranked scoreboard — Comparable Points or classic task points. */
 export function usesPointsBoard(challenge?: ExperienceChallenge | null): boolean {
   return usesComparablePointsScoring(challenge) || challenge?.challenge_type === 'points';
+}
+
+export function usesCumulativeScoring(challenge?: ExperienceChallenge | null): boolean {
+  return challenge?.challenge_type === 'cumulative' || challenge?.format === 'cumulative';
 }

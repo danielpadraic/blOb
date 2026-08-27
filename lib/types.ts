@@ -105,7 +105,8 @@ export type ProofType =
   | 'screenshot'
   | 'text_note'
   | 'link'
-  | 'video';
+  | 'video'
+  | 'distance';
 
 export type ChallengeCategory =
   | 'fitness'
@@ -117,7 +118,7 @@ export type ChallengeCategory =
   | 'gaming'
   | 'other';
 
-export type ChallengeKind = 'consistency' | 'points';
+export type ChallengeKind = 'consistency' | 'points' | 'cumulative';
 
 export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly' | 'once' | '3x_week' | 'custom';
 
@@ -125,9 +126,13 @@ export type ChallengeVisibility = 'public' | 'unlisted' | 'private' | 'friends' 
 export type ChallengeDiscoverability = 'invite_only' | 'friends_of_friends';
 export type PrivacyMode = 'public' | 'private' | 'private_corporate';
 
-export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'checkin' | 'honor' | 'hr';
+export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'checkin' | 'honor' | 'hr' | 'distance';
 
-export type ChallengeFormat = 'consistency' | 'points' | 'lms';
+export type ChallengeFormat = 'consistency' | 'points' | 'lms' | 'cumulative';
+
+export type CumulativeMetric = 'distance_m' | 'count';
+
+export type CumulativeWindow = 'challenge' | 'week' | 'day';
 
 export type ProofReview = 'auto' | 'host';
 
@@ -211,13 +216,14 @@ export interface ProofRequirement {
   required: boolean;
 }
 
-export type ChallengeProofMethod = 'photo' | 'video' | 'checkin' | 'honor' | 'hr';
+export type ChallengeProofMethod = 'photo' | 'video' | 'checkin' | 'honor' | 'hr' | 'distance';
 
 export interface ChallengeProof {
   id: string;
   name: string;
   method: ChallengeProofMethod;
   minutes?: number;
+  distance_meters?: number;
 }
 
 export interface ChallengeProofPart {
@@ -236,6 +242,7 @@ export interface ChallengeProofPart {
     activeEnergyKcal?: number;
     distanceMeters?: number;
   } | null;
+  distanceMeters?: number | null;
 }
 
 export interface ChallengeTask {
@@ -387,6 +394,10 @@ export interface Challenge {
   proof_type?: SimpleProofType | string | null;
   proof_review?: ProofReview | string | null;
   payout_mode?: PayoutMode | string | null;
+  cumulative_metric?: CumulativeMetric | string | null;
+  cumulative_target?: number | null;
+  cumulative_window?: CumulativeWindow | string | null;
+  distance_meters_required?: number | null;
   timezone?: string | null;
   start_rule?: string | null;
   cancelled_at?: string | null;
@@ -417,6 +428,7 @@ export interface ChallengeParticipant {
   points?: number;
   buy_in_paid?: number;
   currency?: WalletCurrency | string | null;
+  distance_meters_total?: number | null;
 }
 
 export interface ChallengeParticipantWithProfile extends ChallengeParticipant {

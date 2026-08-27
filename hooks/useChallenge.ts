@@ -271,7 +271,7 @@ export function useChallenge(id: string | undefined) {
 }
 
 const PARTICIPANT_COLUMNS =
-  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at';
+  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total';
 const PARTICIPANT_COLUMNS_NO_POINTS =
   'id, challenge_id, user_id, status, days_completed, joined_at, completed_at, eliminated_at';
 const PARTICIPANT_COLUMNS_LEGACY =
@@ -283,6 +283,10 @@ function asParticipant(row: ChallengeParticipant, extras?: Partial<ChallengePart
     days_completed: Number(row.days_completed ?? 0),
     points: Number(row.points ?? extras?.points ?? 0),
     eliminated_at: row.eliminated_at ?? extras?.eliminated_at ?? null,
+    distance_meters_total:
+      row.distance_meters_total == null && extras?.distance_meters_total == null
+        ? null
+        : Number(row.distance_meters_total ?? extras?.distance_meters_total ?? 0),
   };
 }
 
@@ -833,7 +837,10 @@ export function useCreateChallenge() {
         format: unlimited ? 'lms' : values.format ?? values.challenge_type,
         task: values.task?.trim() || values.rule_activity.trim() || null,
         required_checkins: Number(values.required_checkins) || targetCount,
-        misses_allowed: isPoints ? 0 : Math.max(Number(values.misses_allowed) || 0, 0),
+        misses_allowed:
+          isPoints || values.challenge_type === 'cumulative'
+            ? 0
+            : Math.max(Number(values.misses_allowed) || 0, 0),
         proof_type:
           values.proof_type ??
           proofTypeFromMethod(firstProofMethod(namedProofs)),
@@ -854,6 +861,12 @@ export function useCreateChallenge() {
           values.scoring_method === 'comparable_points'
             ? parseComparablePointsConfig(values.scoring_config)
             : null,
+        cumulative_metric: values.challenge_type === 'cumulative' ? values.cumulative_metric ?? 'distance_m' : null,
+        cumulative_target:
+          values.challenge_type === 'cumulative' ? Math.max(Number(values.cumulative_target) || 0, 0) : null,
+        cumulative_window:
+          values.challenge_type === 'cumulative' ? values.cumulative_window ?? 'challenge' : null,
+        distance_meters_required: Math.max(Number(values.distance_meters_required) || 0, 0) || null,
       });
       await announceCreatedChallenge({
         authorId: user.id,
@@ -1049,10 +1062,20 @@ export function useUpdateUserChallenge() {
         length_value: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
         required_checkins: Number(values.required_checkins) || targetCount,
-        misses_allowed: isPoints ? 0 : Math.max(Number(values.misses_allowed) || 0, 0),
+        misses_allowed:
+          isPoints || values.challenge_type === 'cumulative'
+            ? 0
+            : Math.max(Number(values.misses_allowed) || 0, 0),
         proof_type: values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),
         cover_image_url: values.cover_image_url?.trim() || null,
         rules_video_url: values.rules_video_url?.trim() || null,
+        format: unlimited ? 'lms' : values.format ?? values.challenge_type,
+        cumulative_metric: values.challenge_type === 'cumulative' ? values.cumulative_metric ?? 'distance_m' : null,
+        cumulative_target:
+          values.challenge_type === 'cumulative' ? Math.max(Number(values.cumulative_target) || 0, 0) : null,
+        cumulative_window:
+          values.challenge_type === 'cumulative' ? values.cumulative_window ?? 'challenge' : null,
+        distance_meters_required: Math.max(Number(values.distance_meters_required) || 0, 0) || null,
       });
       const scoring = parseComparablePointsConfig(values.scoring_config);
       if (values.scoring_method === 'comparable_points' && scoring) {

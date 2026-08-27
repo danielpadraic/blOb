@@ -24,6 +24,9 @@ function extraTaskProofType(method: ExtraCreateTask['proof_method']): string | u
   if (method === 'checkin') {
     return 'text_note';
   }
+  if (method === 'distance') {
+    return 'distance';
+  }
   return method;
 }
 
@@ -45,7 +48,12 @@ export function extraTaskNamedProofs(tasks: ExtraCreateTask[]): ChallengeProof[]
     const minutes = Math.max(Math.round(Number(task.hr_minutes) || DEFAULT_MIN_MINUTES), 1);
     return [
       ensureProofSentence(
-        makeProof(defaultSentenceForMethod(task.proof_method, minutes), task.proof_method, minutes),
+        makeProof(
+          defaultSentenceForMethod(task.proof_method, minutes, { distanceMeters: task.distance_meters }),
+          task.proof_method,
+          minutes,
+          task.distance_meters,
+        ),
         minutes,
       ),
     ];
@@ -53,12 +61,26 @@ export function extraTaskNamedProofs(tasks: ExtraCreateTask[]): ChallengeProof[]
 }
 
 export function namedProofsForPublish(values: CreateChallengeValues): ChallengeProof[] {
+  const requiredMeters = Math.max(Number(values.distance_meters_required) || 0, 0);
   const base =
     values.challenge_proofs && values.challenge_proofs.length > 0
       ? values.challenge_proofs.map((proof) =>
-          ensureProofSentence(proof, proofHeartRateMinutes(proof, Number(values.min_minutes) || DEFAULT_MIN_MINUTES)),
+          ensureProofSentence(
+            {
+              ...proof,
+              distance_meters:
+                proof.method === 'distance'
+                  ? proof.distance_meters || requiredMeters || undefined
+                  : proof.distance_meters,
+            },
+            proofHeartRateMinutes(proof, Number(values.min_minutes) || DEFAULT_MIN_MINUTES),
+          ),
         )
-      : namedProofsFromLegacyTypes(values.proofs);
+      : namedProofsFromLegacyTypes(values.proofs).map((proof) =>
+          proof.method === 'distance' && requiredMeters
+            ? { ...proof, distance_meters: requiredMeters }
+            : proof,
+        );
   return [...base, ...extraTaskNamedProofs(filledExtraTasks(values))];
 }
 

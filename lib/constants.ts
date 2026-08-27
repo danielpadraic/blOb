@@ -73,6 +73,7 @@ export const CREATE_PROOF_TYPES = [
   'text_note',
   'link',
   'video',
+  'distance',
 ] as const satisfies readonly ProofType[];
 
 export const IMAGE_PROOF_TYPES: readonly ProofType[] = [
@@ -126,6 +127,11 @@ export const CHALLENGE_TYPES = [
     value: 'consistency',
     label: 'Consistency',
     helper: 'Check in a required number of times on a schedule. Hit the target to finish.',
+  },
+  {
+    value: 'cumulative',
+    label: 'Cumulative',
+    helper: 'Add up distance over the window. Everyone who hits the total splits the prize.',
   },
   {
     value: 'points',
@@ -262,6 +268,11 @@ export const PROOF_META: Record<
     label: 'Post a video of the work.',
     helper: 'A short clip of the activity or result.',
     short: 'Video',
+  },
+  distance: {
+    label: 'Attach a run or walk of at least 1.00 miles.',
+    helper: 'A Health workout or typed miles. A photo alone is not enough.',
+    short: 'Distance',
   },
 };
 

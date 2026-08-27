@@ -559,6 +559,7 @@ export default function ChallengeDetailScreen() {
   const goalLabel = challengeGoalLabel(challenge, {
     daysCompleted,
     taskCount: Math.max(challenge.tasks?.length ?? 0, 1),
+    distanceMetersCompleted: participation?.distance_meters_total ?? 0,
   });
   const prizeForfeited =
     remainingNow <= 0 &&
@@ -854,7 +855,7 @@ export default function ChallengeDetailScreen() {
                     </View>
                     <View className="flex-1">
                       <AppText className="font-semibold text-charcoal">{proofDisplayName(proof)}</AppText>
-                      {proof.method === 'hr' &&
+                      {(proof.method === 'hr' || proof.method === 'distance') &&
                       periodCheckin.data?.proof_parts?.[proof.id]?.healthWorkoutId ? (
                         <HealthProofCaption
                           healthWorkoutId={periodCheckin.data.proof_parts[proof.id].healthWorkoutId}

@@ -8,6 +8,7 @@ import {
 } from '@/lib/challengeSchedule';
 import type { Challenge, ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
+import { milesToMeters, type DistanceUnit } from '@/lib/distance';
 import {
   BEFORE_AFTER_HR_PRESET,
   SIMPLE_PROOF_CAP,
@@ -16,6 +17,7 @@ import {
   ensureProofSentence,
   firstProofMethod,
   makeProof,
+  proofDistanceMeters,
   proofRequirementsFrom,
   proofTypeFromMethod,
   resolveChallengeProofs,
@@ -95,6 +97,18 @@ export const SIMPLE_PROOF_METHODS: { value: ChallengeProofMethod; label: string;
   { value: 'checkin', label: 'Note', icon: '✎' },
   { value: 'honor', label: 'Honor', icon: '🤝' },
   { value: 'hr', label: 'Heart rate', icon: '♥' },
+  { value: 'distance', label: 'Distance', icon: '↔' },
+];
+
+export const SIMPLE_SCORING: { value: 'consistency' | 'cumulative' | 'points'; label: string }[] = [
+  { value: 'consistency', label: 'Consistency' },
+  { value: 'cumulative', label: 'Cumulative' },
+  { value: 'points', label: 'Points' },
+];
+
+export const SIMPLE_CUMULATIVE_WINDOWS: { value: 'challenge' | 'week'; label: string }[] = [
+  { value: 'challenge', label: 'This challenge' },
+  { value: 'week', label: 'Each week' },
 ];
 
 export type SimpleChallengeDraft = {
@@ -120,6 +134,10 @@ export type SimpleChallengeDraft = {
   friends_of_friends: boolean;
   min_participants: number;
   cover_image_url: string;
+  scoring?: 'consistency' | 'cumulative' | 'points';
+  cumulative_target_meters?: number;
+  cumulative_window?: 'challenge' | 'week' | 'day';
+  distance_unit?: 'mi' | 'km';
 };
 
 export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
@@ -147,6 +165,10 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     friends_of_friends: true,
     min_participants: 2,
     cover_image_url: '',
+    scoring: 'consistency',
+    cumulative_target_meters: milesToMeters(100),
+    cumulative_window: 'challenge',
+    distance_unit: 'mi',
   };
 }
 
@@ -432,9 +454,20 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const fundingModel =
     buyIn > 0 && hostContribution > 0 ? 'hybrid' : hostContribution > 0 ? 'creator' : 'participants';
   const extra_tasks = filledExtraTasks(draft);
-  const proofs = (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
+  let proofs = (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
     ensureProofSentence(item, item.minutes ?? DEFAULT_MIN_MINUTES),
   );
+  if (draft.scoring === 'cumulative' && !proofs.some((item) => item.method === 'distance')) {
+    proofs = [
+      makeProof(
+        defaultSentenceForMethod('distance', 30, { unit: draft.distance_unit }),
+        'distance',
+        undefined,
+        milesToMeters(1),
+      ),
+      ...proofs,
+    ].slice(0, SIMPLE_PROOF_CAP);
+  }
   const legacyTypes = proofRequirementsFrom(proofs).map((item) => item.type);
   const hrMinutes = [
     ...proofs.filter((item) => item.method === 'hr').map((item) => item.minutes ?? DEFAULT_MIN_MINUTES),
@@ -446,7 +479,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     title: draft.title.trim(),
     description: draft.description.trim(),
     category: type.category,
-    challenge_type: 'consistency',
+    challenge_type: draft.scoring === 'cumulative' || draft.scoring === 'points' ? draft.scoring : 'consistency',
     visibility: invite ? 'invite' : draft.visibility === 'friends' ? 'friends' : 'public',
     privacy_mode: corporate ? 'private_corporate' : asPrivacyMode(draft.privacy_mode, invite ? 'invite' : draft.visibility, 'coins'),
     discoverability: corporate
@@ -479,7 +512,13 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     participant_cap: 'unlimited',
     max_participants: '',
     min_participants: String(Math.max(Number(draft.min_participants) || 2, 2)),
-    misses_allowed: '0',
+    misses_allowed: draft.scoring === 'consistency' ? '0' : '0',
+    cumulative_metric: draft.scoring === 'cumulative' ? 'distance_m' : null,
+    cumulative_target: draft.scoring === 'cumulative' ? String(Math.max(Number(draft.cumulative_target_meters) || milesToMeters(100), 1)) : '',
+    cumulative_window: draft.cumulative_window === 'week' || draft.cumulative_window === 'day' ? draft.cumulative_window : 'challenge',
+    distance_meters_required: String(
+      proofDistanceMeters(proofs.find((item) => item.method === 'distance')),
+    ),
     proof_review: 'auto',
     proof_type: proofTypeFromMethod(firstProofMethod(proofs)) as CreateChallengeValues['proof_type'],
     task: draft.task.trim(),
@@ -488,7 +527,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     guarantee_enabled: draft.guarantee_enabled ?? !corporate,
     required_checkins: String(required),
     payout_mode: 'even_split_remaining',
-    format: 'consistency',
+    format:
+      draft.scoring === 'cumulative' || draft.scoring === 'points' ? draft.scoring : 'consistency',
     currency: bucks ? 'bucks' : 'coins',
     creator_participating: true,
     min_minutes: String(minMinutes),
@@ -560,6 +600,18 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
       privacy_mode === 'private_corporate' ? false : challenge.discoverability === 'friends_of_friends',
     min_participants: Math.max(Number(challenge.min_participants) || 2, 2),
     cover_image_url: challenge.cover_image_url?.trim() || '',
+    scoring:
+      challenge.challenge_type === 'cumulative' || challenge.format === 'cumulative'
+        ? 'cumulative'
+        : challenge.challenge_type === 'points' || challenge.format === 'points'
+          ? 'points'
+          : 'consistency',
+    cumulative_target_meters: Math.max(Number(challenge.cumulative_target) || milesToMeters(100), 1),
+    cumulative_window:
+      challenge.cumulative_window === 'week' || challenge.cumulative_window === 'day'
+        ? challenge.cumulative_window
+        : 'challenge',
+    distance_unit: 'mi' as DistanceUnit,
   };
 }
 

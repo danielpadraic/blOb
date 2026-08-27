@@ -3,9 +3,11 @@ import { format } from 'date-fns';
 import {
   isPreWorkoutProof,
   isPostWorkoutProof,
+  proofDistanceMeters,
   resolveChallengeProofs,
   type ChallengeProof,
 } from '@/lib/challengeProofs';
+import { distanceShortHint } from '@/lib/distance';
 import {
   parseCheckinHealthProof,
   type CheckinHealthProof,
@@ -21,6 +23,7 @@ export { parseCheckinHealthProof };
 export type HealthAttachRules = {
   minMinutes?: number | null;
   hrRequired?: boolean;
+  minDistanceMeters?: number | null;
 };
 
 export function proofPrefersHealthAttach(
@@ -39,7 +42,7 @@ export function proofPrefersHealthAttach(
   if (!proof) {
     return false;
   }
-  if (proof.method === 'hr') {
+  if (proof.method === 'hr' || proof.method === 'distance') {
     return true;
   }
   if (proof.method !== 'photo' && proof.method !== 'video') {
@@ -96,13 +99,21 @@ export function healthAttachRulesFor(
   return {
     minMinutes: mins.length > 0 ? Math.max(...mins) : null,
     hrRequired: proof?.method === 'hr',
+    minDistanceMeters: proof?.method === 'distance' ? proofDistanceMeters(proof) : null,
   };
 }
 
 export function workoutAttachBlockReason(
-  workout: Pick<HealthWorkout, 'durationSec' | 'hrAvg' | 'hrMax'>,
+  workout: Pick<HealthWorkout, 'durationSec' | 'hrAvg' | 'hrMax' | 'distanceM'>,
   rules: HealthAttachRules,
 ): string | null {
+  if (Number(rules.minDistanceMeters) > 0) {
+    const actual = Math.max(Number(workout.distanceM) || 0, 0);
+    const need = Number(rules.minDistanceMeters);
+    if (actual < need) {
+      return distanceShortHint(actual, need);
+    }
+  }
   if (!meetsMinMinutes(workout.durationSec, rules.minMinutes)) {
     const min = Math.round(Number(rules.minMinutes));
     return `Needs at least ${min} min`;

@@ -17,6 +17,8 @@ import {
   type ExtraRule,
 } from '@/lib/consistencyRules';
 import { persistTasksForPublish, minMinutesForPublish, namedProofsForPublish } from '@/lib/challengeCreatePublish';
+import { formatDistance, milesToMeters } from '@/lib/distance';
+import { proofDistanceMeters } from '@/lib/challengeProofs';
 import {
   comparablePointsHeadline,
   comparablePointsLiveSentence,
@@ -158,6 +160,10 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   format: 'consistency',
   scoring_method: null,
   scoring_config: null,
+  cumulative_metric: null,
+  cumulative_target: '',
+  cumulative_window: 'challenge',
+  distance_meters_required: '',
 };
 
 export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
@@ -397,10 +403,16 @@ export function isPointsDraft(values: Pick<CreateChallengeValues, 'challenge_typ
   return values.challenge_type === 'points' && values.duration_type !== 'unlimited';
 }
 
+export function isCumulativeDraft(
+  values: Pick<CreateChallengeValues, 'challenge_type' | 'duration_type'>,
+): boolean {
+  return values.challenge_type === 'cumulative' && values.duration_type !== 'unlimited';
+}
+
 export function missesAllowedForPublish(
   values: Pick<CreateChallengeValues, 'challenge_type' | 'duration_type' | 'misses_allowed'>,
 ): number {
-  if (isPointsDraft(values)) {
+  if (isPointsDraft(values) || isCumulativeDraft(values)) {
     return 0;
   }
   return Math.max(Number(values.misses_allowed) || 0, 0);
@@ -409,7 +421,7 @@ export function missesAllowedForPublish(
 export function missesAllowedReviewLine(
   values: Pick<CreateChallengeValues, 'challenge_type' | 'duration_type' | 'misses_allowed'>,
 ): string | null {
-  if (isPointsDraft(values)) {
+  if (isPointsDraft(values) || isCumulativeDraft(values)) {
     return null;
   }
   const n = missesAllowedForPublish(values);
@@ -418,6 +430,30 @@ export function missesAllowedReviewLine(
 
 export function isUnlimitedDraft(values: Pick<CreateChallengeValues, 'duration_type'>): boolean {
   return values.duration_type === 'unlimited';
+}
+
+export function consistencyDistanceWinLine(values: CreateChallengeValues): string | null {
+  const proof = (values.challenge_proofs ?? []).find((item) => item.method === 'distance');
+  const hasLegacy = (values.proofs ?? []).includes('distance');
+  if (!proof && !hasLegacy) {
+    return null;
+  }
+  const meters = proof
+    ? proofDistanceMeters(proof)
+    : Math.max(Number(values.distance_meters_required) || 0, milesToMeters(1));
+  return values.frequency === 'daily'
+    ? `Win by attaching ≥ ${formatDistance(meters)} each day.`
+    : `Win by attaching ≥ ${formatDistance(meters)} each qualifying check-in.`;
+}
+
+export function cumulativeReviewWinLine(values: CreateChallengeValues): string {
+  const target = Math.max(Number(values.cumulative_target) || 0, 0);
+  const meters = target > 0 ? target : milesToMeters(100);
+  const window = values.cumulative_window === 'week' ? 'each week' : values.cumulative_window === 'day' ? 'each day' : 'before the end date';
+  const distanceProof = (values.challenge_proofs ?? []).find((proof) => proof.method === 'distance');
+  const floor = distanceProof ? proofDistanceMeters(distanceProof) : Math.max(Number(values.distance_meters_required) || 0, 0);
+  const floorLine = floor > 0 ? ` Each check-in needs ≥ ${formatDistance(floor)}.` : '';
+  return `Win by reaching ${formatDistance(meters)} ${window}. Everyone who hits the total splits the prize.${floorLine}`;
 }
 
 export function wizardMeans(
@@ -549,9 +585,12 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
         ? `Points. Competitors complete ${values.tasks.length} task${
             values.tasks.length === 1 ? '' : 's'
           } totaling ${values.tasks.reduce((sum, task) => sum + Math.max(Number(task.points) || 0, 0), 0)} pts.`
-        : unlimited
-          ? 'Consistency. Stay eligible on the cadence above or you’re eliminated.'
-          : consistencyRuleSentence(values);
+        : isCumulativeDraft(values)
+          ? cumulativeReviewWinLine(values)
+          : consistencyDistanceWinLine(values) ??
+            (unlimited
+              ? 'Consistency. Stay eligible on the cadence above or you’re eliminated.'
+              : consistencyRuleSentence(values));
 
   const proof = points
     ? values.tasks
@@ -619,7 +658,7 @@ export function challengeContractRows(values: CreateChallengeValues): { label: s
   const buyIn = Math.max(Number(values.buy_in) || 0, 0);
   const points = isPointsDraft(values);
   const unlimited = isUnlimitedDraft(values);
-  const typeLabel = points ? 'Points' : 'Consistency';
+  const typeLabel = points ? 'Points' : isCumulativeDraft(values) ? 'Cumulative' : 'Consistency';
   const rules = points
     ? [
         `Points race. ${values.tasks.length} task${values.tasks.length === 1 ? '' : 's'}.`,
@@ -722,6 +761,11 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     is_unlimited: unlimited,
     category: values.category,
     challenge_type: unlimited ? 'consistency' : values.challenge_type,
+    format: unlimited ? 'lms' : values.format ?? values.challenge_type,
+    cumulative_metric: isCumulativeDraft(values) ? values.cumulative_metric ?? 'distance_m' : null,
+    cumulative_target: isCumulativeDraft(values) ? Math.max(Number(values.cumulative_target) || 0, 0) : null,
+    cumulative_window: isCumulativeDraft(values) ? values.cumulative_window ?? 'challenge' : null,
+    distance_meters_required: Math.max(Number(values.distance_meters_required) || 0, 0) || null,
     misses_allowed: missesAllowedForPublish(values),
     visibility: values.visibility,
     privacy_mode: values.privacy_mode,

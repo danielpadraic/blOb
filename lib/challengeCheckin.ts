@@ -22,6 +22,8 @@ export type ChallengeCheckin = {
   started_at: string;
   submitted_at?: string | null;
   scoring_version?: number | null;
+  distance_meters?: number | null;
+  route_preview_url?: string | null;
   created_at: string;
   updated_at?: string | null;
 };

@@ -124,6 +124,10 @@ export type CreateChallengeInput = {
   privacy_mode?: string | null;
   scoring_method?: string | null;
   scoring_config?: unknown;
+  cumulative_metric?: string | null;
+  cumulative_target?: number | null;
+  cumulative_window?: string | null;
+  distance_meters_required?: number | null;
 };
 
 type ChallengeRow = Record<string, unknown>;
@@ -626,7 +630,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     distributed_at: row.distributed_at ? String(row.distributed_at) : null,
     rules_list: normalizeRulesPayload(row.rules_list, row.rules_structured),
     category: (row.category as string | null) ?? null,
-    challenge_type: rawType === 'points' ? 'points' : 'consistency',
+    challenge_type: rawType === 'points' || rawType === 'cumulative' ? rawType : 'consistency',
     visibility: (row.visibility as string | null) ?? null,
     discoverability: (row.discoverability as string | null) ?? null,
     privacy_mode: asPrivacyMode(row.privacy_mode, row.visibility as string | null, row.challenge_lane as string | null),
@@ -636,6 +640,11 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     host_funded: Boolean(row.host_funded),
     host_budget: Number(row.host_budget ?? row.creator_contribution ?? 0),
     format: (row.format as string | null) ?? null,
+    cumulative_metric: (row.cumulative_metric as string | null) ?? null,
+    cumulative_target: row.cumulative_target == null ? null : Number(row.cumulative_target),
+    cumulative_window: (row.cumulative_window as string | null) ?? null,
+    distance_meters_required:
+      row.distance_meters_required == null ? null : Number(row.distance_meters_required),
     task: (row.task as string | null) ?? null,
     required_checkins: row.required_checkins == null ? null : Number(row.required_checkins),
     misses_allowed: Number(row.misses_allowed ?? 0),
@@ -1472,7 +1481,30 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     start_rule: input.start_rule ?? 'at_starts_at',
     is_official: false,
     discoverability: input.discoverability ?? null,
+    cumulative_metric: input.cumulative_metric ?? null,
+    cumulative_target: input.cumulative_target ?? null,
+    cumulative_window: input.cumulative_window ?? null,
+    distance_meters_required: input.distance_meters_required ?? null,
   }, input.draft_id);
+  if (
+    result.challenge_id &&
+    (input.cumulative_metric ||
+      input.cumulative_target != null ||
+      input.cumulative_window ||
+      input.distance_meters_required != null)
+  ) {
+    await supabase
+      .from('challenges')
+      .update({
+        challenge_type: input.challenge_type,
+        format: input.format ?? input.challenge_type,
+        cumulative_metric: input.cumulative_metric ?? null,
+        cumulative_target: input.cumulative_target ?? null,
+        cumulative_window: input.cumulative_window ?? null,
+        distance_meters_required: input.distance_meters_required ?? null,
+      })
+      .eq('id', result.challenge_id);
+  }
   const { maybeRequestPushPermission } = await import('@/lib/push');
   void maybeRequestPushPermission();
   if (participating) {

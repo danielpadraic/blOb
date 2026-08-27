@@ -13,6 +13,7 @@ import {
 } from '@/lib/health/attachProof';
 import { rankHealthWorkouts } from '@/lib/health/match';
 import { challengeHealthWindow } from '@/lib/health/period';
+import { athleteDistanceUnit, formatDistance } from '@/lib/distance';
 import { healthSourceLabel } from '@/lib/health/proofSummary';
 import { fetchUsedProviderWorkoutIds, probeOnline, upsertHealthConnection } from '@/lib/health/remote';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -320,10 +321,14 @@ export function HealthWorkoutPicker({
                 }}>
                 <AppText className="text-[15px] font-bold text-charcoal">{row.activityLabel}</AppText>
                 <AppText className="mt-0.5 text-sm text-muted">
+                  {Number(row.distanceM) > 0
+                    ? `${formatDistance(Number(row.distanceM), athleteDistanceUnit())} · `
+                    : ''}
                   {formatRange(row.startedAt, row.endedAt)}
                   {` · ${formatDuration(row.durationSec)}`}
                   {row.hrAvg ? ` · ${row.hrAvg} avg` : ''}
                   {` · ${healthSourceLabel(row.confidence)}`}
+                  {Number(row.distanceM) > 0 ? ' · No route on this workout.' : ''}
                 </AppText>
                 {blocked ? (
                   <AppText className="mt-1 text-[12px] font-semibold" style={{ color: THEME.danger }}>

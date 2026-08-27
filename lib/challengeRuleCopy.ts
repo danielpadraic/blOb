@@ -1,4 +1,6 @@
-import { usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesCumulativeScoring, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { athleteDistanceUnit } from '@/lib/distance';
+import { challengeCumulativeProgress, cumulativeEligible, cumulativeTargetMeters } from '@/lib/cumulative';
 import { resolveChallengeProofs } from '@/lib/challengeProofs';
 import { challengeDurationDays } from '@/lib/challengeGoal';
 import {
@@ -36,6 +38,8 @@ type RuleChallenge = {
   proofs?: unknown;
   proof_type?: unknown;
   proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
+  format?: string | null;
+  cumulative_target?: number | null;
 };
 
 export type ChallengeRuleCopy = {
@@ -503,7 +507,16 @@ function compactCadence(count: number, period: ChallengeFrequency): string {
 export function joinedProgressCopy(
   challenge: RuleChallenge,
   daysCompleted = 0,
+  extras?: { distanceMetersCompleted?: number },
 ): JoinedProgressCopy {
+  if (usesCumulativeScoring(challenge)) {
+    const done = Math.max(Number(extras?.distanceMetersCompleted) || 0, 0);
+    const target = cumulativeTargetMeters(challenge);
+    return {
+      label: challengeCumulativeProgress(challenge, done, athleteDistanceUnit()) ?? '0 / 0 mi',
+      ratio: target > 0 && cumulativeEligible(done, target) ? 1 : target > 0 ? Math.min(done / target, 1) : 0,
+    };
+  }
   const logged = Math.max(0, Math.floor(Number(daysCompleted) || 0));
   if (usesTotalCountCheckins(challenge)) {
     const target = Math.max(Number(challenge.target_count) || 1, 1);

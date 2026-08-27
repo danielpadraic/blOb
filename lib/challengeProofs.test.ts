@@ -35,6 +35,41 @@ describe('signupProofLines', () => {
   });
 });
 
+describe('Distance proof method', () => {
+  it('labels Distance and needs meters, not a photo', () => {
+    expect(SIMPLE_PROOF_METHODS.some((item) => item.value === 'distance' && item.label === 'Distance')).toBe(
+      true,
+    );
+    expect(defaultSentenceForMethod('distance')).toBe('Attach a run or walk of at least 1.00 miles.');
+    expect(methodLabel('distance')).toBe('Distance');
+    expect(proofTypeFromMethod('distance')).toBe('distance');
+    expect(
+      partSatisfies(
+        { id: 'd', name: 'Distance', method: 'distance', distance_meters: 1609 },
+        { method: 'distance', url: 'https://x.test/shot.jpg' },
+      ),
+    ).toBe(false);
+    expect(
+      partSatisfies(
+        { id: 'd', name: 'Distance', method: 'distance', distance_meters: 1609 },
+        { method: 'distance', distanceMeters: 1609 },
+      ),
+    ).toBe(true);
+    expect(
+      partSatisfies(
+        { id: 'd', name: 'Distance', method: 'distance', distance_meters: 1609 },
+        { method: 'distance', text: '1.00' },
+      ),
+    ).toBe(true);
+    expect(
+      partSatisfies(
+        { id: 'd', name: 'Distance', method: 'distance', distance_meters: 1609 },
+        { method: 'distance', health: { distanceMeters: 998 } as never },
+      ),
+    ).toBe(false);
+  });
+});
+
 describe('Note proof method', () => {
   it('labels Simple checkin as Note and needs written text', () => {
     expect(SIMPLE_PROOF_METHODS.some((item) => item.value === 'checkin' && item.label === 'Note')).toBe(true);

@@ -61,6 +61,7 @@ import {
   cloneTemplateValues,
   coinFlowLines,
   DEFAULT_CREATE_VALUES,
+  isCumulativeDraft,
   isPointsDraft,
   isUnlimitedDraft,
   wizardStepIndex,
@@ -246,6 +247,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const comparableConfig = parseComparablePointsConfig(values.scoring_config);
   const scoringForm = useComparablePointsForm(comparableConfig);
   const isPoints = isPointsDraft(values);
+  const isCumulative = isCumulativeDraft(values);
   const usesComparablePoints = values.scoring_method === COMPARABLE_POINTS_METHOD && comparableConfig != null;
   const isUnlimited = isUnlimitedDraft(values);
   const isCreatorFunded = values.funding_model === 'creator' || values.funding_model === 'hybrid';
@@ -806,10 +808,22 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   function onTypeChange(next: CreateChallengeValues['challenge_type']) {
-    if (getValues('duration_type') === 'unlimited' && next === 'points') {
+    if (getValues('duration_type') === 'unlimited' && (next === 'points' || next === 'cumulative')) {
       return;
     }
     setValue('challenge_type', next, { shouldValidate: true });
+    setValue('format', next === 'cumulative' ? 'cumulative' : next === 'points' ? 'points' : 'consistency', {
+      shouldValidate: false,
+    });
+    if (next === 'cumulative') {
+      setValue('misses_allowed', '0', { shouldDirty: false, shouldValidate: false });
+      setValue('cumulative_metric', 'distance_m', { shouldDirty: false, shouldValidate: false });
+      setValue('cumulative_window', getValues('cumulative_window') || 'challenge', { shouldDirty: false });
+      if (!Number(getValues('cumulative_target'))) {
+        setValue('cumulative_target', String(160934), { shouldDirty: false });
+      }
+      return;
+    }
     if (next !== 'points') {
       return;
     }
@@ -1682,6 +1696,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               participantCap={values.participant_cap}
               creatorParticipating={values.creator_participating}
               isPoints={isPoints}
+              isCumulative={isCumulative}
               onEntryTabChange={onEntryTabChange}
               onCapChange={(value) => setValue('participant_cap', value, { shouldValidate: true })}
               onCreatorParticipatingChange={(value) =>
@@ -1697,6 +1712,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               getValues={getValues}
               values={values}
               isPoints={isPoints && !usesComparablePoints}
+              isCumulative={isCumulative}
               isUnlimited={isUnlimited}
               onFrequencyChange={onFrequencyChange}
               onAddTask={addTask}
@@ -2125,13 +2141,15 @@ function TypeSlide({
                 selected={challengeType === item.value}
                 title={item.label}
                 body={
-                  pointsLocked
+                  pointsLocked || (isUnlimited && item.value === 'cumulative')
                     ? 'Last-man-standing uses Consistency so everyone is judged on staying eligible.'
                     : item.value === 'consistency'
                       ? 'Check in on a schedule. Hit the target to finish.'
+                      : item.value === 'cumulative'
+                        ? 'Add up distance. Everyone who hits the total splits the prize.'
                       : 'Earn points from a task list. Totals decide ranking.'
                 }
-                disabled={pointsLocked}
+                disabled={pointsLocked || (isUnlimited && item.value === 'cumulative')}
                 onPress={() => onTypeChange(item.value)}
               />
             );
@@ -2655,6 +2673,7 @@ function EntrySlide({
   participantCap,
   creatorParticipating,
   isPoints,
+  isCumulative,
   onEntryTabChange,
   onCapChange,
   onCreatorParticipatingChange,
@@ -2666,6 +2685,7 @@ function EntrySlide({
   participantCap: CreateChallengeValues['participant_cap'];
   creatorParticipating: boolean;
   isPoints: boolean;
+  isCumulative: boolean;
   onEntryTabChange: (next: EntryTab) => void;
   onCapChange: (value: CreateChallengeValues['participant_cap']) => void;
   onCreatorParticipatingChange: (value: boolean) => void;
@@ -2791,7 +2811,7 @@ function EntrySlide({
           )}
         />
       </FieldAnchor>
-      {isPoints ? null : (
+      {isPoints || isCumulative ? null : (
       <FieldAnchor name="misses_allowed">
         <Controller
           control={control}

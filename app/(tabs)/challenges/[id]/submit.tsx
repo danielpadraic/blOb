@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Keyboard, Platform, ScrollView, View } from 'react-native';
+import { Alert, Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
@@ -14,6 +14,7 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useChallengeParticipants, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyProfile } from '@/hooks/useProfile';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
 import type { HealthWorkout } from '@/services/health/types';
 import {
@@ -35,9 +36,18 @@ import {
   proofDisplayName,
   proofsAreHonorOnly,
   uniqueProofUrls,
+  partDistanceMeters,
+  proofDistanceMeters,
   type ChallengeProof,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
+import {
+  athleteDistanceUnit,
+  distanceShortHint,
+  formatDistance,
+  parseDistanceText,
+  type DistanceUnit,
+} from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
@@ -81,12 +91,27 @@ function LoggedState({ onBack }: { onBack: () => void }) {
   );
 }
 
-function slotPart(proof: ChallengeProof, draft: SlotDraft | undefined): ChallengeProofPart {
+function slotPart(
+  proof: ChallengeProof,
+  draft: SlotDraft | undefined,
+  unit: DistanceUnit = 'mi',
+): ChallengeProofPart {
   if (proof.method === 'honor') {
     return { method: 'honor' };
   }
   if (proof.method === 'checkin') {
     return { method: 'checkin', text: draft?.text ?? '' };
+  }
+  if (proof.method === 'distance') {
+    const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
+    return {
+      method: 'distance',
+      text: draft?.text ?? '',
+      url: healthWorkoutId ? '' : draft?.uri ?? '',
+      healthWorkoutId,
+      health: draft?.health ?? null,
+      distanceMeters: draft?.health?.distanceMeters ?? parseDistanceText(draft?.text, unit) ?? undefined,
+    };
   }
   const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
   return {
@@ -106,6 +131,8 @@ export default function SubmitWorkoutScreen() {
   const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
+  const { profile } = useMyProfile();
+  const distanceUnit = athleteDistanceUnit(profile?.weight_unit);
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
   const saveProof = useSaveCheckinProof(id);
   const submitCheckin = useSubmitCheckin(id);
@@ -205,7 +232,9 @@ export default function SubmitWorkoutScreen() {
     }
   }, [challenge, checkinQuery.data?.id, checkinQuery.data?.notes, checkinQuery.data?.proof_parts, checkinQuery.data?.updated_at]);
 
-  const filledCount = proofSteps.filter((proof) => partSatisfies(proof, slotPart(proof, drafts[proof.id]))).length;
+  const filledCount = proofSteps.filter((proof) =>
+    partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
+  ).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
   const busy = saveProof.isPending || submitCheckin.isPending;
   const canSend = canSendCheckin(honorOnly, allReady, phase, busy);
@@ -320,7 +349,7 @@ export default function SubmitWorkoutScreen() {
     const photoProof = proofSteps.find(
       (proof) =>
         (proof.method === 'photo' || proof.method === 'video') &&
-        partSatisfies(proof, slotPart(proof, drafts[proof.id])),
+        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
     );
     const primaryRemote = photoProof
       ? checkinQuery.data?.proof_parts?.[photoProof.id]?.url ??
@@ -369,7 +398,7 @@ export default function SubmitWorkoutScreen() {
 
   function explainSendBlocked() {
     const remaining = proofSteps
-      .filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id])))
+      .filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)))
       .map((proof) => proofDisplayName(proof));
     const names = checkinSendWhyNot(remaining);
     Alert.alert('Still needed', names ? `${names}.` : copy('checkin.emptyBob'));
@@ -400,10 +429,13 @@ export default function SubmitWorkoutScreen() {
           continue;
         }
         const draft = drafts[proof.id];
-        if (partSatisfies(proof, savedParts[proof.id]) && partSatisfies(proof, slotPart(proof, draft))) {
+        if (
+          partSatisfies(proof, savedParts[proof.id]) &&
+          partSatisfies(proof, slotPart(proof, draft, distanceUnit))
+        ) {
           continue;
         }
-        if (!partSatisfies(proof, slotPart(proof, draft))) {
+        if (!partSatisfies(proof, slotPart(proof, draft, distanceUnit))) {
           continue;
         }
         const row = await persistProof(proof, draft);
@@ -449,7 +481,7 @@ export default function SubmitWorkoutScreen() {
       const photoProof = proofSteps.find(
         (proof) =>
           (proof.method === 'photo' || proof.method === 'video') &&
-          partSatisfies(proof, slotPart(proof, drafts[proof.id])),
+          partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
       );
       const primaryRemote = photoProof
         ? savedParts[photoProof.id]?.url ||
@@ -525,7 +557,7 @@ export default function SubmitWorkoutScreen() {
     setError(null);
     const target =
       proof ??
-      proofSteps.find((item) => item.method === 'hr') ??
+      proofSteps.find((item) => item.method === 'distance' || item.method === 'hr') ??
       proofSteps.find((item) => item.method === 'photo' || item.method === 'video');
     if (!target || !user?.id) {
       return;
@@ -658,10 +690,18 @@ export default function SubmitWorkoutScreen() {
     );
   }
 
-  const missing = proofSteps.filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id])));
+  const missing = proofSteps.filter(
+    (proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
+  );
   const iosHealthReady = Platform.OS === 'ios' && Boolean(getHealthProvider()?.isAvailable());
   const firstEmptyMedia =
-    missing.find((proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') ?? null;
+    missing.find(
+      (proof) =>
+        proof.method === 'photo' ||
+        proof.method === 'video' ||
+        proof.method === 'hr' ||
+        proof.method === 'distance',
+    ) ?? null;
   const firstHealth = firstEmptyMedia && proofPrefersHealthAttach(firstEmptyMedia, challenge) ? firstEmptyMedia : null;
   const shouldAutoHealth =
     phase === 'none' &&
@@ -719,7 +759,7 @@ export default function SubmitWorkoutScreen() {
     );
   }
 
-  if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr')) {
+  if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr' || activeProof.method === 'distance')) {
     return (
       <Screen padded={false} edges={TAB_ROOT_EDGES}>
         <Stack.Screen options={{ headerShown: false }} />
@@ -761,8 +801,11 @@ export default function SubmitWorkoutScreen() {
     );
   }
 
-  const composerProofs = proofSteps.filter((proof) => proof.method !== 'honor' && proof.method !== 'checkin');
+  const composerProofs = proofSteps.filter(
+    (proof) => proof.method !== 'honor' && proof.method !== 'checkin' && proof.method !== 'distance',
+  );
   const textProofs = proofSteps.filter((proof) => proof.method === 'checkin');
+  const distanceProofs = proofSteps.filter((proof) => proof.method === 'distance');
   const footerBottom = keyboardPad > 0 ? (Platform.OS === 'ios' ? 8 : keyboardPad) : tabLift;
 
   return (
@@ -833,6 +876,98 @@ export default function SubmitWorkoutScreen() {
                     />
                   </View>
                 ))}
+                {distanceProofs.map((proof) => {
+                  const draft = drafts[proof.id];
+                  const part = slotPart(proof, draft, distanceUnit);
+                  const attached = partDistanceMeters(part, distanceUnit);
+                  const required = proofDistanceMeters(proof);
+                  const short = attached != null && attached < required;
+                  const healthReady = Platform.OS !== 'web' && Boolean(getHealthProvider()?.isAvailable());
+                  return (
+                    <View key={proof.id} className="mb-3" style={{ gap: 8 }}>
+                      <AppText className="text-sm font-semibold text-charcoal">Distance</AppText>
+                      {healthReady ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Attach workout"
+                          onPress={() => {
+                            setPreferCamera(false);
+                            setCaptureId(proof.id);
+                          }}
+                          style={{
+                            minHeight: 44,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: THEME.accent,
+                            backgroundColor: THEME.accentSoft,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            paddingHorizontal: 14,
+                          }}>
+                          <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+                            Attach workout
+                          </AppText>
+                        </Pressable>
+                      ) : null}
+                      <Input
+                        label={healthReady ? undefined : 'Distance'}
+                        placeholder={distanceUnit === 'km' ? '1.00 km' : '1.00'}
+                        keyboardType="decimal-pad"
+                        value={draft?.text ?? ''}
+                        onChangeText={(value) => onText(proof.id, value)}
+                        onBlur={() => {
+                          const text = drafts[proof.id]?.text?.trim() ?? '';
+                          if (parseDistanceText(text, distanceUnit)) {
+                            void persistProof(proof, { text, health: drafts[proof.id]?.health, uri: drafts[proof.id]?.uri });
+                          }
+                        }}
+                        editable={!busy && phase !== 'submitted'}
+                      />
+                      {Platform.OS === 'web' ? (
+                        <AppText className="text-[12px] leading-5 text-muted">{copy('create.healthOnIos')}</AppText>
+                      ) : !healthReady ? (
+                        <AppText className="text-[12px] leading-5 text-muted">
+                          Type the miles. A screenshot is optional and does not count by itself.
+                        </AppText>
+                      ) : null}
+                      {!healthReady ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Add screenshot"
+                          onPress={() => {
+                            setPreferCamera(true);
+                            setCaptureId(proof.id);
+                          }}
+                          style={{
+                            minHeight: 44,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: THEME.border,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            paddingHorizontal: 14,
+                          }}>
+                          <AppText className="text-[15px] font-semibold text-charcoal">Add screenshot</AppText>
+                        </Pressable>
+                      ) : null}
+                      {draft?.health?.distanceMeters ? (
+                        <AppText className="text-[13px] leading-5 text-muted">
+                          {formatDistance(draft.health.distanceMeters, distanceUnit)}
+                          {draft.health.durationSec
+                            ? ` · ${Math.round(draft.health.durationSec / 60)} min`
+                            : ''}
+                          {draft.health.sourceName ? ` · ${draft.health.sourceName}` : ''}
+                          {' · No route on this workout.'}
+                        </AppText>
+                      ) : null}
+                      {short ? (
+                        <AppText className="text-[13px] leading-5 text-coral-dark">
+                          {distanceShortHint(attached ?? 0, required, distanceUnit)}
+                        </AppText>
+                      ) : null}
+                    </View>
+                  );
+                })}
                 {media}
                 {error ? (
                   <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>

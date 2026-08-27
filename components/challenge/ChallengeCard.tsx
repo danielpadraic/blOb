@@ -13,6 +13,7 @@ type ChallengeCardProps = {
   challenge: ChallengeWithStats;
   onPress?: () => void;
   myDays?: number | null;
+  myMeters?: number | null;
   variant?: 'discover' | 'rail';
   joined?: boolean;
   hosting?: boolean;
@@ -29,6 +30,7 @@ export function ChallengeCard({
   challenge,
   onPress,
   myDays,
+  myMeters,
   variant = 'discover',
   joined = false,
   hosting = false,
@@ -69,6 +71,7 @@ export function ChallengeCard({
           hosting={hosting}
           invited={invited}
           myDays={myDays}
+          myMeters={myMeters}
           host={official ? null : resolvedHost}
           nowMs={nowMs}
           onPress={onPress}

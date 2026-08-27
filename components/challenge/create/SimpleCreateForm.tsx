@@ -10,7 +10,7 @@ import { CreateActionsFooter } from '@/components/challenge/create/wizardUi';
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
-import { ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
+import { DistanceMilesRow, ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
 import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
@@ -37,10 +37,12 @@ import {
   pickSimpleDraft,
 } from '@/lib/challengeDraft';
 import {
+  SIMPLE_CUMULATIVE_WINDOWS,
   SIMPLE_CUSTOM_PERIODS,
   SIMPLE_DURATION_CHIPS,
   SIMPLE_FREQUENCY_CHIPS,
   SIMPLE_PROOF_METHODS,
+  SIMPLE_SCORING,
   SIMPLE_TYPES,
   addSimpleProof,
   applyBeforeAfterHrPreset,
@@ -61,6 +63,7 @@ import {
   type SimpleDurationPreset,
   type SimpleFrequency,
 } from '@/lib/simpleChallenge';
+import { milesToMeters } from '@/lib/distance';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import {
@@ -70,7 +73,15 @@ import {
   tomorrowMorning,
   type StartPreset,
 } from '@/lib/challengeSchedule';
-import { SIMPLE_PROOF_CAP, ensureProofSentence, proofNameForMethodChange, type ChallengeProofMethod } from '@/lib/challengeProofs';
+import {
+  SIMPLE_PROOF_CAP,
+  defaultSentenceForMethod,
+  ensureProofSentence,
+  makeProof,
+  proofDistanceMeters,
+  proofNameForMethodChange,
+  type ChallengeProofMethod,
+} from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { copy } from '@/lib/copy';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
@@ -599,6 +610,65 @@ export function SimpleCreateForm() {
         </View>
         </TourAnchor>
 
+        <View className="gap-2">
+          <SectionLabel>{copy('create.howYouWin')}</SectionLabel>
+          <View className="flex-row flex-wrap gap-2">
+            {SIMPLE_SCORING.map((item) => (
+              <IconChip
+                key={item.value}
+                icon=""
+                label={item.label}
+                selected={(draft.scoring ?? 'consistency') === item.value}
+                onPress={() => {
+                  const nextProofs =
+                    item.value === 'cumulative' && !draft.proofs.some((proof) => proof.method === 'distance')
+                      ? [
+                          makeProof(
+                            defaultSentenceForMethod('distance', 30, { unit: draft.distance_unit }),
+                            'distance',
+                            undefined,
+                            milesToMeters(1),
+                          ),
+                          ...draft.proofs,
+                        ].slice(0, 4)
+                      : draft.proofs;
+                  patch({
+                    scoring: item.value,
+                    proofs: nextProofs,
+                    cumulative_window: draft.cumulative_window ?? 'challenge',
+                    cumulative_target_meters: draft.cumulative_target_meters || milesToMeters(100),
+                  });
+                }}
+              />
+            ))}
+          </View>
+          {(draft.scoring ?? 'consistency') === 'cumulative' ? (
+            <View className="gap-2">
+              <DistanceMilesRow
+                meters={draft.cumulative_target_meters || milesToMeters(100)}
+                unit={draft.distance_unit ?? 'mi'}
+                onChangeMeters={(cumulative_target_meters) => patch({ cumulative_target_meters })}
+                onChangeUnit={(distance_unit) => patch({ distance_unit })}
+              />
+              <SectionLabel>{copy('create.cumulativeWindow')}</SectionLabel>
+              <View className="flex-row flex-wrap gap-2">
+                {SIMPLE_CUMULATIVE_WINDOWS.map((item) => (
+                  <IconChip
+                    key={item.value}
+                    icon=""
+                    label={item.label}
+                    selected={(draft.cumulative_window ?? 'challenge') === item.value}
+                    onPress={() => patch({ cumulative_window: item.value })}
+                  />
+                ))}
+              </View>
+              <AppText className="text-[12px] leading-5 text-muted">
+                Everyone who hits the total splits the prize.
+              </AppText>
+            </View>
+          ) : null}
+        </View>
+
         <TourAnchor id="create-simple-title">
         <View
           collapsable={false}
@@ -744,6 +814,7 @@ export function SimpleCreateForm() {
         </View>
         </TourAnchor>
 
+        {(draft.scoring ?? 'consistency') === 'cumulative' ? null : (
         <TourAnchor id="create-simple-frequency">
         <View
           className="gap-2"
@@ -790,6 +861,7 @@ export function SimpleCreateForm() {
           )}
         </View>
         </TourAnchor>
+        )}
 
         <TourAnchor id="create-simple-proof">
         <View
@@ -846,6 +918,10 @@ export function SimpleCreateForm() {
                                     method: item.value as ChallengeProofMethod,
                                     minutes:
                                       item.value === 'hr' ? Math.max(row.minutes || 30, 1) : row.minutes,
+                                    distance_meters:
+                                      item.value === 'distance'
+                                        ? proofDistanceMeters(row)
+                                        : row.distance_meters,
                                     name: proofNameForMethodChange(
                                       row,
                                       item.value as ChallengeProofMethod,
@@ -873,6 +949,22 @@ export function SimpleCreateForm() {
                         ),
                       })
                     }
+                  />
+                ) : null}
+                {proof.method === 'distance' ? (
+                  <DistanceMilesRow
+                    meters={proofDistanceMeters(proof)}
+                    unit={draft.distance_unit ?? 'mi'}
+                    onChangeMeters={(distance_meters) =>
+                      patch({
+                        proofs: draft.proofs.map((row) =>
+                          row.id === proof.id
+                            ? ensureProofSentence({ ...row, method: 'distance', distance_meters })
+                            : row,
+                        ),
+                      })
+                    }
+                    onChangeUnit={(distance_unit) => patch({ distance_unit })}
                   />
                 ) : null}
               </View>

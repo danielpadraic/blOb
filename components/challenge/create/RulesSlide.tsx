@@ -2,7 +2,7 @@ import { useContext, useState } from 'react';
 import { Controller, type UseFormReturn } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
-import { HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
+import { DistanceMilesRow, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
 import { FieldAnchor, FieldLabel, WizardFocusContext } from '@/components/challenge/create/wizardUi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -17,6 +17,7 @@ import {
 } from '@/lib/consistencyRules';
 import { CREATE_PROOF_TYPES, proofMeta } from '@/lib/constants';
 import { heartRateProofSentence } from '@/lib/challengeProofs';
+import { milesToMeters } from '@/lib/distance';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { ChallengeFrequency, ProofType } from '@/lib/types';
@@ -38,6 +39,7 @@ export function RulesSlide({
   getValues,
   values,
   isPoints,
+  isCumulative,
   isUnlimited,
   onFrequencyChange,
   onAddTask,
@@ -51,6 +53,7 @@ export function RulesSlide({
   getValues: Form['getValues'];
   values: CreateChallengeValues;
   isPoints: boolean;
+  isCumulative?: boolean;
   isUnlimited: boolean;
   onFrequencyChange: (next: ChallengeFrequency) => void;
   onAddTask: () => void;
@@ -289,6 +292,37 @@ export function RulesSlide({
             </View>
           </FieldAnchor>
 
+          {isCumulative ? (
+            <View className="gap-3">
+              <DistanceMilesRow
+                meters={Math.max(Number(values.cumulative_target) || milesToMeters(100), 1)}
+                onChangeMeters={(meters) =>
+                  setValue('cumulative_target', String(meters), { shouldDirty: true, shouldValidate: false })
+                }
+              />
+              <FieldLabel label={copy('create.cumulativeWindow')}>
+                <ChipRow>
+                  <Chip
+                    label={copy('create.windowChallenge')}
+                    selected={(values.cumulative_window ?? 'challenge') === 'challenge'}
+                    minHeight={44}
+                    onPress={() => setValue('cumulative_window', 'challenge', { shouldDirty: true })}
+                  />
+                  <Chip
+                    label={copy('create.windowWeek')}
+                    selected={values.cumulative_window === 'week'}
+                    minHeight={44}
+                    onPress={() => setValue('cumulative_window', 'week', { shouldDirty: true })}
+                  />
+                </ChipRow>
+              </FieldLabel>
+              <AppText className="text-[12px] leading-5 text-muted">
+                Everyone who hits the total splits the prize.
+              </AppText>
+            </View>
+          ) : null}
+
+          {isCumulative ? null : (
           <FieldAnchor name="rules">
           <FieldAnchor name="target_count">
             <View className="gap-3">
@@ -351,6 +385,7 @@ export function RulesSlide({
             </View>
           </FieldAnchor>
           </FieldAnchor>
+          )}
 
           <FieldAnchor name="proofs">
             <ProofPicker
@@ -377,6 +412,14 @@ export function RulesSlide({
                 }}
               />
             </FieldAnchor>
+          ) : null}
+          {values.proofs.includes('distance') ? (
+            <DistanceMilesRow
+              meters={Math.max(Number(values.distance_meters_required) || milesToMeters(1), 1)}
+              onChangeMeters={(meters) =>
+                setValue('distance_meters_required', String(meters), { shouldDirty: true, shouldValidate: false })
+              }
+            />
           ) : null}
         </>
       )}

@@ -7,6 +7,15 @@ import { AppText } from '@/components/ui/AppText';
 import { SIMPLE_PROOF_METHODS } from '@/lib/simpleChallenge';
 import { heartRateMinutesLabel, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { copy } from '@/lib/copy';
+import {
+  DEFAULT_DISTANCE_MILES,
+  MIN_DISTANCE_STEPS,
+  amountToMeters,
+  displayDistance,
+  milesToMeters,
+  snapDistanceAmount,
+  type DistanceUnit,
+} from '@/lib/distance';
 import { THEME } from '@/lib/theme';
 import { emptyExtraCreateTask, type ExtraCreateTask } from '@/utils/validators';
 
@@ -27,6 +36,39 @@ export function HeartRateMinutesRow({
       formatValue={heartRateMinutesLabel}
       onChange={onChange}
     />
+  );
+}
+
+export function DistanceMilesRow({
+  meters,
+  unit = 'mi',
+  onChangeMeters,
+  onChangeUnit,
+}: {
+  meters: number;
+  unit?: DistanceUnit;
+  onChangeMeters: (next: number) => void;
+  onChangeUnit?: (next: DistanceUnit) => void;
+}) {
+  const amount = snapDistanceAmount(displayDistance(meters || milesToMeters(DEFAULT_DISTANCE_MILES), unit));
+  return (
+    <View className="gap-2">
+      <StepperField
+        label={copy('create.proofDistance')}
+        value={amount}
+        min={MIN_DISTANCE_STEPS}
+        max={1000}
+        step={MIN_DISTANCE_STEPS}
+        formatValue={(value) => `${snapDistanceAmount(value).toFixed(2)} ${unit}`}
+        onChange={(next) => onChangeMeters(amountToMeters(next, unit))}
+      />
+      {onChangeUnit ? (
+        <ChipRow>
+          <Chip label={copy('create.distanceUnitMi')} selected={unit === 'mi'} minHeight={44} onPress={() => onChangeUnit('mi')} />
+          <Chip label={copy('create.distanceUnitKm')} selected={unit === 'km'} minHeight={44} onPress={() => onChangeUnit('km')} />
+        </ChipRow>
+      ) : null}
+    </View>
   );
 }
 
@@ -104,6 +146,12 @@ export function ExtraTasksEditor({
             <HeartRateMinutesRow
               value={task.hr_minutes}
               onChange={(hr_minutes) => patch(index, { hr_minutes })}
+            />
+          ) : null}
+          {task.proof_method === 'distance' ? (
+            <DistanceMilesRow
+              meters={task.distance_meters || milesToMeters(DEFAULT_DISTANCE_MILES)}
+              onChangeMeters={(distance_meters) => patch(index, { distance_meters })}
             />
           ) : null}
         </View>

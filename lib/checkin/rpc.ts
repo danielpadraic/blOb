@@ -5,6 +5,7 @@ import {
   type ChallengeProof,
   type ChallengeProofPart,
 } from '../challengeProofs';
+import { parseDistanceText } from '../distance';
 import type { CheckinHealthProof } from '../health/checkinHealthProof';
 import { asCheckinStatus, type ChallengeCheckin } from '../challengeCheckin';
 import { normalizePeriodKey } from '../checkinPeriod';
@@ -71,6 +72,11 @@ export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCh
       row.scoring_version == null || !Number.isFinite(Number(row.scoring_version))
         ? null
         : Math.round(Number(row.scoring_version)),
+    distance_meters:
+      row.distance_meters == null || !Number.isFinite(Number(row.distance_meters))
+        ? null
+        : Math.round(Number(row.distance_meters)),
+    route_preview_url: (row.route_preview_url as string | null) ?? null,
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: (row.updated_at as string | null) ?? null,
   };
@@ -106,6 +112,38 @@ async function proofPartFor(
       id: proof.id,
       part: { method: 'checkin', text: (input.text ?? '').trim() || null },
       healthWorkoutId: null,
+    };
+  }
+  if (proof.method === 'distance') {
+    const uri = input.uri?.trim() ?? '';
+    const healthWorkoutId = uri.startsWith('health:') ? uri.slice('health:'.length) : null;
+    let url = '';
+    if (uri && !healthWorkoutId && isRemoteMediaUrl(uri)) {
+      url = uri;
+    } else if ((uri && !healthWorkoutId) || input.blob) {
+      url = await resolveUrl(
+        await upload({
+          uri: uri || 'blob:proof',
+          userId,
+          challengeId: input.challengeId,
+          proofType: captureTypeForMethod(proof.method),
+          mimeType: input.mimeType,
+          blob: input.blob,
+        }),
+      );
+    }
+    const meters = input.health?.distanceMeters ?? parseDistanceText(input.text);
+    return {
+      id: proof.id,
+      part: {
+        method: 'distance',
+        text: (input.text ?? '').trim() || null,
+        url,
+        healthWorkoutId,
+        health: input.health ?? null,
+        distanceMeters: meters,
+      },
+      healthWorkoutId,
     };
   }
   const uri = input.uri?.trim() ?? '';

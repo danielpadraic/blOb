@@ -1,3 +1,4 @@
+import { athleteDistanceUnit, formatDistance } from '@/lib/distance';
 import type { HealthConfidence } from '@/services/health/types';
 
 export function healthSourceLabel(confidence: string | null | undefined): string {
@@ -26,9 +27,18 @@ export function healthProofLines(input: {
   confidence?: HealthConfidence | string | null;
   hrAvg?: number | null;
   caloriesKcal?: number | null;
+  distanceMeters?: number | null;
+  hasRoute?: boolean;
 }): { primary: string; secondary: string | null } {
-  const primary = `${input.activityLabel} · ${formatHealthDuration(input.durationSec)} · ${healthSourceLabel(input.confidence)}`;
+  const miles =
+    Number(input.distanceMeters) > 0 ? formatDistance(Number(input.distanceMeters), athleteDistanceUnit()) : null;
+  const primary = miles
+    ? `${miles} · ${formatHealthDuration(input.durationSec)} · ${healthSourceLabel(input.confidence)}`
+    : `${input.activityLabel} · ${formatHealthDuration(input.durationSec)} · ${healthSourceLabel(input.confidence)}`;
   const bits: string[] = [];
+  if (miles && input.hasRoute === false) {
+    bits.push('No route on this workout.');
+  }
   if (input.hrAvg && input.hrAvg > 0) {
     bits.push(`Average heart rate ${Math.round(input.hrAvg)}`);
   }

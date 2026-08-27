@@ -186,8 +186,9 @@ export const extraCreateTaskSchema = z.object({
   id: z.string(),
   title: z.string(),
   once: z.boolean(),
-  proof_method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr']).nullable(),
+  proof_method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr', 'distance']).nullable(),
   hr_minutes: z.number().int().min(1).max(600),
+  distance_meters: z.number().min(1).optional(),
 });
 
 export type ExtraCreateTask = z.infer<typeof extraCreateTaskSchema>;
@@ -199,6 +200,7 @@ export function emptyExtraCreateTask(existingId?: string): ExtraCreateTask {
     once: false,
     proof_method: 'photo',
     hr_minutes: 30,
+    distance_meters: 1609.34,
   };
 }
 
@@ -223,7 +225,7 @@ export const createChallengeSchema = z
       .optional()
       .or(z.literal('')),
     category: z.enum(CHALLENGE_CATEGORIES),
-    challenge_type: z.enum(['consistency', 'points']),
+    challenge_type: z.enum(['consistency', 'points', 'cumulative']),
     visibility: z.enum(['public', 'private', 'friends', 'invite']),
     privacy_mode: z.enum(['public', 'private', 'private_corporate']),
     duration_days: z.string(),
@@ -258,14 +260,15 @@ export const createChallengeSchema = z
     task: z.string().trim().max(80).optional().or(z.literal('')),
     min_participants: z.string().optional(),
     misses_allowed: z.string().optional(),
-    proof_type: z.enum(['photo', 'video', 'check_in', 'checkin', 'honor', 'hr']).optional(),
+    proof_type: z.enum(['photo', 'video', 'check_in', 'checkin', 'honor', 'hr', 'distance']).optional(),
     challenge_proofs: z
       .array(
         z.object({
           id: z.string(),
           name: z.string(),
-          method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr']),
+          method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr', 'distance']),
           minutes: z.number().int().min(1).max(600).optional(),
+          distance_meters: z.number().min(1).optional(),
         }),
       )
       .optional(),
@@ -275,7 +278,11 @@ export const createChallengeSchema = z
     guarantee_enabled: z.boolean().optional(),
     required_checkins: z.string().optional(),
     payout_mode: z.enum(['even_split_remaining', 'winner_take_all', 'top_places']).optional(),
-    format: z.enum(['consistency', 'points', 'lms']).optional(),
+    format: z.enum(['consistency', 'points', 'lms', 'cumulative']).optional(),
+    cumulative_metric: z.enum(['distance_m', 'count']).nullable().optional(),
+    cumulative_target: z.string().optional(),
+    cumulative_window: z.enum(['challenge', 'week', 'day']).optional(),
+    distance_meters_required: z.string().optional(),
     discoverability: z.enum(['invite_only', 'friends_of_friends']).nullable().optional(),
     scoring_method: z.enum(['comparable_points']).nullable().optional(),
     scoring_config: z.unknown().nullable().optional(),

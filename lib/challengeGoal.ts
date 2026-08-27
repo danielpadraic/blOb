@@ -1,8 +1,11 @@
 import {
   isFitnessOfficialChallenge,
+  usesCumulativeScoring,
   usesPointsBoard,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
+import { athleteDistanceUnit, type DistanceUnit } from '@/lib/distance';
+import { challengeCumulativeProgress } from '@/lib/cumulative';
 import type { Challenge } from '@/lib/types';
 import { challengeWindowDays } from '@/utils/format';
 
@@ -24,6 +27,9 @@ type GoalChallenge = Pick<
   | 'scoring_config'
   | 'comparable_points_config'
   | 'frequency'
+  | 'format'
+  | 'cumulative_target'
+  | 'cumulative_window'
 >;
 
 /** Calendar days the host saved. Never a check-in product or a 100 fallback. */
@@ -67,8 +73,17 @@ export function challengeDurationDays(
 
 export function challengeGoalLabel(
   challenge: GoalChallenge,
-  extras?: { daysCompleted?: number; taskCount?: number },
+  extras?: { daysCompleted?: number; taskCount?: number; distanceMetersCompleted?: number; unit?: DistanceUnit },
 ): string {
+  if (usesCumulativeScoring(challenge)) {
+    return (
+      challengeCumulativeProgress(
+        challenge,
+        extras?.distanceMetersCompleted ?? 0,
+        extras?.unit ?? athleteDistanceUnit(),
+      ) ?? 'Cumulative'
+    );
+  }
   if (usesPointsBoard(challenge)) {
     return 'Score Points';
   }
@@ -95,6 +110,11 @@ export function challengeGoalLabel(
 }
 
 export function challengeGoalSubtitle(challenge: GoalChallenge): string | null {
+  if (usesCumulativeScoring(challenge)) {
+    return challenge.cumulative_window === 'week'
+      ? 'Everyone who hits the total each week splits the prize.'
+      : 'Everyone who hits the total splits the prize.';
+  }
   if (usesPointsBoard(challenge) || usesTotalCountCheckins(challenge) || challenge.is_unlimited) {
     return null;
   }

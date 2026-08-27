@@ -4,10 +4,18 @@ import {
   usesComparablePointsScoring,
 } from '@/lib/challengeExperience';
 import { copy } from '@/lib/copy';
+import {
+  DEFAULT_DISTANCE_MILES,
+  athleteDistanceUnit,
+  distanceProofSentence,
+  milesToMeters,
+  parseDistanceText,
+  type DistanceUnit,
+} from '@/lib/distance';
 import { parseCheckinHealthProof, type CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import type { ProofType } from '@/lib/types';
 
-export const CHALLENGE_PROOF_METHODS = ['photo', 'video', 'checkin', 'honor', 'hr'] as const;
+export const CHALLENGE_PROOF_METHODS = ['photo', 'video', 'checkin', 'honor', 'hr', 'distance'] as const;
 
 export type ChallengeProofMethod = (typeof CHALLENGE_PROOF_METHODS)[number];
 
@@ -16,6 +24,7 @@ export type ChallengeProof = {
   name: string;
   method: ChallengeProofMethod;
   minutes?: number;
+  distance_meters?: number;
 };
 
 export type ChallengeProofPart = {
@@ -28,6 +37,7 @@ export type ChallengeProofPart = {
   fromLibrary?: boolean;
   /** Watch/Health snapshot on this check-in. Not a profile field. */
   health?: CheckinHealthProof | null;
+  distanceMeters?: number | null;
 };
 
 /** Extra photos on top of required proofs. Extras are optional and never unlock Send. */
@@ -109,9 +119,42 @@ export function proofHeartRateMinutes(proof: Pick<ChallengeProof, 'method' | 'mi
   return Math.max(Math.round(Number(proof.minutes) || Number(fallback) || 30), 1);
 }
 
-export function defaultSentenceForMethod(method: ChallengeProofMethod, minutes = 30): string {
+export function proofDistanceMeters(
+  proof?: Pick<ChallengeProof, 'method' | 'distance_meters'> | null,
+  fallback = milesToMeters(DEFAULT_DISTANCE_MILES),
+): number {
+  if (proof?.method && proof.method !== 'distance') {
+    return Math.max(Math.round(Number(fallback) || milesToMeters(DEFAULT_DISTANCE_MILES)), 1);
+  }
+  const stored = Number(proof?.distance_meters);
+  if (Number.isFinite(stored) && stored > 0) {
+    return Math.round(stored);
+  }
+  return Math.max(Math.round(Number(fallback) || milesToMeters(DEFAULT_DISTANCE_MILES)), 1);
+}
+
+export function partDistanceMeters(part?: ChallengeProofPart | null, unit: DistanceUnit = 'mi'): number | null {
+  const health = Number(part?.health?.distanceMeters);
+  if (Number.isFinite(health) && health > 0) {
+    return Math.round(health);
+  }
+  const stored = Number(part?.distanceMeters);
+  if (Number.isFinite(stored) && stored > 0) {
+    return Math.round(stored);
+  }
+  return parseDistanceText(part?.text, unit);
+}
+
+export function defaultSentenceForMethod(
+  method: ChallengeProofMethod,
+  minutes = 30,
+  options?: { distanceMeters?: number; unit?: DistanceUnit },
+): string {
   if (method === 'hr') {
     return heartRateProofSentence(minutes);
+  }
+  if (method === 'distance') {
+    return distanceProofSentence(options?.distanceMeters, options?.unit ?? athleteDistanceUnit());
   }
   if (method === 'video') {
     return 'Post a video of the work.';
@@ -135,6 +178,9 @@ const SHORT_PROOF_LABELS = new Set([
   'honor',
   'heart rate',
   'hr',
+  'distance',
+  'miles',
+  'km',
   'pre-selfie',
   'post-selfie',
   'pre-workout',
@@ -159,6 +205,13 @@ export function ensureProofSentence(proof: ChallengeProof, minutes = 30): Challe
   const name = proof.name.trim();
   const lower = name.toLowerCase();
   const hrMinutes = proofHeartRateMinutes({ method: 'hr', minutes: proof.minutes }, minutes);
+  if (proof.method === 'distance') {
+    const meters = proofDistanceMeters(proof);
+    if (isShortProofLabel(name) || name === defaultSentenceForMethod('distance', minutes, { distanceMeters: meters })) {
+      return { ...proof, distance_meters: meters, name: defaultSentenceForMethod('distance', minutes, { distanceMeters: meters }) };
+    }
+    return { ...proof, distance_meters: meters, name: name.endsWith('.') ? name : `${name}.` };
+  }
   if (proof.method === 'hr' || /\bhr\b/.test(lower) || lower.includes('heart rate') || lower.includes('heart-rate')) {
     return { ...proof, method: 'hr', minutes: hrMinutes, name: heartRateProofSentence(hrMinutes) };
   }
@@ -175,9 +228,11 @@ export function ensureProofSentence(proof: ChallengeProof, minutes = 30): Challe
 }
 
 export function proofNameForMethodChange(proof: ChallengeProof, method: ChallengeProofMethod, minutes = 30): string {
-  const previousDefault = defaultSentenceForMethod(proof.method, minutes);
+  const previousDefault = defaultSentenceForMethod(proof.method, minutes, {
+    distanceMeters: proof.distance_meters,
+  });
   if (!proof.name.trim() || isShortProofLabel(proof.name) || proof.name.trim() === previousDefault) {
-    return defaultSentenceForMethod(method, minutes);
+    return defaultSentenceForMethod(method, minutes, { distanceMeters: proof.distance_meters });
   }
   return ensureProofSentence({ ...proof, method }, minutes).name;
 }
@@ -280,9 +335,16 @@ export function newProofId(): string {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function makeProof(name: string, method: ChallengeProofMethod, minutes?: number): ChallengeProof {
+export function makeProof(
+  name: string,
+  method: ChallengeProofMethod,
+  minutes?: number,
+  distanceMeters?: number,
+): ChallengeProof {
   const hrMinutes = method === 'hr' ? Math.max(Math.round(Number(minutes) || 30), 1) : undefined;
-  return { id: newProofId(), name, method, minutes: hrMinutes };
+  const meters =
+    method === 'distance' ? proofDistanceMeters({ method, distance_meters: distanceMeters }) : undefined;
+  return { id: newProofId(), name, method, minutes: hrMinutes, distance_meters: meters };
 }
 
 export function defaultChallengeProofs(_task = ''): ChallengeProof[] {
@@ -305,6 +367,9 @@ export function methodLabel(method: ChallengeProofMethod): string {
   }
   if (method === 'hr') {
     return copy('create.proofHr');
+  }
+  if (method === 'distance') {
+    return copy('create.proofDistance');
   }
   return copy('create.proofPhoto');
 }
@@ -453,6 +518,9 @@ export function methodFromProofType(value: unknown): ChallengeProofMethod {
   if (raw === 'hr' || raw === 'hr_monitor') {
     return 'hr';
   }
+  if (raw === 'distance') {
+    return 'distance';
+  }
   return 'photo';
 }
 
@@ -508,6 +576,9 @@ export function legacyTypeForProof(proof: ChallengeProof): ProofType | null {
   if (proof.method === 'hr') {
     return 'hr_monitor';
   }
+  if (proof.method === 'distance') {
+    return 'distance';
+  }
   const named = proof.name.trim().toLowerCase();
   if (isCheckoutProofName(named) || proof.id === 'post') {
     return 'post_selfie';
@@ -548,7 +619,10 @@ export function parseChallengeProofs(value: unknown): ChallengeProof[] {
       method === 'hr'
         ? Math.max(Math.round(Number(rawMinutes) || 30), 1)
         : undefined;
-    parsed.push({ id, name, method, minutes });
+    const rawMeters = row.distance_meters ?? row.distanceMeters;
+    const distance_meters =
+      method === 'distance' ? proofDistanceMeters({ method, distance_meters: Number(rawMeters) }) : undefined;
+    parsed.push({ id, name, method, minutes, distance_meters });
   }
   return parsed;
 }
@@ -592,6 +666,10 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
   }
   if (proof.method === 'hr') {
     return Boolean(part?.url?.trim() || part?.healthWorkoutId?.trim() || part?.health);
+  }
+  if (proof.method === 'distance') {
+    const meters = partDistanceMeters(part);
+    return meters != null && meters >= proofDistanceMeters(proof);
   }
   return proofImageUrls(part).length > 0 || Boolean(part?.healthWorkoutId?.trim());
 }
@@ -637,6 +715,10 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
             : null,
       fromLibrary: row.fromLibrary === true || row.from_library === true,
       health: parseCheckinHealthProof(row.health),
+      distanceMeters:
+        Number(row.distanceMeters ?? row.distance_meters) > 0
+          ? Math.round(Number(row.distanceMeters ?? row.distance_meters))
+          : parseCheckinHealthProof(row.health)?.distanceMeters ?? null,
     };
   }
   return parts;

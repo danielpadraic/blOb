@@ -26,6 +26,8 @@ export function HealthProofCaption({
       confidence: row.confidence,
       hrAvg: row.hr_avg,
       caloriesKcal: row.calories_kcal,
+      distanceMeters: row.distance_m,
+      hasRoute: false,
     });
     return (
       <ViewBlock primary={lines.primary} secondary={lines.secondary} />

@@ -19,7 +19,7 @@ import { parseChallengeProofs } from '@/lib/challengeProofs';
 import { challengeDurationDays, challengeGoalLabel, challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesCumulativeScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialGuaranteeAmount, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -39,6 +39,7 @@ type ChallengeCardVisualProps = {
   hosting?: boolean;
   invited?: boolean;
   myDays?: number | null;
+  myMeters?: number | null;
   host?: CardHost | null;
   nowMs: number;
   onPress?: () => void;
@@ -71,6 +72,9 @@ function proofChips(challenge: ChallengeWithStats): ProofChip[] {
     }
     if (proof.method === 'checkin' && !chips.some((chip) => chip.key === 'checkin')) {
       chips.push({ key: 'checkin', label: 'Note', glyph: GLYPH.strong });
+    }
+    if (proof.method === 'distance' && !chips.some((chip) => chip.key === 'distance')) {
+      chips.push({ key: 'distance', label: 'Distance', glyph: GLYPH.anyExercise });
     }
   }
   return chips;
@@ -113,6 +117,7 @@ export function ChallengeCardVisual({
   hosting = false,
   invited = false,
   myDays,
+  myMeters,
   host,
   nowMs,
   onPress,
@@ -132,12 +137,17 @@ export function ChallengeCardVisual({
   const proofs = proofChips(challenge);
   const days = Math.max(Number(myDays) || 0, 0);
   const duration = challengeDurationDays(challenge);
-  const progress = joinedProgressCopy(challenge, days);
+  const progress = joinedProgressCopy(challenge, days, { distanceMetersCompleted: myMeters ?? 0 });
   const showRing =
-    !official && joined && duration > 0 && !usesPointsBoard(challenge) && !usesTotalCountCheckins(challenge);
+    !official &&
+    joined &&
+    duration > 0 &&
+    !usesPointsBoard(challenge) &&
+    !usesTotalCountCheckins(challenge) &&
+    !usesCumulativeScoring(challenge);
   const goal =
-    official || usesPointsBoard(challenge) || usesTotalCountCheckins(challenge)
-      ? challengeGoalLabel(challenge, { daysCompleted: days })
+    official || usesPointsBoard(challenge) || usesTotalCountCheckins(challenge) || usesCumulativeScoring(challenge)
+      ? challengeGoalLabel(challenge, { daysCompleted: days, distanceMetersCompleted: myMeters ?? 0 })
       : `${duration}-Day Consistency`;
   const goalSub = official ? challengeGoalSubtitle(challenge) : null;
   const showGoal = Boolean(goal) && !showRing;

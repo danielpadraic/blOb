@@ -32,6 +32,7 @@ const run: HealthWorkout = {
 describe('proofPrefersHealthAttach', () => {
   it('prefers Watch attach for HR and duration proofs, not selfies', () => {
     expect(proofPrefersHealthAttach({ id: 'hr', name: 'Heart rate', method: 'hr' })).toBe(true);
+    expect(proofPrefersHealthAttach({ id: 'd', name: 'Distance', method: 'distance' })).toBe(true);
     expect(
       proofPrefersHealthAttach(
         { id: 'photo', name: 'Photo of the work', method: 'photo' },
@@ -62,6 +63,7 @@ describe('workoutAttachBlockReason', () => {
     expect(healthAttachRulesFor({ id: 'hr', name: 'HR', method: 'hr', minutes: 45 }, { min_minutes: 30 })).toEqual({
       minMinutes: 45,
       hrRequired: true,
+      minDistanceMeters: null,
     });
   });
 });

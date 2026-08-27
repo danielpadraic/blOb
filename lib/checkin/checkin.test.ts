@@ -28,6 +28,12 @@ const officialTrio: ChallengeProof[] = BEFORE_AFTER_HR_PRESET.map((item, index) 
   minutes: item.minutes,
 }));
 
+describe('Official Weekly trio', () => {
+  it('stays photo, photo, heart rate — no Distance slot', () => {
+    expect(officialTrio.map((proof) => proof.method)).toEqual(['photo', 'photo', 'hr']);
+  });
+});
+
 describe('check-in stages', () => {
   it('uses Begin → Continue → Submit, never log', () => {
     expect(checkinCtaTitle('none')).toBe('Begin');

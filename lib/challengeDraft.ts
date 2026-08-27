@@ -282,9 +282,15 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
     }
     const method = row.proof_method;
     const proof_method =
-      method === 'photo' || method === 'video' || method === 'checkin' || method === 'honor' || method === 'hr'
+      method === 'photo' ||
+      method === 'video' ||
+      method === 'checkin' ||
+      method === 'honor' ||
+      method === 'hr' ||
+      method === 'distance'
         ? method
         : 'photo';
+    const meters = Number(row.distance_meters);
     return [
       {
         id: id || `xtask-${index + 1}`,
@@ -292,6 +298,7 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
         once: Boolean(row.once),
         proof_method,
         hr_minutes: Math.max(Math.round(Number(row.hr_minutes) || 30), 1),
+        distance_meters: Number.isFinite(meters) && meters > 0 ? meters : undefined,
       },
     ];
   });
@@ -307,7 +314,14 @@ function asChallengeProofs(value: unknown): ChallengeProof[] {
     }
     const row = item as Record<string, unknown>;
     const method = row.method;
-    if (method !== 'photo' && method !== 'video' && method !== 'checkin' && method !== 'honor' && method !== 'hr') {
+    if (
+      method !== 'photo' &&
+      method !== 'video' &&
+      method !== 'checkin' &&
+      method !== 'honor' &&
+      method !== 'hr' &&
+      method !== 'distance'
+    ) {
       return [];
     }
     const name = asString(row.name, '');
@@ -316,12 +330,14 @@ function asChallengeProofs(value: unknown): ChallengeProof[] {
       return [];
     }
     const minutes = Number(row.minutes);
+    const meters = Number(row.distance_meters ?? row.distanceMeters);
     return [
       {
         id: id || `proof-${index + 1}`,
         name,
         method,
         minutes: Number.isFinite(minutes) && minutes >= 1 ? Math.round(minutes) : undefined,
+        distance_meters: Number.isFinite(meters) && meters > 0 ? Math.round(meters) : undefined,
       },
     ];
   });
@@ -413,7 +429,10 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       description: asString(row.description, DEFAULT_CREATE_VALUES.description ?? ''),
       task: asString(row.task, DEFAULT_CREATE_VALUES.task ?? ''),
       category,
-      challenge_type: row.challenge_type === 'points' ? 'points' : 'consistency',
+      challenge_type:
+        row.challenge_type === 'points' || row.challenge_type === 'cumulative'
+          ? row.challenge_type
+          : 'consistency',
       visibility:
         row.visibility === 'friends' || row.visibility === 'invite' || row.visibility === 'private'
           ? row.visibility
@@ -490,7 +509,8 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
         row.proof_type === 'check_in' ||
         row.proof_type === 'checkin' ||
         row.proof_type === 'honor' ||
-        row.proof_type === 'hr'
+        row.proof_type === 'hr' ||
+        row.proof_type === 'distance'
           ? row.proof_type
           : DEFAULT_CREATE_VALUES.proof_type,
       proof_review: row.proof_review === 'host' ? 'host' : DEFAULT_CREATE_VALUES.proof_review,
@@ -508,9 +528,22 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
           ? row.payout_mode
           : DEFAULT_CREATE_VALUES.payout_mode,
       format:
-        row.format === 'points' || row.format === 'lms' || row.format === 'consistency'
+        row.format === 'points' ||
+        row.format === 'lms' ||
+        row.format === 'consistency' ||
+        row.format === 'cumulative'
           ? row.format
           : DEFAULT_CREATE_VALUES.format,
+      cumulative_metric: row.cumulative_metric === 'count' ? 'count' : row.cumulative_metric === 'distance_m' ? 'distance_m' : null,
+      cumulative_target: asString(row.cumulative_target, DEFAULT_CREATE_VALUES.cumulative_target ?? ''),
+      cumulative_window:
+        row.cumulative_window === 'week' || row.cumulative_window === 'day' || row.cumulative_window === 'challenge'
+          ? row.cumulative_window
+          : DEFAULT_CREATE_VALUES.cumulative_window,
+      distance_meters_required: asString(
+        row.distance_meters_required,
+        DEFAULT_CREATE_VALUES.distance_meters_required ?? '',
+      ),
     };
     if (row.challenge_proofs != null) {
       next.challenge_proofs = asChallengeProofs(row.challenge_proofs);
@@ -581,7 +614,10 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     host_budget: String(Math.max(Number(challenge.host_budget ?? challenge.creator_contribution) || 0, 0)),
     description: challenge.description ?? '',
     category: normalizeChallengeCategory(challenge.category, 'other'),
-    challenge_type: challenge.challenge_type === 'points' ? 'points' : 'consistency',
+    challenge_type:
+      challenge.challenge_type === 'points' || challenge.challenge_type === 'cumulative'
+        ? challenge.challenge_type
+        : 'consistency',
     visibility:
       challenge.visibility === 'friends' ||
       challenge.visibility === 'invite' ||
@@ -650,6 +686,28 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
       : null,
     scoring_config: comparable,
     guarantee_enabled: Math.max(Number(challenge.host_budget) || 0, 0) > 0,
+    format:
+      challenge.format === 'lms' ||
+      challenge.format === 'points' ||
+      challenge.format === 'cumulative' ||
+      challenge.format === 'consistency'
+        ? challenge.format
+        : challenge.challenge_type === 'cumulative'
+          ? 'cumulative'
+          : DEFAULT_CREATE_VALUES.format,
+    cumulative_metric:
+      challenge.cumulative_metric === 'count' || challenge.cumulative_metric === 'distance_m'
+        ? challenge.cumulative_metric
+        : challenge.challenge_type === 'cumulative'
+          ? 'distance_m'
+          : null,
+    cumulative_target: challenge.cumulative_target != null ? String(challenge.cumulative_target) : '',
+    cumulative_window:
+      challenge.cumulative_window === 'week' || challenge.cumulative_window === 'day'
+        ? challenge.cumulative_window
+        : 'challenge',
+    distance_meters_required:
+      challenge.distance_meters_required != null ? String(challenge.distance_meters_required) : '',
   });
 }
 
