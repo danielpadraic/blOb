@@ -3,6 +3,7 @@ import { Controller, type UseFormReturn } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
 import { DistanceMilesRow, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
+import { LocationPlacePicker } from '@/components/challenge/LocationPlacePicker';
 import { FieldAnchor, FieldLabel, WizardFocusContext } from '@/components/challenge/create/wizardUi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -445,6 +446,14 @@ export function RulesSlide({
               }
             />
           ) : null}
+          {values.proofs.includes('location') ? (
+            <LocationPlacePicker
+              place={values.location_place}
+              onChange={(location_place) =>
+                setValue('location_place', location_place, { shouldDirty: true, shouldValidate: false })
+              }
+            />
+          ) : null}
         </>
       )}
 
@@ -617,21 +626,13 @@ function ProofPicker({
         {CREATE_PROOF_TYPES.map((type) => (
           <Chip
             key={type}
-            label={proofMeta(type).short}
+            label={type === 'location' ? `📍 ${proofMeta(type).short}` : proofMeta(type).short}
             selected={selected.includes(type)}
             onPress={() => onToggle(type)}
           />
         ))}
       </ChipRow>
-      {selected.length > 0 ? (
-        <View className="gap-1">
-          {selected.map((type) => (
-            <AppText key={type} className="text-sm leading-5 text-muted">
-              {proofMeta(type).label} — {proofMeta(type).helper}
-            </AppText>
-          ))}
-        </View>
-      ) : optional ? (
+      {optional ? (
         <AppText className="text-xs leading-5 text-muted">Optional. Leave empty to use the primary proof.</AppText>
       ) : null}
     </FieldLabel>

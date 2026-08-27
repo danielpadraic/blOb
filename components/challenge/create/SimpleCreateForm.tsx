@@ -11,6 +11,7 @@ import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhot
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { DistanceMilesRow, ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
+import { LocationPlacePicker } from '@/components/challenge/LocationPlacePicker';
 import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
@@ -995,6 +996,20 @@ export function SimpleCreateForm() {
                       })
                     }
                     onChangeUnit={(distance_unit) => patch({ distance_unit })}
+                  />
+                ) : null}
+                {proof.method === 'location' ? (
+                  <LocationPlacePicker
+                    place={proof.place}
+                    onChange={(place) =>
+                      patch({
+                        proofs: draft.proofs.map((row) =>
+                          row.id === proof.id
+                            ? ensureProofSentence({ ...row, method: 'location', place })
+                            : row,
+                        ),
+                      })
+                    }
                   />
                 ) : null}
               </View>

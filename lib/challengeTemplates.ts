@@ -153,6 +153,7 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   min_participants: '2',
   misses_allowed: '0',
   proof_type: 'photo',
+  location_place: null,
   proof_review: 'auto',
   host_funded: false,
   host_budget: '0',

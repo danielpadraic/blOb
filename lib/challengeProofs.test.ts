@@ -94,6 +94,23 @@ describe('Distance proof method', () => {
   });
 });
 
+describe('Location proof method', () => {
+  it('labels Location and needs an in-fence check-in', () => {
+    expect(SIMPLE_PROOF_METHODS.some((item) => item.value === 'location' && item.label === 'Location')).toBe(
+      true,
+    );
+    expect(defaultSentenceForMethod('location')).toBe('Check in at the pinned place.');
+    expect(methodLabel('location')).toBe('Location');
+    expect(proofTypeFromMethod('location')).toBe('location');
+    expect(
+      partSatisfies({ id: 'l', name: 'Location', method: 'location' }, { method: 'location', in_fence: true }),
+    ).toBe(true);
+    expect(
+      partSatisfies({ id: 'l', name: 'Location', method: 'location' }, { method: 'location', in_fence: false }),
+    ).toBe(false);
+  });
+});
+
 describe('Note proof method', () => {
   it('labels Simple checkin as Note and needs written text', () => {
     expect(SIMPLE_PROOF_METHODS.some((item) => item.value === 'checkin' && item.label === 'Note')).toBe(true);

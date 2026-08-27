@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
+import { LocationPlacePicker } from '@/components/challenge/LocationPlacePicker';
 import { Button } from '@/components/ui/Button';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
@@ -29,6 +30,7 @@ import {
   type ChallengeProof,
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
+import { persistChallengePlaces } from '@/lib/locationPlaces';
 import { copy } from '@/lib/copy';
 import { canEditOfficialDetails } from '@/lib/officialScoring';
 import { supabase } from '@/lib/supabase';
@@ -179,7 +181,7 @@ export default function OfficialDetailsScreen() {
       },
       {
         onSuccess: () => {
-          router.back();
+          void (id ? persistChallengePlaces(id, proofs) : Promise.resolve()).finally(() => router.back());
         },
         onError: (error) => {
           setFormError(detailsSaveMessage(error));
@@ -331,6 +333,18 @@ export default function OfficialDetailsScreen() {
                           row.id === proof.id
                             ? ensureProofSentence({ ...row, method: 'hr', minutes }, minutes)
                             : row,
+                        ),
+                      })
+                    }
+                  />
+                ) : null}
+                {proof.method === 'location' ? (
+                  <LocationPlacePicker
+                    place={proof.place}
+                    onChange={(place) =>
+                      patch({
+                        proofs: draft.proofs.map((row) =>
+                          row.id === proof.id ? ensureProofSentence({ ...row, method: 'location', place }) : row,
                         ),
                       })
                     }

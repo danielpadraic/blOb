@@ -13,9 +13,16 @@ import {
   type DistanceUnit,
 } from '@/lib/distance';
 import { parseCheckinHealthProof, type CheckinHealthProof } from '@/lib/health/checkinHealthProof';
+import {
+  locationPartSatisfies,
+  locationProofSentence,
+  parseLocationPlace,
+  publicLocationPlace,
+  type LocationPlace,
+} from '@/lib/locationProof';
 import type { ProofType } from '@/lib/types';
 
-export const CHALLENGE_PROOF_METHODS = ['photo', 'video', 'checkin', 'honor', 'hr', 'distance'] as const;
+export const CHALLENGE_PROOF_METHODS = ['photo', 'video', 'checkin', 'honor', 'hr', 'distance', 'location'] as const;
 
 export type ChallengeProofMethod = (typeof CHALLENGE_PROOF_METHODS)[number];
 
@@ -25,6 +32,7 @@ export type ChallengeProof = {
   method: ChallengeProofMethod;
   minutes?: number;
   distance_meters?: number;
+  place?: LocationPlace | null;
 };
 
 export type ChallengeProofPart = {
@@ -38,6 +46,12 @@ export type ChallengeProofPart = {
   /** Watch/Health snapshot on this check-in. Not a profile field. */
   health?: CheckinHealthProof | null;
   distanceMeters?: number | null;
+  place_id?: string | null;
+  label?: string | null;
+  radius_m?: number | null;
+  in_fence?: boolean;
+  accuracy_m?: number | null;
+  submitted_at?: string | null;
 };
 
 /** Extra photos on top of required proofs. Extras are optional and never unlock Send. */
@@ -148,13 +162,16 @@ export function partDistanceMeters(part?: ChallengeProofPart | null, unit: Dista
 export function defaultSentenceForMethod(
   method: ChallengeProofMethod,
   minutes = 30,
-  options?: { distanceMeters?: number; unit?: DistanceUnit },
+  options?: { distanceMeters?: number; unit?: DistanceUnit; place?: LocationPlace | null },
 ): string {
   if (method === 'hr') {
     return heartRateProofSentence(minutes);
   }
   if (method === 'distance') {
     return distanceProofSentence(options?.distanceMeters, options?.unit ?? athleteDistanceUnit());
+  }
+  if (method === 'location') {
+    return locationProofSentence(options?.place);
   }
   if (method === 'video') {
     return 'Post a video of the work.';
@@ -179,6 +196,8 @@ const SHORT_PROOF_LABELS = new Set([
   'heart rate',
   'hr',
   'distance',
+  'location',
+  'place',
   'miles',
   'km',
   'pre-selfie',
@@ -212,6 +231,14 @@ export function ensureProofSentence(proof: ChallengeProof, minutes = 30): Challe
     }
     return { ...proof, distance_meters: meters, name: name.endsWith('.') ? name : `${name}.` };
   }
+  if (proof.method === 'location') {
+    const place = parseLocationPlace(proof.place) ?? proof.place ?? null;
+    const sentence = defaultSentenceForMethod('location', minutes, { place });
+    if (isShortProofLabel(name) || name === sentence) {
+      return { ...proof, place, name: sentence };
+    }
+    return { ...proof, place, name: name.endsWith('.') ? name : `${name}.` };
+  }
   if (proof.method === 'hr' || /\bhr\b/.test(lower) || lower.includes('heart rate') || lower.includes('heart-rate')) {
     return { ...proof, method: 'hr', minutes: hrMinutes, name: heartRateProofSentence(hrMinutes) };
   }
@@ -230,9 +257,10 @@ export function ensureProofSentence(proof: ChallengeProof, minutes = 30): Challe
 export function proofNameForMethodChange(proof: ChallengeProof, method: ChallengeProofMethod, minutes = 30): string {
   const previousDefault = defaultSentenceForMethod(proof.method, minutes, {
     distanceMeters: proof.distance_meters,
+    place: proof.place,
   });
   if (!proof.name.trim() || isShortProofLabel(proof.name) || proof.name.trim() === previousDefault) {
-    return defaultSentenceForMethod(method, minutes, { distanceMeters: proof.distance_meters });
+    return defaultSentenceForMethod(method, minutes, { distanceMeters: proof.distance_meters, place: proof.place });
   }
   return ensureProofSentence({ ...proof, method }, minutes).name;
 }
@@ -340,11 +368,13 @@ export function makeProof(
   method: ChallengeProofMethod,
   minutes?: number,
   distanceMeters?: number,
+  place?: LocationPlace | null,
 ): ChallengeProof {
   const hrMinutes = method === 'hr' ? Math.max(Math.round(Number(minutes) || 30), 1) : undefined;
   const meters =
     method === 'distance' ? proofDistanceMeters({ method, distance_meters: distanceMeters }) : undefined;
-  return { id: newProofId(), name, method, minutes: hrMinutes, distance_meters: meters };
+  const pinned = method === 'location' ? parseLocationPlace(place) ?? place ?? null : undefined;
+  return { id: newProofId(), name, method, minutes: hrMinutes, distance_meters: meters, place: pinned };
 }
 
 export function defaultChallengeProofs(_task = ''): ChallengeProof[] {
@@ -370,6 +400,9 @@ export function methodLabel(method: ChallengeProofMethod): string {
   }
   if (method === 'distance') {
     return copy('create.proofDistance');
+  }
+  if (method === 'location') {
+    return copy('create.proofLocation');
   }
   return copy('create.proofPhoto');
 }
@@ -522,6 +555,9 @@ export function methodFromProofType(value: unknown): ChallengeProofMethod {
   if (raw === 'distance') {
     return 'distance';
   }
+  if (raw === 'location' || raw === 'place') {
+    return 'location';
+  }
   return 'photo';
 }
 
@@ -580,6 +616,9 @@ export function legacyTypeForProof(proof: ChallengeProof): ProofType | null {
   if (proof.method === 'distance') {
     return 'distance';
   }
+  if (proof.method === 'location') {
+    return 'location';
+  }
   const named = proof.name.trim().toLowerCase();
   if (isCheckoutProofName(named) || proof.id === 'post') {
     return 'post_selfie';
@@ -623,7 +662,8 @@ export function parseChallengeProofs(value: unknown): ChallengeProof[] {
     const rawMeters = row.distance_meters ?? row.distanceMeters;
     const distance_meters =
       method === 'distance' ? proofDistanceMeters({ method, distance_meters: Number(rawMeters) }) : undefined;
-    parsed.push({ id, name, method, minutes, distance_meters });
+    const place = method === 'location' ? parseLocationPlace(row.place ?? row) : undefined;
+    parsed.push({ id, name, method, minutes, distance_meters, place });
   }
   return parsed;
 }
@@ -631,6 +671,15 @@ export function parseChallengeProofs(value: unknown): ChallengeProof[] {
 export function proofsFromProofType(proofType: unknown): ChallengeProof[] {
   const method = methodFromProofType(proofType);
   return [makeProof(defaultSentenceForMethod(method), method)];
+}
+
+/** Persist proofs without raw coordinates on the challenge row. */
+export function proofsForStorage(proofs: ChallengeProof[]): ChallengeProof[] {
+  return proofs.map((proof) =>
+    proof.method === 'location'
+      ? { ...proof, place: publicLocationPlace(proof.place) }
+      : proof,
+  );
 }
 
 export function resolveChallengeProofs(input: {
@@ -687,6 +736,9 @@ export function partSatisfies(
     }
     return meters >= proofDistanceMeters(proof);
   }
+  if (proof.method === 'location') {
+    return locationPartSatisfies(part);
+  }
   return proofImageUrls(part).length > 0 || Boolean(part?.healthWorkoutId?.trim());
 }
 
@@ -736,6 +788,12 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
         Number(row.distanceMeters ?? row.distance_meters) > 0
           ? Math.round(Number(row.distanceMeters ?? row.distance_meters))
           : parseCheckinHealthProof(row.health)?.distanceMeters ?? null,
+      place_id: typeof row.place_id === 'string' ? row.place_id : typeof row.placeId === 'string' ? row.placeId : null,
+      label: typeof row.label === 'string' ? row.label : null,
+      radius_m: Number(row.radius_m ?? row.radiusM) > 0 ? Math.round(Number(row.radius_m ?? row.radiusM)) : null,
+      in_fence: row.in_fence === true || row.inFence === true,
+      accuracy_m: Number(row.accuracy_m ?? row.accuracyM) > 0 ? Math.round(Number(row.accuracy_m ?? row.accuracyM)) : null,
+      submitted_at: typeof row.submitted_at === 'string' ? row.submitted_at : typeof row.submittedAt === 'string' ? row.submittedAt : null,
     };
   }
   return parts;

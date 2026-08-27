@@ -28,6 +28,7 @@ import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChal
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { useUpdatePostAudience } from '@/hooks/useFeed';
 import { checkinExtraCaption, isCheckinCompleteStage, isCheckinPost, postLocality } from '@/lib/checkinPost';
+import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { PROOF_META } from '@/lib/constants';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
@@ -219,11 +220,7 @@ function PostCardInner({
           />
         ) : null}
 
-        {city ? (
-          <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
-            {city}
-          </AppText>
-        ) : null}
+        {city ? <LocationVenueLine place={city} compact /> : null}
 
         {post.challenge_id && !hidePromoCard ? (
           <ChallengeShareCard

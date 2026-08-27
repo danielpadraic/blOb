@@ -93,6 +93,13 @@ export function mapCheckinRpcError(
   if (upper.includes('ALREADY_LOGGED_TODAY') || upper.includes('ALREADY CHECKED IN')) {
     return 'Already checked in today. Come back tomorrow.';
   }
+  if (upper.includes('LOCATION_TOO_FAR')) {
+    const label = (error.message ?? '').split(':').slice(1).join(':').trim() || 'the pinned place';
+    return `You don’t look close enough to ${label}. Move closer and try again.`;
+  }
+  if (upper.includes('LOCATION_NEED_PHONE')) {
+    return 'Open the blOb app on your phone to check in at the pinned place.';
+  }
   if (upper.includes('MISSING_PROOFS')) {
     return 'Add every required proof to submit.';
   }

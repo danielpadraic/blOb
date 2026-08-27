@@ -76,6 +76,9 @@ function proofChips(challenge: ChallengeWithStats): ProofChip[] {
     if (proof.method === 'distance' && !chips.some((chip) => chip.key === 'distance')) {
       chips.push({ key: 'distance', label: 'Distance', glyph: GLYPH.anyExercise });
     }
+    if (proof.method === 'location' && !chips.some((chip) => chip.key === 'location')) {
+      chips.push({ key: 'location', label: 'Location', glyph: GLYPH.pin });
+    }
   }
   return chips;
 }

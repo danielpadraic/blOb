@@ -154,6 +154,11 @@ export function ExtraTasksEditor({
               onChangeMeters={(distance_meters) => patch(index, { distance_meters })}
             />
           ) : null}
+          {task.proof_method === 'location' ? (
+            <AppText className="text-[12px] leading-5 text-muted">
+              Uses the same place pin as this challenge.
+            </AppText>
+          ) : null}
         </View>
       ))}
       <Pressable

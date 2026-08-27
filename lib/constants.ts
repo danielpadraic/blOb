@@ -74,6 +74,7 @@ export const CREATE_PROOF_TYPES = [
   'link',
   'video',
   'distance',
+  'location',
 ] as const satisfies readonly ProofType[];
 
 export const IMAGE_PROOF_TYPES: readonly ProofType[] = [
@@ -273,6 +274,11 @@ export const PROOF_META: Record<
     label: 'Attach a run or walk of at least 1.00 miles.',
     helper: 'A Health workout or typed miles. A photo alone is not enough.',
     short: 'Distance',
+  },
+  location: {
+    label: 'Check in at the pinned place.',
+    helper: 'Be at the pin when you tap I’m here. No live tracking.',
+    short: 'Location',
   },
 };
 

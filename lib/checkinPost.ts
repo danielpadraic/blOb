@@ -93,7 +93,7 @@ export function checkinExtraCaption(
 /** City / locality when the post already carries it. Omit missing or “Unknown”. */
 export function postLocality(post: object): string | null {
   const raw = post as Record<string, unknown>;
-  const candidates = [raw.city, raw.locality, raw.location_name, raw.location];
+  const candidates = [raw.location_name, raw.city, raw.locality];
   for (const value of candidates) {
     if (typeof value !== 'string') {
       continue;

@@ -106,7 +106,8 @@ export type ProofType =
   | 'text_note'
   | 'link'
   | 'video'
-  | 'distance';
+  | 'distance'
+  | 'location';
 
 export type ChallengeCategory =
   | 'fitness'
@@ -126,7 +127,7 @@ export type ChallengeVisibility = 'public' | 'unlisted' | 'private' | 'friends' 
 export type ChallengeDiscoverability = 'invite_only' | 'friends_of_friends';
 export type PrivacyMode = 'public' | 'private' | 'private_corporate';
 
-export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'checkin' | 'honor' | 'hr' | 'distance';
+export type SimpleProofType = 'photo' | 'video' | 'check_in' | 'checkin' | 'honor' | 'hr' | 'distance' | 'location';
 
 export type ChallengeFormat = 'consistency' | 'points' | 'lms' | 'cumulative';
 
@@ -216,7 +217,7 @@ export interface ProofRequirement {
   required: boolean;
 }
 
-export type ChallengeProofMethod = 'photo' | 'video' | 'checkin' | 'honor' | 'hr' | 'distance';
+export type ChallengeProofMethod = 'photo' | 'video' | 'checkin' | 'honor' | 'hr' | 'distance' | 'location';
 
 export interface ChallengeProof {
   id: string;
@@ -224,6 +225,13 @@ export interface ChallengeProof {
   method: ChallengeProofMethod;
   minutes?: number;
   distance_meters?: number;
+  place?: {
+    place_id?: string | null;
+    label: string;
+    lat?: number | null;
+    lng?: number | null;
+    radius_m: number;
+  } | null;
 }
 
 export interface ChallengeProofPart {
@@ -243,6 +251,12 @@ export interface ChallengeProofPart {
     distanceMeters?: number;
   } | null;
   distanceMeters?: number | null;
+  place_id?: string | null;
+  label?: string | null;
+  radius_m?: number | null;
+  in_fence?: boolean;
+  accuracy_m?: number | null;
+  submitted_at?: string | null;
 }
 
 export interface ChallengeTask {
@@ -1760,6 +1774,32 @@ export type Database = {
       set_participation_profile_visibility: {
         Args: { p_challenge_id: string; p_visibility: string };
         Returns: undefined;
+      };
+      set_challenge_proof_place: {
+        Args: {
+          p_challenge_id: string;
+          p_proof_id: string;
+          p_label: string;
+          p_place_id: string | null;
+          p_lat: number;
+          p_lng: number;
+          p_radius_m: number;
+        };
+        Returns: undefined;
+      };
+      get_challenge_proof_places: {
+        Args: { p_challenge_id: string };
+        Returns: unknown;
+      };
+      submit_location_proof: {
+        Args: {
+          p_challenge_id: string;
+          p_proof_id: string;
+          p_lat: number;
+          p_lng: number;
+          p_accuracy_m: number | null;
+        };
+        Returns: unknown;
       };
       set_challenge_profile_visibility: {
         Args: { p_challenge_id: string; p_visibility: string };

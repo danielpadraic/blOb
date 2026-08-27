@@ -36,8 +36,10 @@ import {
 import {
   firstProofMethod,
   proofRequirementsFrom,
+  proofsForStorage,
   proofTypeFromMethod,
 } from '@/lib/challengeProofs';
+import { persistChallengePlaces, proofsReadyToPublish } from '@/lib/locationPlaces';
 import {
   minMinutesForPublish,
   namedProofsForPublish,
@@ -781,6 +783,10 @@ export function useCreateChallenge() {
       }
 
       const namedProofs = namedProofsForPublish(values);
+      const placeError = proofsReadyToPublish(namedProofs);
+      if (placeError) {
+        throw new Error(placeError);
+      }
 
       const challenge = await insertUserChallenge({
         title: values.title.trim(),
@@ -795,7 +801,7 @@ export function useCreateChallenge() {
           : namedProofs.length > 0
             ? proofRequirementsFrom(namedProofs)
             : values.proofs.map((type) => ({ type, required: true })),
-        proofs: isPoints ? [] : namedProofs,
+        proofs: isPoints ? [] : proofsForStorage(namedProofs),
         target_count: targetCount,
         frequency: isPoints ? 'once' : values.frequency,
         tasks,
@@ -868,6 +874,7 @@ export function useCreateChallenge() {
           values.challenge_type === 'cumulative' ? values.cumulative_window ?? 'challenge' : null,
         distance_meters_required: Math.max(Number(values.distance_meters_required) || 0, 0) || null,
       });
+      await persistChallengePlaces(challenge.id, namedProofs);
       await announceCreatedChallenge({
         authorId: user.id,
         challengeId: challenge.id,
@@ -1035,6 +1042,10 @@ export function useUpdateUserChallenge() {
       const durationDays = unlimited ? null : durationDaysFromValues(schedule);
       const targetCount = checkinTargetForStore(values, durationDays);
       const namedProofs = namedProofsForPublish(values);
+      const placeError = proofsReadyToPublish(namedProofs);
+      if (placeError) {
+        throw new Error(placeError);
+      }
       const privacyMode = asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane);
       const challenge = await updateUserChallenge(challengeId, {
         title: values.title.trim(),
@@ -1048,7 +1059,7 @@ export function useUpdateUserChallenge() {
         target_count: targetCount,
         min_minutes: minMinutesForPublish(values),
         frequency: isPoints ? 'once' : values.frequency,
-        proofs: namedProofs,
+        proofs: proofsForStorage(namedProofs),
         proof_requirements:
           namedProofs.length > 0
             ? proofRequirementsFrom(namedProofs)
@@ -1077,6 +1088,7 @@ export function useUpdateUserChallenge() {
           values.challenge_type === 'cumulative' ? values.cumulative_window ?? 'challenge' : null,
         distance_meters_required: Math.max(Number(values.distance_meters_required) || 0, 0) || null,
       });
+      await persistChallengePlaces(challengeId, namedProofs);
       const scoring = parseComparablePointsConfig(values.scoring_config);
       if (values.scoring_method === 'comparable_points' && scoring) {
         await publishScoringChange(challengeId, scoring);

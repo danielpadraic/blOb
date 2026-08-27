@@ -19,6 +19,7 @@ import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { JoinCtaButton, JOIN_CTA_HEIGHT } from '@/components/challenge/JoinCtaButton';
 import { HealthProofCaption } from '@/components/challenge/HealthProofCaption';
+import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
@@ -60,6 +61,7 @@ import {
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
+import { parseLocationPlace } from '@/lib/locationProof';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import {
   challengeTargetCount,
@@ -862,9 +864,13 @@ export default function ChallengeDetailScreen() {
                           healthWorkoutId={periodCheckin.data.proof_parts[proof.id].healthWorkoutId}
                         />
                       ) : (
+                        proof.method === 'location' ? (
+                          <LocationVenueLine place={parseLocationPlace(proof.place)} />
+                        ) : (
                         <AppText className="text-[13px] leading-5 text-muted">
                           {proof.method === 'honor' ? 'Honor. Confirm to check in.' : methodLabel(proof.method)}
                         </AppText>
+                        )
                       )}
                     </View>
                   </View>

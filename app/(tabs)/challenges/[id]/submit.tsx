@@ -4,6 +4,7 @@ import { Alert, Keyboard, Platform, Pressable, ScrollView, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import { LocationProofRow } from '@/components/challenge/LocationProofRow';
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
@@ -16,7 +17,11 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useChallengeParticipants, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
+import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
+import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
+import { parseLocationPlace } from '@/lib/locationProof';
 import type { HealthWorkout } from '@/services/health/types';
 import {
   CHECKIN_BOB,
@@ -75,6 +80,7 @@ type SlotDraft = {
   text?: string;
   fromLibrary?: boolean;
   health?: CheckinHealthProof | null;
+  inFence?: boolean;
 };
 
 function LoggedState({ onBack }: { onBack: () => void }) {
@@ -102,6 +108,16 @@ function slotPart(
   }
   if (proof.method === 'checkin') {
     return { method: 'checkin', text: draft?.text ?? '' };
+  }
+  if (proof.method === 'location') {
+    const place = parseLocationPlace(proof.place);
+    return {
+      method: 'location',
+      in_fence: draft?.inFence === true,
+      label: place?.label ?? null,
+      place_id: place?.place_id ?? null,
+      radius_m: place?.radius_m ?? null,
+    };
   }
   if (proof.method === 'distance') {
     const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
@@ -138,6 +154,7 @@ export default function SubmitWorkoutScreen() {
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
   const saveProof = useSaveCheckinProof(id);
   const submitCheckin = useSubmitCheckin(id);
+  const queryClient = useQueryClient();
 
   const [drafts, setDrafts] = useState<Record<string, SlotDraft>>({});
   const [error, setError] = useState<string | null>(null);
@@ -200,6 +217,7 @@ export default function SubmitWorkoutScreen() {
           text: part.text ?? current[proof.id]?.text,
           fromLibrary: part.fromLibrary ?? current[proof.id]?.fromLibrary,
           health: part.health ?? current[proof.id]?.health ?? null,
+          inFence: part.in_fence ?? current[proof.id]?.inFence,
         };
       }
       return next;
@@ -294,6 +312,27 @@ export default function SubmitWorkoutScreen() {
       }
     }
     return null;
+  }
+
+  async function persistLocation(proof: ChallengeProof) {
+    if (!id) {
+      return;
+    }
+    setError(null);
+    setFailKind(null);
+    const place = parseLocationPlace(proof.place);
+    const fix = await readLocationFix(place?.radius_m ?? 100);
+    const row = await submitLocationProof({
+      challengeId: id,
+      proofId: proof.id,
+      lat: fix.lat,
+      lng: fix.lng,
+      accuracy_m: fix.accuracy_m,
+    });
+    setDrafts((current) => ({ ...current, [proof.id]: { ...current[proof.id], inFence: true } }));
+    void checkinQuery.refetch();
+    void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    return row;
   }
 
   async function persistProof(proof: ChallengeProof, draft?: SlotDraft) {
@@ -413,7 +452,25 @@ export default function SubmitWorkoutScreen() {
     if (busy) {
       return;
     }
-    if (!honorOnly && !allReady) {
+    for (const proof of proofSteps.filter((item) => item.method === 'location')) {
+      if (partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit))) {
+        continue;
+      }
+      if (await locationPermissionGrantedThisSession()) {
+        try {
+          await persistLocation(proof);
+        } catch (caught) {
+          Alert.alert('Couldn’t check in here', getErrorMessage(caught));
+          return;
+        }
+      }
+    }
+    const readyNow =
+      honorOnly ||
+      proofSteps.every((proof) =>
+        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
+      );
+    if (!honorOnly && !readyNow) {
       explainSendBlocked();
       return;
     }
@@ -804,10 +861,15 @@ export default function SubmitWorkoutScreen() {
   }
 
   const composerProofs = proofSteps.filter(
-    (proof) => proof.method !== 'honor' && proof.method !== 'checkin' && proof.method !== 'distance',
+    (proof) =>
+      proof.method !== 'honor' &&
+      proof.method !== 'checkin' &&
+      proof.method !== 'distance' &&
+      proof.method !== 'location',
   );
   const textProofs = proofSteps.filter((proof) => proof.method === 'checkin');
   const distanceProofs = proofSteps.filter((proof) => proof.method === 'distance');
+  const locationProofs = proofSteps.filter((proof) => proof.method === 'location');
   const footerBottom = keyboardPad > 0 ? (Platform.OS === 'ios' ? 8 : keyboardPad) : tabLift;
 
   return (
@@ -859,6 +921,20 @@ export default function SubmitWorkoutScreen() {
                 keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 showsVerticalScrollIndicator={false}>
                 <DismissKeyboard>
+                {locationProofs.map((proof) => (
+                  <View key={proof.id} className="mb-3">
+                    <LocationProofRow
+                      place={parseLocationPlace(proof.place)}
+                      ready={partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit))}
+                      busy={busy}
+                      onImHere={() => {
+                        void persistLocation(proof).catch((caught) => {
+                          Alert.alert('Couldn’t check in here', getErrorMessage(caught));
+                        });
+                      }}
+                    />
+                  </View>
+                ))}
                 {textProofs.map((proof) => (
                   <View key={proof.id} className="mb-3">
                     <Input

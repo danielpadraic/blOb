@@ -186,7 +186,7 @@ export const extraCreateTaskSchema = z.object({
   id: z.string(),
   title: z.string(),
   once: z.boolean(),
-  proof_method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr', 'distance']).nullable(),
+  proof_method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr', 'distance', 'location']).nullable(),
   hr_minutes: z.number().int().min(1).max(600),
   distance_meters: z.number().min(1).optional(),
 });
@@ -260,17 +260,37 @@ export const createChallengeSchema = z
     task: z.string().trim().max(80).optional().or(z.literal('')),
     min_participants: z.string().optional(),
     misses_allowed: z.string().optional(),
-    proof_type: z.enum(['photo', 'video', 'check_in', 'checkin', 'honor', 'hr', 'distance']).optional(),
+    proof_type: z.enum(['photo', 'video', 'check_in', 'checkin', 'honor', 'hr', 'distance', 'location']).optional(),
     challenge_proofs: z
       .array(
         z.object({
           id: z.string(),
           name: z.string(),
-          method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr', 'distance']),
+          method: z.enum(['photo', 'video', 'checkin', 'honor', 'hr', 'distance', 'location']),
           minutes: z.number().int().min(1).max(600).optional(),
           distance_meters: z.number().min(1).optional(),
+          place: z
+            .object({
+              place_id: z.string().nullable().optional(),
+              label: z.string(),
+              lat: z.number().nullable().optional(),
+              lng: z.number().nullable().optional(),
+              radius_m: z.number(),
+            })
+            .nullable()
+            .optional(),
         }),
       )
+      .optional(),
+    location_place: z
+      .object({
+        place_id: z.string().nullable().optional(),
+        label: z.string(),
+        lat: z.number().nullable().optional(),
+        lng: z.number().nullable().optional(),
+        radius_m: z.number(),
+      })
+      .nullable()
       .optional(),
     proof_review: z.enum(['auto', 'host']).optional(),
     host_funded: z.boolean().optional(),

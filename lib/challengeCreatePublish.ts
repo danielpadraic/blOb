@@ -27,6 +27,9 @@ function extraTaskProofType(method: ExtraCreateTask['proof_method']): string | u
   if (method === 'distance') {
     return 'distance';
   }
+  if (method === 'location') {
+    return 'location';
+  }
   return method;
 }
 
@@ -81,7 +84,10 @@ export function namedProofsForPublish(values: CreateChallengeValues): ChallengeP
             ? { ...proof, distance_meters: requiredMeters }
             : proof,
         );
-  return [...base, ...extraTaskNamedProofs(filledExtraTasks(values))];
+  const place = values.location_place ?? base.find((proof) => proof.method === 'location')?.place ?? null;
+  const withPlace = (proof: ChallengeProof) =>
+    proof.method === 'location' ? { ...proof, place: proof.place ?? place } : proof;
+  return [...base.map(withPlace), ...extraTaskNamedProofs(filledExtraTasks(values)).map(withPlace)];
 }
 
 export function persistTasksForPublish(values: CreateChallengeValues, isPoints: boolean): ChallengeTask[] {

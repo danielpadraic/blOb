@@ -9,6 +9,7 @@ import {
 import type { Challenge, ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
 import { milesToMeters, type DistanceUnit } from '@/lib/distance';
+import { locationPlaceIsSet } from '@/lib/locationProof';
 import {
   BEFORE_AFTER_HR_PRESET,
   SIMPLE_PROOF_CAP,
@@ -96,6 +97,7 @@ export const SIMPLE_PROOF_METHODS: { value: ChallengeProofMethod; label: string;
   { value: 'honor', label: 'Honor', icon: '🤝' },
   { value: 'hr', label: 'Heart rate', icon: '♥' },
   { value: 'distance', label: 'Distance', icon: '↔' },
+  { value: 'location', label: 'Location', icon: '📍' },
 ];
 
 export type SimpleHowYouWin = 'consistency' | 'cumulative';
@@ -675,6 +677,9 @@ export function validateSimpleDraft(
   }
   if (draft.currency === 'bucks' && Math.max(Number(draft.buy_in) || 0, 0) > 0) {
     return 'The host funds the prize. Participants do not pay an entry.';
+  }
+  if (draft.proofs.some((proof) => proof.method === 'location' && !locationPlaceIsSet(proof.place))) {
+    return 'Drop a pin for the Location proof.';
   }
   return null;
 }

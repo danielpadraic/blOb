@@ -32,6 +32,26 @@ export async function saveCheckinProof(input: SaveCheckinProofInput) {
   }
 }
 
+export async function submitLocationProof(input: {
+  challengeId: string;
+  proofId: string;
+  lat: number;
+  lng: number;
+  accuracy_m: number | null;
+}) {
+  const { data, error } = await supabase.rpc('submit_location_proof', {
+    p_challenge_id: input.challengeId,
+    p_proof_id: input.proofId,
+    p_lat: input.lat,
+    p_lng: input.lng,
+    p_accuracy_m: input.accuracy_m,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return parseChallengeCheckin((data ?? {}) as Record<string, unknown>);
+}
+
 export async function submitCheckin(challengeId: string) {
   try {
     const parsed = await submitCheckinWithClient(supabase as never, challengeId);
