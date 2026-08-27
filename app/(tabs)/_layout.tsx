@@ -35,10 +35,15 @@ import { CAPTURE_REEL_HREF, LOBBY_HREF } from '@/lib/routes';
 import { primeCameraFromGesture } from '@/lib/cameraSession';
 import { rememberLastCapture } from '@/lib/lastCapture';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
-import { shouldReturnHomeOnResume } from '@/lib/appResume';
+import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
 import { THEME } from '@/lib/theme';
+import * as Linking from 'expo-linking';
 
 export { AppErrorBoundary as ErrorBoundary };
+
+export const unstable_settings = {
+  initialRouteName: 'feed',
+};
 
 export default function TabLayout() {
   return (
@@ -129,6 +134,9 @@ function TabLayoutInner() {
   const loggable = useLoggableChallenges();
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const backgroundedAt = useRef<number | null>(null);
+  const pathRef = useRef(pathname);
+  const launchPath = useRef(pathname);
+  pathRef.current = pathname;
   useNotificationsRealtime();
   usePushNotifications();
   useTickUserGrants(true);
@@ -200,6 +208,38 @@ function TabLayoutInner() {
     wallet?.closeAll();
     setLogoMenuOpen(true);
   }
+
+  useEffect(() => {
+    if (onOnboarding) {
+      return;
+    }
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      void Promise.resolve(Linking.getInitialURL())
+        .catch(() => null)
+        .then((initialUrl) => {
+          if (cancelled) {
+            return;
+          }
+          const linkingUrl =
+            typeof Linking.getLinkingURL === 'function' ? Linking.getLinkingURL() : null;
+          if (
+            pathRef.current !== '/feed' &&
+            shouldResetToHomeOnLaunch({
+              pathname: launchPath.current,
+              initialUrl: linkingUrl || initialUrl,
+              platform: Platform.OS,
+            })
+          ) {
+            router.replace('/feed');
+          }
+        });
+    }, 280);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [onOnboarding, router]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {

@@ -1,9 +1,10 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
+import { ProfileLink } from '@/components/profile/ProfileLink';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
@@ -12,12 +13,13 @@ import { Card } from '@/components/ui/Card';
 import {
   boardEmptyCopy,
   boardRowTag,
+  boardScoreLabel,
   boardSettledCopy,
   buildBoard,
-  pointsLeader,
-  pointsRank,
+  rankBoardRows,
 } from '@/lib/board';
 import { usesPointsBoard } from '@/lib/challengeExperience';
+import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { Challenge, ChallengeParticipantWithProfile, ChallengeSettlementView } from '@/lib/types';
@@ -80,10 +82,11 @@ export function ChallengeBoard({
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;
   const pointsBoard = usesPointsBoard(challenge);
-  const contestants = view.people.length;
-  const rank = pointsRank(view.people, viewerId);
-  const leader = pointsLeader(view.people);
-  const rankLabel = joined ? (rank != null ? String(rank) : '—') : copy('board.joinToRank');
+  const requiredDays = challengeTargetCount(challenge);
+  const rows = useMemo(
+    () => rankBoardRows(view.people, pointsBoard ? 'points' : 'days'),
+    [pointsBoard, view.people],
+  );
 
   function toggleReceipt() {
     if (onOpenReceipt) {
@@ -100,26 +103,13 @@ export function ChallengeBoard({
         accessibilityLabel="Open board"
         onPress={onOpenReceipt}
         style={{ minHeight: 44 }}>
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          {pointsBoard ? (
-            <>
-              <CompactStat label={copy('board.contestants')} value={contestants} />
-              <CompactStat label={copy('board.yourRank')} value={joined ? rank ?? '—' : '—'} />
-              <CompactStat label={copy('board.challengeLeader')} value={leader?.name ?? '—'} />
-            </>
-          ) : (
-            <>
-              <CompactStat label="In" value={view.remainingCount} />
-              <CompactStat label="Done" value={view.caughtUpCount} />
-              <CompactStat label="Out" value={view.droppedCount} />
-            </>
-          )}
-          {view.settled ? (
-            <AppText className="text-[12px] font-bold" style={{ color: THEME.accent }}>
-              Settled
-            </AppText>
-          ) : null}
-        </View>
+        <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
+          {copy('board.remaining')} {view.remainingCount}
+          {' · '}
+          {copy('board.caughtUp')} {view.caughtUpCount}
+          {' · '}
+          {copy('board.dropped')} {view.droppedCount}
+        </AppText>
       </Pressable>
     );
   }
@@ -135,36 +125,13 @@ export function ChallengeBoard({
         <ChallengeLifecycleStatus compact status={challenge.status} />
       </View>
 
-      <View className="flex-row items-stretch" style={{ gap: 8 }}>
-        {pointsBoard ? (
-          <>
-            <Stat label={copy('board.contestants')} value={String(contestants)} />
-            <Stat label={copy('board.yourRank')} value={rankLabel} />
-            <Stat label={copy('board.challengeLeader')}>
-              {leader ? (
-                <View className="items-center" style={{ gap: 6 }}>
-                  <Avatar uri={leader.avatarUrl} name={leader.name} size={32} />
-                  <AppText
-                    className="text-center text-[13px] font-bold leading-4 text-charcoal"
-                    numberOfLines={2}>
-                    {leader.name}
-                  </AppText>
-                </View>
-              ) : (
-                <AppText className="text-center text-[13px] font-bold leading-4 text-muted">
-                  {copy('board.noLeader')}
-                </AppText>
-              )}
-            </Stat>
-          </>
-        ) : (
-          <>
-            <Stat label={copy('board.remaining')} value={String(view.remainingCount)} />
-            <Stat label={copy('board.caughtUp')} value={String(view.caughtUpCount)} />
-            <Stat label={copy('board.dropped')} value={String(view.droppedCount)} />
-          </>
-        )}
-      </View>
+      <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
+        {copy('board.remaining')} {view.remainingCount}
+        {' · '}
+        {copy('board.caughtUp')} {view.caughtUpCount}
+        {' · '}
+        {copy('board.dropped')} {view.droppedCount}
+      </AppText>
 
       {view.settled ? (
         <View className="gap-2">
@@ -204,27 +171,31 @@ export function ChallengeBoard({
 
       {error ? (
         <AppText className="text-sm leading-5 text-coral-dark">
-          Couldn’t load the board. {error.includes('network') || error.includes('offline')
+          Couldn’t load the board.{' '}
+          {error.includes('network') || error.includes('offline')
             ? 'You’re offline. It will update when you’re back.'
             : 'Try again.'}
         </AppText>
       ) : null}
 
       {view.empty ? (
-        <AppText className="text-sm text-muted">{boardEmptyCopy(view)}</AppText>
+        <MascotState kind="empty" compact title={boardEmptyCopy(view)} />
       ) : (
-        <View className="gap-1.5">
-          {view.remaining.map((row) => (
-            <BoardRow
+        <View className="gap-1">
+          {rows.map((row) => (
+            <BoardRankRow
               key={row.userId}
-              name={row.name}
-              tag={boardRowTag(row, view.settled)}
-              amount={view.settled ? row.payout : null}
+              rank={row.rank == null ? '—' : String(row.rank)}
+              name={row.you ? `${row.name} (You)` : row.name}
+              username={row.username}
+              userId={row.userId}
+              avatarUrl={row.avatarUrl}
+              score={boardScoreLabel(row, { pointsBoard, requiredDays })}
+              status={boardRowTag(row, view.settled)}
+              muted={row.bucket === 'dropped'}
+              payout={view.settled ? row.payout : null}
               currency={challenge.currency}
             />
-          ))}
-          {view.dropped.map((row) => (
-            <BoardRow key={row.userId} name={row.name} tag={boardRowTag(row, view.settled)} muted />
           ))}
         </View>
       )}
@@ -281,91 +252,62 @@ function ShareLine({
   );
 }
 
-function Stat({
-  label,
-  value,
-  children,
-}: {
-  label: string;
-  value?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <View
-      className="min-w-0 flex-1 items-center justify-start"
-      style={{
-        backgroundColor: THEME.accentSoft,
-        borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 8,
-        minHeight: 92,
-      }}>
-      <View className="min-h-[36px] w-full items-center justify-center">
-        {children ?? (
-          <AppText className="text-center text-[22px] font-extrabold leading-7 text-charcoal">
-            {value}
-          </AppText>
-        )}
-      </View>
-      <AppText className="mt-2 w-full text-center text-[11px] font-semibold leading-4 text-muted">
-        {label}
-      </AppText>
-    </View>
-  );
-}
-
-function CompactStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <View
-      className="flex-row items-center"
-      style={{
-        minHeight: 28,
-        borderRadius: 999,
-        backgroundColor: THEME.accentSoft,
-        paddingHorizontal: 10,
-        gap: 4,
-      }}>
-      <AppText className="text-[13px] font-extrabold text-charcoal">{value}</AppText>
-      <AppText className="text-[10px] font-semibold text-muted">{label}</AppText>
-    </View>
-  );
-}
-
-function BoardRow({
+function BoardRankRow({
+  rank,
   name,
-  tag,
+  username,
+  userId,
+  avatarUrl,
+  score,
+  status,
   muted,
-  amount,
+  payout,
   currency,
 }: {
+  rank: string;
   name: string;
-  tag: string;
+  username: string | null;
+  userId: string;
+  avatarUrl: string | null;
+  score: string;
+  status: string;
   muted?: boolean;
-  amount?: number | null;
+  payout?: number | null;
   currency?: string | null;
 }) {
+  const ink = muted ? THEME.textMuted : THEME.textPrimary;
   return (
-    <View className="flex-row items-center justify-between" style={{ minHeight: 44 }}>
-      <AppText
-        className="flex-1 text-sm font-semibold"
-        style={{ color: muted ? THEME.textMuted : THEME.textPrimary }}
-        numberOfLines={1}>
-        {name}
-      </AppText>
-      {amount != null && Number(amount) > 0 ? (
-        <StakeAmount
-          amount={amount}
-          currency={currency}
-          size={13}
-          zeroAsNumber
-          textClassName="mr-2 text-[13px] font-bold text-charcoal"
-        />
-      ) : null}
-      <AppText
-        className="text-[12px] font-semibold"
-        style={{ color: muted ? THEME.textMuted : THEME.accent }}>
-        {tag}
-      </AppText>
-    </View>
+    <ProfileLink username={username} userId={userId} style={{ minHeight: 52 }}>
+      <View className="flex-row items-center" style={{ gap: 10, minHeight: 52 }}>
+        <AppText
+          className="w-6 text-center text-[13px] font-extrabold"
+          style={{ color: ink }}>
+          {rank}
+        </AppText>
+        <Avatar uri={avatarUrl} name={name} size={36} />
+        <View className="min-w-0 flex-1">
+          <AppText className="text-[15px] font-semibold" style={{ color: ink }} numberOfLines={1}>
+            {name}
+          </AppText>
+          <AppText className="text-[12px] font-semibold" style={{ color: muted ? THEME.textMuted : THEME.accent }}>
+            {status}
+          </AppText>
+        </View>
+        <View className="items-end">
+          <AppText className="text-[15px] font-extrabold" style={{ color: ink }}>
+            {score}
+          </AppText>
+          {payout != null && Number(payout) > 0 ? (
+            <StakeAmount
+              amount={payout}
+              currency={currency}
+              size={12}
+              zeroAsNumber
+              textClassName="text-[12px] font-bold text-charcoal"
+            />
+          ) : null}
+        </View>
+      </View>
+    </ProfileLink>
   );
 }

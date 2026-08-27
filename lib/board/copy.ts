@@ -41,10 +41,7 @@ export function boardEmptyCopy(view: Pick<BoardView, 'settled' | 'spectator'>): 
   if (view.settled) {
     return 'This challenge settled with nobody on the board.';
   }
-  if (view.spectator) {
-    return 'Participate to appear on the board. Remaining show up after the first proven check-in.';
-  }
-  return 'Empty until people join and check in.';
+  return 'Board fills when people join.';
 }
 
 export function boardSettledCopy(view: Pick<BoardView, 'forfeited' | 'youPaid' | 'spectator' | 'remainingCount'>): {
@@ -81,14 +78,11 @@ export function boardSettledCopy(view: Pick<BoardView, 'forfeited' | 'youPaid' |
 }
 
 export function boardRowTag(person: { bucket: string; you?: boolean }, settled: boolean): string {
-  if (person.you) {
-    return 'You';
-  }
   if (settled) {
     return person.bucket === 'dropped' ? 'Out' : 'Paid';
   }
   if (person.bucket === 'caught_up') {
-    return 'Done';
+    return 'Caught up';
   }
   if (person.bucket === 'dropped') {
     return 'Out';

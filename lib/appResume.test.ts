@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MIN_BACKGROUND_MS, shouldReturnHomeOnResume } from '@/lib/appResume';
+import { MIN_BACKGROUND_MS, shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
 
 describe('shouldReturnHomeOnResume', () => {
   const base = {
@@ -51,5 +51,44 @@ describe('shouldReturnHomeOnResume', () => {
     expect(shouldReturnHomeOnResume({ ...base, platform: 'web', pathname: '/challenges/create' })).toBe(
       false,
     );
+  });
+});
+
+describe('shouldResetToHomeOnLaunch', () => {
+  it('opens Home after a force-quit on a challenge, not the last lobby', () => {
+    expect(
+      shouldResetToHomeOnLaunch({
+        pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        initialUrl: null,
+        platform: 'ios',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps an explicit challenge link, share, or notification URL', () => {
+    expect(
+      shouldResetToHomeOnLaunch({
+        pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        initialUrl: 'https://blob.mobi/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        platform: 'ios',
+      }),
+    ).toBe(false);
+    expect(
+      shouldResetToHomeOnLaunch({
+        pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        initialUrl: 'blob://challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        platform: 'android',
+      }),
+    ).toBe(false);
+  });
+
+  it('does not yank a web challenge URL the person opened', () => {
+    expect(
+      shouldResetToHomeOnLaunch({
+        pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        initialUrl: 'https://blob.mobi/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        platform: 'web',
+      }),
+    ).toBe(false);
   });
 });

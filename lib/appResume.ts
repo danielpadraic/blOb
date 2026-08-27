@@ -6,6 +6,9 @@ export const MIN_BACKGROUND_MS = 2500;
 const KEEP_ROUTE =
   /\/(onboarding|capture|submit|create|compose|details|auth|reset-password|forgot-password)/i;
 
+const EXPLICIT_LAUNCH =
+  /(?:^|[/?#]|:\/\/)(?:challenges\/[0-9a-f-]{8,}|invite\/|feed\/p\/|story\/|reel\/)/i;
+
 export function shouldReturnHomeOnResume(input: {
   previous: AppStateStatus | null;
   next: AppStateStatus;
@@ -29,11 +32,42 @@ export function shouldReturnHomeOnResume(input: {
     return false;
   }
   const path = (input.pathname.split('?')[0] ?? '').replace(/\/$/, '') || '/';
-  if (path === '/feed' || path === '/') {
+  if (path === '/feed' || path === '/' || path === '/home') {
     return false;
   }
   if (KEEP_ROUTE.test(path)) {
     return false;
   }
   return true;
+}
+
+/** Notification, share, or typed challenge URL — not a restored last screen. */
+export function isExplicitLaunchUrl(url?: string | null): boolean {
+  const value = String(url ?? '').trim();
+  if (!value) {
+    return false;
+  }
+  return EXPLICIT_LAUNCH.test(value);
+}
+
+/** Cold start / kill+reopen: Home unless this process was opened from a real link. */
+export function shouldResetToHomeOnLaunch(input: {
+  pathname: string;
+  initialUrl?: string | null;
+  platform?: string;
+}): boolean {
+  if (isExplicitLaunchUrl(input.initialUrl)) {
+    return false;
+  }
+  if (input.platform === 'web') {
+    return false;
+  }
+  return shouldReturnHomeOnResume({
+    previous: 'background',
+    next: 'active',
+    backgroundedAt: 0,
+    now: MIN_BACKGROUND_MS + 1,
+    pathname: input.pathname,
+    platform: input.platform,
+  });
 }

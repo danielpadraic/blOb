@@ -30,12 +30,19 @@ export type BoardPayout = {
 export type BoardPerson = {
   userId: string;
   name: string;
+  username: string | null;
   avatarUrl: string | null;
   bucket: BoardBucket;
   days: number;
   points: number;
   payout: number | null;
   you: boolean;
+  eliminatedAt: string | null;
+};
+
+export type BoardRankedRow = BoardPerson & {
+  rank: number | null;
+  score: number;
 };
 
 export function pointsStandings(people: BoardPerson[]): BoardPerson[] {
@@ -152,12 +159,14 @@ export function buildBoard(input: {
       return {
         userId: row.user_id,
         name: boardDisplayName(row),
+        username: row.username?.trim() || null,
         avatarUrl: row.avatar_url?.trim() || null,
         bucket,
         days: Number(row.days_completed) || 0,
         points: Math.max(Number(row.points) || 0, 0),
         payout: paid ? paidByUser.get(row.user_id) ?? 0 : null,
         you: Boolean(viewerId && row.user_id === viewerId),
+        eliminatedAt: row.eliminated_at ?? null,
       } satisfies BoardPerson;
     })
     .sort((a, b) => {
@@ -190,6 +199,49 @@ export function buildBoard(input: {
     spectator: !joined,
     joined,
   };
+}
+
+export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days'): number {
+  return mode === 'points' ? person.points : person.days;
+}
+
+export function boardScoreLabel(
+  person: BoardPerson,
+  input: { pointsBoard: boolean; requiredDays: number },
+): string {
+  if (input.pointsBoard) {
+    return String(person.points);
+  }
+  return `${person.days}/${Math.max(input.requiredDays, 1)}`;
+}
+
+export function rankBoardRows(
+  people: BoardPerson[],
+  mode: 'points' | 'days',
+): BoardRankedRow[] {
+  const inPlay = people.filter((row) => row.bucket !== 'dropped');
+  const out = people.filter((row) => row.bucket === 'dropped');
+  inPlay.sort(
+    (a, b) =>
+      boardScoreOf(b, mode) - boardScoreOf(a, mode) || a.name.localeCompare(b.name),
+  );
+  out.sort((a, b) => {
+    const aAt = a.eliminatedAt ? Date.parse(a.eliminatedAt) : 0;
+    const bAt = b.eliminatedAt ? Date.parse(b.eliminatedAt) : 0;
+    return aAt - bAt || a.name.localeCompare(b.name);
+  });
+  return [
+    ...inPlay.map((row, index) => ({
+      ...row,
+      rank: index + 1,
+      score: boardScoreOf(row, mode),
+    })),
+    ...out.map((row) => ({
+      ...row,
+      rank: null,
+      score: boardScoreOf(row, mode),
+    })),
+  ];
 }
 
 export function compactCountsFromStats(challenge: {

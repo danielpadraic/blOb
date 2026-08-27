@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   assertsNoBucksWord,
   boardEmptyCopy,
+  boardScoreLabel,
   boardSettledCopy,
   buildBoard,
   pointsLeader,
   pointsRank,
+  rankBoardRows,
 } from '@/lib/board';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { FORFEIT_RECEIPT } from '@/lib/settlement/receipts';
@@ -103,7 +105,7 @@ describe('settled board', () => {
     expect(view.spectator).toBe(true);
     expect(view.youPaid).toBe(false);
     expect(boardSettledCopy(view).showBob).toBe(false);
-    expect(boardEmptyCopy({ settled: false, spectator: true })).toContain('Participate');
+    expect(boardEmptyCopy({ settled: false, spectator: true })).toBe('Board fills when people join.');
   });
 });
 
@@ -133,6 +135,26 @@ describe('points board ranking', () => {
     });
     expect(pointsLeader(view.people)).toBeNull();
     expect(pointsRank(view.people, 'z')).toBeNull();
+  });
+});
+
+describe('ranked board', () => {
+  it('ranks still-in by score then name, and puts Out last', () => {
+    const view = buildBoard({
+      status: 'live',
+      participants: [
+        { user_id: 'd', days_completed: 1, status: 'joined', display_name: 'Dee' },
+        { user_id: 'a', days_completed: 3, status: 'joined', display_name: 'Ada' },
+        { user_id: 'c', days_completed: 2, status: 'eliminated', eliminated_at: '2026-01-02', display_name: 'Cam' },
+        { user_id: 'b', days_completed: 3, status: 'joined', display_name: 'Bea' },
+      ],
+      completedUserIds: ['a'],
+    });
+    const rows = rankBoardRows(view.people, 'days');
+    expect(rows.map((row) => row.userId)).toEqual(['a', 'b', 'd', 'c']);
+    expect(rows[0]?.rank).toBe(1);
+    expect(rows[3]?.rank).toBeNull();
+    expect(boardScoreLabel(rows[0]!, { pointsBoard: false, requiredDays: 7 })).toBe('3/7');
   });
 });
 
