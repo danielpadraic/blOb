@@ -154,6 +154,11 @@ export async function maybeRequestPushPermission(): Promise<PushPermissionState>
   }
 }
 
+/** Friend request, invite, join, or check-in Send. Never Home mount. Web is a no-op. */
+export function requestPushAfterValue(): void {
+  void maybeRequestPushPermission();
+}
+
 export async function syncDeviceTimezone(current?: string | null): Promise<void> {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   if (current && current === timezone) {

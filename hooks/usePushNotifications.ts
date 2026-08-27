@@ -8,7 +8,6 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { markNotificationRead, notificationHref } from '@/lib/notifications';
 import {
   getPushPermissionState,
-  maybeRequestPushPermission,
   notificationDataFromResponse,
   registerPushToken,
   syncDeviceTimezone,
@@ -55,7 +54,11 @@ export function usePushNotifications() {
       return;
     }
     void syncDeviceTimezone(profile?.timezone);
-    void maybeRequestPushPermission();
+    void (async () => {
+      if ((await getPushPermissionState()) === 'granted') {
+        await registerPushToken();
+      }
+    })();
   }, [profile?.timezone, userId]);
 
   useEffect(() => {

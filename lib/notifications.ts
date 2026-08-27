@@ -313,8 +313,8 @@ export async function inviteToChallenge(
   if (!row) {
     throw new Error('Invite sent, but we couldn’t load the receipt.');
   }
-  const { maybeRequestPushPermission } = await import('@/lib/push');
-  void maybeRequestPushPermission();
+  const { requestPushAfterValue } = await import('@/lib/push');
+  requestPushAfterValue();
   return row as ChallengeInvite;
 }
 

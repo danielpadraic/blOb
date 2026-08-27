@@ -1,5 +1,5 @@
 import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
-import { maybeRequestPushPermission } from '@/lib/push';
+import { requestPushAfterValue } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import {
   captureTypeForMethod,
@@ -241,7 +241,7 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     challengeId: input.challengeId,
     actorId: userId,
   });
-  void maybeRequestPushPermission();
+  requestPushAfterValue();
 
   return asResult(
     {

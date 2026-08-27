@@ -1,7 +1,7 @@
 import { saveCheckinProofWithClient, submitCheckinWithClient, parseChallengeCheckin } from '@/lib/checkin/rpc';
 import type { SaveCheckinProofInput } from '@/lib/checkin/rpc';
 import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
-import { maybeRequestPushPermission } from '@/lib/push';
+import { requestPushAfterValue } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
@@ -43,7 +43,7 @@ export async function submitCheckin(challengeId: string) {
         postId: null,
       });
     }
-    void maybeRequestPushPermission();
+    requestPushAfterValue();
     return parsed;
   } catch (error) {
     logPostgrestError('checkin-submit', error);

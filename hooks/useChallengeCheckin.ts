@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { maybeRequestPushPermission } from '@/lib/push';
 import {
   checkinCtaTitle,
   isCheckinPrimary,
@@ -393,7 +392,6 @@ export function useSubmitCheckin(challengeId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
-      void maybeRequestPushPermission();
     },
   });
 }

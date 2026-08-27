@@ -10,7 +10,6 @@ import {
   markNotificationsRead,
 } from '@/lib/notifications';
 import { getOrCreateDirectConversation, sendMessage } from '@/lib/social';
-import { maybeRequestPushPermission, PUSH_PROMPT_TYPES } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification } from '@/lib/types';
 
@@ -104,10 +103,6 @@ export function useNotificationsRealtime() {
           },
           (payload) => {
             try {
-              const type = (payload.new as { type?: string } | null)?.type;
-              if (type && PUSH_PROMPT_TYPES.has(type)) {
-                void maybeRequestPushPermission();
-              }
               const now = Date.now();
               if (now - lastInvalidateAt.current < REALTIME_INVALIDATE_MIN_MS) {
                 return;

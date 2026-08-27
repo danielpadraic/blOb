@@ -6,7 +6,7 @@ import { copy } from '@/lib/copy';
 import { fetchLatestWorkoutStart } from '@/lib/health/remote';
 import { rankHealthWorkouts } from '@/lib/health/match';
 import { challengeHealthWindow } from '@/lib/health/period';
-import { maybeRequestPushPermission } from '@/lib/push';
+import { getPushPermissionState } from '@/lib/push';
 import { getHealthProvider } from '@/services/health';
 
 const CHECKOUT_PREFIX = 'blob.health.checkout.';
@@ -51,7 +51,7 @@ async function canNotify(): Promise<boolean> {
   if (Platform.OS === 'web') {
     return false;
   }
-  const state = await maybeRequestPushPermission();
+  const state = await getPushPermissionState();
   return state === 'granted';
 }
 

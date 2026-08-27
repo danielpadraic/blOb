@@ -1148,8 +1148,8 @@ export async function joinChallenge(challengeId: string): Promise<ChallengeParti
   if (!charged.ok) {
     throw new Error(charged.message);
   }
-  const { maybeRequestPushPermission } = await import('@/lib/push');
-  void maybeRequestPushPermission();
+  const { requestPushAfterValue } = await import('@/lib/push');
+  requestPushAfterValue();
   const { data, error } = await supabase
     .from('challenge_participants')
     .select('id, challenge_id, user_id, status, days_completed, joined_at, completed_at, eliminated_at')
@@ -1505,8 +1505,6 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
       })
       .eq('id', result.challenge_id);
   }
-  const { maybeRequestPushPermission } = await import('@/lib/push');
-  void maybeRequestPushPermission();
   if (participating) {
     await ensureCreatorParticipant(result.challenge_id);
   }
