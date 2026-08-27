@@ -70,7 +70,7 @@ const OFFICIAL_DISPLAY_SELECT =
   'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, cover_image_url, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
 
 const LOBBY_SELECTS = [
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit',
   '*',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
@@ -566,7 +566,7 @@ export function participantLimitSummary(challenge: {
 export function normalizeChallenge(row: ChallengeRow): Challenge {
   const now = new Date().toISOString();
   const status = String(row.status ?? 'open').trim().toLowerCase() as ChallengeStatus;
-  const daysRequired = Number(row.days_required ?? row.target_count ?? 6);
+  const daysRequired = Number(row.days_required ?? row.length_value ?? 0) || 0;
   const rawType = String(row.challenge_type ?? 'consistency');
   return {
     id: String(row.id),

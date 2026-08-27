@@ -33,6 +33,7 @@ import {
   startPresetFromValues,
   type StartPreset,
 } from '@/lib/challengeSchedule';
+import { storedDurationDays } from '@/lib/challengeGoal';
 import { extraTasksFromStored } from '@/lib/challengeCreatePublish';
 import { clearPersistedSimpleDraft, parseSimpleChallengeDraft, type SimpleChallengeDraft } from '@/lib/simpleChallenge';
 import { emptyChallengeTask, type CreateChallengeValues, type ExtraCreateTask } from '@/utils/validators';
@@ -566,15 +567,15 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
 export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues {
   const comparable = comparablePointsFromChallenge(challenge);
   const unlimited = isUnlimitedChallenge(challenge);
-  let durationDays = 7;
-  if (!unlimited && challenge.starts_at && challenge.ends_at) {
+  let durationDays = storedDurationDays(challenge) ?? 0;
+  if (!durationDays && !unlimited && challenge.starts_at && challenge.ends_at) {
     try {
       durationDays = differenceInCalendarDays(
         parseISO(challenge.ends_at),
         parseISO(challenge.starts_at),
       );
     } catch {
-      durationDays = 7;
+      durationDays = 0;
     }
   }
   durationDays = Math.min(MAX_CHALLENGE_DURATION_DAYS, Math.max(1, durationDays || 7));

@@ -8,6 +8,7 @@ import {
   defaultSimpleDraft,
   isLeftoverSimplePointsDraft,
   parseSimpleChallengeDraft,
+  simpleDraftFromChallenge,
   simpleDraftToCreateValues,
   simpleHowYouWin,
 } from '@/lib/simpleChallenge';
@@ -93,6 +94,26 @@ describe('Simple allowed misses', () => {
     expect(back.host_budget).toBe(25);
     expect(back.allowed_misses).toBe(3);
     expect(canRoundTripToSimple(values)).toBe(true);
+  });
+
+  it('loads saved duration_days even when ends_at is still a 6-day window', () => {
+    const draft = simpleDraftFromChallenge({
+      id: 'c1',
+      title: '30-Day Consistency',
+      days_required: 30,
+      length_value: 30,
+      length_unit: 'days',
+      starts_at: '2026-08-01T09:00:00.000Z',
+      ends_at: '2026-08-07T09:00:00.000Z',
+      task: 'Show up',
+      frequency: 'daily',
+      is_unlimited: false,
+    } as never);
+    expect(draft.duration_days).toBe(30);
+    expect(draft.duration_preset).toBe(30);
+    const values = simpleDraftToCreateValues({ ...draft, title: '30-Day Consistency' });
+    expect(values.duration_days).toBe('30');
+    expect(values.duration_value).toBe('30');
   });
 
   it('blocks Advanced-only challenges from Simple', () => {

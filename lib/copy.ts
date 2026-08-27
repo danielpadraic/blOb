@@ -482,7 +482,7 @@ const STRINGS = {
   'health.sheetTitle': 'Use a workout',
   'health.confirm': 'Attach this to {title}?',
   'health.prompt': 'I see a {duration} {activity}. Begin check-in?',
-  'health.checkoutPush': 'Post-workout selfie. Then Submit.',
+  'health.checkoutPush': 'After that workout, add a selfie on check-in.',
   'health.faceHint': 'Same outfit. Face in frame.',
   'health.libraryBadge': 'Library',
   'health.liveBadge': 'Live',

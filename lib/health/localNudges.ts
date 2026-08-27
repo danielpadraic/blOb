@@ -74,7 +74,7 @@ export async function notifyForgotToBegin(input: {
         data: {
           type: 'health_begin',
           challenge_id: input.challengeId,
-          href: `/challenges/${input.challengeId}/submit`,
+          href: `/challenges/${input.challengeId}`,
         },
       },
       trigger: null,
@@ -152,7 +152,7 @@ export async function scheduleCheckoutReminder(input: {
         data: {
           type: 'health_checkout',
           challenge_id: input.challengeId,
-          href: `/challenges/${input.challengeId}/submit`,
+          href: `/challenges/${input.challengeId}`,
         },
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },

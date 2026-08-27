@@ -32,6 +32,30 @@ type GoalChallenge = Pick<
   | 'cumulative_window'
 >;
 
+/** Host-saved calendar length. Prefer length_value / days_required — never invent 6. */
+export function storedDurationDays(challenge: {
+  days_required?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+} | null | undefined): number | null {
+  if (!challenge) {
+    return null;
+  }
+  const length = Math.floor(Number(challenge.length_value) || 0);
+  if (length > 0) {
+    const unit = String(challenge.length_unit ?? 'days').toLowerCase();
+    if (unit.startsWith('week')) {
+      return Math.max(length * 7, 1);
+    }
+    if (unit.startsWith('month')) {
+      return Math.max(length * 30, 1);
+    }
+    return length;
+  }
+  const days = Math.floor(Number(challenge.days_required) || 0);
+  return days > 0 ? days : null;
+}
+
 /** Calendar days the host saved. Never a check-in product or a 100 fallback. */
 export function challengeDurationDays(
   challenge: {
@@ -49,18 +73,14 @@ export function challengeDurationDays(
     return 1;
   }
   if (challenge.is_official) {
-    return Math.max(Number(challenge.days_required) || Number(challenge.target_count) || 7, 1);
+    return Math.max(
+      storedDurationDays(challenge) || Number(challenge.target_count) || 7,
+      1,
+    );
   }
-  const stored = Math.floor(Number(challenge.length_value) || 0);
-  if (stored > 0) {
-    const unit = String(challenge.length_unit ?? 'days').toLowerCase();
-    if (unit.startsWith('week')) {
-      return Math.max(stored * 7, 1);
-    }
-    if (unit.startsWith('month')) {
-      return Math.max(stored * 30, 1);
-    }
-    return stored;
+  const saved = storedDurationDays(challenge);
+  if (saved) {
+    return saved;
   }
   if (challenge.starts_at && challenge.ends_at) {
     const windowDays = challengeWindowDays(challenge.starts_at, challenge.ends_at);
@@ -68,7 +88,7 @@ export function challengeDurationDays(
       return windowDays;
     }
   }
-  return Math.max(Math.floor(Number(challenge.days_required) || 1), 1);
+  return 1;
 }
 
 export function challengeGoalLabel(

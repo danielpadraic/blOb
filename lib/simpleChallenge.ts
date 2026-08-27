@@ -27,6 +27,7 @@ import {
 } from '@/lib/challengeProofs';
 import { resolveDiscoverability } from '@/lib/challengeDiscoverability';
 import { extraTasksFromStored, filledExtraTasks } from '@/lib/challengeCreatePublish';
+import { storedDurationDays } from '@/lib/challengeGoal';
 import { isUnlimitedChallenge, normalizeFrequency, normalizeTasks } from '@/lib/challenges';
 import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
 import type { CreateChallengeValues, ExtraCreateTask } from '@/utils/validators';
@@ -604,7 +605,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
 
 export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeDraft {
   const unlimited = isUnlimitedChallenge(challenge);
-  let days = Math.max(Number(challenge.length_value) || 0, 0);
+  let days = storedDurationDays(challenge) ?? 0;
   if (!days && !unlimited && challenge.starts_at && challenge.ends_at) {
     const start = Date.parse(challenge.starts_at);
     const end = Date.parse(challenge.ends_at);

@@ -17,7 +17,19 @@ import { BODY_METRICS_HREF, challengeDetailHref, storyHref } from '@/lib/routes'
 import type { AppNotification } from '@/lib/types';
 
 function hrefFromPushData(data: NotificationNavData): Href | null {
-  if (data.href) {
+  if (
+    data.type === 'challenge_checkin_reminder' ||
+    data.type === 'health_begin' ||
+    data.type === 'health_checkout'
+  ) {
+    if (data.challenge_id) {
+      return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
+    }
+  }
+  if (data.href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(data.href) && data.challenge_id) {
+    return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
+  }
+  if (data.href && !/\/submit(?:\?|$)/.test(data.href)) {
     return data.href as Href;
   }
   const fake: AppNotification = {

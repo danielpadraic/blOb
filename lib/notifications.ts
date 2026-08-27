@@ -310,6 +310,16 @@ export async function inviteToChallenge(
 
 export function notificationHref(item: AppNotification): Href | null {
   const data = item.data ?? {};
+  if (
+    item.type === 'challenge_checkin_reminder' ||
+    item.type === 'health_begin' ||
+    item.type === 'health_checkout'
+  ) {
+    const reminderChallengeId = notificationChallengeId(data);
+    if (reminderChallengeId) {
+      return challengeDetailHref(reminderChallengeId, 'lobby', null, { tab: 'overview' });
+    }
+  }
   if (item.type === 'bob_encouragement') {
     if (data.href) {
       return data.href as Href;
@@ -374,16 +384,6 @@ export function notificationHref(item: AppNotification): Href | null {
   }
   if (data.callout_id) {
     return `/challenges/callout/${data.callout_id}`;
-  }
-  if (
-    item.type === 'health_begin' ||
-    item.type === 'health_checkout' ||
-    item.type === 'challenge_checkin_reminder'
-  ) {
-    const reminderChallengeId = notificationChallengeId(data);
-    if (reminderChallengeId) {
-      return `/challenges/${reminderChallengeId}/submit`;
-    }
   }
   const challengeId = notificationChallengeId(data);
   const postId = notificationPostId(data);

@@ -1086,6 +1086,8 @@ export function useUpdateUserChallenge() {
         is_unlimited: unlimited,
         min_participants: Math.max(Number(values.min_participants) || 2, 2),
         days_required: durationDays ?? targetCount,
+        length_value: durationDays,
+        duration_days: durationDays,
         target_count: targetCount,
         min_minutes: minMinutesForPublish(values),
         frequency: isPoints ? 'once' : values.frequency,
@@ -1100,7 +1102,6 @@ export function useUpdateUserChallenge() {
         discoverability: values.discoverability ?? null,
         privacy_mode: privacyMode,
         task: values.task?.trim() || values.rule_activity.trim() || null,
-        length_value: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
         required_checkins: isPoints ? 1 : Number(values.required_checkins) || targetCount,
         misses_allowed:

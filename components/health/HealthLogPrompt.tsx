@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { useHealthLogPrompt } from '@/hooks/useHealthLogPrompt';
 import { copy } from '@/lib/copy';
+import { challengeDetailHref } from '@/lib/routes';
 import { formatHealthDuration } from '@/lib/health/proofSummary';
 import { THEME, themeShadow } from '@/lib/theme';
 
@@ -39,7 +40,9 @@ export function HealthLogPromptHost() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={label}
-          onPress={() => router.push(`/challenges/${prompt.challenge!.id}/submit`)}
+          onPress={() =>
+            router.push(challengeDetailHref(prompt.challenge!.id, 'lobby', null, { tab: 'overview' }))
+          }
           style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}>
           <AppText className="text-[15px] font-bold text-charcoal">{label}</AppText>
           <AppText className="mt-0.5 text-sm text-muted">{prompt.challenge.title}</AppText>
