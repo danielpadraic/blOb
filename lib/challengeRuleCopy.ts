@@ -11,6 +11,7 @@ import {
   pluralizeActivity,
   type RulesStructured,
 } from '@/lib/consistencyRules';
+import { pointsToWinOf, pointsWinRulesSentence } from '@/lib/ruleActivityCopy';
 import type { ChallengeFrequency } from '@/lib/types';
 import { challengeWindowDays } from '@/utils/format';
 
@@ -260,7 +261,7 @@ export function formatPrimaryRuleSentence(
   unlimited = false,
 ): string {
   const count = Math.max(Number(primary.count) || 1, 1);
-  const activity = pluralizeActivity(humanizeActivity(primary.activity) || 'workout', count);
+  const activity = pluralizeActivity(humanizeActivity(primary.activity) || 'task', count);
   if (primary.period === 'once') {
     return `Competitors must check in ${count} ${activity} once during the challenge.`;
   }
@@ -410,6 +411,34 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
     readStructured(challenge.rules_list) ?? readStructured(challenge.rules_structured);
   const storedTarget = Math.max(Number(challenge.target_count || challenge.days_required) || 1, 1);
   const unlimited = Boolean(challenge.is_unlimited);
+  if (challenge.challenge_type === 'points' && !unlimited) {
+    const n = pointsToWinOf({
+      points_to_win: challenge.target_count,
+      tasks: Array.isArray(challenge.tasks)
+        ? (challenge.tasks as Array<{ title?: string | null; points?: string | number | null }>)
+        : [],
+    });
+    const extras = extrasFromPayload(challenge.rules_list);
+    return {
+      primary: pointsWinRulesSentence({
+        points_to_win: n,
+        tasks: Array.isArray(challenge.tasks)
+          ? (challenge.tasks as Array<{ title?: string | null; points?: string | number | null }>)
+          : challenge.task
+            ? [{ title: challenge.task }]
+            : [],
+      }),
+      extras: extras.filter(
+        (line) => !/competitors must check in/i.test(line) && !/\d+\s+workouts?\b/i.test(line),
+      ),
+      cadenceLabel: `${n} points`,
+      cadenceLong: `reach ${n} points`,
+      totalHint: null,
+      period: null,
+      count: n,
+      toFinish: challengeTaskTitles(challenge).join(' · ') || null,
+    };
+  }
   const rulesText = (challenge.rules ?? '').trim();
   const split = rulesText ? splitRulesText(rulesText) : { primary: '', extras: [] };
 
@@ -523,8 +552,8 @@ export function joinedProgressCopy(
     return { label: `${logged}/${target} check-ins`, ratio: logged / target };
   }
   if (challenge.challenge_type === 'points' && !challenge.is_unlimited) {
-    const target = Math.max(Array.isArray(challenge.tasks) ? challenge.tasks.length : 1, 1);
-    return { label: `${logged}/${target} tasks`, ratio: logged / Math.max(target, 1) };
+    const target = Math.max(Number(challenge.target_count) || 1, 1);
+    return { label: `${target} points to win`, ratio: 0 };
   }
 
   const copy = challengeRuleCopy(challenge);

@@ -27,9 +27,10 @@ import {
 import { resolveDiscoverability } from '@/lib/challengeDiscoverability';
 import { extraTasksFromStored, filledExtraTasks } from '@/lib/challengeCreatePublish';
 import { isUnlimitedChallenge, normalizeFrequency, normalizeTasks } from '@/lib/challenges';
+import { composeChallengeRules } from '@/lib/consistencyRules';
 import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
 import type { ExtraCreateTask } from '@/utils/validators';
-import { emptyExtraCreateTask } from '@/utils/validators';
+import { emptyChallengeTask, emptyExtraCreateTask } from '@/utils/validators';
 import { challengeRulesFromCreateValues } from '@/lib/challengeRuleCopy';
 import { copy } from '@/lib/copy';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -100,11 +101,23 @@ export const SIMPLE_PROOF_METHODS: { value: ChallengeProofMethod; label: string;
   { value: 'distance', label: 'Distance', icon: '↔' },
 ];
 
-export const SIMPLE_SCORING: { value: 'consistency' | 'cumulative' | 'points'; label: string }[] = [
+export type SimpleHowYouWin = 'consistency' | 'cumulative';
+
+export const SIMPLE_SCORING: { value: SimpleHowYouWin; label: string }[] = [
   { value: 'consistency', label: 'Consistency' },
   { value: 'cumulative', label: 'Cumulative' },
-  { value: 'points', label: 'Points' },
 ];
+
+/** Leftover Simple drafts may still say points. Publish never does. */
+export function isLeftoverSimplePointsDraft(draft: {
+  scoring?: string | null;
+} | null | undefined): boolean {
+  return draft?.scoring === 'points';
+}
+
+export function simpleHowYouWin(draft: { scoring?: string | null } | null | undefined): SimpleHowYouWin {
+  return draft?.scoring === 'cumulative' ? 'cumulative' : 'consistency';
+}
 
 export const SIMPLE_CUMULATIVE_WINDOWS: { value: 'challenge' | 'week'; label: string }[] = [
   { value: 'challenge', label: 'This challenge' },
@@ -135,6 +148,7 @@ export type SimpleChallengeDraft = {
   min_participants: number;
   cover_image_url: string;
   scoring?: 'consistency' | 'cumulative' | 'points';
+  points_to_win?: number;
   cumulative_target_meters?: number;
   cumulative_window?: 'challenge' | 'week' | 'day';
   distance_unit?: 'mi' | 'km';
@@ -166,6 +180,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     min_participants: 2,
     cover_image_url: '',
     scoring: 'consistency',
+    points_to_win: 1,
     cumulative_target_meters: milesToMeters(100),
     cumulative_window: 'challenge',
     distance_unit: 'mi',
@@ -269,6 +284,17 @@ export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | 
     friends_of_friends: row.friends_of_friends !== false,
     min_participants: Math.max(Number(row.min_participants) || 2, 2),
     cover_image_url: typeof row.cover_image_url === 'string' ? row.cover_image_url : '',
+    scoring:
+      row.scoring === 'cumulative' || row.scoring === 'points' || row.scoring === 'consistency'
+        ? row.scoring
+        : base.scoring,
+    points_to_win: Math.max(Number(row.points_to_win) || 0, 0) || base.points_to_win,
+    cumulative_target_meters: Math.max(Number(row.cumulative_target_meters) || 0, 0) || base.cumulative_target_meters,
+    cumulative_window:
+      row.cumulative_window === 'week' || row.cumulative_window === 'day' || row.cumulative_window === 'challenge'
+        ? row.cumulative_window
+        : base.cumulative_window,
+    distance_unit: row.distance_unit === 'km' ? 'km' : base.distance_unit,
   });
 }
 
@@ -474,12 +500,26 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     ...extra_tasks.filter((item) => item.proof_method === 'hr').map((item) => item.hr_minutes),
   ];
   const minMinutes = hrMinutes.length > 0 ? Math.max(...hrMinutes, 1) : DEFAULT_MIN_MINUTES;
+  const isPoints = draft.scoring === 'points';
+  const pointsToWin = Math.max(Number(draft.points_to_win) || 1, 1);
+  const pointTasks = isPoints
+    ? [
+        ...(draft.task.trim()
+          ? [{ ...emptyChallengeTask(), title: draft.task.trim(), points: '1' }]
+          : []),
+        ...extra_tasks.map((item) => ({
+          ...emptyChallengeTask(item.id),
+          title: item.title.trim(),
+          points: '1',
+        })),
+      ]
+    : DEFAULT_CREATE_VALUES.tasks;
   const values: CreateChallengeValues = {
     ...DEFAULT_CREATE_VALUES,
     title: draft.title.trim(),
     description: draft.description.trim(),
     category: type.category,
-    challenge_type: draft.scoring === 'cumulative' || draft.scoring === 'points' ? draft.scoring : 'consistency',
+    challenge_type: simpleHowYouWin(draft),
     visibility: invite ? 'invite' : draft.visibility === 'friends' ? 'friends' : 'public',
     privacy_mode: corporate ? 'private_corporate' : asPrivacyMode(draft.privacy_mode, invite ? 'invite' : draft.visibility, 'coins'),
     discoverability: corporate
@@ -498,23 +538,27 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     duration_value: String(days),
     duration_unit: 'days',
     duration_days: String(days),
-    target_count: String(required),
-    frequency: publishFrequencyOf(draft),
-    rule_activity: type.activity,
+    target_count: isPoints ? String(pointsToWin) : String(required),
+    frequency: isPoints ? 'once' : publishFrequencyOf(draft),
+    rule_activity: isPoints ? draft.task.trim() || '' : type.activity,
+    points_to_win: isPoints ? String(pointsToWin) : '',
     extra_rules: [],
     extra_tasks,
     proofs: legacyTypes,
     challenge_proofs: proofs,
-    tasks: DEFAULT_CREATE_VALUES.tasks,
+    tasks: pointTasks.length > 0 ? pointTasks : DEFAULT_CREATE_VALUES.tasks,
     prize_structure: 'equal_split',
     funding_model: fundingModel,
     creator_contribution: String(hostContribution),
     participant_cap: 'unlimited',
     max_participants: '',
     min_participants: String(Math.max(Number(draft.min_participants) || 2, 2)),
-    misses_allowed: draft.scoring === 'consistency' ? '0' : '0',
-    cumulative_metric: draft.scoring === 'cumulative' ? 'distance_m' : null,
-    cumulative_target: draft.scoring === 'cumulative' ? String(Math.max(Number(draft.cumulative_target_meters) || milesToMeters(100), 1)) : '',
+    misses_allowed: '0',
+    cumulative_metric: simpleHowYouWin(draft) === 'cumulative' ? 'distance_m' : null,
+    cumulative_target:
+      simpleHowYouWin(draft) === 'cumulative'
+        ? String(Math.max(Number(draft.cumulative_target_meters) || milesToMeters(100), 1))
+        : '',
     cumulative_window: draft.cumulative_window === 'week' || draft.cumulative_window === 'day' ? draft.cumulative_window : 'challenge',
     distance_meters_required: String(
       proofDistanceMeters(proofs.find((item) => item.method === 'distance')),
@@ -525,10 +569,9 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     host_funded: bucks || hostContribution > 0,
     host_budget: String((draft.guarantee_enabled ?? false) ? hostContribution : 0),
     guarantee_enabled: draft.guarantee_enabled ?? !corporate,
-    required_checkins: String(required),
+    required_checkins: isPoints ? '1' : String(required),
     payout_mode: 'even_split_remaining',
-    format:
-      draft.scoring === 'cumulative' || draft.scoring === 'points' ? draft.scoring : 'consistency',
+    format: simpleHowYouWin(draft),
     currency: bucks ? 'bucks' : 'coins',
     creator_participating: true,
     min_minutes: String(minMinutes),
@@ -536,10 +579,12 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     rules_video_url: '',
     rules: '',
   };
-  values.rules = challengeRulesFromCreateValues({
-    ...values,
-    frequency: publishCadenceOf(draft),
-  });
+  values.rules = isPoints
+    ? composeChallengeRules(values)
+    : challengeRulesFromCreateValues({
+        ...values,
+        frequency: publishCadenceOf(draft),
+      });
   return values;
 }
 
@@ -606,6 +651,10 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
         : challenge.challenge_type === 'points' || challenge.format === 'points'
           ? 'points'
           : 'consistency',
+    points_to_win:
+      challenge.challenge_type === 'points' || challenge.format === 'points'
+        ? Math.max(Number(challenge.target_count) || 1, 1)
+        : 1,
     cumulative_target_meters: Math.max(Number(challenge.cumulative_target) || milesToMeters(100), 1),
     cumulative_window:
       challenge.cumulative_window === 'week' || challenge.cumulative_window === 'day'

@@ -82,6 +82,7 @@ import {
 } from '@/lib/constants';
 import { wizardBobOops, wizardBobTips, wizardEntryTabTipIndex, wizardGoalTypeTipIndex, wizardStepForField, entryTabFromValues, type EntryTab } from '@/lib/createBobCopy';
 import { composeChallengeRules } from '@/lib/consistencyRules';
+import { sumTaskPoints } from '@/lib/ruleActivityCopy';
 import {
   defaultRulesTargetCount,
   nextCreateWizardStep,
@@ -157,6 +158,7 @@ const FOCUSABLE_FIELDS = new Set([
   'min_minutes',
   'rules',
   'extra_rules',
+  'points_to_win',
   'cover_image_url',
   'rules_video_url',
   'tasks',
@@ -711,6 +713,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     values.challenge_type,
     values.task,
     values.extra_tasks,
+    values.tasks,
+    values.points_to_win,
     getValues,
     setValue,
   ]);
@@ -833,6 +837,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
     seedPointsTaskFromGoal();
     setValue('misses_allowed', '0', { shouldDirty: false, shouldValidate: false });
+    const nextTasks = getValues('tasks');
+    if (!String(getValues('points_to_win') ?? '').trim()) {
+      setValue('points_to_win', String(sumTaskPoints(nextTasks)), { shouldDirty: false, shouldValidate: false });
+    }
   }
 
   function applySchedule(patch: Partial<CreateChallengeValues>) {
@@ -1221,6 +1229,12 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       syncRuleActivityFromTask();
       if (!String(getValues('target_count') ?? '').trim()) {
         setValue('target_count', defaultRulesTargetCount(getValues('target_count')), {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
+      }
+      if (getValues('challenge_type') === 'points' && !String(getValues('points_to_win') ?? '').trim()) {
+        setValue('points_to_win', String(sumTaskPoints(getValues('tasks'))), {
           shouldDirty: false,
           shouldValidate: false,
         });

@@ -836,7 +836,7 @@ export function useCreateChallenge() {
             : 0,
         format: unlimited ? 'lms' : values.format ?? values.challenge_type,
         task: values.task?.trim() || values.rule_activity.trim() || null,
-        required_checkins: Number(values.required_checkins) || targetCount,
+        required_checkins: isPoints ? 1 : Number(values.required_checkins) || targetCount,
         misses_allowed:
           isPoints || values.challenge_type === 'cumulative'
             ? 0
@@ -1061,7 +1061,7 @@ export function useUpdateUserChallenge() {
         task: values.task?.trim() || values.rule_activity.trim() || null,
         length_value: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
-        required_checkins: Number(values.required_checkins) || targetCount,
+        required_checkins: isPoints ? 1 : Number(values.required_checkins) || targetCount,
         misses_allowed:
           isPoints || values.challenge_type === 'cumulative'
             ? 0

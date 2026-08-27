@@ -1,5 +1,12 @@
 import { nextCreateItemId } from '@/lib/createItemIds';
 import { CREATE_PROOF_TYPES } from '@/lib/constants';
+import {
+  consistencyHowOftenSentence,
+  pointsToWinOf,
+  pointsWinRulesSentence,
+  pluralizeRuleActivity,
+  ruleActivityNoun,
+} from '@/lib/ruleActivityCopy';
 import type { ChallengeFrequency, ProofType } from '@/lib/types';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -69,17 +76,7 @@ export function periodNoun(frequency: string | null | undefined): 'day' | 'week'
 }
 
 export function pluralizeActivity(activity: string, count: number): string {
-  const trimmed = activity.trim() || 'workout';
-  if (count === 1) {
-    return trimmed;
-  }
-  if (/s$/i.test(trimmed)) {
-    return trimmed;
-  }
-  if (/check-in$/i.test(trimmed)) {
-    return `${trimmed}s`;
-  }
-  return `${trimmed}s`;
+  return pluralizeRuleActivity(activity, count);
 }
 
 export function ruleCount(values: Pick<CreateChallengeValues, 'target_count'>): number {
@@ -90,18 +87,13 @@ export function consistencyRuleSentence(
   values: Pick<
     CreateChallengeValues,
     'target_count' | 'rule_activity' | 'frequency' | 'duration_type'
-  >,
+  > &
+    Partial<Pick<CreateChallengeValues, 'task' | 'challenge_type'>>,
 ): string {
-  const count = ruleCount(values);
-  const activity = pluralizeActivity(values.rule_activity, count);
-  if (values.frequency === 'once') {
-    return `Competitors must check in ${count} ${activity} for the duration of the challenge.`;
+  if (values.challenge_type === 'points' && values.duration_type !== 'unlimited') {
+    return '';
   }
-  const period = periodNoun(values.frequency) ?? 'week';
-  if (values.duration_type === 'unlimited') {
-    return `Competitors must check in ${count} ${activity} every ${period} to stay in the challenge.`;
-  }
-  return `Competitors must check in ${count} ${activity} every ${period} for the duration of the challenge.`;
+  return consistencyHowOftenSentence(values);
 }
 
 export function extraRuleLines(values: Pick<CreateChallengeValues, 'extra_rules'>): string[] {
@@ -152,10 +144,15 @@ export function composeChallengeRules(
     CreateChallengeValues,
     'target_count' | 'rule_activity' | 'frequency' | 'duration_type' | 'extra_rules' | 'challenge_type'
   > &
-    Partial<Pick<CreateChallengeValues, 'task' | 'extra_tasks' | 'proofs' | 'challenge_proofs' | 'rules'>>,
+    Partial<
+      Pick<
+        CreateChallengeValues,
+        'task' | 'extra_tasks' | 'proofs' | 'challenge_proofs' | 'rules' | 'tasks' | 'points_to_win'
+      >
+    >,
 ): string {
   if (values.challenge_type === 'points' && values.duration_type !== 'unlimited') {
-    return extraRuleLines(values).join('\n\n');
+    return [pointsWinRulesSentence(values), ...extraRuleLines(values)].filter(Boolean).join('\n\n');
   }
   const { challengeRulesFromCreateValues } = require('./challengeRuleCopy') as typeof import('./challengeRuleCopy');
   const english = challengeRulesFromCreateValues(values);
@@ -180,10 +177,11 @@ export function deriveFinishTarget(
   values: Pick<
     CreateChallengeValues,
     'challenge_type' | 'duration_type' | 'duration_days' | 'frequency' | 'target_count' | 'tasks'
-  >,
+  > &
+    Partial<Pick<CreateChallengeValues, 'points_to_win'>>,
 ): number {
   if (values.challenge_type === 'points' && values.duration_type !== 'unlimited') {
-    return Math.max(values.tasks?.length || 1, 1);
+    return pointsToWinOf(values);
   }
   const count = ruleCount(values);
   if (values.duration_type === 'unlimited') {
@@ -198,11 +196,12 @@ export function checkinTargetForStore(
   values: Pick<
     CreateChallengeValues,
     'challenge_type' | 'duration_type' | 'required_checkins' | 'target_count' | 'duration_days' | 'frequency' | 'tasks'
-  >,
+  > &
+    Partial<Pick<CreateChallengeValues, 'points_to_win'>>,
   durationDays: number | null,
 ): number {
   if (values.challenge_type === 'points' && values.duration_type !== 'unlimited') {
-    return deriveFinishTarget(values);
+    return pointsToWinOf(values);
   }
   return Math.max(
     Number(values.required_checkins) || Number(values.target_count) || durationDays || 1,
@@ -220,7 +219,8 @@ export function buildRulesStructured(
     | 'frequency'
     | 'proofs'
     | 'extra_rules'
-  >,
+  > &
+    Partial<Pick<CreateChallengeValues, 'task'>>,
 ): RulesStructured {
   const extras = (values.extra_rules ?? []).flatMap((rule) => {
     const text = rule.text.trim();
@@ -236,7 +236,7 @@ export function buildRulesStructured(
   return {
     primary: {
       count: ruleCount(values),
-      activity: values.rule_activity.trim() || 'workout',
+      activity: ruleActivityNoun(values.task, values.rule_activity),
       period: values.frequency,
       proof: [...(values.proofs ?? [])],
     },

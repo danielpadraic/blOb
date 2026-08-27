@@ -286,6 +286,7 @@ export const createChallengeSchema = z
     discoverability: z.enum(['invite_only', 'friends_of_friends']).nullable().optional(),
     scoring_method: z.enum(['comparable_points']).nullable().optional(),
     scoring_config: z.unknown().nullable().optional(),
+    points_to_win: z.string().optional(),
     rules: z
       .string()
       .trim()
@@ -548,6 +549,14 @@ export const createChallengeSchema = z
           });
         }
       });
+      const win = Number(values.points_to_win);
+      if (String(values.points_to_win ?? '').trim() && (!Number.isFinite(win) || win < 1)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['points_to_win'],
+          message: 'Points to win must be at least 1',
+        });
+      }
       return;
     }
 

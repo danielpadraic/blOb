@@ -15,6 +15,7 @@ import {
   emptyExtraRule,
   type ExtraRuleKind,
 } from '@/lib/consistencyRules';
+import { pointsToWinHelper, pointsToWinOf, sumTaskPoints } from '@/lib/ruleActivityCopy';
 import { CREATE_PROOF_TYPES, proofMeta } from '@/lib/constants';
 import { heartRateProofSentence } from '@/lib/challengeProofs';
 import { milesToMeters } from '@/lib/distance';
@@ -71,7 +72,9 @@ export function RulesSlide({
     ? PERIODS.filter((item) => item.value === 'daily' || item.value === 'weekly')
     : PERIODS;
   const preview = consistencyRuleSentence(values);
-  const taskLine = (values.task ?? '').trim() || values.rule_activity.trim() || 'your check-in';
+  const taskLine = (values.task ?? '').trim() || values.rule_activity.trim() || 'task';
+  const winDefault = String(sumTaskPoints(values.tasks));
+  const winAmount = pointsToWinOf(values);
   const showConstraints = constraintsOpen || hasConstraintCopy || customOpen;
 
   function flushCustomDraft() {
@@ -193,6 +196,7 @@ export function RulesSlide({
   return (
     <View className="gap-5">
       {isPoints ? (
+        <>
         <FieldAnchor name="tasks">
           <FieldLabel
             label="Tasks"
@@ -257,6 +261,26 @@ export function RulesSlide({
             </View>
           </FieldLabel>
         </FieldAnchor>
+        <FieldAnchor name="points_to_win">
+          <Controller
+            control={control}
+            name="points_to_win"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Points to win"
+                placeholder={winDefault}
+                keyboardType="number-pad"
+                value={(value ?? '').trim() ? value ?? '' : winDefault}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                onFocus={() => focus?.onFieldFocus('points_to_win')}
+                error={errors.points_to_win?.message}
+                hint={pointsToWinHelper(winAmount)}
+              />
+            )}
+          />
+        </FieldAnchor>
+        </>
       ) : (
         <>
           <FieldAnchor name="task">

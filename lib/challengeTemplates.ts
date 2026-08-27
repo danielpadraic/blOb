@@ -17,6 +17,7 @@ import {
   type ExtraRule,
 } from '@/lib/consistencyRules';
 import { persistTasksForPublish, minMinutesForPublish, namedProofsForPublish } from '@/lib/challengeCreatePublish';
+import { pointsWinRulesSentence } from '@/lib/ruleActivityCopy';
 import { formatDistance, milesToMeters } from '@/lib/distance';
 import { proofDistanceMeters } from '@/lib/challengeProofs';
 import {
@@ -61,7 +62,7 @@ export const CREATE_STEP_FIELDS: Record<number, readonly (keyof CreateChallengeV
   6: ['scoring_method', 'scoring_config'],
   7: ['funding_model', 'creator_contribution', 'guarantee_enabled'],
   8: ['buy_in', 'currency', 'participant_cap', 'max_participants', 'creator_participating', 'min_participants', 'misses_allowed', 'proof_review'],
-  9: ['rules', 'proofs', 'tasks', 'frequency', 'target_count', 'rule_activity', 'extra_rules', 'min_minutes', 'rules_video_url'],
+  9: ['rules', 'proofs', 'tasks', 'frequency', 'target_count', 'points_to_win', 'rule_activity', 'extra_rules', 'min_minutes', 'rules_video_url'],
   10: [],
 };
 
@@ -128,7 +129,8 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   ...defaultSchedule(),
   target_count: '6',
   frequency: 'weekly',
-  rule_activity: 'workout',
+  rule_activity: '',
+  points_to_win: '',
     extra_rules: [],
     extra_tasks: [],
     proofs: [...FITNESS_PROOFS],
@@ -281,7 +283,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       duration_type: 'fixed',
       target_count: '3',
       frequency: 'weekly',
-      rule_activity: 'workout',
+      rule_activity: '',
       extra_rules: [extra('separate_days')],
       proofs: ['photo'],
       prize_structure: 'top_places',
@@ -314,8 +316,9 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       buy_in: '15',
       duration_days: '14',
       duration_type: 'fixed',
-      target_count: '3',
+      target_count: '60',
       frequency: 'once',
+      points_to_win: '60',
       proofs: ['photo'],
       tasks: [
         task('Practice the skill and check in', '10'),
@@ -327,7 +330,7 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
       creator_contribution: '0',
       participant_cap: 'unlimited',
       rules:
-        'Complete the scored tasks before the window closes. Attach proof when a task asks for it. Highest point total wins the entire prize.',
+        'Win by reaching 60 points. Tasks: Practice the skill and check in; Share a before/after or progress clip; Hit a personal best or ship the work.',
     }),
   },
   {
@@ -392,7 +395,8 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
     tasks,
     extra_rules,
     extra_tasks,
-    rule_activity: source?.rule_activity?.trim() || DEFAULT_CREATE_VALUES.rule_activity,
+    rule_activity: source?.rule_activity?.trim() ?? '',
+    points_to_win: source?.points_to_win != null ? String(source.points_to_win) : '',
     scoring_method: source?.scoring_method === 'comparable_points' && scoring_config ? 'comparable_points' : null,
     scoring_config,
     privacy_mode: asPrivacyMode(source?.privacy_mode, source?.visibility, source?.challenge_lane),
@@ -497,10 +501,7 @@ export function wizardMeans(
         return `Comparable Points. ${comparablePointsHeadline(scoring)}`;
       }
       if (points) {
-        const total = values.tasks.reduce((sum, task) => sum + Math.max(Number(task.points) || 0, 0), 0);
-        return `Competitors earn points from your task list (${values.tasks.length} task${
-          values.tasks.length === 1 ? '' : 's'
-        }, ${total} pts). Highest totals rank when it ends.`;
+        return pointsWinRulesSentence(values);
       }
       return consistencyRuleSentence(values);
     case 'duration':
@@ -582,9 +583,7 @@ export function challengeReviewSections(values: CreateChallengeValues): { title:
     values.scoring_method === 'comparable_points' && comparable
       ? `Comparable Points. ${comparablePointsHeadline(comparable)}`
       : points
-        ? `Points. Competitors complete ${values.tasks.length} task${
-            values.tasks.length === 1 ? '' : 's'
-          } totaling ${values.tasks.reduce((sum, task) => sum + Math.max(Number(task.points) || 0, 0), 0)} pts.`
+        ? pointsWinRulesSentence(values)
         : isCumulativeDraft(values)
           ? cumulativeReviewWinLine(values)
           : consistencyDistanceWinLine(values) ??
@@ -660,12 +659,7 @@ export function challengeContractRows(values: CreateChallengeValues): { label: s
   const unlimited = isUnlimitedDraft(values);
   const typeLabel = points ? 'Points' : isCumulativeDraft(values) ? 'Cumulative' : 'Consistency';
   const rules = points
-    ? [
-        `Points race. ${values.tasks.length} task${values.tasks.length === 1 ? '' : 's'}.`,
-        ...extraRuleLines(values),
-      ]
-        .filter(Boolean)
-        .join('\n')
+    ? composeChallengeRules(values)
     : [consistencyRuleSentence(values), ...extraRuleLines(values)].filter(Boolean).join('\n');
   const schedule = unlimited
     ? 'No end date until one person remains.'

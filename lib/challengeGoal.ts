@@ -85,6 +85,10 @@ export function challengeGoalLabel(
     );
   }
   if (usesPointsBoard(challenge)) {
+    if (challenge.challenge_type === 'points' && challenge.scoring_method !== 'comparable_points') {
+      const target = Math.max(Math.floor(Number(challenge.target_count) || 1), 1);
+      return `Reach ${target} points`;
+    }
     return 'Score Points';
   }
   if (usesTotalCountCheckins(challenge)) {

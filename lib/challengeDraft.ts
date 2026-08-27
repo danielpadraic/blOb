@@ -465,7 +465,11 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       }),
       target_count: asString(row.target_count, DEFAULT_CREATE_VALUES.target_count),
       frequency: normalizeFrequency(row.frequency),
-      rule_activity: asString(row.rule_activity, DEFAULT_CREATE_VALUES.rule_activity) || DEFAULT_CREATE_VALUES.rule_activity,
+      rule_activity: asString(row.rule_activity, ''),
+      points_to_win: asString(
+        row.points_to_win,
+        row.challenge_type === 'points' ? asString(row.target_count, '') : '',
+      ),
       extra_rules: extraRules,
       proofs: asProofs(row.proofs ?? row.proof_requirements),
       tasks: asTasks(row.tasks),
@@ -646,7 +650,11 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     }),
     target_count: String(Math.max(Number(primary?.count ?? challenge.target_count) || 1, 1)),
     frequency: normalizeFrequency(primary?.period ?? challenge.frequency),
-    rule_activity: primary?.activity?.trim() || DEFAULT_CREATE_VALUES.rule_activity,
+    rule_activity: primary?.activity?.trim() || challenge.task || '',
+    points_to_win:
+      challenge.challenge_type === 'points'
+        ? String(Math.max(Number(challenge.target_count) || 0, 0) || '')
+        : '',
     extra_rules: extraRulesFromStructured(structured),
     extra_tasks:
       challenge.challenge_type === 'points'

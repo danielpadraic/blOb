@@ -137,10 +137,11 @@ describe('points board ranking', () => {
 });
 
 describe('points goal', () => {
-  it('labels points challenges Score Points', () => {
+  it('labels comparable-points Score Points and task-points Reach N', () => {
     expect(challengeGoalLabel({ scoring_method: 'comparable_points', challenge_type: 'points' })).toBe(
       'Score Points',
     );
+    expect(challengeGoalLabel({ challenge_type: 'points', target_count: 12 })).toBe('Reach 12 points');
   });
 
   it('labels total-count fitness as N of T Check-Ins', () => {

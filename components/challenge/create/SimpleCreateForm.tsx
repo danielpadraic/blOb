@@ -64,6 +64,7 @@ import {
   type SimpleFrequency,
 } from '@/lib/simpleChallenge';
 import { milesToMeters } from '@/lib/distance';
+import { pointsToWinHelper } from '@/lib/ruleActivityCopy';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import {
@@ -637,6 +638,10 @@ export function SimpleCreateForm() {
                     proofs: nextProofs,
                     cumulative_window: draft.cumulative_window ?? 'challenge',
                     cumulative_target_meters: draft.cumulative_target_meters || milesToMeters(100),
+                    points_to_win:
+                      item.value === 'points'
+                        ? Math.max(Number(draft.points_to_win) || 1, 1)
+                        : draft.points_to_win,
                   });
                 }}
               />
@@ -666,6 +671,18 @@ export function SimpleCreateForm() {
                 Everyone who hits the total splits the prize.
               </AppText>
             </View>
+          ) : null}
+          {(draft.scoring ?? 'consistency') === 'points' ? (
+            <Input
+              label="Points to win"
+              placeholder="1"
+              keyboardType="number-pad"
+              value={String(Math.max(Number(draft.points_to_win) || 1, 1))}
+              onChangeText={(text) =>
+                patch({ points_to_win: Math.max(Number(text.replace(/[^0-9]/g, '')) || 0, 0) || 1 })
+              }
+              hint={pointsToWinHelper(Math.max(Number(draft.points_to_win) || 1, 1))}
+            />
           ) : null}
         </View>
 
@@ -814,7 +831,8 @@ export function SimpleCreateForm() {
         </View>
         </TourAnchor>
 
-        {(draft.scoring ?? 'consistency') === 'cumulative' ? null : (
+        {(draft.scoring ?? 'consistency') === 'cumulative' ||
+        (draft.scoring ?? 'consistency') === 'points' ? null : (
         <TourAnchor id="create-simple-frequency">
         <View
           className="gap-2"
