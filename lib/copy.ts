@@ -249,6 +249,8 @@ const STRINGS = {
   'create.proofHr': 'Heart rate',
   'create.proofDistance': 'Distance',
   'create.howYouWin': 'How you win',
+  'create.needScoreboard': 'Need a scoreboard? Use Advanced.',
+  'create.pointsInAdvanced': 'Points boards are in Advanced.',
   'create.cumulative': 'Cumulative',
   'create.cumulativeTarget': 'Target',
   'create.cumulativeWindow': 'Window',

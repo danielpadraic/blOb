@@ -29,24 +29,6 @@ describe('Cumulative scoring', () => {
     expect(values.challenge_proofs?.some((proof) => proof.method === 'distance')).toBe(true);
   });
 
-  it('publishes Simple Points as a win total, not a weekly cadence', () => {
-    const draft = defaultSimpleDraft();
-    draft.scoring = 'points';
-    draft.task = 'Bible reading';
-    draft.frequency = 'daily';
-    draft.custom_checkins = 20;
-    draft.points_to_win = 12;
-    const values = simpleDraftToCreateValues(draft);
-    expect(values.challenge_type).toBe('points');
-    expect(values.frequency).toBe('once');
-    expect(values.points_to_win).toBe('12');
-    expect(values.target_count).toBe('12');
-    expect(values.required_checkins).toBe('1');
-    expect(values.rules).toContain('Win by reaching 12 points');
-    expect(values.rules).toContain('Bible reading');
-    expect(values.rules).not.toMatch(/workout|every week|every day/i);
-  });
-
   it('treats 40 + 60 miles as eligible at 100 / 100', () => {
     const done = milesToMeters(40) + milesToMeters(60);
     const target = milesToMeters(100);

@@ -171,11 +171,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     draftId?: string | string[];
     returnTo?: string | string[];
     editId?: string | string[];
+    type?: string | string[];
   }>();
   const resumeOnOpen = (Array.isArray(params.resume) ? params.resume[0] : params.resume) === '1';
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
+  const handoffType = Array.isArray(params.type) ? params.type[0] : params.type;
   const dismissFallback = returnTo === 'feed' ? TABS_HREF : LOBBY_HREF;
   const { profile } = useMyProfile();
   const create = useCreateChallenge();
@@ -211,6 +213,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const tour = useTourOptional();
   const setCreatePeek = tour?.setCreatePeek;
   const hydratedEdit = useRef(false);
+  const appliedPointsHandoff = useRef(false);
   useCreateChallengeTour(
     'advanced',
     !liveChallengeId && !isEditing && !resumeOnOpen && !restoredDraft,
@@ -842,6 +845,20 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       setValue('points_to_win', String(sumTaskPoints(nextTasks)), { shouldDirty: false, shouldValidate: false });
     }
   }
+
+  useEffect(() => {
+    if (appliedPointsHandoff.current || resumeOnOpen || editId) {
+      return;
+    }
+    if (handoffType !== 'points') {
+      return;
+    }
+    appliedPointsHandoff.current = true;
+    onTypeChange('points');
+    setStartPath('scratch');
+    setLaneChosen(true);
+    setStep(STEP_TYPE);
+  }, [editId, handoffType, resumeOnOpen]);
 
   function applySchedule(patch: Partial<CreateChallengeValues>) {
     const current = getValues();

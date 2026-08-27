@@ -51,9 +51,11 @@ import {
   defaultSimpleDraft,
   endsAtOf,
   frequencyHintOf,
+  isLeftoverSimplePointsDraft,
   removeSimpleProof,
   simpleDraftFromChallenge,
   simpleDraftToCreateValues,
+  simpleHowYouWin,
   syncProofNameWithTask,
   validateSimpleDraft,
   type SimpleChallengeDraft,
@@ -64,7 +66,6 @@ import {
   type SimpleFrequency,
 } from '@/lib/simpleChallenge';
 import { milesToMeters } from '@/lib/distance';
-import { pointsToWinHelper } from '@/lib/ruleActivityCopy';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import {
@@ -164,6 +165,7 @@ export function SimpleCreateForm() {
   const [draft, setDraft] = useState<SimpleChallengeDraft>(() => defaultSimpleDraft());
   draftRef.current = draft;
   const [error, setError] = useState<string | null>(null);
+  const [leftoverPointsNotice, setLeftoverPointsNotice] = useState(false);
   const [view, setView] = useState<'form' | 'review'>('form');
   const [focusSection, setFocusSection] = useState<string | null>(null);
   const sectionRefs = useRef<Record<string, View | null>>({});
@@ -240,6 +242,11 @@ export function SimpleCreateForm() {
       hydratedRemote.current = true;
       simpleDraftIdRef.current = remote.id;
       const next = remote.simple ?? draftRef.current;
+      if (isLeftoverSimplePointsDraft(next)) {
+        setLeftoverPointsNotice(true);
+        setDraft({ ...next, scoring: 'consistency' });
+        return;
+      }
       setDraft(next);
       return;
     }
@@ -619,7 +626,7 @@ export function SimpleCreateForm() {
                 key={item.value}
                 icon=""
                 label={item.label}
-                selected={(draft.scoring ?? 'consistency') === item.value}
+                selected={simpleHowYouWin(draft) === item.value}
                 onPress={() => {
                   const nextProofs =
                     item.value === 'cumulative' && !draft.proofs.some((proof) => proof.method === 'distance')
@@ -638,16 +645,31 @@ export function SimpleCreateForm() {
                     proofs: nextProofs,
                     cumulative_window: draft.cumulative_window ?? 'challenge',
                     cumulative_target_meters: draft.cumulative_target_meters || milesToMeters(100),
-                    points_to_win:
-                      item.value === 'points'
-                        ? Math.max(Number(draft.points_to_win) || 1, 1)
-                        : draft.points_to_win,
                   });
                 }}
               />
             ))}
           </View>
-          {(draft.scoring ?? 'consistency') === 'cumulative' ? (
+          {leftoverPointsNotice ? (
+            <AppText className="text-[12px] leading-5 text-muted">{copy('create.pointsInAdvanced')}</AppText>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              router.replace({
+                pathname: '/challenges/create',
+                params:
+                  returnTo === 'feed'
+                    ? { mode: 'advanced', type: 'points', returnTo: 'feed' }
+                    : { mode: 'advanced', type: 'points' },
+              })
+            }
+            hitSlop={8}>
+            <AppText className="text-[12px] font-semibold leading-5" style={{ color: THEME.accent }}>
+              {copy('create.needScoreboard')}
+            </AppText>
+          </Pressable>
+          {simpleHowYouWin(draft) === 'cumulative' ? (
             <View className="gap-2">
               <DistanceMilesRow
                 meters={draft.cumulative_target_meters || milesToMeters(100)}
@@ -671,18 +693,6 @@ export function SimpleCreateForm() {
                 Everyone who hits the total splits the prize.
               </AppText>
             </View>
-          ) : null}
-          {(draft.scoring ?? 'consistency') === 'points' ? (
-            <Input
-              label="Points to win"
-              placeholder="1"
-              keyboardType="number-pad"
-              value={String(Math.max(Number(draft.points_to_win) || 1, 1))}
-              onChangeText={(text) =>
-                patch({ points_to_win: Math.max(Number(text.replace(/[^0-9]/g, '')) || 0, 0) || 1 })
-              }
-              hint={pointsToWinHelper(Math.max(Number(draft.points_to_win) || 1, 1))}
-            />
           ) : null}
         </View>
 
@@ -831,8 +841,7 @@ export function SimpleCreateForm() {
         </View>
         </TourAnchor>
 
-        {(draft.scoring ?? 'consistency') === 'cumulative' ||
-        (draft.scoring ?? 'consistency') === 'points' ? null : (
+        {simpleHowYouWin(draft) === 'cumulative' ? null : (
         <TourAnchor id="create-simple-frequency">
         <View
           className="gap-2"
