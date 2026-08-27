@@ -14,6 +14,8 @@ import {
 import {
   boardProgressLabel,
   canSendCheckin,
+  checkinAutoNotes,
+  checkinBeginCaption,
   checkinSendWhyNot,
   checkinStageLabel,
   classifyCheckinError,
@@ -86,7 +88,7 @@ describe('official weekly proofs', () => {
     expect(classifyCheckinError(new Error('Add every required proof to submit.'))).toBe('missing');
   });
 
-  it('keeps Send off until every required proof is filled; extras do not count', () => {
+  it('enables Send once a required proof is attached; extras do not count', () => {
     const onePhoto: ChallengeProof[] = [{ id: 'pre', name: 'Pre-workout selfie', method: 'photo' }];
     const twoRequired: ChallengeProof[] = [
       { id: 'pre', name: 'Pre-workout selfie', method: 'photo' },
@@ -115,6 +117,25 @@ describe('official weekly proofs', () => {
     );
     expect(canSendCheckin(false, false, 'in_progress', false)).toBe(false);
     expect(canSendCheckin(false, true, 'in_progress', false)).toBe(true);
+    expect(checkinBeginCaption('Sam', 'laundry')).toBe('Sam is laundry!');
+    expect(
+      checkinAutoNotes({
+        complete: false,
+        caption: '',
+        name: 'Sam',
+        task: 'laundry',
+        challengeTitle: 'Kids chores',
+      }),
+    ).toBe('Sam is laundry!');
+    expect(
+      checkinAutoNotes({
+        complete: true,
+        caption: '',
+        name: 'Sam',
+        task: 'laundry',
+        challengeTitle: 'Kids chores',
+      }),
+    ).toBe('Sam checked in for Kids chores.');
     expect(canSendCheckin(true, false, 'none', false)).toBe(true);
     expect(canSendCheckin(true, true, 'submitted', false)).toBe(false);
     expect(canSendCheckin(false, true, 'ready', true)).toBe(false);

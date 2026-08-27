@@ -38,11 +38,8 @@ export default function ChallengeIdLayout() {
         <Stack.Screen
           name="submit"
           options={{
-            headerShown: true,
+            headerShown: false,
             title: 'Check in',
-            headerBackVisible: false,
-            headerLeft: () => <StackBackButton preferHistory />,
-            headerRight: () => <WalletBar />,
           }}
         />
         <Stack.Screen

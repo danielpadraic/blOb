@@ -59,12 +59,12 @@ export function checkinSendWhyNot(remaining: string[]): string {
   return remaining.filter(Boolean).join(', ');
 }
 
-/** Solid Send only when honor-only or every required proof is in. One proof is not enough. */
+/** Solid Send when honor-only or at least one required proof is attached. Extras never unlock Send. */
 export function canSendCheckin(
   honorOnly: boolean,
-  allReady: boolean,
+  hasRequiredAttached: boolean,
   phase: CheckinPhase,
   busy: boolean,
 ): boolean {
-  return (honorOnly || allReady) && phase !== 'submitted' && !busy;
+  return (honorOnly || hasRequiredAttached) && phase !== 'submitted' && !busy;
 }

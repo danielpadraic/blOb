@@ -25,6 +25,12 @@ export {
   type UploadCheckinProofFn,
 } from './rpc';
 export {
+  checkinAutoNotes,
+  checkinBeginCaption,
+  checkinCompleteCaption,
+  checkinTaskLabel,
+} from './captions';
+export {
   CHECKIN_STAGE_LABELS,
   checkinStageFromPhase,
   checkinStageHint,

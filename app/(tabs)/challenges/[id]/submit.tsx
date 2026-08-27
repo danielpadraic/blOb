@@ -1,14 +1,12 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, Platform, Pressable, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
 import { LocationProofRow } from '@/components/challenge/LocationProofRow';
-import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
-import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -26,9 +24,10 @@ import type { HealthWorkout } from '@/services/health/types';
 import {
   CHECKIN_BOB,
   canSendCheckin,
+  checkinAutoNotes,
   checkinSendWhyNot,
-  checkinStageHint,
   checkinStageLabel,
+  checkinTaskLabel,
   classifyCheckinError,
   isLikelyOffline,
 } from '@/lib/checkin';
@@ -50,12 +49,16 @@ import {
 import {
   athleteDistanceUnit,
   distanceShortHint,
-  formatDistance,
   parseSessionDistanceText,
   type DistanceUnit,
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
-import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
+import { personDisplayName } from '@/lib/social';
+import {
+  ensureLibraryPermission,
+  openAppSettings,
+  permissionCopy,
+} from '@/lib/mediaPermissions';
 import { copy } from '@/lib/copy';
 import {
   composeCheckinNotes,
@@ -70,7 +73,7 @@ import { distanceProofIsSessionLog, usesTotalCountCheckins } from '@/lib/challen
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
-import { tabBarLift, THEME } from '@/lib/theme';
+import { THEME } from '@/lib/theme';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
 import { uploadPostAttachment } from '@/utils/upload';
 
@@ -143,7 +146,6 @@ export default function SubmitWorkoutScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
@@ -163,10 +165,8 @@ export default function SubmitWorkoutScreen() {
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
   const [preferCamera, setPreferCamera] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
-  const [keyboardPad, setKeyboardPad] = useState(0);
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
@@ -186,14 +186,6 @@ export default function SubmitWorkoutScreen() {
     }
     return [...ids];
   }, [challenge?.created_by, roster.data]);
-
-  useEffect(() => {
-    if (!challenge || !isOfficialSeriesChallenge(challenge) || challenge.status !== 'live') {
-      return;
-    }
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [challenge]);
 
   useEffect(() => {
     if (usesTotalCountCheckins(challenge) && checkinQuery.data?.phase === 'submitted') {
@@ -257,36 +249,23 @@ export default function SubmitWorkoutScreen() {
   ).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
   const busy = saveProof.isPending || submitCheckin.isPending;
-  const canSend = canSendCheckin(honorOnly, allReady, phase, busy);
+  const hasRequiredAttached = honorOnly || filledCount > 0;
+  const canSend = canSendCheckin(honorOnly, hasRequiredAttached, phase, busy);
   const firstCamera = beginCameraProof(proofSteps);
-  const tabLift = tabBarLift(insets.bottom, 'sticky');
+  const hasReviewDraft = proofSteps.some(
+    (proof) => drafts[proof.id]?.uri || drafts[proof.id]?.text || drafts[proof.id]?.inFence,
+  );
 
-  useEffect(() => {
-    const show = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (event) => setKeyboardPad(event.endCoordinates.height),
-    );
-    const hide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardPad(0),
-    );
-    const webView = Platform.OS === 'web' && typeof window !== 'undefined' ? window.visualViewport : null;
-    function onViewport() {
-      if (!webView) {
-        return;
-      }
-      const overlap = Math.max(0, window.innerHeight - webView.height - webView.offsetTop);
-      setKeyboardPad(overlap);
-    }
-    webView?.addEventListener('resize', onViewport);
-    webView?.addEventListener('scroll', onViewport);
-    return () => {
-      show.remove();
-      hide.remove();
-      webView?.removeEventListener('resize', onViewport);
-      webView?.removeEventListener('scroll', onViewport);
-    };
-  }, []);
+  function reviewPhotoProof(): ChallengeProof | null {
+    const filled = [...proofSteps].reverse().find((proof) => {
+      const uri = drafts[proof.id]?.uri;
+      return (
+        Boolean(uri && !uri.startsWith('health:')) &&
+        (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr')
+      );
+    });
+    return filled ?? firstCamera ?? null;
+  }
 
   function onMedia(proofId: string, uri: string, mimeType?: string | null, fromLibrary?: boolean) {
     if (busy) {
@@ -335,7 +314,7 @@ export default function SubmitWorkoutScreen() {
     return row;
   }
 
-  async function persistProof(proof: ChallengeProof, draft?: SlotDraft) {
+  async function persistProof(proof: ChallengeProof, draft?: SlotDraft, notes?: string | null) {
     if (!id) {
       return;
     }
@@ -355,6 +334,7 @@ export default function SubmitWorkoutScreen() {
         text: draft?.text,
         fromLibrary: draft?.fromLibrary,
         health: draft?.health ?? null,
+        notes,
       });
     } catch (caught) {
       const kind = classifyCheckinError(caught);
@@ -373,10 +353,45 @@ export default function SubmitWorkoutScreen() {
     onMedia(proof.id, uri, mimeType, fromLibrary);
     setCaptureId(null);
     setSkippedAuto(true);
+  }
+
+  function onRetakeCurrent() {
+    const target = reviewPhotoProof();
+    if (!target) {
+      return;
+    }
+    setPreferCamera(true);
+    setCaptureId(target.id);
+  }
+
+  async function pickCurrentFromGallery() {
+    const target = reviewPhotoProof();
+    if (!target || busy) {
+      return;
+    }
+    const permission = await ensureLibraryPermission();
+    if (!permission.ok) {
+      const copyBlock = permissionCopy('library');
+      Alert.alert(copyBlock.title, copyBlock.body, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => void openAppSettings() },
+      ]);
+      return;
+    }
     try {
-      await persistProof(proof, { uri, mimeType, fromLibrary });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.9,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      });
+      if (result.canceled || !result.assets[0]?.uri) {
+        return;
+      }
+      const asset = result.assets[0];
+      await onCaptured(target, asset.uri, asset.mimeType ?? asset.file?.type, true);
     } catch (caught) {
-      Alert.alert('Couldn’t save that proof', getErrorMessage(caught));
+      Alert.alert('Couldn’t attach that', getErrorMessage(caught));
     }
   }
 
@@ -470,7 +485,12 @@ export default function SubmitWorkoutScreen() {
       proofSteps.every((proof) =>
         partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
       );
-    if (!honorOnly && !readyNow) {
+    const attachedNow =
+      honorOnly ||
+      proofSteps.some((proof) =>
+        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
+      );
+    if (!honorOnly && !attachedNow) {
       explainSendBlocked();
       return;
     }
@@ -482,6 +502,16 @@ export default function SubmitWorkoutScreen() {
       return;
     }
     try {
+      const notes = composeCheckinNotes(
+        checkinAutoNotes({
+          complete: readyNow,
+          caption: caption.text,
+          name: personDisplayName(profile),
+          task: checkinTaskLabel(challenge),
+          challengeTitle: challenge?.title ?? '',
+        }),
+        attachedHealth(),
+      );
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       for (const proof of proofSteps) {
         if (proof.method === 'honor') {
@@ -497,7 +527,7 @@ export default function SubmitWorkoutScreen() {
         if (!partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance })) {
           continue;
         }
-        const row = await persistProof(proof, draft);
+        const row = await persistProof(proof, draft, notes);
         if (row?.proof_parts) {
           savedParts = row.proof_parts;
         }
@@ -548,8 +578,7 @@ export default function SubmitWorkoutScreen() {
             ? drafts[photoProof.id]?.uri
             : null)
         : null;
-      const notes = composeCheckinNotes(caption.text, attachedHealth());
-      await saveProof.mutateAsync({
+      const saved = await saveProof.mutateAsync({
         challengeId: id,
         notes,
         extraMedia: extraUrls,
@@ -568,14 +597,14 @@ export default function SubmitWorkoutScreen() {
             : `${failedExtras.length} photos didn’t upload. The rest are ready to send.`,
         );
       }
-      const submitted = await submitCheckin.mutateAsync();
+      const checkinId = honorOnly || readyNow ? (await submitCheckin.mutateAsync())?.id : saved?.id;
       const mentionIds = [...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id))];
-      if (mentionIds.length > 0 && submitted?.id && user?.id) {
+      if (mentionIds.length > 0 && checkinId && user?.id) {
         try {
           const post = await supabase
             .from('posts')
             .select('id')
-            .eq('checkin_id', submitted.id)
+            .eq('checkin_id', checkinId)
             .is('deleted_at', null)
             .maybeSingle();
           const postId = (post.data as { id?: string } | null)?.id;
@@ -593,7 +622,12 @@ export default function SubmitWorkoutScreen() {
         }
       }
       await successHaptic();
-      setJustSubmitted(true);
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      if (honorOnly || readyNow) {
+        setJustSubmitted(true);
+        return;
+      }
+      router.replace(`/challenges/${id}`);
     } catch (caught) {
       const kind = classifyCheckinError(caught);
       if (kind === 'missing') {
@@ -763,21 +797,22 @@ export default function SubmitWorkoutScreen() {
     ) ?? null;
   const firstHealth = firstEmptyMedia && proofPrefersHealthAttach(firstEmptyMedia, challenge) ? firstEmptyMedia : null;
   const shouldAutoHealth =
-    phase === 'none' &&
     !skippedAuto &&
     !preferCamera &&
     iosHealthReady &&
     Boolean(firstHealth) &&
     !drafts[firstHealth?.id ?? '']?.uri;
+  const nextPhoto = missing.find(
+    (proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr',
+  );
   const shouldAutoOpen =
-    phase === 'none' &&
     !skippedAuto &&
     !honorOnly &&
-    Boolean(firstCamera) &&
-    !drafts[firstCamera?.id ?? '']?.uri &&
+    Boolean(nextPhoto) &&
+    !drafts[nextPhoto?.id ?? '']?.uri &&
     !shouldAutoHealth;
   const activeCaptureId =
-    captureId ?? (shouldAutoHealth ? firstHealth?.id ?? null : shouldAutoOpen ? firstCamera?.id ?? null : null);
+    captureId ?? (shouldAutoHealth ? firstHealth?.id ?? null : shouldAutoOpen ? nextPhoto?.id ?? null : null);
   const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;
   const showHealthFirst =
     Boolean(activeProof) &&
@@ -809,7 +844,7 @@ export default function SubmitWorkoutScreen() {
             setCaptureId(null);
             setSkippedAuto(true);
             setPreferCamera(false);
-            if (phase === 'none' && !captureId) {
+            if (!hasReviewDraft && !captureId) {
               router.back();
             }
           }}
@@ -851,7 +886,7 @@ export default function SubmitWorkoutScreen() {
             setCaptureId(null);
             setSkippedAuto(true);
             setPreferCamera(false);
-            if (phase === 'none') {
+            if (!hasReviewDraft) {
               router.back();
             }
           }}
@@ -870,222 +905,117 @@ export default function SubmitWorkoutScreen() {
   const textProofs = proofSteps.filter((proof) => proof.method === 'checkin');
   const distanceProofs = proofSteps.filter((proof) => proof.method === 'distance');
   const locationProofs = proofSteps.filter((proof) => proof.method === 'location');
-  const footerBottom = keyboardPad > 0 ? (Platform.OS === 'ios' ? 8 : keyboardPad) : tabLift;
+  const stillNeeded = allReady ? undefined : checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)));
 
   return (
-    <Screen padded={false} edges={TAB_ROOT_EDGES}>
-      <Stack.Screen options={{ title: 'Check-in' }} />
-      <View className="flex-1" style={{ minHeight: 0 }}>
-        {challenge && isOfficialSeriesChallenge(challenge) ? (
-          <View className="px-5 pt-2">
-            <OfficialDayClock challenge={challenge} now={new Date(nowMs)} variant="page" />
-          </View>
-        ) : null}
-        <AppText className="px-5 pb-2 pt-3 text-center text-sm text-muted">
-          {checkinStageHint(
-            phase,
-            missing.map((proof) => proofDisplayName(proof)),
-          ) || copy('checkin.emptyBob')}
-        </AppText>
-        <CheckinComposer
-          proofs={composerProofs}
-          drafts={drafts}
-          extras={extras}
-          audienceUserIds={mentionAudienceIds}
-          initialCaption={stripHealthSummaryFromNotes(checkinQuery.data?.notes ?? '', attachedHealth())}
-          allReady={allReady}
-          busy={busy}
-          canSend={canSend}
-          blockedHint={checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)))}
-          onAddProof={(proof) => {
-            if (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') {
-              setPreferCamera(Platform.OS !== 'ios' || !proofPrefersHealthAttach(proof, challenge));
-              setCaptureId(proof.id);
-            }
-          }}
-          onRemoveProof={(proof) => void onRemoveProof(proof)}
-          onExtrasChange={handleExtrasChange}
-          onCaptionChange={setCaption}
-          onSend={() => void onSubmit()}>
-          {({ media, footer }) => (
+    <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding>
+      <Stack.Screen options={{ headerShown: false, title: 'Check-in' }} />
+      <CheckinComposer
+        proofs={composerProofs}
+        drafts={drafts}
+        extras={extras}
+        audienceUserIds={mentionAudienceIds}
+        initialCaption={stripHealthSummaryFromNotes(checkinQuery.data?.notes ?? '', attachedHealth())}
+        allReady={allReady}
+        busy={busy}
+        canSend={canSend}
+        blockedHint={checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)))}
+        stillNeeded={stillNeeded}
+        onClose={() => router.back()}
+        onRetake={onRetakeCurrent}
+        onOpenGallery={() => void pickCurrentFromGallery()}
+        onAddProof={(proof) => {
+          if (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') {
+            setPreferCamera(Platform.OS !== 'ios' || !proofPrefersHealthAttach(proof, challenge));
+            setCaptureId(proof.id);
+          }
+        }}
+        onRemoveProof={(proof) => void onRemoveProof(proof)}
+        onExtrasChange={handleExtrasChange}
+        onCaptionChange={setCaption}
+        onSend={() => void onSubmit()}
+        accessory={
+          locationProofs.length || textProofs.length || distanceProofs.length || error ? (
             <>
-              <ScrollView
-                className="flex-1"
-                style={{ minHeight: 0 }}
-                contentContainerStyle={{
-                  paddingHorizontal: 20,
-                  paddingTop: 4,
-                  paddingBottom: 12,
-                }}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-                showsVerticalScrollIndicator={false}>
-                <DismissKeyboard>
-                {locationProofs.map((proof) => (
-                  <View key={proof.id} className="mb-3">
-                    <LocationProofRow
-                      place={parseLocationPlace(proof.place)}
-                      ready={partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit))}
-                      busy={busy}
-                      onImHere={() => {
-                        void persistLocation(proof).catch((caught) => {
-                          Alert.alert('Couldn’t check in here', getErrorMessage(caught));
-                        });
-                      }}
-                    />
-                  </View>
-                ))}
-                {textProofs.map((proof) => (
-                  <View key={proof.id} className="mb-3">
-                    <Input
-                      label="Note"
-                      placeholder="Write a short note that you did the work."
-                      value={drafts[proof.id]?.text ?? ''}
-                      onChangeText={(value) => onText(proof.id, value)}
-                      onBlur={() => {
-                        const text = drafts[proof.id]?.text?.trim() ?? '';
-                        if (text) {
-                          void persistProof(proof, { text });
-                        }
-                      }}
-                      editable={!busy && phase !== 'submitted'}
-                      multiline
-                      textAlignVertical="top"
-                      style={{ minHeight: 88 }}
-                    />
-                  </View>
-                ))}
-                {distanceProofs.map((proof) => {
-                  const draft = drafts[proof.id];
-                  const part = slotPart(proof, draft, distanceUnit);
-                  const attached = partDistanceMeters(part, distanceUnit);
-                  const required = proofDistanceMeters(proof);
-                  const short = !sessionDistance && attached != null && attached < required;
-                  const healthReady = Platform.OS !== 'web' && Boolean(getHealthProvider()?.isAvailable());
-                  return (
-                    <View key={proof.id} className="mb-3" style={{ gap: 8 }}>
-                      <AppText className="text-sm font-semibold text-charcoal">Distance</AppText>
-                      {sessionDistance && required > 0 ? (
-                        <AppText className="text-[13px] leading-5 text-muted">
-                          Goal {formatDistance(required, distanceUnit)}
-                        </AppText>
-                      ) : null}
-                      {healthReady ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Attach workout"
-                          onPress={() => {
-                            setPreferCamera(false);
-                            setCaptureId(proof.id);
-                          }}
-                          style={{
-                            minHeight: 44,
-                            borderRadius: 14,
-                            borderWidth: 1,
-                            borderColor: THEME.accent,
-                            backgroundColor: THEME.accentSoft,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            paddingHorizontal: 14,
-                          }}>
-                          <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
-                            Attach workout
-                          </AppText>
-                        </Pressable>
-                      ) : null}
-                      <View className="flex-row items-end" style={{ gap: 8 }}>
-                        <View className="min-w-0 flex-1">
-                          <Input
-                            label={healthReady ? undefined : 'Distance'}
-                            placeholder="How far this session?"
-                            keyboardType="decimal-pad"
-                            value={draft?.text ?? ''}
-                            onChangeText={(value) => onText(proof.id, value)}
-                            onBlur={() => {
-                              const text = drafts[proof.id]?.text?.trim() ?? '';
-                              if (parseSessionDistanceText(text, distanceUnit)) {
-                                void persistProof(proof, {
-                                  text,
-                                  health: drafts[proof.id]?.health,
-                                  uri: drafts[proof.id]?.uri,
-                                });
-                              }
-                            }}
-                            editable={!busy && phase !== 'submitted'}
-                          />
-                        </View>
-                        <AppText
-                          className="mb-3 text-[15px] font-semibold"
-                          style={{ color: THEME.textMuted, minWidth: 28 }}>
-                          {distanceUnit}
-                        </AppText>
+              {locationProofs.map((proof) => (
+                <View key={proof.id} className="mb-2">
+                  <LocationProofRow
+                    place={parseLocationPlace(proof.place)}
+                    ready={partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit))}
+                    busy={busy}
+                    onImHere={() => {
+                      void persistLocation(proof).catch((caught) => {
+                        Alert.alert('Couldn’t check in here', getErrorMessage(caught));
+                      });
+                    }}
+                  />
+                </View>
+              ))}
+              {textProofs.map((proof) => (
+                <View key={proof.id} className="mb-2">
+                  <Input
+                    label="Note"
+                    placeholder="Write a short note that you did the work."
+                    value={drafts[proof.id]?.text ?? ''}
+                    onChangeText={(value) => onText(proof.id, value)}
+                    editable={!busy && phase !== 'submitted'}
+                    multiline
+                    textAlignVertical="top"
+                    style={{ minHeight: 64 }}
+                  />
+                </View>
+              ))}
+              {distanceProofs.map((proof) => {
+                const draft = drafts[proof.id];
+                const part = slotPart(proof, draft, distanceUnit);
+                const attached = partDistanceMeters(part, distanceUnit);
+                const required = proofDistanceMeters(proof);
+                const short = !sessionDistance && attached != null && attached < required;
+                const healthReady = Platform.OS !== 'web' && Boolean(getHealthProvider()?.isAvailable());
+                return (
+                  <View key={proof.id} className="mb-2" style={{ gap: 6 }}>
+                    <View className="flex-row items-end" style={{ gap: 8 }}>
+                      <View className="min-w-0 flex-1">
+                        <Input
+                          label="Distance"
+                          placeholder="How far this session?"
+                          keyboardType="decimal-pad"
+                          value={draft?.text ?? ''}
+                          onChangeText={(value) => onText(proof.id, value)}
+                          editable={!busy && phase !== 'submitted'}
+                        />
                       </View>
-                      {Platform.OS === 'web' ? (
-                        <AppText className="text-[12px] leading-5 text-muted">{copy('create.healthOnIos')}</AppText>
-                      ) : !healthReady ? (
-                        <AppText className="text-[12px] leading-5 text-muted">
-                          A screenshot is optional and does not count by itself.
-                        </AppText>
-                      ) : null}
-                      {!healthReady ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Add screenshot"
-                          onPress={() => {
-                            setPreferCamera(true);
-                            setCaptureId(proof.id);
-                          }}
-                          style={{
-                            minHeight: 44,
-                            borderRadius: 14,
-                            borderWidth: 1,
-                            borderColor: THEME.border,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            paddingHorizontal: 14,
-                          }}>
-                          <AppText className="text-[15px] font-semibold text-charcoal">Add screenshot</AppText>
-                        </Pressable>
-                      ) : null}
-                      {draft?.health?.distanceMeters ? (
-                        <AppText className="text-[13px] leading-5 text-muted">
-                          {formatDistance(draft.health.distanceMeters, distanceUnit)}
-                          {draft.health.durationSec
-                            ? ` · ${Math.round(draft.health.durationSec / 60)} min`
-                            : ''}
-                          {draft.health.sourceName ? ` · ${draft.health.sourceName}` : ''}
-                          {' · No route on this workout.'}
-                        </AppText>
-                      ) : null}
-                      {short ? (
-                        <AppText className="text-[13px] leading-5 text-coral-dark">
-                          {distanceShortHint(attached ?? 0, required, distanceUnit)}
-                        </AppText>
-                      ) : null}
+                      <AppText className="mb-3 text-[15px] font-semibold" style={{ color: THEME.textMuted, minWidth: 28 }}>
+                        {distanceUnit}
+                      </AppText>
                     </View>
-                  );
-                })}
-                {media}
-                {error ? (
-                  <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
-                ) : null}
-                </DismissKeyboard>
-              </ScrollView>
-              <View
-                style={{
-                  paddingHorizontal: 20,
-                  paddingTop: 8,
-                  paddingBottom: footerBottom,
-                  backgroundColor: THEME.background,
-                  borderTopWidth: 1,
-                  borderTopColor: THEME.border,
-                }}>
-                {footer}
-              </View>
+                    {healthReady ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Attach from Health"
+                        onPress={() => {
+                          setPreferCamera(false);
+                          setCaptureId(proof.id);
+                        }}
+                        style={{ minHeight: 36, justifyContent: 'center' }}>
+                        <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                          Attach from Health
+                        </AppText>
+                      </Pressable>
+                    ) : null}
+                    {short ? (
+                      <AppText className="text-[12px] leading-4 text-coral-dark">
+                        {distanceShortHint(attached ?? 0, required, distanceUnit)}
+                      </AppText>
+                    ) : null}
+                  </View>
+                );
+              })}
+              {error ? <AppText className="text-sm leading-5 text-coral-dark">{error}</AppText> : null}
             </>
-          )}
-        </CheckinComposer>
-      </View>
+          ) : null
+        }
+      />
     </Screen>
   );
 }
