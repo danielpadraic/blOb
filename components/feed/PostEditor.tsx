@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallenge } from '@/hooks/useChallenge';
-import { useEditPost, useHidePostMedia } from '@/hooks/usePostEdit';
+import { applyEditedPostToFeeds, useEditPost } from '@/hooks/usePostEdit';
+import { useQueryClient } from '@tanstack/react-query';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import { saveCapturedProofLocally } from '@/lib/checkin';
 import { isCheckinPost } from '@/lib/checkinPost';
@@ -49,7 +50,9 @@ export function PostEditor({
 }) {
   const { user } = useAuth();
   const edit = useEditPost();
-  const hideMedia = useHidePostMedia();
+  const queryClient = useQueryClient();
+  const originalHidden = uniqueProofUrls(post.hidden_media_urls ?? []);
+  const originalCaption = post.content ?? '';
   const checkin = isCheckinPost(post);
   const challenge = useChallenge(checkin && post.challenge_id ? post.challenge_id : undefined);
   const checkinRow = useQuery({
@@ -89,18 +92,12 @@ export function PostEditor({
 
   const extras = mediaUrls.filter((url) => !Object.values(required).some((urls) => urls.includes(url)));
 
-  async function persistHidden(nextHidden: string[], previous: string[]) {
+  function patchHidden(nextHidden: string[]) {
     setHidden(nextHidden);
-    try {
-      await hideMedia.mutateAsync({
-        postId: post.id,
-        hiddenMediaUrls: nextHidden,
-        checkinId: post.checkin_id,
-      });
-    } catch {
-      setHidden(previous);
-      onToast?.(copy('post.hideFailed'));
-    }
+    applyEditedPostToFeeds(queryClient, {
+      id: post.id,
+      hidden_media_urls: nextHidden,
+    });
   }
 
   function hideUrl(url: string) {
@@ -108,16 +105,21 @@ export function PostEditor({
       onToast?.(copy('post.savePhotoFirst'));
       return;
     }
-    const previous = hidden;
-    void persistHidden(uniqueProofUrls([...hidden, url]), previous);
+    patchHidden(uniqueProofUrls([...hidden, url]));
   }
 
   function unhideUrl(url: string) {
-    const previous = hidden;
-    void persistHidden(
-      hidden.filter((item) => item !== url),
-      previous,
-    );
+    patchHidden(hidden.filter((item) => !isHiddenMedia(item, [url]) && item !== url));
+  }
+
+  function closeWithoutSave() {
+    applyEditedPostToFeeds(queryClient, {
+      id: post.id,
+      content: originalCaption,
+      hidden_media_urls: originalHidden,
+      edited_at: post.edited_at,
+    });
+    onClose();
   }
 
   function removeRegular(url: string) {
@@ -195,14 +197,23 @@ export function PostEditor({
           replacements[draft.proofId] = remote;
         }
       }
+      const nextMedia = uniqueProofUrls([...mediaUrls, ...uploaded]);
       await edit.mutateAsync({
         postId: post.id,
         caption,
-        mediaUrls: uniqueProofUrls([...mediaUrls, ...uploaded]),
+        mediaUrls: nextMedia,
         hiddenMediaUrls: hidden,
         proofReplacements: replacements,
         checkinId: post.checkin_id,
       });
+      if (__DEV__) {
+        console.log('[blob:edit-save]', {
+          postId: post.id,
+          hidden,
+          hiddenCount: hidden.length,
+          payloadChars: JSON.stringify({ caption, nextMedia, hidden }).length,
+        });
+      }
       onSaved?.();
       onClose();
     } catch {
@@ -213,7 +224,7 @@ export function PostEditor({
   }
 
   return (
-    <ChromeOverlay visible onClose={onClose} align="end" zIndex={70}>
+    <ChromeOverlay visible onClose={closeWithoutSave} align="end" zIndex={70}>
       <View
         style={{
           backgroundColor: THEME.surface,
@@ -224,7 +235,7 @@ export function PostEditor({
           ...themeShadow('card'),
         }}>
         <View className="flex-row items-center justify-between px-5 pt-4 pb-2">
-          <Pressable accessibilityRole="button" onPress={onClose} hitSlop={8}>
+          <Pressable accessibilityRole="button" onPress={closeWithoutSave} hitSlop={8}>
             <AppText className="text-[15px] font-semibold" style={{ color: THEME.textMuted }}>
               Cancel
             </AppText>
@@ -256,42 +267,40 @@ export function PostEditor({
                       {proofDisplayName(proof)}
                     </AppText>
                     {shown.map((url) => (
-                      <EditorFrame
-                        key={url}
-                        uri={url}
-                        hidden={!draft && isHiddenMedia(url, hidden)}
-                      />
+                      <View key={url} style={{ gap: 8 }}>
+                        <EditorFrame uri={url} hidden={!draft && isHiddenMedia(url, hidden)} />
+                        <View className="flex-row" style={{ gap: 8 }}>
+                          <Button
+                            title="Replace"
+                            variant="outline"
+                            size="sm"
+                            onPress={() => void pickMedia(proof.id)}
+                          />
+                          <HideControl
+                            url={url}
+                            hidden={!draft && isHiddenMedia(url, hidden)}
+                            blocked={
+                              draft
+                                ? copy('post.savePhotoFirst')
+                                : !isPersistedMediaUrl(url)
+                                  ? copy('post.replaceFirst')
+                                  : null
+                            }
+                            onPress={() => {
+                              if (draft || !isPersistedMediaUrl(url)) {
+                                onToast?.(draft ? copy('post.savePhotoFirst') : copy('post.replaceFirst'));
+                                return;
+                              }
+                              if (isHiddenMedia(url, hidden)) {
+                                unhideUrl(url);
+                                return;
+                              }
+                              hideUrl(url);
+                            }}
+                          />
+                        </View>
+                      </View>
                     ))}
-                    <View className="flex-row" style={{ gap: 8 }}>
-                      <Button
-                        title="Replace"
-                        variant="outline"
-                        size="sm"
-                        onPress={() => void pickMedia(proof.id)}
-                      />
-                      {draft ? (
-                        <HideControl
-                          blocked={copy('post.savePhotoFirst')}
-                          onPress={() => onToast?.(copy('post.savePhotoFirst'))}
-                        />
-                      ) : urls[0] ? (
-                        <HideControl
-                          hidden={isHiddenMedia(urls[0], hidden)}
-                          blocked={!isPersistedMediaUrl(urls[0]) ? copy('post.replaceFirst') : null}
-                          onPress={() => {
-                            if (!isPersistedMediaUrl(urls[0])) {
-                              onToast?.(copy('post.replaceFirst'));
-                              return;
-                            }
-                            if (isHiddenMedia(urls[0], hidden)) {
-                              unhideUrl(urls[0]);
-                              return;
-                            }
-                            hideUrl(urls[0]);
-                          }}
-                        />
-                      ) : null}
-                    </View>
                   </View>
                 );
               })
@@ -302,6 +311,7 @@ export function PostEditor({
               <View className="flex-row" style={{ gap: 8 }}>
                 {checkin ? (
                   <HideControl
+                    url={url}
                     hidden={isHiddenMedia(url, hidden)}
                     blocked={!isPersistedMediaUrl(url) ? copy('post.savePhotoFirst') : null}
                     onPress={() =>
@@ -320,6 +330,7 @@ export function PostEditor({
               <View key={row.uri} style={{ gap: 8 }}>
                 <EditorFrame uri={row.uri} />
                 <HideControl
+                  url={row.uri}
                   blocked={copy('post.savePhotoFirst')}
                   onPress={() => onToast?.(copy('post.savePhotoFirst'))}
                 />
@@ -338,40 +349,41 @@ export function PostEditor({
 }
 
 function HideControl({
+  url,
   hidden,
   blocked,
   onPress,
 }: {
+  url: string;
   hidden?: boolean;
   blocked?: string | null;
   onPress: () => void;
 }) {
   const title = hidden ? copy('post.unhide') : 'Hide';
-  if (blocked && !hidden) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={title}
-        accessibilityHint={blocked}
-        onPress={onPress}
-        hitSlop={8}
-        style={{
-          height: 40,
-          paddingHorizontal: 12,
-          borderRadius: THEME.radiusSm,
-          borderWidth: 1,
-          borderColor: THEME.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: 0.38,
-        }}>
-        <AppText className="text-[14px] font-semibold" style={{ color: THEME.textMuted }}>
-          {title}
-        </AppText>
-      </Pressable>
-    );
-  }
-  return <Button title={title} variant="ghost" size="sm" onPress={onPress} />;
+  const faded = Boolean(blocked && !hidden);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title} ${url}`}
+      accessibilityHint={blocked ?? undefined}
+      onPress={onPress}
+      hitSlop={8}
+      style={{
+        height: 44,
+        minWidth: 72,
+        paddingHorizontal: 12,
+        borderRadius: THEME.radiusSm,
+        borderWidth: 1,
+        borderColor: faded ? THEME.border : THEME.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: faded ? 0.38 : 1,
+      }}>
+      <AppText className="text-[14px] font-semibold" style={{ color: faded ? THEME.textMuted : THEME.primary }}>
+        {title}
+      </AppText>
+    </Pressable>
+  );
 }
 
 function EditorFrame({

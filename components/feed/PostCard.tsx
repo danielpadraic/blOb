@@ -30,6 +30,7 @@ import { useUpdatePostAudience } from '@/hooks/useFeed';
 import { checkinCardCaption, isCheckinCompleteStage, isCheckinPost, postLocality } from '@/lib/checkinPost';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { PROOF_META } from '@/lib/constants';
+import { isHiddenMedia } from '@/lib/postEdit';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
@@ -750,7 +751,6 @@ function ProofMedia({
 }) {
   const lightbox = useMediaLightboxOptional();
   const items = urls.filter(Boolean);
-  const hidden = new Set((hiddenUrls ?? []).filter(Boolean));
   if (items.length === 0) {
     return null;
   }
@@ -781,7 +781,7 @@ function ProofMedia({
           uri={visuals[0]}
           height={SINGLE_IMAGE_HEIGHT}
           radius={14}
-          hidden={hidden.has(visuals[0])}
+          hidden={isHiddenMedia(visuals[0], hiddenUrls)}
           owner={owner}
           onPress={lightbox ? () => openAt(0) : undefined}
         />
@@ -797,7 +797,7 @@ function ProofMedia({
                       uri={uri}
                       height={TILE_HEIGHT}
                       radius={12}
-                      hidden={hidden.has(uri)}
+                      hidden={isHiddenMedia(uri, hiddenUrls)}
                       owner={owner}
                       onPress={lightbox ? () => openAt(itemIndex) : undefined}
                     />

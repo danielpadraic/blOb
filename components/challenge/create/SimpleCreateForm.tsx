@@ -162,7 +162,6 @@ export function SimpleCreateForm() {
   const editedRef = useRef(false);
   const draftFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draftFlash, setDraftFlash] = useState(false);
-  const [footerH, setFooterH] = useState(88);
   const [draft, setDraft] = useState<SimpleChallengeDraft>(() => defaultSimpleDraft());
   draftRef.current = draft;
   const [error, setError] = useState<string | null>(null);
@@ -432,18 +431,24 @@ export function SimpleCreateForm() {
   return (
     <ChallengeNotesProvider>
     <View style={{ flex: 1, backgroundColor: THEME.background }}>
-    <Screen
-      scroll
-      padded
-      edges={TAB_ROOT_EDGES}
-      scrollRef={(node) => {
+    <Screen scroll={false} padded={false} edges={TAB_ROOT_EDGES}>
+    <ScrollView
+      ref={(node) => {
         scrollRef.current = node;
         tour?.setCreateScroll(node);
       }}
+      className="flex-1"
+      style={{ flex: 1 }}
+      contentContainerStyle={{
+        paddingHorizontal: 16,
+        paddingBottom: (tour?.createActive ? 220 : 24) + (keyboardOverlap > 0 ? keyboardOverlap : 0),
+        flexGrow: 1,
+      }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="none"
       onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
-      contentPaddingBottom={
-        (tour?.createActive ? 220 : 24) + footerH + (keyboardOverlap > 0 ? keyboardOverlap : 0)
-      }>
+      scrollEventThrottle={16}
+      showsVerticalScrollIndicator={false}>
       <View ref={contentRef} className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'} collapsable={false}>
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
           <StackBackButton fallback={returnTo === 'feed' ? TABS_HREF : LOBBY_HREF} />
@@ -536,14 +541,15 @@ export function SimpleCreateForm() {
                 onChange={(buy_in) => patch({ buy_in })}
               />
             )}
-            <StepperField
-              label={copy('create.hostPrize')}
-              value={draft.host_budget}
-              min={0}
-              max={10_000}
-              formatValue={draft.currency === 'bucks' ? formatCash : undefined}
-              onChange={(host_budget) => patch({ host_budget })}
-            />
+              <StepperField
+                label={copy('create.hostPrize')}
+                value={draft.host_budget}
+                min={0}
+                max={10_000}
+                step={draft.currency === 'bucks' ? 0.01 : 1}
+                formatValue={draft.currency === 'bucks' ? formatCash : undefined}
+                onChange={(host_budget) => patch({ host_budget })}
+              />
             <AppText className="text-[13px] leading-5 text-muted">
               {cash ? copy('create.youFundPrize') : copy('create.realMoneyFund')}
             </AppText>
@@ -1133,25 +1139,15 @@ export function SimpleCreateForm() {
         </>
         ) : null}
       </View>
-    </Screen>
+    </ScrollView>
     <View
-      pointerEvents="box-none"
-      onLayout={(event) => {
-        setFooterH(Math.max(88, event.nativeEvent.layout.height));
-      }}
       className="gap-2 px-4 pt-2"
       style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 4,
         backgroundColor: THEME.surface,
         borderTopWidth: 1,
         borderTopColor: THEME.border,
         paddingBottom: tabBarLift(insets.bottom, 'sticky') + 8,
       }}>
-      <View pointerEvents="auto">
       <CreateActionsFooter
         onBack={view === 'review' ? () => setView('form') : closeSimple}
         onSaveDraft={() => void onSaveDraft()}
@@ -1178,8 +1174,8 @@ export function SimpleCreateForm() {
         showSave={!editId}
         draftFlash={draftFlash}
       />
-      </View>
     </View>
+    </Screen>
     </View>
     </ChallengeNotesProvider>
   );

@@ -4,7 +4,6 @@ import { TextInput, View, type TextInputProps } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { useKeyboardForm } from '@/components/ui/KeyboardFormShell';
 import { THEME } from '@/lib/theme';
-import { cn } from '@/utils/cn';
 
 type InputProps = TextInputProps & {
   label?: string;
@@ -36,9 +35,13 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         placeholderTextColor={THEME.textMuted}
         keyboardAppearance="light"
         selectionColor={THEME.accent}
-        className={cn('min-h-[52px] px-4 py-3.5 text-base', className)}
+        className={className}
         style={[
           {
+            minHeight: 52,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            fontSize: 16,
             color: THEME.textPrimary,
             backgroundColor: THEME.surface,
             borderWidth: 1,

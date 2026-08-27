@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
-import { dismissKeyboard } from '@/utils/keyboard';
 
 type StepperProps = {
   value: number;
@@ -46,15 +46,9 @@ export function StepperField({
   ...stepper
 }: StepperProps & { label: string; hint?: string }) {
   return (
-    <View className="w-full gap-1.5">
-      <View className="flex-row items-center gap-3">
-        <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }}>
-          <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
-        </View>
-        <View style={{ flexShrink: 0 }}>
-          <Stepper {...stepper} accessibilityLabel={stepper.accessibilityLabel ?? label} />
-        </View>
-      </View>
+    <View className="w-full gap-1.5" style={{ overflow: 'visible' }}>
+      <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
+      <Stepper {...stepper} accessibilityLabel={stepper.accessibilityLabel ?? label} />
       {hint ? <AppText className="text-[13px] leading-5 text-muted">{hint}</AppText> : null}
     </View>
   );
@@ -69,10 +63,13 @@ export function Stepper({
   accessibilityLabel,
   formatValue,
 }: StepperProps) {
-  const allowDecimal = Boolean(formatValue);
+  const allowDecimal = Boolean(formatValue) || step < 1;
   const safe = clamp(Number.isFinite(value) ? value : min, min, max);
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState(String(safe));
+  const [note, setNote] = useState<string | null>(null);
+  const atMin = safe <= min;
+  const atMax = safe >= max;
 
   useEffect(() => {
     if (!focused) {
@@ -81,8 +78,16 @@ export function Stepper({
   }, [focused, safe]);
 
   function bump(delta: number) {
-    dismissKeyboard();
-    onChange(clamp(safe + delta, min, max));
+    setNote(null);
+    if (delta < 0 && atMin) {
+      setNote(copy('stepper.min'));
+      return;
+    }
+    if (delta > 0 && atMax) {
+      setNote(copy('stepper.max'));
+      return;
+    }
+    onChange(clamp(Number((safe + delta).toFixed(step < 1 ? 2 : 0)), min, max));
   }
 
   function commit() {
@@ -95,62 +100,102 @@ export function Stepper({
   }
 
   return (
-    <View
-      accessibilityRole="adjustable"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityValue={{ min, max, now: safe }}
-      className="flex-row items-center"
-      style={{
-        backgroundColor: THEME.surface,
-        borderWidth: 1,
-        borderColor: THEME.border,
-        borderRadius: 999,
-        padding: 4,
-      }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Decrease"
-        onPress={() => bump(-step)}
-        disabled={safe <= min}
-        className="h-10 w-10 items-center justify-center rounded-full"
-        style={{ backgroundColor: THEME.background }}>
-        <AppText className="text-[18px] font-bold text-charcoal">−</AppText>
-      </Pressable>
-      <TextInput
+    <View style={{ width: '100%', maxWidth: 280, overflow: 'visible' }}>
+      <View
+        accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
-        value={focused ? draft : formatValue ? formatValue(safe) : String(safe)}
-        onChangeText={(text) => setDraft(sanitizeDraft(text, allowDecimal))}
-        onFocus={() => {
-          setFocused(true);
-          setDraft(String(safe));
-        }}
-        onBlur={() => {
-          commit();
-          setFocused(false);
-        }}
-        onSubmitEditing={commit}
-        keyboardType={allowDecimal ? 'decimal-pad' : 'number-pad'}
-        inputMode={allowDecimal ? 'decimal' : 'numeric'}
-        selectTextOnFocus
-        textAlign="center"
+        accessibilityValue={{ min, max, now: safe }}
         style={{
-          minWidth: 72,
-          minHeight: 40,
-          paddingHorizontal: 4,
-          fontSize: 16,
-          fontWeight: '800',
-          color: THEME.textPrimary,
-        }}
-      />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Increase"
-        onPress={() => bump(step)}
-        disabled={safe >= max}
-        className="h-10 w-10 items-center justify-center rounded-full"
-        style={{ backgroundColor: THEME.background }}>
-        <AppText className="text-[18px] font-bold text-charcoal">+</AppText>
-      </Pressable>
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: THEME.surface,
+          borderWidth: 1,
+          borderColor: THEME.border,
+          borderRadius: 999,
+          padding: 4,
+          overflow: 'visible',
+        }}>
+        <StepperBump
+          label="Decrease"
+          glyph="−"
+          faded={atMin}
+          onPress={() => bump(-step)}
+        />
+        <TextInput
+          accessibilityLabel={accessibilityLabel}
+          value={focused ? draft : formatValue ? formatValue(safe) : String(safe)}
+          onChangeText={(text) => setDraft(sanitizeDraft(text, allowDecimal))}
+          onFocus={() => {
+            setFocused(true);
+            setNote(null);
+            setDraft(String(safe));
+          }}
+          onBlur={() => {
+            commit();
+            setFocused(false);
+          }}
+          onSubmitEditing={commit}
+          keyboardType={allowDecimal ? 'decimal-pad' : 'number-pad'}
+          inputMode={allowDecimal ? 'decimal' : 'numeric'}
+          selectTextOnFocus
+          textAlign="center"
+          style={{
+            flexGrow: 1,
+            flexShrink: 1,
+            minWidth: 56,
+            minHeight: 44,
+            paddingHorizontal: 4,
+            fontSize: 16,
+            fontWeight: '800',
+            color: THEME.textPrimary,
+          }}
+        />
+        <StepperBump
+          label="Increase"
+          glyph="+"
+          faded={atMax}
+          onPress={() => bump(step)}
+        />
+      </View>
+      {note ? (
+        <AppText className="mt-1 text-[12px]" style={{ color: THEME.textMuted }}>
+          {note}
+        </AppText>
+      ) : null}
     </View>
+  );
+}
+
+function StepperBump({
+  label,
+  glyph,
+  faded,
+  onPress,
+}: {
+  label: string;
+  glyph: string;
+  faded: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: faded }}
+      onPress={onPress}
+      hitSlop={6}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: THEME.background,
+        opacity: faded ? 0.38 : 1,
+        flexShrink: 0,
+        ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
+      }}>
+      <AppText className="text-[18px] font-bold text-charcoal">{glyph}</AppText>
+    </Pressable>
   );
 }

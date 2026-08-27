@@ -1578,11 +1578,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
           contentContainerStyle={{
-            paddingBottom: tour?.createActive ? 220 : 24 + footerH,
+            paddingBottom: tour?.createActive ? 220 : 24,
           }}
-          automaticallyAdjustKeyboardInsets
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardDismissMode="none"
           nestedScrollEnabled
           onScroll={(event) => {
             scrollY.current = event.nativeEvent.contentOffset.y;
@@ -1778,7 +1777,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         </ScrollView>
 
         <View
-          pointerEvents="box-none"
           onLayout={(event) => {
             const height = event.nativeEvent.layout.height;
             setFooterH(Math.max(72, height));
@@ -1786,17 +1784,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           }}
           className="gap-2 px-4 pt-2"
           style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 4,
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,
             paddingBottom: tabBarLift(insets.bottom, 'sticky') + 8,
           }}>
-          <View pointerEvents="auto">
           {scoringToast ? (
             <View className="items-center">
               <View
@@ -1834,7 +1826,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             showSave={!isEditing && step >= STEP_GOAL}
             draftFlash={draftFlash}
           />
-          </View>
         </View>
           </WizardFocusContext.Provider>
         )}

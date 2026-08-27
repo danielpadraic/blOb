@@ -65,17 +65,8 @@ export function useMediaLightbox() {
   return value;
 }
 
-function uniqueLightboxItems(items: LightboxItem[]): LightboxItem[] {
-  const seen = new Set<string>();
-  const next: LightboxItem[] = [];
-  for (const item of items) {
-    if (!item.uri || seen.has(item.uri)) {
-      continue;
-    }
-    seen.add(item.uri);
-    next.push(item);
-  }
-  return next;
+function lightboxItems(items: LightboxItem[]): LightboxItem[] {
+  return items.filter((item) => Boolean(item.uri));
 }
 
 export function MediaLightboxHost({ children }: { children: ReactNode }) {
@@ -83,18 +74,11 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
 
   const closeLightbox = useCallback(() => setState(null), []);
   const openLightbox = useCallback((items: LightboxItem[], index = 0) => {
-    const next = uniqueLightboxItems(items);
+    const next = lightboxItems(items);
     if (next.length === 0) {
       return;
     }
-    const raw = items.filter((item) => item.uri);
-    const preferred = raw[Math.min(Math.max(index, 0), raw.length - 1)]?.uri;
-    const start = preferred
-      ? Math.max(
-          next.findIndex((item) => item.uri === preferred),
-          0,
-        )
-      : 0;
+    const start = Math.min(Math.max(index, 0), next.length - 1);
     setState({ items: next, index: start });
   }, []);
 
@@ -184,11 +168,23 @@ function MediaLightboxOverlay({
     };
   }, [open, onClose]);
 
-  function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
-    if (Number.isFinite(next)) {
-      setPage(Math.min(Math.max(next, 0), (state?.items.length ?? 1) - 1));
+  function pageFromOffset(x: number) {
+    const next = Math.round(x / pageWidth);
+    if (!Number.isFinite(next)) {
+      return;
     }
+    setPage((current) => {
+      const clamped = Math.min(Math.max(next, 0), (state?.items.length ?? 1) - 1);
+      return current === clamped ? current : clamped;
+    });
+  }
+
+  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    pageFromOffset(event.nativeEvent.contentOffset.x);
+  }
+
+  function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    pageFromOffset(event.nativeEvent.contentOffset.x);
   }
 
   function goTo(index: number) {
@@ -221,11 +217,13 @@ function MediaLightboxOverlay({
             style={{ width: pageWidth, height: pageHeight }}
             contentContainerStyle={{ height: pageHeight }}
             contentOffset={{ x: state.index * pageWidth, y: 0 }}
+            scrollEventThrottle={16}
+            onScroll={onScroll}
             onMomentumScrollEnd={onScrollEnd}
-            onScrollEndDrag={Platform.OS === 'web' ? onScrollEnd : undefined}>
-            {items.map((item) => (
+            onScrollEndDrag={onScrollEnd}>
+            {items.map((item, itemIndex) => (
               <LightboxPage
-                key={item.uri}
+                key={`${item.uri}-${itemIndex}`}
                 item={item}
                 width={pageWidth}
                 height={pageHeight}
@@ -249,9 +247,10 @@ function MediaLightboxOverlay({
               style={[styles.dots, { bottom: Math.max(insets.bottom, 12) + (current?.label ? 28 : 8) }]}>
               {items.map((item, index) => (
                 <Pressable
-                  key={item.uri}
+                  key={`${item.uri}-dot-${index}`}
                   accessibilityRole="button"
                   accessibilityLabel={`Photo ${index + 1} of ${items.length}`}
+                  accessibilityState={{ selected: index === page }}
                   hitSlop={8}
                   onPress={() => goTo(index)}
                   style={[styles.dot, index === page ? styles.dotOn : null]}
@@ -409,7 +408,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(247, 247, 245, 0.35)',
   },
   dotOn: {
-    backgroundColor: THEME.primaryForeground,
+    backgroundColor: THEME.accent,
   },
   captionWrap: {
     position: 'absolute',

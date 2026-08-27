@@ -1,4 +1,4 @@
-import { uniqueProofUrls, type ChallengeProof, type ChallengeProofPart } from '@/lib/challengeProofs';
+import { mediaUrlKey, uniqueProofUrls, type ChallengeProof, type ChallengeProofPart } from '@/lib/challengeProofs';
 
 export type PostEditHistoryRow = {
   caption: string;
@@ -6,16 +6,16 @@ export type PostEditHistoryRow = {
 };
 
 export function hiddenMediaSet(urls?: string[] | null): Set<string> {
-  return new Set(uniqueProofUrls(urls ?? []));
+  return new Set(uniqueProofUrls(urls ?? []).map((url) => mediaUrlKey(url)));
 }
 
 export function isHiddenMedia(url: string, hidden?: string[] | null): boolean {
-  return hiddenMediaSet(hidden).has(url.trim());
+  return hiddenMediaSet(hidden).has(mediaUrlKey(url));
 }
 
 export function visiblePostMedia(urls?: string[] | null, hidden?: string[] | null): string[] {
   const skip = hiddenMediaSet(hidden);
-  return uniqueProofUrls(urls ?? []).filter((url) => !skip.has(url));
+  return uniqueProofUrls(urls ?? []).filter((url) => !skip.has(mediaUrlKey(url)));
 }
 
 export function hiddenUrlsFromParts(

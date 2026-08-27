@@ -39,6 +39,8 @@ const STRINGS = {
   'post.discard': 'Discard',
   'post.discardConfirm': 'Discard this post?',
   'post.clear': 'Clear',
+  'stepper.max': 'That’s the top.',
+  'stepper.min': 'That’s the bottom.',
   'post.savePhotoFirst': 'Save this photo first.',
   'post.replaceFirst': 'Replace this photo first.',
   'post.replaceFirstBody': 'A required proof needs a visible photo. Hide it after you add a new one.',

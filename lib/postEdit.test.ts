@@ -4,6 +4,7 @@ import { checkinCardCaption } from '@/lib/checkinPost';
 import {
   canHideCheckinUrl,
   hiddenUrlsFromParts,
+  isHiddenMedia,
   isPersistedMediaUrl,
   parsePostEdits,
   postEditUnchanged,
@@ -29,6 +30,7 @@ describe('post edit lock', () => {
         ['https://a.jpg'],
       ),
     ).toEqual(['https://b.jpg']);
+    expect(isHiddenMedia('https://cdn.example/a.jpg?x=1', ['https://cdn.example/a.jpg?x=2'])).toBe(true);
   });
 
   it('treats hide as unchanged when flags already match', () => {

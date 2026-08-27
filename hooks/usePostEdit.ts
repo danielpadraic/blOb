@@ -52,13 +52,12 @@ export function applyEditedPostToFeeds(
   queryClient: ReturnType<typeof useQueryClient>,
   post: Pick<Post, 'id'> & Partial<Post>,
 ) {
-  const editedAt = post.edited_at ?? new Date().toISOString();
   patchFeedPosts(queryClient, post.id, (row) => ({
     ...row,
     content: post.content !== undefined ? post.content : row.content,
     media_urls: post.media_urls ?? row.media_urls,
     hidden_media_urls: post.hidden_media_urls ?? row.hidden_media_urls ?? [],
-    edited_at: editedAt,
+    edited_at: post.edited_at !== undefined ? post.edited_at : row.edited_at,
   }));
 }
 
