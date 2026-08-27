@@ -121,7 +121,6 @@ function PostCardInner({
         borderWidth: highlighted ? 1.5 : 1,
         borderColor: highlighted ? THEME.accent : THEME.border,
         overflow: 'visible',
-        opacity: mutedOwnerHome ? 0.62 : 1,
       }}>
       <View className="flex-row items-center" style={{ gap: 10 }}>
         <ProfileLink username={post.author?.username} userId={post.author_id}>
@@ -154,22 +153,6 @@ function PostCardInner({
               </AppText>
             </View>
           </ProfileLink>
-          {showInLine && post.challenge_id ? (
-            <InChallengeLine
-              challengeId={post.challenge_id}
-              title={challengeTitle}
-              visibility={preview.data?.visibility}
-              challengeLane={preview.data?.challenge_lane}
-              isOfficial={preview.data?.is_official}
-              createdBy={preview.data?.created_by}
-            />
-          ) : post.wall_host ? (
-            <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={1}>
-              {copy('wall.onHost', 'neutral', {
-                name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
-              })}
-            </AppText>
-          ) : null}
         </View>
         {hideAudience || post.checkin_id ? null : currentUserId && currentUserId === post.author_id ? (
           <AudienceIconButton
@@ -192,34 +175,6 @@ function PostCardInner({
         ) : (
           <AudienceIconButton audience={audience} />
         )}
-        {mine && hiddenFromHome ? (
-          <WebTapButton
-            accessibilityLabel={copy('post.unhideOnHome')}
-            onPress={toggleHomeHide}
-            style={{
-              height: 28,
-              minHeight: 28,
-              paddingHorizontal: 8,
-              borderRadius: 999,
-              backgroundColor: THEME.accentSoft,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-            <AppText className="text-[11px] font-semibold" style={{ color: THEME.accent }}>
-              {copy('post.hiddenFromHome')}
-            </AppText>
-          </WebTapButton>
-        ) : null}
-        {mine && !challengeFeed ? (
-          <WebTapButton
-            accessibilityLabel={
-              hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')
-            }
-            onPress={toggleHomeHide}
-            style={{ height: 44, width: 44, minWidth: 44, minHeight: 44 }}>
-            <Glyph name={GLYPH.hide} color={THEME.textMuted} size={16} />
-          </WebTapButton>
-        ) : null}
         {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
           <ProofFlagButton postId={post.id} />
         ) : null}
@@ -239,6 +194,90 @@ function PostCardInner({
           <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
         </Pressable>
       </View>
+      {showInLine && post.challenge_id ? (
+        <View className="flex-row items-center" style={{ gap: 8, marginTop: 6, minWidth: 0 }}>
+          <View style={[flexChildMin(), { flex: 1 }]}>
+            <InChallengeLine
+              challengeId={post.challenge_id}
+              title={challengeTitle}
+              visibility={preview.data?.visibility}
+              challengeLane={preview.data?.challenge_lane}
+              isOfficial={preview.data?.is_official}
+              createdBy={preview.data?.created_by}
+            />
+          </View>
+          {mine && hiddenFromHome ? (
+            <WebTapButton
+              accessibilityLabel={copy('post.unhideOnHome')}
+              onPress={toggleHomeHide}
+              style={{
+                height: 28,
+                minHeight: 28,
+                paddingHorizontal: 8,
+                borderRadius: 999,
+                backgroundColor: THEME.accentSoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+              <AppText className="text-[11px] font-semibold" style={{ color: THEME.accent }}>
+                {copy('post.hiddenFromHome')}
+              </AppText>
+            </WebTapButton>
+          ) : null}
+          {mine && !challengeFeed ? (
+            <WebTapButton
+              accessibilityLabel={
+                hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')
+              }
+              onPress={toggleHomeHide}
+              style={{ height: 44, width: 44, minWidth: 44, minHeight: 44, flexShrink: 0 }}>
+              <Glyph name={GLYPH.hide} color={THEME.textMuted} size={16} />
+            </WebTapButton>
+          ) : null}
+        </View>
+      ) : post.wall_host || (mine && !challengeFeed) || (mine && hiddenFromHome) ? (
+        <View className="flex-row items-center" style={{ gap: 8, marginTop: 4, minWidth: 0 }}>
+          {post.wall_host ? (
+            <AppText className="flex-1 text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={1}>
+              {copy('wall.onHost', 'neutral', {
+                name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
+              })}
+            </AppText>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
+          {mine && hiddenFromHome ? (
+            <WebTapButton
+              accessibilityLabel={copy('post.unhideOnHome')}
+              onPress={toggleHomeHide}
+              style={{
+                height: 28,
+                minHeight: 28,
+                paddingHorizontal: 8,
+                borderRadius: 999,
+                backgroundColor: THEME.accentSoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+              <AppText className="text-[11px] font-semibold" style={{ color: THEME.accent }}>
+                {copy('post.hiddenFromHome')}
+              </AppText>
+            </WebTapButton>
+          ) : null}
+          {mine && !challengeFeed ? (
+            <WebTapButton
+              accessibilityLabel={
+                hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')
+              }
+              onPress={toggleHomeHide}
+              style={{ height: 44, width: 44, minWidth: 44, minHeight: 44, flexShrink: 0 }}>
+              <Glyph name={GLYPH.hide} color={THEME.textMuted} size={16} />
+            </WebTapButton>
+          ) : null}
+        </View>
+      )}
 
       <View style={{ gap: 10, marginTop: 6, opacity: mutedOwnerHome ? 0.45 : 1 }}>
         {caption ? (
@@ -723,7 +762,7 @@ function PostVideoPlayer({ uri }: { uri: string }) {
   return (
     <VideoView
       player={player}
-      style={{ width: '100%', height: '100%', backgroundColor: THEME.surface }}
+      style={{ width: '100%', height: '100%', backgroundColor: THEME.surface, overflow: 'hidden' }}
       contentFit="contain"
       nativeControls
     />

@@ -349,7 +349,7 @@ function LightboxVideo({
   return (
     <VideoView
       player={player}
-      style={[style, { backgroundColor: 'transparent' }]}
+      style={[style, { backgroundColor: 'transparent', overflow: 'hidden' }]}
       contentFit="contain"
       nativeControls
     />

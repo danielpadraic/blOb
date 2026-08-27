@@ -6,7 +6,11 @@ function pathOf(url: string): string {
 
 export function mediaKind(url: string): MediaKind {
   const path = pathOf(url);
-  if (/\.(mp4|mov|m4v|webm)$/.test(path) || /\/video-\d+\./.test(path)) {
+  if (
+    /\.(mp4|mov|m4v|webm)$/.test(path) ||
+    /\/video-\d+\./.test(path) ||
+    /\/reels\//.test(path)
+  ) {
     return 'video';
   }
   if (/\.(png|jpe?g|webp|gif|heic|heif)$/.test(path)) {

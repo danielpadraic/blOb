@@ -256,7 +256,7 @@ export function ChallengeDetailHeaderRight() {
   }, []);
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}>
       <WalletBar />
       {overflowVisible ? <ChallengeOverflowButton onPress={openOverflowMenu} /> : null}
     </View>

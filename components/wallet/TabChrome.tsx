@@ -189,7 +189,7 @@ export function TabChromeHeader({
               alignItems: 'center',
               overflow: 'visible',
               paddingTop: 6,
-              paddingRight: Math.max(insets.right, 10) + 8,
+              paddingRight: Math.max(insets.right, 16) + 18,
             }}>
             <WalletBar />
             <TourAnchor id="tour-dm" style={{ overflow: 'visible' }}>
@@ -242,7 +242,7 @@ function HeaderIcon({
       style={{
         overflow: 'visible',
         paddingTop: 8,
-        paddingRight: 10,
+        paddingRight: 16,
         marginLeft: 6,
       }}>
       <Pressable

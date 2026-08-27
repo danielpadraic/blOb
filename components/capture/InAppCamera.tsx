@@ -7,7 +7,7 @@ import {
   useState,
   type RefObject,
 } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { BackHandler, Platform, Pressable, View } from 'react-native';
 import { CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,8 +22,10 @@ import { AppText } from '@/components/ui/AppText';
 import {
   cameraErrorKind,
   logCameraError,
+  markWebCameraGranted,
   openWebCameraStream,
   takePrimedCameraStream,
+  webCameraGrantedThisSession,
 } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import {
@@ -119,24 +121,27 @@ export function InAppCamera({
       }
       if (web) {
         try {
-          const queried = await queryWebCameraPermission();
-          if (cancelled) {
-            return;
-          }
           const primed = takePrimedCameraStream();
-          if (queried === 'denied' && !primed) {
-            setFail('denied');
-            return;
+          if (!webCameraGrantedThisSession() && !primed) {
+            const queried = await queryWebCameraPermission();
+            if (cancelled) {
+              return;
+            }
+            if (queried === 'denied') {
+              setFail('denied');
+              return;
+            }
           }
           const stream = await openWebCameraStream({
             facing: facing === 'front' ? 'front' : 'back',
-            audio: video,
+            audio: true,
             existing: primed,
           });
           if (cancelled) {
             stream.getTracks().forEach((track) => track.stop());
             return;
           }
+          markWebCameraGranted();
           webStreamRef.current = stream;
           const node = webVideoRef.current;
           if (node) {
@@ -178,7 +183,7 @@ export function InAppCamera({
         }
       }
     };
-  }, [facing, parentBlocked, retry, video, web]);
+  }, [facing, parentBlocked, retry, web]);
 
   useEffect(() => {
     if (parentBlocked || fail != null) {
@@ -188,7 +193,15 @@ export function InAppCamera({
       setReady(true);
     }, 300);
     return () => clearTimeout(timer);
-  }, [fail, facing, parentBlocked, retry, video, web]);
+  }, [fail, facing, parentBlocked, retry, web]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeCamera();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onCancel]);
 
   const attachWebVideo = useCallback((node: HTMLVideoElement | null) => {
     webVideoRef.current = node;
@@ -229,6 +242,20 @@ export function InAppCamera({
 
   const onCameraDenied = useCallback(() => setFail('denied'), []);
   const onCameraMissing = useCallback(() => setFail('missing'), []);
+
+  function stopWebTracks() {
+    webStreamRef.current?.getTracks().forEach((track) => track.stop());
+    webStreamRef.current = null;
+    const node = webVideoRef.current;
+    if (node) {
+      node.srcObject = null;
+    }
+  }
+
+  function closeCamera() {
+    stopWebTracks();
+    onCancel();
+  }
 
   async function takePhoto() {
     if (!shutterEnabled) {
@@ -473,11 +500,13 @@ export function InAppCamera({
         </View>
       )}
 
-      <View className="absolute left-3 right-3 top-3 flex-row items-center justify-between">
+      <View
+        className="absolute left-3 right-3 flex-row items-center justify-between"
+        style={{ top: Math.max(insets.top, 12) + 4, zIndex: 4 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close camera"
-          onPress={onCancel}
+          onPress={closeCamera}
           className="h-9 items-center justify-center rounded-full px-3"
           style={{ backgroundColor: 'rgba(16,19,18,0.72)' }}>
           <AppText className="text-[13px] font-bold" style={{ color: '#fff' }}>

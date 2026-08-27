@@ -37,6 +37,15 @@ export function cameraErrorKind(error: unknown): 'denied' | 'missing' | 'other' 
 }
 
 let primed: MediaStream | null = null;
+let webGrantedThisSession = false;
+
+export function markWebCameraGranted() {
+  webGrantedThisSession = true;
+}
+
+export function webCameraGrantedThisSession() {
+  return webGrantedThisSession;
+}
 
 export function takePrimedCameraStream(): MediaStream | null {
   const stream = primed;

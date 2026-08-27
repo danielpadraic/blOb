@@ -103,13 +103,15 @@ export function ChallengeBoard({
         accessibilityLabel="Open board"
         onPress={onOpenReceipt}
         style={{ minHeight: 44 }}>
-        <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
-          {copy('board.remaining')} {view.remainingCount}
-          {' · '}
-          {copy('board.caughtUp')} {view.caughtUpCount}
-          {' · '}
-          {copy('board.dropped')} {view.droppedCount}
-        </AppText>
+        <View style={{ gap: 6 }}>
+          <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
+            {copy('board.remaining')} {view.remainingCount}
+            {' · '}
+            {copy('board.caughtUp')} {view.caughtUpCount}
+            {' · '}
+            {copy('board.dropped')} {view.droppedCount}
+          </AppText>
+        </View>
       </Pressable>
     );
   }

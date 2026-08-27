@@ -88,7 +88,10 @@ export default function FriendsScreen() {
   const acceptRequest = useAcceptFriendRequest();
   const rejectRequest = useRejectFriendRequest();
 
-  const friends = friendsQuery.data ?? [];
+  const friends = (friendsQuery.data ?? []).filter((row) => {
+    const profile = row.profile;
+    return Boolean(profile?.id && (profile.display_name?.trim() || profile.username?.trim()));
+  });
   const incoming = requestsQuery.data?.incoming ?? [];
   const outgoing = requestsQuery.data?.outgoing ?? [];
   const requestCount = incoming.length + outgoing.length;
@@ -336,6 +339,9 @@ function FriendsPane({
       refreshControl={refreshControl}
       renderItem={({ item: friend }) => {
         const otherId = userId ? otherFriendshipUserId(friend, userId) : (friend.profile?.id ?? '');
+        if (!friend.profile?.id || !otherId) {
+          return null;
+        }
         return (
           <FriendCard
             friend={friend}

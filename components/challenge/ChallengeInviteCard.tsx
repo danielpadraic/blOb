@@ -267,6 +267,7 @@ export function ChallengeInviteCard({
     (challenge.starts_at != null && new Date(challenge.starts_at).getTime() > Date.now());
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [joining, setJoining] = useState(false);
+  const [sponsorLogoFailed, setSponsorLogoFailed] = useState(false);
   const joinSheet = useJoinConfirm();
   const openTag = useOpenChallengeFromTag();
   const typeTip = useChallengeTypeTip();
@@ -432,12 +433,13 @@ export function ChallengeInviteCard({
                   numberOfLines={2}>
                   {namedSponsor}
                 </AppText>
-              ) : asHttpUrl(challenge.sponsor_logo_url) ? (
+              ) : asHttpUrl(challenge.sponsor_logo_url) && !sponsorLogoFailed ? (
                 <Image
                   source={{ uri: asHttpUrl(challenge.sponsor_logo_url) }}
                   style={{ width: 56, height: 28 }}
                   contentFit="contain"
                   accessibilityLabel={sponsorName}
+                  onError={() => setSponsorLogoFailed(true)}
                 />
               ) : (
                 <Image
@@ -662,6 +664,8 @@ function MediaPanel({
           </View>
         ) : resolved.kind === 'bob' ? (
           <OfficialBobPanel onError={failThrough} />
+        ) : officialPanel ? (
+          <OfficialBobPanel onError={() => undefined} />
         ) : (
           <ChallengeTypePlaceholder category={category} />
         )}

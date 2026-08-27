@@ -1,7 +1,6 @@
 import {
   Stack,
   useFocusEffect,
-  useGlobalSearchParams,
   useLocalSearchParams,
   useRouter,
   type ErrorBoundaryProps,
@@ -129,12 +128,16 @@ const BODY_METRICS_JOIN_COPY =
 
 function ChallengeStackTitle({ title }: { title: string }) {
   const label = title.trim();
+  if (!label) {
+    return null;
+  }
   return (
     <AppText
       numberOfLines={1}
+      ellipsizeMode="tail"
       className="text-[17px] font-extrabold text-charcoal"
-      style={{ maxWidth: 220 }}>
-      {label || 'Challenge'}
+      style={{ minWidth: 0, maxWidth: '100%', flexShrink: 1 }}>
+      {label}
     </AppText>
   );
 }
@@ -170,8 +173,7 @@ export default function ChallengeDetailScreen() {
     tab?: string;
     receipt?: string;
   }>();
-  const globalParams = useGlobalSearchParams<{ id?: string }>();
-  const routeParam = firstRouteParam(params.id) || firstRouteParam(globalParams.id);
+  const routeParam = firstRouteParam(params.id);
   const { id, waiting: waitingForId } = useStableChallengeRouteId(routeParam);
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
@@ -232,7 +234,8 @@ export default function ChallengeDetailScreen() {
     challengeQuery.isError &&
     !challengeQuery.isFetching &&
     !challengeQuery.isLoading;
-  const challenge = showQueryError ? undefined : challengeQuery.data;
+  const challenge =
+    showQueryError || !id || challengeQuery.data?.id !== id ? undefined : challengeQuery.data;
   const hostProfile = hostQuery.data;
   const heroHost =
     hostProfile && typeof hostProfile === 'object' && hostProfile.id
@@ -496,7 +499,8 @@ export default function ChallengeDetailScreen() {
       <Screen>
         <Stack.Screen
           options={{
-            title: 'Challenge',
+            title: '',
+            headerTitle: () => null,
             headerBackVisible: false,
             headerLeft: () => <StackBackButton />,
             headerRight: () => <ChallengeDetailHeaderRight />,
@@ -712,14 +716,14 @@ export default function ChallengeDetailScreen() {
     challenge.status !== 'cancelled' &&
     (stickyJoin || stickyCheckin);
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
-  const stickyBlock = showStickyCta ? JOIN_CTA_HEIGHT + 12 : 0;
+  const stickyBlock = showStickyCta ? JOIN_CTA_HEIGHT + (pageTab === 'overview' && stickyCheckin ? 56 : 12) : 0;
 
   return (
     <ChallengeNotesProvider>
     <Screen padded={false} edges={['left', 'right']}>
       <Stack.Screen
         options={{
-          title: challenge.title.trim() || 'Challenge',
+          title: '',
           headerTitle: () => <ChallengeStackTitle title={challenge.title} />,
           headerBackVisible: false,
           headerLeft: () => <StackBackButton />,
@@ -796,6 +800,7 @@ export default function ChallengeDetailScreen() {
         <View className="mt-4">
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
+        {pageTab === 'overview' && stickyCheckin ? null : (
         <View className="mt-3">
           <ChallengeLeaderboard
             challenge={challenge}
@@ -808,6 +813,7 @@ export default function ChallengeDetailScreen() {
             onOpenReceipt={() => setPageTab('board')}
           />
         </View>
+        )}
 
         {challenge.status === 'settling' && !receipt ? (
           <Card className="mt-4">
@@ -1242,7 +1248,19 @@ export default function ChallengeDetailScreen() {
         ) : periodCheckin.isLoading ? (
           <Button title="Checking today’s check-in" size="md" loading disabled />
         ) : (
-          <View className="gap-1.5">
+          <View className="gap-2">
+            {pageTab === 'overview' ? (
+              <ChallengeLeaderboard
+                challenge={challenge}
+                roster={boardRoster}
+                completedUserIds={completions.data ?? new Set()}
+                joined={isJoined}
+                viewerId={user?.id}
+                settlement={receipt}
+                variant="compact"
+                onOpenReceipt={() => setPageTab('board')}
+              />
+            ) : null}
             <Button
               title={checkinLocked ? copy('checkin.checkedIn') : logTitle}
               size="md"

@@ -147,7 +147,7 @@ export function CaptureStudio({
     return () => {
       cancelled = true;
     };
-  }, [captureKind, mode]);
+  }, [mode]);
 
   function close() {
     resetStudio();

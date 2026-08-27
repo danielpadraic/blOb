@@ -2,33 +2,28 @@ import { useEffect, useState } from 'react';
 
 import { firstRouteParam } from '@/lib/challengeLoad';
 
-/** Wait one frame when Expo Router hands an empty `[id]` on first paint. Never throw. */
+/** Wait while Expo Router’s `[id]` is empty. Never reuse a previous challenge id. */
 export function useStableChallengeRouteId(routeParam: unknown): { id: string; waiting: boolean } {
   const fromRoute = firstRouteParam(routeParam);
-  const [held, setHeld] = useState(fromRoute);
   const [waiting, setWaiting] = useState(!fromRoute);
 
   useEffect(() => {
     if (fromRoute) {
-      setHeld(fromRoute);
       setWaiting(false);
       return;
     }
-    let cancelled = false;
+    setWaiting(true);
     const frame = requestAnimationFrame(() => {
-      if (!cancelled) {
-        setWaiting(false);
-      }
+      setWaiting(true);
     });
     return () => {
-      cancelled = true;
       cancelAnimationFrame(frame);
     };
   }, [fromRoute]);
 
   return {
-    id: fromRoute || held,
-    waiting: Boolean(waiting && !fromRoute && !held),
+    id: fromRoute,
+    waiting: !fromRoute || waiting,
   };
 }
 

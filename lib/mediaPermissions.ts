@@ -3,7 +3,7 @@ import { Camera, CameraView } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 
-import { cameraErrorKind, logCameraError } from '@/lib/cameraSession';
+import { cameraErrorKind, logCameraError, webCameraGrantedThisSession } from '@/lib/cameraSession';
 
 export type MediaPermissionKind = 'camera' | 'microphone' | 'library';
 
@@ -55,6 +55,9 @@ export async function queryWebCameraPermission(): Promise<'granted' | 'denied' |
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') {
     return 'prompt';
   }
+  if (webCameraGrantedThisSession()) {
+    return 'granted';
+  }
   try {
     const status = await navigator.permissions.query({ name: 'camera' as PermissionName });
     if (status.state === 'granted' || status.state === 'denied') {
@@ -68,6 +71,9 @@ export async function queryWebCameraPermission(): Promise<'granted' | 'denied' |
 
 export async function ensureCameraPermission(): Promise<MediaPermissionResult> {
   if (Platform.OS === 'web') {
+    if (webCameraGrantedThisSession()) {
+      return { ok: true };
+    }
     const queried = await queryWebCameraPermission();
     if (queried === 'granted') {
       return { ok: true };
