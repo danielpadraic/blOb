@@ -1171,6 +1171,7 @@ export default function ChallengeDetailScreen() {
                   : 'Join the challenge to post in this feed.'
               }
               composerPlaceholder="How’s the work going?"
+              draftKey={id ? `challenge:${id}` : 'challenge'}
               hideAudience
               composeSource="challenge"
               canCompose={isJoined && !participation?.eliminated_at}

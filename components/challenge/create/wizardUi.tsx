@@ -17,7 +17,6 @@ import { draftContinueSubtitle, draftContinueTitle, type ChallengeDraft } from '
 import { bobExampleLine } from '@/lib/createBobCopy';
 import { THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
-import { dismissKeyboard } from '@/utils/keyboard';
 
 const BOB_SIZE = 88;
 const BOB_SIZE_NARROW = 72;
@@ -512,9 +511,7 @@ export function FieldLabel({
 }) {
   return (
     <View className="gap-1.5">
-      <Pressable accessible={false} onPress={dismissKeyboard}>
-        <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
-      </Pressable>
+      <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
       {children}
       {error ? (
         <AppText className="text-xs text-coral-dark">{error}</AppText>

@@ -5,7 +5,7 @@ export const POSTS_CORE_COLUMNS =
 
 /** Default posts select. Quote / deleted_at are added only if a limit-0 probe succeeds. */
 export const POSTS_FEED_SELECT =
-  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, created_at';
+  'id, author_id, challenge_id, content, media_urls, audience, audience_user_ids, created_at, edited_at, hidden_media_urls';
 
 export type PostsSchema = {
   select: string;

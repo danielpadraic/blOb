@@ -33,6 +33,7 @@ type FeedListProps = {
   composeSource?: ComposeInput['source'];
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
   defaultAudience?: ComposeInput['audience'];
+  draftKey?: string;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -113,6 +114,7 @@ export function FeedList({
   composeSource,
   wallHost,
   defaultAudience,
+  draftKey,
   onRefresh,
   onRetry,
   onCompose,
@@ -152,14 +154,17 @@ export function FeedList({
         hideAudience={hideAudience}
         wallHost={wallHost}
         defaultAudience={defaultAudience}
+        draftKey={draftKey ?? (challengeFeed ? 'challenge' : 'home')}
         onSubmit={onComposeSubmit}
       />
     );
   }, [
     canCompose,
+    challengeFeed,
     composerPlaceholder,
     composing,
     defaultAudience,
+    draftKey,
     hideAudience,
     onCompose,
     onComposeSubmit,

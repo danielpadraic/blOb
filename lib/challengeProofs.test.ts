@@ -4,8 +4,10 @@ import {
   defaultSentenceForMethod,
   methodLabel,
   partSatisfies,
+  proofSlotNeedsRewrite,
   proofTypeFromMethod,
   signupProofLines,
+  uniqueProofUrls,
 } from '@/lib/challengeProofs';
 import { SIMPLE_PROOF_METHODS } from '@/lib/simpleChallenge';
 
@@ -123,5 +125,22 @@ describe('Note proof method', () => {
     expect(
       partSatisfies({ id: 'n', name: 'Note', method: 'checkin' }, { method: 'checkin', url: 'https://x.test/n' }),
     ).toBe(false);
+  });
+});
+
+describe('proof slot rewrite', () => {
+  it('drops duplicate urls that only differ by query tokens', () => {
+    expect(
+      uniqueProofUrls([
+        'https://cdn.example/a.jpg?token=1',
+        'https://cdn.example/a.jpg?token=2',
+        'https://cdn.example/b.jpg',
+      ]),
+    ).toEqual(['https://cdn.example/a.jpg?token=1', 'https://cdn.example/b.jpg']);
+  });
+
+  it('rewrites a slot when the draft is a new local file', () => {
+    expect(proofSlotNeedsRewrite('file:///tmp/retake.jpg', 'https://cdn.example/old.jpg')).toBe(true);
+    expect(proofSlotNeedsRewrite('https://cdn.example/old.jpg', 'https://cdn.example/old.jpg')).toBe(false);
   });
 });

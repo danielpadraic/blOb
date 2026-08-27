@@ -205,8 +205,8 @@ export function PostEditor({
       });
       onSaved?.();
       onClose();
-    } catch (error) {
-      onToast?.(getErrorMessage(error));
+    } catch {
+      onToast?.(copy('post.saveFailed'));
     } finally {
       setBusy(false);
     }

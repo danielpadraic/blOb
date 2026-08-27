@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -16,6 +16,13 @@ import { AppText } from '@/components/ui/AppText';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
+import {
+  clearComposerDraft,
+  composerDraftKey,
+  readComposerDraft,
+  writeComposerDraft,
+  type ComposerDraftAttachment,
+} from '@/lib/composerDraft';
 import { asCopyTone, copy } from '@/lib/copy';
 import { ensureLibraryPermission, openAppSettings, permissionCopy } from '@/lib/mediaPermissions';
 import {
@@ -57,6 +64,7 @@ type ComposerProps = {
   quote?: { postId: string; snapshot: QuoteSnapshot; audience?: string | null } | null;
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
   tall?: boolean;
+  draftKey?: string;
   onSubmit: (input: ComposeInput) => Promise<unknown> | void;
 };
 
@@ -72,6 +80,7 @@ export function Composer({
   quote,
   wallHost,
   tall: _tall,
+  draftKey,
   onSubmit,
 }: ComposerProps) {
   const { user } = useAuth();
@@ -80,13 +89,18 @@ export function Composer({
   const router = useRouter();
   const social = useSocialSheetsOptional();
   const profileDefault = asDefaultPostAudience(profile?.default_post_audience);
+  const scope = composerDraftKey(draftKey ?? 'home');
+  const stored = readComposerDraft(scope);
   const fieldRef = useRef<MentionFieldHandle>(null);
-  const docRef = useRef<MentionDoc>({ text: initialText ?? '', chips: [] });
+  const docRef = useRef<MentionDoc>(stored?.doc ?? { text: initialText ?? '', chips: [] });
+  const holdFocus = useRef(false);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fieldKey, setFieldKey] = useState(0);
-  const [hasText, setHasText] = useState(Boolean(initialText?.trim()));
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [hasText, setHasText] = useState(Boolean((stored?.doc.text ?? initialText)?.trim()));
+  const [attachments, setAttachments] = useState<Attachment[]>(stored?.attachments ?? []);
   const [uploading, setUploading] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const allowPublic = !audienceOptions || audienceOptions.some((item) => item.value === 'public');
   const [audience, setAudience] = useState<PostAudience>(
     hideAudience ? 'public' : (defaultAudience ?? (wallHost ? 'friends' : profileDefault)),
@@ -100,11 +114,79 @@ export function Composer({
     setAudience(profileDefault);
   }, [defaultAudience, hideAudience, profileDefault, wallHost]);
 
-  const onDocChange = useCallback((doc: MentionDoc) => {
-    docRef.current = doc;
-    const next = doc.text.trim().length > 0;
-    setHasText((current) => (current === next ? current : next));
-  }, []);
+  const persistDraft = useCallback(
+    (doc: MentionDoc, files: ComposerDraftAttachment[]) => {
+      if (doc.text.trim() || files.length > 0) {
+        writeComposerDraft(scope, { doc, attachments: files });
+        return;
+      }
+      clearComposerDraft(scope);
+    },
+    [scope],
+  );
+
+  const onDocChange = useCallback(
+    (doc: MentionDoc) => {
+      docRef.current = doc;
+      const next = doc.text.trim().length > 0;
+      setHasText((current) => (current === next ? current : next));
+      persistDraft(doc, attachments);
+    },
+    [attachments, persistDraft],
+  );
+
+  useEffect(() => {
+    persistDraft(docRef.current, attachments);
+  }, [attachments, persistDraft]);
+
+  function cancelCollapse() {
+    if (blurTimer.current) {
+      clearTimeout(blurTimer.current);
+      blurTimer.current = null;
+    }
+  }
+
+  function scheduleCollapse() {
+    cancelCollapse();
+    blurTimer.current = setTimeout(() => {
+      blurTimer.current = null;
+      if (holdFocus.current || gifOpen) {
+        holdFocus.current = false;
+        return;
+      }
+      setExpanded(false);
+    }, 160);
+  }
+
+  useEffect(() => () => cancelCollapse(), []);
+
+  function clearDraft() {
+    docRef.current = { text: '', chips: [] };
+    setHasText(false);
+    setAttachments([]);
+    setGifOpen(false);
+    setFieldKey((value) => value + 1);
+    setExpanded(true);
+    clearComposerDraft(scope);
+  }
+
+  function discardDraft() {
+    const run = () => clearDraft();
+    if (attachments.length === 0) {
+      run();
+      return;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(copy('post.discardConfirm'))) {
+        run();
+      }
+      return;
+    }
+    Alert.alert(copy('post.discardConfirm'), undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: copy('post.discard'), style: 'destructive', onPress: run },
+    ]);
+  }
 
   const busy = Boolean(submitting || uploading);
   const canPost =
@@ -221,11 +303,7 @@ export function Composer({
         quoteSnapshot: quote?.snapshot ?? null,
         challengeId: attachedChallenge?.id ?? null,
       });
-      docRef.current = { text: '', chips: [] };
-      setHasText(false);
-      setAttachments([]);
-      setGifOpen(false);
-      setFieldKey((value) => value + 1);
+      clearDraft();
       setAudience(hideAudience ? 'public' : wallHost ? 'public' : profileDefault);
       setAudienceUserIds([]);
     } catch (error) {
@@ -271,18 +349,46 @@ export function Composer({
               ref={fieldRef}
               placeholder={resolvedPlaceholder}
               autoFocus={autoFocus}
+              initialText={docRef.current.text}
               compact
+              collapsed={!expanded}
               audience={audience}
               audienceUserIds={audienceUserIds}
               onChange={onDocChange}
+              onFocus={() => {
+                cancelCollapse();
+                setExpanded(true);
+              }}
+              onBlur={scheduleCollapse}
               onSubmit={() => void handleSubmit()}
               accessibilityLabel="Write a post"
             />
           </View>
+          {hasText || attachments.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={copy('post.discard')}
+              onPress={discardDraft}
+              onPressIn={() => {
+                holdFocus.current = true;
+                cancelCollapse();
+              }}
+              hitSlop={6}
+              className="items-center justify-center"
+              style={{ width: 36, height: 44 }}>
+              <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
+                ✕
+              </AppText>
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Post"
             onPress={() => void handleSubmit()}
+            onPressIn={() => {
+              holdFocus.current = true;
+              cancelCollapse();
+            }}
             disabled={!canPost || busy}
             className="items-center justify-center"
             style={{
@@ -300,14 +406,35 @@ export function Composer({
         </View>
       </View>
 
+      {expanded ? (
       <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44 }}>
         <ComposerIcon
           glyph={GLYPH.camera}
           label="Camera"
+          onPressIn={() => {
+            holdFocus.current = true;
+            cancelCollapse();
+          }}
           onPress={() => router.push(captureHref('post', 'photo'))}
         />
-        <ComposerIcon glyph={GLYPH.album} label="Gallery" onPress={() => void pickGallery()} />
-        <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+        <ComposerIcon
+          glyph={GLYPH.album}
+          label="Gallery"
+          onPressIn={() => {
+            holdFocus.current = true;
+            cancelCollapse();
+          }}
+          onPress={() => void pickGallery()}
+        />
+        <ComposerIcon
+          mark="GIF"
+          label="GIF"
+          onPressIn={() => {
+            holdFocus.current = true;
+            cancelCollapse();
+          }}
+          onPress={() => setGifOpen((open) => !open)}
+        />
         {hideAudience ? null : (
           <Pressable
             accessibilityRole="button"
@@ -324,12 +451,17 @@ export function Composer({
               })
             }
             hitSlop={4}
+            onPressIn={() => {
+              holdFocus.current = true;
+              cancelCollapse();
+            }}
             className="items-center justify-center"
             style={{ width: 44, height: 44 }}>
             <AudienceIconButton audience={audience} />
           </Pressable>
         )}
       </View>
+      ) : null}
 
       {gifOpen ? (
         <GifPicker
@@ -375,25 +507,40 @@ export function Composer({
   );
 }
 
+function keepFocusProps() {
+  if (Platform.OS !== 'web') {
+    return null;
+  }
+  return {
+    onMouseDown: (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+    },
+  };
+}
+
 function ComposerIcon({
   glyph,
   mark,
   label,
   onPress,
+  onPressIn,
 }: {
   glyph?: (typeof GLYPH)[keyof typeof GLYPH];
   mark?: string;
   label: string;
   onPress: () => void;
+  onPressIn?: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
+      onPressIn={onPressIn}
       hitSlop={4}
       className="items-center justify-center"
-      style={{ width: 44, height: 44 }}>
+      style={{ width: 44, height: 44 }}
+      {...keepFocusProps()}>
       {mark ? (
         <AppText className="text-[11px] font-extrabold" style={{ color: THEME.textMuted }}>
           {mark}

@@ -80,6 +80,7 @@ export default function FeedScreen() {
         emptyTitle={copy('home.empty', tone)}
         emptyBody=""
         composerPlaceholder={copy('home.composer', tone)}
+        draftKey="home"
         composing={createPost.isPending}
         headerTop={<FeaturedOfficialStrip />}
         headerExtra={

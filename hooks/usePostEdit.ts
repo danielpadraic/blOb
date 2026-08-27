@@ -52,22 +52,25 @@ export function applyEditedPostToFeeds(
   queryClient: ReturnType<typeof useQueryClient>,
   post: Pick<Post, 'id'> & Partial<Post>,
 ) {
-  patchFeedPosts(queryClient, post.id, (row) => {
-    const next: PostWithMeta = { ...row };
-    if (post.content !== undefined) {
-      next.content = post.content;
-    }
-    if (post.media_urls !== undefined) {
-      next.media_urls = post.media_urls;
-    }
-    if (post.hidden_media_urls !== undefined) {
-      next.hidden_media_urls = post.hidden_media_urls;
-    }
-    if (post.edited_at !== undefined) {
-      next.edited_at = post.edited_at;
-    }
-    return next;
-  });
+  const editedAt = post.edited_at ?? new Date().toISOString();
+  patchFeedPosts(queryClient, post.id, (row) => ({
+    ...row,
+    content: post.content !== undefined ? post.content : row.content,
+    media_urls: post.media_urls ?? row.media_urls,
+    hidden_media_urls: post.hidden_media_urls ?? row.hidden_media_urls ?? [],
+    edited_at: editedAt,
+  }));
+}
+
+function rowFromEdit(input: EditPostInput, row?: Post | null): Post {
+  return {
+    ...(row ?? { id: input.postId, author_id: '', challenge_id: null, content: null, media_urls: [], created_at: '' }),
+    id: input.postId,
+    content: input.caption !== undefined && input.caption !== null ? input.caption : row?.content ?? null,
+    media_urls: input.mediaUrls ? uniqueProofUrls(input.mediaUrls) : row?.media_urls ?? [],
+    hidden_media_urls: uniqueProofUrls(input.hiddenMediaUrls),
+    edited_at: row?.edited_at ?? new Date().toISOString(),
+  };
 }
 
 async function stampCheckinHidden(checkinId: string, hidden: string[]) {
@@ -105,7 +108,10 @@ async function persistEditedPost(input: EditPostInput): Promise<Post> {
         : null,
   });
   if (!error && data) {
-    return data;
+    if (input.checkinId) {
+      await stampCheckinHidden(input.checkinId, hidden);
+    }
+    return rowFromEdit(input, data);
   }
 
   const now = new Date().toISOString();
@@ -131,7 +137,7 @@ async function persistEditedPost(input: EditPostInput): Promise<Post> {
   if (input.checkinId) {
     await stampCheckinHidden(input.checkinId, hidden);
   }
-  return fallback.data as Post;
+  return rowFromEdit(input, fallback.data as Post);
 }
 
 export function usePostEdits(postId?: string | null) {
@@ -163,8 +169,25 @@ export function useEditPost() {
       }
       return persistEditedPost(input);
     },
-    onSuccess: (row) => {
-      applyEditedPostToFeeds(queryClient, row);
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
+      applyEditedPostToFeeds(queryClient, {
+        id: input.postId,
+        content: input.caption ?? undefined,
+        media_urls: input.mediaUrls ?? undefined,
+        hidden_media_urls: uniqueProofUrls(input.hiddenMediaUrls),
+        edited_at: new Date().toISOString(),
+      });
+      return { previous };
+    },
+    onError: (_error, _input, context) => {
+      for (const [queryKey, data] of context?.previous ?? []) {
+        queryClient.setQueryData(queryKey, data);
+      }
+    },
+    onSuccess: (row, input) => {
+      applyEditedPostToFeeds(queryClient, rowFromEdit(input, row));
       void queryClient.invalidateQueries({ queryKey: ['post-edits'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['edit-checkin'] });
@@ -205,8 +228,12 @@ export function useHidePostMedia() {
         queryClient.setQueryData(queryKey, data);
       }
     },
-    onSuccess: (row) => {
-      applyEditedPostToFeeds(queryClient, row);
+    onSuccess: (row, input) => {
+      applyEditedPostToFeeds(queryClient, rowFromEdit({
+        postId: input.postId,
+        hiddenMediaUrls: input.hiddenMediaUrls,
+        checkinId: input.checkinId,
+      }, row));
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['edit-checkin'] });
     },

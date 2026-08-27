@@ -170,13 +170,13 @@ async function proofPartFor(
           blob: input.blob,
         }),
       );
-  const urls = uniqueProofUrls([url, ...(input.urls ?? [])]);
+  const urlOnly = uniqueProofUrls([url]);
   return {
     id: proof.id,
     part: {
       method: proof.method,
-      url: urls[0] ?? url,
-      urls,
+      url: urlOnly[0] ?? url,
+      urls: urlOnly,
       fromLibrary: input.fromLibrary === true,
     },
     healthWorkoutId: null,

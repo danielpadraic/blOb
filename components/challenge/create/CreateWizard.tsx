@@ -1778,11 +1778,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         </ScrollView>
 
         <View
+          pointerEvents="box-none"
           onLayout={(event) => {
             const height = event.nativeEvent.layout.height;
-            const chrome = Math.max(72, height - (keyboardHeightRef.current > 0 ? keyboardHeightRef.current : 0));
-            setFooterH(chrome);
-            footerDockHeight.current = chrome;
+            setFooterH(Math.max(72, height));
+            footerDockHeight.current = Math.max(72, height);
           }}
           className="gap-2 px-4 pt-2"
           style={{
@@ -1794,8 +1794,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,
-            paddingBottom: keyboardHeight > 0 ? Math.max(keyboardHeight, 8) : tabBarLift(insets.bottom, 'sticky') + 8,
+            paddingBottom: tabBarLift(insets.bottom, 'sticky') + 8,
           }}>
+          <View pointerEvents="auto">
           {scoringToast ? (
             <View className="items-center">
               <View
@@ -1833,6 +1834,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             showSave={!isEditing && step >= STEP_GOAL}
             draftFlash={draftFlash}
           />
+          </View>
         </View>
           </WizardFocusContext.Provider>
         )}

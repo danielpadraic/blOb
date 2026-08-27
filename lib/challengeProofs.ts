@@ -59,18 +59,42 @@ export type ChallengeProofPart = {
 /** Extra photos on top of required proofs. Extras are optional and never unlock Send. */
 export const CHECKIN_PHOTO_CAP = 8;
 
+export function mediaUrlKey(url: string): string {
+  return url.trim().split('?')[0]?.toLowerCase() ?? url.trim().toLowerCase();
+}
+
 export function uniqueProofUrls(urls: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of urls) {
     const url = typeof raw === 'string' ? raw.trim() : '';
-    if (!url || seen.has(url)) {
+    if (!url) {
       continue;
     }
-    seen.add(url);
+    const key = mediaUrlKey(url);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
     out.push(url);
   }
   return out;
+}
+
+/** True when the draft is a new file for this slot (retake / replace). */
+export function proofSlotNeedsRewrite(
+  draftUri?: string | null,
+  savedUrl?: string | null,
+): boolean {
+  const draft = draftUri?.trim() ?? '';
+  const saved = savedUrl?.trim() ?? '';
+  if (!draft) {
+    return false;
+  }
+  if (!saved) {
+    return true;
+  }
+  return mediaUrlKey(draft) !== mediaUrlKey(saved);
 }
 
 export function proofImageUrls(part?: ChallengeProofPart | null): string[] {

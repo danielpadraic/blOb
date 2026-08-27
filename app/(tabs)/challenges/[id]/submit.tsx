@@ -41,6 +41,7 @@ import {
   legacyTypeForProof,
   partSatisfies,
   proofDisplayName,
+  proofSlotNeedsRewrite,
   proofsAreHonorOnly,
   uniqueProofUrls,
   partDistanceMeters,
@@ -325,6 +326,9 @@ export default function SubmitWorkoutScreen() {
         fromLibrary: draft?.fromLibrary,
         health: draft?.health ?? null,
         notes,
+        extraMedia: uniqueProofUrls(
+          extras.map((item) => item.remoteUrl ?? (item.kind === 'gif' ? item.uri : null)),
+        ),
       });
     } catch (caught) {
       const kind = classifyCheckinError(caught);
@@ -395,27 +399,9 @@ export default function SubmitWorkoutScreen() {
     const remote = uniqueProofUrls(
       items.map((item) => item.remoteUrl ?? (item.kind === 'gif' ? item.uri : null)),
     );
-    const photoProof = proofSteps.find(
-      (proof) =>
-        (proof.method === 'photo' || proof.method === 'video') &&
-        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
-    );
-    const primaryRemote = photoProof
-      ? checkinQuery.data?.proof_parts?.[photoProof.id]?.url ??
-        (drafts[photoProof.id]?.uri && /^https?:\/\//i.test(drafts[photoProof.id]?.uri ?? '')
-          ? drafts[photoProof.id]?.uri
-          : null)
-      : null;
     await saveProof.mutateAsync({
       challengeId: id,
       extraMedia: remote,
-      ...(photoProof && primaryRemote
-        ? {
-            proof: photoProof,
-            uri: primaryRemote,
-            urls: uniqueProofUrls([primaryRemote, ...remote]),
-          }
-        : {}),
     });
   }
 
@@ -513,7 +499,8 @@ export default function SubmitWorkoutScreen() {
         const draft = drafts[proof.id];
         if (
           partSatisfies(proof, savedParts[proof.id], { sessionDistance }) &&
-          partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance })
+          partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance }) &&
+          !proofSlotNeedsRewrite(draft?.uri, savedParts[proof.id]?.url)
         ) {
           continue;
         }
@@ -560,28 +547,10 @@ export default function SubmitWorkoutScreen() {
           setExtras(uploadedExtras);
         }
       }
-      const photoProof = proofSteps.find(
-        (proof) =>
-          (proof.method === 'photo' || proof.method === 'video') &&
-          partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
-      );
-      const primaryRemote = photoProof
-        ? savedParts[photoProof.id]?.url ||
-          (drafts[photoProof.id]?.uri && /^https?:\/\//i.test(drafts[photoProof.id]?.uri ?? '')
-            ? drafts[photoProof.id]?.uri
-            : null)
-        : null;
       const saved = await saveProof.mutateAsync({
         challengeId: id,
         notes,
         extraMedia: extraUrls,
-        ...(photoProof && primaryRemote
-          ? {
-              proof: photoProof,
-              uri: primaryRemote,
-              urls: uniqueProofUrls([primaryRemote, ...extraUrls]),
-            }
-          : {}),
       });
       if (failedExtras.length > 0) {
         setError(

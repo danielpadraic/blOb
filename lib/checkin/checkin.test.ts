@@ -286,7 +286,7 @@ describe('check-in composer save', () => {
     );
   });
 
-  it('writes urls onto a photo proof without re-uploading a remote file', async () => {
+  it('overwrites a photo slot with one url and does not re-upload a remote file', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
     const upload = vi.fn();
     await saveCheckinProofWithClient(
@@ -311,7 +311,7 @@ describe('check-in composer save', () => {
         p_proof_part: {
           method: 'photo',
           url: 'https://example.com/one.jpg',
-          urls: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+          urls: ['https://example.com/one.jpg'],
           fromLibrary: false,
         },
       }),

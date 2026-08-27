@@ -25,7 +25,6 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
-import { dismissKeyboard } from '@/utils/keyboard';
 import { useCreateChallenge, useChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
@@ -129,11 +128,9 @@ function IconChip({
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <Pressable accessible={false} onPress={dismissKeyboard}>
-      <AppText className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-        {children}
-      </AppText>
-    </Pressable>
+    <AppText className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+      {children}
+    </AppText>
   );
 }
 
@@ -445,7 +442,7 @@ export function SimpleCreateForm() {
       }}
       onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
       contentPaddingBottom={
-        (tour?.createActive ? 220 : 24) + keyboardOverlap + footerH
+        (tour?.createActive ? 220 : 24) + footerH + (keyboardOverlap > 0 ? keyboardOverlap : 0)
       }>
       <View ref={contentRef} className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'} collapsable={false}>
         <View className="flex-row items-center" style={{ marginHorizontal: -8 }}>
@@ -1138,6 +1135,7 @@ export function SimpleCreateForm() {
       </View>
     </Screen>
     <View
+      pointerEvents="box-none"
       onLayout={(event) => {
         setFooterH(Math.max(88, event.nativeEvent.layout.height));
       }}
@@ -1151,8 +1149,9 @@ export function SimpleCreateForm() {
         backgroundColor: THEME.surface,
         borderTopWidth: 1,
         borderTopColor: THEME.border,
-        paddingBottom: keyboardOverlap > 0 ? Math.max(keyboardOverlap, 8) : tabBarLift(insets.bottom, 'sticky') + 8,
+        paddingBottom: tabBarLift(insets.bottom, 'sticky') + 8,
       }}>
+      <View pointerEvents="auto">
       <CreateActionsFooter
         onBack={view === 'review' ? () => setView('form') : closeSimple}
         onSaveDraft={() => void onSaveDraft()}
@@ -1179,6 +1178,7 @@ export function SimpleCreateForm() {
         showSave={!editId}
         draftFlash={draftFlash}
       />
+      </View>
     </View>
     </View>
     </ChallengeNotesProvider>

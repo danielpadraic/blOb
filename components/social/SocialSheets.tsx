@@ -27,6 +27,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { useQueryClient } from '@tanstack/react-query';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useCreatePost } from '@/hooks/useFeed';
 import {
@@ -258,6 +260,26 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
   );
 }
 
+function liveFeedPost(
+  queryClient: ReturnType<typeof useQueryClient>,
+  post: PostWithMeta,
+): PostWithMeta {
+  const queries = queryClient.getQueriesData({ queryKey: ['feed'] });
+  for (const [, data] of queries) {
+    if (Array.isArray(data)) {
+      const found = data.find((row) => row && (row as PostWithMeta).id === post.id) as
+        | PostWithMeta
+        | undefined;
+      if (found) {
+        return { ...post, ...found };
+      }
+    } else if (data && typeof data === 'object' && (data as PostWithMeta).id === post.id) {
+      return { ...post, ...(data as PostWithMeta) };
+    }
+  }
+  return post;
+}
+
 function SheetView({
   sheet,
   userId,
@@ -271,6 +293,8 @@ function SheetView({
   onToast: (message: string) => void;
   onOpen: (sheet: Sheet) => void;
 }) {
+  const queryClient = useQueryClient();
+  const post = sheet && 'post' in sheet ? liveFeedPost(queryClient, sheet.post) : null;
   if (!sheet) {
     return null;
   }
@@ -284,8 +308,8 @@ function SheetView({
         onClose={onClose}
         onToast={onToast}
         onPanel={(panel) => onOpen({ ...sheet, panel })}
-        onQuote={() => onOpen({ kind: 'quote', post: sheet.post })}
-        onEdit={() => onOpen({ kind: 'edit', post: sheet.post })}
+        onQuote={() => onOpen({ kind: 'quote', post: post ?? sheet.post })}
+        onEdit={() => onOpen({ kind: 'edit', post: post ?? sheet.post })}
       />
     );
   }
@@ -295,7 +319,7 @@ function SheetView({
   if (sheet.kind === 'edit') {
     return (
       <PostEditor
-        post={sheet.post}
+        post={post ?? sheet.post}
         onClose={onClose}
         onToast={onToast}
         onSaved={() => onToast('Saved.')}
