@@ -277,7 +277,7 @@ function PostCardInner({
             </WebTapButton>
           ) : null}
         </View>
-      )}
+      ) : null}
 
       <View style={{ gap: 10, marginTop: 6, opacity: mutedOwnerHome ? 0.45 : 1 }}>
         {caption ? (
