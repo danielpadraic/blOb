@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { isCumulativeDraft } from '@/lib/challengeTemplates';
 import {
   SIMPLE_SCORING,
+  canRoundTripToSimple,
+  createValuesToSimpleDraft,
   defaultSimpleDraft,
   isLeftoverSimplePointsDraft,
+  parseSimpleChallengeDraft,
   simpleDraftToCreateValues,
   simpleHowYouWin,
 } from '@/lib/simpleChallenge';
@@ -50,5 +53,51 @@ describe('Simple How you win', () => {
     expect(values.format).toBe('consistency');
     expect(values.points_to_win).toBe('');
     expect(values.prize_structure).toBe('equal_split');
+  });
+});
+
+describe('Simple allowed misses', () => {
+  it('publishes allowed_misses onto the existing misses_allowed field', () => {
+    const draft = defaultSimpleDraft();
+    draft.title = 'Miss three';
+    draft.scoring = 'consistency';
+    draft.allowed_misses = 3;
+    const values = simpleDraftToCreateValues(draft);
+    expect(values.misses_allowed).toBe('3');
+    const again = parseSimpleChallengeDraft({ ...draft, allowed_misses: 3 });
+    expect(again?.allowed_misses).toBe(3);
+  });
+
+  it('clears misses on cumulative publish', () => {
+    const draft = defaultSimpleDraft();
+    draft.title = 'Hit 100';
+    draft.scoring = 'cumulative';
+    draft.allowed_misses = 3;
+    expect(simpleDraftToCreateValues(draft).misses_allowed).toBe('0');
+  });
+
+  it('round-trips Simple fields through Advanced values', () => {
+    const draft = defaultSimpleDraft();
+    draft.title = 'Workout Group #2';
+    draft.task = 'Run 1 mile';
+    draft.cover_image_url = 'https://example.com/cover.jpg';
+    draft.host_budget = 25;
+    draft.buy_in = 5;
+    draft.allowed_misses = 3;
+    draft.description = 'Show up';
+    const values = simpleDraftToCreateValues(draft);
+    const back = createValuesToSimpleDraft(values);
+    expect(back.title).toBe('Workout Group #2');
+    expect(back.task).toBe('Run 1 mile');
+    expect(back.cover_image_url).toBe('https://example.com/cover.jpg');
+    expect(back.host_budget).toBe(25);
+    expect(back.allowed_misses).toBe(3);
+    expect(canRoundTripToSimple(values)).toBe(true);
+  });
+
+  it('blocks Advanced-only challenges from Simple', () => {
+    expect(canRoundTripToSimple({ challenge_type: 'points' })).toBe(false);
+    expect(canRoundTripToSimple({ extra_rules: [{ text: 'No bikes' }] })).toBe(false);
+    expect(canRoundTripToSimple({ challenge_lane: 'private' })).toBe(false);
   });
 });

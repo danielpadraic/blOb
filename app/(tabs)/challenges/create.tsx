@@ -61,7 +61,7 @@ export default function CreateChallengeScreen() {
     <>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: true, fullScreenGestureEnabled: true }} />
       {mode === 'advanced' ? (
-        <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
+        <Screen padded={false} edges={TAB_ROOT_EDGES}>
           <CreateWizard embedded />
         </Screen>
       ) : (

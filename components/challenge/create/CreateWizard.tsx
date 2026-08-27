@@ -13,6 +13,9 @@ import {
   ChoiceCard,
   ContinueDraftCard,
   CreateActionsFooter,
+  CreateModeSwitch,
+  createScrollBottomPad,
+  createStickyFooterPad,
   FieldAnchor,
   FieldLabel,
   useWizardFieldFocus,
@@ -118,6 +121,11 @@ import { useComparablePointsForm } from '@/hooks/useComparablePointsForm';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { copy } from '@/lib/copy';
+import {
+  canRoundTripToSimple,
+  stageSimpleFromAdvanced,
+  peekAdvancedFromSimple,
+} from '@/lib/simpleChallenge';
 import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
 import { getCreateChallengeMessage, getErrorMessage } from '@/utils/errors';
@@ -154,12 +162,14 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     returnTo?: string | string[];
     editId?: string | string[];
     type?: string | string[];
+    from?: string | string[];
   }>();
   const resumeOnOpen = (Array.isArray(params.resume) ? params.resume[0] : params.resume) === '1';
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const handoffType = Array.isArray(params.type) ? params.type[0] : params.type;
+  const fromSimple = (Array.isArray(params.from) ? params.from[0] : params.from) === 'simple';
   const dismissFallback = returnTo === 'feed' ? TABS_HREF : LOBBY_HREF;
   const { profile } = useMyProfile();
   const create = useCreateChallenge();
@@ -249,6 +259,28 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       ? `You need ${formatWallet(extraNeeded, values.currency)} to fund this pool. You have ${formatWallet(walletCredits, values.currency)}.`
       : null;
   const publishing = isSubmitting || create.isPending || update.isPending;
+
+  useEffect(() => {
+    if (!fromSimple) {
+      return;
+    }
+    const staged = peekAdvancedFromSimple();
+    if (!staged) {
+      return;
+    }
+    hydratedEdit.current = true;
+    skipSaveRef.current = true;
+    reset(staged);
+    setLaneChosen(true);
+    setStartPath(editId ? 'previous' : 'scratch');
+    setRestoredDraft(true);
+    setEntryTab(entryTabFromValues(staged));
+    captureBaseline(staged, STEP_GOAL);
+    setStep(STEP_GOAL);
+    queueMicrotask(() => {
+      skipSaveRef.current = false;
+    });
+  }, [editId, fromSimple, reset]);
 
   useEffect(() => {
     if (!editId || !editing.data || hydratedEdit.current) {
@@ -1531,7 +1563,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     <View
       className="flex-1"
       pointerEvents={tour?.createActive && !liveChallengeId ? 'none' : 'auto'}
-      style={{ backgroundColor: embedded ? THEME.background : undefined }}>
+      style={{
+        backgroundColor: embedded ? THEME.background : undefined,
+        marginBottom: Platform.OS === 'web' ? keyboardHeight : 0,
+      }}>
         {liveChallengeId ? (
           <View className="flex-1 items-center justify-center px-6">
             <AppText className="text-center text-2xl font-bold text-charcoal">
@@ -1555,24 +1590,28 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             onStepPress={goToStep}
             trailing={
               <View className="flex-row items-center gap-1">
-                {isEditing ? null : (
                 <TourAnchor id="create-advanced-simple">
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() =>
+                <CreateModeSwitch
+                  mode="advanced"
+                  onAdvanced={() => undefined}
+                  onSimple={() => {
+                    const current = getValues();
+                    if (!canRoundTripToSimple(current)) {
+                      setFormError(copy('create.advancedOnly'));
+                      return;
+                    }
+                    stageSimpleFromAdvanced(current);
                     router.replace({
                       pathname: '/challenges/create',
-                      params: returnTo === 'feed' ? { returnTo: 'feed' } : {},
-                    })
-                  }
-                  className="h-7 items-center justify-center px-1">
-                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                    {copy('create.simple')}
-                  </AppText>
-                </Pressable>
+                      params: {
+                        from: 'advanced',
+                        ...(editId ? { editId } : {}),
+                        ...(returnTo === 'feed' ? { returnTo: 'feed' } : {}),
+                      },
+                    });
+                  }}
+                />
                 </TourAnchor>
-                )}
-                <AppText className="mr-1 text-[13px] font-semibold text-muted">{copy('create.advanced')}</AppText>
                 {tutorialOn && bobTipOpen ? null : (
                   <Pressable
                     accessibilityRole="button"
@@ -1604,7 +1643,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
           contentContainerStyle={{
-            paddingBottom: (tour?.createActive ? 220 : 0) + keyboardHeight + footerH + 24,
+            paddingBottom: createScrollBottomPad(Boolean(tour?.createActive), footerH),
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
@@ -1813,7 +1852,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,
-            paddingBottom: tabBarLift(insets.bottom, 'sticky') + 8,
+            paddingBottom: createStickyFooterPad(
+              keyboardHeight > 0,
+              tabBarLift(insets.bottom, 'sticky') + 8,
+            ),
           }}>
           {scoringToast ? (
             <View className="items-center">

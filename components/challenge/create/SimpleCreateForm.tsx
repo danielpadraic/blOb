@@ -6,7 +6,13 @@ import { KeyboardFormContext, useKeyboardOverlap } from '@/components/ui/Keyboar
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
-import { CreateActionsFooter } from '@/components/challenge/create/wizardUi';
+import {
+  CREATE_FOOTER_BODY,
+  CreateActionsFooter,
+  CreateModeSwitch,
+  createScrollBottomPad,
+  createStickyFooterPad,
+} from '@/components/challenge/create/wizardUi';
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
@@ -49,6 +55,8 @@ import {
   applyBeforeAfterHrPreset,
   clearPersistedSimpleDraft,
   customFrequencyCopy,
+  allowedMissesMax,
+  clampAllowedMisses,
   defaultSimpleDraft,
   endsAtOf,
   frequencyHintOf,
@@ -57,6 +65,8 @@ import {
   simpleDraftFromChallenge,
   simpleDraftToCreateValues,
   simpleHowYouWin,
+  stageAdvancedFromSimple,
+  peekSimpleFromAdvanced,
   syncProofNameWithTask,
   validateSimpleDraft,
   type SimpleChallengeDraft,
@@ -142,11 +152,13 @@ export function SimpleCreateForm() {
     editId?: string;
     resume?: string;
     draftId?: string;
+    from?: string;
   }>();
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const funded = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
+  const fromAdvanced = (Array.isArray(params.from) ? params.from[0] : params.from) === 'advanced';
   const { user } = useAuth();
   const { profile, refetch, isFetched } = useMyProfile();
   const walletSheet = useWalletOptional();
@@ -182,6 +194,8 @@ export function SimpleCreateForm() {
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
   overlapRef.current = keyboardOverlap;
+  const keyboardOpen = keyboardOverlap > 0;
+  const [footerH, setFooterH] = useState(CREATE_FOOTER_BODY);
   const scrollFieldIntoView = useCallback((node: View) => {
     lastFieldNode.current = node;
     const run = () => {
@@ -259,12 +273,43 @@ export function SimpleCreateForm() {
   function patch(partial: Partial<SimpleChallengeDraft>) {
     setDraft((current) => {
       const next = { ...current, ...partial };
+      if (simpleHowYouWin(next) === 'cumulative') {
+        next.allowed_misses = 0;
+      } else {
+        next.allowed_misses = clampAllowedMisses(next.allowed_misses ?? 0, next);
+      }
       if (!editId) {
         editedRef.current = true;
       }
       return next;
     });
     setError(null);
+  }
+
+  useEffect(() => {
+    if (!fromAdvanced) {
+      return;
+    }
+    const staged = peekSimpleFromAdvanced();
+    if (!staged) {
+      return;
+    }
+    hydratedEdit.current = true;
+    hydratedRemote.current = true;
+    setDraft(staged);
+  }, [fromAdvanced]);
+
+  function openAdvanced() {
+    stageAdvancedFromSimple(draftRef.current);
+    router.replace({
+      pathname: '/challenges/create',
+      params: {
+        mode: 'advanced',
+        from: 'simple',
+        ...(editId ? { editId } : {}),
+        ...(returnTo === 'feed' ? { returnTo: 'feed' } : {}),
+      },
+    });
   }
 
   useEffect(() => {
@@ -473,7 +518,12 @@ export function SimpleCreateForm() {
         scrollToTop: () => scrollRef.current?.scrollTo({ y: 0, animated: true }),
         scrollFieldIntoView,
       }}>
-    <View style={{ flex: 1, backgroundColor: THEME.background }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: THEME.background,
+        marginBottom: Platform.OS === 'web' ? keyboardOverlap : 0,
+      }}>
     <Screen scroll={false} padded={false} edges={TAB_ROOT_EDGES}>
     <ScrollView
       ref={(node) => {
@@ -484,8 +534,7 @@ export function SimpleCreateForm() {
       style={{ flex: 1 }}
       contentContainerStyle={{
         paddingHorizontal: 16,
-        paddingBottom:
-          (tour?.createActive ? 220 : 0) + Math.max(keyboardOverlap, 0) + 88 + 24,
+        paddingBottom: createScrollBottomPad(Boolean(tour?.createActive), footerH),
         flexGrow: 1,
       }}
       keyboardShouldPersistTaps="handled"
@@ -502,6 +551,7 @@ export function SimpleCreateForm() {
           <AppText className="flex-1 text-[22px] font-extrabold text-charcoal">
             {editId ? copy('create.editTitle') : copy('create.screenTitle')}
           </AppText>
+          <CreateModeSwitch mode="simple" onSimple={() => undefined} onAdvanced={openAdvanced} />
         </View>
 
         {view === 'review' ? (
@@ -709,15 +759,16 @@ export function SimpleCreateForm() {
           ) : null}
           <Pressable
             accessibilityRole="button"
-            onPress={() =>
+            onPress={() => {
+              stageAdvancedFromSimple(draftRef.current);
               router.replace({
                 pathname: '/challenges/create',
                 params:
                   returnTo === 'feed'
-                    ? { mode: 'advanced', type: 'points', returnTo: 'feed' }
-                    : { mode: 'advanced', type: 'points' },
-              })
-            }
+                    ? { mode: 'advanced', type: 'points', from: 'simple', returnTo: 'feed' }
+                    : { mode: 'advanced', type: 'points', from: 'simple' },
+              });
+            }}
             hitSlop={8}>
             <AppText className="text-[12px] font-semibold leading-5" style={{ color: THEME.accent }}>
               {copy('create.needScoreboard')}
@@ -940,6 +991,15 @@ export function SimpleCreateForm() {
           ) : (
             <AppText className="text-[12px] leading-5 text-muted">{frequencyHintOf(draft)}</AppText>
           )}
+          <StepperField
+            label={copy('create.allowedMisses')}
+            hint={copy('create.allowedMissesHint')}
+            value={draft.allowed_misses ?? 0}
+            min={0}
+            max={allowedMissesMax(draft)}
+            step={1}
+            onChange={(allowed_misses) => patch({ allowed_misses })}
+          />
         </View>
         </TourAnchor>
         )}
@@ -1167,21 +1227,14 @@ export function SimpleCreateForm() {
         ) : null}
 
         <TourAnchor id="create-simple-advanced">
-        {editId ? null : (
         <Pressable
           accessibilityRole="button"
-          onPress={() =>
-            router.push({
-              pathname: '/challenges/create',
-              params: returnTo === 'feed' ? { mode: 'advanced', returnTo: 'feed' } : { mode: 'advanced' },
-            })
-          }
+          onPress={openAdvanced}
           className="items-center py-2">
           <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
             {copy('create.advanced')}
           </AppText>
         </Pressable>
-        )}
         </TourAnchor>
         </>
         ) : null}
@@ -1189,11 +1242,12 @@ export function SimpleCreateForm() {
     </ScrollView>
     <View
       className="gap-2 px-4 pt-2"
+      onLayout={(event) => setFooterH(Math.max(CREATE_FOOTER_BODY, event.nativeEvent.layout.height))}
       style={{
         backgroundColor: THEME.surface,
         borderTopWidth: 1,
         borderTopColor: THEME.border,
-        paddingBottom: tabBarLift(insets.bottom, 'sticky') + 8,
+        paddingBottom: createStickyFooterPad(keyboardOpen, tabBarLift(insets.bottom, 'sticky') + 8),
       }}>
       <CreateActionsFooter
         onBack={view === 'review' ? () => setView('form') : closeSimple}

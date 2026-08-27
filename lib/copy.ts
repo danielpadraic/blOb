@@ -260,6 +260,10 @@ const STRINGS = {
   'create.taskLabel': 'Task',
   'create.taskPlaceholder': 'Run 1 mile',
   'create.frequency': 'Frequency',
+  'create.allowedMisses': 'Allowed misses',
+  'create.allowedMissesHint':
+    'Days they can miss and still stay in. 0 means every check-in is required.',
+  'create.advancedOnly': 'This challenge uses Advanced rules.',
   'create.checkins': 'Check-ins',
   'create.proof': 'Proof',
   'create.proofs': 'Proofs',

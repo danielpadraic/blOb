@@ -99,7 +99,8 @@ export function KeyboardFormShell({
   const overlapRef = useRef(0);
   overlapRef.current = overlap;
   const safeBottom = Math.max(insets.bottom, 12);
-  const extraPad = overlap + 24 + (footer ? 0 : safeBottom);
+  const [footerH, setFooterH] = useState(footer ? 64 : 0);
+  const extraPad = footerH + 16;
   const gutter = paddingHorizontal ?? (padded ? 16 : 0);
 
   const scrollToTop = useCallback(() => {
@@ -150,8 +151,12 @@ export function KeyboardFormShell({
   return (
     <KeyboardFormContext.Provider value={api}>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor }}
-        behavior="padding"
+        style={{
+          flex: 1,
+          backgroundColor,
+          marginBottom: Platform.OS === 'web' ? overlap : 0,
+        }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
         <ScrollView
           ref={scrollRef}
@@ -176,12 +181,14 @@ export function KeyboardFormShell({
         {footer ? (
           <View
             onLayout={(event: LayoutChangeEvent) => {
-              footerHeight.current = event.nativeEvent.layout.height;
+              const height = event.nativeEvent.layout.height;
+              footerHeight.current = height;
+              setFooterH(height);
             }}
             style={{
               paddingHorizontal: gutter,
               paddingTop: 10,
-              paddingBottom: safeBottom,
+              paddingBottom: overlap > 0 ? 0 : safeBottom,
               backgroundColor,
               borderTopWidth: 1,
               borderTopColor:

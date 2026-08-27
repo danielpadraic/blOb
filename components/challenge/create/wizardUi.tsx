@@ -15,6 +15,7 @@ import { BobPose, type BobPoseName } from '@/components/mascot/BobPose';
 import { CREATE_WIZARD_STEPS } from '@/lib/challengeTemplates';
 import { draftContinueSubtitle, draftContinueTitle, type ChallengeDraft } from '@/lib/challengeDraft';
 import { bobExampleLine } from '@/lib/createBobCopy';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
 
@@ -390,6 +391,56 @@ export function WizardProgress({
 }
 
 const FOOTER_BTN = { minHeight: 44, height: 44 } as const;
+export const CREATE_FOOTER_BODY = 64;
+
+/** Scroll clearance for the sticky create footer. Never include keyboard height. */
+export function createScrollBottomPad(tourActive: boolean, footerHeight = CREATE_FOOTER_BODY): number {
+  return (tourActive ? 220 : 0) + footerHeight + 16;
+}
+
+/** Sticky footer sits on the keyboard when it is open — no home-indicator band. */
+export function createStickyFooterPad(keyboardOpen: boolean, closedPad: number): number {
+  return keyboardOpen ? 0 : closedPad;
+}
+
+export function CreateModeSwitch({
+  mode,
+  onSimple,
+  onAdvanced,
+}: {
+  mode: 'simple' | 'advanced';
+  onSimple: () => void;
+  onAdvanced: () => void;
+}) {
+  return (
+    <View className="flex-row items-center gap-1">
+      {mode === 'simple' ? (
+        <AppText className="text-[13px] font-semibold text-muted">{copy('create.simple')}</AppText>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onSimple}
+          className="h-7 items-center justify-center px-1">
+          <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+            {copy('create.simple')}
+          </AppText>
+        </Pressable>
+      )}
+      {mode === 'advanced' ? (
+        <AppText className="mr-1 text-[13px] font-semibold text-muted">{copy('create.advanced')}</AppText>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onAdvanced}
+          className="h-7 items-center justify-center px-1">
+          <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+            {copy('create.advanced')}
+          </AppText>
+        </Pressable>
+      )}
+    </View>
+  );
+}
 
 export function CreateActionsFooter({
   onBack,

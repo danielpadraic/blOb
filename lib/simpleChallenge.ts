@@ -151,6 +151,7 @@ export type SimpleChallengeDraft = {
   cumulative_target_meters?: number;
   cumulative_window?: 'challenge' | 'week' | 'day';
   distance_unit?: 'mi' | 'km';
+  allowed_misses?: number;
 };
 
 export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
@@ -183,6 +184,7 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     cumulative_target_meters: milesToMeters(100),
     cumulative_window: 'challenge',
     distance_unit: 'mi',
+    allowed_misses: 0,
   };
 }
 
@@ -294,6 +296,13 @@ export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | 
         ? row.cumulative_window
         : base.cumulative_window,
     distance_unit: row.distance_unit === 'km' ? 'km' : base.distance_unit,
+    allowed_misses: clampAllowedMisses(
+      Number(row.allowed_misses ?? row.misses_allowed) || 0,
+      {
+        duration_preset,
+        duration_days: Math.max(Number(row.duration_days) || base.duration_days, 1),
+      },
+    ),
   });
 }
 
@@ -319,6 +328,25 @@ export function durationDaysOf(draft: SimpleChallengeDraft): number {
     return Math.max(Math.floor(draft.duration_days) || 1, 1);
   }
   return draft.duration_preset;
+}
+
+/** Stepper max: duration days, or 30 if custom days are not set yet. */
+export function allowedMissesMax(
+  draft: Pick<SimpleChallengeDraft, 'duration_preset' | 'duration_days'>,
+): number {
+  if (draft.duration_preset === 'custom') {
+    const days = Math.floor(Number(draft.duration_days) || 0);
+    return days > 0 ? days : 30;
+  }
+  return durationDaysOf(draft as SimpleChallengeDraft);
+}
+
+export function clampAllowedMisses(
+  value: number,
+  draft: Pick<SimpleChallengeDraft, 'duration_preset' | 'duration_days'>,
+): number {
+  const max = allowedMissesMax(draft);
+  return Math.min(max, Math.max(0, Math.floor(Number(value) || 0)));
 }
 
 export function requiredCheckinsOf(draft: SimpleChallengeDraft): number {
@@ -539,7 +567,9 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     participant_cap: 'unlimited',
     max_participants: '',
     min_participants: String(Math.max(Number(draft.min_participants) || 2, 2)),
-    misses_allowed: '0',
+    misses_allowed: String(
+      simpleHowYouWin(draft) === 'cumulative' ? 0 : clampAllowedMisses(draft.allowed_misses ?? 0, draft),
+    ),
     cumulative_metric: howYouWin === 'cumulative' ? 'distance_m' : null,
     cumulative_target:
       howYouWin === 'cumulative'
@@ -640,7 +670,117 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
         ? challenge.cumulative_window
         : 'challenge',
     distance_unit: 'mi' as DistanceUnit,
+    allowed_misses: clampAllowedMisses(Number(challenge.misses_allowed) || 0, {
+      duration_preset,
+      duration_days: days,
+    }),
   };
+}
+
+export function canRoundTripToSimple(values: {
+  challenge_type?: string | null;
+  format?: string | null;
+  scoring_method?: string | null;
+  challenge_lane?: string | null;
+  duration_type?: string | null;
+  extra_rules?: Array<{ text?: string | null }> | null;
+  tasks?: Array<{ title?: string | null; points?: string | number | null }> | null;
+}): boolean {
+  if (values.challenge_type === 'points' || values.format === 'points' || values.format === 'lms') {
+    return false;
+  }
+  if (values.scoring_method === 'comparable_points') {
+    return false;
+  }
+  if (values.challenge_lane === 'private') {
+    return false;
+  }
+  if (values.duration_type === 'unlimited') {
+    return false;
+  }
+  if ((values.extra_rules ?? []).some((row) => String(row.text ?? '').trim())) {
+    return false;
+  }
+  const named = (values.tasks ?? []).filter((task) => String(task.title ?? '').trim());
+  if (named.length > 1 && named.some((task) => Number(task.points) > 0)) {
+    return false;
+  }
+  return true;
+}
+
+/** Inverse of simpleDraftToCreateValues — create and edit share this mapping. */
+export function createValuesToSimpleDraft(values: CreateChallengeValues): SimpleChallengeDraft {
+  const base = defaultSimpleDraft();
+  const days = Math.min(
+    365,
+    Math.max(Math.floor(Number(values.duration_days || values.duration_value) || 7), 1),
+  );
+  const duration_preset: SimpleDurationPreset = days === 1 || days === 7 || days === 30 ? days : 'custom';
+  const freq = values.frequency;
+  const frequency: SimpleFrequency =
+    freq === 'once' || freq === 'daily' || freq === '3x_week' ? freq : 'custom';
+  const visibility: SimpleVisibility =
+    values.visibility === 'friends' ? 'friends' : values.visibility === 'invite' || values.visibility === 'private' ? 'invite' : 'public';
+  const type =
+    SIMPLE_TYPES.find((item) => item.activity === String(values.rule_activity ?? '').toLowerCase()) ??
+    SIMPLE_TYPES.find((item) => item.category === values.category) ??
+    SIMPLE_TYPES.find((item) => item.value === 'custom') ??
+    SIMPLE_TYPES[0];
+  const proofs =
+    values.challenge_proofs && values.challenge_proofs.length > 0
+      ? values.challenge_proofs
+      : base.proofs;
+  return withProofSentences({
+    ...base,
+    currency: values.currency === 'bucks' ? 'bucks' : 'coins',
+    buy_in: values.currency === 'bucks' ? 0 : Math.max(Number(values.buy_in) || 0, 0),
+    host_budget: Math.max(Number(values.creator_contribution) || 0, 0),
+    guarantee_enabled: values.guarantee_enabled !== false && Math.max(Number(values.host_budget) || 0, 0) > 0,
+    type: type.value,
+    title: values.title?.trim() ?? '',
+    description: values.description?.trim() ?? '',
+    starts_at: values.starts_at || base.starts_at,
+    start_preset: startPresetFromValues(values.starts_at || base.starts_at),
+    duration_preset,
+    duration_days: days,
+    task: values.task?.trim() ?? '',
+    frequency,
+    custom_checkins: Math.max(Number(values.required_checkins ?? values.target_count) || days, 1),
+    custom_period: frequency === 'custom' ? 'duration' : base.custom_period,
+    proofs,
+    extra_tasks: Array.isArray(values.extra_tasks) ? values.extra_tasks : [],
+    visibility,
+    privacy_mode: asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane),
+    friends_of_friends: values.discoverability === 'friends_of_friends',
+    min_participants: Math.max(Number(values.min_participants) || 2, 2),
+    cover_image_url: values.cover_image_url?.trim() || '',
+    scoring: values.challenge_type === 'cumulative' || values.format === 'cumulative' ? 'cumulative' : 'consistency',
+    points_to_win: 1,
+    cumulative_target_meters: Math.max(Number(values.cumulative_target) || milesToMeters(100), 1),
+    cumulative_window:
+      values.cumulative_window === 'week' || values.cumulative_window === 'day' ? values.cumulative_window : 'challenge',
+    distance_unit: 'mi',
+    allowed_misses: clampAllowedMisses(Number(values.misses_allowed) || 0, { duration_preset, duration_days: days }),
+  });
+}
+
+let advancedFromSimple: CreateChallengeValues | null = null;
+let simpleFromAdvanced: SimpleChallengeDraft | null = null;
+
+export function stageAdvancedFromSimple(draft: SimpleChallengeDraft) {
+  advancedFromSimple = simpleDraftToCreateValues(draft);
+}
+
+export function peekAdvancedFromSimple(): CreateChallengeValues | null {
+  return advancedFromSimple;
+}
+
+export function stageSimpleFromAdvanced(values: CreateChallengeValues) {
+  simpleFromAdvanced = createValuesToSimpleDraft(values);
+}
+
+export function peekSimpleFromAdvanced(): SimpleChallengeDraft | null {
+  return simpleFromAdvanced;
 }
 
 export function validateSimpleDraft(
