@@ -1,12 +1,21 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  Alert,
+  FlatList,
+  Platform,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  View,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+} from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GifPicker } from '@/components/feed/GifPicker';
 import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
-import { useMediaLightboxOptional } from '@/components/feed/MediaLightbox';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { CHECKIN_PHOTO_CAP, proofDisplayName, type ChallengeProof } from '@/lib/challengeProofs';
@@ -17,6 +26,7 @@ import {
   permissionCopy,
 } from '@/lib/mediaPermissions';
 import type { MentionDoc } from '@/lib/mentions';
+import { saveCapturedProofLocally } from '@/lib/checkin/saveProofLocal';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { asGalleryMedia } from '@/utils/media';
@@ -41,6 +51,10 @@ export type CheckinSlotDraft = {
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const STRIP = 56;
 
+type ReviewPage =
+  | { key: string; kind: 'proof'; proof: ChallengeProof; uri: string; label: string }
+  | { key: string; kind: 'extra'; extra: CheckinExtra; uri: string; label: string };
+
 type CheckinComposerProps = {
   proofs: ChallengeProof[];
   drafts: Record<string, CheckinSlotDraft>;
@@ -53,8 +67,8 @@ type CheckinComposerProps = {
   blockedHint?: string;
   stillNeeded?: string;
   onClose: () => void;
-  onRetake: () => void;
-  onOpenGallery: () => void;
+  onRetake: (proof: ChallengeProof) => void;
+  onOpenGallery: (proof: ChallengeProof) => void;
   onAddProof: (proof: ChallengeProof) => void;
   onRemoveProof: (proof: ChallengeProof) => void;
   onExtrasChange: (extras: CheckinExtra[]) => void;
@@ -85,9 +99,12 @@ export function CheckinComposer({
   accessory,
 }: CheckinComposerProps) {
   const fieldRef = useRef<MentionFieldHandle>(null);
-  const lightbox = useMediaLightboxOptional();
+  const pagerRef = useRef<FlatList<ReviewPage>>(null);
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const pageWidth = Math.max(windowWidth, 1);
   const [gifOpen, setGifOpen] = useState(false);
+  const [pageIndex, setPageIndex] = useState(0);
   const chromePad = tabBarLift(insets.bottom, 'sticky');
 
   const onDocChange = useCallback(
@@ -97,23 +114,41 @@ export function CheckinComposer({
     [onCaptionChange],
   );
 
-  const previewItems = [
-    ...proofs
-      .map((proof) => {
-        const uri = drafts[proof.id]?.uri;
-        if (!uri || uri.startsWith('health:')) {
-          return null;
-        }
-        return { uri, label: proofDisplayName(proof) };
-      })
-      .filter((row): row is { uri: string; label: string } => Boolean(row)),
-    ...extras.map((item) => ({ uri: item.uri, label: item.name ?? 'Extra' })),
+  const pages: ReviewPage[] = [
+    ...proofs.flatMap((proof): ReviewPage[] => {
+      const uri = drafts[proof.id]?.uri;
+      if (!uri || uri.startsWith('health:')) {
+        return [];
+      }
+      return [{ key: `proof-${proof.id}`, kind: 'proof', proof, uri, label: proofDisplayName(proof) }];
+    }),
+    ...extras.map((item) => ({
+      key: `extra-${item.id}`,
+      kind: 'extra' as const,
+      extra: item,
+      uri: item.uri,
+      label: item.name ?? 'Extra',
+    })),
   ];
-  const current = previewItems[previewItems.length - 1] ?? null;
+  const current = pages[Math.min(pageIndex, Math.max(pages.length - 1, 0))] ?? null;
   const nextProof = proofs.find((proof) => {
     const draft = drafts[proof.id];
     return !draft?.uri && !draft?.text;
   });
+
+  useEffect(() => {
+    if (pageIndex > pages.length - 1) {
+      setPageIndex(Math.max(pages.length - 1, 0));
+    }
+  }, [pageIndex, pages.length]);
+
+  function goToPage(index: number) {
+    const next = Math.max(0, Math.min(index, pages.length - 1));
+    setPageIndex(next);
+    if (pages.length > 0) {
+      pagerRef.current?.scrollToIndex({ index: next, animated: true });
+    }
+  }
 
   const photoCount =
     proofs.filter((proof) => {
@@ -242,6 +277,7 @@ export function CheckinComposer({
         return;
       }
       const asset = result.assets[0];
+      void saveCapturedProofLocally({ uri: asset.uri, fromLibrary: false });
       addExtra({
         uri: asset.uri,
         kind,
@@ -258,6 +294,94 @@ export function CheckinComposer({
     }
   }
 
+  function replaceExtra(extra: CheckinExtra, next: Omit<CheckinExtra, 'id'>) {
+    onExtrasChange(extras.map((item) => (item.id === extra.id ? { ...item, ...next, id: extra.id } : item)));
+  }
+
+  async function retakeExtra(extra: CheckinExtra) {
+    const permission = await ensureCameraPermission();
+    if (!permission.ok) {
+      const copyBlock = permissionCopy('camera');
+      Alert.alert(copyBlock.title, copyBlock.body, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => void openAppSettings() },
+      ]);
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: extra.kind === 'video' ? ['videos'] : ['images'],
+        allowsEditing: false,
+        quality: 0.9,
+      });
+      if (result.canceled || !result.assets[0]?.uri) {
+        return;
+      }
+      const asset = result.assets[0];
+      void saveCapturedProofLocally({ uri: asset.uri, fromLibrary: false });
+      replaceExtra(extra, {
+        uri: asset.uri,
+        kind: extra.kind === 'gif' ? 'photo' : extra.kind,
+        mimeType: asset.mimeType ?? asset.file?.type,
+        name: extra.name ?? 'Extra',
+        blob: asset.file ?? null,
+      });
+    } catch (error) {
+      Alert.alert('Couldn’t attach that', getErrorMessage(error));
+    }
+  }
+
+  async function galleryReplaceExtra(extra: CheckinExtra) {
+    const permission = await ensureLibraryPermission();
+    if (!permission.ok) {
+      const copyBlock = permissionCopy('library');
+      Alert.alert(copyBlock.title, copyBlock.body, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => void openAppSettings() },
+      ]);
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: extra.kind === 'video' ? ['videos'] : ['images'],
+        allowsEditing: false,
+        quality: 0.9,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      });
+      if (result.canceled || !result.assets[0]?.uri) {
+        return;
+      }
+      const asset = result.assets[0];
+      replaceExtra(extra, {
+        uri: asset.uri,
+        kind: extra.kind === 'gif' ? 'photo' : extra.kind,
+        mimeType: asset.mimeType ?? asset.file?.type,
+        name: extra.name ?? 'Extra',
+        blob: asset.file ?? null,
+        remoteUrl: undefined,
+      });
+    } catch (error) {
+      Alert.alert('Couldn’t attach that', getErrorMessage(error));
+    }
+  }
+
+  function confirmRemove(page: ReviewPage) {
+    Alert.alert('Remove this photo from the check-in?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          if (page.kind === 'proof') {
+            onRemoveProof(page.proof);
+          } else {
+            onExtrasChange(extras.filter((item) => item.id !== page.extra.id));
+          }
+        },
+      },
+    ]);
+  }
+
   function sendPress() {
     if (busy) {
       return;
@@ -268,12 +392,29 @@ export function CheckinComposer({
   return (
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
       <View className="flex-1" style={{ minHeight: 0, backgroundColor: THEME.primary }}>
-        {current ? (
-          <Image
-            source={{ uri: current.uri }}
-            style={{ width: '100%', height: '100%' }}
-            contentFit="contain"
-            accessibilityLabel={current.label}
+        {pages.length > 0 ? (
+          <FlatList
+            ref={pagerRef}
+            data={pages}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.key}
+            getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
+            onMomentumScrollEnd={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
+              const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
+              setPageIndex(Math.max(0, Math.min(next, pages.length - 1)));
+            }}
+            renderItem={({ item }) => (
+              <View style={{ width: pageWidth, height: '100%' }}>
+                <Image
+                  source={{ uri: item.uri }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="contain"
+                  accessibilityLabel={item.label}
+                />
+              </View>
+            )}
           />
         ) : (
           <View
@@ -320,13 +461,32 @@ export function CheckinComposer({
               justifyContent: 'center',
               gap: 8,
             }}>
-            <OverlayChip label="Retake" onPress={onRetake} />
-            <OverlayChip label="Gallery" onPress={onOpenGallery} />
+            <OverlayChip
+              label="Retake"
+              onPress={() => {
+                if (current.kind === 'proof') {
+                  onRetake(current.proof);
+                } else {
+                  void retakeExtra(current.extra);
+                }
+              }}
+            />
+            <OverlayChip label="Remove" onPress={() => confirmRemove(current)} />
+            <OverlayChip
+              label="Gallery"
+              onPress={() => {
+                if (current.kind === 'proof') {
+                  onOpenGallery(current.proof);
+                } else {
+                  void galleryReplaceExtra(current.extra);
+                }
+              }}
+            />
           </View>
         ) : null}
       </View>
 
-      {previewItems.length > 1 || nextProof || extras.length > 0 ? (
+      {pages.length > 1 || nextProof || extras.length > 0 ? (
         <View style={{ paddingTop: 8, paddingHorizontal: 12, backgroundColor: THEME.background }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {proofs.map((proof) => {
@@ -342,12 +502,17 @@ export function CheckinComposer({
                   accessibilityRole="button"
                   accessibilityLabel={proofDisplayName(proof)}
                   onPress={() => {
-                    if (uri && !health) {
-                      const index = previewItems.findIndex((item) => item.uri === uri);
-                      lightbox?.openLightbox(previewItems, Math.max(index, 0));
+                    const index = pages.findIndex((page) => page.kind === 'proof' && page.proof.id === proof.id);
+                    if (index >= 0) {
+                      goToPage(index);
                     }
                   }}
-                  onLongPress={() => onRemoveProof(proof)}
+                  onLongPress={() => {
+                    const page = pages.find((row) => row.kind === 'proof' && row.proof.id === proof.id);
+                    if (page) {
+                      confirmRemove(page);
+                    }
+                  }}
                   style={{
                     width: STRIP,
                     height: STRIP,
@@ -369,16 +534,23 @@ export function CheckinComposer({
                 </Pressable>
               );
             })}
-            {extras.map((item, index) => (
+            {extras.map((item) => (
               <Pressable
                 key={item.id}
                 accessibilityRole="button"
                 accessibilityLabel="Extra"
                 onPress={() => {
-                  const start = previewItems.findIndex((row) => row.uri === item.uri);
-                  lightbox?.openLightbox(previewItems, start >= 0 ? start : index);
+                  const start = pages.findIndex((page) => page.kind === 'extra' && page.extra.id === item.id);
+                  if (start >= 0) {
+                    goToPage(start);
+                  }
                 }}
-                onLongPress={() => onExtrasChange(extras.filter((row) => row.id !== item.id))}
+                onLongPress={() => {
+                  const page = pages.find((row) => row.kind === 'extra' && row.extra.id === item.id);
+                  if (page) {
+                    confirmRemove(page);
+                  }
+                }}
                 style={{
                   width: STRIP,
                   height: STRIP,

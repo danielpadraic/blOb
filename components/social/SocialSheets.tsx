@@ -21,6 +21,7 @@ import * as Clipboard from 'expo-clipboard';
 
 import { AudienceSheet, type AudienceDraft } from '@/components/feed/AudienceSheet';
 import { Composer } from '@/components/feed/Composer';
+import { PostEditHistory, PostEditor } from '@/components/feed/PostEditor';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -34,8 +35,11 @@ import {
   useMutedUserIds,
   useRemoveFromWall,
   useReportPost,
+  useSoftDeletePost,
   useToggleMute,
 } from '@/hooks/usePostModeration';
+import { usePostEdits } from '@/hooks/usePostEdit';
+import { isCheckinPost } from '@/lib/checkinPost';
 import {
   useFriends,
   useFriendshipStatus,
@@ -71,6 +75,8 @@ type OverflowPanel = 'menu' | 'share' | 'report' | 'send';
 type Sheet =
   | { kind: 'overflow'; post: PostWithMeta; anchor: WindowRect; panel: OverflowPanel }
   | { kind: 'quote'; post: PostWithMeta }
+  | { kind: 'edit'; post: PostWithMeta }
+  | { kind: 'history'; post: PostWithMeta }
   | { kind: 'profile'; userId: string; muted: boolean; anchor: WindowRect }
   | { kind: 'audience'; draft: AudienceDraft };
 
@@ -79,6 +85,8 @@ type SocialSheetsValue = {
   toggleProfileMenu: (userId: string, anchor: WindowRect) => void;
   openShare: (post: PostWithMeta, anchor: WindowRect) => void;
   openAudience: (draft: AudienceDraft) => void;
+  openEdit: (post: PostWithMeta) => void;
+  openHistory: (post: PostWithMeta) => void;
 };
 
 type OverflowOpenStore = {
@@ -193,6 +201,14 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
     setSheet({ kind: 'audience', draft });
   }, []);
 
+  const openEdit = useCallback((post: PostWithMeta) => {
+    setSheet({ kind: 'edit', post });
+  }, []);
+
+  const openHistory = useCallback((post: PostWithMeta) => {
+    setSheet({ kind: 'history', post });
+  }, []);
+
   const overflowStore = useMemo(createOverflowOpenStore, []);
 
   useEffect(() => {
@@ -205,8 +221,10 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
       toggleProfileMenu,
       openShare,
       openAudience,
+      openEdit,
+      openHistory,
     }),
-    [openAudience, openShare, toggleOverflow, toggleProfileMenu],
+    [openAudience, openEdit, openHistory, openShare, toggleOverflow, toggleProfileMenu],
   );
 
   return (
@@ -267,11 +285,18 @@ function SheetView({
         onToast={onToast}
         onPanel={(panel) => onOpen({ ...sheet, panel })}
         onQuote={() => onOpen({ kind: 'quote', post: sheet.post })}
+        onEdit={() => onOpen({ kind: 'edit', post: sheet.post })}
       />
     );
   }
   if (sheet.kind === 'quote') {
     return <QuoteSheet post={sheet.post} onClose={onClose} />;
+  }
+  if (sheet.kind === 'edit') {
+    return <PostEditor post={sheet.post} onClose={onClose} onSaved={() => onToast('Saved.')} />;
+  }
+  if (sheet.kind === 'history') {
+    return <HistorySheet post={sheet.post} onClose={onClose} />;
   }
   if (sheet.kind === 'audience') {
     return <AudienceSheet draft={sheet.draft} onClose={onClose} />;
@@ -297,6 +322,7 @@ function OverflowPopover({
   onToast,
   onPanel,
   onQuote,
+  onEdit,
 }: {
   post: PostWithMeta;
   userId?: string;
@@ -306,10 +332,12 @@ function OverflowPopover({
   onToast: (message: string) => void;
   onPanel: (panel: OverflowPanel) => void;
   onQuote: () => void;
+  onEdit: () => void;
 }) {
   const hide = useHidePost();
   const report = useReportPost();
   const removeFromWall = useRemoveFromWall();
+  const softDelete = useSoftDeletePost();
   const friends = useFriends();
   const startChat = useGetOrCreateConversation();
   const send = useSendMessage();
@@ -348,6 +376,13 @@ function OverflowPopover({
       {panel === 'menu' ? (
         <View>
           <View className="flex-row items-center" style={{ columnGap: 2 }}>
+            {mine ? (
+              <IconAction
+                label={copy('post.edit')}
+                icon={GLYPH.pencil}
+                onPress={onEdit}
+              />
+            ) : null}
             <IconAction
               label="Share"
               icon={GLYPH.share}
@@ -374,6 +409,29 @@ function OverflowPopover({
               />
             ) : null}
           </View>
+          {mine && !isCheckinPost(post) ? (
+            <ListRow
+              label={copy('post.delete')}
+              onPress={() => {
+                Alert.alert(copy('post.deleteConfirm'), undefined, [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: copy('post.delete'),
+                    style: 'destructive',
+                    onPress: () => {
+                      softDelete.mutate(post.id, {
+                        onSuccess: () => {
+                          onClose();
+                          onToast('Deleted.');
+                        },
+                        onError: (error) => Alert.alert('Couldn’t delete that', getErrorMessage(error)),
+                      });
+                    },
+                  },
+                ]);
+              }}
+            />
+          ) : null}
           {host ? (
             <ListRow label={copy('wall.remove')} onPress={() => void onRemoveFromWall()} />
           ) : null}
@@ -462,6 +520,11 @@ function OverflowPopover({
       ) : null}
     </AnchoredPopover>
   );
+}
+
+function HistorySheet({ post, onClose }: { post: PostWithMeta; onClose: () => void }) {
+  const edits = usePostEdits(post.id);
+  return <PostEditHistory rows={edits.data ?? []} onClose={onClose} />;
 }
 
 function QuoteSheet({ post, onClose }: { post: PostWithMeta; onClose: () => void }) {

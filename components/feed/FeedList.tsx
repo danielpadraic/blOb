@@ -28,6 +28,7 @@ type FeedListProps = {
   headerExtra?: ReactNode;
   empty?: ReactNode;
   highlightPostId?: string;
+  onHighlightedLayout?: (y: number) => void;
   hideAudience?: boolean;
   composeSource?: ComposeInput['source'];
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
@@ -107,6 +108,7 @@ export function FeedList({
   headerExtra,
   empty,
   highlightPostId,
+  onHighlightedLayout,
   hideAudience,
   composeSource,
   wallHost,
@@ -232,16 +234,23 @@ export function FeedList({
           empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
         ) : (
           visiblePosts.map((post) => (
-            <FeedRow
+            <View
               key={post.id}
-              post={post}
-              currentUserId={currentUserId}
-              hideAudience={hideAudience}
-              challengeFeed={challengeFeed}
-              highlighted={highlightPostId === post.id}
-              onReact={onReact}
-              onComment={onComment}
-            />
+              onLayout={(event) => {
+                if (highlightPostId === post.id) {
+                  onHighlightedLayout?.(event.nativeEvent.layout.y);
+                }
+              }}>
+              <FeedRow
+                post={post}
+                currentUserId={currentUserId}
+                hideAudience={hideAudience}
+                challengeFeed={challengeFeed}
+                highlighted={highlightPostId === post.id}
+                onReact={onReact}
+                onComment={onComment}
+              />
+            </View>
           ))
         )}
       </View>

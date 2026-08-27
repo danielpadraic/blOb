@@ -93,7 +93,10 @@ async function loadPostsSchema(): Promise<PostsSchema> {
   working = source.ok ? withSource : working;
   const withPlace = `${working}, location_name`;
   const place = await trySelect(withPlace);
-  return schemaFromSelect(place.ok ? withPlace : working);
+  working = place.ok ? withPlace : working;
+  const withEdits = `${working}, edited_at, hidden_media_urls`;
+  const edits = await trySelect(withEdits);
+  return schemaFromSelect(edits.ok ? withEdits : working);
 }
 
 /** No RPC. Probe with limit 0, then cache the working select list. */

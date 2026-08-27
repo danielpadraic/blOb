@@ -399,10 +399,16 @@ export default function ChallengeDetailScreen() {
   }, [judgingHold, waitingToStart, officialLiveClock]);
 
   const scrollRef = useRef<ScrollView>(null);
+  const feedSectionY = useRef(0);
+  const feedTitlesH = useRef(0);
+  const scrolledToPost = useRef<string | null>(null);
 
   useEffect(() => {
+    if (highlightPostId && pageTab === 'feed') {
+      return;
+    }
     scrollNodeTo(scrollRef.current, { y: 0, animated: false });
-  }, [pageTab]);
+  }, [highlightPostId, pageTab]);
   const lastFocusFetchAt = useRef(Date.now());
   const refetchChallenge = useRef(challengeQuery.refetch);
   const refetchRoster = useRef(roster.refetch);
@@ -1121,21 +1127,40 @@ export default function ChallengeDetailScreen() {
         ) : null}
 
         {pageTab === 'feed' ? (
-          <View className="mt-4">
-            <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-              Lobby Feed
-            </AppText>
-            <AppText className="mt-1 mb-3 text-xl font-bold text-charcoal">
-              {isCorporateChallenge(challenge)
-                ? 'Posts stay inside this challenge'
-                : 'Posts from this challenge'}
-            </AppText>
+          <View
+            className="mt-4"
+            onLayout={(event) => {
+              feedSectionY.current = event.nativeEvent.layout.y;
+            }}>
+            <View
+              onLayout={(event) => {
+                feedTitlesH.current = event.nativeEvent.layout.height;
+              }}>
+              <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Lobby Feed
+              </AppText>
+              <AppText className="mt-1 mb-3 text-xl font-bold text-charcoal">
+                {isCorporateChallenge(challenge)
+                  ? 'Posts stay inside this challenge'
+                  : 'Posts from this challenge'}
+              </AppText>
+            </View>
             <FeedList
               embedded
               posts={feed.data ?? []}
               isLoading={feed.isLoading}
               error={feed.error instanceof Error ? feed.error.message : null}
               highlightPostId={highlightPostId}
+              onHighlightedLayout={(y) => {
+                if (!highlightPostId || scrolledToPost.current === highlightPostId) {
+                  return;
+                }
+                scrolledToPost.current = highlightPostId;
+                scrollNodeTo(scrollRef.current, {
+                  y: Math.max(0, feedSectionY.current + feedTitlesH.current + y - 12),
+                  animated: true,
+                });
+              }}
               currentUserId={user?.id}
               emptyTitle="Quiet in this challenge"
               emptyBody={

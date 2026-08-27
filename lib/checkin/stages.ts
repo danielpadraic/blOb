@@ -66,5 +66,5 @@ export function canSendCheckin(
   phase: CheckinPhase,
   busy: boolean,
 ): boolean {
-  return (honorOnly || hasRequiredAttached) && phase !== 'submitted' && !busy;
+  return (honorOnly || hasRequiredAttached) && !busy;
 }

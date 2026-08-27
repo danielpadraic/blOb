@@ -50,6 +50,7 @@ export const GLYPH = {
   bell: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
   send: { ios: 'paperplane.fill', android: 'send', web: 'send' },
   hide: { ios: 'eye.slash', android: 'visibility_off', web: 'visibility_off' },
+  pencil: { ios: 'pencil', android: 'edit', web: 'edit' },
   trash: { ios: 'trash', android: 'delete', web: 'delete' },
   mute: { ios: 'speaker.slash.fill', android: 'volume_off', web: 'volume_off' },
   unmute: { ios: 'speaker.wave.2.fill', android: 'volume_up', web: 'volume_up' },

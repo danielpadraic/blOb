@@ -18,9 +18,11 @@ import {
   checkinBeginCaption,
   checkinSendWhyNot,
   checkinStageLabel,
+  checkinUploadStayCopy,
   classifyCheckinError,
   didAdvanceBoard,
   incrementDaysCompleted,
+  saveCapturedProofLocally,
 } from '@/lib/checkin';
 
 const officialTrio: ChallengeProof[] = BEFORE_AFTER_HR_PRESET.map((item, index) => ({
@@ -137,8 +139,24 @@ describe('official weekly proofs', () => {
       }),
     ).toBe('Sam checked in for Kids chores.');
     expect(canSendCheckin(true, false, 'none', false)).toBe(true);
-    expect(canSendCheckin(true, true, 'submitted', false)).toBe(false);
+    expect(canSendCheckin(true, true, 'submitted', false)).toBe(true);
     expect(canSendCheckin(false, true, 'ready', true)).toBe(false);
+  });
+
+  it('does not copy gallery or Health files onto the camera roll', async () => {
+    expect(await saveCapturedProofLocally({ uri: 'file://pre.jpg', fromLibrary: true })).toEqual({
+      saved: false,
+      reason: 'library',
+    });
+    expect(await saveCapturedProofLocally({ uri: 'health:hw-1', fromLibrary: false })).toEqual({
+      saved: false,
+      reason: 'health',
+    });
+    expect(await saveCapturedProofLocally({ uri: '', fromLibrary: false })).toEqual({
+      saved: false,
+      reason: 'empty',
+    });
+    expect(checkinUploadStayCopy()).toMatch(/Saved to your photos|Kept on this device/);
   });
 
   it('Note proof needs written text; a URL does not count', () => {

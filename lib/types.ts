@@ -579,6 +579,8 @@ export interface Post {
   checkin_stage?: string | null;
   source?: PostSource | null;
   system_kind?: string | null;
+  edited_at?: string | null;
+  hidden_media_urls?: string[] | null;
   created_at: string;
 }
 

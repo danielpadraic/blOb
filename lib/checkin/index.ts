@@ -31,6 +31,13 @@ export {
   checkinTaskLabel,
 } from './captions';
 export {
+  CHECKIN_SAVE_PERMISSION,
+  CHECKIN_UPLOAD_SAVED_NATIVE,
+  CHECKIN_UPLOAD_SAVED_WEB,
+  checkinUploadStayCopy,
+  saveCapturedProofLocally,
+} from './saveProofLocal';
+export {
   CHECKIN_STAGE_LABELS,
   checkinStageFromPhase,
   checkinStageHint,
