@@ -3,7 +3,6 @@ import { useRef } from 'react';
 import { Alert } from 'react-native';
 
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
-import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { asPostAudience, DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
@@ -693,11 +692,6 @@ export async function insertWorkoutCheckInPost(input: {
   const created = await supabase.from('posts').insert(payload).select(schema.select).single();
   if (!created.error) {
     const post = created.data as unknown as Post;
-    void notifyChallengeCheckinAfterPost({
-      challengeId: input.challengeId,
-      actorId: input.userId,
-      postId: post.id,
-    });
     return post;
   }
 
@@ -705,11 +699,6 @@ export async function insertWorkoutCheckInPost(input: {
     const retry = await supabase.from('posts').insert(payload).select(schema.select).single();
     if (!retry.error) {
       const post = retry.data as unknown as Post;
-      void notifyChallengeCheckinAfterPost({
-        challengeId: input.challengeId,
-        actorId: input.userId,
-        postId: post.id,
-      });
       return post;
     }
     const missingMedia =
@@ -741,11 +730,6 @@ export async function insertWorkoutCheckInPost(input: {
     return null;
   }
   const post = withoutMedia.data as unknown as Post;
-  void notifyChallengeCheckinAfterPost({
-    challengeId: input.challengeId,
-    actorId: input.userId,
-    postId: post.id,
-  });
   return post;
 }
 

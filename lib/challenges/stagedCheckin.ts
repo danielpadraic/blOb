@@ -1,6 +1,5 @@
 import { saveCheckinProofWithClient, submitCheckinWithClient, parseChallengeCheckin } from '@/lib/checkin/rpc';
 import type { SaveCheckinProofInput } from '@/lib/checkin/rpc';
-import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
 import { requestPushAfterValue } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
@@ -36,13 +35,6 @@ export async function saveCheckinProof(input: SaveCheckinProofInput) {
 export async function submitCheckin(challengeId: string) {
   try {
     const parsed = await submitCheckinWithClient(supabase as never, challengeId);
-    if (parsed?.user_id) {
-      void notifyChallengeCheckinAfterPost({
-        challengeId,
-        actorId: parsed.user_id,
-        postId: null,
-      });
-    }
     requestPushAfterValue();
     return parsed;
   } catch (error) {

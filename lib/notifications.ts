@@ -35,23 +35,13 @@ export async function notifyFriendsOfCreatedChallenge(challengeId: string): Prom
   }
 }
 
-export async function notifyChallengeCheckinAfterPost(input: {
+/** SQL `posts_notify_checkin` is the only writer. Do not insert from the client. */
+export async function notifyChallengeCheckinAfterPost(_input: {
   challengeId: string;
   actorId: string;
   postId?: string | null;
 }): Promise<void> {
-  try {
-    const { error } = await supabase.rpc('notify_challenge_checkin', {
-      p_challenge_id: input.challengeId,
-      p_actor_id: input.actorId,
-      p_post_id: input.postId ?? null,
-    });
-    if (error) {
-      console.log('[blob:notify] checkin skipped', error.message);
-    }
-  } catch (error) {
-    console.log('[blob:notify] checkin skipped', error);
-  }
+  return;
 }
 
 const NOTIFICATION_COLUMNS =

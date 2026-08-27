@@ -1,4 +1,3 @@
-import { notifyChallengeCheckinAfterPost } from '@/lib/notifications';
 import { requestPushAfterValue } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import {
@@ -237,10 +236,6 @@ export async function logWorkout(input: LogWorkoutInput): Promise<LogWorkoutResu
     ? parsedDays
     : await readDaysCompleted(input.challengeId, userId);
 
-  void notifyChallengeCheckinAfterPost({
-    challengeId: input.challengeId,
-    actorId: userId,
-  });
   requestPushAfterValue();
 
   return asResult(
