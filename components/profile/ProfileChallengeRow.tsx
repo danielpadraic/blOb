@@ -5,6 +5,7 @@ import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { openChallengeLobby } from '@/lib/challengeOpen';
 import { THEME } from '@/lib/theme';
 import { CHALLENGE_STATUS_LABEL } from '@/lib/constants';
 import type { ProfileChallenge } from '@/hooks/usePublicProfile';
@@ -96,7 +97,13 @@ export function ProfileChallengeRow({
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push(`/challenges/${item.challenge.id}`)}
+      onPress={() => {
+        const challenge = item.challenge;
+        if (!challenge?.id) {
+          return;
+        }
+        openChallengeLobby(router, { id: challenge.id, snapshot: challenge, returnTo: 'lobby' });
+      }}
       className="px-3 py-2.5"
       style={{
         backgroundColor: THEME.surface,

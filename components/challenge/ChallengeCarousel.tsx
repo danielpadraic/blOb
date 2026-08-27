@@ -30,7 +30,7 @@ type ChallengeCarouselProps = {
   socialProofById?: Map<string, CarouselSocialProof>;
   hostById?: Map<string, InviteHost>;
   selfHost?: InviteHost | null;
-  onPress: (id: string) => void;
+  onPress: (id: string, snapshot?: ChallengeWithStats) => void;
   allowCancel?: boolean;
   official?: boolean;
   showStateTags?: boolean;
@@ -93,7 +93,12 @@ export function ChallengeCarousel({
                 eliminated={Boolean(mine?.eliminated)}
                 host={resolvedHost}
                 showStateTags={showStateTags}
-                onPress={() => onPress(challenge.id)}
+                onPress={() => {
+                  if (!challenge.id) {
+                    return;
+                  }
+                  onPress(challenge.id, challenge);
+                }}
               />
             </View>
           );

@@ -5,9 +5,10 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { fetchChallengeShareState } from '@/lib/challenges';
+import { openChallengeLobby } from '@/lib/challengeOpen';
+import type { ChallengeLoadSnapshot } from '@/lib/challengeLoad';
 import { copy } from '@/lib/copy';
 import { challengeTagAccess } from '@/lib/openChallengeFromTag';
-import { challengeDetailHref } from '@/lib/routes';
 
 export type OpenChallengeFromTagInput = {
   challengeId: string;
@@ -16,6 +17,7 @@ export type OpenChallengeFromTagInput = {
   is_official?: boolean | null;
   created_by?: string | null;
   isParticipant?: boolean;
+  snapshot?: ChallengeLoadSnapshot | null;
 };
 
 export function useOpenChallengeFromTag() {
@@ -37,12 +39,16 @@ export function useOpenChallengeFromTag() {
       let shareHidden = false;
       const visibilityUnknown = input.visibility == null && input.challenge_lane == null;
       if (!isParticipant && !isHost && visibilityUnknown && !input.is_official) {
-        const share = await fetchChallengeShareState(challengeId);
-        if (share.reason === 'geo') {
-          Alert.alert(copy('geo.unavailable'));
-          return;
+        try {
+          const share = await fetchChallengeShareState(challengeId);
+          if (share.reason === 'geo') {
+            Alert.alert(copy('geo.unavailable'));
+            return;
+          }
+          shareHidden = share.reason === 'hidden';
+        } catch {
+          // Transient share lookup must not block View on a card that already rendered.
         }
-        shareHidden = share.reason === 'hidden';
       }
 
       const access = challengeTagAccess({
@@ -60,7 +66,17 @@ export function useOpenChallengeFromTag() {
         return;
       }
 
-      router.push(challengeDetailHref(challengeId, 'feed'));
+      openChallengeLobby(router, {
+        id: challengeId,
+        snapshot: input.snapshot ?? {
+          id: challengeId,
+          visibility: input.visibility,
+          challenge_lane: input.challenge_lane,
+          is_official: input.is_official,
+          created_by: input.created_by,
+        },
+        returnTo: 'feed',
+      });
     },
     [mine.data, router, user?.id],
   );

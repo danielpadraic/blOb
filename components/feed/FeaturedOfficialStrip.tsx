@@ -16,7 +16,8 @@ import {
   isOfficialJoinable,
   officialContestantsNeeded,
 } from '@/lib/officialSeries';
-import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
+import { openChallengeLobby } from '@/lib/challengeOpen';
+import { BODY_METRICS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 const BLOB_WORDMARK = require('@/assets/mascot/blob-logo.png');
@@ -66,7 +67,10 @@ export function FeaturedOfficialStrip() {
   }
 
   function openDetail() {
-    router.push(challengeDetailHref(card.id, 'feed'));
+    if (!card.id) {
+      return;
+    }
+    openChallengeLobby(router, { id: card.id, snapshot: card, returnTo: 'feed' });
   }
 
   function onJoin() {

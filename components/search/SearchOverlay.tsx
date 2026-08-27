@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuth } from '@/hooks/useAuth';
-import { challengeDetailHref } from '@/lib/routes';
+import { openChallengeLobby } from '@/lib/challengeOpen';
 import { isSearchEmpty, searchGlobal } from '@/lib/search';
 import { personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -46,8 +46,11 @@ export function SearchOverlay({ visible, onClose }: SearchOverlayProps) {
   }
 
   function goChallenge(id: string) {
+    if (!id) {
+      return;
+    }
     onClose();
-    router.push(challengeDetailHref(id, 'feed'));
+    openChallengeLobby(router, { id, returnTo: 'feed' });
   }
 
   return (

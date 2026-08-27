@@ -21,6 +21,8 @@ import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { fetchChallengeById } from '@/lib/challenges';
+import { firstRouteParam } from '@/lib/challengeLoad';
+import { openChallengeLobby, prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
 import { formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { copy } from '@/lib/copy';
@@ -314,18 +316,29 @@ export function ChallengeInviteCard({
   const cardLabel = `${challenge.title}. ${status}. ${canCheckIn ? 'View or check-in' : cta}`;
 
   async function openDetail() {
+    const challengeId = firstRouteParam(challenge.id);
+    if (!challengeId) {
+      return;
+    }
+    seedChallengeDetailQuery({ ...challenge, id: challengeId });
+    prefetchChallengeDetail(challengeId, challenge);
     if (onPress) {
       onPress();
       return;
     }
-    await openTag({
-      challengeId: challenge.id,
-      visibility: challenge.visibility,
-      challenge_lane: challenge.challenge_lane,
-      is_official: challenge.is_official,
-      created_by: challenge.created_by,
-      isParticipant: joined,
-    });
+    try {
+      await openTag({
+        challengeId,
+        visibility: challenge.visibility,
+        challenge_lane: challenge.challenge_lane,
+        is_official: challenge.is_official,
+        created_by: challenge.created_by,
+        isParticipant: joined,
+        snapshot: challenge,
+      });
+    } catch {
+      openChallengeLobby(router, { id: challengeId, snapshot: challenge, returnTo: 'feed' });
+    }
   }
 
   async function onJoinOrView() {

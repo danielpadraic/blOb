@@ -19,6 +19,7 @@ import {
   FIELD_NOTE_TITLE,
   type FieldNoteKey,
 } from '@/lib/challengeFieldNotes';
+import { measureInWindowSafe } from '@/lib/measureWindow';
 import { TAB_BAR_HEIGHT, TAB_BAR_GUTTER, THEME, themeShadow } from '@/lib/theme';
 
 type NoteAnchor = { x: number; y: number; width: number; height: number };
@@ -87,7 +88,7 @@ export function FieldNoteButton({
   const open = notes.active === note;
 
   function toggle() {
-    ref.current?.measureInWindow((x, y, width, height) => {
+    measureInWindowSafe(ref.current, ({ x, y, width, height }) => {
       notes?.open(note, {
         x,
         y,
@@ -221,7 +222,7 @@ function FieldNotePopover({
   }, []);
 
   function measureHost() {
-    hostRef.current?.measureInWindow((x, y, width, height) => {
+    measureInWindowSafe(hostRef.current, ({ x, y, width, height }) => {
       setHost({ x, y, width, height });
     });
   }

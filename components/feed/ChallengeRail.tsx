@@ -9,7 +9,7 @@ import { useFeedActiveChallenges, useMyChallengeProgress } from '@/hooks/useChal
 import { useMyProfile } from '@/hooks/useProfile';
 import { copy } from '@/lib/copy';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
-import { challengeDetailHref } from '@/lib/routes';
+import { openChallengeLobby } from '@/lib/challengeOpen';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
@@ -45,8 +45,8 @@ export function ChallengeRail() {
     return null;
   }
 
-  function open(id: string) {
-    router.push(challengeDetailHref(id, 'feed'));
+  function open(id: string, snapshot?: (typeof activeRows)[number]) {
+    openChallengeLobby(router, { id, snapshot, returnTo: 'feed' });
   }
 
   return (

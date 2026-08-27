@@ -496,6 +496,7 @@ function ChallengeShareCard({
       challenge_lane: card?.challenge_lane,
       is_official: card?.is_official,
       created_by: card?.created_by,
+      snapshot: card,
     });
   if (card) {
     const host =

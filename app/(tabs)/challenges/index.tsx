@@ -31,7 +31,7 @@ import { isJoinableNotStarted } from '@/lib/challengeDiscoverability';
 import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
 import { AppText } from '@/components/ui/AppText';
-import { challengeDetailHref } from '@/lib/routes';
+import { openChallengeLobby } from '@/lib/challengeOpen';
 import { asCopyTone, copy } from '@/lib/copy';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { getCancelChallengeMessage } from '@/utils/errors';
@@ -204,11 +204,8 @@ export default function ChallengesScreen() {
     friends.length === 0 &&
     drafts.length === 0;
 
-  function openChallenge(id: string) {
-    if (!id) {
-      return;
-    }
-    router.push(challengeDetailHref(id, 'lobby'));
+  function openChallenge(id: string, snapshot?: ChallengeWithStats) {
+    openChallengeLobby(router, { id, snapshot, returnTo: 'lobby' });
   }
 
   async function onRefresh() {

@@ -23,7 +23,7 @@ import {
 } from '@/hooks/useSocial';
 import { Button } from '@/components/ui/Button';
 import { copy } from '@/lib/copy';
-import { challengeDetailHref } from '@/lib/routes';
+import { openChallengeLobby } from '@/lib/challengeOpen';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { personDisplayName, storyTimeLeft, type FeedChallengePreview, type StoryGroup } from '@/lib/social';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
@@ -505,7 +505,9 @@ function ChallengeChip({
     <Pressable
       onPress={() => {
         onClose();
-        router.push(challengeDetailHref(challenge.id, 'feed'));
+        if (challenge.id) {
+          openChallengeLobby(router, { id: challenge.id, snapshot: challenge, returnTo: 'feed' });
+        }
       }}
       className="mx-4 mt-3 self-start rounded-full px-3 py-2"
       style={{ backgroundColor: THEME.accentSoft }}

@@ -8,7 +8,6 @@ import { parseComparablePointsConfig } from '@/lib/comparablePoints';
 import { asPrivacyMode } from '@/lib/privacyMode';
 import { durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
-  fetchChallengeById,
   fetchChallengeShareState,
   fetchActiveChallenges,
   fetchCompetingChallenges,
@@ -56,7 +55,9 @@ import {
   checkinTargetForStore,
   composeChallengeRules,
 } from '@/lib/consistencyRules';
-import { copy } from '@/lib/copy';
+import { loadChallengeDetail } from '@/lib/challengeOpen';
+import { isChallengeLoadError } from '@/lib/challengeLoad';
+import { queryClient as appQueryClient } from '@/lib/queryClient';
 import { fetchChallengePreviewsByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -252,22 +253,21 @@ export function useChallenge(id: string | undefined) {
   return useQuery({
     queryKey: ['challenge', id],
     enabled: Boolean(id),
+    retry: (count, error) => {
+      if (isChallengeLoadError(error) && error.kind !== 'server') {
+        return false;
+      }
+      return count < 1;
+    },
     queryFn: async (): Promise<ChallengeWithStats> => {
       console.log('[blob:detail] load', id);
-      await syncChallengeStatuses();
       try {
-        const challenge = await fetchChallengeById(id!);
-        return {
-          ...challenge,
-          participant_count: 0,
-        };
+        await syncChallengeStatuses();
       } catch (error) {
-        const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: id! });
-        if (reason.data === 'geo') {
-          throw new Error(copy('geo.unavailable'));
-        }
-        throw error;
+        console.log('[blob:detail] status sync skipped', error);
       }
+      const snapshot = appQueryClient.getQueryData<ChallengeWithStats>(['challenge', id]);
+      return loadChallengeDetail(id!, snapshot);
     },
   });
 }

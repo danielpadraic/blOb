@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { measureInWindowSafe } from '@/lib/measureWindow';
 import { THEME, themeShadow } from '@/lib/theme';
 
 export type MenuAnchor = { x: number; y: number; width: number; height: number };
@@ -30,7 +31,7 @@ export function ChallengeOverflowButton({
       accessibilityLabel="Challenge menu"
       hitSlop={8}
       onPress={() => {
-        ref.current?.measureInWindow((x, y, width, height) => {
+        measureInWindowSafe(ref.current, ({ x, y, width, height }) => {
           onPress({ x, y, width, height });
         });
       }}
@@ -61,7 +62,7 @@ export function ChallengeMenuPopover({
   }
 
   function measureHost() {
-    hostRef.current?.measureInWindow((x, y, width, height) => {
+    measureInWindowSafe(hostRef.current, ({ x, y, width, height }) => {
       setHost({ x, y, width, height });
     });
   }

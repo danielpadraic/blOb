@@ -1,4 +1,11 @@
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  Stack,
+  useFocusEffect,
+  useGlobalSearchParams,
+  useLocalSearchParams,
+  useRouter,
+  type ErrorBoundaryProps,
+} from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -49,6 +56,7 @@ import {
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { useChallengeBoardRealtime } from '@/hooks/useChallengeBoardRealtime';
+import { isChallengeRealtimeId } from '@/lib/challengeBoardRealtime';
 import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
@@ -110,11 +118,35 @@ import { bucksJoinCta } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { tabBarLift, THEME } from '@/lib/theme';
+import { reportAppError, extractPostgrestCode } from '@/lib/appErrors';
+import { challengeLoadKind, firstRouteParam } from '@/lib/challengeLoad';
+import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 
 const BODY_METRICS_JOIN_COPY =
   'Missing: physical details. Official Fitness Challenges need them for matching — they stay private.';
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    reportAppError({
+      route: 'challenge/detail-boundary',
+      error,
+      payload: { errorCode: extractPostgrestCode(error) },
+    });
+  }, [error]);
+  return (
+    <Screen>
+      <MascotState
+        kind="error"
+        title="Something went wrong"
+        body="Try again in a moment."
+        actionLabel="Retry"
+        onAction={() => void retry()}
+      />
+    </Screen>
+  );
+}
 
 export default function ChallengeDetailScreen() {
   const params = useLocalSearchParams<{
@@ -126,7 +158,9 @@ export default function ChallengeDetailScreen() {
     tab?: string;
     receipt?: string;
   }>();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const globalParams = useGlobalSearchParams<{ id?: string }>();
+  const routeParam = firstRouteParam(params.id) || firstRouteParam(globalParams.id);
+  const { id, waiting: waitingForId } = useStableChallengeRouteId(routeParam);
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
   const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
@@ -138,7 +172,7 @@ export default function ChallengeDetailScreen() {
   useDismissTo(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useMyProfile();
-  const challengeQuery = useChallenge(id);
+  const challengeQuery = useChallenge(id || undefined);
   const hostQuery = useProfile(challengeQuery.data?.created_by ?? undefined);
   const roster = useChallengeParticipants(id);
   const boardProfiles = useQuery({
@@ -154,7 +188,7 @@ export default function ChallengeDetailScreen() {
     }));
   }, [boardProfiles.data, roster.data]);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
-  useChallengeBoardRealtime(id);
+  useChallengeBoardRealtime(isChallengeRealtimeId(id) ? id : undefined);
   const submittedCheckins = useSubmittedCheckinCount(id, challengeQuery.data);
   const completions = usePeriodCompletions(id, challengeQuery.data);
   const joinSheet = useJoinConfirm();
@@ -180,7 +214,57 @@ export default function ChallengeDetailScreen() {
         : 'overview',
   );
 
-  const challenge = challengeQuery.data;
+  const loadKind = challengeLoadKind(challengeQuery.error);
+  const showQueryError =
+    Boolean(id) &&
+    challengeQuery.isError &&
+    !challengeQuery.isFetching &&
+    !challengeQuery.isLoading;
+  const challenge = showQueryError ? undefined : challengeQuery.data;
+  const hostProfile = hostQuery.data;
+  const heroHost =
+    hostProfile && typeof hostProfile === 'object' && hostProfile.id
+      ? {
+          id: String(hostProfile.id),
+          username: String(hostProfile.username ?? ''),
+          display_name: hostProfile.display_name,
+        }
+      : null;
+  const loggedLoadRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (waitingForId || challengeQuery.isLoading || challengeQuery.isFetching) {
+      return;
+    }
+    if (!showQueryError && id) {
+      return;
+    }
+    const key = `${id || routeParam}:${challengeQuery.status}:${loadKind ?? 'empty'}`;
+    if (loggedLoadRef.current === key) {
+      return;
+    }
+    loggedLoadRef.current = key;
+    reportAppError({
+      route: 'challenge/detail',
+      error: challengeQuery.error,
+      code: loadKind ?? extractPostgrestCode(challengeQuery.error),
+      payload: {
+        challengeId: id || null,
+        routeParam: routeParam || null,
+        queryStatus: challengeQuery.status,
+        errorCode: loadKind ?? extractPostgrestCode(challengeQuery.error),
+      },
+    });
+  }, [
+    challengeQuery.error,
+    challengeQuery.isFetching,
+    challengeQuery.isLoading,
+    challengeQuery.status,
+    id,
+    loadKind,
+    routeParam,
+    showQueryError,
+    waitingForId,
+  ]);
   const participation = useMemo(
     () => roster.data?.find((row) => row.user_id === user?.id) ?? null,
     [roster.data, user?.id],
@@ -317,7 +401,7 @@ export default function ChallengeDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    scrollNodeTo(scrollRef.current, { y: 0, animated: false });
   }, [pageTab]);
   const lastFocusFetchAt = useRef(Date.now());
   const refetchChallenge = useRef(challengeQuery.refetch);
@@ -335,7 +419,7 @@ export default function ChallengeDetailScreen() {
         return;
       }
       if (loggedParam) {
-        scrollRef.current?.scrollTo({ y: 0, animated: false });
+        scrollNodeTo(scrollRef.current, { y: 0, animated: false });
       }
       const now = Date.now();
       if (now - lastFocusFetchAt.current < 8000) {
@@ -377,7 +461,19 @@ export default function ChallengeDetailScreen() {
     };
   }, [id, challenge?.status, challenge?.ends_at, challenge?.distributed_at]);
 
-  if (challengeQuery.isLoading) {
+  function goBackFromDetail() {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
+  }
+
+  const stillLoading =
+    waitingForId ||
+    (Boolean(id) && (challengeQuery.isLoading || challengeQuery.isFetching) && !challenge);
+
+  if (stillLoading) {
     return (
       <Screen>
         <Stack.Screen
@@ -398,7 +494,16 @@ export default function ChallengeDetailScreen() {
   }
 
   if (!challenge) {
-    const blocked = String(challengeQuery.error?.message ?? '').includes(copy('geo.unavailable'));
+    const kind = loadKind ?? (challengeQuery.isError ? 'server' : 'unavailable');
+    const server = kind === 'server';
+    const title =
+      kind === 'geo'
+        ? copy('geo.unavailable')
+        : kind === 'private'
+          ? copy('challenge.private')
+          : server
+            ? 'Something went wrong'
+            : copy('challenge.unavailable');
     return (
       <Screen>
         <Stack.Screen
@@ -410,11 +515,11 @@ export default function ChallengeDetailScreen() {
           }}
         />
         <MascotState
-          kind="error"
-          title={blocked ? copy('geo.unavailable') : copy('challenge.notFound')}
-          body={blocked ? undefined : challengeQuery.error?.message ?? 'This blob wandered off.'}
-          actionLabel="Retry"
-          onAction={() => void challengeQuery.refetch()}
+          kind={server ? 'error' : 'empty'}
+          title={title}
+          body={server ? 'Try again in a moment.' : undefined}
+          actionLabel={server ? 'Retry' : 'Back'}
+          onAction={server ? () => void challengeQuery.refetch() : goBackFromDetail}
         />
       </Screen>
     );
@@ -490,6 +595,7 @@ export default function ChallengeDetailScreen() {
     ]);
   }
 
+  const tasks = Array.isArray(challenge.tasks) ? challenge.tasks : [];
   const proofSteps = requiredChallengeProofs(challenge);
   const comparable = usesComparablePointsScoring(challenge);
   const comparableConfig = comparable ? comparablePointsFromChallenge(challenge) : null;
@@ -561,7 +667,7 @@ export default function ChallengeDetailScreen() {
   const remainingNow = competitorCount;
   const goalLabel = challengeGoalLabel(challenge, {
     daysCompleted,
-    taskCount: Math.max(challenge.tasks?.length ?? 0, 1),
+    taskCount: Math.max(tasks.length, 1),
     distanceMetersCompleted: participation?.distance_meters_total ?? 0,
   });
   const prizeForfeited =
@@ -569,7 +675,7 @@ export default function ChallengeDetailScreen() {
     (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0);
   const progressRatio = isUnlimited
     ? 1
-    : daysCompleted / Math.max(isPoints ? Math.max(challenge.tasks.length, 1) : target, 1);
+    : daysCompleted / Math.max(isPoints ? Math.max(tasks.length, 1) : target, 1);
   const startLine =
     waitingToStart
       ? startsInLabel(challenge, new Date(nowMs)) ??
@@ -625,7 +731,7 @@ export default function ChallengeDetailScreen() {
         <View style={{ marginTop: 8 }}>
           <ChallengeHeroCard
             challenge={challenge}
-            host={hostQuery.data}
+            host={heroHost}
             viewerId={user?.id}
             joined={isJoined}
             hosting={isHost && !isJoined}
@@ -765,7 +871,7 @@ export default function ChallengeDetailScreen() {
             ) : null}
             {isPoints ? (
               <View className="mt-3 gap-2.5">
-                {challenge.tasks.map((task, index) => (
+                {tasks.map((task, index) => (
                   <View key={task.id} className="flex-row gap-3">
                     <View
                       className="h-6 w-6 items-center justify-center rounded-full"
@@ -828,7 +934,7 @@ export default function ChallengeDetailScreen() {
               {comparable && comparableConfig
                 ? comparablePointsHeadline(comparableConfig)
                 : isPoints
-                  ? `${totalTaskPoints(challenge.tasks)} pts`
+                  ? `${totalTaskPoints(tasks)} pts`
                   : challenge.is_official
                     ? challengeGoalLabel(challenge)
                     : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}

@@ -201,6 +201,8 @@ const STRINGS = {
   'challenge.cancelled': 'This challenge was cancelled.',
   'challenge.cancelledToast': 'Challenge cancelled.',
   'challenge.notFound': 'Challenge not found.',
+  'challenge.unavailable': 'This challenge isn’t available.',
+  'challenge.private': 'This challenge is private.',
   'challenge.joinFirst': 'Join first.',
   'create.screenTitle': 'New Skill Tournament',
   'create.currency': 'Currency',

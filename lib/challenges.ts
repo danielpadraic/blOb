@@ -44,6 +44,15 @@ import {
   isLiveOrUpcoming,
 } from '@/lib/challengeDiscoverability';
 
+import {
+  classifyChallengeLoadFailure,
+  createChallengeLoadError,
+  firstRouteParam,
+  isChallengeLoadError,
+  isPermissionDeniedError,
+  isTransientNetworkError,
+  type ChallengeLoadSnapshot,
+} from '@/lib/challengeLoad';
 import { copy } from '@/lib/copy';
 import { parseOfficialDayWindows } from '@/lib/officialDays';
 import { OFFICIAL_WEEK_10_SLUG, pickFeaturedOfficialChallenge } from '@/lib/officialSeries';
@@ -1083,33 +1092,73 @@ export async function fetchLobbyChallenges(userId?: string): Promise<Challenge[]
   return sortOfficialFirst(rows);
 }
 
-export async function fetchChallengeById(id: string): Promise<Challenge> {
-  let lastError: string | null = null;
+export async function fetchChallengeById(
+  id: string,
+  snapshot?: ChallengeLoadSnapshot | ChallengeWithStats | null,
+): Promise<Challenge> {
+  const challengeId = firstRouteParam(id);
+  if (!challengeId) {
+    throw createChallengeLoadError('unavailable');
+  }
+
+  let lastError: unknown = null;
 
   for (const columns of LOBBY_SELECTS) {
     try {
-      const { data, error } = await challengeList().select(columns).eq('id', id).maybeSingle();
+      const { data, error } = await challengeList().select(columns).eq('id', challengeId).maybeSingle();
       if (error) {
-        lastError = error.message;
+        lastError = error;
+        if (isTransientNetworkError(error)) {
+          throw createChallengeLoadError('server', error);
+        }
+        if (isPermissionDeniedError(error)) {
+          break;
+        }
         console.log('[blob:challenge] select failed', { columns, message: error.message });
         continue;
       }
       if (!data) {
         continue;
       }
-      const [hydrated] = await hydrateOfficialDisplay([data]);
-      return normalizeChallenge(hydrated ?? data);
+      try {
+        const [hydrated] = await hydrateOfficialDisplay([data]);
+        return normalizeChallenge(hydrated ?? data);
+      } catch (hydrateError) {
+        try {
+          return normalizeChallenge(data);
+        } catch {
+          throw createChallengeLoadError('server', hydrateError);
+        }
+      }
     } catch (caught) {
-      lastError = caught instanceof Error ? caught.message : String(caught ?? '');
-      console.log('[blob:challenge] select threw', { columns, message: lastError });
+      if (isChallengeLoadError(caught)) {
+        throw caught;
+      }
+      lastError = caught;
+      if (isTransientNetworkError(caught)) {
+        throw createChallengeLoadError('server', caught);
+      }
+      const message = caught instanceof Error ? caught.message : String(caught ?? '');
+      console.log('[blob:challenge] select threw', { columns, message });
     }
   }
 
-  const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: id });
-  if (reason.data === 'geo') {
-    throw new Error(copy('geo.unavailable'));
+  let accessReason: string | null = null;
+  try {
+    const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: challengeId });
+    accessReason = typeof reason.data === 'string' ? reason.data : null;
+  } catch {
+    accessReason = null;
   }
-  throw new Error(getErrorMessage(lastError ?? 'Challenge not found'));
+
+  throw createChallengeLoadError(
+    classifyChallengeLoadFailure({
+      accessReason,
+      snapshot,
+      error: lastError,
+    }),
+    lastError,
+  );
 }
 
 export type ChallengeShareState = {
