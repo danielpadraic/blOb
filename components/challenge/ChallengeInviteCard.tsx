@@ -22,6 +22,7 @@ import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { fetchChallengeById } from '@/lib/challenges';
 import { firstRouteParam } from '@/lib/challengeLoad';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { openChallengeLobby, prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
 import { formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
@@ -71,6 +72,8 @@ export type InviteChallenge = {
   cover_image_url?: string | null;
   sponsor_logo_url?: string | null;
   sponsor_name?: string | null;
+  task?: string | null;
+  tasks?: Array<{ title?: string | null }> | null;
 };
 
 export type InviteHost = {
@@ -314,7 +317,8 @@ export function ChallengeInviteCard({
   const tags = challengeCardTags({ challenge, hosting, joined });
   const namedSponsor = namedOfficialSponsor(challenge);
   const sponsorName = namedSponsor || officialSponsorName(challenge) || 'blOb';
-  const cardLabel = `${challenge.title}. ${status}. ${canCheckIn ? 'View or check-in' : cta}`;
+  const displayTitle = challengeDisplayTitle(challenge);
+  const cardLabel = `${displayTitle}. ${status}. ${canCheckIn ? 'View or check-in' : cta}`;
 
   async function openDetail() {
     const challengeId = firstRouteParam(challenge.id);
@@ -380,7 +384,7 @@ export function ChallengeInviteCard({
         <MediaPanel
           steps={mediaSteps}
           visual={visual}
-          title={challenge.title}
+          title={displayTitle}
           openLabel={cardLabel}
           category={challenge.category ?? undefined}
           typeTipOpen={typeTip.open}
@@ -407,8 +411,8 @@ export function ChallengeInviteCard({
             <AppText
               className="text-[16px] font-semibold leading-5"
               style={{ color: titleColor, minWidth: 0 }}
-              numberOfLines={1}>
-              {challenge.title}
+              numberOfLines={2}>
+              {challengeDisplayTitle(challenge)}
             </AppText>
           </Pressable>
         </View>

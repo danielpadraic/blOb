@@ -257,7 +257,7 @@ export function ChallengeDetailHeaderRight() {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}>
-      <WalletBar />
+      <WalletBar compact />
       {overflowVisible ? <ChallengeOverflowButton onPress={openOverflowMenu} /> : null}
     </View>
   );

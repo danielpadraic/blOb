@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
@@ -100,6 +100,48 @@ export function TabChromeHeader({
   const unreadCount = unread.data ?? 0;
   const unreadMessages = (conversations.data ?? []).filter((row) => row.unread).length;
   const tourLocked = Boolean(useTourOptional()?.active);
+  const { width } = useWindowDimensions();
+  const narrow = width <= 430;
+  const clusterPad = Math.max(insets.right, 12);
+
+  const rightCluster = (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        overflow: 'visible',
+        flexShrink: 0,
+        paddingRight: clusterPad,
+      }}>
+      {narrow ? null : <WalletBar compact />}
+      <TourAnchor id="tour-dm" style={{ overflow: 'visible' }}>
+        <HeaderIcon
+          label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
+          badge={unreadMessages > 0 ? <UnreadDot count={unreadMessages} /> : null}
+          onPress={() => {
+            wallet?.closeAll();
+            router.push(MESSAGES_HREF);
+          }}>
+          <Glyph name={GLYPH.reply} color={THEME.textPrimary} size={20} />
+        </HeaderIcon>
+      </TourAnchor>
+      <TourAnchor id="tour-bell" style={{ overflow: 'visible' }}>
+        <HeaderIcon
+          label={
+            alertsOpen
+              ? 'Close alerts'
+              : unreadCount > 0
+                ? `Alerts, ${unreadCount} unread`
+                : 'Alerts'
+          }
+          active={alertsOpen}
+          badge={unreadCount > 0 ? <UnreadDot count={unreadCount} /> : null}
+          onPress={onToggleAlerts}>
+          <Glyph name={GLYPH.bell} color={alertsOpen ? THEME.accent : THEME.textPrimary} size={20} />
+        </HeaderIcon>
+      </TourAnchor>
+    </View>
+  );
 
   return (
     <View
@@ -129,8 +171,9 @@ export function TabChromeHeader({
       ) : null}
       <View
         pointerEvents={tourLocked ? 'none' : 'auto'}
-        className="flex-row items-center px-4 pb-2.5 pt-2"
-        style={{ zIndex: 2, overflow: 'visible' }}>
+        className="pb-2.5 pt-2"
+        style={{ zIndex: 2, overflow: 'visible', paddingHorizontal: narrow ? 12 : 16 }}>
+        <View className="flex-row items-center" style={{ overflow: 'visible' }}>
           <View>
             <Pressable
               accessibilityRole="button"
@@ -174,52 +217,37 @@ export function TabChromeHeader({
               </View>
             ) : null}
           </View>
-          <TourAnchor id="tour-search" style={{ overflow: 'visible' }}>
-            <HeaderIcon
-              label={searchOpen ? 'Close search' : 'Search'}
-              active={searchOpen}
-              onPress={onToggleSearch}>
-              <Glyph name={GLYPH.search} color={searchOpen ? THEME.accent : THEME.textPrimary} size={20} />
-            </HeaderIcon>
-          </TourAnchor>
-          <View className="flex-1" />
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              overflow: 'visible',
-              paddingTop: 6,
-              paddingRight: Math.max(insets.right, 16) + 18,
-            }}>
-            <WalletBar />
-            <TourAnchor id="tour-dm" style={{ overflow: 'visible' }}>
+          {narrow ? (
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 8, justifyContent: 'center' }}>
+              <WalletBar compact />
+            </View>
+          ) : (
+            <TourAnchor id="tour-search" style={{ overflow: 'visible' }}>
               <HeaderIcon
-                label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
-                badge={unreadMessages > 0 ? <UnreadDot count={unreadMessages} /> : null}
-                onPress={() => {
-                  wallet?.closeAll();
-                  router.push(MESSAGES_HREF);
-                }}>
-                <Glyph name={GLYPH.reply} color={THEME.textPrimary} size={20} />
+                label={searchOpen ? 'Close search' : 'Search'}
+                active={searchOpen}
+                onPress={onToggleSearch}>
+                <Glyph name={GLYPH.search} color={searchOpen ? THEME.accent : THEME.textPrimary} size={20} />
               </HeaderIcon>
             </TourAnchor>
-            <TourAnchor id="tour-bell" style={{ overflow: 'visible' }}>
-              <HeaderIcon
-                label={
-                  alertsOpen
-                    ? 'Close alerts'
-                    : unreadCount > 0
-                      ? `Alerts, ${unreadCount} unread`
-                      : 'Alerts'
-                }
-                active={alertsOpen}
-                badge={unreadCount > 0 ? <UnreadDot count={unreadCount} /> : null}
-                onPress={onToggleAlerts}>
-                <Glyph name={GLYPH.bell} color={alertsOpen ? THEME.accent : THEME.textPrimary} size={20} />
-              </HeaderIcon>
-            </TourAnchor>
-          </View>
+          )}
+          {narrow ? null : <View className="flex-1" />}
+          {rightCluster}
         </View>
+        {narrow ? (
+          <View className="flex-row items-center" style={{ marginTop: 2 }}>
+            <TourAnchor id="tour-search" style={{ overflow: 'visible' }}>
+              <HeaderIcon
+                label={searchOpen ? 'Close search' : 'Search'}
+                active={searchOpen}
+                onPress={onToggleSearch}>
+                <Glyph name={GLYPH.search} color={searchOpen ? THEME.accent : THEME.textPrimary} size={20} />
+              </HeaderIcon>
+            </TourAnchor>
+            <View className="flex-1" />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -241,9 +269,8 @@ function HeaderIcon({
     <View
       style={{
         overflow: 'visible',
-        paddingTop: 8,
-        paddingRight: 16,
-        marginLeft: 6,
+        paddingTop: 6,
+        paddingRight: 8,
       }}>
       <Pressable
         accessibilityRole="button"

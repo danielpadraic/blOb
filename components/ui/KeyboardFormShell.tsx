@@ -94,11 +94,12 @@ export function KeyboardFormShell({
   const overlap = useKeyboardOverlap();
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
+  const lastFieldNode = useRef<View | null>(null);
   const footerHeight = useRef(0);
   const overlapRef = useRef(0);
   overlapRef.current = overlap;
   const safeBottom = Math.max(insets.bottom, 12);
-  const extraPad = overlap + (footer ? 16 : safeBottom);
+  const extraPad = overlap + 24 + (footer ? 0 : safeBottom);
   const gutter = paddingHorizontal ?? (padded ? 16 : 0);
 
   const scrollToTop = useCallback(() => {
@@ -106,10 +107,11 @@ export function KeyboardFormShell({
   }, []);
 
   const scrollFieldIntoView = useCallback((node: View) => {
+    lastFieldNode.current = node;
     const run = () => {
       node.measureInWindow((_x, y, _w, h) => {
         const windowH = Dimensions.get('window').height;
-        const reserved = footerHeight.current + overlapRef.current + 16;
+        const reserved = footerHeight.current + overlapRef.current + 24;
         const visibleBottom = windowH - reserved;
         const fieldBottom = y + h;
         const topGuard = 24;
@@ -131,6 +133,13 @@ export function KeyboardFormShell({
       setTimeout(run, Platform.OS === 'android' ? 80 : 40);
     });
   }, []);
+
+  useEffect(() => {
+    if (overlap <= 0 || !lastFieldNode.current) {
+      return;
+    }
+    scrollFieldIntoView(lastFieldNode.current);
+  }, [overlap, scrollFieldIntoView]);
 
   useEffect(() => {
     scrollToTop();

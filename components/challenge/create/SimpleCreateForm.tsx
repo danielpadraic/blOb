@@ -177,15 +177,17 @@ export function SimpleCreateForm() {
   const tour = useTourOptional();
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
+  const lastFieldNode = useRef<View | null>(null);
   const overlapRef = useRef(0);
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
   overlapRef.current = keyboardOverlap;
   const scrollFieldIntoView = useCallback((node: View) => {
+    lastFieldNode.current = node;
     const run = () => {
       node.measureInWindow((_x, y, _w, h) => {
         const windowH = Dimensions.get('window').height;
-        const reserved = 88 + overlapRef.current + 16;
+        const reserved = 88 + overlapRef.current + 24;
         const visibleBottom = windowH - reserved;
         const fieldBottom = y + h;
         const topGuard = 24;
@@ -207,6 +209,13 @@ export function SimpleCreateForm() {
       setTimeout(run, Platform.OS === 'android' ? 80 : 40);
     });
   }, []);
+
+  useEffect(() => {
+    if (keyboardOverlap <= 0 || !lastFieldNode.current) {
+      return;
+    }
+    scrollFieldIntoView(lastFieldNode.current);
+  }, [keyboardOverlap, scrollFieldIntoView]);
 
   useEffect(() => {
     tour?.setCreateCurrency(draft.currency);
@@ -476,7 +485,7 @@ export function SimpleCreateForm() {
       contentContainerStyle={{
         paddingHorizontal: 16,
         paddingBottom:
-          (tour?.createActive ? 220 : 24) + Math.max(keyboardOverlap, 0) + 88,
+          (tour?.createActive ? 220 : 0) + Math.max(keyboardOverlap, 0) + 88 + 24,
         flexGrow: 1,
       }}
       keyboardShouldPersistTaps="handled"

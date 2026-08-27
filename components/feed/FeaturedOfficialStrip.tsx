@@ -126,7 +126,7 @@ export function FeaturedOfficialStrip() {
           <View className="min-w-0 flex-1" style={{ paddingHorizontal: 10 }}>
             <AppText
               className="text-[16px] font-extrabold"
-              numberOfLines={1}
+              numberOfLines={2}
               style={{ color: '#FFFFFF' }}>
               {title}
             </AppText>

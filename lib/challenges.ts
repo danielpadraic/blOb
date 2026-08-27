@@ -56,6 +56,7 @@ import {
 import { copy } from '@/lib/copy';
 import { parseOfficialDayWindows } from '@/lib/officialDays';
 import { OFFICIAL_WEEK_10_SLUG, pickFeaturedOfficialChallenge } from '@/lib/officialSeries';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 
 const JOINABLE_NOT_STARTED_STATUSES = ['open', 'upcoming', 'starting'] as const;
 
@@ -69,15 +70,15 @@ const OFFICIAL_DISPLAY_SELECT =
   'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, cover_image_url, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
 
 const LOBBY_SELECTS = [
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version',
   '*',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, frequency, target_count, tasks, created_at, updated_at, sponsor_name, sponsor_logo_url',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, created_at, updated_at',
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility',
-  'id, title, is_official, created_by, buy_in_amount, days_required, status, category, challenge_type, visibility, prize_pool',
-  'id, title, is_official, buy_in_amount, status',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, task, created_at, updated_at',
+  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, status, starts_at, ends_at, prize_pool, category, challenge_type, visibility, task',
+  'id, title, is_official, created_by, buy_in_amount, days_required, status, category, challenge_type, visibility, prize_pool, task',
+  'id, title, is_official, buy_in_amount, status, task',
 ] as const;
 
 export type CreateChallengeInput = {
@@ -569,7 +570,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
   const rawType = String(row.challenge_type ?? 'consistency');
   return {
     id: String(row.id),
-    title: String(row.title ?? '').trim() || 'Untitled challenge',
+    title: challengeDisplayTitle(row),
     description: (row.description as string | null) ?? null,
     rules: (row.rules as string | null) ?? null,
     is_official: Boolean(row.is_official),
@@ -1169,11 +1170,12 @@ export type ChallengeShareState = {
 export async function fetchChallengeShareState(id: string): Promise<ChallengeShareState> {
   const { data, error } = await supabase
     .from('challenges')
-    .select('id, title')
+    .select('id, title, task')
     .eq('id', id)
     .maybeSingle();
   if (!error && data) {
-    return { reason: 'ok', title: String((data as { title?: string }).title ?? '') || null };
+    const title = challengeDisplayTitle(data as { title?: string; task?: string; tasks?: unknown });
+    return { reason: 'ok', title: title === 'Challenge' ? null : title };
   }
   const reason = await supabase.rpc('challenge_access_reason', { p_challenge_id: id });
   if (reason.data === 'geo') {

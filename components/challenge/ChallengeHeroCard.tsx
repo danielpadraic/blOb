@@ -18,6 +18,7 @@ import { challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { formatCash, isBucksChallenge } from '@/lib/currency';
 import { isOfficialJoinable } from '@/lib/officialSeries';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 
@@ -94,7 +95,7 @@ export function ChallengeHeroCard({
         className="text-[24px] font-extrabold leading-7"
         style={{ color: titleColor }}
         numberOfLines={2}>
-        {challenge.title}
+        {challengeDisplayTitle(challenge)}
       </AppText>
       {official ? (
         <OfficialSponsorLine

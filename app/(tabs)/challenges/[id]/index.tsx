@@ -119,6 +119,8 @@ import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { reportAppError, extractPostgrestCode } from '@/lib/appErrors';
 import { challengeLoadKind, firstRouteParam } from '@/lib/challengeLoad';
+import { isCheckinPost } from '@/lib/checkinPost';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
@@ -127,18 +129,20 @@ const BODY_METRICS_JOIN_COPY =
   'Missing: physical details. Official Fitness Challenges need them for matching — they stay private.';
 
 function ChallengeStackTitle({ title }: { title: string }) {
-  const label = title.trim();
+  const label = challengeDisplayTitle({ title });
   if (!label) {
     return null;
   }
   return (
-    <AppText
-      numberOfLines={1}
-      ellipsizeMode="tail"
-      className="text-[17px] font-extrabold text-charcoal"
-      style={{ minWidth: 0, maxWidth: '100%', flexShrink: 1 }}>
-      {label}
-    </AppText>
+    <View style={{ flex: 1, minWidth: 0, maxWidth: '100%', justifyContent: 'center' }}>
+      <AppText
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        className="text-[17px] font-extrabold text-charcoal"
+        style={{ minWidth: 0, maxWidth: '100%', flexShrink: 1 }}>
+        {label}
+      </AppText>
+    </View>
   );
 }
 
@@ -685,7 +689,13 @@ export default function ChallengeDetailScreen() {
   const signupLines = signupProofLines(challenge);
   const hideBuyIn =
     buyInAmount > 0 && (isBucksChallenge(challenge) || Boolean(challenge.host_funded));
-  const startNeeded = userStartNeededLabel(challenge, competitorCount);
+  const hasCheckins =
+    (submittedCheckins.data ?? 0) > 0 ||
+    (feed.data ?? []).some((post) => isCheckinPost(post));
+  const startNeeded =
+    challenge.status === 'live' || hasCheckins
+      ? null
+      : userStartNeededLabel(challenge, competitorCount);
   const remainingNow = competitorCount;
   const goalLabel = challengeGoalLabel(challenge, {
     daysCompleted,
@@ -699,9 +709,9 @@ export default function ChallengeDetailScreen() {
     ? 1
     : daysCompleted / Math.max(isPoints ? Math.max(tasks.length, 1) : target, 1);
   const startLine =
-    waitingToStart
+    waitingToStart && challenge.status !== 'live' && !hasCheckins
       ? startsInLabel(challenge, new Date(nowMs)) ??
-        userStartNeededLabel(challenge, competitorCount) ??
+        startNeeded ??
         copy('challenge.waitingToStart')
       : null;
   const stickyJoin = !isJoined && (needsBodyMetrics || canJoin || needsTopUp);
@@ -724,7 +734,12 @@ export default function ChallengeDetailScreen() {
       <Stack.Screen
         options={{
           title: '',
-          headerTitle: () => <ChallengeStackTitle title={challenge.title} />,
+          headerTitle: () => (
+            <ChallengeStackTitle title={challengeDisplayTitle(challenge)} />
+          ),
+          headerTitleContainerStyle: { flex: 1, minWidth: 0, maxWidth: '100%' },
+          headerRightContainerStyle: { flexGrow: 0, flexShrink: 0 },
+          headerLeftContainerStyle: { flexGrow: 0, flexShrink: 0 },
           headerBackVisible: false,
           headerLeft: () => <StackBackButton />,
           headerRight: () => <ChallengeDetailHeaderRight />,

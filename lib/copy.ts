@@ -451,6 +451,7 @@ const STRINGS = {
   'profile.photoShareFail': 'Photo updated. Couldn’t share to feed.',
   'wall.closed': 'You can’t post here anymore.',
   'wall.onHost': 'On {name}’s profile',
+  'wall.to': 'to',
   'wall.remove': 'Remove from profile',
   'wall.allow': 'Allow others to post on your profile',
   'wall.muteMentions': 'Mute mention notifications',

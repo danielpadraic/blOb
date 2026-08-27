@@ -17,7 +17,7 @@ import { countUpValues } from '@/lib/topup';
 import { THEME } from '@/lib/theme';
 import { formatCoins } from '@/utils/format';
 
-export function WalletBar() {
+export function WalletBar({ compact = false }: { compact?: boolean }) {
   const { profile } = useMyProfile();
   const wallet = useWalletOptional();
   const tour = useTourOptional();
@@ -143,22 +143,31 @@ export function WalletBar() {
         borderColor: THEME.border,
         borderWidth: 1,
         borderRadius: 999,
-        paddingVertical: 6,
-        paddingHorizontal: 10,
+        paddingVertical: compact ? 4 : 6,
+        paddingHorizontal: compact ? 7 : 10,
+        flexShrink: 1,
+        minWidth: 0,
+        alignSelf: 'flex-start',
       }}
       hitSlop={6}>
       <TourAnchor id="tour-coins">
-        <View className="flex-row items-center" style={{ minHeight: 28 }}>
-          <CurrencyMark currency="coins" size={18} />
-          <AppText className="ml-1.5 text-[12px] font-extrabold text-charcoal">
+        <View className="flex-row items-center" style={{ minHeight: 28, minWidth: 0, flexShrink: 1 }}>
+          <CurrencyMark currency="coins" size={compact ? 15 : 18} />
+          <AppText
+            className="ml-1 text-[12px] font-extrabold text-charcoal"
+            numberOfLines={1}
+            style={{ fontVariant: ['tabular-nums'], minWidth: 0, flexShrink: 1 }}>
             {official ? copy('official.infinity') : formatCoins(displayCoins).replace(' Coins', '')}
           </AppText>
         </View>
       </TourAnchor>
-      <AppText className="mx-1.5 text-[12px] font-extrabold text-muted">·</AppText>
+      <AppText className="mx-1 text-[12px] font-extrabold text-muted">·</AppText>
       <TourAnchor id="tour-money">
-        <View className="flex-row items-center" style={{ minHeight: 28 }}>
-          <AppText className="ml-1.5 text-[12px] font-extrabold" style={{ color: '#1B7A4A' }}>
+        <View className="flex-row items-center" style={{ minHeight: 28, minWidth: 0, flexShrink: 1 }}>
+          <AppText
+            className="text-[12px] font-extrabold"
+            numberOfLines={1}
+            style={{ color: '#1B7A4A', fontVariant: ['tabular-nums'], minWidth: 0, flexShrink: 1 }}>
             {formatCash(displayBucks)}
           </AppText>
         </View>

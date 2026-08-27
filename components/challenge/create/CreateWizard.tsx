@@ -146,26 +146,6 @@ const TUTORIAL_KEY = 'blob:create-tutorial';
 
 type BobIssue = { field: string; step: number };
 
-const FOCUSABLE_FIELDS = new Set([
-  'title',
-  'description',
-  'task',
-  'duration_days',
-  'duration_value',
-  'target_count',
-  'top_places_value',
-  'creator_contribution',
-  'buy_in',
-  'max_participants',
-  'min_minutes',
-  'rules',
-  'extra_rules',
-  'points_to_win',
-  'cover_image_url',
-  'rules_video_url',
-  'tasks',
-]);
-
 export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -242,7 +222,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     reset,
     setError,
     clearErrors,
-    setFocus,
     formState: { errors, isSubmitting },
   } = useForm<CreateChallengeValues>({
     resolver: zodResolver(createChallengeSchema),
@@ -302,6 +281,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const pendingAnchor = useRef<string | null>(null);
   const scrollToAnchorRef = useRef<(name: string) => void>(() => {});
   const scrollY = useRef(0);
+  const lastFieldNode = useRef<View | null>(null);
   const footerDockHeight = useRef(72);
   const keyboardHeightRef = useRef(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -353,13 +333,41 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (keyboardHeight <= 0 || !pendingAnchor.current) {
+    if (keyboardHeight <= 0) {
       return;
     }
-    const name = pendingAnchor.current;
-    requestAnimationFrame(() => {
-      setTimeout(() => scrollToAnchorRef.current(name), Platform.OS === 'android' ? 80 : 40);
-    });
+    if (pendingAnchor.current) {
+      const name = pendingAnchor.current;
+      requestAnimationFrame(() => {
+        setTimeout(() => scrollToAnchorRef.current(name), Platform.OS === 'android' ? 80 : 40);
+      });
+      return;
+    }
+    if (lastFieldNode.current) {
+      const node = lastFieldNode.current;
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          node.measureInWindow((_x, y, _w, h) => {
+            const windowH = Dimensions.get('window').height;
+            const reserved = footerDockHeight.current + keyboardHeightRef.current + 24;
+            const visibleBottom = windowH - reserved;
+            const fieldBottom = y + h;
+            let delta = 0;
+            if (fieldBottom > visibleBottom) {
+              delta = fieldBottom - visibleBottom;
+            } else if (y < 24) {
+              delta = y - 24;
+            }
+            if (delta !== 0) {
+              scrollRef.current?.scrollTo({
+                y: Math.max(0, scrollY.current + delta),
+                animated: true,
+              });
+            }
+          });
+        }, Platform.OS === 'android' ? 80 : 40);
+      });
+    }
   }, [keyboardHeight]);
 
   function captureBaseline(nextValues: CreateChallengeValues, nextStep: number) {
@@ -1118,7 +1126,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     const run = () => {
       node.measureInWindow((_x, y, _w, h) => {
         const windowH = Dimensions.get('window').height;
-        const reserved = footerDockHeight.current + keyboardHeightRef.current + 16;
+        const reserved = footerDockHeight.current + keyboardHeightRef.current + 24;
         const visibleBottom = windowH - reserved;
         const fieldBottom = y + h;
         const topGuard = 24;
@@ -1142,16 +1150,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       });
     } else {
       run();
-    }
-    const focusName = name.split('.')[0];
-    if (FOCUSABLE_FIELDS.has(focusName) || focusName === 'tasks' || focusName === 'extra_rules') {
-      requestAnimationFrame(() => {
-        try {
-          setFocus((name.includes('.') ? name : focusName) as FieldPath<CreateChallengeValues>);
-        } catch {
-          // Choice fields have no text input.
-        }
-      });
     }
   }
   scrollToAnchorRef.current = scrollToAnchor;
@@ -1460,14 +1458,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           scrollToAnchorRef.current(name);
         }
       },
-      onFieldFocus: (name) => {
-        pendingAnchor.current = name;
-        requestAnimationFrame(() => {
-          setTimeout(
-            () => scrollToAnchorRef.current(name),
-            keyboardHeightRef.current > 0 ? 40 : 280,
-          );
-        });
+      onFieldFocus: () => {
+        // Input scrolls the focused field. Do not scroll a section anchor
+        // (Visibility / Private Corporate) or steal focus.
       },
     }),
     [],
@@ -1505,24 +1498,31 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       value={{
         scrollToTop: () => scrollRef.current?.scrollTo({ y: 0, animated: true }),
         scrollFieldIntoView: (node) => {
-          node.measureInWindow((_x, y, _w, h) => {
-            const windowH = Dimensions.get('window').height;
-            const reserved = footerH + keyboardHeight + 16;
-            const visibleBottom = windowH - reserved;
-            const fieldBottom = y + h;
-            const topGuard = 24;
-            let delta = 0;
-            if (fieldBottom > visibleBottom) {
-              delta = fieldBottom - visibleBottom;
-            } else if (y < topGuard) {
-              delta = y - topGuard;
-            }
-            if (delta !== 0) {
-              scrollRef.current?.scrollTo({
-                y: Math.max(0, scrollY.current + delta),
-                animated: true,
-              });
-            }
+          lastFieldNode.current = node;
+          pendingAnchor.current = null;
+          const run = () => {
+            node.measureInWindow((_x, y, _w, h) => {
+              const windowH = Dimensions.get('window').height;
+              const reserved = footerDockHeight.current + keyboardHeightRef.current + 24;
+              const visibleBottom = windowH - reserved;
+              const fieldBottom = y + h;
+              const topGuard = 24;
+              let delta = 0;
+              if (fieldBottom > visibleBottom) {
+                delta = fieldBottom - visibleBottom;
+              } else if (y < topGuard) {
+                delta = y - topGuard;
+              }
+              if (delta !== 0) {
+                scrollRef.current?.scrollTo({
+                  y: Math.max(0, scrollY.current + delta),
+                  animated: true,
+                });
+              }
+            });
+          };
+          requestAnimationFrame(() => {
+            setTimeout(run, Platform.OS === 'android' ? 80 : 40);
           });
         },
       }}>
@@ -1604,7 +1604,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
           contentContainerStyle={{
-            paddingBottom: (tour?.createActive ? 220 : 24) + keyboardHeight + footerH,
+            paddingBottom: (tour?.createActive ? 220 : 0) + keyboardHeight + footerH + 24,
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
@@ -2144,17 +2144,16 @@ function GoalSlide({
             />
           )}
         />
-        {isPoints ? null : (
-          <View className="mt-3">
-            <ExtraTasksEditor
-              tasks={extraTasks ?? []}
-              onChange={onExtraTasksChange}
-              onTitleFocus={onTaskFocus}
-              hint={copy('create.addTaskHint')}
-            />
-          </View>
-        )}
       </FieldAnchor>
+      {isPoints ? null : (
+        <View className="mt-3">
+          <ExtraTasksEditor
+            tasks={extraTasks ?? []}
+            onChange={onExtraTasksChange}
+            hint={copy('create.addTaskHint')}
+          />
+        </View>
+      )}
       <FieldAnchor name="visibility">
         <PrivacyModePicker
           privacyMode={privacyMode}

@@ -36,6 +36,7 @@ import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
 import { supabase } from '@/lib/supabase';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { copy } from '@/lib/copy';
 import { flexChildMin, THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
@@ -97,7 +98,7 @@ function PostCardInner({
     post.source === 'challenge' ||
     post.source === 'checkin';
   const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
-  const challengeTitle = preview.data?.title?.trim() || null;
+  const challengeTitle = preview.data ? challengeDisplayTitle(preview.data) : null;
   const city = postLocality(post);
   const caption = checkin ? checkinCardCaption(content, challengeTitle, post.edited_at) : content;
   const showInLine = Boolean(tagged && !challengeFeed && hidePromoCard);
@@ -131,11 +132,11 @@ function PostCardInner({
             username={post.author?.username}
             userId={post.author_id}
             style={[flexChildMin(), { maxWidth: '100%' }]}>
-            <View className="flex-row items-center" style={[{ gap: 6 }, flexChildMin()]}>
+            <View className="flex-row flex-wrap items-center" style={[{ gap: 6 }, flexChildMin()]}>
               <AppText
                 className="font-semibold text-charcoal"
-                style={{ fontSize: 16, lineHeight: 20, minWidth: 0, flexShrink: 1, flexGrow: 0 }}
-                numberOfLines={1}>
+                style={{ fontSize: 16, lineHeight: 20, minWidth: 0, flexShrink: 1, flexGrow: 1 }}
+                numberOfLines={2}>
                 {name}
               </AppText>
               <OfficialMark profile={post.author} compact />
@@ -145,8 +146,7 @@ function PostCardInner({
                   color: THEME.textMuted,
                   lineHeight: 18,
                   minWidth: 0,
-                  flexShrink: 2,
-                  flexGrow: 1,
+                  flexShrink: 1,
                 }}
                 numberOfLines={1}>
                 @{handle}
@@ -195,8 +195,8 @@ function PostCardInner({
         </Pressable>
       </View>
       {showInLine && post.challenge_id ? (
-        <View className="flex-row items-center" style={{ gap: 8, marginTop: 6, minWidth: 0 }}>
-          <View style={[flexChildMin(), { flex: 1 }]}>
+        <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: 6, minWidth: 0 }}>
+          <View style={[flexChildMin(), { flexGrow: 1, flexShrink: 1, minWidth: 140 }]}>
             <InChallengeLine
               challengeId={post.challenge_id}
               title={challengeTitle}
@@ -236,14 +236,10 @@ function PostCardInner({
             </WebTapButton>
           ) : null}
         </View>
-      ) : post.wall_host || (mine && !challengeFeed) || (mine && hiddenFromHome) ? (
-        <View className="flex-row items-center" style={{ gap: 8, marginTop: 4, minWidth: 0 }}>
-          {post.wall_host ? (
-            <AppText className="flex-1 text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={1}>
-              {copy('wall.onHost', 'neutral', {
-                name: post.wall_host.display_name?.trim() || post.wall_host.username || 'this blob',
-              })}
-            </AppText>
+      ) : (post.wall_host && !challengeFeed) || (mine && !challengeFeed) || (mine && hiddenFromHome) ? (
+        <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: 4, minWidth: 0 }}>
+          {post.wall_host && !challengeFeed ? (
+            <WallHostLine host={post.wall_host} />
           ) : (
             <View style={{ flex: 1 }} />
           )}
@@ -492,29 +488,69 @@ function InChallengeLine({
         })
       }
       hitSlop={4}
-      className="flex-row items-center"
-      style={{ minWidth: 0, maxWidth: '100%' }}>
+      className="flex-row items-start"
+      style={{ minWidth: 0, maxWidth: '100%', flex: 1 }}>
       <AppText
         className="text-[13px] leading-5"
         style={{ color: THEME.textMuted, flexShrink: 0 }}>
         in{' '}
       </AppText>
       <AppText
-        numberOfLines={1}
+        numberOfLines={2}
         ellipsizeMode="tail"
         className="text-[13px] font-semibold leading-5"
         style={{
           color: THEME.accent,
           fontWeight: '600',
+          flex: 1,
           flexShrink: 1,
           minWidth: 0,
-          ...(Platform.OS === 'web'
-            ? { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-            : null),
         }}>
         {label}
       </AppText>
     </Pressable>
+  );
+}
+
+function WallHostLine({
+  host,
+}: {
+  host: { id?: string | null; username?: string | null; display_name?: string | null; avatar_url?: string | null };
+}) {
+  const name = host.display_name?.trim() || host.username?.trim();
+  if (!host.id && !host.username) {
+    return (
+      <AppText className="flex-1 text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={2}>
+        {copy('wall.onHost', 'neutral', { name: name || 'this blob' })}
+      </AppText>
+    );
+  }
+  return (
+    <ProfileLink
+      username={host.username}
+      userId={host.id}
+      style={[flexChildMin(), { flex: 1, minWidth: 0 }]}>
+      <View className="flex-row flex-wrap items-center" style={{ gap: 6, minWidth: 0 }}>
+        <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted, flexShrink: 0 }}>
+          {copy('wall.to')}
+        </AppText>
+        <Avatar uri={host.avatar_url} name={name || 'blob'} size={28} />
+        <AppText
+          className="font-semibold text-charcoal"
+          style={{ fontSize: 14, lineHeight: 18, minWidth: 0, flexShrink: 1 }}
+          numberOfLines={2}>
+          {name || 'blob'}
+        </AppText>
+        {host.username ? (
+          <AppText
+            className="text-[13px]"
+            style={{ color: THEME.textMuted, lineHeight: 18, minWidth: 0, flexShrink: 1 }}
+            numberOfLines={1}>
+            @{host.username}
+          </AppText>
+        ) : null}
+      </View>
+    </ProfileLink>
   );
 }
 

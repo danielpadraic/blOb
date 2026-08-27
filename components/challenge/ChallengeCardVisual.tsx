@@ -19,6 +19,7 @@ import { parseChallengeProofs } from '@/lib/challengeProofs';
 import { challengeDurationDays, challengeGoalLabel, challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { usesCumulativeScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialGuaranteeAmount, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
 import { copy } from '@/lib/copy';
@@ -167,7 +168,7 @@ export function ChallengeCardVisual({
           className={compact ? 'text-[17px] font-extrabold leading-5' : 'text-[20px] font-extrabold leading-6'}
           style={{ color: titleColor }}
           numberOfLines={2}>
-          {challenge.title}
+          {challengeDisplayTitle(challenge)}
         </AppText>
         {official ? (
           <View className="mt-1.5">
@@ -290,7 +291,7 @@ export function ChallengeCardVisual({
           <View style={{ flex: primaryLabel ? 0.72 : 1 }}>
             <OfficialInviteButton
               challengeId={challenge.id}
-              challengeTitle={challenge.title}
+              challengeTitle={challengeDisplayTitle(challenge)}
               tone={dark ? 'hero' : 'card'}
               embedded
             />
@@ -336,7 +337,7 @@ export function ChallengeCardVisual({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={challenge.title}
+        accessibilityLabel={challengeDisplayTitle(challenge)}
         disabled={!onPress}>
         {openBody}
       </Pressable>
