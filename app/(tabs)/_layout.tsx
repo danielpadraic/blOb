@@ -223,11 +223,13 @@ function TabLayoutInner() {
           }
           const linkingUrl =
             typeof Linking.getLinkingURL === 'function' ? Linking.getLinkingURL() : null;
+          const addressBar =
+            Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : null;
           if (
             pathRef.current !== '/feed' &&
             shouldResetToHomeOnLaunch({
               pathname: launchPath.current,
-              initialUrl: linkingUrl || initialUrl,
+              initialUrl: addressBar || linkingUrl || initialUrl,
               platform: Platform.OS,
             })
           ) {

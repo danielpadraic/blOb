@@ -42,10 +42,27 @@ export function ChromeOverlay({
         style={[styles.backdrop, { backgroundColor: scrim }]}
         onStartShouldSetResponder={() => Boolean(onClose)}
         onResponderRelease={() => onClose?.()}
-        {...(Platform.OS === 'web' && onClose ? ({ onClick: onClose } as object) : null)}
+        {...(Platform.OS === 'web' && onClose
+          ? ({
+              onClick: (event: { target: unknown; currentTarget: unknown }) => {
+                if (event.target === event.currentTarget) {
+                  onClose();
+                }
+              },
+            } as object)
+          : null)}
       />
       <View pointerEvents="box-none" style={[styles.slot, { justifyContent }]}>
-        <View pointerEvents="auto" style={styles.sheet}>
+        <View
+          pointerEvents="auto"
+          style={styles.sheet}
+          {...(Platform.OS === 'web'
+            ? ({
+                onClick: (event: { stopPropagation: () => void }) => {
+                  event.stopPropagation();
+                },
+              } as object)
+            : null)}>
           {children}
         </View>
       </View>

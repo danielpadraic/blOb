@@ -643,7 +643,11 @@ function MediaFrame({
       ) : (
         <Image
           source={{ uri }}
-          style={{ width: '100%', height: '100%' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            ...(blur && Platform.OS === 'web' ? ({ filter: 'blur(16px)' } as object) : null),
+          }}
           contentFit="contain"
           contentPosition="center"
           cachePolicy="memory-disk"

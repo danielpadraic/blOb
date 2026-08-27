@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
+import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallenge } from '@/hooks/useChallenge';
 import { applyEditedPostToFeeds, useEditPost } from '@/hooks/usePostEdit';
@@ -101,6 +102,7 @@ export function PostEditor({
   }
 
   function hideUrl(url: string) {
+    console.log('[blob:hide]', url);
     if (!isPersistedMediaUrl(url)) {
       onToast?.(copy('post.savePhotoFirst'));
       return;
@@ -362,15 +364,16 @@ function HideControl({
   const title = hidden ? copy('post.unhide') : 'Hide';
   const faded = Boolean(blocked && !hidden);
   return (
-    <Pressable
-      accessibilityRole="button"
+    <WebTapButton
       accessibilityLabel={`${title} ${url}`}
-      accessibilityHint={blocked ?? undefined}
-      onPress={onPress}
-      hitSlop={8}
+      onPress={() => {
+        console.log('[blob:hide]', url);
+        onPress();
+      }}
       style={{
         height: 44,
         minWidth: 72,
+        minHeight: 44,
         paddingHorizontal: 12,
         borderRadius: THEME.radiusSm,
         borderWidth: 1,
@@ -382,7 +385,7 @@ function HideControl({
       <AppText className="text-[14px] font-semibold" style={{ color: faded ? THEME.textMuted : THEME.primary }}>
         {title}
       </AppText>
-    </Pressable>
+    </WebTapButton>
   );
 }
 
@@ -403,7 +406,11 @@ function EditorFrame({
       }}>
       <Image
         source={{ uri }}
-        style={{ width: '100%', height: '100%' }}
+        style={{
+          width: '100%',
+          height: '100%',
+          ...(hidden && Platform.OS === 'web' ? ({ filter: 'blur(16px)' } as object) : null),
+        }}
         contentFit="contain"
         blurRadius={hidden ? 36 : 0}
       />
@@ -412,16 +419,28 @@ function EditorFrame({
           pointerEvents="none"
           style={{
             position: 'absolute',
-            left: 10,
-            bottom: 10,
-            backgroundColor: 'rgba(16,19,18,0.72)',
-            borderRadius: 12,
-            paddingHorizontal: 10,
-            paddingVertical: 5,
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(16,19,18,0.28)',
+            ...(Platform.OS === 'web'
+              ? ({ backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } as object)
+              : null),
           }}>
-          <AppText className="text-[12px] font-semibold" style={{ color: THEME.surface }}>
-            {copy('post.hiddenByAuthor')}
-          </AppText>
+          <View
+            style={{
+              backgroundColor: 'rgba(16,19,18,0.72)',
+              borderRadius: 12,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+            }}>
+            <AppText className="text-[12px] font-semibold" style={{ color: THEME.surface }}>
+              {copy('post.hiddenByAuthor')}
+            </AppText>
+          </View>
         </View>
       ) : null}
     </View>

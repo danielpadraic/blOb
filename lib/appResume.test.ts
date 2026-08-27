@@ -90,5 +90,29 @@ describe('shouldResetToHomeOnLaunch', () => {
         platform: 'web',
       }),
     ).toBe(false);
+    expect(
+      shouldResetToHomeOnLaunch({
+        pathname: '/challenges/week_10',
+        initialUrl: 'https://blob.mobi/challenges/week_10',
+        platform: 'web',
+      }),
+    ).toBe(false);
+  });
+
+  it('opens Home on web when the address bar is not a challenge link', () => {
+    expect(
+      shouldResetToHomeOnLaunch({
+        pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        initialUrl: 'https://blob.mobi/',
+        platform: 'web',
+      }),
+    ).toBe(true);
+    expect(
+      shouldResetToHomeOnLaunch({
+        pathname: '/challenges/week_10',
+        initialUrl: 'https://blob.mobi/feed',
+        platform: 'web',
+      }),
+    ).toBe(true);
   });
 });

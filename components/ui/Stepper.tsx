@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, TextInput, View } from 'react-native';
+import { Platform, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { WebTapButton } from '@/components/ui/WebTapButton';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
+
+const BUMP = 44;
+const VALUE = 72;
 
 type StepperProps = {
   value: number;
@@ -100,13 +104,14 @@ export function Stepper({
   }
 
   return (
-    <View style={{ width: '100%', maxWidth: 280, overflow: 'visible' }}>
+    <View style={{ alignSelf: 'flex-start', width: BUMP + VALUE + BUMP + 8, overflow: 'visible' }}>
       <View
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
         accessibilityValue={{ min, max, now: safe }}
         style={{
           flexDirection: 'row',
+          flexWrap: 'nowrap',
           alignItems: 'center',
           backgroundColor: THEME.surface,
           borderWidth: 1,
@@ -140,14 +145,21 @@ export function Stepper({
           selectTextOnFocus
           textAlign="center"
           style={{
-            flexGrow: 1,
-            flexShrink: 1,
-            minWidth: 56,
-            minHeight: 44,
+            width: VALUE,
+            maxWidth: VALUE,
+            minWidth: VALUE,
+            flexGrow: 0,
+            flexShrink: 0,
+            flexBasis: VALUE,
+            height: BUMP,
+            minHeight: BUMP,
             paddingHorizontal: 4,
             fontSize: 16,
             fontWeight: '800',
             color: THEME.textPrimary,
+            ...(Platform.OS === 'web'
+              ? ({ display: 'flex', boxSizing: 'border-box' } as object)
+              : null),
           }}
         />
         <StepperBump
@@ -178,24 +190,23 @@ function StepperBump({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
+    <WebTapButton
       accessibilityLabel={label}
-      accessibilityState={{ disabled: faded }}
       onPress={onPress}
-      hitSlop={6}
       style={{
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: BUMP,
+        height: BUMP,
+        minWidth: BUMP,
+        minHeight: BUMP,
+        borderRadius: BUMP / 2,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: THEME.background,
         opacity: faded ? 0.38 : 1,
         flexShrink: 0,
-        ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
+        flexGrow: 0,
       }}>
       <AppText className="text-[18px] font-bold text-charcoal">{glyph}</AppText>
-    </Pressable>
+    </WebTapButton>
   );
 }

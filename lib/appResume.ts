@@ -7,7 +7,7 @@ const KEEP_ROUTE =
   /\/(onboarding|capture|submit|create|compose|details|auth|reset-password|forgot-password)/i;
 
 const EXPLICIT_LAUNCH =
-  /(?:^|[/?#]|:\/\/)(?:challenges\/[0-9a-f-]{8,}|invite\/|feed\/p\/|story\/|reel\/)/i;
+  /(?:^|[/?#]|:\/\/)(?:challenges\/[^/?#]+|invite\/|feed\/p\/|story\/|reel\/)/i;
 
 export function shouldReturnHomeOnResume(input: {
   previous: AppStateStatus | null;
@@ -57,9 +57,6 @@ export function shouldResetToHomeOnLaunch(input: {
   platform?: string;
 }): boolean {
   if (isExplicitLaunchUrl(input.initialUrl)) {
-    return false;
-  }
-  if (input.platform === 'web') {
     return false;
   }
   return shouldReturnHomeOnResume({
