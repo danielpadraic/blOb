@@ -21,6 +21,7 @@ import {
   fetchFollowing,
   fetchFriendRequests,
   fetchBlockedPeerIds,
+  fetchFriendCount,
   fetchFriends,
   fetchFriendshipSnapshot,
   fetchMessages,
@@ -81,6 +82,7 @@ export const socialKeys = {
   followers: (userId: string) => ['followers', userId] as const,
   following: (userId: string) => ['following', userId] as const,
   friends: (userId: string) => ['friends', userId] as const,
+  friendCount: (userId: string) => ['friend-count', userId] as const,
   requests: (userId: string) => ['friend-requests', userId] as const,
   peopleSearch: (userId: string, term: string) => ['people-search', userId, term] as const,
   friendship: (userId: string, targetId: string) => ['friendship', userId, targetId] as const,
@@ -130,6 +132,8 @@ function invalidateFriendship(
   void queryClient.invalidateQueries({ queryKey: socialKeys.friendship(userId, targetUserId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.friends(userId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.friends(targetUserId) });
+  void queryClient.invalidateQueries({ queryKey: socialKeys.friendCount(userId) });
+  void queryClient.invalidateQueries({ queryKey: socialKeys.friendCount(targetUserId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.requests(userId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.requests(targetUserId) });
   void queryClient.invalidateQueries({ queryKey: socialKeys.blockedPeers(userId) });
@@ -164,6 +168,15 @@ export function useFriends(userId?: string | null, options?: { enabled?: boolean
     queryKey: socialKeys.friends(id ?? ''),
     enabled: Boolean(id) && options?.enabled !== false,
     queryFn: () => fetchFriends(id!),
+  });
+}
+
+export function useFriendCount(userId?: string | null) {
+  return useQuery({
+    queryKey: socialKeys.friendCount(userId ?? ''),
+    enabled: Boolean(userId),
+    staleTime: 60_000,
+    queryFn: () => fetchFriendCount(userId!),
   });
 }
 

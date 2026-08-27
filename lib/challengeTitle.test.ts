@@ -25,8 +25,8 @@ describe('challengeDisplayTitle', () => {
     ).toBe('Journal tonight');
   });
 
-  it('falls back to Challenge when nothing real exists', () => {
-    expect(challengeDisplayTitle({ title: 'Untitled challenge' })).toBe('Challenge');
+  it('returns empty when nothing real exists — never a fake Challenge name', () => {
+    expect(challengeDisplayTitle({ title: 'Untitled challenge' })).toBe('');
     expect(challengeDisplayTitle(null)).toBe('');
   });
 });

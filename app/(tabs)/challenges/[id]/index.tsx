@@ -41,6 +41,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useChallenge,
+  useChallengeFeedPreview,
   useChallengeParticipants,
   useChallengeSettlement,
   useMarkChallengeJudging,
@@ -120,6 +121,7 @@ import { tabBarLift, THEME } from '@/lib/theme';
 import { reportAppError, extractPostgrestCode } from '@/lib/appErrors';
 import { challengeLoadKind, firstRouteParam } from '@/lib/challengeLoad';
 import { isCheckinPost } from '@/lib/checkinPost';
+import { challengeHasDurationHint, resolveChallengeHero } from '@/lib/challengeOpen';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
@@ -128,8 +130,17 @@ import { getErrorMessage } from '@/utils/errors';
 const BODY_METRICS_JOIN_COPY =
   'Missing: physical details. Official Fitness Challenges need them for matching — they stay private.';
 
-function ChallengeStackTitle({ title }: { title: string }) {
-  const label = challengeDisplayTitle({ title });
+function ChallengeStackTitle({
+  challenge,
+}: {
+  challenge: {
+    title?: string | null;
+    task?: string | null;
+    tasks?: Array<{ title?: string | null } | string> | null;
+    extra_tasks?: Array<{ title?: string | null } | string> | null;
+  } | null;
+}) {
+  const label = challengeDisplayTitle(challenge);
   if (!label) {
     return null;
   }
@@ -191,7 +202,20 @@ export default function ChallengeDetailScreen() {
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useMyProfile();
   const challengeQuery = useChallenge(id || undefined);
-  const hostQuery = useProfile(challengeQuery.data?.created_by ?? undefined);
+  const previewQuery = useChallengeFeedPreview(id || undefined);
+  const loadKind = challengeLoadKind(challengeQuery.error);
+  const showQueryError =
+    Boolean(id) &&
+    challengeQuery.isError &&
+    !challengeQuery.isFetching &&
+    !challengeQuery.isLoading;
+  const challenge = resolveChallengeHero({
+    id,
+    queryData:
+      !showQueryError && challengeQuery.data?.id === id ? challengeQuery.data : undefined,
+    preview: previewQuery.data,
+  });
+  const hostQuery = useProfile(challenge?.created_by ?? undefined);
   const roster = useChallengeParticipants(id);
   const boardProfiles = useQuery({
     queryKey: ['challenge-board-profiles', id, (roster.data ?? []).map((row) => row.user_id).join(',')],
@@ -232,14 +256,6 @@ export default function ChallengeDetailScreen() {
         : 'overview',
   );
 
-  const loadKind = challengeLoadKind(challengeQuery.error);
-  const showQueryError =
-    Boolean(id) &&
-    challengeQuery.isError &&
-    !challengeQuery.isFetching &&
-    !challengeQuery.isLoading;
-  const challenge =
-    showQueryError || !id || challengeQuery.data?.id !== id ? undefined : challengeQuery.data;
   const hostProfile = hostQuery.data;
   const heroHost =
     hostProfile && typeof hostProfile === 'object' && hostProfile.id
@@ -534,7 +550,7 @@ export default function ChallengeDetailScreen() {
       <Screen>
         <Stack.Screen
           options={{
-            title: 'Challenge',
+            title: '',
             headerBackVisible: false,
             headerLeft: () => <StackBackButton />,
             headerRight: () => <ChallengeDetailHeaderRight />,
@@ -629,7 +645,8 @@ export default function ChallengeDetailScreen() {
   const isUnlimited = isUnlimitedChallenge(challenge);
   const totalCount = usesTotalCountCheckins(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
-  const showDayRing = isJoined && usesConsistencyExperience(challenge);
+  const previewHero = Boolean(challenge.preview_hero);
+  const showDayRing = !previewHero && isJoined && usesConsistencyExperience(challenge);
   const checkinTarget = challengeTargetCount(challenge);
   const target = totalCount ? checkinTarget : durationDays;
   const submittedCount = Math.max(
@@ -697,11 +714,14 @@ export default function ChallengeDetailScreen() {
       ? null
       : userStartNeededLabel(challenge, competitorCount);
   const remainingNow = competitorCount;
-  const goalLabel = challengeGoalLabel(challenge, {
-    daysCompleted,
-    taskCount: Math.max(tasks.length, 1),
-    distanceMetersCompleted: participation?.distance_meters_total ?? 0,
-  });
+  const goalLabel =
+    previewHero && !challengeHasDurationHint(challenge)
+      ? ''
+      : challengeGoalLabel(challenge, {
+          daysCompleted,
+          taskCount: Math.max(tasks.length, 1),
+          distanceMetersCompleted: participation?.distance_meters_total ?? 0,
+        });
   const prizeForfeited =
     remainingNow <= 0 &&
     (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0);
@@ -734,9 +754,7 @@ export default function ChallengeDetailScreen() {
       <Stack.Screen
         options={{
           title: '',
-          headerTitle: () => (
-            <ChallengeStackTitle title={challengeDisplayTitle(challenge)} />
-          ),
+          headerTitle: () => <ChallengeStackTitle challenge={challenge} />,
           headerTitleContainerStyle: { flex: 1, minWidth: 0, maxWidth: '100%' },
           headerRightContainerStyle: { flexGrow: 0, flexShrink: 0 },
           headerLeftContainerStyle: { flexGrow: 0, flexShrink: 0 },

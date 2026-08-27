@@ -26,7 +26,7 @@ import {
 import { usePublicProfile } from '@/hooks/usePublicProfile';
 import {
   useAcceptFriendRequest,
-  useFriends,
+  useFriendCount,
   useFriendshipStatus,
   useSendFriendRequest,
   useUnfriend,
@@ -79,8 +79,8 @@ export default function PublicProfileScreen() {
 
   const profile = bundle.data?.profile;
   const posts = useAuthorFeed(profile?.id);
-  const friendsQuery = useFriends(profile?.id);
   const friendship = useFriendshipStatus(profile?.id);
+  const friendCountQuery = useFriendCount(profile?.id);
   const follow = useFollowState(profile?.id);
   const toggleFollow = useToggleFollow(profile?.id);
   const sendRequest = useSendFriendRequest();
@@ -168,8 +168,7 @@ export default function PublicProfileScreen() {
       friends: relation?.status === 'accepted',
     });
   });
-  const friendRows = (friendsQuery.data ?? []).filter((row) => row.profile);
-  const friendCount = friendRows.length;
+  const friendCount = friendCountQuery.data;
   const canPost = canPostOnProfile({
     viewerId: user?.id,
     host: profile,
@@ -310,7 +309,15 @@ export default function PublicProfileScreen() {
               <OfficialMark profile={profile} />
             </View>
             <View className="mt-2 flex-row gap-3">
-              <Count label="Friends" value={friendCount} />
+              <Count
+                label="Friends"
+                value={
+                  friendCount == null && (friendCountQuery.isPending || friendCountQuery.isError)
+                    ? null
+                    : (friendCount ?? 0)
+                }
+                onPress={isSelf ? () => router.push('/friends') : undefined}
+              />
               <Count label="Posts" value={publicPosts.length} />
               <Count label="Challenges" value={publicChallenges.length} />
             </View>
@@ -463,12 +470,30 @@ export default function PublicProfileScreen() {
   );
 }
 
-function Count({ label, value }: { label: string; value: number }) {
-  return (
+function Count({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: number | null;
+  onPress?: () => void;
+}) {
+  const body = (
     <View>
-      <AppText className="text-[15px] font-extrabold text-charcoal">{value}</AppText>
+      <AppText className="text-[15px] font-extrabold text-charcoal">
+        {value == null ? ' ' : value}
+      </AppText>
       <AppText className="text-[11px] text-muted">{label}</AppText>
     </View>
+  );
+  if (!onPress) {
+    return body;
+  }
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${value ?? 0} ${label}`} onPress={onPress}>
+      {body}
+    </Pressable>
   );
 }
 

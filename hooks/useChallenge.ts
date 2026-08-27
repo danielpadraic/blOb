@@ -55,10 +55,16 @@ import {
   checkinTargetForStore,
   composeChallengeRules,
 } from '@/lib/consistencyRules';
-import { loadChallengeDetail } from '@/lib/challengeOpen';
+import {
+  challengeFromFeedPreview,
+  challengeSnapshotHasIdentity,
+  loadChallengeDetail,
+  peekLastGoodChallenge,
+  rememberLastGoodChallenge,
+} from '@/lib/challengeOpen';
 import { isChallengeLoadError } from '@/lib/challengeLoad';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
-import { fetchChallengePreviewsByIds } from '@/lib/social';
+import { fetchChallengePreviewsByIds, type FeedChallengePreview } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type {
   Challenge,
@@ -250,7 +256,8 @@ export function useChallengeFeedPreview(id: string | null | undefined) {
 }
 
 export function useChallenge(id: string | undefined) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ['challenge', id],
     enabled: Boolean(id),
     retry: (count, error) => {
@@ -258,6 +265,23 @@ export function useChallenge(id: string | undefined) {
         return false;
       }
       return count < 1;
+    },
+    placeholderData: (previous) => {
+      if (!id) {
+        return undefined;
+      }
+      if (previous?.id === id && challengeSnapshotHasIdentity(previous)) {
+        return previous;
+      }
+      const last = peekLastGoodChallenge(id);
+      if (last) {
+        return last;
+      }
+      const preview = queryClient.getQueryData<FeedChallengePreview>(['challenge-feed-preview', id]);
+      if (preview?.id === id && challengeSnapshotHasIdentity(preview)) {
+        return challengeFromFeedPreview(preview);
+      }
+      return undefined;
     },
     queryFn: async (): Promise<ChallengeWithStats> => {
       console.log('[blob:detail] load', id);
@@ -267,9 +291,15 @@ export function useChallenge(id: string | undefined) {
         console.log('[blob:detail] status sync skipped', error);
       }
       const snapshot = appQueryClient.getQueryData<ChallengeWithStats>(['challenge', id]);
-      return loadChallengeDetail(id!, snapshot);
+      const usable = snapshot?.id === id && challengeSnapshotHasIdentity(snapshot) ? snapshot : undefined;
+      const row = await loadChallengeDetail(id!, usable);
+      if (row.id === id && challengeSnapshotHasIdentity(row)) {
+        rememberLastGoodChallenge(row);
+      }
+      return row;
     },
   });
+  return query;
 }
 
 const PARTICIPANT_COLUMNS =

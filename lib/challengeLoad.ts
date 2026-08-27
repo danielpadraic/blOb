@@ -8,7 +8,15 @@ export type ChallengeLoadKind = 'geo' | 'private' | 'unavailable' | 'server';
 export type ChallengeLoadSnapshot = {
   id?: string | null;
   title?: string | null;
+  task?: string | null;
+  tasks?: Array<{ title?: string | null } | string> | null;
   cover_image_url?: string | null;
+  prize_pool?: number | null;
+  buy_in_amount?: number | null;
+  days_required?: number | null;
+  target_count?: number | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
   visibility?: string | null;
   challenge_lane?: unknown;
   privacy_mode?: string | null;

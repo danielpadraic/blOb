@@ -204,6 +204,7 @@ function PostCardInner({
               challengeLane={preview.data?.challenge_lane}
               isOfficial={preview.data?.is_official}
               createdBy={preview.data?.created_by}
+              snapshot={preview.data}
             />
           </View>
           {mine && hiddenFromHome ? (
@@ -464,6 +465,7 @@ function InChallengeLine({
   challengeLane,
   isOfficial,
   createdBy,
+  snapshot,
 }: {
   challengeId: string;
   title?: string | null;
@@ -471,6 +473,23 @@ function InChallengeLine({
   challengeLane?: string | null;
   isOfficial?: boolean | null;
   createdBy?: string | null;
+  snapshot?: {
+    id?: string | null;
+    title?: string | null;
+    task?: string | null;
+    tasks?: Array<{ title?: string | null } | string> | null;
+    cover_image_url?: string | null;
+    prize_pool?: number | null;
+    buy_in_amount?: number | null;
+    days_required?: number | null;
+    target_count?: number | null;
+    starts_at?: string | null;
+    ends_at?: string | null;
+    visibility?: string | null;
+    challenge_lane?: unknown;
+    is_official?: boolean | null;
+    created_by?: string | null;
+  } | null;
 }) {
   const openTag = useOpenChallengeFromTag();
   const label = title?.trim() || 'this challenge';
@@ -485,6 +504,9 @@ function InChallengeLine({
           challenge_lane: challengeLane,
           is_official: isOfficial,
           created_by: createdBy,
+          snapshot: snapshot
+            ? { ...snapshot, id: challengeId, title: snapshot.title ?? title }
+            : { id: challengeId, title, visibility, challenge_lane: challengeLane, is_official: isOfficial, created_by: createdBy },
         })
       }
       hitSlop={4}

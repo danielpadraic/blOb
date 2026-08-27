@@ -8,7 +8,14 @@ import {
   isTransientNetworkError,
   snapshotLooksPrivate,
 } from '@/lib/challengeLoad';
-import { openChallengeLobby, seedChallengeDetailQuery } from '@/lib/challengeOpen';
+import {
+  challengeFromFeedPreview,
+  openChallengeLobby,
+  peekLastGoodChallenge,
+  rememberLastGoodChallenge,
+  resolveChallengeHero,
+  seedChallengeDetailQuery,
+} from '@/lib/challengeOpen';
 import { scrollNodeTo } from '@/lib/challengeRoute';
 
 describe('firstRouteParam', () => {
@@ -81,6 +88,68 @@ describe('challenge load helpers', () => {
     expect(push).not.toHaveBeenCalled();
     expect(seedChallengeDetailQuery({ title: 'Nope' }, client)).toBe('');
     expect(client.setQueryData).not.toHaveBeenCalled();
+  });
+
+  it('does not seed a hollow id-only challenge shell', () => {
+    const store = new Map();
+    const client = {
+      getQueryData: (key: unknown) => store.get(JSON.stringify(key)),
+      setQueryData: (key: unknown, value: unknown) => {
+        store.set(JSON.stringify(key), value);
+      },
+      prefetchQuery: vi.fn(),
+    };
+    const push = vi.fn();
+    expect(openChallengeLobby({ push }, { id: 'abc' }, client as never)).toBe(true);
+    expect(client.getQueryData(['challenge', 'abc'])).toBeUndefined();
+    expect(seedChallengeDetailQuery({ id: 'abc' }, client)).toBe('abc');
+    expect(client.getQueryData(['challenge', 'abc'])).toBeUndefined();
+  });
+
+  it('seeds a snapshot that already has a real name', () => {
+    const store = new Map();
+    const client = {
+      getQueryData: (key: unknown) => store.get(JSON.stringify(key)),
+      setQueryData: (key: unknown, value: unknown) => {
+        store.set(JSON.stringify(key), value);
+      },
+      prefetchQuery: vi.fn(),
+    };
+    expect(seedChallengeDetailQuery({ id: 'abc', title: 'Workout Group #2', prize_pool: 20 }, client)).toBe(
+      'abc',
+    );
+    const seeded = client.getQueryData(['challenge', 'abc']) as { title?: string; prize_pool?: number };
+    expect(seeded.title).toBe('Workout Group #2');
+    expect(seeded.prize_pool).toBe(20);
+  });
+
+  it('paints feed preview for the same id and never last-good from another challenge', () => {
+    rememberLastGoodChallenge({
+      id: 'aaa',
+      title: 'Challenge A',
+      prize_pool: 10,
+      participant_count: 2,
+    } as never);
+    const preview = {
+      id: 'bbb',
+      title: 'Workout Group #2',
+      status: 'open',
+      is_official: false,
+      buy_in_amount: 5,
+      prize_pool: 20,
+      currency: 'usd',
+      cover_image_url: 'https://example.com/cover.jpg',
+      created_by: 'host',
+      task: 'Workout Group #2',
+    };
+    const hero = resolveChallengeHero({ id: 'bbb', preview });
+    expect(hero?.id).toBe('bbb');
+    expect(hero?.title).toBe('Workout Group #2');
+    expect(hero?.prize_pool).toBe(20);
+    expect(hero?.cover_image_url).toBe('https://example.com/cover.jpg');
+    expect(hero?.preview_hero).toBe(true);
+    expect(peekLastGoodChallenge('bbb')).toBeUndefined();
+    expect(challengeFromFeedPreview(preview).days_required).toBe(0);
   });
 
   it('scrolls only when scrollTo exists', () => {

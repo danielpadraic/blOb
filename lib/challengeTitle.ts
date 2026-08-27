@@ -34,5 +34,5 @@ export function challengeDisplayTitle(row: {
   if (task && !isPlaceholderChallengeTitle(task)) {
     return task;
   }
-  return firstTaskTitle(row.tasks) || firstTaskTitle(row.extra_tasks) || 'Challenge';
+  return firstTaskTitle(row.tasks) || firstTaskTitle(row.extra_tasks) || '';
 }
