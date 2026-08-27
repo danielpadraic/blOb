@@ -10,12 +10,11 @@ import { Platform } from 'react-native';
 
 import {
   GOOGLE_NOT_CONFIGURED,
+  GOOGLE_SIGN_IN_RETRY,
   googleNativeConfigureKeysPresent,
   googleNativeSignInConfig,
   googleWebClientIdPrefix,
   iosUrlSchemeFromClientId,
-  isGoogleClientConfigError,
-  isGoogleDeveloperError,
   peekGoogleIdTokenClaims,
 } from '@/lib/googleSignInConfig';
 import { reportAppError } from '@/lib/appErrors';
@@ -29,7 +28,7 @@ export const GOOGLE_CANCELLED = 'Sign-in was cancelled.';
 export const GOOGLE_NO_TOKEN = 'Google did not return a sign-in token. Try again.';
 export const GOOGLE_PLAY_SERVICES =
   'Google Play Services is missing or out of date. Update Play Services and try again.';
-export { GOOGLE_NOT_CONFIGURED };
+export { GOOGLE_NOT_CONFIGURED, GOOGLE_SIGN_IN_RETRY };
 
 export type GoogleNativeAuthDetail = {
   resultType: string;
@@ -186,7 +185,7 @@ export async function signInWithNativeGoogle(): Promise<void> {
       };
       logNativeGoogle(detail);
       reportAndroidGoogleFailure('play-services', error);
-      throw new GoogleNativeAuthError(GOOGLE_NOT_CONFIGURED, {
+      throw new GoogleNativeAuthError(GOOGLE_SIGN_IN_RETRY, {
         ...detail,
         code: isErrorWithCode(error) ? error.code : statusCodes.PLAY_SERVICES_NOT_AVAILABLE,
       });
@@ -210,7 +209,7 @@ export async function signInWithNativeGoogle(): Promise<void> {
     }
     if (isErrorWithCode(error) && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
       reportAndroidGoogleFailure('play-services', error);
-      throw new GoogleNativeAuthError(GOOGLE_NOT_CONFIGURED, {
+      throw new GoogleNativeAuthError(GOOGLE_SIGN_IN_RETRY, {
         resultType: 'play-services',
         hasIdToken: false,
         hasCode: false,
@@ -218,17 +217,8 @@ export async function signInWithNativeGoogle(): Promise<void> {
       });
     }
     const message = getErrorMessage(error);
-    const developerError =
-      isGoogleDeveloperError(error) ||
-      (isErrorWithCode(error) &&
-        (error.code === '10' || String(error.code).toUpperCase() === 'DEVELOPER_ERROR')) ||
-      /developer_error/i.test(message);
-    const userMessage =
-      developerError || isGoogleClientConfigError(message)
-        ? GOOGLE_NOT_CONFIGURED
-        : message || GOOGLE_NOT_CONFIGURED;
     reportAndroidGoogleFailure('sign-in', error);
-    throw new GoogleNativeAuthError(userMessage, {
+    throw new GoogleNativeAuthError(GOOGLE_SIGN_IN_RETRY, {
       resultType: 'sign-in',
       hasIdToken: false,
       hasCode: false,
@@ -306,9 +296,6 @@ export async function signInWithNativeGoogle(): Promise<void> {
         supabaseMessage: exchangeMessage,
       }),
     });
-    throw new GoogleNativeAuthError(
-      isGoogleClientConfigError(exchangeMessage) ? GOOGLE_NOT_CONFIGURED : exchangeMessage || GOOGLE_NOT_CONFIGURED,
-      detail,
-    );
+    throw new GoogleNativeAuthError(GOOGLE_SIGN_IN_RETRY, detail);
   }
 }

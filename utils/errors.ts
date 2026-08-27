@@ -1,6 +1,11 @@
 import { copy } from '@/lib/copy';
 import { dmOpenUserMessage } from '@/lib/dmOpen';
-import { GOOGLE_NOT_CONFIGURED, isGoogleClientConfigError } from '@/lib/googleSignInConfig';
+import {
+  GOOGLE_SIGN_IN_RETRY,
+  googleLiveSignInMessage,
+  isGoogleClientConfigError,
+} from '@/lib/googleSignInConfig';
+import { Platform } from 'react-native';
 
 const CHECKIN_SUBMIT_FAIL = 'Couldn’t submit this check-in. Try again.';
 
@@ -440,16 +445,16 @@ export function getAuthFormMessage(error: unknown): string {
     return copy('auth.network');
   }
   if (blob.includes('play services')) {
-    return GOOGLE_NOT_CONFIGURED;
+    return GOOGLE_SIGN_IN_RETRY;
   }
   if (code === '10' || code === 'developer_error' || blob.includes('developer_error')) {
-    return GOOGLE_NOT_CONFIGURED;
+    return GOOGLE_SIGN_IN_RETRY;
   }
   if (blob.includes('did not return a sign-in token') || blob.includes('no idtoken')) {
     return 'Google did not return a sign-in token. Try again.';
   }
   if (isGoogleClientConfigError(`${code} ${raw}`)) {
-    return GOOGLE_NOT_CONFIGURED;
+    return googleLiveSignInMessage(Platform.OS);
   }
 
   const human = humanize(raw);
@@ -828,7 +833,7 @@ function humanize(raw: string): string {
     return 'We couldn’t reach blOb just now. Check your connection and try again.';
   }
   if (isGoogleClientConfigError(raw)) {
-    return GOOGLE_NOT_CONFIGURED;
+    return googleLiveSignInMessage(Platform.OS);
   }
   if (message.includes('oauth') || message.includes('provider')) {
     return 'That sign-in didn’t finish. Please try again.';

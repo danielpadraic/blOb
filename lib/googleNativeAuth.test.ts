@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   GOOGLE_NOT_CONFIGURED,
+  GOOGLE_SIGN_IN_RETRY,
+  googleLiveSignInMessage,
   googleNativeConfigureKeysPresent,
   googleNativeSignInConfig,
+  googleNotConfiguredUserMessage,
   googleWebClientIdPrefix,
   iosUrlSchemeFromClientId,
   isGoogleDeveloperError,
@@ -70,13 +73,16 @@ describe('googleNativeSignInConfig', () => {
     expect(googleNativeConfigureKeysPresent()).toEqual({ webClientId: true, iosClientId: true });
   });
 
-  it('refuses to use the iOS or Android client as webClientId', () => {
+  it('does not hide Google when the Web env matches a native client id', () => {
     process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = 'ios-client.apps.googleusercontent.com';
     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = 'ios-client.apps.googleusercontent.com';
-    expect(googleNativeSignInConfig()).toBeNull();
+    expect(googleNativeSignInConfig()).toEqual({
+      webClientId: 'ios-client.apps.googleusercontent.com',
+      iosClientId: 'ios-client.apps.googleusercontent.com',
+    });
     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = 'android-client.apps.googleusercontent.com';
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID = 'android-client.apps.googleusercontent.com';
-    expect(googleNativeSignInConfig()).toBeNull();
+    expect(googleNativeSignInConfig()?.webClientId).toBe('android-client.apps.googleusercontent.com');
   });
 });
 
@@ -104,24 +110,36 @@ describe('peekGoogleIdTokenClaims', () => {
 });
 
 describe('Google client config errors', () => {
-  it('maps invalid_client and unacceptable audience to configure copy', () => {
+  it('maps invalid_client and tap failures to try-again, not the configured banner', () => {
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = 'web-client.apps.googleusercontent.com';
     expect(
       getAuthFormMessage(new Error('Unacceptable audience in id_token: [49251028054-abc.apps.googleusercontent.com]')),
-    ).toBe(GOOGLE_NOT_CONFIGURED);
+    ).toBe(GOOGLE_SIGN_IN_RETRY);
     expect(
       getAuthFormMessage(new Error('Access blocked: The OAuth client was not found. 401 invalid_client')),
-    ).toBe(GOOGLE_NOT_CONFIGURED);
-    expect(getAuthFormMessage(new Error(GOOGLE_NOT_CONFIGURED))).toBe(GOOGLE_NOT_CONFIGURED);
+    ).toBe(GOOGLE_SIGN_IN_RETRY);
+    expect(getAuthFormMessage(new Error(GOOGLE_NOT_CONFIGURED))).toBe(GOOGLE_SIGN_IN_RETRY);
   });
 
-  it('maps Android DEVELOPER_ERROR / code 10 to configure copy', () => {
+  it('maps Android DEVELOPER_ERROR / code 10 to try-again', () => {
     const raw = Object.assign(new Error('10: '), { code: '10', message: '10 DEVELOPER_ERROR' });
     expect(isGoogleDeveloperError(raw)).toBe(true);
-    expect(getAuthFormMessage(raw)).toBe(GOOGLE_NOT_CONFIGURED);
+    expect(getAuthFormMessage(raw)).toBe(GOOGLE_SIGN_IN_RETRY);
     expect(getAuthFormMessage(Object.assign(new Error('DEVELOPER_ERROR'), { code: 'DEVELOPER_ERROR' }))).toBe(
-      GOOGLE_NOT_CONFIGURED,
+      GOOGLE_SIGN_IN_RETRY,
     );
-    expect(getAuthFormMessage(new Error('10 10 DEVELOPER_ERROR'))).toBe(GOOGLE_NOT_CONFIGURED);
+    expect(getAuthFormMessage(new Error('10 10 DEVELOPER_ERROR'))).toBe(GOOGLE_SIGN_IN_RETRY);
+  });
+
+  it('shows the configured banner only when the Web client env is empty on native', () => {
+    delete process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    expect(googleNotConfiguredUserMessage('web')).toBeNull();
+    expect(googleNotConfiguredUserMessage('ios')).toBe(GOOGLE_NOT_CONFIGURED);
+    expect(googleNotConfiguredUserMessage('android')).toBe(GOOGLE_NOT_CONFIGURED);
+    expect(googleLiveSignInMessage('web')).toBe(GOOGLE_SIGN_IN_RETRY);
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = 'web-client.apps.googleusercontent.com';
+    expect(googleNotConfiguredUserMessage('ios')).toBeNull();
+    expect(googleLiveSignInMessage('android')).toBe(GOOGLE_SIGN_IN_RETRY);
   });
 
   it('prefixes the Web client id to 20 characters for diagnostics', () => {

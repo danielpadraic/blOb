@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import {
   AuthBackButton,
@@ -22,8 +22,17 @@ import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
 import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
+import { googleWebClientId } from '@/lib/googleSignInConfig';
 import { getAuthFormMessage } from '@/utils/errors';
 import { loginSchema, type LoginValues } from '@/utils/validators';
+
+function isStickyConfiguredBanner(text: string): boolean {
+  const blob = text.toLowerCase();
+  if (!blob.includes('configured in this build')) {
+    return false;
+  }
+  return Platform.OS === 'web' || Boolean(googleWebClientId());
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -47,9 +56,17 @@ export default function LoginScreen() {
       return;
     }
     try {
-      setFormError(decodeURIComponent(raw).replace(/\s+/g, ' ').trim().slice(0, 180));
+      const decoded = decodeURIComponent(raw).replace(/\s+/g, ' ').trim().slice(0, 180);
+      if (isStickyConfiguredBanner(decoded)) {
+        return;
+      }
+      setFormError(decoded);
     } catch {
-      setFormError(raw.replace(/\s+/g, ' ').trim().slice(0, 180));
+      const fallback = raw.replace(/\s+/g, ' ').trim().slice(0, 180);
+      if (isStickyConfiguredBanner(fallback)) {
+        return;
+      }
+      setFormError(fallback);
     }
   }, [authError]);
   const {

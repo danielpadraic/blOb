@@ -1,5 +1,5 @@
 /** Native Google SDK is not loaded on web. Web uses HTTPS signInWithOAuth. */
-export { GOOGLE_NOT_CONFIGURED, iosUrlSchemeFromClientId } from '@/lib/googleSignInConfig';
+export { GOOGLE_NOT_CONFIGURED, GOOGLE_SIGN_IN_RETRY, iosUrlSchemeFromClientId } from '@/lib/googleSignInConfig';
 
 export const GOOGLE_CANCELLED = 'Sign-in was cancelled.';
 

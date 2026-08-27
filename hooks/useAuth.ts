@@ -41,7 +41,7 @@ import {
   isPasswordRecoveryPending,
   markPasswordRecoveryPending,
 } from '@/lib/passwordRecovery';
-import { GOOGLE_NOT_CONFIGURED } from '@/lib/googleSignInConfig';
+import { GOOGLE_SIGN_IN_RETRY } from '@/lib/googleSignInConfig';
 import { emailAuthRedirectTo } from '@/lib/authRedirect';
 import { signInWithNativeGoogle } from '@/lib/googleNativeAuth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -450,7 +450,7 @@ function isGoogleBrowserOAuthUrl(url: string): boolean {
 
 async function resolveNativeOAuthBrowserUrl(startUrl: string, signal: AbortSignal): Promise<string> {
   if (isGoogleBrowserOAuthUrl(startUrl)) {
-    throw new Error(GOOGLE_NOT_CONFIGURED);
+    throw new Error(GOOGLE_SIGN_IN_RETRY);
   }
   if (!isExpectedOAuthStartUrl(startUrl)) {
     throw new Error('Sign-in did not start from Google or Supabase.');
@@ -501,7 +501,7 @@ async function resolveNativeOAuthBrowserUrl(startUrl: string, signal: AbortSigna
 
 async function completeNativeOAuth(authorizeUrl: string, redirectTo: string): Promise<void> {
   if (isGoogleBrowserOAuthUrl(authorizeUrl)) {
-    throw new Error(GOOGLE_NOT_CONFIGURED);
+    throw new Error(GOOGLE_SIGN_IN_RETRY);
   }
   const incoming = waitForNativeAuthCallback(180_000);
   try {
@@ -561,7 +561,7 @@ async function signInWithOAuthProvider(provider: Provider): Promise<void> {
   }
 
   if (provider === 'google') {
-    throw new Error(GOOGLE_NOT_CONFIGURED);
+    throw new Error(GOOGLE_SIGN_IN_RETRY);
   }
 
   const nativeRedirect = resolveOAuthRedirectUri({

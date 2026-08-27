@@ -1,5 +1,8 @@
-/** Shown when the Web client ID is missing or a native client was used as webClientId. */
+/** Shown only when EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is missing or empty after trim. Never the default tap error. */
 export const GOOGLE_NOT_CONFIGURED = 'Google Sign-In isn’t configured in this build.';
+
+/** Short live error after a failed Google tap. Cancel stays silent. */
+export const GOOGLE_SIGN_IN_RETRY = 'Google sign-in didn’t finish. Try again.';
 
 /** Reversed iOS OAuth client ID for the Google Sign-In URL scheme (plugin iosUrlScheme). */
 export function iosUrlSchemeFromClientId(clientId: string | undefined): string | null {
@@ -44,13 +47,15 @@ export function webClientIdIsNativeClient(webClientId: string): boolean {
 /**
  * Native GoogleSignin.configure() input.
  * `webClientId` is the Web application client ONLY (ID token `aud` / Supabase secret).
- * Never the iOS or Android client. `iosClientId` is iOS-only.
+ * Gate is a string check: missing/empty after trim. Do not block on client-kind,
+ * native-module presence, configure() throw, DEVELOPER_ERROR, or id_token claims.
+ * `iosClientId` is iOS-only and optional.
  * Android error 10 (DEVELOPER_ERROR) = package + SHA-1 of THIS apk must match an
  * Android OAuth client in GCP project 49251028054.
  */
 export function googleNativeSignInConfig(): { webClientId: string; iosClientId?: string } | null {
   const webClientId = googleWebClientId();
-  if (!webClientId || webClientIdIsNativeClient(webClientId)) {
+  if (!webClientId) {
     return null;
   }
   const iosClientId = googleIosClientId();
@@ -58,6 +63,21 @@ export function googleNativeSignInConfig(): { webClientId: string; iosClientId?:
     webClientId,
     ...(iosClientId ? { iosClientId } : {}),
   };
+}
+
+/**
+ * User-facing configured copy. Only when the Web client env is empty, and never on web.
+ * Failed taps use GOOGLE_SIGN_IN_RETRY instead.
+ */
+export function googleNotConfiguredUserMessage(os: string): string | null {
+  if (os === 'web') {
+    return null;
+  }
+  return googleWebClientId() ? null : GOOGLE_NOT_CONFIGURED;
+}
+
+export function googleLiveSignInMessage(os: string): string {
+  return googleNotConfiguredUserMessage(os) ?? GOOGLE_SIGN_IN_RETRY;
 }
 
 export function googleNativeConfigureKeysPresent(): { webClientId: boolean; iosClientId: boolean } {
