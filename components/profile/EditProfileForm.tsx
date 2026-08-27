@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Image, Pressable, ScrollView, View } from 'react-native';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
 import { LastDoneSlider } from '@/components/profile/LastDoneSlider';
@@ -12,12 +12,14 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
+import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
-import { useMyProfile, useUpdateProfile, useUploadAvatar, useUsernameAvailability } from '@/hooks/useProfile';
+import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
+import { useMyProfile, useUpdateProfile, useUploadAvatar, useUploadCover, useUsernameAvailability } from '@/hooks/useProfile';
 import {
   BODY_FAT_DEFAULT,
   BODY_FAT_MAX,
@@ -44,7 +46,8 @@ import {
   type LastDoneBucket,
   type PrimaryGoal,
 } from '@/lib/fitnessProfile';
-import { pickCropProfilePhoto } from '@/lib/profilePhoto';
+import { pickCropCoverPhoto, pickCropProfilePhoto } from '@/lib/profilePhoto';
+import type { PostAudience } from '@/lib/postAudience';
 import { TAB_BAR_PEEK, THEME, themeShadow } from '@/lib/theme';
 import type { Profile, ProfileUpdate, WeightUnit } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -94,6 +97,7 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
   const { user } = useAuth();
   const updateProfile = useUpdateProfile();
   const uploadAvatar = useUploadAvatar();
+  const uploadCover = useUploadCover();
   const scrollRef = useRef<ScrollView>(null);
   const sectionY = useRef<Record<SectionId, number>>({ profile: 0, training: 0, physical: 0 });
   const [section, setSection] = useState<SectionId>('profile');
@@ -102,6 +106,7 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
   const [fieldError, setFieldError] = useState<FieldError>({});
   const [exactOpen, setExactOpen] = useState(false);
   const [exactDraft, setExactDraft] = useState(String(BODY_FAT_DEFAULT));
+  const [pendingPhoto, setPendingPhoto] = useState<{ kind: 'avatar' | 'cover'; uri: string } | null>(null);
 
   const defaults = useMemo(() => buildDefaults(profile), [profile]);
   const {
@@ -177,7 +182,47 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
       if (!uri) {
         return;
       }
-      await uploadAvatar.mutateAsync(uri);
+      setPendingPhoto({ kind: 'avatar', uri });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setFormError(
+        message === 'Turn on photo access in Settings.' ? message : copy('error.uploadPhoto'),
+      );
+    }
+  }
+
+  async function pickCover() {
+    if (!user) {
+      return;
+    }
+    try {
+      const uri = await pickCropCoverPhoto();
+      if (!uri) {
+        return;
+      }
+      setPendingPhoto({ kind: 'cover', uri });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setFormError(
+        message === 'Turn on photo access in Settings.' ? message : copy('error.uploadPhoto'),
+      );
+    }
+  }
+
+  async function savePendingPhoto(audience: Extract<PostAudience, 'public' | 'friends'>) {
+    if (!pendingPhoto) {
+      return;
+    }
+    const next = pendingPhoto;
+    setPendingPhoto(null);
+    try {
+      const result =
+        next.kind === 'cover'
+          ? await uploadCover.mutateAsync({ uri: next.uri, audience })
+          : await uploadAvatar.mutateAsync({ uri: next.uri, audience });
+      if (!result.shared) {
+        showToast(copy('profile.photoShareFail'));
+      }
     } catch (error) {
       const message = getErrorMessage(error);
       setFormError(
@@ -404,10 +449,44 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
           ref={scrollRef}
           className="mt-4 flex-1"
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 16 }}>
+          <DismissKeyboard style={{ flexGrow: 1 }}>
           <View onLayout={(event) => { sectionY.current.profile = event.nativeEvent.layout.y; }} className="gap-4">
             <AppText className="text-[18px] font-extrabold text-charcoal">Profile</AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Change cover photo"
+              onPress={() => void pickCover()}>
+              {profile?.cover_url ? (
+                <Image
+                  source={{ uri: profile.cover_url }}
+                  style={{ width: '100%', height: 128, borderRadius: 18, backgroundColor: THEME.surface }}
+                />
+              ) : (
+                <View
+                  style={{
+                    width: '100%',
+                    height: 128,
+                    borderRadius: 18,
+                    backgroundColor: THEME.surface,
+                    borderWidth: 1,
+                    borderColor: THEME.border,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <AppText className="text-sm font-semibold text-charcoal">
+                    {uploadCover.isPending ? 'Uploading…' : 'Add a cover'}
+                  </AppText>
+                </View>
+              )}
+              {profile?.cover_url ? (
+                <AppText className="mt-2 text-center text-sm font-semibold text-charcoal">
+                  {uploadCover.isPending ? 'Uploading…' : 'Change cover'}
+                </AppText>
+              ) : null}
+            </Pressable>
             <Pressable
               className="items-center"
               onPress={() => void pickAvatar()}
@@ -771,6 +850,7 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
               </View>
             ) : null}
           </View>
+          </DismissKeyboard>
         </ScrollView>
 
         {formError ? (
@@ -800,6 +880,12 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
           />
         </View>
       </View>
+      <ProfilePhotoSaveSheet
+        visible={Boolean(pendingPhoto)}
+        kind={pendingPhoto?.kind ?? 'avatar'}
+        onClose={() => setPendingPhoto(null)}
+        onSave={(audience) => void savePendingPhoto(audience)}
+      />
     </Screen>
   );
 }

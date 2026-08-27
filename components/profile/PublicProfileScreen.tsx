@@ -1,16 +1,15 @@
-import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 
 import { FeedList } from '@/components/feed/FeedList';
 import { ProfileChallengeRow } from '@/components/profile/ProfileChallengeRow';
+import { ProfileMediaGrid } from '@/components/profile/ProfileMediaGrid';
 import { OfficialMark } from '@/components/profile/OfficialMark';
-import { ProfileLink } from '@/components/profile/ProfileLink';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -21,9 +20,10 @@ import { useCopyTone } from '@/hooks/useCopy';
 import {
   useCreateComment,
   useAuthorFeed,
+  useCreatePost,
   useToggleReaction,
 } from '@/hooks/useFeed';
-import { usePublicProfile, type ProfileChallenge } from '@/hooks/usePublicProfile';
+import { usePublicProfile } from '@/hooks/usePublicProfile';
 import {
   useAcceptFriendRequest,
   useFriends,
@@ -32,6 +32,12 @@ import {
   useUnfriend,
 } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
+import { collectProfileMedia } from '@/lib/profileMedia';
+import {
+  firstGivenName,
+  profileChallengeIsHiddenFromOthers,
+  viewerCanSeeShowcase,
+} from '@/lib/profileShowcase';
 import { canPostOnProfile } from '@/lib/profileWall';
 import { directMessageHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
@@ -40,14 +46,11 @@ import { isOfficialAccount, isAdminViewer } from '@/lib/official';
 import { ADMIN_HREF } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
-import { mediaKind } from '@/utils/media';
 import { useBugReport } from '@/components/bug/BugReportHost';
 
 const TABS = [
   { value: 'posts', label: 'Posts' },
-  { value: 'about', label: 'About' },
-  { value: 'friends', label: 'Friends' },
-  { value: 'photos', label: 'Photos' },
+  { value: 'photos', label: 'Photos & Videos' },
   { value: 'challenges', label: 'Challenges' },
 ] as const;
 
@@ -68,7 +71,6 @@ export default function PublicProfileScreen() {
   const handle = Array.isArray(params.username) ? params.username[0] : params.username;
   const postedId = Array.isArray(params.posted) ? params.posted[0] : params.posted;
   const router = useRouter();
-  const pathname = usePathname();
   const { user } = useAuth();
   const tone = useCopyTone();
   const bundle = usePublicProfile(handle);
@@ -86,6 +88,7 @@ export default function PublicProfileScreen() {
   const unfriend = useUnfriend();
   const toggleReaction = useToggleReaction();
   const createComment = useCreateComment();
+  const createPost = useCreatePost();
   const social = useSocialSheetsOptional();
   const bugReport = useBugReport();
   const menuRef = useRef<View>(null);
@@ -139,10 +142,9 @@ export default function PublicProfileScreen() {
   const name = profile.display_name ?? profile.username;
   const isSelf = Boolean(user?.id && user.id === profile.id);
   const official = isOfficialAccount(profile);
+  const relation = friendship.data;
   const publicPosts = posts.data ?? [];
-  const photos = publicPosts.flatMap((post) =>
-    (post.media_urls ?? []).filter((url) => mediaKind(url) === 'image'),
-  );
+  const photos = collectProfileMedia(publicPosts, profile.id, user?.id);
   const publicChallenges = [
     ...bundle.data.hosted,
     ...bundle.data.participating,
@@ -150,11 +152,24 @@ export default function PublicProfileScreen() {
     if (list.findIndex((row) => row.challenge.id === item.challenge.id) !== index) {
       return false;
     }
-    return isPublicChallenge(item);
+    if (isSelf) {
+      return true;
+    }
+    if (profileChallengeIsHiddenFromOthers(item.challenge)) {
+      return false;
+    }
+    const visibility = item.competed
+      ? item.participation?.profile_visibility
+      : item.challenge.profile_visibility;
+    return viewerCanSeeShowcase({
+      viewerId: user?.id,
+      ownerId: profile.id,
+      visibility,
+      friends: relation?.status === 'accepted',
+    });
   });
   const friendRows = (friendsQuery.data ?? []).filter((row) => row.profile);
   const friendCount = friendRows.length;
-  const relation = friendship.data;
   const canPost = canPostOnProfile({
     viewerId: user?.id,
     host: profile,
@@ -278,6 +293,12 @@ export default function PublicProfileScreen() {
       />
 
       <View className="gap-3 pb-4 pt-2">
+        {profile.cover_url ? (
+          <Image
+            source={{ uri: profile.cover_url }}
+            style={{ width: '100%', height: 148, borderRadius: 20, backgroundColor: THEME.surface }}
+          />
+        ) : null}
         <View className="flex-row items-start gap-3">
           <Avatar uri={profile.avatar_url} name={name} size={80} />
           <View className="min-w-0 flex-1">
@@ -344,7 +365,7 @@ export default function PublicProfileScreen() {
                   />
                 ) : null}
                 {relation?.status === 'blocked' ? (
-                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.muted }}>
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
                     {copy('messages.blocked')}
                   </AppText>
                 ) : (
@@ -364,34 +385,6 @@ export default function PublicProfileScreen() {
                     Report a problem
                   </AppText>
                 </Pressable>
-                {canPost ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Post"
-                    onPress={() => {
-                      router.push({
-                        pathname: '/feed/compose',
-                        params: {
-                          wallHostId: profile.id,
-                          wallHostName: name,
-                          wallHostUsername: profile.username,
-                          returnTo: pathname,
-                        },
-                      });
-                    }}
-                    className="flex-row items-center justify-center px-3"
-                    style={{
-                      minHeight: 44,
-                      minWidth: 44,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: THEME.border,
-                      backgroundColor: THEME.surface,
-                    }}>
-                    <Glyph name={GLYPH.plus} color={THEME.textPrimary} size={14} />
-                    <AppText className="ml-1 text-[14px] font-semibold text-charcoal">Post</AppText>
-                  </Pressable>
-                ) : null}
               </View>
             )}
           </View>
@@ -414,7 +407,20 @@ export default function PublicProfileScreen() {
             emptyTitle={copy('wall.empty', tone)}
             emptyBody=""
             empty={<MascotState kind="empty" title={copy('wall.empty', tone)} compact />}
-            canCompose={false}
+            canCompose={canPost || isSelf}
+            composing={createPost.isPending}
+            composerPlaceholder={
+              canPost
+                ? copy('wall.writeOn', tone, { name: firstGivenName(profile) })
+                : copy('home.composer', tone)
+            }
+            wallHost={
+              canPost
+                ? { id: profile.id, name, username: profile.username }
+                : null
+            }
+            defaultAudience={canPost ? 'friends' : undefined}
+            onCompose={(input) => createPost.mutateAsync(input)}
             commenting={createComment.isPending}
             onRetry={() => void posts.refetch()}
             onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
@@ -424,65 +430,15 @@ export default function PublicProfileScreen() {
           />
         ) : null}
 
-        {tab === 'about' ? (
-          <Card className="gap-2">
-            <Row label="Username" value={`@${profile.username}`} />
-            <Row label="Bio" value={profile.bio?.trim() || 'No bio yet.'} />
-          </Card>
-        ) : null}
-
-        {tab === 'friends' ? (
-          friendCount === 0 ? (
-            <AppText className="py-4 text-center text-[14px] text-muted">{copy('friends.empty', tone)}</AppText>
-          ) : (
-            <View className="flex-row flex-wrap" style={{ marginHorizontal: -4 }}>
-              {friendRows.map((row) => {
-                const friend = row.profile;
-                if (!friend) {
-                  return null;
-                }
-                return (
-                  <View key={friend.id} className="w-1/3 p-1">
-                    <ProfileLink username={friend.username} userId={friend.id}>
-                      <View className="items-center gap-1 py-2">
-                        <Avatar
-                          uri={friend.avatar_url}
-                          name={personDisplayName(friend)}
-                          size={64}
-                        />
-                        <AppText className="text-center text-[12px] font-semibold text-charcoal" numberOfLines={1}>
-                          {personDisplayName(friend)}
-                        </AppText>
-                      </View>
-                    </ProfileLink>
-                  </View>
-                );
-              })}
-            </View>
-          )
-        ) : null}
-
-        {tab === 'photos' ? (
-          photos.length === 0 ? (
-            <AppText className="py-4 text-center text-[14px] text-muted">No photos yet.</AppText>
-          ) : (
-            <View className="flex-row flex-wrap" style={{ marginHorizontal: -3 }}>
-              {photos.map((uri) => (
-                <View key={uri} className="w-1/3 p-0.5">
-                  <Image source={{ uri }} style={{ width: '100%', aspectRatio: 1, borderRadius: 8 }} />
-                </View>
-              ))}
-            </View>
-          )
-        ) : null}
+        {tab === 'photos' ? <ProfileMediaGrid items={photos} posts={publicPosts} /> : null}
 
         {tab === 'challenges' ? (
           publicChallenges.length === 0 ? (
-            <AppText className="py-4 text-center text-[14px] text-muted">No Challenges yet.</AppText>
+            <MascotState kind="empty" title={copy('profile.challengesEmpty')} compact />
           ) : (
             <View className="gap-1.5">
               {publicChallenges.map((item) => (
-                <ProfileChallengeRow key={item.challenge.id} item={item} />
+                <ProfileChallengeRow key={item.challenge.id} item={item} canEdit={isSelf} />
               ))}
             </View>
           )
@@ -507,14 +463,6 @@ export default function PublicProfileScreen() {
   );
 }
 
-function isPublicChallenge(item: ProfileChallenge): boolean {
-  if (item.challenge.is_official) {
-    return true;
-  }
-  const visibility = String(item.challenge.visibility ?? 'public').toLowerCase();
-  return visibility === 'public' || visibility === 'unlisted';
-}
-
 function Count({ label, value }: { label: string; value: number }) {
   return (
     <View>
@@ -524,11 +472,3 @@ function Count({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View>
-      <AppText className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</AppText>
-      <AppText className="mt-0.5 text-[14px] leading-5 text-charcoal">{value}</AppText>
-    </View>
-  );
-}

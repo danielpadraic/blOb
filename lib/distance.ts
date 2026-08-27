@@ -54,7 +54,7 @@ export function amountToMeters(amount: number, unit: DistanceUnit): number {
   return unit === 'km' ? kmToMeters(snapped) : milesToMeters(snapped);
 }
 
-export function parseDistanceText(value: string | null | undefined, unit: DistanceUnit = 'mi'): number | null {
+function parseDistanceAmount(value: string | null | undefined): { amount: number; raw: string } | null {
   const raw = String(value ?? '').trim().toLowerCase();
   if (!raw) {
     return null;
@@ -67,6 +67,10 @@ export function parseDistanceText(value: string | null | undefined, unit: Distan
   if (!Number.isFinite(amount) || amount <= 0) {
     return null;
   }
+  return { amount, raw };
+}
+
+function metersForTypedAmount(amount: number, raw: string, unit: DistanceUnit, snap: boolean): number {
   const asKm = /\bkm\b|\bk\b/.test(raw);
   const asMi = /\bmi\b|\bmile/.test(raw);
   if (asKm) {
@@ -75,7 +79,27 @@ export function parseDistanceText(value: string | null | undefined, unit: Distan
   if (asMi) {
     return milesToMeters(amount);
   }
-  return amountToMeters(amount, unit);
+  return snap ? amountToMeters(amount, unit) : unit === 'km' ? kmToMeters(amount) : milesToMeters(amount);
+}
+
+export function parseDistanceText(value: string | null | undefined, unit: DistanceUnit = 'mi'): number | null {
+  const parsed = parseDistanceAmount(value);
+  if (!parsed) {
+    return null;
+  }
+  return metersForTypedAmount(parsed.amount, parsed.raw, unit, true);
+}
+
+/** Session log: any distance > 0, no 0.25 snap (0.4 mi stays 0.4). */
+export function parseSessionDistanceText(
+  value: string | null | undefined,
+  unit: DistanceUnit = 'mi',
+): number | null {
+  const parsed = parseDistanceAmount(value);
+  if (!parsed) {
+    return null;
+  }
+  return metersForTypedAmount(parsed.amount, parsed.raw, unit, false);
 }
 
 export function distanceProofSentence(meters = milesToMeters(DEFAULT_DISTANCE_MILES), unit: DistanceUnit = 'mi'): string {

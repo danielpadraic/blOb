@@ -44,7 +44,9 @@ import {
 } from '@/lib/bodyMetrics';
 import { asCopyTone, copy, type CopyTone } from '@/lib/copy';
 import { fitnessProfileFromUser, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
+import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
+import type { PostAudience } from '@/lib/postAudience';
 import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
@@ -96,6 +98,7 @@ export function ProfileSetupWizard() {
   const [exactOpen, setExactOpen] = useState(false);
   const [exactDraft, setExactDraft] = useState(String(BODY_FAT_DEFAULT));
   const [tone, setTone] = useState<CopyTone>(() => asCopyTone(profile?.motivation_tone));
+  const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
 
   const defaults = useMemo(() => buildDefaults(profile), [profile]);
 
@@ -224,7 +227,7 @@ export function ProfileSetupWizard() {
       if (!uri) {
         return;
       }
-      await uploadAvatar.mutateAsync(uri);
+      setPendingPhoto(uri);
     } catch (error) {
       const message = getErrorMessage(error);
       setFormError(
@@ -669,6 +672,23 @@ export function ProfileSetupWizard() {
         </View>
       ) : null}
     </KeyboardFormShell>
+    <ProfilePhotoSaveSheet
+      visible={Boolean(pendingPhoto)}
+      kind="avatar"
+      onClose={() => setPendingPhoto(null)}
+      onSave={(audience: Extract<PostAudience, 'public' | 'friends'>) => {
+        const uri = pendingPhoto;
+        setPendingPhoto(null);
+        if (!uri) {
+          return;
+        }
+        void uploadAvatar.mutateAsync({ uri, audience }).then((result) => {
+          if (!result.shared) {
+            setFormError(copy('profile.photoShareFail'));
+          }
+        });
+      }}
+    />
     </SafeAreaView>
   );
 }

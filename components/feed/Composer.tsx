@@ -89,7 +89,7 @@ export function Composer({
   const [gifOpen, setGifOpen] = useState(false);
   const allowPublic = !audienceOptions || audienceOptions.some((item) => item.value === 'public');
   const [audience, setAudience] = useState<PostAudience>(
-    hideAudience ? 'public' : (defaultAudience ?? (wallHost ? 'public' : profileDefault)),
+    hideAudience ? 'public' : (defaultAudience ?? (wallHost ? 'friends' : profileDefault)),
   );
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
 
@@ -260,7 +260,7 @@ export function Composer({
             minHeight: 40,
             alignItems: 'flex-end',
           }}>
-          <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'center' }}>
+          <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end' }}>
             {wallHost ? (
               <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
                 {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}

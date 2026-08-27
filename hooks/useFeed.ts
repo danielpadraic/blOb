@@ -67,7 +67,8 @@ type FeedScope =
   | { kind: 'global' }
   | { kind: 'ids'; challengeIds: string[] }
   | { kind: 'authors'; authorIds: string[] }
-  | { kind: 'wall'; hostId: string };
+  | { kind: 'wall'; hostId: string }
+  | { kind: 'wallHosts'; hostIds: string[] };
 
 async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
   if (scope.kind === 'ids' && scope.challengeIds.length === 0) {
@@ -77,6 +78,9 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
     return [];
   }
   if (scope.kind === 'wall' && !scope.hostId) {
+    return [];
+  }
+  if (scope.kind === 'wallHosts' && scope.hostIds.length === 0) {
     return [];
   }
 
@@ -133,6 +137,9 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
     return query.or(
       `and(author_id.eq.${scope.hostId},wall_host_id.is.null),and(wall_host_id.eq.${scope.hostId},wall_removed_at.is.null)`,
     );
+  }
+  if (scope.kind === 'wallHosts') {
+    return query.in('wall_host_id', scope.hostIds).is('wall_removed_at', null);
   }
   if (hasSource) {
     return query.in('source', ['feed', 'share']);
@@ -421,9 +428,6 @@ function viewerCanSeeProfilePost(
   if (post.wall_host_id && post.wall_host_id !== input.profileId) {
     return false;
   }
-  if (post.wall_host_id === input.profileId) {
-    return true;
-  }
   return viewerCanSeeHomePost({
     viewerId: input.viewerId,
     authorId: post.author_id,
@@ -431,6 +435,7 @@ function viewerCanSeeProfilePost(
     audienceUserIds: post.audience_user_ids,
     friendsWithAuthor: input.friendsWithAuthor,
     officialAuthor: input.officialAuthor && post.author_id === input.profileId,
+    wallHostId: post.wall_host_id,
   });
 }
 
@@ -606,16 +611,18 @@ async function fetchPosts(input: {
   const recommended = new Set(recommendedIds);
   const authorIds = [...new Set([input.userId, ...friendIds, ...officialIds, ...recommendedIds])];
 
-  const [challengePosts, people] = await Promise.all([
+  const wallHostIds = [...new Set([input.userId, ...friendIds])];
+  const [challengePosts, people, wall] = await Promise.all([
     queryPosts({ kind: 'ids', challengeIds }),
     queryPosts({ kind: 'authors', authorIds }),
+    queryPosts({ kind: 'wallHosts', hostIds: wallHostIds }).catch(() => [] as PostWithMeta[]),
   ]);
 
   const hidden = new Set(hiddenIds);
   const muted = new Set(mutedIds);
   const blocked = new Set(blockedIds);
   const userId = input.userId;
-  const merged = dedupePosts([people, challengePosts]);
+  const merged = dedupePosts([people, challengePosts, wall]);
   const corporateIds = await fetchCorporateChallengeIds(
     merged.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
   );
@@ -647,12 +654,16 @@ async function fetchPosts(input: {
               audienceUserIds: post.audience_user_ids,
               friendsWithAuthor: friends.has(post.author_id),
               officialAuthor: official.has(post.author_id),
+              wallHostId: post.wall_host_id,
             })
           ) {
             return false;
           }
           if (official.has(post.author_id) || post.author_id === userId || friends.has(post.author_id)) {
             return true;
+          }
+          if (post.wall_host_id && (post.wall_host_id === userId || friends.has(post.wall_host_id))) {
+            return asPostAudience(post.audience) === 'public' || post.wall_host_id === userId;
           }
           if (post.challenge_id && challengeIdSet.has(post.challenge_id)) {
             return true;
@@ -774,8 +785,8 @@ export function useAuthorFeed(authorId?: string | null) {
         viewerCanSeeProfilePost(post, {
           viewerId: user?.id,
           profileId,
-          friendsWithAuthor: friends.has(profileId),
-          officialAuthor: official.has(profileId),
+          friendsWithAuthor: friends.has(post.author_id),
+          officialAuthor: official.has(post.author_id),
           hidden,
         }),
       );

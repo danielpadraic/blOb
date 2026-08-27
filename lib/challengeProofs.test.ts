@@ -68,6 +68,30 @@ describe('Distance proof method', () => {
       ),
     ).toBe(false);
   });
+
+  it('accepts any session distance over zero on consistency logs', () => {
+    expect(
+      partSatisfies(
+        { id: 'd', name: 'Distance', method: 'distance', distance_meters: 4828 },
+        { method: 'distance', distanceMeters: 644 },
+        { sessionDistance: true },
+      ),
+    ).toBe(true);
+    expect(
+      partSatisfies(
+        { id: 'd', name: 'Distance', method: 'distance', distance_meters: 4828 },
+        { method: 'distance', text: '12.0' },
+        { sessionDistance: true },
+      ),
+    ).toBe(true);
+    expect(
+      partSatisfies(
+        { id: 'd', name: 'Distance', method: 'distance', distance_meters: 4828 },
+        { method: 'distance', text: '0' },
+        { sessionDistance: true },
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('Note proof method', () => {

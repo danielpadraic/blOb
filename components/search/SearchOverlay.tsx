@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
+import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
@@ -76,7 +77,9 @@ export function SearchOverlay({ visible, onClose }: SearchOverlayProps) {
         <ScrollView
           className="max-h-[420px]"
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerClassName="px-3 pb-4 pt-2 gap-3">
+          <DismissKeyboard>
           {query.isFetching ? (
             <View className="items-center py-6">
               <ActivityIndicator color={THEME.accent} />
@@ -143,6 +146,7 @@ export function SearchOverlay({ visible, onClose }: SearchOverlayProps) {
               ))}
             </Section>
           ) : null}
+          </DismissKeyboard>
         </ScrollView>
       </View>
     </ChromeOverlay>

@@ -8,7 +8,7 @@ import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
-import { TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
+import { FEED_COLUMN_MAX, TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
 type FeedListProps = {
@@ -30,6 +30,8 @@ type FeedListProps = {
   highlightPostId?: string;
   hideAudience?: boolean;
   composeSource?: ComposeInput['source'];
+  wallHost?: { id: string; name?: string | null; username?: string | null } | null;
+  defaultAudience?: ComposeInput['audience'];
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -107,6 +109,8 @@ export function FeedList({
   highlightPostId,
   hideAudience,
   composeSource,
+  wallHost,
+  defaultAudience,
   onRefresh,
   onRetry,
   onCompose,
@@ -125,10 +129,14 @@ export function FeedList({
       if (!onCompose) {
         return;
       }
-      await onCompose({ ...input, source: composeSource ?? input.source ?? 'feed' });
+      await onCompose({
+        ...input,
+        source: composeSource ?? input.source ?? 'feed',
+        wallHostId: input.wallHostId ?? wallHost?.id ?? null,
+      });
       listRef.current?.scrollToOffset({ offset: 0, animated: true });
     },
-    [composeSource, onCompose],
+    [composeSource, onCompose, wallHost?.id],
   );
 
   const composer = useMemo(() => {
@@ -140,10 +148,21 @@ export function FeedList({
         placeholder={composerPlaceholder}
         submitting={composing}
         hideAudience={hideAudience}
+        wallHost={wallHost}
+        defaultAudience={defaultAudience}
         onSubmit={onComposeSubmit}
       />
     );
-  }, [canCompose, composerPlaceholder, composing, hideAudience, onCompose, onComposeSubmit]);
+  }, [
+    canCompose,
+    composerPlaceholder,
+    composing,
+    defaultAudience,
+    hideAudience,
+    onCompose,
+    onComposeSubmit,
+    wallHost,
+  ]);
 
   const listHeader = useMemo(
     () => (
@@ -189,9 +208,14 @@ export function FeedList({
     );
   }
 
+  const webColumn =
+    Platform.OS === 'web'
+      ? { width: '100%' as const, maxWidth: FEED_COLUMN_MAX, alignSelf: 'center' as const }
+      : null;
+
   if (isLoading) {
     return (
-      <View className="gap-3" style={embedded ? undefined : { flex: 1 }}>
+      <View className="gap-3" style={[embedded ? undefined : { flex: 1 }, webColumn]}>
         <View pointerEvents={tourLocked ? 'none' : 'auto'}>{composer}</View>
         {listHeader}
         <MascotState kind="loading" title={copy('home.loading', tone)} compact={embedded} />
@@ -225,7 +249,7 @@ export function FeedList({
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={[{ flex: 1 }, webColumn]}>
       {composer ? (
         <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: 12 }}>
           {composer}

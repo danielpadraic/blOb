@@ -22,7 +22,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useAppOpenPing } from '@/hooks/useAppOpenPing';
 import { takePendingInviteToken } from '@/lib/challengeInvites';
 import { inviteHref } from '@/lib/routes';
-import { THEME } from '@/lib/theme';
+import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { queryClient } from '@/lib/queryClient';
 import { paymentsProviderError } from '@/services/payments';
 import { isProfileComplete } from '@/utils/validators';
@@ -169,7 +169,7 @@ function AppFrame({ children }: { children: ReactNode }) {
         style={{
           flex: 1,
           width: '100%',
-          maxWidth: 430,
+          maxWidth: FEED_COLUMN_MAX,
           backgroundColor: THEME.background,
           overflow: 'hidden',
         }}>

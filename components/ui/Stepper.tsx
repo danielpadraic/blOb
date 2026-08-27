@@ -3,6 +3,7 @@ import { Pressable, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
+import { dismissKeyboard } from '@/utils/keyboard';
 
 type StepperProps = {
   value: number;
@@ -80,6 +81,7 @@ export function Stepper({
   }, [focused, safe]);
 
   function bump(delta: number) {
+    dismissKeyboard();
     onChange(clamp(safe + delta, min, max));
   }
 

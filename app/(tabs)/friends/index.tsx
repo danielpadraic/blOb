@@ -575,6 +575,7 @@ function PaneScroll({
       style={PANE_SCROLL}
       contentContainerStyle={PANE_CONTENT}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}>
       {children}

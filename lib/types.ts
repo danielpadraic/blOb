@@ -260,6 +260,7 @@ export interface Profile {
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  cover_url?: string | null;
   bio: string | null;
   height_cm: number | null;
   current_weight: number | null;
@@ -305,6 +306,7 @@ export interface PublicProfile {
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  cover_url?: string | null;
   bio: string | null;
   skill_tags: string[];
   primary_activities: string[];
@@ -566,7 +568,7 @@ export interface Post {
   created_at: string;
 }
 
-export type PostSource = 'challenge' | 'checkin' | 'feed' | 'share';
+export type PostSource = 'challenge' | 'checkin' | 'feed' | 'share' | 'profile_photo';
 
 export type ComposeInput = {
   content: string;
@@ -1749,6 +1751,18 @@ export type Database = {
       };
       enqueue_profile_reminders: {
         Args: Record<string, never>;
+        Returns: undefined;
+      };
+      bob_participant_rank: {
+        Args: { p_challenge_id: string; p_user_id: string };
+        Returns: number | null;
+      };
+      set_participation_profile_visibility: {
+        Args: { p_challenge_id: string; p_visibility: string };
+        Returns: undefined;
+      };
+      set_challenge_profile_visibility: {
+        Args: { p_challenge_id: string; p_visibility: string };
         Returns: undefined;
       };
     };

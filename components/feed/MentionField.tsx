@@ -34,13 +34,19 @@ import {
   type TextSelection,
 } from '@/lib/mentions';
 import { personDisplayName } from '@/lib/social';
+import {
+  COMPOSER_LINE_HEIGHT,
+  COMPOSER_MAX_HEIGHT,
+  COMPOSER_MIN_HEIGHT,
+  composerFieldHeight,
+} from '@/lib/composerField';
 import { THEME } from '@/lib/theme';
 import type { PostAudience } from '@/lib/postAudience';
 
 const FONT = 15;
-const LINE = 20;
-const MIN_HEIGHT = 36;
-const MAX_HEIGHT = LINE * 5 + 12;
+const LINE = COMPOSER_LINE_HEIGHT;
+const MIN_HEIGHT = COMPOSER_MIN_HEIGHT;
+const MAX_HEIGHT = COMPOSER_MAX_HEIGHT;
 
 type MentionFieldProps = {
   placeholder?: string;
@@ -79,7 +85,6 @@ function MentionFieldInner(
     audienceUserIds,
     excludeIds,
     onChange,
-    onSubmit,
     onFocus,
     onBlur,
     accessibilityLabel,
@@ -322,6 +327,10 @@ function MentionFieldInner(
           const liveChips = mentionDocFromState(next.text, chips).chips;
           setSuppressed(false);
           commit(next.text, next.selection, liveChips, next.forced);
+          const nextHeight = composerFieldHeight({ collapsed, text: next.text });
+          if (nextHeight !== height) {
+            setHeight(nextHeight);
+          }
         }}
         placeholder={placeholder}
         placeholderTextColor={THEME.textMuted}
@@ -336,40 +345,41 @@ function MentionFieldInner(
         autoCapitalize="sentences"
         keyboardType="default"
         accessibilityLabel={accessibilityLabel ?? 'Write a post'}
-        onSubmitEditing={onSubmit}
         onFocus={onFocus}
         onBlur={onBlur}
         onContentSizeChange={(event) => {
-          if (collapsed) {
-            if (height !== MIN_HEIGHT) {
-              setHeight(MIN_HEIGHT);
-            }
-            return;
-          }
-          const next = Math.min(
-            MAX_HEIGHT,
-            Math.max(MIN_HEIGHT, Math.ceil(event.nativeEvent.contentSize.height)),
-          );
+          const next = composerFieldHeight({
+            collapsed,
+            text,
+            contentHeight: event.nativeEvent.contentSize.height,
+          });
           if (next !== height) {
             setHeight(next);
           }
         }}
         style={{
           minHeight: MIN_HEIGHT,
-          height: collapsed ? MIN_HEIGHT : height,
           maxHeight: collapsed ? MIN_HEIGHT : MAX_HEIGHT,
           paddingVertical: 6,
           paddingHorizontal: 0,
           color: THEME.textPrimary,
           fontSize: FONT,
           lineHeight: LINE,
-          textAlignVertical: 'center',
+          textAlignVertical: collapsed || height <= MIN_HEIGHT + 2 ? 'center' : 'top',
           ...(Platform.OS === 'web'
             ? ({
+                minHeight: collapsed ? MIN_HEIGHT : height,
+                height: undefined,
+                overflowY: 'auto',
+                resize: 'none',
+                fieldSizing: collapsed ? 'fixed' : 'content',
                 outlineStyle: 'none',
                 caretColor: THEME.textPrimary,
               } as object)
-            : { cursorColor: THEME.textPrimary }),
+            : {
+                height: collapsed ? MIN_HEIGHT : height,
+                cursorColor: THEME.textPrimary,
+              }),
         }}
       />
       {compact ? null : (

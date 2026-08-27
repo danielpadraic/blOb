@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
+import { dismissKeyboard } from '@/utils/keyboard';
 
 type SegmentOption<T extends string> = {
   value: T;
@@ -39,7 +40,10 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
-            onPress={() => onChange(option.value)}
+            onPress={() => {
+              dismissKeyboard();
+              onChange(option.value);
+            }}
             className="min-h-[44px] flex-1 items-center justify-center px-2"
             style={{
               backgroundColor: selected ? THEME.primary : 'transparent',

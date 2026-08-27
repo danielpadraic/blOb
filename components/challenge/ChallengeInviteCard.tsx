@@ -28,7 +28,7 @@ import { namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponso
 import { isOfficialChallenge } from '@/lib/official';
 import { armingCountdownLabel, officialContestantsNeeded, officialGuaranteeAmount } from '@/lib/officialSeries';
 import { isClosedForLogs, isJoinWindowOpen } from '@/lib/settlement';
-import { THEME, themeShadow } from '@/lib/theme';
+import { flexChildMin, THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { compactCountdown } from '@/utils/format';
 
@@ -375,18 +375,24 @@ export function ChallengeInviteCard({
         />
       </View>
       <View
-        className="min-w-0 flex-1"
-        style={{ paddingLeft: 10, paddingRight: 10, paddingVertical: 10, justifyContent: 'space-between' }}>
+        className="flex-1"
+        style={{
+          paddingLeft: 10,
+          paddingRight: 10,
+          paddingVertical: 10,
+          justifyContent: 'space-between',
+          ...flexChildMin(),
+        }}>
         <View>
           <ChallengeTagRow tags={tags} compact />
           <Pressable
             onPress={() => void openDetail()}
             accessibilityRole="button"
             accessibilityLabel={cardLabel}
-            style={{ marginTop: 4 }}>
+            style={{ marginTop: 4, minWidth: 0 }}>
             <AppText
-              className="min-w-0 text-[16px] font-semibold leading-5"
-              style={{ color: titleColor }}
+              className="text-[16px] font-semibold leading-5"
+              style={{ color: titleColor, minWidth: 0 }}
               numberOfLines={1}>
               {challenge.title}
             </AppText>
@@ -431,14 +437,19 @@ export function ChallengeInviteCard({
               )}
             </View>
           ) : host ? (
-            <View className="flex-row items-center" style={{ gap: 6, minHeight: 28 }}>
+            <View className="flex-row items-start" style={[{ gap: 6, minHeight: 28 }, flexChildMin()]}>
               <Avatar uri={host.avatarUrl} name={host.name} size={20} />
-              <AppText className="min-w-0 flex-1 text-[12px]" style={{ color: muted }} numberOfLines={1}>
-                Hosted by{' '}
-                <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
-                  {host.name}
+              <View style={[flexChildMin(), { flexGrow: 1 }]}>
+                <AppText
+                  className="text-[12px] leading-4"
+                  style={{ color: muted, minWidth: 0 }}
+                  numberOfLines={2}>
+                  Hosted by{' '}
+                  <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
+                    {host.name}
+                  </AppText>
                 </AppText>
-              </AppText>
+              </View>
             </View>
           ) : (
             <View style={{ minHeight: 28 }} />
@@ -446,11 +457,16 @@ export function ChallengeInviteCard({
         </Pressable>
 
         <View style={{ gap: canCheckIn ? 6 : 0 }}>
-          <View className="flex-row items-center" style={{ gap: 8 }}>
-            <View className="min-w-0 flex-1 flex-row items-center" style={{ gap: 5 }}>
-              <LobbyMoneyMark challenge={challenge} color={titleColor} />
-              <AppText style={{ color: muted }}>·</AppText>
-              <AppText className="min-w-0 flex-1 text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
+          <View className="flex-row items-center" style={[{ gap: 8 }, flexChildMin()]}>
+            <View className="flex-1 flex-row items-center" style={[{ gap: 5 }, flexChildMin()]}>
+              <View style={{ flexShrink: 0 }}>
+                <LobbyMoneyMark challenge={challenge} color={titleColor} />
+              </View>
+              <AppText style={{ color: muted, flexShrink: 0 }}>·</AppText>
+              <AppText
+                className="flex-1 text-[12px] font-semibold"
+                style={{ color: muted, minWidth: 0, flexShrink: 1 }}
+                numberOfLines={1}>
                 {status}
               </AppText>
             </View>

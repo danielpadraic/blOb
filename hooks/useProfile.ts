@@ -9,7 +9,9 @@ import { normalizeUsername } from '@/lib/username';
 import { isProfileComplete } from '@/utils/validators';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchPublicProfileById } from '@/hooks/usePublicProfile';
-import { uploadProfilePhoto } from '@/lib/profilePhoto';
+import { uploadProfileCover, uploadProfilePhoto } from '@/lib/profilePhoto';
+import { shareProfilePhotoPost } from '@/lib/profilePhotoPost';
+import type { PostAudience } from '@/lib/postAudience';
 
 function isNoRow(error: { code?: string; details?: string; message: string }): boolean {
   const code = String(error.code ?? '');
@@ -335,17 +337,57 @@ export function useUploadAvatar() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (uri: string) => {
+    mutationFn: async (input: string | { uri: string; audience?: PostAudience }) => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      return uploadProfilePhoto(user.id, uri);
+      const uri = typeof input === 'string' ? input : input.uri;
+      const audience = typeof input === 'string' ? 'friends' : (input.audience ?? 'friends');
+      const publicUrl = await uploadProfilePhoto(user.id, uri);
+      const shared = await shareProfilePhotoPost({
+        userId: user.id,
+        mediaUrl: publicUrl,
+        audience,
+        kind: 'avatar',
+      });
+      return { publicUrl, shared };
     },
-    onSuccess: (publicUrl) => {
+    onSuccess: (result) => {
       queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>
-        current && typeof current === 'object' ? { ...current, avatar_url: publicUrl } : current,
+        current && typeof current === 'object' ? { ...current, avatar_url: result.publicUrl } : current,
       );
       void queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['public-profile'] });
+    },
+  });
+}
+
+export function useUploadCover() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { uri: string; audience?: PostAudience }) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      const publicUrl = await uploadProfileCover(user.id, input.uri);
+      const shared = await shareProfilePhotoPost({
+        userId: user.id,
+        mediaUrl: publicUrl,
+        audience: input.audience ?? 'friends',
+        kind: 'cover',
+      });
+      return { publicUrl, shared };
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>
+        current && typeof current === 'object' ? { ...current, cover_url: result.publicUrl } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['public-profile'] });
     },
   });
 }

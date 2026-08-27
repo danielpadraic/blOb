@@ -478,6 +478,29 @@ export async function uploadPostAttachment(input: {
   }
 }
 
+export async function uploadCoverImage(input: {
+  uri: string;
+  userId: string;
+  blob?: Blob | null;
+}): Promise<string> {
+  const contentType = coerceImageContentType(input.blob?.type, input.uri);
+  const ext = extensionFor(contentType);
+  const path = await uploadObject({
+    bucket: STORAGE_BUCKETS.avatars,
+    path: buildStoragePath({
+      userId: input.userId,
+      bucket: STORAGE_BUCKETS.avatars,
+      fileName: `cover.${ext}`,
+    }),
+    uri: input.uri,
+    contentType,
+    blob: input.blob,
+    upsert: true,
+  });
+  const { data } = supabase.storage.from(STORAGE_BUCKETS.avatars).getPublicUrl(path);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
+
 export async function uploadAvatarImage(input: {
   uri: string;
   userId: string;

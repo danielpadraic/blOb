@@ -24,6 +24,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
+import { dismissKeyboard } from '@/utils/keyboard';
 import { useCreateChallenge, useChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
@@ -127,9 +128,11 @@ function IconChip({
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <AppText className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-      {children}
-    </AppText>
+    <Pressable accessible={false} onPress={dismissKeyboard}>
+      <AppText className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+        {children}
+      </AppText>
+    </Pressable>
   );
 }
 

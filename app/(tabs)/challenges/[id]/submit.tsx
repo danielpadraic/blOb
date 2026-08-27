@@ -4,6 +4,7 @@ import { Alert, Keyboard, Platform, Pressable, ScrollView, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
@@ -45,7 +46,7 @@ import {
   athleteDistanceUnit,
   distanceShortHint,
   formatDistance,
-  parseDistanceText,
+  parseSessionDistanceText,
   type DistanceUnit,
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
@@ -60,7 +61,7 @@ import {
 } from '@/lib/health/attachProof';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
-import { usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { distanceProofIsSessionLog, usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
@@ -110,7 +111,7 @@ function slotPart(
       url: healthWorkoutId ? '' : draft?.uri ?? '',
       healthWorkoutId,
       health: draft?.health ?? null,
-      distanceMeters: draft?.health?.distanceMeters ?? parseDistanceText(draft?.text, unit) ?? undefined,
+      distanceMeters: draft?.health?.distanceMeters ?? parseSessionDistanceText(draft?.text, unit) ?? undefined,
     };
   }
   const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
@@ -133,6 +134,7 @@ export default function SubmitWorkoutScreen() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const distanceUnit = athleteDistanceUnit(profile?.weight_unit);
+  const sessionDistance = distanceProofIsSessionLog(challengeQuery.data);
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
   const saveProof = useSaveCheckinProof(id);
   const submitCheckin = useSubmitCheckin(id);
@@ -233,7 +235,7 @@ export default function SubmitWorkoutScreen() {
   }, [challenge, checkinQuery.data?.id, checkinQuery.data?.notes, checkinQuery.data?.proof_parts, checkinQuery.data?.updated_at]);
 
   const filledCount = proofSteps.filter((proof) =>
-    partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
+    partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
   ).length;
   const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
   const busy = saveProof.isPending || submitCheckin.isPending;
@@ -349,7 +351,7 @@ export default function SubmitWorkoutScreen() {
     const photoProof = proofSteps.find(
       (proof) =>
         (proof.method === 'photo' || proof.method === 'video') &&
-        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
+        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
     );
     const primaryRemote = photoProof
       ? checkinQuery.data?.proof_parts?.[photoProof.id]?.url ??
@@ -398,7 +400,7 @@ export default function SubmitWorkoutScreen() {
 
   function explainSendBlocked() {
     const remaining = proofSteps
-      .filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)))
+      .filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }))
       .map((proof) => proofDisplayName(proof));
     const names = checkinSendWhyNot(remaining);
     Alert.alert('Still needed', names ? `${names}.` : copy('checkin.emptyBob'));
@@ -430,12 +432,12 @@ export default function SubmitWorkoutScreen() {
         }
         const draft = drafts[proof.id];
         if (
-          partSatisfies(proof, savedParts[proof.id]) &&
-          partSatisfies(proof, slotPart(proof, draft, distanceUnit))
+          partSatisfies(proof, savedParts[proof.id], { sessionDistance }) &&
+          partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance })
         ) {
           continue;
         }
-        if (!partSatisfies(proof, slotPart(proof, draft, distanceUnit))) {
+        if (!partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance })) {
           continue;
         }
         const row = await persistProof(proof, draft);
@@ -481,7 +483,7 @@ export default function SubmitWorkoutScreen() {
       const photoProof = proofSteps.find(
         (proof) =>
           (proof.method === 'photo' || proof.method === 'video') &&
-          partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
+          partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
       );
       const primaryRemote = photoProof
         ? savedParts[photoProof.id]?.url ||
@@ -691,7 +693,7 @@ export default function SubmitWorkoutScreen() {
   }
 
   const missing = proofSteps.filter(
-    (proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit)),
+    (proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
   );
   const iosHealthReady = Platform.OS === 'ios' && Boolean(getHealthProvider()?.isAvailable());
   const firstEmptyMedia =
@@ -856,6 +858,7 @@ export default function SubmitWorkoutScreen() {
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 showsVerticalScrollIndicator={false}>
+                <DismissKeyboard>
                 {textProofs.map((proof) => (
                   <View key={proof.id} className="mb-3">
                     <Input
@@ -881,11 +884,16 @@ export default function SubmitWorkoutScreen() {
                   const part = slotPart(proof, draft, distanceUnit);
                   const attached = partDistanceMeters(part, distanceUnit);
                   const required = proofDistanceMeters(proof);
-                  const short = attached != null && attached < required;
+                  const short = !sessionDistance && attached != null && attached < required;
                   const healthReady = Platform.OS !== 'web' && Boolean(getHealthProvider()?.isAvailable());
                   return (
                     <View key={proof.id} className="mb-3" style={{ gap: 8 }}>
                       <AppText className="text-sm font-semibold text-charcoal">Distance</AppText>
+                      {sessionDistance && required > 0 ? (
+                        <AppText className="text-[13px] leading-5 text-muted">
+                          Goal {formatDistance(required, distanceUnit)}
+                        </AppText>
+                      ) : null}
                       {healthReady ? (
                         <Pressable
                           accessibilityRole="button"
@@ -909,25 +917,38 @@ export default function SubmitWorkoutScreen() {
                           </AppText>
                         </Pressable>
                       ) : null}
-                      <Input
-                        label={healthReady ? undefined : 'Distance'}
-                        placeholder={distanceUnit === 'km' ? '1.00 km' : '1.00'}
-                        keyboardType="decimal-pad"
-                        value={draft?.text ?? ''}
-                        onChangeText={(value) => onText(proof.id, value)}
-                        onBlur={() => {
-                          const text = drafts[proof.id]?.text?.trim() ?? '';
-                          if (parseDistanceText(text, distanceUnit)) {
-                            void persistProof(proof, { text, health: drafts[proof.id]?.health, uri: drafts[proof.id]?.uri });
-                          }
-                        }}
-                        editable={!busy && phase !== 'submitted'}
-                      />
+                      <View className="flex-row items-end" style={{ gap: 8 }}>
+                        <View className="min-w-0 flex-1">
+                          <Input
+                            label={healthReady ? undefined : 'Distance'}
+                            placeholder="How far this session?"
+                            keyboardType="decimal-pad"
+                            value={draft?.text ?? ''}
+                            onChangeText={(value) => onText(proof.id, value)}
+                            onBlur={() => {
+                              const text = drafts[proof.id]?.text?.trim() ?? '';
+                              if (parseSessionDistanceText(text, distanceUnit)) {
+                                void persistProof(proof, {
+                                  text,
+                                  health: drafts[proof.id]?.health,
+                                  uri: drafts[proof.id]?.uri,
+                                });
+                              }
+                            }}
+                            editable={!busy && phase !== 'submitted'}
+                          />
+                        </View>
+                        <AppText
+                          className="mb-3 text-[15px] font-semibold"
+                          style={{ color: THEME.textMuted, minWidth: 28 }}>
+                          {distanceUnit}
+                        </AppText>
+                      </View>
                       {Platform.OS === 'web' ? (
                         <AppText className="text-[12px] leading-5 text-muted">{copy('create.healthOnIos')}</AppText>
                       ) : !healthReady ? (
                         <AppText className="text-[12px] leading-5 text-muted">
-                          Type the miles. A screenshot is optional and does not count by itself.
+                          A screenshot is optional and does not count by itself.
                         </AppText>
                       ) : null}
                       {!healthReady ? (
@@ -972,6 +993,7 @@ export default function SubmitWorkoutScreen() {
                 {error ? (
                   <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
                 ) : null}
+                </DismissKeyboard>
               </ScrollView>
               <View
                 style={{

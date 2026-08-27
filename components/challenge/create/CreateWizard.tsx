@@ -28,6 +28,7 @@ import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePick
 import { ComparablePointsEditor } from '@/components/challenge/create/comparablePoints/ComparablePointsEditor';
 import { ComparablePointsMethodCard } from '@/components/challenge/create/comparablePoints/ComparablePointsMethodCard';
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
+import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -1580,7 +1581,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             paddingBottom: tour?.createActive ? 220 : 24 + footerH,
           }}
           automaticallyAdjustKeyboardInsets
-          keyboardShouldPersistTaps="always"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           nestedScrollEnabled
           onScroll={(event) => {
             scrollY.current = event.nativeEvent.contentOffset.y;
@@ -1588,6 +1590,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           }}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}>
+          <DismissKeyboard style={{ flexGrow: 1 }}>
           <View
             ref={contentRef}
             collapsable={false}
@@ -1771,6 +1774,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             </FieldAnchor>
           ) : null}
           </View>
+          </DismissKeyboard>
         </ScrollView>
 
         <View

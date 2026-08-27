@@ -17,6 +17,9 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const CHALLENGE_PREVIEW_COLUMNS =
+  'id, title, is_official, created_by, buy_in_amount, status, prize_pool, currency, challenge_type, target_count, days_required, tasks, visibility, privacy_mode, starts_at, ends_at, profile_visibility';
+
+const CHALLENGE_PREVIEW_COLUMNS_BASE =
   'id, title, is_official, created_by, buy_in_amount, status, prize_pool, currency, challenge_type, target_count, days_required, tasks, visibility';
 
 export type ProfileChallenge = {
@@ -37,11 +40,22 @@ export type ProfileChallenge = {
     | 'visibility'
   > & {
     days_required?: number;
+    privacy_mode?: string | null;
+    starts_at?: string | null;
+    ends_at?: string | null;
+    profile_visibility?: string | null;
   };
   participation?: Pick<
     ChallengeParticipant,
     'status' | 'days_completed' | 'completed_at' | 'eliminated_at'
-  > | null;
+  > & {
+    profile_visibility?: string | null;
+  } | null;
+  hosted?: boolean;
+  competed?: boolean;
+  placement?: number | null;
+  coinsWon?: number;
+  bucksWon?: number;
 };
 
 export type PublicProfileStats = {
@@ -83,11 +97,8 @@ export function useRecommendedProfiles() {
 async function fetchPublicProfileBundle(handle: string): Promise<PublicProfileBundle> {
   const profile = await fetchPublicProfile(handle);
   const [hostedRows, participationRows, payouts, earnings] = await Promise.all([
-    supabase.from('challenges').select(CHALLENGE_PREVIEW_COLUMNS).eq('created_by', profile.id),
-    supabase
-      .from('challenge_participants')
-      .select('challenge_id, status, days_completed, completed_at, eliminated_at')
-      .eq('user_id', profile.id),
+    selectChallengePreview().eq('created_by', profile.id),
+    selectParticipationRows(profile.id),
     supabase
       .from('challenge_payouts')
       .select('amount, challenge_id, challenges(currency)')
@@ -111,6 +122,8 @@ async function fetchPublicProfileBundle(handle: string): Promise<PublicProfileBu
   const hosted = (hostedRows.data ?? []).map((row) => ({
     challenge: row as ProfileChallenge['challenge'],
     participation: null,
+    hosted: true,
+    competed: false,
   }));
 
   const participationList = (participationRows.data ?? []) as Array<{
@@ -119,15 +132,13 @@ async function fetchPublicProfileBundle(handle: string): Promise<PublicProfileBu
     days_completed: number | null;
     completed_at: string | null;
     eliminated_at: string | null;
+    profile_visibility?: string | null;
   }>;
 
   const joinedIds = participationList.map((row) => row.challenge_id);
   let joinedChallenges: ProfileChallenge['challenge'][] = [];
   if (joinedIds.length > 0) {
-    const joined = await supabase
-      .from('challenges')
-      .select(CHALLENGE_PREVIEW_COLUMNS)
-      .in('id', joinedIds);
+    const joined = await selectChallengePreview().in('id', joinedIds);
     joinedChallenges = (joined.data ?? []) as ProfileChallenge['challenge'][];
   }
   const byId = new Map(joinedChallenges.map((row) => [row.id, row]));
@@ -145,7 +156,10 @@ async function fetchPublicProfileBundle(handle: string): Promise<PublicProfileBu
         days_completed: Number(row.days_completed ?? 0),
         completed_at: row.completed_at,
         eliminated_at: row.eliminated_at,
+        profile_visibility: row.profile_visibility ?? 'friends',
       },
+      hosted: challenge.created_by === profile.id,
+      competed: true,
     });
   }
 
@@ -185,6 +199,15 @@ async function fetchPublicProfileBundle(handle: string): Promise<PublicProfileBu
     accolades.push('Call-out');
   }
 
+  const payoutByChallenge = payoutsByChallenge(payouts.data ?? []);
+  const ranks = await fetchSettledRanks(profile.id, [...hosted, ...participating]);
+  const withMoney = (row: ProfileChallenge): ProfileChallenge => ({
+    ...row,
+    placement: ranks.get(row.challenge.id) ?? null,
+    coinsWon: payoutByChallenge.get(row.challenge.id)?.coins ?? 0,
+    bucksWon: payoutByChallenge.get(row.challenge.id)?.bucks ?? 0,
+  });
+
   return {
     profile,
     stats: {
@@ -198,9 +221,85 @@ async function fetchPublicProfileBundle(handle: string): Promise<PublicProfileBu
       bestRun,
       accolades: [...new Set(accolades)],
     },
-    hosted,
-    participating,
+    hosted: hosted.map(withMoney),
+    participating: participating.map(withMoney),
   };
+}
+
+async function selectParticipationRows(userId: string) {
+  const full = await supabase
+    .from('challenge_participants')
+    .select('challenge_id, status, days_completed, completed_at, eliminated_at, profile_visibility')
+    .eq('user_id', userId);
+  if (!full.error) {
+    return full;
+  }
+  return supabase
+    .from('challenge_participants')
+    .select('challenge_id, status, days_completed, completed_at, eliminated_at')
+    .eq('user_id', userId);
+}
+
+function selectChallengePreview() {
+  return {
+    eq: async (column: string, value: string) => {
+      const full = await supabase.from('challenges').select(CHALLENGE_PREVIEW_COLUMNS).eq(column, value);
+      if (!full.error) {
+        return full;
+      }
+      return supabase.from('challenges').select(CHALLENGE_PREVIEW_COLUMNS_BASE).eq(column, value);
+    },
+    in: async (column: string, values: string[]) => {
+      const full = await supabase.from('challenges').select(CHALLENGE_PREVIEW_COLUMNS).in(column, values);
+      if (!full.error) {
+        return full;
+      }
+      return supabase.from('challenges').select(CHALLENGE_PREVIEW_COLUMNS_BASE).in(column, values);
+    },
+  };
+}
+
+function payoutsByChallenge(rows: unknown[]): Map<string, { coins: number; bucks: number }> {
+  const map = new Map<string, { coins: number; bucks: number }>();
+  for (const raw of rows) {
+    const row = raw as {
+      amount?: number;
+      challenge_id?: string;
+      challenges?: { currency?: string | null } | { currency?: string | null }[] | null;
+    };
+    const id = String(row.challenge_id ?? '');
+    if (!id) {
+      continue;
+    }
+    const amount = Number(row.amount ?? 0);
+    const related = Array.isArray(row.challenges) ? row.challenges[0] : row.challenges;
+    const current = map.get(id) ?? { coins: 0, bucks: 0 };
+    if (asWalletCurrency(related?.currency) === 'bucks') {
+      current.bucks += amount;
+    } else {
+      current.coins += amount;
+    }
+    map.set(id, current);
+  }
+  return map;
+}
+
+async function fetchSettledRanks(userId: string, rows: ProfileChallenge[]): Promise<Map<string, number>> {
+  const ranks = new Map<string, number>();
+  const settled = rows.filter((row) => String(row.challenge.status) === 'settled');
+  await Promise.all(
+    settled.map(async (row) => {
+      const result = await supabase.rpc('bob_participant_rank', {
+        p_challenge_id: row.challenge.id,
+        p_user_id: userId,
+      });
+      const rank = Number(result.data);
+      if (Number.isFinite(rank) && rank > 0) {
+        ranks.set(row.challenge.id, rank);
+      }
+    }),
+  );
+  return ranks;
 }
 
 function isMissingProfileColumn(error: { message?: string } | null): boolean {
@@ -208,7 +307,8 @@ function isMissingProfileColumn(error: { message?: string } | null): boolean {
   return (
     (text.includes('is_creator') ||
       text.includes('allow_profile_posts') ||
-      text.includes('profile_visibility')) &&
+      text.includes('profile_visibility') ||
+      text.includes('cover_url')) &&
     (text.includes('does not exist') || text.includes('schema cache') || text.includes('42703') || text.includes('pgrst204'))
   );
 }

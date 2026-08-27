@@ -40,6 +40,14 @@ export const TAB_BAR_SCENE_PEEK = 18;
 /** Extra air above the pill for in-flow stickies. Keep at 0 so the CTA sits flush. */
 export const TAB_STICKY_PAD = 0;
 
+/** Phone-width Home column on web. Do not widen cards on desktop. */
+export const FEED_COLUMN_MAX = 430;
+
+/** Web flex children default to min-width:auto and ellipsis too early. Safe on native. */
+export function flexChildMin(): ViewStyle {
+  return { minWidth: 0, flexShrink: 1 };
+}
+
 /** Space so tab-root screens clear the floating pill bar (70px bar + inset + gap). */
 export const TAB_BAR_CONTENT_INSET = 128;
 

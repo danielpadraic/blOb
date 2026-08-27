@@ -9,7 +9,7 @@ import {
   athleteDistanceUnit,
   distanceProofSentence,
   milesToMeters,
-  parseDistanceText,
+  parseSessionDistanceText,
   type DistanceUnit,
 } from '@/lib/distance';
 import { parseCheckinHealthProof, type CheckinHealthProof } from '@/lib/health/checkinHealthProof';
@@ -142,7 +142,7 @@ export function partDistanceMeters(part?: ChallengeProofPart | null, unit: Dista
   if (Number.isFinite(stored) && stored > 0) {
     return Math.round(stored);
   }
-  return parseDistanceText(part?.text, unit);
+  return parseSessionDistanceText(part?.text, unit);
 }
 
 export function defaultSentenceForMethod(
@@ -489,11 +489,12 @@ export function proofsAreHonorOnly(proofs: ChallengeProof[]): boolean {
 export function checkinProofsReady(
   proofs: ChallengeProof[],
   parts: Record<string, ChallengeProofPart> | null | undefined,
+  opts?: ProofSatisfyOptions,
 ): boolean {
   if (proofs.length === 0) {
     return true;
   }
-  return proofs.every((proof) => partSatisfies(proof, parts?.[proof.id]));
+  return proofs.every((proof) => partSatisfies(proof, parts?.[proof.id], opts));
 }
 
 /** Stored on challenges.proof_type for old rows. */
@@ -657,7 +658,16 @@ export function resolveChallengeProofs(input: {
   return defaultChallengeProofs();
 }
 
-export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | null | undefined): boolean {
+export type ProofSatisfyOptions = {
+  /** Consistency / cumulative / repeating logs: any session distance > 0 counts. */
+  sessionDistance?: boolean;
+};
+
+export function partSatisfies(
+  proof: ChallengeProof,
+  part: ChallengeProofPart | null | undefined,
+  opts?: ProofSatisfyOptions,
+): boolean {
   if (proof.method === 'honor') {
     return true;
   }
@@ -669,7 +679,13 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
   }
   if (proof.method === 'distance') {
     const meters = partDistanceMeters(part);
-    return meters != null && meters >= proofDistanceMeters(proof);
+    if (meters == null || meters <= 0) {
+      return false;
+    }
+    if (opts?.sessionDistance) {
+      return true;
+    }
+    return meters >= proofDistanceMeters(proof);
   }
   return proofImageUrls(part).length > 0 || Boolean(part?.healthWorkoutId?.trim());
 }
@@ -677,6 +693,7 @@ export function partSatisfies(proof: ChallengeProof, part: ChallengeProofPart | 
 export function logHasEveryProof(
   proofs: ChallengeProof[],
   parts: Record<string, ChallengeProofPart> | null | undefined,
+  opts?: ProofSatisfyOptions,
 ): boolean {
   if (proofs.length === 0) {
     return true;
@@ -684,7 +701,7 @@ export function logHasEveryProof(
   if (!parts || Object.keys(parts).length === 0) {
     return true;
   }
-  return proofs.every((proof) => partSatisfies(proof, parts[proof.id]));
+  return proofs.every((proof) => partSatisfies(proof, parts[proof.id], opts));
 }
 
 export function parseProofParts(value: unknown): Record<string, ChallengeProofPart> {

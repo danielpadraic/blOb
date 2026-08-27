@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
-import { uploadAvatarImage } from '@/utils/upload';
+import { uploadAvatarImage, uploadCoverImage } from '@/utils/upload';
 
 const PHOTO_ERROR = copy('error.uploadPhoto');
 
@@ -74,4 +74,39 @@ export async function pickAndUploadProfilePhoto(userId: string): Promise<string 
     return null;
   }
   return uploadProfilePhoto(userId, uri);
+}
+
+/** Wide crop for the Facebook-style cover. */
+export async function pickCropCoverPhoto(): Promise<string | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    throw new Error('Turn on photo access in Settings.');
+  }
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [16, 9],
+    quality: 0.85,
+  });
+  if (result.canceled || !result.assets[0]?.uri) {
+    return null;
+  }
+  return result.assets[0].uri;
+}
+
+export async function uploadProfileCover(userId: string, uri: string): Promise<string> {
+  try {
+    await ensureOwnProfileRow(userId);
+    const publicUrl = await uploadCoverImage({ uri, userId });
+    const { error } = await supabase.from('profiles').update({ cover_url: publicUrl }).eq('id', userId);
+    if (error) {
+      throw error;
+    }
+    return publicUrl;
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Turn on photo access in Settings.') {
+      throw error;
+    }
+    throw new Error(PHOTO_ERROR);
+  }
 }

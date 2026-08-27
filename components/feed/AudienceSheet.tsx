@@ -19,7 +19,7 @@ export function AudienceIconButton({
   onPress?: () => void;
   size?: number;
 }) {
-  const glyph = audience === 'public' ? GLYPH.globe : GLYPH.people;
+  const glyph = audience === 'public' ? GLYPH.globe : audience === 'only_me' ? GLYPH.lock : GLYPH.people;
   const inner = <Glyph name={glyph} color={THEME.textMuted} size={size} />;
   if (!onPress) {
     return (
@@ -48,6 +48,7 @@ export type AudienceDraft = {
   audience: PostAudience;
   audienceUserIds: string[];
   allowPublic?: boolean;
+  profileOnly?: boolean;
   onSave: (audience: PostAudience, audienceUserIds: string[]) => void | Promise<void>;
 };
 
@@ -100,17 +101,26 @@ export function AudienceSheet({
           />
         ) : null}
         <Row
-          label="All friends"
+          label="Friends"
           selected={audience === 'friends'}
           glyph={GLYPH.people}
           onPress={() => apply('friends')}
         />
-        <Row
-          label="Specific people"
-          selected={audience === 'specific'}
-          glyph={GLYPH.people}
-          onPress={() => apply('specific', ids)}
-        />
+        {draft.profileOnly ? (
+          <Row
+            label="Only me"
+            selected={audience === 'only_me'}
+            glyph={GLYPH.lock}
+            onPress={() => apply('only_me')}
+          />
+        ) : (
+          <Row
+            label="Specific people"
+            selected={audience === 'specific'}
+            glyph={GLYPH.people}
+            onPress={() => apply('specific', ids)}
+          />
+        )}
         {audience === 'specific' ? (
           <View className="mt-3 gap-2">
             {(friends.data ?? []).length === 0 ? (

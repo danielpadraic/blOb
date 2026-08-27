@@ -11,6 +11,7 @@ import {
 import { useSegments } from 'expo-router';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
+import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { isInsideTabChrome } from '@/components/wallet/TabChrome';
 import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
 import { cn } from '@/utils/cn';
@@ -80,8 +81,9 @@ export function Screen({
             keyboardShouldPersistTaps="handled"
             onScroll={onScroll}
             scrollEventThrottle={onScroll ? 16 : undefined}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             showsVerticalScrollIndicator={false}>
-            {children}
+            <DismissKeyboard style={{ flexGrow: 1 }}>{children}</DismissKeyboard>
           </ScrollView>
         ) : (
           body

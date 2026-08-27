@@ -1,4 +1,4 @@
-import { isCreatorAccount } from '@/lib/creator';
+import { isOfficialAccount } from '@/lib/official';
 
 export type ProfileWallHost = {
   id: string;
@@ -7,6 +7,8 @@ export type ProfileWallHost = {
   allow_profile_posts?: boolean | null;
   profile_visibility?: string | null;
   is_creator?: boolean | null;
+  is_official?: boolean | null;
+  is_admin?: boolean | null;
 };
 
 export function canPostOnProfile(input: {
@@ -24,16 +26,16 @@ export function canPostOnProfile(input: {
   if (input.blocked) {
     return false;
   }
-  if (String(host.profile_visibility ?? 'public') !== 'public') {
+  if (isOfficialAccount(host)) {
     return false;
   }
   if (host.allow_profile_posts === false) {
     return false;
   }
-  if (input.friends) {
-    return true;
+  if (String(host.profile_visibility ?? 'public') === 'friends') {
+    return input.friends;
   }
-  return input.followingCreator && isCreatorAccount(host);
+  return true;
 }
 
 export function wallHostLabel(host: { display_name?: string | null; username?: string | null } | null | undefined) {

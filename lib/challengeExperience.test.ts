@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { usesAdvancedCreateEdit, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import {
+  distanceProofIsSessionLog,
+  usesAdvancedCreateEdit,
+  usesTotalCountCheckins,
+} from '@/lib/challengeExperience';
 
 describe('usesAdvancedCreateEdit', () => {
   it('sends Comparable Points and points challenges to Advanced edit', () => {
@@ -55,5 +59,20 @@ describe('usesTotalCountCheckins', () => {
         days_required: 7,
       }),
     ).toBe(false);
+  });
+});
+
+describe('distanceProofIsSessionLog', () => {
+  it('treats consistency and cumulative as session logs', () => {
+    expect(distanceProofIsSessionLog({ challenge_type: 'consistency', frequency: 'daily' })).toBe(true);
+    expect(distanceProofIsSessionLog({ challenge_type: 'cumulative', format: 'cumulative' })).toBe(true);
+    expect(distanceProofIsSessionLog({ frequency: 'once', target_count: 6, length_value: 7 })).toBe(true);
+  });
+
+  it('keeps a single-event race on the fixed distance threshold', () => {
+    expect(distanceProofIsSessionLog({ frequency: 'once', target_count: 1, challenge_type: 'custom' })).toBe(
+      false,
+    );
+    expect(distanceProofIsSessionLog(null)).toBe(false);
   });
 });

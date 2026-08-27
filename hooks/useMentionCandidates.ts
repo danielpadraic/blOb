@@ -88,6 +88,9 @@ export function useMentionCandidates(input: {
       if (!profile.id || seen.has(profile.id) || exclude.has(profile.id) || blockedIds.has(profile.id)) {
         return;
       }
+      if (audience === 'only_me') {
+        return;
+      }
       if (audience === 'friends' && rank !== 'friend' && rank !== 'audience') {
         return;
       }

@@ -34,7 +34,7 @@ import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
 import { supabase } from '@/lib/supabase';
 import { copy } from '@/lib/copy';
-import { THEME } from '@/lib/theme';
+import { flexChildMin, THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { displayUrl, mediaKind } from '@/utils/media';
@@ -113,19 +113,28 @@ function PostCardInner({
         <ProfileLink username={post.author?.username} userId={post.author_id}>
           <Avatar uri={post.author?.avatar_url} name={name} size={42} />
         </ProfileLink>
-        <View className="min-w-0 flex-1 justify-center">
-          <ProfileLink username={post.author?.username} userId={post.author_id}>
-            <View className="flex-row items-center" style={{ gap: 6 }}>
+        <View className="flex-1 justify-center" style={flexChildMin()}>
+          <ProfileLink
+            username={post.author?.username}
+            userId={post.author_id}
+            style={[flexChildMin(), { maxWidth: '100%' }]}>
+            <View className="flex-row items-center" style={[{ gap: 6 }, flexChildMin()]}>
               <AppText
-                className="shrink font-semibold text-charcoal"
-                style={{ fontSize: 16, lineHeight: 20 }}
+                className="font-semibold text-charcoal"
+                style={{ fontSize: 16, lineHeight: 20, minWidth: 0, flexShrink: 1, flexGrow: 0 }}
                 numberOfLines={1}>
                 {name}
               </AppText>
               <OfficialMark profile={post.author} compact />
               <AppText
-                className="shrink text-[13px]"
-                style={{ color: THEME.textMuted, lineHeight: 18 }}
+                className="text-[13px]"
+                style={{
+                  color: THEME.textMuted,
+                  lineHeight: 18,
+                  minWidth: 0,
+                  flexShrink: 2,
+                  flexGrow: 1,
+                }}
                 numberOfLines={1}>
                 @{handle}
               </AppText>
@@ -155,6 +164,7 @@ function PostCardInner({
               social?.openAudience({
                 audience,
                 audienceUserIds: post.audience_user_ids ?? [],
+                profileOnly: true,
                 onSave: async (next, ids) => {
                   await updateAudience.mutateAsync({
                     postId: post.id,

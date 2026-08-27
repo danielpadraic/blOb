@@ -5,7 +5,7 @@ import {
   type ChallengeProof,
   type ChallengeProofPart,
 } from '../challengeProofs';
-import { parseDistanceText } from '../distance';
+import { parseSessionDistanceText } from '../distance';
 import type { CheckinHealthProof } from '../health/checkinHealthProof';
 import { asCheckinStatus, type ChallengeCheckin } from '../challengeCheckin';
 import { normalizePeriodKey } from '../checkinPeriod';
@@ -132,7 +132,7 @@ async function proofPartFor(
         }),
       );
     }
-    const meters = input.health?.distanceMeters ?? parseDistanceText(input.text);
+    const meters = input.health?.distanceMeters ?? parseSessionDistanceText(input.text);
     return {
       id: proof.id,
       part: {

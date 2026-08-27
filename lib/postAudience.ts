@@ -1,4 +1,4 @@
-export type PostAudience = 'public' | 'friends' | 'specific';
+export type PostAudience = 'public' | 'friends' | 'specific' | 'only_me';
 export type DefaultPostAudience = 'public' | 'friends';
 
 export const POST_AUDIENCE_OPTIONS = [
@@ -7,10 +7,19 @@ export const POST_AUDIENCE_OPTIONS = [
   { value: 'public' as const, label: 'Public' },
 ];
 
+export const PROFILE_AUDIENCE_OPTIONS = [
+  { value: 'public' as const, label: 'Public' },
+  { value: 'friends' as const, label: 'Friends' },
+  { value: 'only_me' as const, label: 'Only me' },
+];
+
 export const DEFAULT_POST_AUDIENCE: PostAudience = 'friends';
 
 export function asPostAudience(value: unknown): PostAudience {
-  if (value === 'public' || value === 'friends' || value === 'specific') {
+  if (value === 'people') {
+    return 'specific';
+  }
+  if (value === 'public' || value === 'friends' || value === 'specific' || value === 'only_me') {
     return value;
   }
   return 'public';
@@ -27,11 +36,20 @@ export function audienceLabel(audience: PostAudience): string {
   if (audience === 'friends') {
     return 'Friends';
   }
+  if (audience === 'only_me') {
+    return 'Only me';
+  }
   return 'Public';
 }
 
 export function audienceGlyph(audience: PostAudience | DefaultPostAudience) {
-  return audience === 'public' ? 'globe' : 'people';
+  if (audience === 'public') {
+    return 'globe';
+  }
+  if (audience === 'only_me') {
+    return 'lock';
+  }
+  return 'people';
 }
 
 export function feedVisibilityForAudience(audience: PostAudience): 'public' | 'friends' | 'private' {
@@ -52,6 +70,7 @@ export function viewerCanSeeHomePost(input: {
   audienceUserIds?: string[] | null;
   friendsWithAuthor: boolean;
   officialAuthor?: boolean;
+  wallHostId?: string | null;
 }): boolean {
   const viewerId = input.viewerId ?? undefined;
   if (viewerId && input.authorId === viewerId) {
@@ -61,6 +80,12 @@ export function viewerCanSeeHomePost(input: {
     return true;
   }
   const audience = asPostAudience(input.audience);
+  if (audience === 'only_me') {
+    return false;
+  }
+  if (viewerId && input.wallHostId && input.wallHostId === viewerId) {
+    return true;
+  }
   if (audience === 'public') {
     return true;
   }

@@ -8,6 +8,7 @@ import {
   formatDistance,
   milesToMeters,
   parseDistanceText,
+  parseSessionDistanceText,
   snapDistanceAmount,
 } from '@/lib/distance';
 
@@ -29,6 +30,12 @@ describe('distance units', () => {
     expect(parseDistanceText('1.00')).toBe(1609);
     expect(parseDistanceText('1 km')).toBe(1000);
     expect(parseDistanceText('')).toBeNull();
+  });
+
+  it('keeps a session distance like 0.4 without snapping to 0.25 steps', () => {
+    expect(parseSessionDistanceText('0.4')).toBe(644);
+    expect(parseSessionDistanceText('12.0')).toBe(19312);
+    expect(parseDistanceText('0.4')).toBe(805);
   });
 
   it('writes the Distance proof sentence and short hint', () => {

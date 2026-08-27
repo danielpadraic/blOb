@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
+import { dismissKeyboard } from '@/utils/keyboard';
 
 type ChipProps = {
   label: string;
@@ -14,7 +15,10 @@ type ChipProps = {
 export function Chip({ label, selected, onPress, minHeight = 36 }: ChipProps) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        dismissKeyboard();
+        onPress?.();
+      }}
       accessibilityRole="button"
       accessibilityState={{ selected: Boolean(selected) }}
       className="items-center justify-center rounded-full px-4"

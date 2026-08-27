@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { THEME } from '@/lib/theme';
 
 type KeyboardFormApi = {
@@ -157,7 +158,7 @@ export function KeyboardFormShell({
             scrollY.current = event.nativeEvent.contentOffset.y;
           }}
           scrollEventThrottle={16}>
-          {children}
+          <DismissKeyboard style={{ flexGrow: 1 }}>{children}</DismissKeyboard>
         </ScrollView>
         {footer ? (
           <View

@@ -119,3 +119,30 @@ export function usesPointsBoard(challenge?: ExperienceChallenge | null): boolean
 export function usesCumulativeScoring(challenge?: ExperienceChallenge | null): boolean {
   return challenge?.challenge_type === 'cumulative' || challenge?.format === 'cumulative';
 }
+
+/**
+ * Distance proof on repeating / consistency / cumulative logs is a session entry
+ * (any distance > 0). A single-event race keeps a fixed threshold.
+ */
+export function distanceProofIsSessionLog(challenge?: ExperienceChallenge | null): boolean {
+  if (!challenge) {
+    return false;
+  }
+  if (usesCumulativeScoring(challenge)) {
+    return true;
+  }
+  if (challenge.challenge_type === 'consistency') {
+    return true;
+  }
+  if (usesTotalCountCheckins(challenge)) {
+    return Math.floor(Number(challenge.target_count) || 0) > 1;
+  }
+  const freq = String(challenge.frequency ?? '').toLowerCase();
+  if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === '3x_week') {
+    return true;
+  }
+  if (freq === 'once') {
+    return false;
+  }
+  return usesConsistencyExperience(challenge);
+}
