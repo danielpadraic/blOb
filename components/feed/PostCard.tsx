@@ -101,6 +101,15 @@ function PostCardInner({
   const city = postLocality(post);
   const caption = checkin ? checkinCardCaption(content, challengeTitle, post.edited_at) : content;
   const showInLine = Boolean(tagged && !challengeFeed && hidePromoCard);
+  const hiddenFromHome = Boolean(post.hidden_from_home);
+  const mutedOwnerHome = mine && hiddenFromHome && !challengeFeed;
+
+  function toggleHomeHide() {
+    hideHome.mutate(
+      { postId: post.id, hidden: !hiddenFromHome },
+      { onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)) },
+    );
+  }
 
   return (
     <Card
@@ -112,6 +121,7 @@ function PostCardInner({
         borderWidth: highlighted ? 1.5 : 1,
         borderColor: highlighted ? THEME.accent : THEME.border,
         overflow: 'visible',
+        opacity: mutedOwnerHome ? 0.62 : 1,
       }}>
       <View className="flex-row items-center" style={{ gap: 10 }}>
         <ProfileLink username={post.author?.username} userId={post.author_id}>
@@ -182,17 +192,30 @@ function PostCardInner({
         ) : (
           <AudienceIconButton audience={audience} />
         )}
+        {mine && hiddenFromHome ? (
+          <WebTapButton
+            accessibilityLabel={copy('post.unhideOnHome')}
+            onPress={toggleHomeHide}
+            style={{
+              height: 28,
+              minHeight: 28,
+              paddingHorizontal: 8,
+              borderRadius: 999,
+              backgroundColor: THEME.accentSoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <AppText className="text-[11px] font-semibold" style={{ color: THEME.accent }}>
+              {copy('post.hiddenFromHome')}
+            </AppText>
+          </WebTapButton>
+        ) : null}
         {mine && !challengeFeed ? (
           <WebTapButton
             accessibilityLabel={
-              post.hidden_from_home ? copy('post.unhideOnHome') : copy('post.hideFromHome')
+              hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')
             }
-            onPress={() => {
-              hideHome.mutate(
-                { postId: post.id, hidden: !post.hidden_from_home },
-                { onError: (error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)) },
-              );
-            }}
+            onPress={toggleHomeHide}
             style={{ height: 44, width: 44, minWidth: 44, minHeight: 44 }}>
             <Glyph name={GLYPH.hide} color={THEME.textMuted} size={16} />
           </WebTapButton>
@@ -217,7 +240,7 @@ function PostCardInner({
         </Pressable>
       </View>
 
-      <View style={{ gap: 10, marginTop: 6 }}>
+      <View style={{ gap: 10, marginTop: 6, opacity: mutedOwnerHome ? 0.45 : 1 }}>
         {caption ? (
           <PostBody
             content={caption}

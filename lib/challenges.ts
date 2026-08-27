@@ -569,7 +569,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
   const rawType = String(row.challenge_type ?? 'consistency');
   return {
     id: String(row.id),
-    title: String(row.title ?? 'Untitled challenge'),
+    title: String(row.title ?? '').trim() || 'Untitled challenge',
     description: (row.description as string | null) ?? null,
     rules: (row.rules as string | null) ?? null,
     is_official: Boolean(row.is_official),

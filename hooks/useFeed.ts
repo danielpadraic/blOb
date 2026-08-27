@@ -127,9 +127,6 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
     }
     return query;
   }
-  if (select.includes('hidden_from_home')) {
-    query = query.eq('hidden_from_home', false);
-  }
   if (scope.kind === 'ids') {
     return query.in('challenge_id', scope.challengeIds);
   }
@@ -425,7 +422,7 @@ function viewerCanSeeProfilePost(
   if (input.hidden.has(post.id)) {
     return false;
   }
-  if (post.hidden_from_home) {
+  if (post.hidden_from_home && post.author_id !== input.viewerId) {
     return false;
   }
   if (post.wall_removed_at) {
@@ -637,7 +634,7 @@ async function fetchPosts(input: {
     await withSocial(
       merged
         .filter((post) => {
-          if (post.hidden_from_home) {
+          if (post.hidden_from_home && post.author_id !== userId) {
             return false;
           }
           if (post.source === 'challenge') {

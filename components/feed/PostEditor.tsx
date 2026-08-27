@@ -75,7 +75,8 @@ export function PostEditor({
   const [mediaUrls, setMediaUrls] = useState(originalMedia);
   const [drafts, setDrafts] = useState<DraftAsset[]>([]);
   const [busy, setBusy] = useState(false);
-  const hiddenFromHome = Boolean(post.hidden_from_home);
+  const [originalHiddenFromHome] = useState(Boolean(post.hidden_from_home));
+  const [hiddenFromHome, setHiddenFromHome] = useState(originalHiddenFromHome);
 
   const extras = mediaUrls.filter((url) => !Object.values(required).some((urls) => urls.includes(url)));
 
@@ -84,9 +85,19 @@ export function PostEditor({
       id: post.id,
       content: originalCaption,
       media_urls: originalMedia,
+      hidden_from_home: originalHiddenFromHome,
       edited_at: post.edited_at,
     });
     onClose();
+  }
+
+  function toggleHiddenFromHome() {
+    const next = !hiddenFromHome;
+    setHiddenFromHome(next);
+    applyEditedPostToFeeds(queryClient, {
+      id: post.id,
+      hidden_from_home: next,
+    });
   }
 
   function removeExtra(url: string) {
@@ -142,6 +153,8 @@ export function PostEditor({
         originalMediaUrls: post.media_urls ?? [],
         hidden: [],
         originalHidden: [],
+        hiddenFromHome,
+        originalHiddenFromHome,
       });
     if (unchanged) {
       onToast?.(copy('post.noChanges'));
@@ -150,29 +163,38 @@ export function PostEditor({
     }
     setBusy(true);
     try {
-      const replacements: Record<string, string> = {};
-      const uploaded: string[] = [];
-      for (const draft of drafts) {
-        const remote = await uploadPostAttachment({
-          uri: draft.uri,
-          userId: user.id,
-          fileStem: draft.proofId ? `proof-${draft.proofId}` : 'post',
-          mimeType: draft.mimeType,
-        });
-        uploaded.push(remote);
-        if (draft.proofId) {
-          replacements[draft.proofId] = remote;
-        }
+      if (hiddenFromHome !== originalHiddenFromHome) {
+        await hideHome.mutateAsync({ postId: post.id, hidden: hiddenFromHome });
       }
-      const nextMedia = uniqueProofUrls([...mediaUrls, ...uploaded]);
-      await edit.mutateAsync({
-        postId: post.id,
-        caption,
-        mediaUrls: nextMedia,
-        hiddenMediaUrls: [],
-        proofReplacements: replacements,
-        checkinId: post.checkin_id,
-      });
+      const mediaChanged =
+        drafts.length > 0 ||
+        caption.trim() !== (post.content ?? '').trim() ||
+        mediaUrls.join('|') !== originalMedia.join('|');
+      if (mediaChanged) {
+        const replacements: Record<string, string> = {};
+        const uploaded: string[] = [];
+        for (const draft of drafts) {
+          const remote = await uploadPostAttachment({
+            uri: draft.uri,
+            userId: user.id,
+            fileStem: draft.proofId ? `proof-${draft.proofId}` : 'post',
+            mimeType: draft.mimeType,
+          });
+          uploaded.push(remote);
+          if (draft.proofId) {
+            replacements[draft.proofId] = remote;
+          }
+        }
+        const nextMedia = uniqueProofUrls([...mediaUrls, ...uploaded]);
+        await edit.mutateAsync({
+          postId: post.id,
+          caption,
+          mediaUrls: nextMedia,
+          hiddenMediaUrls: [],
+          proofReplacements: replacements,
+          checkinId: post.checkin_id,
+        });
+      }
       onSaved?.();
       onClose();
     } catch {
@@ -217,14 +239,7 @@ export function PostEditor({
           </AppText>
           <WebTapButton
             accessibilityLabel={hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')}
-            onPress={() => {
-              hideHome.mutate(
-                { postId: post.id, hidden: !hiddenFromHome },
-                {
-                  onError: () => onToast?.(copy('post.saveFailed')),
-                },
-              );
-            }}
+            onPress={toggleHiddenFromHome}
             style={{
               height: 44,
               minHeight: 44,

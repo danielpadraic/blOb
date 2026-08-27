@@ -32,7 +32,7 @@ const STRINGS = {
   'post.hidden': 'Hidden',
   'post.unhide': 'Unhide',
   'post.hideFromHome': 'Hide from Home',
-  'post.unhideOnHome': 'Unhide on Home',
+  'post.unhideOnHome': 'Unhide from Home',
   'post.hiddenFromHome': 'Hidden from Home',
   'post.keepOneProof': 'Keep at least one photo for this proof.',
   'post.hidePhoto': 'Hide this photo?',

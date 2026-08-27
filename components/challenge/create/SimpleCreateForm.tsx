@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Dimensions, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
+import { KeyboardFormContext, useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
@@ -176,8 +176,37 @@ export function SimpleCreateForm() {
   useCreateChallengeTour('simple');
   const tour = useTourOptional();
   const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const overlapRef = useRef(0);
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
+  overlapRef.current = keyboardOverlap;
+  const scrollFieldIntoView = useCallback((node: View) => {
+    const run = () => {
+      node.measureInWindow((_x, y, _w, h) => {
+        const windowH = Dimensions.get('window').height;
+        const reserved = 88 + overlapRef.current + 16;
+        const visibleBottom = windowH - reserved;
+        const fieldBottom = y + h;
+        const topGuard = 24;
+        let delta = 0;
+        if (fieldBottom > visibleBottom) {
+          delta = fieldBottom - visibleBottom;
+        } else if (y < topGuard) {
+          delta = y - topGuard;
+        }
+        if (delta !== 0) {
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, scrollY.current + delta),
+            animated: true,
+          });
+        }
+      });
+    };
+    requestAnimationFrame(() => {
+      setTimeout(run, Platform.OS === 'android' ? 80 : 40);
+    });
+  }, []);
 
   useEffect(() => {
     tour?.setCreateCurrency(draft.currency);
@@ -430,6 +459,11 @@ export function SimpleCreateForm() {
 
   return (
     <ChallengeNotesProvider>
+    <KeyboardFormContext.Provider
+      value={{
+        scrollToTop: () => scrollRef.current?.scrollTo({ y: 0, animated: true }),
+        scrollFieldIntoView,
+      }}>
     <View style={{ flex: 1, backgroundColor: THEME.background }}>
     <Screen scroll={false} padded={false} edges={TAB_ROOT_EDGES}>
     <ScrollView
@@ -441,12 +475,16 @@ export function SimpleCreateForm() {
       style={{ flex: 1 }}
       contentContainerStyle={{
         paddingHorizontal: 16,
-        paddingBottom: (tour?.createActive ? 220 : 24) + (keyboardOverlap > 0 ? keyboardOverlap : 0),
+        paddingBottom:
+          (tour?.createActive ? 220 : 24) + Math.max(keyboardOverlap, 0) + 88,
         flexGrow: 1,
       }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="none"
-      onScroll={(event) => tour?.setCreateScrollY(event.nativeEvent.contentOffset.y)}
+      onScroll={(event) => {
+        scrollY.current = event.nativeEvent.contentOffset.y;
+        tour?.setCreateScrollY(event.nativeEvent.contentOffset.y);
+      }}
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}>
       <View ref={contentRef} className="gap-5 pt-1" pointerEvents={tour?.createActive ? 'none' : 'auto'} collapsable={false}>
@@ -1177,6 +1215,7 @@ export function SimpleCreateForm() {
     </View>
     </Screen>
     </View>
+    </KeyboardFormContext.Provider>
     </ChallengeNotesProvider>
   );
 }

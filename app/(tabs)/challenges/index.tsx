@@ -12,6 +12,7 @@ import {
 import { remainingFromChallenge } from '@/components/challenge/ChallengePosterCard';
 import { ContinueDraftCard } from '@/components/challenge/create/wizardUi';
 import { MascotState } from '@/components/mascot/MascotState';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { AppHeader } from '@/components/wallet/AppHeader';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
@@ -244,6 +245,14 @@ export default function ChallengesScreen() {
         }}
         accessibilityLabel="Search challenges"
       />
+
+      <View className="mt-3">
+        <Button
+          title="Create Challenge"
+          accessibilityLabel="Create Challenge"
+          onPress={() => router.push('/challenges/create')}
+        />
+      </View>
 
       {user && drafts.length > 0 ? (
         <View className="mt-3 gap-2">

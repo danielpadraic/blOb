@@ -29,6 +29,7 @@ import { ComparablePointsEditor } from '@/components/challenge/create/comparable
 import { ComparablePointsMethodCard } from '@/components/challenge/create/comparablePoints/ComparablePointsMethodCard';
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
+import { KeyboardFormContext } from '@/components/ui/KeyboardFormShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -1500,6 +1501,31 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   const wizardBody = (
+    <KeyboardFormContext.Provider
+      value={{
+        scrollToTop: () => scrollRef.current?.scrollTo({ y: 0, animated: true }),
+        scrollFieldIntoView: (node) => {
+          node.measureInWindow((_x, y, _w, h) => {
+            const windowH = Dimensions.get('window').height;
+            const reserved = footerH + keyboardHeight + 16;
+            const visibleBottom = windowH - reserved;
+            const fieldBottom = y + h;
+            const topGuard = 24;
+            let delta = 0;
+            if (fieldBottom > visibleBottom) {
+              delta = fieldBottom - visibleBottom;
+            } else if (y < topGuard) {
+              delta = y - topGuard;
+            }
+            if (delta !== 0) {
+              scrollRef.current?.scrollTo({
+                y: Math.max(0, scrollY.current + delta),
+                animated: true,
+              });
+            }
+          });
+        },
+      }}>
     <ChallengeNotesProvider>
     <TourAnchor id="tour-create" style={{ flex: 1 }}>
     <View
@@ -1578,7 +1604,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
           contentContainerStyle={{
-            paddingBottom: tour?.createActive ? 220 : 24,
+            paddingBottom: (tour?.createActive ? 220 : 24) + keyboardHeight + footerH,
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
@@ -1832,6 +1858,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       </View>
     </TourAnchor>
     </ChallengeNotesProvider>
+    </KeyboardFormContext.Provider>
   );
 
   if (embedded) {

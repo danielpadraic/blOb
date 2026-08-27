@@ -49,6 +49,20 @@ describe('post edit lock', () => {
         originalMediaUrls: ['https://a.jpg'],
         hidden: [],
         originalHidden: [],
+        hiddenFromHome: true,
+        originalHiddenFromHome: false,
+      }),
+    ).toBe(false);
+    expect(
+      postEditUnchanged({
+        caption: 'Hi',
+        originalCaption: 'Hi',
+        mediaUrls: ['https://a.jpg'],
+        originalMediaUrls: ['https://a.jpg'],
+        hidden: [],
+        originalHidden: [],
+        hiddenFromHome: true,
+        originalHiddenFromHome: true,
       }),
     ).toBe(true);
     expect(

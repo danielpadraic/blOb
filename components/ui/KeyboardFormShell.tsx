@@ -23,13 +23,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { THEME } from '@/lib/theme';
+import { subscribeVisualViewport } from '@/lib/visualViewport';
 
 type KeyboardFormApi = {
   scrollToTop: () => void;
   scrollFieldIntoView: (node: View) => void;
 };
 
-const KeyboardFormContext = createContext<KeyboardFormApi | null>(null);
+export const KeyboardFormContext = createContext<KeyboardFormApi | null>(null);
 
 export function useKeyboardForm(): KeyboardFormApi | null {
   return useContext(KeyboardFormContext);
@@ -55,10 +56,13 @@ export function useKeyboardOverlap(): number {
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => setOverlap(0),
     );
+    const unsubViewport =
+      Platform.OS === 'web' ? subscribeVisualViewport((occlusion) => setOverlap(occlusion)) : () => undefined;
     return () => {
       show.remove();
       change.remove();
       hide.remove();
+      unsubViewport();
     };
   }, []);
 

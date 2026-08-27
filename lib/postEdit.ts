@@ -85,11 +85,14 @@ export function postEditUnchanged(input: {
   originalMediaUrls: string[];
   hidden: string[];
   originalHidden: string[];
+  hiddenFromHome?: boolean;
+  originalHiddenFromHome?: boolean;
 }): boolean {
   return (
     input.caption.trim() === input.originalCaption.trim() &&
     sameUrlList(input.mediaUrls, input.originalMediaUrls) &&
-    sameUrlList(input.hidden, input.originalHidden)
+    sameUrlList(input.hidden, input.originalHidden) &&
+    Boolean(input.hiddenFromHome) === Boolean(input.originalHiddenFromHome)
   );
 }
 

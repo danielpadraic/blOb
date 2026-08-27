@@ -127,6 +127,18 @@ import { getErrorMessage } from '@/utils/errors';
 const BODY_METRICS_JOIN_COPY =
   'Missing: physical details. Official Fitness Challenges need them for matching — they stay private.';
 
+function ChallengeStackTitle({ title }: { title: string }) {
+  const label = title.trim();
+  return (
+    <AppText
+      numberOfLines={1}
+      className="text-[17px] font-extrabold text-charcoal"
+      style={{ maxWidth: 220 }}>
+      {label || 'Challenge'}
+    </AppText>
+  );
+}
+
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
     reportAppError({
@@ -707,7 +719,8 @@ export default function ChallengeDetailScreen() {
     <Screen padded={false} edges={['left', 'right']}>
       <Stack.Screen
         options={{
-          title: challenge.title,
+          title: challenge.title.trim() || 'Challenge',
+          headerTitle: () => <ChallengeStackTitle title={challenge.title} />,
           headerBackVisible: false,
           headerLeft: () => <StackBackButton />,
           headerRight: () => <ChallengeDetailHeaderRight />,

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { patchFeedPosts, removePostFromHomeFeeds } from '@/hooks/useFeed';
+import { patchFeedPosts } from '@/hooks/useFeed';
 import type { ChallengeProofPart } from '@/lib/challengeProofs';
 import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { parsePostEdits } from '@/lib/postEdit';
@@ -197,9 +197,6 @@ export function useHidePostFromHome() {
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: ['feed'] });
       const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
-      if (input.hidden) {
-        removePostFromHomeFeeds(queryClient, input.postId);
-      }
       applyEditedPostToFeeds(queryClient, {
         id: input.postId,
         hidden_from_home: input.hidden,
@@ -216,15 +213,6 @@ export function useHidePostFromHome() {
         id: row.id,
         hidden_from_home: row.hidden_from_home ?? false,
       });
-      if (row.hidden_from_home) {
-        removePostFromHomeFeeds(queryClient, row.id);
-      } else {
-        void queryClient.invalidateQueries({
-          predicate: (query) =>
-            query.queryKey[0] === 'feed' &&
-            (query.queryKey[1] === 'global' || query.queryKey[1] === 'author'),
-        });
-      }
     },
   });
 }

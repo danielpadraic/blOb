@@ -189,6 +189,7 @@ export function TabChromeHeader({
               alignItems: 'center',
               overflow: 'visible',
               paddingTop: 6,
+              paddingRight: Math.max(insets.right, 10) + 8,
             }}>
             <WalletBar />
             <TourAnchor id="tour-dm" style={{ overflow: 'visible' }}>
@@ -240,9 +241,9 @@ function HeaderIcon({
     <View
       style={{
         overflow: 'visible',
-        paddingTop: 6,
-        paddingRight: 6,
-        marginLeft: 8,
+        paddingTop: 8,
+        paddingRight: 10,
+        marginLeft: 6,
       }}>
       <Pressable
         accessibilityRole="button"
@@ -275,8 +276,8 @@ function UnreadDot({ count }: { count: number }) {
       pointerEvents="none"
       style={{
         position: 'absolute',
-        top: 2,
-        right: 2,
+        top: 0,
+        right: 0,
         minWidth: 18,
         height: 18,
         paddingHorizontal: 4,
