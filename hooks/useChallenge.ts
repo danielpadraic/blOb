@@ -1252,7 +1252,10 @@ export function useSettleChallenge() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (challengeId: string) => settleChallenge(challengeId),
+    mutationFn: async (challengeId: string) => {
+      const cached = queryClient.getQueryData<ChallengeWithStats>(['challenge', challengeId]);
+      return settleChallenge(challengeId, cached ?? null);
+    },
     onSuccess: (result, challengeId) => {
       queryClient.setQueryData(['challenge-settlement', challengeId], result);
       queryClient.setQueryData<ChallengeWithStats>(['challenge', challengeId], (current) =>

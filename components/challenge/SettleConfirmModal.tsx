@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { isUnlimitedChallenge } from '@/lib/challenges';
+import { settlePayoutConfirmCopy } from '@/lib/settlement/payout';
 import type { Challenge } from '@/lib/types';
 import { THEME } from '@/lib/theme';
 import { formatWallet } from '@/lib/currency';
@@ -19,16 +20,6 @@ type SettleConfirmModalProps = {
   onClose: () => void;
   onConfirm: () => void;
 };
-
-function structureLabel(challenge: Challenge) {
-  if (challenge.prize_structure === 'winner_take_all') {
-    return 'winner take all';
-  }
-  if (challenge.prize_structure === 'top_places') {
-    return 'top places';
-  }
-  return 'equal split among completers';
-}
 
 export function SettleConfirmModal({
   visible,
@@ -76,9 +67,9 @@ export function SettleConfirmModal({
           <AppText className="mt-2 text-muted">
             {judging
               ? 'The window is over. This locks new check-ins and joins. Payout unlocks 1 hour after the challenge ended.'
-              : `${pool} will be paid out now (${structureLabel(challenge)}${
+              : `${settlePayoutConfirmCopy(challenge)} ${pool} will be paid out now${
                   finishers > 0 ? ` · ${finishers} completer${finishers === 1 ? '' : 's'}` : ''
-                }). This can only happen once.`}
+                }. This can only happen once.`}
           </AppText>
           {unlimited && !judging ? (
             <AppText className="mt-3 text-sm leading-5 text-muted">

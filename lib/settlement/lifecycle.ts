@@ -1,3 +1,5 @@
+import { isEvenSplitPayout } from './payout';
+
 export const LIFECYCLE_PHASES = ['open', 'live', 'settling', 'settled'] as const;
 
 export type LifecyclePhase = (typeof LIFECYCLE_PHASES)[number];
@@ -53,18 +55,10 @@ export function isEvenSplitAutoSettle(challenge: {
   end_mode?: string | null;
   challenge_type?: string | null;
   prize_structure?: string | null;
+  payout_mode?: string | null;
+  format?: string | null;
 } | null | undefined): boolean {
-  if (!challenge) {
-    return false;
-  }
-  if (challenge.is_unlimited) {
-    return false;
-  }
-  if (challenge.end_mode === 'indefinite_lms' || challenge.challenge_type === 'lms') {
-    return false;
-  }
-  const structure = String(challenge.prize_structure ?? 'equal_split');
-  return structure !== 'winner_take_all' && structure !== 'top_places';
+  return isEvenSplitPayout(challenge);
 }
 
 export function shouldAutoSettle(challenge: {
@@ -75,6 +69,8 @@ export function shouldAutoSettle(challenge: {
   end_mode?: string | null;
   challenge_type?: string | null;
   prize_structure?: string | null;
+  payout_mode?: string | null;
+  format?: string | null;
 } | null | undefined, now = new Date()): boolean {
   if (!challenge || !isEvenSplitAutoSettle(challenge)) {
     return false;

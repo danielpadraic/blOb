@@ -8,6 +8,7 @@ import {
   forfeitNotifyCopy,
   formatSettlementAmount,
   isEvenSplitAutoSettle,
+  isEvenSplitPayout,
   lifecycleLabel,
   lifecyclePhase,
   lobbyResultCopy,
@@ -16,7 +17,10 @@ import {
   receiptHeadline,
   remainingEligible,
   settledCongratulateCopy,
+  settlePayoutConfirmCopy,
+  settlementErrorCopy,
   settlementRequiredDays,
+  settlementRpcForPayout,
   shouldAutoSettle,
 } from '@/lib/settlement/index';
 
@@ -42,6 +46,61 @@ describe('lifecycle', () => {
     ).toBe(true);
     expect(isEvenSplitAutoSettle({ challenge_type: 'lms' })).toBe(false);
     expect(isEvenSplitAutoSettle({ is_unlimited: true })).toBe(false);
+  });
+
+  it('routes host Settle to the payout RPC the host picked', () => {
+    expect(
+      settlementRpcForPayout({
+        prize_structure: 'equal_split',
+        payout_mode: 'even_split_remaining',
+      }),
+    ).toBe('settle_ended_challenge');
+    expect(
+      settlementRpcForPayout({
+        challenge_type: 'cumulative',
+        prize_structure: 'equal_split',
+        payout_mode: 'even_split_remaining',
+      }),
+    ).toBe('settle_ended_challenge');
+    expect(isEvenSplitPayout({ prize_structure: 'winner_take_all' })).toBe(false);
+    expect(settlementRpcForPayout({ prize_structure: 'winner_take_all' })).toBe('distribute_challenge');
+    expect(settlementRpcForPayout({ prize_structure: 'top_places' })).toBe('distribute_challenge');
+    expect(
+      settlementRpcForPayout({
+        challenge_type: 'points',
+        prize_structure: 'winner_take_all',
+      }),
+    ).toBe('distribute_challenge');
+    expect(
+      settlementRpcForPayout({
+        challenge_type: 'points',
+        prize_structure: 'equal_split',
+        payout_mode: 'even_split_remaining',
+      }),
+    ).toBe('settle_ended_challenge');
+  });
+
+  it('writes confirm copy for each payout path', () => {
+    expect(settlePayoutConfirmCopy({ prize_structure: 'equal_split' })).toBe(
+      'Everyone still in splits the prize.',
+    );
+    expect(settlePayoutConfirmCopy({ prize_structure: 'winner_take_all' })).toBe(
+      'First place takes the prize.',
+    );
+    expect(
+      settlePayoutConfirmCopy({
+        challenge_type: 'points',
+        prize_structure: 'winner_take_all',
+      }),
+    ).toBe('Highest points wins. Ties split.');
+    expect(
+      settlePayoutConfirmCopy({
+        prize_structure: 'top_places',
+        top_places_mode: 'count',
+        top_places_value: 3,
+        top_places_distribution: 'even',
+      }),
+    ).toBe('The top 3 finishers will split the prize evenly.');
   });
 });
 
@@ -112,6 +171,20 @@ describe('errors', () => {
     expect(classifySettlementError(new Error('INSUFFICIENT_FLOAT'))).toBe('insufficient_float');
     expect(classifySettlementError(new Error('geo restricted'))).toBe('geo_restricted');
     expect(classifySettlementError(new Error('CHALLENGE_NOT_ENDED'))).toBe('not_ended');
+    expect(classifySettlementError(new Error('NOT_EVEN_SPLIT'))).toBe('not_even_split');
     expect(classifySettlementError(new Error('Failed to fetch'))).toBe('offline');
+  });
+
+  it('uses the server reason instead of a generic settle fail', () => {
+    expect(settlementErrorCopy(new Error('NOT_EVEN_SPLIT'))).toBe(
+      'This prize is ranked, not an even split. Host Settle pays first place or top places.',
+    );
+    expect(settlementErrorCopy(new Error('COOLDOWN_ACTIVE'))).toBe(
+      'Payout unlocks 1 hour after the challenge ends.',
+    );
+    expect(settlementErrorCopy(new Error('Only the host can close or pay out.'))).toBe(
+      'Only the host can close or pay out.',
+    );
+    expect(settlementErrorCopy(new Error('NOT_EVEN_SPLIT'))).not.toMatch(/Couldn.t settle/i);
   });
 });

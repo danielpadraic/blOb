@@ -1,4 +1,4 @@
-import { closeChallengeForJudging } from '@/lib/api/challenges';
+import { closeChallengeForJudging, distributeChallenge } from '@/lib/api/challenges';
 import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 import { getPaymentsProvider } from '@/services/payments';
@@ -19,6 +19,7 @@ import { formatWallet } from '@/lib/currency';
 import { officialBob } from '@/copy/officialBob';
 import { FORFEIT_RECEIPT } from '@/lib/settlement/receipts';
 import { isEvenSplitAutoSettle } from '@/lib/settlement/lifecycle';
+import { settlementRpcForPayout, type EvenSplitPayoutInput } from '@/lib/settlement/payout';
 import {
   getChallengeSettlementWithClient,
   settleEndedChallengeWithClient,
@@ -32,7 +33,13 @@ export {
   lifecyclePhase,
   shouldAutoSettle,
 } from '@/lib/settlement/lifecycle';
+export {
+  isEvenSplitPayout,
+  settlePayoutConfirmCopy,
+  settlementRpcForPayout,
+} from '@/lib/settlement/payout';
 export { FORFEIT_RECEIPT, formatSettlementAmount, receiptHeadline } from '@/lib/settlement/receipts';
+import { settlementErrorCopy } from '@/lib/settlement/errors';
 export { classifySettlementError, settlementErrorCopy } from '@/lib/settlement/errors';
 export { trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
 
@@ -196,6 +203,8 @@ export function canMarkJudging(
     prize_structure?: string | null;
     end_mode?: string | null;
     challenge_type?: string | null;
+    payout_mode?: string | null;
+    format?: string | null;
   },
   userId: string | undefined,
   now = new Date(),
@@ -221,6 +230,8 @@ export function canSettleChallenge(
     prize_structure?: string | null;
     end_mode?: string | null;
     challenge_type?: string | null;
+    payout_mode?: string | null;
+    format?: string | null;
   },
   userId: string | undefined,
 ): boolean {
@@ -236,7 +247,13 @@ export function canSettleChallenge(
   if (challenge.distributed_at || challenge.status === 'settled' || challenge.status === 'cancelled') {
     return false;
   }
-  return challenge.status === 'judging' || challenge.status === 'distributing';
+  const status = String(challenge.status ?? '');
+  return (
+    status === 'ended' ||
+    status === 'settling' ||
+    status === 'judging' ||
+    status === 'distributing'
+  );
 }
 
 /** Payout unlocks 1 hour after judging_started_at, else 1 hour after ends_at. */
@@ -493,7 +510,64 @@ export async function markChallengeJudging(
   return closeChallengeForJudging(challengeId);
 }
 
-export async function settleChallenge(challengeId: string): Promise<ChallengeSettlementView> {
+async function fetchPayoutHint(challengeId: string): Promise<EvenSplitPayoutInput | null> {
+  const { data, error } = await supabase
+    .from('challenges')
+    .select('prize_structure, payout_mode, format, challenge_type, is_unlimited, end_mode')
+    .eq('id', challengeId)
+    .maybeSingle();
+  if (error || !data) {
+    return null;
+  }
+  return data as EvenSplitPayoutInput;
+}
+
+async function viewFromDistributedPayouts(
+  challengeId: string,
+): Promise<ChallengeSettlementView | null> {
+  try {
+    const challengeQuery = await supabase
+      .from('challenges')
+      .select('id, created_by, prize_pool, prize_structure, distributed_at, status')
+      .eq('id', challengeId)
+      .maybeSingle();
+    const row = challengeQuery.data as Record<string, unknown> | null;
+    if (!row) {
+      return null;
+    }
+    const payoutsQuery = await supabase
+      .from('challenge_payouts')
+      .select('id, challenge_id, user_id, amount, created_at')
+      .eq('challenge_id', challengeId)
+      .order('created_at', { ascending: true });
+    const payouts = (payoutsQuery.data ?? []).map((item) => asPayout(item as Record<string, unknown>));
+    const settled = Boolean(row.distributed_at) || String(row.status ?? '') === 'settled' || payouts.length > 0;
+    if (!settled) {
+      return null;
+    }
+    const distributed = payouts.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+    return {
+      already_settled: true,
+      settlement: {
+        id: challengeId,
+        challenge_id: challengeId,
+        settled_by: (row.created_by as string | null) ?? null,
+        prize_pool: Number(row.prize_pool ?? distributed),
+        distributed,
+        prize_structure: String(row.prize_structure ?? 'winner_take_all'),
+        winner_count: payouts.length,
+        settled_at: String(row.distributed_at ?? new Date().toISOString()),
+        slices: payouts,
+      },
+      payouts: await withPayoutProfiles(payouts),
+    };
+  } catch (error) {
+    console.log('[blob:settlement] distribute receipt skipped', error);
+    return null;
+  }
+}
+
+async function settleEvenSplitChallenge(challengeId: string): Promise<ChallengeSettlementView> {
   try {
     return await settleEndedChallengeWithClient(supabase, challengeId);
   } catch (error) {
@@ -517,14 +591,49 @@ export async function settleChallenge(challengeId: string): Promise<ChallengeSet
           return paid;
         }
       }
-      throw error;
+      throw error instanceof Error ? error : new Error(settlementErrorCopy(error));
     }
     const after = await fetchChallengeSettlement(challengeId);
     if (after) {
       return after;
     }
-    throw error;
+    throw error instanceof Error ? error : new Error(settlementErrorCopy(error));
   }
+}
+
+async function settleRankedChallenge(challengeId: string): Promise<ChallengeSettlementView> {
+  try {
+    await distributeChallenge(challengeId);
+  } catch (error) {
+    const existing =
+      (await fetchChallengeSettlement(challengeId)) ?? (await viewFromDistributedPayouts(challengeId));
+    if (existing) {
+      return existing;
+    }
+    throw new Error(settlementErrorCopy(error));
+  }
+  const view =
+    (await fetchChallengeSettlement(challengeId)) ??
+    (await getChallengeSettlementWithClient(supabase, challengeId)) ??
+    (await viewFromDistributedPayouts(challengeId));
+  if (view) {
+    return view;
+  }
+  throw new Error('Prize moved, but the receipt did not load. Open this challenge again.');
+}
+
+export async function settleChallenge(
+  challengeId: string,
+  hint?: EvenSplitPayoutInput | null,
+): Promise<ChallengeSettlementView> {
+  const payout = (await fetchPayoutHint(challengeId)) ?? hint ?? null;
+  if (!payout) {
+    throw new Error('Could not read how this prize is paid.');
+  }
+  if (settlementRpcForPayout(payout) === 'settle_ended_challenge') {
+    return settleEvenSplitChallenge(challengeId);
+  }
+  return settleRankedChallenge(challengeId);
 }
 
 export async function trySettleIfEnded(challengeId: string): Promise<ChallengeSettlementView | null> {

@@ -27,6 +27,7 @@ const RPC_MESSAGES: Record<string, string> = {
   NO_END_DATE: 'This challenge doesn’t have an end date.',
   ALREADY_SETTLED: 'Already paid out.',
   ALREADY_DISTRIBUTED: 'Already paid out.',
+  NOT_EVEN_SPLIT: 'This prize is ranked, not an even split. Host Settle pays first place or top places.',
   TITLE_REQUIRED: 'Give the challenge a title before you publish.',
   INVALID_CURRENCY: 'Pick Blob Coins or $.',
   MAX_PARTICIPANTS_MIN_1: 'Max competitors must be at least 1.',

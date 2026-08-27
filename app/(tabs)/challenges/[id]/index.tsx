@@ -88,6 +88,7 @@ import {
   isEvenSplitAutoSettle,
   isJoinWindowOpen,
   payoutCountdownLabel,
+  settlementErrorCopy,
   shouldAutoSettle,
   startsInLabel,
   trySettleIfEnded,
@@ -470,7 +471,7 @@ export default function ChallengeDetailScreen() {
     settle.mutate(id, {
       onSuccess: () => setSettleOpen(false),
       onError: (error) => {
-        setActionError(getErrorMessage(error));
+        setActionError(settlementErrorCopy(error));
       },
     });
   }
