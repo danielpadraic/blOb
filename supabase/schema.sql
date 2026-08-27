@@ -59,7 +59,7 @@ create table public.profiles (
   height_cm numeric,
   current_weight numeric,
   goal_weight numeric,
-  weight_unit text default 'kg' check (weight_unit in ('kg','lb')),
+  weight_unit text default 'lb' check (weight_unit in ('kg','lb')),
   gender text check (gender is null or gender in ('male','female')),
   body_fat_pct numeric,
   body_metrics_completed_at timestamptz,

@@ -80,8 +80,25 @@ export function formatBmi(bmi: number | null): string {
   return String(bmi);
 }
 
-export function unitSystemFromWeightUnit(unit?: WeightUnit | null): BodyUnitSystem {
-  return unit === 'kg' ? 'metric' : 'imperial';
+export function unitSystemFromWeightUnit(unit?: WeightUnit | string | null): BodyUnitSystem {
+  return String(unit ?? '').trim().toLowerCase() === 'kg' ? 'metric' : 'imperial';
+}
+
+/** Saved kg or preferred_units === metric → metric. Anything else, including unset, is imperial. */
+export function preferredUnitSystem(input?: {
+  weight_unit?: WeightUnit | string | null;
+  preferred_units?: string | null;
+  fitness_profile?: { preferred_units?: string | null } | unknown | null;
+} | null): BodyUnitSystem {
+  const stored =
+    input && typeof input.fitness_profile === 'object' && input.fitness_profile
+      ? (input.fitness_profile as { preferred_units?: string | null }).preferred_units
+      : undefined;
+  const preferred = String(input?.preferred_units ?? stored ?? '').trim().toLowerCase();
+  if (preferred === 'metric' || unitSystemFromWeightUnit(input?.weight_unit) === 'metric') {
+    return 'metric';
+  }
+  return 'imperial';
 }
 
 export function weightUnitFromSystem(system: BodyUnitSystem): WeightUnit {

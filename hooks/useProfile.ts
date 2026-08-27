@@ -46,6 +46,7 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
       profile.last_shown_coin_balance == null ? null : Number(profile.last_shown_coin_balance),
     last_shown_bucks_balance:
       profile.last_shown_bucks_balance == null ? null : Number(profile.last_shown_bucks_balance),
+    weight_unit: profile.weight_unit === 'kg' ? 'kg' : 'lb',
     gender,
     body_fat_pct: Number.isFinite(bodyFat) ? bodyFat : null,
     body_metrics_completed_at: profile.body_metrics_completed_at ?? null,
@@ -301,6 +302,7 @@ export function useCompleteProfile() {
         show_fitness_stats_publicly: patch.show_fitness_stats_publicly ?? false,
         motivation_tone: patch.motivation_tone ?? 'neutral',
         encouragement_tone: patch.encouragement_tone ?? 'neutral',
+        ...(patch.fitness_profile ? { fitness_profile: patch.fitness_profile } : {}),
       };
 
       const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' });

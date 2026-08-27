@@ -49,11 +49,11 @@ export function formatHeight(
   if (cm == null) {
     return 'Not set';
   }
-  if (unit === 'lb') {
-    const { feet, inches } = cmToFeetInches(cm);
-    return `${feet}′ ${inches}″`;
+  if (unit === 'kg') {
+    return `${prettyNumber(cm)} cm`;
   }
-  return `${prettyNumber(cm)} cm`;
+  const { feet, inches } = cmToFeetInches(cm);
+  return `${feet}′ ${inches}″`;
 }
 
 export function formatWeight(
@@ -63,5 +63,5 @@ export function formatWeight(
   if (amount == null) {
     return 'Not set';
   }
-  return `${prettyNumber(amount)} ${unit === 'lb' ? 'lb' : 'kg'}`;
+  return `${prettyNumber(amount)} ${unit === 'kg' ? 'kg' : 'lb'}`;
 }

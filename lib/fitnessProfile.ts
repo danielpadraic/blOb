@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { unitSystemFromWeightUnit, type BodyUnitSystem } from '@/lib/bodyMetrics';
+import { preferredUnitSystem, type BodyUnitSystem } from '@/lib/bodyMetrics';
 import type { FitnessProfile, Profile } from '@/lib/types';
 
 export type { FitnessProfile };
@@ -186,7 +186,10 @@ export function emptyFitnessProfile(units: BodyUnitSystem = 'imperial'): Fitness
 
 export function fitnessProfileFromUser(profile?: Profile | null): FitnessProfile {
   const existing = parseFitnessProfile(profile?.fitness_profile);
-  const units = existing?.preferred_units ?? unitSystemFromWeightUnit(profile?.weight_unit);
+  const units = preferredUnitSystem({
+    weight_unit: profile?.weight_unit,
+    preferred_units: existing?.preferred_units,
+  });
   const base = emptyFitnessProfile(units);
   const days = profile?.typical_weekly_workout_frequency;
   const fromActivities = (profile?.primary_activities ?? [])

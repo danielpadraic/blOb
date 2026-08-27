@@ -6,6 +6,7 @@ import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
 import { LastDoneSlider } from '@/components/profile/LastDoneSlider';
 import { BfpSliderCopy, MotivationToneChips } from '@/components/profile/MotivationToneChips';
 import { MorphingBlob } from '@/components/profile/MorphingBlob';
+import { UnitToggle } from '@/components/profile/UnitToggle';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -26,6 +27,7 @@ import {
   formatBmi,
   hasCompletedBodyMetrics,
   inputWeightToKg,
+  preferredUnitSystem,
   profileWeightKg,
 } from '@/lib/bodyMetrics';
 import { ACTIVITY_OPTIONS, WORKOUT_FREQUENCY_OPTIONS } from '@/lib/constants';
@@ -49,10 +51,6 @@ import { getErrorMessage } from '@/utils/errors';
 import { cmToFeetInches, convertWeight, feetInchesToCm, prettyNumber } from '@/utils/units';
 import { parseOptionalNumber } from '@/utils/validators';
 
-const UNIT_OPTIONS = [
-  { value: 'lb' as const, label: 'ft / in + lb' },
-  { value: 'kg' as const, label: 'cm + kg' },
-];
 
 const GENDER_OPTIONS = [
   { value: 'male' as const, label: 'Male' },
@@ -333,6 +331,10 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
       }
       if (dirty.weight_unit) {
         patch.weight_unit = values.weight_unit;
+        patch.fitness_profile = {
+          ...(patch.fitness_profile ?? fitnessProfileFromUser(profile)),
+          preferred_units: values.weight_unit === 'kg' ? 'metric' : 'imperial',
+        };
       }
       const heightCm =
         values.weight_unit === 'lb'
@@ -630,11 +632,9 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
             </View>
             <View className="gap-2">
               <AppText className="text-sm font-semibold text-charcoal">Units</AppText>
-              <SegmentedControl
-                accessibilityLabel="Measurement units"
-                value={unit}
-                options={UNIT_OPTIONS}
-                onChange={switchUnits}
+              <UnitToggle
+                value={unit === 'kg' ? 'metric' : 'imperial'}
+                onChange={(next) => switchUnits(next === 'metric' ? 'kg' : 'lb')}
               />
             </View>
             {unit === 'lb' ? (
@@ -805,7 +805,7 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
 }
 
 function buildDefaults(profile?: Profile | null): EditValues {
-  const unit: WeightUnit = profile?.weight_unit ?? 'lb';
+  const unit: WeightUnit = preferredUnitSystem(profile) === 'metric' ? 'kg' : 'lb';
   let heightFt = '';
   let heightIn = '';
   let heightCm = '';

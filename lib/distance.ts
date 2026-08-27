@@ -1,3 +1,5 @@
+import { preferredUnitSystem } from '@/lib/bodyMetrics';
+
 export const METERS_PER_MILE = 1609.34;
 export const METERS_PER_KM = 1000;
 export const DEFAULT_DISTANCE_MILES = 1;
@@ -5,8 +7,13 @@ export const MIN_DISTANCE_STEPS = 0.25;
 
 export type DistanceUnit = 'mi' | 'km';
 
-export function athleteDistanceUnit(weightUnit?: string | null): DistanceUnit {
-  return String(weightUnit ?? '').toLowerCase() === 'kg' ? 'km' : 'mi';
+export function athleteDistanceUnit(
+  weightUnit?: string | null,
+  preferredUnits?: string | null,
+): DistanceUnit {
+  return preferredUnitSystem({ weight_unit: weightUnit, preferred_units: preferredUnits }) === 'metric'
+    ? 'km'
+    : 'mi';
 }
 
 export function milesToMeters(miles: number): number {

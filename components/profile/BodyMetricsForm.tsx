@@ -26,11 +26,12 @@ import {
   formatBmi,
   inputHeightToCm,
   inputWeightToKg,
+  preferredUnitSystem,
   profileWeightKg,
-  unitSystemFromWeightUnit,
   weightUnitFromSystem,
   type BodyUnitSystem,
 } from '@/lib/bodyMetrics';
+import { fitnessProfileFromUser } from '@/lib/fitnessProfile';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
@@ -213,6 +214,10 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
         weight_unit: weightUnitFromSystem(values.units),
         body_fat_pct: clampBodyFat(values.body_fat_pct),
         body_metrics_completed_at: new Date().toISOString(),
+        fitness_profile: {
+          ...fitnessProfileFromUser(profile),
+          preferred_units: values.units,
+        },
       });
       setSaved(true);
     } catch (error) {
@@ -407,7 +412,7 @@ export function BodyMetricsForm({ profile, onSkip, afterSave }: BodyMetricsFormP
 }
 
 function buildDefaults(profile?: Profile | null): FormValues {
-  const units = unitSystemFromWeightUnit(profile?.weight_unit);
+  const units = preferredUnitSystem(profile);
   const heightCm = profile?.height_cm ?? 0;
   const parts = heightCm > 0 ? displayHeightParts(heightCm, units) : { cm: '', feet: '', inches: '' };
   const kg = profileWeightKg(profile ?? {});

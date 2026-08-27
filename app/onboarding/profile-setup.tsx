@@ -7,6 +7,7 @@ import type { Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
+import { UnitToggle } from '@/components/profile/UnitToggle';
 import { BfpSliderCopy, MotivationToneChips } from '@/components/profile/MotivationToneChips';
 import { MorphingBlob, preloadBodyFatFrames } from '@/components/profile/MorphingBlob';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
@@ -38,10 +39,11 @@ import {
   clampBodyFat,
   formatBmi,
   inputWeightToKg,
+  preferredUnitSystem,
   profileWeightKg,
 } from '@/lib/bodyMetrics';
 import { asCopyTone, copy, type CopyTone } from '@/lib/copy';
-import { hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
+import { fitnessProfileFromUser, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -62,10 +64,6 @@ import {
   type ProfileSetupValues,
 } from '@/utils/validators';
 
-const UNIT_OPTIONS = [
-  { value: 'lb' as const, label: 'ft / in + lb' },
-  { value: 'kg' as const, label: 'cm + kg' },
-];
 
 const GENDER_OPTIONS = [
   { value: 'male' as const, label: 'Male' },
@@ -281,6 +279,10 @@ export function ProfileSetupWizard() {
         weight_unit: values.weight_unit,
         body_fat_pct: clampBodyFat(values.body_fat_pct),
         body_metrics_completed_at: new Date().toISOString(),
+        fitness_profile: {
+          ...fitnessProfileFromUser(profile),
+          preferred_units: values.weight_unit === 'kg' ? 'metric' : 'imperial',
+        },
         typical_weekly_workout_frequency: parseOptionalNumber(
           values.typical_weekly_workout_frequency,
         ),
@@ -504,11 +506,9 @@ export function ProfileSetupWizard() {
 
           <View className="gap-2">
             <AppText className="text-sm font-semibold text-charcoal">Units</AppText>
-            <SegmentedControl
-              accessibilityLabel="Measurement units"
-              value={unit}
-              options={UNIT_OPTIONS}
-              onChange={switchUnits}
+            <UnitToggle
+              value={unit === 'kg' ? 'metric' : 'imperial'}
+              onChange={(next) => switchUnits(next === 'metric' ? 'kg' : 'lb')}
             />
           </View>
 
@@ -684,7 +684,7 @@ export default function ProfileSetupScreen() {
 function buildDefaults(
   profile: ReturnType<typeof useMyProfile>['profile'],
 ): ProfileSetupValues {
-  const unit: WeightUnit = profile?.weight_unit ?? 'lb';
+  const unit: WeightUnit = preferredUnitSystem(profile) === 'metric' ? 'kg' : 'lb';
   let heightFt = '';
   let heightIn = '';
   let heightCm = '';
