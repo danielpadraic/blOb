@@ -257,6 +257,7 @@ export function useSubmittedCheckinCount(
       if (!liveWindow) {
         return 0;
       }
+      // Count live challenge_checkins only. posts.hidden_from_home must not join or filter this.
       let query = supabase
         .from('challenge_checkins')
         .select('id', { count: 'exact', head: true })

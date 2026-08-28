@@ -35,7 +35,8 @@ export function looksLikeProofMedia(urls?: string[] | null): boolean {
   return visuals.length >= 2 && visuals.length <= 3;
 }
 
-/** Check-in / workout proof post. Reuses source, checkin_id, and proof media — no parallel kind. */
+/** Check-in / workout proof post. Reuses source, checkin_id, and proof media — no parallel kind.
+ *  hidden_from_home only mutes the Home card. It does not change this, or board / ring counts. */
 export function isCheckinPost(post: CheckinPostLike): boolean {
   const kind = String(post.kind ?? post.type ?? '').toLowerCase();
   if (CHECKIN_KINDS.has(kind)) {

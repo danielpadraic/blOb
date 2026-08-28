@@ -24,6 +24,7 @@ import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDeta
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { JoinCtaButton, JOIN_CTA_HEIGHT } from '@/components/challenge/JoinCtaButton';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { HealthProofCaption } from '@/components/challenge/HealthProofCaption';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
@@ -120,7 +121,6 @@ import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { reportAppError, extractPostgrestCode } from '@/lib/appErrors';
 import { challengeLoadKind, firstRouteParam } from '@/lib/challengeLoad';
-import { isCheckinPost } from '@/lib/checkinPost';
 import { challengeHasDurationHint, resolveChallengeHero } from '@/lib/challengeOpen';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
@@ -706,9 +706,7 @@ export default function ChallengeDetailScreen() {
   const signupLines = signupProofLines(challenge);
   const hideBuyIn =
     buyInAmount > 0 && (isBucksChallenge(challenge) || Boolean(challenge.host_funded));
-  const hasCheckins =
-    (submittedCheckins.data ?? 0) > 0 ||
-    (feed.data ?? []).some((post) => isCheckinPost(post));
+  const hasCheckins = (submittedCheckins.data ?? 0) > 0 || loggedToday;
   const startNeeded =
     challenge.status === 'live' || hasCheckins
       ? null
@@ -746,7 +744,9 @@ export default function ChallengeDetailScreen() {
     challenge.status !== 'cancelled' &&
     (stickyJoin || stickyCheckin);
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
-  const stickyBlock = showStickyCta ? JOIN_CTA_HEIGHT + (pageTab === 'overview' && stickyCheckin ? 56 : 12) : 0;
+  const stickyBlock = showStickyCta
+    ? JOIN_CTA_HEIGHT + (!checkinLocked && watch.visible ? 44 : 12)
+    : 0;
 
   return (
     <ChallengeNotesProvider>
@@ -833,7 +833,7 @@ export default function ChallengeDetailScreen() {
         <View className="mt-4">
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
-        {pageTab === 'overview' && stickyCheckin ? null : (
+        {pageTab === 'overview' ? (
         <View className="mt-3">
           <ChallengeLeaderboard
             challenge={challenge}
@@ -846,7 +846,7 @@ export default function ChallengeDetailScreen() {
             onOpenReceipt={() => setPageTab('board')}
           />
         </View>
-        )}
+        ) : null}
 
         {challenge.status === 'settling' && !receipt ? (
           <Card className="mt-4">
@@ -1282,30 +1282,36 @@ export default function ChallengeDetailScreen() {
           <Button title="Checking today’s check-in" size="md" loading disabled />
         ) : (
           <View className="gap-2">
-            {pageTab === 'overview' ? (
-              <ChallengeLeaderboard
-                challenge={challenge}
-                roster={boardRoster}
-                completedUserIds={completions.data ?? new Set()}
-                joined={isJoined}
-                viewerId={user?.id}
-                settlement={receipt}
-                variant="compact"
-                onOpenReceipt={() => setPageTab('board')}
+            {checkinLocked ? (
+              <View
+                accessibilityRole="button"
+                accessibilityLabel={copy('checkin.checkedIn')}
+                accessibilityState={{ disabled: true }}
+                style={{
+                  height: JOIN_CTA_HEIGHT,
+                  width: '100%',
+                  backgroundColor: THEME.accent,
+                  borderRadius: THEME.radiusSm,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}>
+                <Glyph name={GLYPH.check} color={THEME.accentForeground} size={18} />
+                <AppText className="text-[16px] font-semibold" style={{ color: THEME.accentForeground }}>
+                  {copy('checkin.checkedIn')}
+                </AppText>
+              </View>
+            ) : (
+              <Button
+                title={logTitle}
+                size="md"
+                variant="primary"
+                onPress={() => {
+                  router.push(`/challenges/${id}/submit`);
+                }}
               />
-            ) : null}
-            <Button
-              title={checkinLocked ? copy('checkin.checkedIn') : logTitle}
-              size="md"
-              variant={checkinLocked ? 'outline' : 'primary'}
-              disabled={checkinLocked}
-              onPress={() => {
-                if (checkinLocked) {
-                  return;
-                }
-                router.push(`/challenges/${id}/submit`);
-              }}
-            />
+            )}
             {!checkinLocked && watch.visible ? (
               <Pressable
                 accessibilityRole="button"
