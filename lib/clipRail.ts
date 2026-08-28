@@ -86,36 +86,175 @@ export function railHasVisibleWaves(groups: StoryGroup[]): boolean {
   return groups.some((group) => group.stories.length > 0);
 }
 
-/** Tapped Wave first, then that person’s unhidden Waves newest-first, then friends’ unseen. */
+export type AuthorRange = {
+  authorId: string;
+  start: number;
+  end: number;
+};
+
+/** Own stack first (rail order), then friends. Stories inside an author stay oldest-first. */
+export function flattenWaveStories(input: {
+  groups: StoryGroup[];
+  startStoryId: string;
+  extra?: Story | null;
+}): { stories: Story[]; startIndex: number } {
+  const startId = String(input.startStoryId ?? '').trim();
+  const stories = input.groups.flatMap((group) => group.stories);
+  const startIndex = stories.findIndex((story) => story.id === startId);
+  if (startIndex >= 0) {
+    return { stories, startIndex };
+  }
+  const extra = input.extra && extraMatchesStart(input.extra, startId) ? input.extra : null;
+  if (!extra) {
+    return { stories, startIndex: 0 };
+  }
+  if (stories.length === 0) {
+    return { stories: [extra], startIndex: 0 };
+  }
+  const insertAt = insertIndexForAuthor(stories, extra);
+  return {
+    stories: [...stories.slice(0, insertAt), extra, ...stories.slice(insertAt)],
+    startIndex: insertAt,
+  };
+}
+
+function extraMatchesStart(story: Story, startId: string): boolean {
+  return story.id === startId;
+}
+
+function insertIndexForAuthor(stories: Story[], extra: Story): number {
+  const first = stories.findIndex((story) => story.user_id === extra.user_id);
+  if (first < 0) {
+    return stories.length;
+  }
+  let i = first;
+  while (i < stories.length && stories[i]?.user_id === extra.user_id) {
+    const time = Date.parse(stories[i]!.created_at) - Date.parse(extra.created_at);
+    if (time > 0 || (time === 0 && (stories[i]!.sequence_index ?? 0) > (extra.sequence_index ?? 0))) {
+      break;
+    }
+    i += 1;
+  }
+  return i;
+}
+
+/** @deprecated Use flattenWaveStories. Kept for older call sites. */
 export function buildWaveStack(input: {
   groups: StoryGroup[];
   startStoryId: string;
   viewedIds: Set<string>;
 }): Story[] {
-  const startId = String(input.startStoryId ?? '').trim();
-  const startGroup = input.groups.find((group) => group.stories.some((story) => story.id === startId));
-  if (!startGroup) {
-    const solo = input.groups.flatMap((group) => group.stories).find((story) => story.id === startId);
-    return solo ? [solo] : [];
-  }
-  const person = newestFirstStories(startGroup.stories);
-  const startIndex = person.findIndex((story) => story.id === startId);
-  const ordered =
-    startIndex >= 0 ? [...person.slice(startIndex), ...person.slice(0, startIndex)] : person;
-  const seen = new Set(ordered.map((story) => story.id));
-  const unseenFriends = input.groups
-    .filter((group) => group.userId !== startGroup.userId && !group.isOwn)
-    .flatMap((group) => newestFirstStories(group.stories))
-    .filter((story) => !input.viewedIds.has(story.id) && !seen.has(story.id));
-  return [...ordered, ...unseenFriends];
+  return flattenWaveStories(input).stories;
 }
 
-/** Tapped Round first, then the rest of the rail newest-first. */
-export function buildRoundStack<T extends { id: string }>(reels: T[], startReelId: string): T[] {
-  const startId = String(startReelId ?? '').trim();
-  const start = reels.find((reel) => reel.id === startId);
-  if (!start) {
-    return [];
+export function authorRanges(clips: { authorId: string }[]): AuthorRange[] {
+  const ranges: AuthorRange[] = [];
+  for (let i = 0; i < clips.length; i += 1) {
+    const authorId = clips[i]?.authorId ?? '';
+    const last = ranges[ranges.length - 1];
+    if (last && last.authorId === authorId) {
+      last.end = i;
+    } else {
+      ranges.push({ authorId, start: i, end: i });
+    }
   }
-  return [start, ...reels.filter((reel) => reel.id !== startId)];
+  return ranges;
+}
+
+export function rangeAt(ranges: AuthorRange[], index: number): AuthorRange | null {
+  return ranges.find((range) => index >= range.start && index <= range.end) ?? null;
+}
+
+/** Unseen clip in this author, else the newest (last in oldest-first). */
+export function authorEntryIndex(
+  clips: { id: string }[],
+  range: AuthorRange,
+  viewedIds: Set<string>,
+): number {
+  for (let i = range.start; i <= range.end; i += 1) {
+    if (!viewedIds.has(clips[i]?.id ?? '')) {
+      return i;
+    }
+  }
+  return range.end;
+}
+
+export function nextStoryIndex(ranges: AuthorRange[], index: number): number | 'close' {
+  const range = rangeAt(ranges, index);
+  if (!range) {
+    return 'close';
+  }
+  if (index < range.end) {
+    return index + 1;
+  }
+  const next = ranges[ranges.indexOf(range) + 1];
+  return next ? next.start : 'close';
+}
+
+export function prevStoryIndex(ranges: AuthorRange[], index: number): number | 'close' {
+  const range = rangeAt(ranges, index);
+  if (!range) {
+    return 'close';
+  }
+  if (index > range.start) {
+    return index - 1;
+  }
+  const prev = ranges[ranges.indexOf(range) - 1];
+  return prev ? prev.end : 'close';
+}
+
+export function nextAuthorEntryIndex(
+  clips: { id: string }[],
+  ranges: AuthorRange[],
+  index: number,
+  viewedIds: Set<string>,
+): number | null {
+  const range = rangeAt(ranges, index);
+  if (!range) {
+    return null;
+  }
+  const next = ranges[ranges.indexOf(range) + 1];
+  return next ? authorEntryIndex(clips, next, viewedIds) : null;
+}
+
+export function prevAuthorEntryIndex(
+  clips: { id: string }[],
+  ranges: AuthorRange[],
+  index: number,
+  viewedIds: Set<string>,
+): number | null {
+  const range = rangeAt(ranges, index);
+  if (!range) {
+    return null;
+  }
+  const prev = ranges[ranges.indexOf(range) - 1];
+  return prev ? authorEntryIndex(clips, prev, viewedIds) : null;
+}
+
+export function preloadStoryIndex(ranges: AuthorRange[], index: number): number | null {
+  const next = nextStoryIndex(ranges, index);
+  return typeof next === 'number' ? next : null;
+}
+
+/** Home Rounds rail order (newest first). Play starts on the tapped id. */
+export function buildRoundPlayList<T extends { id: string }>(
+  rail: T[],
+  startReelId: string,
+  extra?: T | null,
+): { items: T[]; startIndex: number } {
+  const startId = String(startReelId ?? '').trim();
+  const items = [...rail];
+  if (extra && !items.some((row) => row.id === extra.id)) {
+    items.unshift(extra);
+  }
+  const found = items.findIndex((row) => row.id === startId);
+  if (found >= 0) {
+    return { items, startIndex: found };
+  }
+  return { items: extra ? [extra] : items, startIndex: 0 };
+}
+
+/** @deprecated Use buildRoundPlayList. */
+export function buildRoundStack<T extends { id: string }>(reels: T[], startReelId: string): T[] {
+  return buildRoundPlayList(reels, startReelId).items;
 }

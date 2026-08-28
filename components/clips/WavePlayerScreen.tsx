@@ -10,7 +10,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useStory, useStoryChallengePreviews, useStoryGroups } from '@/hooks/useSocial';
-import { buildWaveStack } from '@/lib/clipRail';
+import { flattenWaveStories } from '@/lib/clipRail';
 import { waveWatchName } from '@/lib/clipWatch';
 import { copy } from '@/lib/copy';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
@@ -47,15 +47,14 @@ export function WavePlayerScreen() {
     return map;
   }, [challengeQuery.data]);
 
-  const clips = useMemo(() => {
+  const { clips, startIndex } = useMemo(() => {
     if (!storyId) {
-      return [];
+      return { clips: [] as ClipPlayItem[], startIndex: 0 };
     }
-    let stories = buildWaveStack({ groups, startStoryId: storyId, viewedIds });
-    if (stories.length === 0 && storyQuery.data) {
-      stories = [storyQuery.data];
-    }
-    return stories.map((story) => {
+    const flat = flattenWaveStories({ groups, startStoryId: storyId, extra: storyQuery.data });
+    return {
+      startIndex: flat.startIndex,
+      clips: flat.stories.map((story) => {
       const group = groups.find((row) => row.userId === story.user_id);
       const name = waveWatchName({
         isOwn: story.user_id === user?.id,
@@ -83,8 +82,9 @@ export function WavePlayerScreen() {
         isOwn: story.user_id === user?.id,
       };
       return item;
-    });
-  }, [groups, profile, storyId, storyQuery.data, user?.id, viewedIds]);
+    }),
+    };
+  }, [groups, profile, storyId, storyQuery.data, user?.id]);
 
   function close() {
     if (router.canGoBack()) {
@@ -98,7 +98,7 @@ export function WavePlayerScreen() {
     router.replace(TABS_HREF);
   }
 
-  if ((isLoading || storyQuery.isLoading) && clips.length === 0) {
+  if (isLoading || (storyQuery.isLoading && clips.length === 0)) {
     return (
       <WatchSurface>
         <View className="flex-1 items-center justify-center">
@@ -154,15 +154,12 @@ export function WavePlayerScreen() {
     <ClipPlayer
       key={storyId}
       clips={clips}
-      startIndex={0}
+      startIndex={startIndex}
       autoAdvance
       openComments={comments === '1' || (Array.isArray(comments) && comments[0] === '1')}
       challenges={challenges}
+      viewedIds={viewedIds}
       onClose={close}
-      onCreate={() => {
-        close();
-        startFreshWaveCapture(router);
-      }}
     />
   );
 }

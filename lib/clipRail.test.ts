@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRoundStack, buildWaveStack, filterStoriesForRail, newestFirstStories, railHasVisibleWaves } from '@/lib/clipRail';
+import {
+  authorEntryIndex,
+  authorRanges,
+  buildRoundPlayList,
+  filterStoriesForRail,
+  flattenWaveStories,
+  newestFirstStories,
+  nextAuthorEntryIndex,
+  nextStoryIndex,
+  prevAuthorEntryIndex,
+  prevStoryIndex,
+  railHasVisibleWaves,
+} from '@/lib/clipRail';
 import type { Story, StoryGroup } from '@/lib/social';
 
 function story(partial: Partial<Story> & { id: string; user_id: string }): Story {
@@ -26,19 +38,37 @@ describe('clip rail', () => {
     expect(newestFirstStories([older, newer]).map((row) => row.id)).toEqual(['b', 'a']);
   });
 
-  it('starts the stack on the tapped Wave, then that person, then unseen friends', () => {
+  it('keeps each author’s Waves together and opens on the tapped id', () => {
     const mine = [
       story({ id: 'old', user_id: 'p1', created_at: '2026-01-01T00:00:00.000Z' }),
       story({ id: 'tap', user_id: 'p1', created_at: '2026-01-02T00:00:00.000Z' }),
     ];
-    const friendSeen = story({ id: 'seen', user_id: 'p2', created_at: '2026-01-03T00:00:00.000Z' });
-    const friendUnseen = story({ id: 'unseen', user_id: 'p2', created_at: '2026-01-04T00:00:00.000Z' });
-    const stack = buildWaveStack({
-      groups: [group('p1', mine), group('p2', [friendSeen, friendUnseen])],
+    const friend = [
+      story({ id: 'f1', user_id: 'p2', created_at: '2026-01-03T00:00:00.000Z' }),
+      story({ id: 'f2', user_id: 'p2', created_at: '2026-01-04T00:00:00.000Z' }),
+    ];
+    const flat = flattenWaveStories({
+      groups: [group('p1', mine, true), group('p2', friend)],
       startStoryId: 'tap',
-      viewedIds: new Set(['seen']),
     });
-    expect(stack.map((row) => row.id)).toEqual(['tap', 'old', 'unseen']);
+    expect(flat.stories.map((row) => row.id)).toEqual(['old', 'tap', 'f1', 'f2']);
+    expect(flat.startIndex).toBe(1);
+    const ranges = authorRanges([
+      { authorId: 'p1' },
+      { authorId: 'p1' },
+      { authorId: 'p2' },
+      { authorId: 'p2' },
+    ]);
+    expect(authorEntryIndex([{ id: 'old' }, { id: 'tap' }, { id: 'f1' }, { id: 'f2' }], ranges[1]!, new Set(['f1']))).toBe(
+      3,
+    );
+    expect(nextStoryIndex(ranges, 0)).toBe(1);
+    expect(nextStoryIndex(ranges, 1)).toBe(2);
+    expect(nextStoryIndex(ranges, 3)).toBe('close');
+    expect(prevStoryIndex(ranges, 0)).toBe('close');
+    expect(prevStoryIndex(ranges, 2)).toBe(1);
+    expect(nextAuthorEntryIndex([{ id: 'old' }, { id: 'tap' }, { id: 'f1' }, { id: 'f2' }], ranges, 1, new Set())).toBe(2);
+    expect(prevAuthorEntryIndex([{ id: 'old' }, { id: 'tap' }, { id: 'f1' }, { id: 'f2' }], ranges, 2, new Set())).toBe(0);
   });
 
   it('hides rail Waves that are hidden, corporate, or author-muted', () => {
@@ -55,12 +85,10 @@ describe('clip rail', () => {
     expect(kept.map((row) => row.id)).toEqual(['ok']);
   });
 
-  it('starts the Round stack on the tapped clip', () => {
-    expect(buildRoundStack([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 'b').map((row) => row.id)).toEqual([
-      'b',
-      'a',
-      'c',
-    ]);
+  it('plays Rounds in rail order and starts on the tapped clip', () => {
+    const play = buildRoundPlayList([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 'b');
+    expect(play.items.map((row) => row.id)).toEqual(['a', 'b', 'c']);
+    expect(play.startIndex).toBe(1);
   });
 
   it('treats an empty Waves rail as hidden', () => {

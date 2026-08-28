@@ -1,3 +1,4 @@
+import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { postHref } from '@/lib/postShare';
 import { challengeDetailHref, conversationHref, reelHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
@@ -93,9 +94,10 @@ function stackedSuffix(
   data?: NotificationData,
 ): { one: string; many: string } {
   if (type === 'post_reaction') {
-    return stackKey.includes('comment:')
-      ? { one: 'reacted to your comment', many: 'reacted to your comment' }
-      : { one: 'reacted to your post', many: 'reacted to your post' };
+    if (stackKey.includes('comment:')) {
+      return { one: 'reacted to your comment', many: 'reacted to your comment' };
+    }
+    return clipReactionNotifyCopy(data);
   }
   if (type === 'post_comment') {
     if (stackKey.includes('comment:')) {
@@ -115,6 +117,8 @@ function stackedSuffix(
   }
   return { one: 'tagged you', many: 'tagged you in a post' };
 }
+
+export { clipReactionNotifyCopy } from '@/lib/clipNotify';
 
 export function stackedInteractionTitle(name: string, count: number, one: string, many: string): string {
   const display = name.trim() || 'Someone';

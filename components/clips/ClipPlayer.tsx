@@ -50,7 +50,16 @@ import {
   saveLastClipReaction,
   type ClipReactionType,
 } from '@/lib/clipReactions';
-import { setPostHiddenFromRail } from '@/lib/clipRail';
+import {
+  authorRanges,
+  nextAuthorEntryIndex,
+  nextStoryIndex,
+  preloadStoryIndex,
+  prevAuthorEntryIndex,
+  prevStoryIndex,
+  rangeAt,
+  setPostHiddenFromRail,
+} from '@/lib/clipRail';
 import { clipSocialCounts } from '@/lib/clipPost';
 import { copy } from '@/lib/copy';
 import { canOfferShareToFeed } from '@/lib/roundShare';
@@ -94,8 +103,8 @@ type ClipPlayerProps = {
   openComments?: boolean;
   challenges?: Map<string, FeedChallengePreview>;
   sharePrompt?: boolean;
+  viewedIds?: Set<string>;
   onClose: () => void;
-  onCreate?: () => void;
 };
 
 export function ClipPlayer({
@@ -105,8 +114,8 @@ export function ClipPlayer({
   openComments = false,
   challenges,
   sharePrompt = false,
+  viewedIds,
   onClose,
-  onCreate,
 }: ClipPlayerProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -140,40 +149,109 @@ export function ClipPlayer({
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const captionOpenRef = useRef(false);
-  const onCreateRef = useRef(onCreate);
+  const holdingRef = useRef(false);
+  const lastTap = useRef(0);
+  const viewedIdsRef = useRef(viewedIds ?? new Set<string>());
+  const atStartX = useSharedValue(false);
+  const atEndX = useSharedValue(false);
+  const [videoWidth, setVideoWidth] = useState(0);
 
   clipsRef.current = clips;
   indexRef.current = index;
   sheetRef.current = sheet;
   commentsRef.current = commentsMode;
   captionOpenRef.current = captionOpen;
-  onCreateRef.current = onCreate;
-  paused.current = pickerOpen;
+  viewedIdsRef.current = viewedIds ?? new Set<string>();
+  paused.current = pickerOpen || holdingRef.current;
 
   useEffect(() => {
     void loadLastClipReaction().then(setLastReaction);
   }, []);
 
   const clip = clips[index];
+  const kind = clip?.kind ?? clips[0]?.kind ?? 'wave';
+  const ranges = useMemo(() => authorRanges(clips), [clips]);
+  const authorRange = rangeAt(ranges, index);
+  const storyProgressIndex = authorRange ? index - authorRange.start : 0;
+  const storyCount = authorRange ? authorRange.end - authorRange.start + 1 : 1;
 
-  const goNext = useCallback(() => {
-    const current = clipsRef.current;
-    const at = indexRef.current;
-    if (at + 1 < current.length) {
-      setIndex(at + 1);
+  useEffect(() => {
+    if (kind === 'wave') {
+      atStartX.value = Boolean(ranges[0] && authorRange && authorRange.authorId === ranges[0].authorId);
+      atEndX.value = Boolean(
+        ranges.length &&
+          authorRange &&
+          authorRange.authorId === ranges[ranges.length - 1]?.authorId,
+      );
       return;
     }
-    onClose();
+    atStartX.value = index === 0;
+    atEndX.value = index >= clips.length - 1;
+  }, [authorRange, atEndX, atStartX, clips.length, index, kind, ranges]);
+
+  const applyIndex = useCallback((next: number | 'close' | null) => {
+    if (next === 'close' || next == null) {
+      if (next === 'close') {
+        onClose();
+      }
+      return;
+    }
+    setIndex(next);
   }, [onClose]);
 
-  const goPrev = useCallback(() => {
+  const goNextClip = useCallback(() => {
+    const current = clipsRef.current;
     const at = indexRef.current;
-    if (at > 0) {
-      setIndex(at - 1);
+    if ((current[at]?.kind ?? kind) === 'round') {
+      if (at + 1 < current.length) {
+        setIndex(at + 1);
+      }
       return;
     }
-    onCreateRef.current?.();
-  }, []);
+    applyIndex(nextStoryIndex(authorRanges(current), at));
+  }, [applyIndex, kind]);
+
+  const goPrevClip = useCallback(() => {
+    const current = clipsRef.current;
+    const at = indexRef.current;
+    if ((current[at]?.kind ?? kind) === 'round') {
+      if (at > 0) {
+        setIndex(at - 1);
+      }
+      return;
+    }
+    applyIndex(prevStoryIndex(authorRanges(current), at));
+  }, [applyIndex, kind]);
+
+  const goSwipeLeft = useCallback(() => {
+    const current = clipsRef.current;
+    const at = indexRef.current;
+    if ((current[at]?.kind ?? kind) === 'round') {
+      if (at + 1 < current.length) {
+        setIndex(at + 1);
+      }
+      return;
+    }
+    const next = nextAuthorEntryIndex(current, authorRanges(current), at, viewedIdsRef.current);
+    if (next != null) {
+      setIndex(next);
+    }
+  }, [kind]);
+
+  const goSwipeRight = useCallback(() => {
+    const current = clipsRef.current;
+    const at = indexRef.current;
+    if ((current[at]?.kind ?? kind) === 'round') {
+      if (at > 0) {
+        setIndex(at - 1);
+      }
+      return;
+    }
+    const prev = prevAuthorEntryIndex(current, authorRanges(current), at, viewedIdsRef.current);
+    if (prev != null) {
+      setIndex(prev);
+    }
+  }, [kind]);
 
   const applyReaction = useCallback((type: ClipReactionType) => {
     setLastReaction(type);
@@ -202,6 +280,14 @@ export function ClipPlayer({
   }
 
   useEffect(() => {
+    const keepId = clips[indexRef.current]?.id ?? clips[startIndex]?.id;
+    const keep = clips.findIndex((row) => row.id === keepId);
+    if (keep >= 0 && keep !== indexRef.current) {
+      setIndex(keep);
+    }
+  }, [clips, startIndex]);
+
+  useEffect(() => {
     setProgress(0);
     setFloat(null);
     setPickerOpen(false);
@@ -211,6 +297,27 @@ export function ClipPlayer({
     setCaptionOpen(false);
     setCaptionOverflow(false);
   }, [clip?.id, index, openComments, startIndex]);
+
+  useEffect(() => {
+    if (!clip || clip.mediaType !== 'image' || !autoAdvance || commentsMode) {
+      return undefined;
+    }
+    let acc = 0;
+    let last = Date.now();
+    const span = Math.max(clip.durationMs, 400);
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (!paused.current) {
+        acc += now - last;
+      }
+      last = now;
+      setProgress(Math.max(0, Math.min(1, acc / span)));
+      if (acc >= span) {
+        goNextClip();
+      }
+    }, 80);
+    return () => clearInterval(id);
+  }, [autoAdvance, clip?.durationMs, clip?.id, clip?.mediaType, commentsMode, goNextClip]);
 
   useEffect(() => {
     if (!clip || clip.isOwn || clip.kind !== 'wave') {
@@ -258,22 +365,24 @@ export function ClipPlayer({
       .activeOffsetX([-28, 28])
       .failOffsetY([-36, 36])
       .onUpdate((event) => {
-        translateX.value = event.translationX;
+        const pullingStart = atStartX.value && event.translationX > 0;
+        const pullingEnd = atEndX.value && event.translationX < 0;
+        translateX.value = pullingStart || pullingEnd ? event.translationX * 0.32 : event.translationX;
       })
       .onEnd((event) => {
         if (sheetRef.current) {
           translateX.value = withTiming(0);
           return;
         }
-        if (event.translationX > 80) {
-          runOnJS(goPrev)();
-        } else if (event.translationX < -80) {
-          runOnJS(goNext)();
+        if (event.translationX > 80 && !atStartX.value) {
+          runOnJS(goSwipeRight)();
+        } else if (event.translationX < -80 && !atEndX.value) {
+          runOnJS(goSwipeLeft)();
         }
         translateX.value = withTiming(0);
       });
     return Gesture.Race(horizontal, vertical);
-  }, [goNext, goPrev, translateX, translateY]);
+  }, [atEndX, atStartX, goSwipeLeft, goSwipeRight, translateX, translateY]);
 
   const commentsPan = useMemo(
     () =>
@@ -308,7 +417,9 @@ export function ClipPlayer({
     <Animated.View style={[{ flex: 1, backgroundColor: '#101312', overflow: 'hidden' }, dismissStyle]}>
       <View style={{ flex: 1 }}>
       <GestureDetector gesture={pan}>
-          <Animated.View style={[{ height: bandH, flex: bandH ? undefined : 1, overflow: 'hidden', backgroundColor: '#101312' }, swipeStyle]}>
+          <Animated.View
+            onLayout={(event) => setVideoWidth(event.nativeEvent.layout.width)}
+            style={[{ height: bandH, flex: bandH ? undefined : 1, overflow: 'hidden', backgroundColor: '#101312' }, swipeStyle]}>
           {clip.mediaType === 'video' ? (
             <ClipVideo
               key={clip.id}
@@ -318,7 +429,7 @@ export function ClipPlayer({
               loop={!autoAdvance}
               muted={muted}
               pausedRef={paused}
-              onEnded={autoAdvance ? goNext : undefined}
+              onEnded={autoAdvance ? goNextClip : undefined}
               onProgress={setProgress}
             />
           ) : (
@@ -328,31 +439,85 @@ export function ClipPlayer({
               contentFit="cover"
             />
           )}
+          {(() => {
+            const nextAt =
+              kind === 'wave' ? preloadStoryIndex(ranges, index) : index + 1 < clips.length ? index + 1 : null;
+            const next = nextAt != null ? clips[nextAt] : null;
+            return next?.mediaType === 'video' ? (
+              <PreloadClip key={`preload-${next.id}`} uri={next.mediaUrl} startMs={next.startMs ?? 0} />
+            ) : null;
+          })()}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="React"
-            onPress={() => undefined}
-            onLongPress={() => setPickerOpen(true)}
-            delayLongPress={220}
-            style={{ position: 'absolute', top: 0, right: 72, bottom: 0, left: 72 }}
-          >
-            <DoubleTapLike onLike={() => applyReaction(lastReaction)} />
-          </Pressable>
+          {!commentsMode ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={kind === 'wave' ? copy('wave.next') : 'Hold to pause'}
+              delayLongPress={180}
+              onLongPress={() => {
+                holdingRef.current = true;
+                paused.current = true;
+              }}
+              onPressOut={() => {
+                holdingRef.current = false;
+                paused.current = pickerOpen;
+              }}
+              onPress={(event) => {
+                const width = videoWidth || event.nativeEvent.locationX * 3;
+                const x = event.nativeEvent.locationX;
+                if (kind === 'wave' && !commentsRef.current) {
+                  if (x < width / 3) {
+                    goPrevClip();
+                    return;
+                  }
+                  if (x > (width * 2) / 3) {
+                    goNextClip();
+                    return;
+                  }
+                }
+                const now = Date.now();
+                if (now - lastTap.current < 280) {
+                  applyReaction(lastReaction);
+                }
+                lastTap.current = now;
+              }}
+              style={{ position: 'absolute', top: 0, right: RAIL_HIT + 16, bottom: 0, left: 0 }}
+            />
+          ) : null}
 
-          {autoAdvance && !commentsMode ? (
-            <>
-              <Pressable
-                accessibilityLabel={copy('wave.prev')}
-                onPress={goPrev}
-                style={{ position: 'absolute', top: 96, bottom: 120, left: 0, width: 56 }}
-              />
-              <Pressable
-                accessibilityLabel={copy('wave.next')}
-                onPress={goNext}
-                style={{ position: 'absolute', top: 96, bottom: 120, right: 72, width: 56 }}
-              />
-            </>
+          {kind === 'wave' && !commentsMode ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: topPad,
+                right: 0,
+                left: 0,
+                height: 3,
+                paddingHorizontal: 8,
+                flexDirection: 'row',
+                gap: 3,
+                zIndex: 3,
+              }}>
+              {Array.from({ length: storyCount }).map((_, storyAt) => (
+                <View
+                  key={`${clip.authorId}-${storyAt}`}
+                  style={{
+                    flex: 1,
+                    height: 2,
+                    borderRadius: 1,
+                    backgroundColor: 'rgba(255,255,255,0.28)',
+                    overflow: 'hidden',
+                  }}>
+                  <View
+                    style={{
+                      width: `${storyAt < storyProgressIndex ? 100 : storyAt === storyProgressIndex ? Math.round(progress * 100) : 0}%`,
+                      height: '100%',
+                      backgroundColor: '#fff',
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
           ) : null}
 
           <View
@@ -362,7 +527,7 @@ export function ClipPlayer({
               top: 0,
               right: 0,
               left: 0,
-              paddingTop: commentsMode ? 8 : topPad,
+              paddingTop: commentsMode ? 8 : topPad + (kind === 'wave' ? 10 : 0),
               paddingHorizontal: 12,
             }}>
             <View className="flex-row items-center">
@@ -450,8 +615,8 @@ export function ClipPlayer({
               style={{
                 position: 'absolute',
                 left: 16,
-                right: 96,
-                bottom: railPad + 20,
+                right: 12 + RAIL_HIT * 2 + 16,
+                bottom: railPad + 12,
               }}>
               <AppText
                 className="text-[15px] leading-5"
@@ -476,6 +641,7 @@ export function ClipPlayer({
             </Pressable>
           ) : null}
 
+          {kind === 'round' && !commentsMode ? (
           <View
             pointerEvents="none"
             style={{
@@ -496,6 +662,7 @@ export function ClipPlayer({
               }}
             />
           </View>
+          ) : null}
           {promptShare && canOfferShareToFeed(clip) && !commentsMode ? (
             <Pressable
               accessibilityRole="button"
@@ -573,20 +740,13 @@ export function ClipPlayer({
   );
 }
 
-function DoubleTapLike({ onLike }: { onLike: () => void }) {
-  const last = useRef(0);
-  return (
-    <Pressable
-      onPress={() => {
-        const now = Date.now();
-        if (now - last.current < 280) {
-          onLike();
-        }
-        last.current = now;
-      }}
-      style={{ flex: 1 }}
-    />
-  );
+function PreloadClip({ uri, startMs }: { uri: string; startMs: number }) {
+  useVideoPlayer(uri, (instance) => {
+    instance.muted = true;
+    instance.currentTime = Math.max(startMs, 0) / 1000;
+    instance.pause();
+  });
+  return null;
 }
 
 function ClipSocialRail({
@@ -661,10 +821,10 @@ function ClipSocialRail({
         : null)}
       style={{
         position: 'absolute',
-        right: 8,
-        bottom: insetsBottom + 48,
-        alignItems: 'center',
-        gap: 10,
+        right: 12,
+        bottom: insetsBottom + 12,
+        alignItems: 'flex-end',
+        gap: 6,
         opacity: lit,
       }}>
       <View style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
@@ -736,7 +896,7 @@ function ClipSocialRail({
           {counts.comments}
         </AppText>
       </Pressable>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={muted ? 'Unmute' : 'Mute'}
@@ -753,7 +913,7 @@ function ClipSocialRail({
           onPressIn={() => onRailHot(true)}
           onPressOut={() => onRailHot(false)}
           style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
-          <Glyph name={GLYPH.share} color={iShared ? fill : '#fff'} size={24} />
+          <Glyph name={GLYPH.share} color={iShared ? fill : '#fff'} size={26} />
           <AppText className="text-[11px] font-bold" style={{ color: iShared ? fill : '#fff' }}>
             {social.shareCount}
           </AppText>

@@ -10,12 +10,11 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { usePost } from '@/hooks/useFeed';
 import { useReel, useReels, useStoryChallengePreviews } from '@/hooks/useSocial';
-import { buildRoundStack } from '@/lib/clipRail';
+import { buildRoundPlayList } from '@/lib/clipRail';
 import { copy } from '@/lib/copy';
 import { personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import { ROUND_RECORD_MAX_MS } from '@/lib/waveClips';
-import { startFreshRoundCapture } from '@/lib/waveCapture';
 import { THEME } from '@/lib/theme';
 import { TABS_HREF } from '@/lib/routes';
 
@@ -35,7 +34,7 @@ export function RoundPlayerScreen() {
     sharePrompt === '1' || (Array.isArray(sharePrompt) && sharePrompt[0] === '1');
   const reelQuery = useReel(reelId);
   const reel = reelQuery.data;
-  const railQuery = useReels(16);
+  const railQuery = useReels();
   const postQuery = usePost(reel?.post_id);
   const challengeIds = reel?.challenge_id ? [reel.challenge_id] : [];
   const challengeQuery = useStoryChallengePreviews(challengeIds);
@@ -55,13 +54,14 @@ export function RoundPlayerScreen() {
     },
   });
 
-  const clips: ClipPlayItem[] = useMemo(() => {
+  const { clips, startIndex } = useMemo(() => {
     if (!reel) {
-      return [];
+      return { clips: [] as ClipPlayItem[], startIndex: 0 };
     }
-    const stacked = buildRoundStack(railQuery.data ?? [], reel.id);
-    const rows = stacked.length > 0 ? stacked : [reel];
-    return rows.map((item) => ({
+    const play = buildRoundPlayList(railQuery.data ?? [], reel.id, reel);
+    return {
+      startIndex: play.startIndex,
+      clips: play.items.map((item) => ({
       id: item.id,
       kind: 'round' as const,
       mediaUrl: item.video_url,
@@ -80,7 +80,8 @@ export function RoundPlayerScreen() {
       audienceUserIds: item.id === reel.id ? postQuery.data?.audience_user_ids : undefined,
       coverUrl: item.thumbnail_url ?? item.video_url,
       privacyMode: item.id === reel.id ? privacyQuery.data : undefined,
-    }));
+    })),
+    };
   }, [postQuery.data, privacyQuery.data, railQuery.data, reel, user?.id]);
   const challenges = useMemo(
     () => new Map((challengeQuery.data ?? []).map((challenge) => [challenge.id, challenge])),
@@ -99,7 +100,7 @@ export function RoundPlayerScreen() {
     router.replace(TABS_HREF);
   }
 
-  if (reelQuery.isLoading) {
+  if (reelQuery.isLoading || (railQuery.isLoading && !railQuery.data)) {
     return (
       <WatchSurface>
         <View className="flex-1 items-center justify-center">
@@ -133,16 +134,12 @@ export function RoundPlayerScreen() {
     <ClipPlayer
       key={reel.id}
       clips={clips}
-      startIndex={0}
+      startIndex={startIndex}
       autoAdvance={false}
       openComments={comments === '1' || (Array.isArray(comments) && comments[0] === '1')}
       challenges={challenges}
       sharePrompt={promptShare}
       onClose={close}
-      onCreate={() => {
-        close();
-        startFreshRoundCapture(router);
-      }}
     />
   );
 }
