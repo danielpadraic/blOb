@@ -47,6 +47,7 @@ export default function ForgotPasswordScreen() {
 
   return (
     <AuthShell
+      scrollToTopKey="reset"
       footer={
         <Button title={copy('auth.sendResetLink')} onPress={onSubmit} loading={isSubmitting} size="lg" />
       }>
@@ -63,9 +64,13 @@ export default function ForgotPasswordScreen() {
           name="email"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
+              key="email"
+              name="email"
               label="Email"
               autoCapitalize="none"
               autoComplete="email"
+              autoCorrect={false}
+              textContentType="emailAddress"
               keyboardType="email-address"
               keyboardAppearance="dark"
               inverted

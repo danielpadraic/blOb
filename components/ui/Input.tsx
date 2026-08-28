@@ -1,5 +1,5 @@
-import { forwardRef, useRef, useState } from 'react';
-import { TextInput, View, type TextInputProps } from 'react-native';
+import { createElement, forwardRef, useRef, useState } from 'react';
+import { Platform, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
 
 import { GrowingText } from '@/components/ui/GrowingText';
 import { AppText } from '@/components/ui/AppText';
@@ -13,10 +13,43 @@ type InputProps = TextInputProps & {
   hint?: string;
   className?: string;
   inverted?: boolean;
+  /** HTML name for web autofill. Stable across keystrokes. */
+  name?: string;
   /** Sentence fields wrap and grow. Search, handles, steppers, and amounts stay one line. */
   grow?: boolean;
   growMaxLines?: number;
 };
+
+function cssFromInputStyle(style: InputProps['style']): Record<string, unknown> {
+  const list = Array.isArray(style) ? style : [style];
+  const flat = Object.assign(
+    {},
+    ...list.filter((item): item is object => Boolean(item) && typeof item === 'object'),
+  ) as ViewStyle & { paddingHorizontal?: number; paddingVertical?: number };
+  const { paddingHorizontal, paddingVertical, ...rest } = flat;
+  return {
+    ...rest,
+    ...(paddingHorizontal != null
+      ? { paddingLeft: paddingHorizontal, paddingRight: paddingHorizontal }
+      : null),
+    ...(paddingVertical != null
+      ? { paddingTop: paddingVertical, paddingBottom: paddingVertical }
+      : null),
+  };
+}
+
+function htmlAutoComplete(autoComplete?: TextInputProps['autoComplete']): string | undefined {
+  if (!autoComplete) {
+    return undefined;
+  }
+  if (autoComplete === 'off') {
+    return 'off';
+  }
+  if (autoComplete === 'password') {
+    return 'current-password';
+  }
+  return String(autoComplete);
+}
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
   {
@@ -25,6 +58,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     hint,
     className,
     inverted,
+    name,
     grow,
     growMaxLines = COMPOSER_MAX_LINES,
     onFocus,
@@ -41,6 +75,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   const boxRef = useRef<View>(null);
   const form = useKeyboardForm();
   const sentence = Boolean(grow || (multiline && numberOfLines !== 1));
+  const webAuthInput = Platform.OS === 'web' && Boolean(inverted) && !sentence;
   const boxStyle = [
     {
       minHeight: FORM_MIN_HEIGHT,
@@ -58,7 +93,15 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 
   function handleFocus(event: Parameters<NonNullable<TextInputProps['onFocus']>>[0]) {
     setFocused(true);
+    form?.setFieldFocused?.(true);
     onFocus?.(event);
+    if (webAuthInput) {
+      const target = (event as unknown as { target?: HTMLElement }).target;
+      if (target?.scrollIntoView) {
+        requestAnimationFrame(() => target.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+      }
+      return;
+    }
     if (boxRef.current) {
       form?.scrollFieldIntoView(boxRef.current);
     }
@@ -66,6 +109,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 
   function handleBlur(event: Parameters<NonNullable<TextInputProps['onBlur']>>[0]) {
     setFocused(false);
+    form?.setFieldFocused?.(false);
     onBlur?.(event);
   }
 
@@ -78,6 +122,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     onBlur: handleBlur,
     ...props,
   };
+
+  function assignRef(node: TextInput | HTMLInputElement | null) {
+    if (typeof ref === 'function') {
+      ref(node as TextInput);
+    } else if (ref) {
+      ref.current = node as TextInput;
+    }
+  }
 
   return (
     <View ref={boxRef} collapsable={false} className="w-full gap-1.5">
@@ -97,6 +149,44 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           maxLines={growMaxLines}
           style={boxStyle}
         />
+      ) : webAuthInput ? (
+        createElement('input', {
+          ref: assignRef,
+          type: props.secureTextEntry ? 'password' : props.keyboardType === 'email-address' ? 'email' : 'text',
+          name,
+          value: props.value ?? '',
+          maxLength: props.maxLength,
+          placeholder: props.placeholder,
+          disabled: props.editable === false,
+          autoComplete: htmlAutoComplete(props.autoComplete),
+          autoCapitalize: props.autoCapitalize === 'none' ? 'off' : props.autoCapitalize,
+          autoCorrect: props.autoCorrect === false ? 'off' : undefined,
+          spellCheck: props.autoCorrect !== false,
+          inputMode: props.keyboardType === 'email-address' ? 'email' : undefined,
+          onChange: (event: { currentTarget: { value: string } }) => {
+            props.onChangeText?.(event.currentTarget.value);
+          },
+          onInput: (event: { currentTarget: { value: string } }) => {
+            props.onChangeText?.(event.currentTarget.value);
+          },
+          onFocus: handleFocus,
+          onBlur: (event: { currentTarget: { value: string } }) => {
+            const next = event.currentTarget.value;
+            if (next !== (props.value ?? '')) {
+              props.onChangeText?.(next);
+            }
+            handleBlur(event as never);
+          },
+          style: {
+            width: '100%',
+            boxSizing: 'border-box',
+            outline: 'none',
+            borderStyle: 'solid',
+            fontFamily: 'inherit',
+            caretColor: THEME.accent,
+            ...cssFromInputStyle(boxStyle),
+          },
+        })
       ) : (
         <TextInput
           ref={ref}

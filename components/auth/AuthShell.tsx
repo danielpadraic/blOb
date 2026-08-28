@@ -40,7 +40,8 @@ export function AuthShell({
         scrollToTopKey={scrollToTopKey}
         backgroundColor={AUTH_BG}
         tone="dark"
-        paddingHorizontal={22}>
+        paddingHorizontal={22}
+        protectFieldFocus>
         <View className="items-center pt-4">
           <AppText className="text-[34px] font-extrabold tracking-tight" style={{ color: '#FFFFFF' }}>
             bl

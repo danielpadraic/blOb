@@ -144,9 +144,13 @@ export default function RegisterScreen() {
             name="email"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
+                key="email"
+                name="email"
                 label="Email"
                 autoCapitalize="none"
                 autoComplete="email"
+                autoCorrect={false}
+                textContentType="emailAddress"
                 keyboardType="email-address"
                 keyboardAppearance="dark"
                 inverted
@@ -162,9 +166,14 @@ export default function RegisterScreen() {
             name="password"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
+                key="password"
+                name="password"
                 label="Password"
                 secureTextEntry
                 autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
                 keyboardAppearance="dark"
                 inverted
                 value={value}
@@ -180,9 +189,14 @@ export default function RegisterScreen() {
             name="confirmPassword"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
+                key="confirmPassword"
+                name="confirmPassword"
                 label="Confirm password"
                 secureTextEntry
                 autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
                 keyboardAppearance="dark"
                 inverted
                 value={value}

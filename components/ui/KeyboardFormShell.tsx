@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -22,12 +23,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
+import { shouldRunScrollToTop } from '@/lib/authScroll';
 import { THEME } from '@/lib/theme';
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 
 type KeyboardFormApi = {
   scrollToTop: () => void;
   scrollFieldIntoView: (node: View) => void;
+  setFieldFocused?: (focused: boolean) => void;
 };
 
 export const KeyboardFormContext = createContext<KeyboardFormApi | null>(null);
@@ -78,6 +81,8 @@ type KeyboardFormShellProps = {
   paddingHorizontal?: number;
   contentContainerStyle?: ViewStyle;
   tone?: 'light' | 'dark';
+  /** Auth email/password: do not wrap fields in a dismiss Pressable, and never scroll-to-top on keyboard / viewport. */
+  protectFieldFocus?: boolean;
 };
 
 export function KeyboardFormShell({
@@ -89,6 +94,7 @@ export function KeyboardFormShell({
   paddingHorizontal,
   contentContainerStyle,
   tone = 'light',
+  protectFieldFocus = false,
 }: KeyboardFormShellProps) {
   const insets = useSafeAreaInsets();
   const overlap = useKeyboardOverlap();
@@ -98,6 +104,8 @@ export function KeyboardFormShell({
   const footerHeight = useRef(0);
   const overlapRef = useRef(0);
   overlapRef.current = overlap;
+  const fieldFocusedRef = useRef(false);
+  const appliedScrollKey = useRef<string | number | undefined>(undefined);
   const safeBottom = Math.max(insets.bottom, 12);
   const [footerH, setFooterH] = useState(footer ? 64 : 0);
   const extraPad = footerH + 16;
@@ -107,10 +115,27 @@ export function KeyboardFormShell({
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, []);
 
+  const setFieldFocused = useCallback((focused: boolean) => {
+    fieldFocusedRef.current = focused;
+  }, []);
+
   const scrollFieldIntoView = useCallback((node: View) => {
     lastFieldNode.current = node;
     const run = () => {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const active = document.activeElement;
+        if (
+          active instanceof HTMLElement &&
+          (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
+        ) {
+          active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          return;
+        }
+      }
       node.measureInWindow((_x, y, _w, h) => {
+        if (!h || y == null || Number.isNaN(y)) {
+          return;
+        }
         const windowH = Dimensions.get('window').height;
         const reserved = footerHeight.current + overlapRef.current + 24;
         const visibleBottom = windowH - reserved;
@@ -119,7 +144,7 @@ export function KeyboardFormShell({
         let delta = 0;
         if (fieldBottom > visibleBottom) {
           delta = fieldBottom - visibleBottom;
-        } else if (y < topGuard) {
+        } else if (y < topGuard && overlapRef.current <= 0) {
           delta = y - topGuard;
         }
         if (delta !== 0) {
@@ -139,14 +164,37 @@ export function KeyboardFormShell({
     if (overlap <= 0 || !lastFieldNode.current) {
       return;
     }
+    if (protectFieldFocus && fieldFocusedRef.current && Platform.OS === 'web') {
+      const active = typeof document !== 'undefined' ? document.activeElement : null;
+      if (
+        active instanceof HTMLElement &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
+      ) {
+        active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        return;
+      }
+    }
     scrollFieldIntoView(lastFieldNode.current);
-  }, [overlap, scrollFieldIntoView]);
+  }, [overlap, protectFieldFocus, scrollFieldIntoView]);
 
   useEffect(() => {
+    if (
+      !shouldRunScrollToTop({
+        stepKey: scrollToTopKey,
+        appliedKey: appliedScrollKey.current,
+        fieldFocused: fieldFocusedRef.current,
+      })
+    ) {
+      return;
+    }
+    appliedScrollKey.current = scrollToTopKey;
     scrollToTop();
   }, [scrollToTop, scrollToTopKey]);
 
-  const api: KeyboardFormApi = { scrollToTop, scrollFieldIntoView };
+  const api = useMemo<KeyboardFormApi>(
+    () => ({ scrollToTop, scrollFieldIntoView, setFieldFocused }),
+    [scrollToTop, scrollFieldIntoView, setFieldFocused],
+  );
 
   return (
     <KeyboardFormContext.Provider value={api}>
@@ -170,13 +218,20 @@ export function KeyboardFormShell({
             contentContainerStyle,
           ]}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode={
+            protectFieldFocus ? 'none' : Platform.OS === 'ios' ? 'interactive' : 'on-drag'
+          }
           showsVerticalScrollIndicator={false}
           onScroll={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
             scrollY.current = event.nativeEvent.contentOffset.y;
           }}
           scrollEventThrottle={16}>
-          <DismissKeyboard style={{ flexGrow: 1 }}>{children}</DismissKeyboard>
+          {protectFieldFocus ? (
+            <View style={{ flexGrow: 1 }}>{children}</View>
+          ) : (
+            <DismissKeyboard style={{ flexGrow: 1 }}>{children}</DismissKeyboard>
+          )}
         </ScrollView>
         {footer ? (
           <View

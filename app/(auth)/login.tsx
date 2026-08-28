@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Platform, Pressable, View } from 'react-native';
 
@@ -72,20 +72,24 @@ export default function LoginScreen() {
   const {
     control,
     handleSubmit,
-    watch,
+    getValues,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: prefillEmail, password: '' },
   });
-  const emailValue = watch('email');
+  const appliedInboundEmail = useRef<string | null>(null);
+  const fieldsEdited = useRef(false);
 
   useEffect(() => {
-    if (prefillEmail) {
+    if (fieldsEdited.current) {
+      return;
+    }
+    if (prefillEmail && appliedInboundEmail.current !== prefillEmail) {
+      appliedInboundEmail.current = prefillEmail;
       setValue('email', prefillEmail);
     }
-    setValue('password', '');
     if (inboxHint || prefillEmail) {
       setEmailStep(true);
       if (inboxHint) {
@@ -137,14 +141,21 @@ export default function LoginScreen() {
             name="email"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
+                key="email"
+                name="email"
                 label="Email"
                 autoCapitalize="none"
                 autoComplete="email"
+                autoCorrect={false}
+                textContentType="emailAddress"
                 keyboardType="email-address"
                 keyboardAppearance="dark"
                 inverted
                 value={value}
-                onChangeText={onChange}
+                onChangeText={(text) => {
+                  fieldsEdited.current = true;
+                  onChange(text);
+                }}
                 onBlur={onBlur}
                 error={errors.email?.message}
               />
@@ -155,13 +166,21 @@ export default function LoginScreen() {
             name="password"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
+                key="password"
+                name="password"
                 label="Password"
                 secureTextEntry
-                autoComplete="password"
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="password"
                 keyboardAppearance="dark"
                 inverted
                 value={value}
-                onChangeText={onChange}
+                onChangeText={(text) => {
+                  fieldsEdited.current = true;
+                  onChange(text);
+                }}
                 onBlur={onBlur}
                 error={errors.password?.message}
               />
@@ -182,8 +201,9 @@ export default function LoginScreen() {
             accessibilityLabel={copy('auth.forgotPassword')}
             hitSlop={8}
             onPress={() => {
-              const href = emailValue?.trim()
-                ? `/(auth)/forgot-password?email=${encodeURIComponent(emailValue.trim())}`
+              const typed = getValues('email')?.trim();
+              const href = typed
+                ? `/(auth)/forgot-password?email=${encodeURIComponent(typed)}`
                 : '/(auth)/forgot-password';
               router.push(href as Href);
             }}
