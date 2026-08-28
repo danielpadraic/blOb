@@ -91,10 +91,10 @@ export default function FeedScreen() {
         homeChrome
         draftKey="home"
         composing={createPost.isPending}
-        headerTop={<FeaturedOfficialStrip />}
+        headerTop={<StoryTray />}
         headerExtra={
           <View className="gap-1.5">
-            <StoryTray />
+            <FeaturedOfficialStrip />
             <ReelsRow />
           </View>
         }
