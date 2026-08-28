@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWaveStack, filterStoriesForRail, newestFirstStories, railHasVisibleWaves } from '@/lib/clipRail';
+import { buildRoundStack, buildWaveStack, filterStoriesForRail, newestFirstStories, railHasVisibleWaves } from '@/lib/clipRail';
 import type { Story, StoryGroup } from '@/lib/social';
 
 function story(partial: Partial<Story> & { id: string; user_id: string }): Story {
@@ -53,6 +53,14 @@ describe('clip rail', () => {
       hiddenAuthorIds: new Set(['z']),
     });
     expect(kept.map((row) => row.id)).toEqual(['ok']);
+  });
+
+  it('starts the Round stack on the tapped clip', () => {
+    expect(buildRoundStack([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 'b').map((row) => row.id)).toEqual([
+      'b',
+      'a',
+      'c',
+    ]);
   });
 
   it('treats an empty Waves rail as hidden', () => {

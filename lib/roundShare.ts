@@ -4,11 +4,16 @@ import type { QuoteSnapshot } from '@/lib/types';
 
 export type RoundShareSnapshot = QuoteSnapshot & {
   reel_id?: string | null;
-  kind?: 'round';
+  story_id?: string | null;
+  kind?: 'round' | 'wave';
 };
 
 export function isRoundSharePost(post: { type?: string | null } | null | undefined): boolean {
   return post?.type === 'round_share';
+}
+
+export function isClipSharePost(post: { type?: string | null } | null | undefined): boolean {
+  return post?.type === 'round_share' || post?.type === 'wave_share';
 }
 
 export function canShareRoundToFeed(privacyMode?: string | null): boolean {
@@ -22,10 +27,10 @@ export function canOfferShareToFeed(input: {
   challengeId?: string | null;
   privacyMode?: string | null;
 }): boolean {
-  if (input.kind !== 'round' || !input.postId) {
+  if (!input.postId || (input.kind !== 'round' && input.kind !== 'wave')) {
     return false;
   }
-  if (input.challengeId && input.privacyMode == null) {
+  if (input.kind === 'round' && input.challengeId && input.privacyMode == null) {
     return false;
   }
   return canShareRoundToFeed(input.privacyMode);
@@ -90,12 +95,15 @@ export function asRoundShareSnapshot(raw: unknown): RoundShareSnapshot | null {
     created_at: typeof row.created_at === 'string' ? row.created_at : '',
     audience: typeof row.audience === 'string' ? row.audience : null,
     reel_id: reelId,
-    kind: 'round',
+    story_id: typeof row.story_id === 'string' ? row.story_id : null,
+    kind: row.kind === 'wave' ? 'wave' : 'round',
   };
 }
 
 export function snapshotFromRound(input: {
-  reelId: string;
+  reelId?: string;
+  storyId?: string;
+  kind?: 'round' | 'wave';
   authorId: string;
   authorName?: string | null;
   username?: string | null;
@@ -106,6 +114,7 @@ export function snapshotFromRound(input: {
   audience?: string | null;
 }): RoundShareSnapshot {
   const username = input.username?.trim() || 'blob';
+  const kind = input.kind ?? (input.storyId && !input.reelId ? 'wave' : 'round');
   return {
     author_id: input.authorId,
     display_name: input.authorName?.trim() || username,
@@ -115,8 +124,9 @@ export function snapshotFromRound(input: {
     media_preview_url: input.coverUrl ?? null,
     created_at: input.createdAt,
     audience: input.audience ?? null,
-    reel_id: input.reelId,
-    kind: 'round',
+    reel_id: input.reelId ?? null,
+    story_id: input.storyId ?? null,
+    kind,
   };
 }
 
@@ -134,7 +144,7 @@ export function roundShareClipUnavailable(parent: {
   if (parent.hidden_from_rail) {
     return true;
   }
-  return parent.type != null && parent.type !== 'round';
+  return parent.type != null && parent.type !== 'round' && parent.type !== 'wave';
 }
 
 export function reelIdFromShare(post: {
@@ -143,4 +153,20 @@ export function reelIdFromShare(post: {
 }): string | null {
   const snap = asRoundShareSnapshot(post.quote_snapshot);
   return snap?.reel_id ?? null;
+}
+
+export function storyIdFromShare(post: {
+  parent_id?: string | null;
+  quote_snapshot?: unknown;
+}): string | null {
+  const snap = asRoundShareSnapshot(post.quote_snapshot);
+  return snap?.story_id ?? null;
+}
+
+export function clipShareKind(post: { type?: string | null; quote_snapshot?: unknown }): 'wave' | 'round' {
+  if (post.type === 'wave_share') {
+    return 'wave';
+  }
+  const snap = asRoundShareSnapshot(post.quote_snapshot);
+  return snap?.kind === 'wave' ? 'wave' : 'round';
 }

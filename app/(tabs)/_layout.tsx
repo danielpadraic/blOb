@@ -31,10 +31,9 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
-import { CAPTURE_REEL_HREF, isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
-import { primeCameraFromGesture, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
-import { rememberLastCapture } from '@/lib/lastCapture';
-import { startFreshWaveCapture } from '@/lib/waveCapture';
+import { isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
+import { stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
+import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
 import { THEME } from '@/lib/theme';
 import * as Linking from 'expo-linking';
@@ -345,9 +344,7 @@ function TabLayoutInner() {
     if (id === 'reel') {
       // Action id stays `reel`; capture URL stays mode=reel. User-facing name is Round.
       closeOverlays();
-      rememberLastCapture(null);
-      void primeCameraFromGesture('video');
-      router.push(CAPTURE_REEL_HREF);
+      startFreshRoundCapture(router);
       return;
     }
     if (id === 'coins') {

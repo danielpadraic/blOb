@@ -5,7 +5,7 @@ const LAST_KEY = 'blob.clip.last-reaction';
 
 export const CLIP_REACTIONS = [
   { type: 'like', emoji: '👍', label: 'Like' },
-  { type: 'love', emoji: '❤️', label: 'Heart' },
+  { type: 'love', emoji: '❤️', label: 'Love' },
   { type: 'fire', emoji: '🔥', label: 'Fire' },
   { type: 'laugh', emoji: '😂', label: 'Laugh' },
   { type: 'sad', emoji: '😢', label: 'Sad' },

@@ -25,6 +25,23 @@ export function visualViewportBox(): VisualViewportBox {
   };
 }
 
+/** Phone-shell watch box: full visualViewport on a phone, centered max-width column on desktop. */
+export function watchSurfaceBox(
+  viewport: VisualViewportBox,
+  shellMaxWidth: number,
+): VisualViewportBox {
+  const viewW = Math.max(0, viewport.width || 0);
+  const cap = Number.isFinite(shellMaxWidth) && shellMaxWidth > 0 ? shellMaxWidth : viewW;
+  const width = viewW > 0 ? Math.min(viewW, cap) : 0;
+  const leftover = Math.max(0, viewW - width);
+  return {
+    top: viewport.top,
+    left: viewport.left + leftover / 2,
+    width,
+    height: viewport.height,
+  };
+}
+
 function bindViewport(sync: () => void): () => void {
   if (typeof window === 'undefined') {
     return () => undefined;

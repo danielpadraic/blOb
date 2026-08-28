@@ -1,8 +1,10 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import { useCreateComment, useCreatePost, usePost, useToggleReaction } from '@/hooks/useFeed';
 import { attachClipPostId } from '@/lib/social';
 import { isClipSocialPost, type ClipKind } from '@/lib/clipPost';
+import { supabase } from '@/lib/supabase';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 
 type ClipSocialInput = {
@@ -39,6 +41,22 @@ export function useClipSocial(input: ClipSocialInput) {
 
   const post =
     postQuery.data && isClipSocialPost(postQuery.data) ? postQuery.data : null;
+  const sharesQuery = useQuery({
+    queryKey: ['clip-shares', linkedId],
+    enabled: Boolean(linkedId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('id, author_id, type')
+        .eq('parent_id', linkedId as string)
+        .in('type', ['round_share', 'wave_share']);
+      if (error) {
+        return [];
+      }
+      return (data ?? []) as Array<{ id: string; author_id: string; type: string }>;
+    },
+  });
+  const shares = sharesQuery.data ?? [];
 
   async function ensurePost(): Promise<PostWithMeta | null> {
     if (post) {
@@ -58,6 +76,8 @@ export function useClipSocial(input: ClipSocialInput) {
 
   return {
     post,
+    shares,
+    shareCount: shares.length,
     commenting: createComment.isPending,
     onReact: async (type: ReactionType, commentId?: string | null) => {
       const target = post ?? (await ensurePost());

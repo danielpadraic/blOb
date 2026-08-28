@@ -1,6 +1,7 @@
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { supabase } from '@/lib/supabase';
-import type { Story, StoryGroup } from '@/lib/social';
+import type { StoryGroup } from '@/lib/social';
+import type { Story } from '@/types/social';
 import { authStorage } from '@/lib/utils/secureStore';
 
 const HIDDEN_RAIL_AUTHORS_KEY = 'blob.hidden-rail-authors';
@@ -107,4 +108,14 @@ export function buildWaveStack(input: {
     .flatMap((group) => newestFirstStories(group.stories))
     .filter((story) => !input.viewedIds.has(story.id) && !seen.has(story.id));
   return [...ordered, ...unseenFriends];
+}
+
+/** Tapped Round first, then the rest of the rail newest-first. */
+export function buildRoundStack<T extends { id: string }>(reels: T[], startReelId: string): T[] {
+  const startId = String(startReelId ?? '').trim();
+  const start = reels.find((reel) => reel.id === startId);
+  if (!start) {
+    return [];
+  }
+  return [start, ...reels.filter((reel) => reel.id !== startId)];
 }

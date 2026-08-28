@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,11 +9,13 @@ import { WatchSurface } from '@/components/clips/WatchSurface';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { usePost } from '@/hooks/useFeed';
-import { useReel, useStoryChallengePreviews } from '@/hooks/useSocial';
+import { useReel, useReels, useStoryChallengePreviews } from '@/hooks/useSocial';
+import { buildRoundStack } from '@/lib/clipRail';
 import { copy } from '@/lib/copy';
 import { personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import { ROUND_RECORD_MAX_MS } from '@/lib/waveClips';
+import { startFreshRoundCapture } from '@/lib/waveCapture';
 import { THEME } from '@/lib/theme';
 import { TABS_HREF } from '@/lib/routes';
 
@@ -32,6 +35,7 @@ export function RoundPlayerScreen() {
     sharePrompt === '1' || (Array.isArray(sharePrompt) && sharePrompt[0] === '1');
   const reelQuery = useReel(reelId);
   const reel = reelQuery.data;
+  const railQuery = useReels(16);
   const postQuery = usePost(reel?.post_id);
   const challengeIds = reel?.challenge_id ? [reel.challenge_id] : [];
   const challengeQuery = useStoryChallengePreviews(challengeIds);
@@ -50,6 +54,38 @@ export function RoundPlayerScreen() {
       return (data as { privacy_mode?: string | null } | null)?.privacy_mode ?? null;
     },
   });
+
+  const clips: ClipPlayItem[] = useMemo(() => {
+    if (!reel) {
+      return [];
+    }
+    const stacked = buildRoundStack(railQuery.data ?? [], reel.id);
+    const rows = stacked.length > 0 ? stacked : [reel];
+    return rows.map((item) => ({
+      id: item.id,
+      kind: 'round' as const,
+      mediaUrl: item.video_url,
+      mediaType: 'video' as const,
+      caption: item.caption,
+      durationMs: item.duration_ms || ROUND_RECORD_MAX_MS,
+      authorId: item.user_id,
+      authorName: personDisplayName(item.profile) || 'Blob',
+      authorAvatar: item.profile?.avatar_url ?? null,
+      username: item.profile?.username ?? null,
+      createdAt: item.created_at,
+      postId: item.post_id,
+      challengeId: item.challenge_id,
+      isOwn: item.user_id === user?.id,
+      audience: item.id === reel.id ? postQuery.data?.audience : undefined,
+      audienceUserIds: item.id === reel.id ? postQuery.data?.audience_user_ids : undefined,
+      coverUrl: item.thumbnail_url ?? item.video_url,
+      privacyMode: item.id === reel.id ? privacyQuery.data : undefined,
+    }));
+  }, [postQuery.data, privacyQuery.data, railQuery.data, reel, user?.id]);
+  const challenges = useMemo(
+    () => new Map((challengeQuery.data ?? []).map((challenge) => [challenge.id, challenge])),
+    [challengeQuery.data],
+  );
 
   function close() {
     if (router.canGoBack()) {
@@ -93,40 +129,20 @@ export function RoundPlayerScreen() {
     );
   }
 
-  const clip: ClipPlayItem = {
-    id: reel.id,
-    kind: 'round',
-    mediaUrl: reel.video_url,
-    mediaType: 'video',
-    caption: reel.caption,
-    durationMs: reel.duration_ms || ROUND_RECORD_MAX_MS,
-    authorId: reel.user_id,
-    authorName: personDisplayName(reel.profile) || 'Blob',
-    authorAvatar: reel.profile?.avatar_url ?? null,
-    username: reel.profile?.username ?? null,
-    createdAt: reel.created_at,
-    postId: reel.post_id,
-    challengeId: reel.challenge_id,
-    isOwn: reel.user_id === user?.id,
-    audience: postQuery.data?.audience,
-    audienceUserIds: postQuery.data?.audience_user_ids,
-    coverUrl: reel.thumbnail_url ?? postQuery.data?.media_urls?.[0] ?? reel.video_url,
-    privacyMode: privacyQuery.data,
-  };
-  const challenges = new Map(
-    (challengeQuery.data ?? []).map((challenge) => [challenge.id, challenge]),
-  );
-
   return (
     <ClipPlayer
       key={reel.id}
-      clips={[clip]}
+      clips={clips}
       startIndex={0}
       autoAdvance={false}
       openComments={comments === '1' || (Array.isArray(comments) && comments[0] === '1')}
       challenges={challenges}
       sharePrompt={promptShare}
       onClose={close}
+      onCreate={() => {
+        close();
+        startFreshRoundCapture(router);
+      }}
     />
   );
 }

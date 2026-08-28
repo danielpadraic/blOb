@@ -6,6 +6,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useRouter } from 'expo-router';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
+import { takeClipAttach } from '@/lib/clipAttach';
 import { rememberLastCapture } from '@/lib/lastCapture';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { captureKindFor, type CapturedMedia, type CaptureMode } from '@/components/capture/types';
@@ -121,6 +122,18 @@ export function CaptureStudio({
 
   useEffect(() => {
     resetStudio();
+    const attached = takeClipAttach();
+    if (!attached?.uri) {
+      return;
+    }
+    setDraft({
+      uri: attached.uri,
+      mediaType: attached.mediaType,
+      mimeType: attached.mimeType,
+      durationMs: attached.durationMs,
+    });
+    setCaption(attached.caption ?? '');
+    setStep('preview');
   }, [mode]);
 
   useEffect(() => {

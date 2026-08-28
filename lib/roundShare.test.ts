@@ -33,7 +33,15 @@ describe('Round share to Feed', () => {
         privacyMode: 'private_corporate',
       }),
     ).toBe(false);
-    expect(canOfferShareToFeed({ kind: 'wave', postId: 'p1' })).toBe(false);
+    expect(canOfferShareToFeed({ kind: 'wave', postId: 'p1' })).toBe(true);
+    expect(
+      canOfferShareToFeed({
+        kind: 'wave',
+        postId: 'p1',
+        challengeId: 'c1',
+        privacyMode: 'private_corporate',
+      }),
+    ).toBe(false);
     expect(canOfferShareToFeed({ kind: 'round', postId: 'p1' })).toBe(true);
   });
 

@@ -22,6 +22,7 @@ describe('clip social posts', () => {
     expect(isHomeExcludedClipType('wave')).toBe(true);
     expect(isHomeExcludedClipType('round')).toBe(true);
     expect(isHomeExcludedClipType('round_share')).toBe(false);
+    expect(isHomeExcludedClipType('wave_share')).toBe(false);
     expect(isHomeExcludedClipType('feed')).toBe(false);
   });
 

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -23,7 +24,9 @@ import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
 export type RoundShareTarget = {
-  reelId: string;
+  kind?: 'wave' | 'round';
+  reelId?: string;
+  storyId?: string;
   postId: string;
   mediaUrl: string;
   coverUrl?: string | null;
@@ -49,6 +52,7 @@ export function RoundShareComposer({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const createPost = useCreatePost();
   const [comment, setComment] = useState('');
   const [audienceOpen, setAudienceOpen] = useState(false);
@@ -59,6 +63,7 @@ export function RoundShareComposer({
     allowed.includes('friends') ? 'friends' : allowed[0] ?? 'friends',
   );
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
+  const shareKind = target?.kind ?? (target?.storyId && !target?.reelId ? 'wave' : 'round');
   const canPublish = comment.trim().length > 0 && Boolean(target?.postId);
   const blocked = !target || !canShareRoundToFeed(target.privacyMode);
 
@@ -92,11 +97,13 @@ export function RoundShareComposer({
         audienceUserIds: nextIds,
         challengeId: undefined,
         source: 'share',
-        type: 'round_share',
+        type: shareKind === 'wave' ? 'wave_share' : 'round_share',
         parentId: target.postId,
         quotedPostId: target.postId,
         quoteSnapshot: snapshotFromRound({
+          kind: shareKind,
           reelId: target.reelId,
+          storyId: target.storyId,
           authorId: target.authorId,
           authorName: target.authorName,
           username: target.username,
@@ -109,6 +116,8 @@ export function RoundShareComposer({
       });
       onClose();
       setComment('');
+      void queryClient.invalidateQueries({ queryKey: ['clip-shares', target.postId] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
       router.replace(feedHref(created.id));
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -132,7 +141,7 @@ export function RoundShareComposer({
         }}>
         <View className="flex-row items-center justify-between">
           <AppText className="text-[16px] font-extrabold text-charcoal">
-            {copy('round.shareFeedTitle')}
+            {copy('clip.repostFeedTitle')}
           </AppText>
           <Pressable
             accessibilityRole="button"
@@ -161,7 +170,7 @@ export function RoundShareComposer({
 
         <View className="mt-3">
           <Input
-            placeholder={copy('round.sharePlaceholder')}
+            placeholder={copy('clip.repostPlaceholder')}
             value={comment}
             onChangeText={setComment}
             grow

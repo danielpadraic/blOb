@@ -569,7 +569,8 @@ export type QuoteSnapshot = {
   created_at: string;
   audience?: string | null;
   reel_id?: string | null;
-  kind?: 'round';
+  story_id?: string | null;
+  kind?: 'round' | 'wave';
 };
 
 export interface Post {
@@ -610,7 +611,8 @@ export type PostType =
   | 'profile_photo'
   | 'wave'
   | 'round'
-  | 'round_share';
+  | 'round_share'
+  | 'wave_share';
 
 export type ComposeInput = {
   content: string;

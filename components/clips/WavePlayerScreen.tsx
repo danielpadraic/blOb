@@ -159,6 +159,10 @@ export function WavePlayerScreen() {
       openComments={comments === '1' || (Array.isArray(comments) && comments[0] === '1')}
       challenges={challenges}
       onClose={close}
+      onCreate={() => {
+        close();
+        startFreshWaveCapture(router);
+      }}
     />
   );
 }
