@@ -215,7 +215,7 @@ export function TabChromeHeader({
               alignItems: 'center',
               overflow: 'visible',
               flexShrink: 0,
-              marginRight: -6,
+              gap: 8,
               paddingRight: clusterPad,
             }}>
             <TourAnchor id="tour-search" style={{ overflow: 'visible' }}>
@@ -333,7 +333,7 @@ function HeaderIcon({
   children: ReactNode;
 }) {
   return (
-    <View style={{ overflow: 'visible', marginHorizontal: -5 }}>
+    <View style={{ overflow: 'visible' }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}

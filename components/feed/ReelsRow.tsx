@@ -11,7 +11,7 @@ import { useReels } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import { roundRailLabel } from '@/lib/clipWatch';
 import { copy } from '@/lib/copy';
-import { CAPTURE_REEL_HREF, reelHref } from '@/lib/routes';
+import { reelHref } from '@/lib/routes';
 import { persistReelThumbnail } from '@/lib/social';
 import { persistGeneratedPoster } from '@/lib/videoPoster';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -63,14 +63,7 @@ export function ReelsRow() {
     caption: reel.caption,
     challengeId: reel.challenge_id,
   }));
-  const createCard: MomentItem = {
-    id: 'new-reel',
-    handle: 'You',
-    title: copy('round.new'),
-    variant: 'teal',
-    href: CAPTURE_REEL_HREF,
-  };
-  const cards = [createCard, ...liveReels];
+  const cards = liveReels;
 
   return (
     <View className="gap-1.5" style={{ marginHorizontal: -16 }}>

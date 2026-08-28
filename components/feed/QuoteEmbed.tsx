@@ -42,11 +42,16 @@ export function QuoteEmbed({ snapshot, audience, unavailable, onPress }: QuoteEm
             <AppText className="text-[13px] font-extrabold text-charcoal" numberOfLines={1}>
               {name}
             </AppText>
-            <AppText className="text-[11px] text-muted" numberOfLines={1}>
-              @{snapshot.username}
-              {snapshot.created_at ? ` · ${formatFeedTime(snapshot.created_at)}` : ''}
-              {audience ? ` · ${audienceLabel(asPostAudience(audience))}` : ''}
-            </AppText>
+            {snapshot.created_at || audience ? (
+              <AppText className="text-[11px] text-muted" numberOfLines={1}>
+                {[
+                  snapshot.created_at ? formatFeedTime(snapshot.created_at) : null,
+                  audience ? audienceLabel(asPostAudience(audience)) : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </AppText>
+            ) : null}
           </View>
         </View>
         {unavailable ? (

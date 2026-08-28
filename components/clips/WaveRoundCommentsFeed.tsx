@@ -11,6 +11,7 @@ import {
 import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { MentionText } from '@/components/feed/MentionText';
 import { ReactionBar } from '@/components/feed/ReactionBar';
+import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -200,10 +201,12 @@ function FeedItem({
         </ProfileLink>
         <View className="min-w-0 flex-1">
           <ProfileLink username={comment.author?.username} userId={comment.author_id}>
-            <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
-              {name}{' '}
-              <AppText className="text-[11px] font-normal text-muted">@{handle}</AppText>
-            </AppText>
+            <View className="flex-row items-center" style={{ gap: 4, minWidth: 0 }}>
+              <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
+                {name}
+              </AppText>
+              <OfficialMark profile={comment.author} compact />
+            </View>
           </ProfileLink>
           <MentionText content={comment.content} mentions={comment.mentions} className="text-[13px] leading-[18px] text-ink" />
           <AppText className="mt-0.5 text-[11px] text-muted">{formatFeedTime(comment.created_at)}</AppText>

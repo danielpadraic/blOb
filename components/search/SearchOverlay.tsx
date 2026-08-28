@@ -1,11 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
-import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuth } from '@/hooks/useAuth';
@@ -57,26 +56,34 @@ export function SearchOverlay({ visible, onClose }: SearchOverlayProps) {
     <ChromeOverlay visible={visible} onClose={onClose} align="start" dim>
       <View
         style={{
-          marginTop: 8,
+          marginTop: 4,
           marginHorizontal: 12,
           maxHeight: 520,
           backgroundColor: THEME.surface,
           borderColor: THEME.border,
           borderWidth: 1,
-          borderRadius: 22,
+          borderRadius: 16,
           overflow: 'hidden',
           ...themeShadow('card'),
         }}>
-        <View className="px-3 pt-3">
-          <Input
-            value={term}
-            onChangeText={setTerm}
-            placeholder="Search people, Challenges, #tags"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-          />
-        </View>
+        <TextInput
+          value={term}
+          onChangeText={setTerm}
+          placeholder="Search people, Challenges, #tags"
+          placeholderTextColor={THEME.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          accessibilityLabel="Search"
+          style={{
+            height: 40,
+            paddingHorizontal: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: THEME.border,
+            color: THEME.textPrimary,
+            fontSize: 15,
+          }}
+        />
         <ScrollView
           className="max-h-[420px]"
           keyboardShouldPersistTaps="handled"

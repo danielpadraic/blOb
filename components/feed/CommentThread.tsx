@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { MentionText } from '@/components/feed/MentionText';
 import { ReactionBar } from '@/components/feed/ReactionBar';
+import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -126,10 +127,12 @@ function CommentItem({
         </ProfileLink>
         <View className="min-w-0 flex-1">
           <ProfileLink username={comment.author?.username} userId={comment.author_id}>
-            <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
-              {name}{' '}
-              <AppText className="text-[11px] font-normal text-muted">@{handle}</AppText>
-            </AppText>
+            <View className="flex-row items-center" style={{ gap: 4, minWidth: 0 }}>
+              <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
+                {name}
+              </AppText>
+              <OfficialMark profile={comment.author} compact />
+            </View>
           </ProfileLink>
           {body ? (
             <MentionText

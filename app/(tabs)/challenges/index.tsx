@@ -222,7 +222,7 @@ export default function ChallengesScreen() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
-      <AppHeader title="Lobby" subtitle={copy('lobby.subtitle')} />
+      <AppHeader title="Lobby" />
 
       <TextInput
         value={query}

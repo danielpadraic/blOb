@@ -36,11 +36,14 @@ import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
 import {
+  clipShareKind,
+  isClipSharePost,
   isRoundSharePost,
   reelIdFromShare,
+  storyIdFromShare,
   roundShareClipUnavailable,
 } from '@/lib/roundShare';
-import { roundHref } from '@/lib/routes';
+import { roundHref, waveHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { copy } from '@/lib/copy';
@@ -96,13 +99,17 @@ function PostCardInner({
   const audience = asPostAudience(post.audience);
   const content = post.content?.trim() ?? '';
   const quote = asQuoteSnapshot(post.quote_snapshot);
-  const shareParentId = isRoundSharePost(post) ? post.parent_id ?? post.quoted_post_id : null;
+  const shareParentId = isClipSharePost(post) ? post.parent_id ?? post.quoted_post_id : null;
   const parentRound = usePost(shareParentId);
   const shareUnavailable =
-    isRoundSharePost(post) &&
+    isClipSharePost(post) &&
     !parentRound.isLoading &&
     (roundShareClipUnavailable(parentRound.data) || !parentRound.data);
-  const shareReelId = reelIdFromShare(post) ?? shareParentId ?? null;
+  const shareKind = clipShareKind(post);
+  const shareClipId =
+    shareKind === 'wave'
+      ? storyIdFromShare(post) ?? shareParentId ?? null
+      : reelIdFromShare(post) ?? shareParentId ?? null;
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
   const checkin = isCheckinPost(post);
@@ -167,30 +174,16 @@ function PostCardInner({
                 {name}
               </AppText>
               {officialOnHome ? <OfficialMark profile={post.author} compact /> : null}
-              {homeFeed ? (
-                <AppText
-                  style={{
-                    fontSize: 11,
-                    color: THEME.textMuted,
-                    lineHeight: 14,
-                    flexShrink: 0,
-                  }}
-                  numberOfLines={1}>
-                  {formatFeedTime(post.created_at)}
-                </AppText>
-              ) : (
-                <AppText
-                  style={{
-                    fontSize: 13,
-                    color: THEME.textMuted,
-                    lineHeight: 18,
-                    minWidth: 0,
-                    flexShrink: 1,
-                  }}
-                  numberOfLines={1}>
-                  @{handle}
-                </AppText>
-              )}
+              <AppText
+                style={{
+                  fontSize: 11,
+                  color: THEME.textMuted,
+                  lineHeight: 14,
+                  flexShrink: 0,
+                }}
+                numberOfLines={1}>
+                {formatFeedTime(post.created_at)}
+              </AppText>
             </View>
           </ProfileLink>
         </View>
@@ -336,7 +329,7 @@ function PostCardInner({
             content={caption}
             mentions={post.mentions}
             expanded={expanded}
-            compact={homeFeed}
+            compact={homeFeed || !challengeFeed}
             canExpand={
               checkin
                 ? caption.length > BODY_COLLAPSE_CHARS ||
@@ -378,14 +371,17 @@ function PostCardInner({
           />
         ) : null}
 
-        {isRoundSharePost(post) ? (
+        {isClipSharePost(post) ? (
           <RoundShareEmbed
             coverUrl={quote?.media_preview_url ?? parentRound.data?.media_urls?.[0] ?? null}
             unavailable={Boolean(shareUnavailable)}
             onPress={
-              shareUnavailable || !shareReelId
+              shareUnavailable || !shareClipId
                 ? undefined
-                : () => router.push(roundHref(shareReelId))
+                : () =>
+                    router.push(
+                      shareKind === 'wave' ? waveHref(shareClipId) : roundHref(shareClipId),
+                    )
             }
           />
         ) : quote ? (
@@ -400,7 +396,7 @@ function PostCardInner({
           />
         ) : null}
 
-        {isRoundSharePost(post) ? null : <ProofMedia urls={post.media_urls ?? []} proof={checkin} />}
+        {isClipSharePost(post) ? null : <ProofMedia urls={post.media_urls ?? []} proof={checkin} />}
 
         <ReactionBar
           createdAt={homeFeed ? undefined : post.created_at}
@@ -408,59 +404,71 @@ function PostCardInner({
           currentUserId={currentUserId}
           commentCount={comments.length}
           onReact={(type) => onReact(type)}
+          onShare={(anchor) => social?.openShare(post, anchor)}
           onReply={
             onComment
               ? () => {
-                  if (!showComposer) {
-                    setShowComposer(true);
-                    setComposerExpanded(true);
-                    return;
-                  }
-                  setComposerExpanded((value) => !value);
+                  setShowComposer((open) => !open);
+                  setComposerExpanded(true);
                 }
               : undefined
           }
         />
 
         {showComposer && onComment ? (
-          <InlineComposer
-            placeholder="Write a reply…"
-            submitting={commenting}
-            audience={audience}
-            audienceUserIds={post.audience_user_ids ?? []}
-            expanded={composerExpanded}
-            onExpandedChange={setComposerExpanded}
-            replyTo={
-              post.author
-                ? {
-                    userId: post.author_id,
-                    username: handle,
-                    label: name,
+          <View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close comments"
+              onPress={() => setShowComposer(false)}
+              style={{
+                position: 'absolute',
+                top: -900,
+                right: -24,
+                bottom: 0,
+                left: -24,
+                zIndex: 0,
+              }}
+            />
+            <View style={{ zIndex: 1 }}>
+              <InlineComposer
+                placeholder="Write a reply…"
+                submitting={commenting}
+                audience={audience}
+                audienceUserIds={post.audience_user_ids ?? []}
+                expanded={composerExpanded}
+                onExpandedChange={setComposerExpanded}
+                replyTo={
+                  post.author
+                    ? {
+                        userId: post.author_id,
+                        username: handle,
+                        label: name,
+                      }
+                    : null
+                }
+                onSubmit={async (text, mentionedUserIds) => {
+                  try {
+                    await onComment(text, null, mentionedUserIds);
+                    setComposerExpanded(true);
+                  } catch (error) {
+                    Alert.alert('Couldn’t post that reply', getErrorMessage(error));
                   }
-                : null
-            }
-            onSubmit={async (text, mentionedUserIds) => {
-              try {
-                await onComment(text, null, mentionedUserIds);
-                setShowComposer(false);
-                setComposerExpanded(true);
-              } catch (error) {
-                Alert.alert('Couldn’t post that reply', getErrorMessage(error));
-              }
-            }}
-          />
-        ) : null}
-
-        {comments.length > 0 ? (
-          <CommentThread
-            comments={comments}
-            currentUserId={currentUserId}
-            composing={commenting}
-            audience={audience}
-            audienceUserIds={post.audience_user_ids ?? []}
-            onReply={onComment ?? (async () => undefined)}
-            onReact={(commentId, type) => onReact(type, commentId)}
-          />
+                }}
+              />
+              {comments.length > 0 ? (
+                <CommentThread
+                  comments={comments}
+                  currentUserId={currentUserId}
+                  composing={commenting}
+                  audience={audience}
+                  audienceUserIds={post.audience_user_ids ?? []}
+                  onReply={onComment ?? (async () => undefined)}
+                  onReact={(commentId, type) => onReact(type, commentId)}
+                />
+              ) : null}
+            </View>
+          </View>
         ) : null}
       </View>
     </Card>
@@ -628,14 +636,6 @@ function WallHostLine({
           numberOfLines={2}>
           {name || 'blob'}
         </AppText>
-        {host.username ? (
-          <AppText
-            className="text-[13px]"
-            style={{ color: THEME.textMuted, lineHeight: 18, minWidth: 0, flexShrink: 1 }}
-            numberOfLines={1}>
-            @{host.username}
-          </AppText>
-        ) : null}
       </View>
     </ProfileLink>
   );
@@ -766,7 +766,7 @@ function PostBody({
         content={content}
         mentions={mentions}
         numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}
-        className={compact ? 'text-[13px] leading-[18px] text-ink' : undefined}
+        className={compact ? 'text-[12px] leading-[16px] text-ink' : undefined}
       />
       {canExpand ? (
         <Pressable accessibilityRole="button" hitSlop={6} onPress={onToggle}>

@@ -147,7 +147,7 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
         paddingHorizontal: compact ? 6 : 10,
         flexShrink: 1,
         minWidth: 0,
-        alignSelf: 'flex-start',
+        alignSelf: compact ? 'center' : 'flex-start',
       }}
       hitSlop={6}>
       <TourAnchor id="tour-coins">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Vibration, View } from 'react-native';
+import { Animated, Platform, Pressable, Vibration, View } from 'react-native';
 
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
@@ -153,11 +153,14 @@ export function ReactionBar({
           }}
         />
       ) : null}
-      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: THEME.border, marginBottom: 10 }} />
-      <View className="flex-row items-center">
-        <AppText className="flex-1 text-[13px]" style={{ color: THEME.textMuted }}>
-          {createdAt ? footerTime(createdAt) : ''}
-        </AppText>
+      <View className="flex-row items-center justify-end" style={{ minHeight: 32 }}>
+        {createdAt ? (
+          <AppText className="flex-1 text-[11px]" style={{ color: THEME.textMuted }}>
+            {footerTime(createdAt)}
+          </AppText>
+        ) : (
+          <View className="flex-1" />
+        )}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={total > 0 ? `Like ${total}` : 'Like'}
@@ -172,7 +175,7 @@ export function ReactionBar({
           }}
           onLongPress={() => openReactionTray(setTrayOpen)}
           {...webNoSelectProps()}
-          className="h-9 flex-row items-center px-1.5"
+          className="h-8 flex-row items-center px-1.5"
           style={noSelectStyle}>
           <Glyph
             name={mineType ? REACTION_GLYPH[mineType] : GLYPH.strongOutline}
@@ -182,23 +185,28 @@ export function ReactionBar({
           {total > 0 ? (
             <AppText
               selectable={false}
-              className="ml-1 text-[13px] font-semibold"
+              className="ml-1 text-[12px] font-semibold"
               style={[{ color: THEME.textPrimary }, noSelectStyle]}>
               {total}
             </AppText>
           ) : null}
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={commentLabel}
-          hitSlop={8}
-          onPress={onReply}
-          className="h-9 flex-row items-center px-1.5">
-          <Glyph name={GLYPH.reply} color={THEME.textMuted} size={16} />
-          <AppText className="ml-1 text-[13px]" style={{ color: THEME.textMuted }}>
-            {commentLabel}
-          </AppText>
-        </Pressable>
+        {onReply ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={commentLabel}
+            hitSlop={8}
+            onPress={onReply}
+            className="h-8 flex-row items-center px-1.5">
+            <Glyph name={GLYPH.reply} color={THEME.textMuted} size={16} />
+            {commentCount > 0 ? (
+              <AppText className="ml-1 text-[12px]" style={{ color: THEME.textMuted }}>
+                {commentCount}
+              </AppText>
+            ) : null}
+          </Pressable>
+        ) : null}
+        {onShare ? <ShareAction onShare={onShare} /> : null}
       </View>
     </View>
   );
