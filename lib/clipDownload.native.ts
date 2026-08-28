@@ -1,0 +1,16 @@
+import { cacheDirectory, documentDirectory, downloadAsync } from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
+
+export async function downloadClipMedia(url: string): Promise<void> {
+  const source = String(url ?? '').trim();
+  if (!source) {
+    throw new Error('This clip has no file to save.');
+  }
+  const permission = await MediaLibrary.requestPermissionsAsync();
+  if (!permission.granted) {
+    throw new Error('Allow Photos to save this clip.');
+  }
+  const dest = `${cacheDirectory ?? documentDirectory}blob-clip-${Date.now()}`;
+  const result = await downloadAsync(source, dest);
+  await MediaLibrary.saveToLibraryAsync(result.uri);
+}
