@@ -240,7 +240,7 @@ export function FeedList({
     [challengeFeed, currentUserId, hideAudience, highlightPostId, homeChrome, midFeedRail, onComment, onReact],
   );
 
-  if (error && !homeChrome) {
+  if (error && !homeChrome && !headerTop && !stickyAbove) {
     return (
       <MascotState
         kind="error"

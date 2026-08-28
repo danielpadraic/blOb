@@ -13,12 +13,8 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
 import { useFeaturedOfficialChallenge } from '@/hooks/useChallenge';
-import {
-  useCreateComment,
-  useCreatePost,
-  useFeed,
-  useToggleReaction,
-} from '@/hooks/useFeed';
+import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/hooks/useFeed';
+import { rawFeedError } from '@/lib/feedError';
 import { useActiveStories } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
@@ -42,6 +38,8 @@ export default function FeedScreen() {
   const createComment = useCreateComment();
   const toggleReaction = useToggleReaction();
   const posts = feed.data ?? [];
+  const feedWarning = feed.warning ?? (feed.error ? rawFeedError(feed.error) : null);
+  const showFeedBanner = Boolean(feed.error || feedWarning);
   const refreshing = (feed.isRefetching || stories.isRefetching) && !feed.isLoading;
 
   const onRefresh = useCallback(() => {
@@ -70,7 +68,7 @@ export default function FeedScreen() {
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4">
       <FeedList
         posts={posts}
-        isLoading={feed.isLoading && !feed.error}
+        isLoading={Boolean(feed.isLoading && posts.length === 0 && !showFeedBanner)}
         isRefreshing={refreshing}
         currentUserId={user?.id}
         emptyTitle={copy('home.empty', tone)}
@@ -86,22 +84,30 @@ export default function FeedScreen() {
         }
         headerTop={
           <View>
-            {feed.error ? (
-              <View
-                className="flex-row items-center"
-                style={{ gap: 10, minHeight: 44, marginBottom: 8 }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
+            {showFeedBanner ? (
+              <View style={{ marginBottom: 8, gap: 4 }}>
+                <View className="flex-row items-center" style={{ gap: 10, minHeight: 44 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Try again"
+                    onPress={() => void feed.refetch()}
+                    style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                      Try again
+                    </AppText>
+                  </Pressable>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Try again"
-                  onPress={() => void feed.refetch()}
-                  style={{ minHeight: 44, justifyContent: 'center' }}>
-                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                    Try again
+                {feedWarning ? (
+                  <AppText
+                    className="text-[12px]"
+                    numberOfLines={1}
+                    style={{ color: THEME.textMuted }}>
+                    {feedWarning}
                   </AppText>
-                </Pressable>
+                ) : null}
               </View>
             ) : null}
             <FeaturedOfficialStrip />

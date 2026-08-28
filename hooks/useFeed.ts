@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { Alert } from 'react-native';
 
@@ -9,6 +9,7 @@ import { asQuoteSnapshot } from '@/lib/quotePost';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { asPostAudience, DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { reportAppError } from '@/lib/appErrors';
+import { rawFeedError } from '@/lib/feedError';
 import {
   dropCachedCircleId,
   isMissingCircleIdColumn,
@@ -40,6 +41,14 @@ const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at
 
 function feedListKey(scope: string, userId?: string | null) {
   return ['feed', scope, userId] as const;
+}
+
+export { rawFeedError } from '@/lib/feedError';
+
+let lastHomeFeedWarning: string | null = null;
+
+export function peekHomeFeedWarning(): string | null {
+  return lastHomeFeedWarning;
 }
 
 function asFeedPost(
@@ -128,7 +137,7 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
 
   const { data, error } = result;
   if (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(rawFeedError(error));
   }
   return ((data ?? []) as unknown as PostWithMeta[])
     .filter(
@@ -784,17 +793,37 @@ async function fetchPosts(input: {
     return [];
   }
 
+  lastHomeFeedWarning = null;
+  const noteHomeError = (error: unknown) => {
+    const message = rawFeedError(error);
+    console.log('[blob:feed]', message);
+    if (!lastHomeFeedWarning) {
+      lastHomeFeedWarning = message;
+      reportAppError({ route: 'feed/home', error, message });
+    }
+  };
+
+  const emptyIds = async (run: () => Promise<string[]>) => {
+    try {
+      return await run();
+    } catch (error) {
+      noteHomeError(error);
+      return [] as string[];
+    }
+  };
+
+  try {
   const [joinedIds, hostedIds, circleIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
     await Promise.all([
-      fetchJoinedChallengeIds(input.userId),
-      fetchHostedChallengeIds(input.userId),
-      fetchJoinedCircleIds(input.userId),
-      friendIdsForUser(input.userId),
-      fetchOfficialAuthorIds(),
-      fetchRecommendedCreatorIds(input.userId),
-      fetchHiddenPostIds(input.userId),
-      fetchMutedUserIds(input.userId),
-      fetchBlockedUserIds(input.userId),
+      emptyIds(() => fetchJoinedChallengeIds(input.userId!)),
+      emptyIds(() => fetchHostedChallengeIds(input.userId!)),
+      emptyIds(() => fetchJoinedCircleIds(input.userId!)),
+      emptyIds(() => friendIdsForUser(input.userId!)),
+      emptyIds(() => fetchOfficialAuthorIds()),
+      emptyIds(() => fetchRecommendedCreatorIds(input.userId!)),
+      emptyIds(() => fetchHiddenPostIds(input.userId!)),
+      emptyIds(() => fetchMutedUserIds(input.userId!)),
+      emptyIds(() => fetchBlockedUserIds(input.userId!)),
     ]);
   const challengeIds = [...new Set([...joinedIds, ...hostedIds])];
   const challengeIdSet = new Set(challengeIds);
@@ -806,28 +835,34 @@ async function fetchPosts(input: {
 
   const wallHostIds = [...new Set([input.userId, ...friendIds])];
   const schema = await resolvePostsSchema();
-  let reportedHomeError = false;
-  const noteHomeError = (error: unknown) => {
-    if (reportedHomeError) {
-      return;
-    }
-    reportedHomeError = true;
-    reportAppError({ route: 'feed/home', error });
-  };
-  const safeQuery = async (run: () => Promise<PostWithMeta[]>) => {
-    try {
-      return await run();
-    } catch (error) {
-      noteHomeError(error);
-      return [] as PostWithMeta[];
-    }
-  };
+  const none: PostWithMeta[] = [];
   const [challengePosts, circlePosts, discoverCircles, people, wall] = await Promise.all([
-    safeQuery(() => queryPosts({ kind: 'ids', challengeIds })),
-    safeQuery(() => queryPosts({ kind: 'circleIds', circleIds })),
-    schema.hasCircleId ? safeQuery(() => queryPosts({ kind: 'circleDiscover' })) : Promise.resolve([] as PostWithMeta[]),
-    safeQuery(() => queryPosts({ kind: 'authors', authorIds })),
-    safeQuery(() => queryPosts({ kind: 'wallHosts', hostIds: wallHostIds })),
+    queryPosts({ kind: 'ids', challengeIds }).catch((error) => {
+      noteHomeError(error);
+      return none;
+    }),
+    queryPosts({ kind: 'circleIds', circleIds }).catch((error) => {
+      const message = rawFeedError(error);
+      console.log('[blob:feed]', message);
+      reportAppError({ route: 'feed/home', error, message });
+      return none;
+    }),
+    schema.hasCircleId
+      ? queryPosts({ kind: 'circleDiscover' }).catch((error) => {
+          const message = rawFeedError(error);
+          console.log('[blob:feed]', message);
+          reportAppError({ route: 'feed/home', error, message });
+          return none;
+        })
+      : Promise.resolve(none),
+    queryPosts({ kind: 'authors', authorIds }).catch((error) => {
+      noteHomeError(error);
+      return none;
+    }),
+    queryPosts({ kind: 'wallHosts', hostIds: wallHostIds }).catch((error) => {
+      noteHomeError(error);
+      return none;
+    }),
   ]);
 
   const hidden = new Set(hiddenIds);
@@ -837,12 +872,17 @@ async function fetchPosts(input: {
   const merged = await hydrateCircles(
     dedupePosts([people, challengePosts, circlePosts, discoverCircles, wall]),
   );
-  const corporateIds = await fetchCorporateChallengeIds(
-    merged.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
-  );
+  let corporateIds = new Set<string>();
+  try {
+    corporateIds = await fetchCorporateChallengeIds(
+      merged.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
+    );
+  } catch (error) {
+    noteHomeError(error);
+  }
 
   try {
-  return await hydrateAuthors(
+    return await hydrateAuthors(
     await withSocial(
       merged
         .filter((post) => {
@@ -918,10 +958,14 @@ async function fetchPosts(input: {
         .slice(0, 50),
       userId,
     ),
-  );
+    );
   } catch (error) {
     noteHomeError(error);
-    throw error;
+    return merged.slice(0, 50);
+  }
+  } catch (error) {
+    noteHomeError(error);
+    return [];
   }
 }
 
@@ -993,12 +1037,33 @@ export async function insertWorkoutCheckInPost(input: {
 export function useFeed(challengeId?: string | null) {
   const { user } = useAuth();
   const key = challengeId ?? 'global';
+  const home = !challengeId;
 
-  return useQuery({
+  const query = useQuery({
     queryKey: feedListKey(key, user?.id),
     staleTime: 30_000,
-    queryFn: () => fetchPosts({ challengeId, userId: user?.id }),
+    retry: home ? false : 1,
+    placeholderData: home ? keepPreviousData : undefined,
+    queryFn: async () => {
+      try {
+        return await fetchPosts({ challengeId, userId: user?.id });
+      } catch (error) {
+        const message = rawFeedError(error);
+        console.log('[blob:feed]', message);
+        reportAppError({ route: 'feed/home', error, message });
+        if (home) {
+          lastHomeFeedWarning = lastHomeFeedWarning ?? message;
+          return [];
+        }
+        throw error;
+      }
+    },
   });
+
+  return {
+    ...query,
+    warning: home ? lastHomeFeedWarning : null,
+  };
 }
 
 export function useCircleFeed(circleId?: string | null) {
