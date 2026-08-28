@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
+  Dimensions,
   Platform,
   Pressable,
   ScrollView,
@@ -21,13 +21,16 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CommentThread } from '@/components/feed/CommentThread';
-import { InlineComposer } from '@/components/feed/InlineComposer';
+import { WaveRoundCommentSheet } from '@/components/clips/WaveRoundCommentSheet';
+import { WatchSurface, useWatchSurface } from '@/components/clips/WatchSurface';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
+import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyProfile } from '@/hooks/useProfile';
 import { useClipSocial } from '@/hooks/useClipSocial';
 import { useBlockUser, useReportPost } from '@/hooks/usePostModeration';
 import { useFriends, useShareStory, useViewStory } from '@/hooks/useSocial';
@@ -97,6 +100,11 @@ export function ClipPlayer({
 }: ClipPlayerProps) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { profile } = useMyProfile();
+  const watch = useWatchSurface();
+  const topPad = Platform.OS === 'web' ? 8 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 8 : Math.max(insets.bottom, 8);
+  const watchHeight = watch.height || Dimensions.get('window').height;
   const viewStory = useViewStory();
   const [index, setIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
@@ -108,7 +116,9 @@ export function ClipPlayer({
   const [burst, setBurst] = useState(0);
   const [floatEmoji, setFloatEmoji] = useState<string | null>(null);
   const [captionDraft, setCaptionDraft] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
   const paused = useRef(false);
+  const sheetRef = useRef(sheet);
   const marked = useRef(new Set<string>());
   const clipsRef = useRef(clips);
   const indexRef = useRef(index);
@@ -116,7 +126,16 @@ export function ClipPlayer({
 
   clipsRef.current = clips;
   indexRef.current = index;
+  sheetRef.current = sheet;
   paused.current = emojiOpen;
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const handle = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(handle);
+  }, [toast]);
 
   const clip = clips[index];
 
@@ -173,6 +192,10 @@ export function ClipPlayer({
           }
         })
         .onEnd((event) => {
+          if (sheetRef.current) {
+            translateY.value = withTiming(0);
+            return;
+          }
           if (event.translationY > 110) {
             runOnJS(onClose)();
             return;
@@ -193,9 +216,11 @@ export function ClipPlayer({
   const origin = clip.challengeId ? challenges?.get(clip.challengeId) : undefined;
 
   return (
-    <Animated.View className="flex-1" style={[{ backgroundColor: '#101312' }, sheetStyle]}>
+    <WatchSurface>
+      <StatusBar style="light" />
+    <Animated.View style={[{ flex: 1, backgroundColor: '#101312' }, sheetStyle]}>
       <GestureDetector gesture={pan}>
-        <View className="flex-1">
+        <View style={{ flex: 1 }}>
           {clip.mediaType === 'video' ? (
             <ClipVideo
               key={clip.id}
@@ -255,7 +280,7 @@ export function ClipPlayer({
               top: 0,
               right: 0,
               left: 0,
-              paddingTop: insets.top + 8,
+              paddingTop: topPad,
               paddingHorizontal: 12,
             }}>
             <View className="flex-row items-center">
@@ -298,7 +323,7 @@ export function ClipPlayer({
             onLikeBurst={() => setBurst((value) => value + 1)}
             burstKey={burst}
             floatEmoji={floatEmoji}
-            insetsBottom={insets.bottom}
+            insetsBottom={bottomPad}
           />
 
           {clip.caption ? (
@@ -308,7 +333,7 @@ export function ClipPlayer({
                 position: 'absolute',
                 left: 16,
                 right: 88,
-                bottom: insets.bottom + 28,
+                bottom: bottomPad + 20,
               }}>
               <AppText className="text-[15px] leading-5" style={{ color: '#fff' }} numberOfLines={3}>
                 {clip.caption}
@@ -322,7 +347,7 @@ export function ClipPlayer({
               position: 'absolute',
               right: 12,
               left: 12,
-              bottom: insets.bottom + 8,
+              bottom: bottomPad,
               height: 3,
               borderRadius: 2,
               backgroundColor: 'rgba(255,255,255,0.28)',
@@ -347,7 +372,7 @@ export function ClipPlayer({
                 position: 'absolute',
                 left: 16,
                 right: 16,
-                bottom: insets.bottom + 40,
+                bottom: bottomPad + 32,
                 minHeight: 44,
                 borderRadius: 18,
                 backgroundColor: 'rgba(16,19,18,0.88)',
@@ -360,6 +385,24 @@ export function ClipPlayer({
               </AppText>
             </Pressable>
           ) : null}
+          {toast ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 88,
+                bottom: bottomPad + 72,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                borderRadius: 14,
+                backgroundColor: 'rgba(16,19,18,0.72)',
+              }}>
+              <AppText className="text-[14px] leading-5" style={{ color: '#fff' }} numberOfLines={3}>
+                {toast}
+              </AppText>
+            </View>
+          ) : null}
         </View>
       </GestureDetector>
 
@@ -369,7 +412,7 @@ export function ClipPlayer({
           style={{
             position: 'absolute',
             right: 0,
-            bottom: insets.bottom + 72,
+            bottom: bottomPad + 64,
             left: 0,
             alignItems: 'center',
           }}>
@@ -403,11 +446,16 @@ export function ClipPlayer({
         onCloseSheet={() => setSheet(null)}
         onClosePlayer={onClose}
         currentUserId={user?.id}
+        avatarUrl={profile?.avatar_url}
+        displayName={profile?.display_name ?? profile?.username}
+        viewportHeight={watchHeight}
+        onToast={setToast}
         floatType={
           floatEmoji ? EMOJI_ROW.find((row) => row.emoji === floatEmoji)?.type : undefined
         }
       />
     </Animated.View>
+    </WatchSurface>
   );
 }
 
@@ -474,7 +522,7 @@ function ClipSocialRail({
       style={{
         position: 'absolute',
         right: 8,
-        bottom: insetsBottom + 56,
+        bottom: insetsBottom + 48,
         alignItems: 'center',
         gap: 10,
       }}>
@@ -488,40 +536,48 @@ function ClipSocialRail({
         </AppText>
       ) : null}
       <RailButton
-        label={String(counts.reactions)}
-        glyph={liked ? '❤️' : '♡'}
+        accessibilityLabel="Like"
+        glyph={liked ? GLYPH.like : GLYPH.likeOutline}
+        count={counts.reactions}
         onPress={() => {
           onLikeBurst();
         }}
       />
-      <RailButton label={String(counts.comments)} glyph="💬" onPress={onComments} />
-      <RailButton label="Share" glyph="↗" onPress={onShare} />
-      <RailButton label="More" glyph="•••" onPress={onMore} />
+      <RailButton
+        accessibilityLabel="Comment"
+        glyph={GLYPH.reply}
+        count={counts.comments}
+        onPress={onComments}
+      />
+      <RailButton accessibilityLabel="Share" glyph={GLYPH.share} onPress={onShare} />
+      <RailButton accessibilityLabel="More" glyph={GLYPH.more} onPress={onMore} />
     </View>
   );
 }
 
 function RailButton({
-  label,
+  accessibilityLabel,
   glyph,
+  count,
   onPress,
 }: {
-  label: string;
-  glyph: string;
+  accessibilityLabel: string;
+  glyph: (typeof GLYPH)[keyof typeof GLYPH];
+  count?: number;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-      <AppText className="text-[20px]" style={{ color: '#fff' }}>
-        {glyph}
-      </AppText>
-      <AppText className="text-[11px] font-bold" style={{ color: '#fff' }}>
-        {label}
-      </AppText>
+      <Glyph name={glyph} color="#fff" size={22} />
+      {count != null ? (
+        <AppText className="text-[11px] font-bold" style={{ color: '#fff' }}>
+          {count}
+        </AppText>
+      ) : null}
     </Pressable>
   );
 }
@@ -535,6 +591,10 @@ function ClipSheets({
   onCloseSheet,
   onClosePlayer,
   currentUserId,
+  avatarUrl,
+  displayName,
+  viewportHeight,
+  onToast,
   floatType,
 }: {
   clip: ClipPlayItem;
@@ -545,6 +605,10 @@ function ClipSheets({
   onCloseSheet: () => void;
   onClosePlayer: () => void;
   currentUserId?: string;
+  avatarUrl?: string | null;
+  displayName?: string | null;
+  viewportHeight: number;
+  onToast: (value: string | null) => void;
   floatType?: ReactionType;
 }) {
   const social = useClipSocial({
@@ -572,48 +636,20 @@ function ClipSheets({
 
   return (
     <>
-      <ChromeOverlay visible={sheet === 'comments'} onClose={onCloseSheet} dim="heavy" zIndex={40}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{
-            height: '50%',
-            backgroundColor: THEME.surface,
-            borderTopLeftRadius: 22,
-            borderTopRightRadius: 22,
-            paddingBottom: 12,
-          }}>
-          <View className="flex-row items-center justify-between px-4 pt-3">
-            <AppText className="text-[15px] font-extrabold text-charcoal">Comments</AppText>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onCloseSheet}
-              hitSlop={8}
-              style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}>
-              <AppText className="text-[18px] font-bold text-muted">×</AppText>
-            </Pressable>
-          </View>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16 }}>
-            <CommentThread
-              comments={social.post?.comments ?? []}
-              currentUserId={currentUserId}
-              composing={social.commenting}
-              onReply={social.onComment}
-              onReact={(commentId, type) => social.onReact(type, commentId)}
-              audience={social.post?.audience}
-              audienceUserIds={social.post?.audience_user_ids}
-            />
-          </ScrollView>
-          <View className="px-4 pt-2">
-            <InlineComposer
-              placeholder="Reply"
-              submitting={social.commenting}
-              audience={social.post?.audience}
-              audienceUserIds={social.post?.audience_user_ids}
-              onSubmit={(content, mentionedUserIds) => social.onComment(content, null, mentionedUserIds)}
-            />
-          </View>
-        </KeyboardAvoidingView>
-      </ChromeOverlay>
+      <WaveRoundCommentSheet
+        visible={sheet === 'comments'}
+        comments={social.post?.comments ?? []}
+        viewportHeight={viewportHeight}
+        avatarUrl={avatarUrl}
+        displayName={displayName}
+        authorId={currentUserId}
+        submitting={social.commenting}
+        onClose={onCloseSheet}
+        onSend={async (content) => {
+          await social.onComment(content);
+          onToast(content);
+        }}
+      />
 
       <ChromeOverlay visible={sheet === 'share'} onClose={onCloseSheet} dim zIndex={40}>
         <View

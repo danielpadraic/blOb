@@ -5,14 +5,14 @@ export default function RoundStackLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#101312' },
+        contentStyle: { backgroundColor: 'transparent' },
       }}>
       <Stack.Screen
         name="[id]"
         options={{
-          presentation: 'fullScreenModal',
+          presentation: 'transparentModal',
           animation: 'fade',
-          contentStyle: { backgroundColor: '#101312' },
+          contentStyle: { backgroundColor: 'transparent' },
         }}
       />
     </Stack>

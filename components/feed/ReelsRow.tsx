@@ -9,9 +9,10 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
 import { useReels } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
+import { roundRailLabel } from '@/lib/clipWatch';
 import { copy } from '@/lib/copy';
 import { CAPTURE_REEL_HREF, reelHref } from '@/lib/routes';
-import { persistReelThumbnail, personDisplayName } from '@/lib/social';
+import { persistReelThumbnail } from '@/lib/social';
 import { persistGeneratedPoster } from '@/lib/videoPoster';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
@@ -43,11 +44,7 @@ const GRADIENTS: Record<MomentVariant, readonly [string, string]> = {
 };
 
 function reelHandle(profile?: PublicProfile | null): string {
-  const username = profile?.username?.trim();
-  if (username) {
-    return `@${username.replace(/^@/, '')}`;
-  }
-  return personDisplayName(profile);
+  return roundRailLabel(profile);
 }
 
 export function ReelsRow() {
@@ -192,15 +189,22 @@ function MomentCard({
             <Glyph name={GLYPH.play} color="#FFFFFF" size={22} />
           </View>
         ) : null}
-        <AppText className="text-[11px] font-bold" style={{ color, opacity: 0.9, zIndex: 1 }}>
+        <AppText
+          className="text-[11px] font-bold"
+          style={{ color, opacity: 0.9, zIndex: 1 }}
+          numberOfLines={1}
+          ellipsizeMode="tail">
           {item.handle}
         </AppText>
-        <AppText
-          className="text-[16px] font-extrabold"
-          style={{ color, letterSpacing: -0.3, lineHeight: 18, zIndex: 1 }}
-          numberOfLines={3}>
-          {item.title}
-        </AppText>
+        {item.title ? (
+          <AppText
+            className="text-[13px] font-extrabold"
+            style={{ color, letterSpacing: -0.3, zIndex: 1 }}
+            numberOfLines={1}
+            ellipsizeMode="tail">
+            {item.title}
+          </AppText>
+        ) : null}
       </LinearGradient>
     </Pressable>
     </View>

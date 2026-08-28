@@ -31,7 +31,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
-import { CAPTURE_REEL_HREF, LOBBY_HREF } from '@/lib/routes';
+import { CAPTURE_REEL_HREF, isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
 import { primeCameraFromGesture, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { rememberLastCapture } from '@/lib/lastCapture';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
@@ -362,11 +362,12 @@ function TabLayoutInner() {
   }
 
   const friendsTabRoot = pathname === '/friends';
+  const watchOpen = isWatchSurfacePath(pathname);
 
   return (
     <MediaLightboxHost>
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-      {isChallengeIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
+      {watchOpen || isChallengeIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
         <TabChromeHeader
           alertsOpen={alertsOpen}
           searchOpen={searchOpen}
@@ -436,7 +437,7 @@ function TabLayoutInner() {
         </SocialSheetsHost>
         </InviteHost>
       </View>
-      {onOnboarding || pathname.includes('/capture') ? null : (
+      {watchOpen || onOnboarding || pathname.includes('/capture') ? null : (
         <BlobTabBar
           composeOpen={sheetOpen}
           onToggleCompose={toggleSheet}

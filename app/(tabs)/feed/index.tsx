@@ -5,7 +5,6 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedList } from '@/components/feed/FeedList';
-import { RecommendedProfiles } from '@/components/feed/RecommendedProfiles';
 import { ReelsRow } from '@/components/feed/ReelsRow';
 import { StoryTray } from '@/components/feed/StoryTray';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -90,7 +89,6 @@ export default function FeedScreen() {
         emptyBody=""
         composerPlaceholder={copy('home.shareThoughts')}
         homeChrome
-        midFeedRail={posts.length >= 2 ? <RecommendedProfiles compact /> : null}
         draftKey="home"
         composing={createPost.isPending}
         headerTop={<FeaturedOfficialStrip />}

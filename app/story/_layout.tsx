@@ -24,9 +24,9 @@ export default function StoryStackLayout() {
       <Stack.Screen
         name="[id]"
         options={{
-          presentation: 'fullScreenModal',
+          presentation: 'transparentModal',
           animation: 'fade',
-          contentStyle: { backgroundColor: '#101312' },
+          contentStyle: { backgroundColor: 'transparent' },
         }}
       />
     </Stack>

@@ -101,6 +101,23 @@ export function storyHref(id: string, extra?: { comments?: boolean; from?: strin
   return waveHref(id, extra);
 }
 
+/** Wave / Round watch surface. Hide Home chrome while these routes are open. */
+export function isWatchSurfacePath(pathname?: string | null): boolean {
+  if (!pathname) {
+    return false;
+  }
+  return (
+    pathname === '/wave' ||
+    pathname.startsWith('/wave/') ||
+    pathname === '/round' ||
+    pathname.startsWith('/round/') ||
+    pathname === '/story' ||
+    pathname.startsWith('/story/') ||
+    pathname === '/reel' ||
+    pathname.startsWith('/reel/')
+  );
+}
+
 export const MESSAGES_HREF = '/messages' as const;
 export const BODY_METRICS_HREF = '/profile/body-metrics' as const;
 export const FITNESS_HISTORY_HREF = '/profile/fitness-history' as const;

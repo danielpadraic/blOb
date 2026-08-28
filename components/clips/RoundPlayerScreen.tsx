@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClipPlayer, type ClipPlayItem } from '@/components/clips/ClipPlayer';
+import { WatchSurface } from '@/components/clips/WatchSurface';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { usePost } from '@/hooks/useFeed';
@@ -64,29 +65,31 @@ export function RoundPlayerScreen() {
 
   if (reelQuery.isLoading) {
     return (
-      <View className="flex-1 items-center justify-center" style={{ backgroundColor: '#101312' }}>
-        <ActivityIndicator color={THEME.accentBright} />
-      </View>
+      <WatchSurface>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color={THEME.accentBright} />
+        </View>
+      </WatchSurface>
     );
   }
 
   if (!reel) {
     return (
-      <View
-        className="flex-1 items-center justify-center px-8"
-        style={{ backgroundColor: '#101312', paddingTop: insets.top }}>
-        <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
-          {copy('round.gone')}
-        </AppText>
-        <Pressable
-          onPress={close}
-          className="mt-6 rounded-full px-4 py-2"
-          style={{ backgroundColor: THEME.accent, minHeight: 44, justifyContent: 'center' }}>
-          <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
-            Back
+      <WatchSurface>
+        <View className="flex-1 items-center justify-center px-8" style={{ paddingTop: insets.top }}>
+          <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
+            {copy('round.gone')}
           </AppText>
-        </Pressable>
-      </View>
+          <Pressable
+            onPress={close}
+            className="mt-6 rounded-full px-4 py-2"
+            style={{ backgroundColor: THEME.accent, minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
+              Back
+            </AppText>
+          </Pressable>
+        </View>
+      </WatchSurface>
     );
   }
 

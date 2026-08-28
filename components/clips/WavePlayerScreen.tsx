@@ -4,16 +4,18 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClipPlayer, type ClipPlayItem } from '@/components/clips/ClipPlayer';
+import { WatchSurface } from '@/components/clips/WatchSurface';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useStory, useStoryChallengePreviews, useStoryGroups } from '@/hooks/useSocial';
 import { buildWaveStack } from '@/lib/clipRail';
+import { waveWatchName } from '@/lib/clipWatch';
 import { copy } from '@/lib/copy';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
-import { personDisplayName, type FeedChallengePreview } from '@/lib/social';
+import { type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { TABS_HREF } from '@/lib/routes';
 
@@ -55,11 +57,12 @@ export function WavePlayerScreen() {
     }
     return stories.map((story) => {
       const group = groups.find((row) => row.userId === story.user_id);
-      const name =
-        group?.name ||
-        (story.user_id === user?.id
-          ? copy('wave.yours')
-          : personDisplayName(story.user_id === profile?.id ? profile : null) || 'Blob');
+      const name = waveWatchName({
+        isOwn: story.user_id === user?.id,
+        groupName: group?.name,
+        displayName: story.user_id === profile?.id ? profile?.display_name : null,
+        username: story.user_id === profile?.id ? profile?.username : null,
+      });
       const item: ClipPlayItem = {
         id: story.id,
         kind: 'wave',
@@ -97,51 +100,53 @@ export function WavePlayerScreen() {
 
   if ((isLoading || storyQuery.isLoading) && clips.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center" style={{ backgroundColor: '#101312' }}>
-        <ActivityIndicator color={THEME.accentBright} />
-      </View>
+      <WatchSurface>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color={THEME.accentBright} />
+        </View>
+      </WatchSurface>
     );
   }
 
   if (!storyId) {
     return (
-      <View
-        className="flex-1 items-center justify-center px-8"
-        style={{ backgroundColor: '#101312', paddingTop: insets.top }}>
-        <BlobMascot size={180} variant="wave" motion="float" />
-        <AppText className="mt-4 text-center text-[16px] font-bold" style={{ color: '#fff' }}>
-          {copy('wave.empty')}
-        </AppText>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => startFreshWaveCapture(router)}
-          className="mt-6 rounded-full px-5 py-3"
-          style={{ backgroundColor: THEME.primary, minHeight: 44, justifyContent: 'center' }}>
-          <AppText className="text-[15px] font-bold" style={{ color: '#fff' }}>
-            {copy('wave.noun')}
+      <WatchSurface>
+        <View className="flex-1 items-center justify-center px-8" style={{ paddingTop: insets.top }}>
+          <BlobMascot size={180} variant="wave" motion="float" />
+          <AppText className="mt-4 text-center text-[16px] font-bold" style={{ color: '#fff' }}>
+            {copy('wave.empty')}
           </AppText>
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => startFreshWaveCapture(router)}
+            className="mt-6 rounded-full px-5 py-3"
+            style={{ backgroundColor: THEME.primary, minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[15px] font-bold" style={{ color: '#fff' }}>
+              {copy('wave.noun')}
+            </AppText>
+          </Pressable>
+        </View>
+      </WatchSurface>
     );
   }
 
   if (clips.length === 0) {
     return (
-      <View
-        className="flex-1 items-center justify-center px-8"
-        style={{ backgroundColor: '#101312', paddingTop: insets.top }}>
-        <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
-          {copy('wave.gone')}
-        </AppText>
-        <Pressable
-          onPress={close}
-          className="mt-6 rounded-full px-4 py-2"
-          style={{ backgroundColor: THEME.accent, minHeight: 44, justifyContent: 'center' }}>
-          <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
-            Back
+      <WatchSurface>
+        <View className="flex-1 items-center justify-center px-8" style={{ paddingTop: insets.top }}>
+          <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
+            {copy('wave.gone')}
           </AppText>
-        </Pressable>
-      </View>
+          <Pressable
+            onPress={close}
+            className="mt-6 rounded-full px-4 py-2"
+            style={{ backgroundColor: THEME.accent, minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
+              Back
+            </AppText>
+          </Pressable>
+        </View>
+      </WatchSurface>
     );
   }
 
