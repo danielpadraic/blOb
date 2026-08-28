@@ -74,7 +74,6 @@ export function ReelsRow() {
 
   return (
     <View className="gap-1.5" style={{ marginHorizontal: -16 }}>
-      <AppText className="px-4 text-[12px] font-bold text-muted">{copy('round.title')}</AppText>
       <ScrollView
         horizontal
         nestedScrollEnabled
@@ -142,8 +141,6 @@ function MomentCard({
           width: 112,
           height: 128,
           borderRadius: 18,
-          padding: 12,
-          justifyContent: 'space-between',
           overflow: 'hidden',
         }}>
         {thumbUrl ? (
@@ -189,22 +186,24 @@ function MomentCard({
             <Glyph name={GLYPH.play} color="#FFFFFF" size={22} />
           </View>
         ) : null}
-        <AppText
-          className="text-[11px] font-bold"
-          style={{ color, opacity: 0.9, zIndex: 1 }}
-          numberOfLines={1}
-          ellipsizeMode="tail">
-          {item.handle}
-        </AppText>
-        {item.title ? (
+        {item.id === 'new-reel' ? null : (
           <AppText
-            className="text-[13px] font-extrabold"
-            style={{ color, letterSpacing: -0.3, zIndex: 1 }}
+            className="font-bold"
+            style={{
+              position: 'absolute',
+              top: 6,
+              left: 6,
+              right: 8,
+              fontSize: 9,
+              lineHeight: 11,
+              color,
+              zIndex: 2,
+            }}
             numberOfLines={1}
             ellipsizeMode="tail">
-            {item.title}
+            {item.handle}
           </AppText>
-        ) : null}
+        )}
       </LinearGradient>
     </Pressable>
     </View>

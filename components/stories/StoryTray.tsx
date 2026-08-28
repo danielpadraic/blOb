@@ -118,7 +118,7 @@ function StoryBubble({
 }) {
   const showAdd = group.isOwn;
   return (
-    <View className="w-[80px] items-center">
+    <View className="items-center">
       <View className="relative">
         <Pressable
           onPress={onPress}
@@ -150,9 +150,6 @@ function StoryBubble({
           </Pressable>
         ) : null}
       </View>
-      <AppText className="mt-1.5 text-center text-[10px] text-muted" numberOfLines={1}>
-        {group.isOwn ? copy('wave.yours') : group.name}
-      </AppText>
     </View>
   );
 }

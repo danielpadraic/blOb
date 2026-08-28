@@ -112,11 +112,7 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
                   if (loggables.length === 0) {
                     return;
                   }
-                  if (loggables.length > 1) {
-                    setStep('log');
-                    return;
-                  }
-                  pickLog();
+                  setStep((current) => (current === 'log' ? 'root' : 'log'));
                 }}
               />
               <BarDivider />

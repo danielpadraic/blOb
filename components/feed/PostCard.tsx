@@ -44,6 +44,7 @@ import { roundHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { copy } from '@/lib/copy';
+import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { flexChildMin, THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -121,6 +122,8 @@ function PostCardInner({
   const showInLine = Boolean(tagged && !challengeFeed && hidePromoCard);
   const hiddenFromHome = Boolean(post.hidden_from_home);
   const mutedOwnerHome = mine && hiddenFromHome && !challengeFeed;
+  const hideOnRail = Boolean(homeFeed && mine && !challengeFeed);
+  const officialOnHome = !homeFeed || isHomeOfficialAuthor(post.author);
 
   function toggleHomeHide() {
     hideHome.mutate(
@@ -140,7 +143,7 @@ function PostCardInner({
         borderColor: highlighted ? THEME.accent : THEME.border,
         overflow: 'visible',
       }}>
-      <View className="flex-row items-center" style={{ gap: 10 }}>
+      <View className="flex-row items-center" style={{ gap: homeFeed ? 6 : 10 }}>
         <ProfileLink username={post.author?.username} userId={post.author_id}>
           <Avatar uri={post.author?.avatar_url} name={name} size={homeFeed ? 32 : 42} />
         </ProfileLink>
@@ -149,7 +152,9 @@ function PostCardInner({
             username={post.author?.username}
             userId={post.author_id}
             style={[flexChildMin(), { maxWidth: '100%' }]}>
-            <View className="flex-row flex-wrap items-center" style={[{ gap: 6 }, flexChildMin()]}>
+            <View
+              className="flex-row items-center"
+              style={[{ gap: homeFeed ? 4 : 6, flexWrap: homeFeed ? 'nowrap' : 'wrap' }, flexChildMin()]}>
               <AppText
                 className="font-semibold text-charcoal"
                 style={{
@@ -157,23 +162,11 @@ function PostCardInner({
                   lineHeight: homeFeed ? 16 : 20,
                   minWidth: 0,
                   flexShrink: 1,
-                  flexGrow: 1,
                 }}
-                numberOfLines={2}>
+                numberOfLines={homeFeed ? 1 : 2}>
                 {name}
               </AppText>
-              <OfficialMark profile={post.author} compact />
-              <AppText
-                style={{
-                  fontSize: homeFeed ? 11 : 13,
-                  color: THEME.textMuted,
-                  lineHeight: homeFeed ? 14 : 18,
-                  minWidth: 0,
-                  flexShrink: 1,
-                }}
-                numberOfLines={1}>
-                @{handle}
-              </AppText>
+              {officialOnHome ? <OfficialMark profile={post.author} compact /> : null}
               {homeFeed ? (
                 <AppText
                   style={{
@@ -185,7 +178,19 @@ function PostCardInner({
                   numberOfLines={1}>
                   {formatFeedTime(post.created_at)}
                 </AppText>
-              ) : null}
+              ) : (
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    color: THEME.textMuted,
+                    lineHeight: 18,
+                    minWidth: 0,
+                    flexShrink: 1,
+                  }}
+                  numberOfLines={1}>
+                  @{handle}
+                </AppText>
+              )}
             </View>
           </ProfileLink>
         </View>
@@ -210,6 +215,20 @@ function PostCardInner({
         ) : (
           <AudienceIconButton audience={audience} />
         )}
+        {hideOnRail ? (
+          <WebTapButton
+            accessibilityLabel={
+              hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')
+            }
+            onPress={toggleHomeHide}
+            style={{ height: 44, width: 36, minWidth: 36, minHeight: 44, flexShrink: 0 }}>
+            <Glyph
+              name={GLYPH.hide}
+              color={hiddenFromHome ? THEME.accent : THEME.textMuted}
+              size={16}
+            />
+          </WebTapButton>
+        ) : null}
         {post.challenge_id && currentUserId && currentUserId !== post.author_id ? (
           <ProofFlagButton postId={post.id} />
         ) : null}
@@ -230,7 +249,7 @@ function PostCardInner({
         </Pressable>
       </View>
       {showInLine && post.challenge_id ? (
-        <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: 6, minWidth: 0 }}>
+        <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: homeFeed ? 2 : 6, minWidth: 0 }}>
           <View style={[flexChildMin(), { flexGrow: 1, flexShrink: 1, minWidth: 140 }]}>
             <InChallengeLine
               challengeId={post.challenge_id}
@@ -242,7 +261,7 @@ function PostCardInner({
               snapshot={previewRow}
             />
           </View>
-          {mine && hiddenFromHome ? (
+          {!hideOnRail && mine && hiddenFromHome ? (
             <WebTapButton
               accessibilityLabel={copy('post.unhideOnHome')}
               onPress={toggleHomeHide}
@@ -261,7 +280,7 @@ function PostCardInner({
               </AppText>
             </WebTapButton>
           ) : null}
-          {mine && !challengeFeed ? (
+          {!hideOnRail && mine && !challengeFeed ? (
             <WebTapButton
               accessibilityLabel={
                 hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')
@@ -272,14 +291,14 @@ function PostCardInner({
             </WebTapButton>
           ) : null}
         </View>
-      ) : (post.wall_host && !challengeFeed) || (mine && !challengeFeed) || (mine && hiddenFromHome) ? (
-        <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: 4, minWidth: 0 }}>
+      ) : (post.wall_host && !challengeFeed) || (!hideOnRail && mine && !challengeFeed) || (!hideOnRail && mine && hiddenFromHome) ? (
+        <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: homeFeed ? 2 : 4, minWidth: 0 }}>
           {post.wall_host && !challengeFeed ? (
             <WallHostLine host={post.wall_host} />
           ) : (
             <View style={{ flex: 1 }} />
           )}
-          {mine && hiddenFromHome ? (
+          {!hideOnRail && mine && hiddenFromHome ? (
             <WebTapButton
               accessibilityLabel={copy('post.unhideOnHome')}
               onPress={toggleHomeHide}
@@ -298,7 +317,7 @@ function PostCardInner({
               </AppText>
             </WebTapButton>
           ) : null}
-          {mine && !challengeFeed ? (
+          {!hideOnRail && mine && !challengeFeed ? (
             <WebTapButton
               accessibilityLabel={
                 hiddenFromHome ? copy('post.unhideOnHome') : copy('post.hideFromHome')
@@ -311,12 +330,13 @@ function PostCardInner({
         </View>
       ) : null}
 
-      <View style={{ gap: 10, marginTop: 6, opacity: mutedOwnerHome ? 0.45 : 1 }}>
+      <View style={{ gap: homeFeed ? 6 : 10, marginTop: homeFeed ? 2 : 6, opacity: mutedOwnerHome ? 0.45 : 1 }}>
         {caption ? (
           <PostBody
             content={caption}
             mentions={post.mentions}
             expanded={expanded}
+            compact={homeFeed}
             canExpand={
               checkin
                 ? caption.length > BODY_COLLAPSE_CHARS ||
@@ -713,18 +733,32 @@ function ChallengeShareCard({
   return null;
 }
 
+function isHomeOfficialAuthor(
+  author?: { id?: string | null; is_official?: boolean | null; username?: string | null } | null,
+) {
+  if (!author) {
+    return false;
+  }
+  if (author.is_official || author.id === OFFICIAL_BOB_ID) {
+    return true;
+  }
+  return String(author.username ?? '').trim().toLowerCase() === 'blob';
+}
+
 function PostBody({
   content,
   mentions,
   expanded,
   canExpand,
   onToggle,
+  compact,
 }: {
   content: string;
   mentions?: PostWithMeta['mentions'];
   expanded: boolean;
   canExpand: boolean;
   onToggle: () => void;
+  compact?: boolean;
 }) {
   return (
     <View>
@@ -732,6 +766,7 @@ function PostBody({
         content={content}
         mentions={mentions}
         numberOfLines={expanded ? undefined : BODY_COLLAPSE_LINES}
+        className={compact ? 'text-[13px] leading-[18px] text-ink' : undefined}
       />
       {canExpand ? (
         <Pressable accessibilityRole="button" hitSlop={6} onPress={onToggle}>

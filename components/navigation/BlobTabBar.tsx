@@ -53,6 +53,14 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
       router.navigate('/profile');
       return;
     }
+    if (href === '/feed') {
+      if (pathname === '/feed' || pathname === '/feed/') {
+        tour?.scrollHomeToTop();
+        return;
+      }
+      router.navigate('/feed');
+      return;
+    }
     router.navigate(href);
   }
 

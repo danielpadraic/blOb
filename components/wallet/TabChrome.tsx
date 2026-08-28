@@ -108,7 +108,7 @@ export function TabChromeHeader({
   const rows = conversations.data ?? [];
   const unreadMessages = rows.filter((row) => row.unread).length;
   const tourLocked = Boolean(useTourOptional()?.active);
-  const clusterPad = Math.max(insets.right, 8);
+  const clusterPad = Math.max(insets.right, 4);
 
   return (
     <View
@@ -201,9 +201,8 @@ export function TabChromeHeader({
             onPress={onHomePress}
             hitSlop={4}
             className="flex-row items-center"
-            style={{ minHeight: 44, paddingRight: 6 }}>
+            style={{ minHeight: 44, paddingRight: 4 }}>
             <BlobMascot variant="logo" size={36} />
-            <AppText className="ml-1 text-[16px] font-extrabold text-charcoal">blOb</AppText>
           </Pressable>
 
           <View style={{ flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center' }}>
@@ -216,6 +215,7 @@ export function TabChromeHeader({
               alignItems: 'center',
               overflow: 'visible',
               flexShrink: 0,
+              marginRight: -6,
               paddingRight: clusterPad,
             }}>
             <TourAnchor id="tour-search" style={{ overflow: 'visible' }}>
@@ -333,20 +333,17 @@ function HeaderIcon({
   children: ReactNode;
 }) {
   return (
-    <View
-      style={{
-        overflow: 'visible',
-        paddingTop: 2,
-      }}>
+    <View style={{ overflow: 'visible', marginHorizontal: -5 }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ expanded: Boolean(active) }}
         onPress={onPress}
+        hitSlop={{ top: 0, bottom: 0, left: 4, right: 4 }}
         style={{
-          width: 44,
+          width: 36,
           height: 44,
-          minWidth: 44,
+          minWidth: 36,
           minHeight: 44,
           alignItems: 'center',
           justifyContent: 'center',
@@ -365,8 +362,8 @@ function UnreadDot({ count }: { count: number }) {
       pointerEvents="none"
       style={{
         position: 'absolute',
-        top: 0,
-        right: 0,
+        top: 1,
+        right: -1,
         minWidth: 18,
         height: 18,
         paddingHorizontal: 4,

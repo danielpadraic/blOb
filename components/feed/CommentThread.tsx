@@ -139,7 +139,9 @@ function CommentItem({
             />
           ) : null}
           <CommentMedia urls={mediaUrls} />
-          <AppText className="mt-0.5 text-[11px] text-muted">{formatFeedTime(comment.created_at)}</AppText>
+          <AppText className="mt-0.5 text-[11px] leading-[14px] text-muted">
+            {formatFeedTime(comment.created_at)}
+          </AppText>
           <View className="mt-0.5">
             <ReactionBar
               compact
