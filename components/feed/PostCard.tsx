@@ -26,7 +26,7 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
-import { useUpdatePostAudience } from '@/hooks/useFeed';
+import { usePost, useUpdatePostAudience } from '@/hooks/useFeed';
 import { checkinCardCaption, isCheckinPost, postLocality } from '@/lib/checkinPost';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { PROOF_META } from '@/lib/constants';
@@ -35,6 +35,12 @@ import { WebTapButton } from '@/components/ui/WebTapButton';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
+import {
+  isRoundSharePost,
+  reelIdFromShare,
+  roundShareClipUnavailable,
+} from '@/lib/roundShare';
+import { roundHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { copy } from '@/lib/copy';
@@ -86,6 +92,13 @@ function PostCardInner({
   const audience = asPostAudience(post.audience);
   const content = post.content?.trim() ?? '';
   const quote = asQuoteSnapshot(post.quote_snapshot);
+  const shareParentId = isRoundSharePost(post) ? post.parent_id ?? post.quoted_post_id : null;
+  const parentRound = usePost(shareParentId);
+  const shareUnavailable =
+    isRoundSharePost(post) &&
+    !parentRound.isLoading &&
+    (roundShareClipUnavailable(parentRound.data) || !parentRound.data);
+  const shareReelId = reelIdFromShare(post) ?? shareParentId ?? null;
   const canExpand =
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
   const checkin = isCheckinPost(post);
@@ -324,7 +337,17 @@ function PostCardInner({
           />
         ) : null}
 
-        {quote ? (
+        {isRoundSharePost(post) ? (
+          <RoundShareEmbed
+            coverUrl={quote?.media_preview_url ?? parentRound.data?.media_urls?.[0] ?? null}
+            unavailable={Boolean(shareUnavailable)}
+            onPress={
+              shareUnavailable || !shareReelId
+                ? undefined
+                : () => router.push(roundHref(shareReelId))
+            }
+          />
+        ) : quote ? (
           <QuoteEmbed
             snapshot={quote}
             audience={quote.audience ?? post.audience}
@@ -336,7 +359,7 @@ function PostCardInner({
           />
         ) : null}
 
-        <ProofMedia urls={post.media_urls ?? []} proof={checkin} />
+        {isRoundSharePost(post) ? null : <ProofMedia urls={post.media_urls ?? []} proof={checkin} />}
 
         <ReactionBar
           createdAt={post.created_at}
@@ -825,6 +848,66 @@ function PostVideoPlayer({ uri }: { uri: string }) {
       contentFit="contain"
       nativeControls
     />
+  );
+}
+
+function RoundShareEmbed({
+  coverUrl,
+  unavailable,
+  onPress,
+}: {
+  coverUrl?: string | null;
+  unavailable: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole={onPress ? 'button' : 'none'}
+      accessibilityLabel={unavailable ? copy('round.gone') : copy('round.noun')}
+      disabled={!onPress}
+      onPress={onPress}
+      style={{
+        borderRadius: 18,
+        overflow: 'hidden',
+        backgroundColor: THEME.primary,
+        borderWidth: 1,
+        borderColor: THEME.border,
+      }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: 10,
+          zIndex: 2,
+          borderRadius: 999,
+          backgroundColor: THEME.accentSoft,
+          paddingHorizontal: 10,
+          paddingVertical: 4,
+        }}>
+        <AppText className="text-[11px] font-extrabold" style={{ color: THEME.accent }}>
+          {copy('round.noun')}
+        </AppText>
+      </View>
+      {unavailable ? (
+        <View style={{ minHeight: 160, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <AppText className="text-center text-[14px] font-bold" style={{ color: '#fff' }}>
+            {copy('round.gone')}
+          </AppText>
+        </View>
+      ) : coverUrl ? (
+        <Image
+          source={{ uri: coverUrl }}
+          style={{ width: '100%', height: 200 }}
+          contentFit="contain"
+        />
+      ) : (
+        <View style={{ height: 160, alignItems: 'center', justifyContent: 'center' }}>
+          <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
+            {copy('round.noun')}
+          </AppText>
+        </View>
+      )}
+    </Pressable>
   );
 }
 

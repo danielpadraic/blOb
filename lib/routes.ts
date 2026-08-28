@@ -60,7 +60,16 @@ export const STORY_CREATE_HREF = captureHref('story');
 export const CAPTURE_STORY_HREF = captureHref('story');
 export const CAPTURE_REEL_HREF = captureHref('reel');
 
-function clipHref(base: 'wave' | 'round', id: string, extra?: { comments?: boolean; from?: string }): Href {
+export function feedHref(postId?: string | null): Href {
+  const id = String(postId ?? '').trim();
+  return (id ? `/feed?postId=${encodeURIComponent(id)}` : TABS_HREF) as Href;
+}
+
+function clipHref(
+  base: 'wave' | 'round',
+  id: string,
+  extra?: { comments?: boolean; from?: string; sharePrompt?: boolean },
+): Href {
   const clipId = String(id ?? '').trim();
   const qs = new URLSearchParams();
   if (extra?.comments) {
@@ -69,23 +78,26 @@ function clipHref(base: 'wave' | 'round', id: string, extra?: { comments?: boole
   if (extra?.from) {
     qs.set('from', extra.from);
   }
+  if (extra?.sharePrompt) {
+    qs.set('sharePrompt', '1');
+  }
   const query = qs.toString();
   return (`/${base}/${clipId}${query ? `?${query}` : ''}`) as Href;
 }
 
-export function waveHref(id: string, extra?: { comments?: boolean; from?: string }) {
+export function waveHref(id: string, extra?: { comments?: boolean; from?: string; sharePrompt?: boolean }) {
   return clipHref('wave', id, extra);
 }
 
-export function roundHref(id: string, extra?: { comments?: boolean; from?: string }) {
+export function roundHref(id: string, extra?: { comments?: boolean; from?: string; sharePrompt?: boolean }) {
   return clipHref('round', id, extra);
 }
 
-export function reelHref(id: string, extra?: { comments?: boolean; from?: string }) {
+export function reelHref(id: string, extra?: { comments?: boolean; from?: string; sharePrompt?: boolean }) {
   return roundHref(id, extra);
 }
 
-export function storyHref(id: string, extra?: { comments?: boolean; from?: string }) {
+export function storyHref(id: string, extra?: { comments?: boolean; from?: string; sharePrompt?: boolean }) {
   return waveHref(id, extra);
 }
 

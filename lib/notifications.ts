@@ -87,16 +87,28 @@ function interactionStackKey(item: AppNotification): string | null {
   return null;
 }
 
-function stackedSuffix(type: string, stackKey: string): { one: string; many: string } {
+function stackedSuffix(
+  type: string,
+  stackKey: string,
+  data?: NotificationData,
+): { one: string; many: string } {
   if (type === 'post_reaction') {
     return stackKey.includes('comment:')
       ? { one: 'reacted to your comment', many: 'reacted to your comment' }
       : { one: 'reacted to your post', many: 'reacted to your post' };
   }
   if (type === 'post_comment') {
-    return stackKey.includes('comment:')
-      ? { one: 'replied to your comment', many: 'replied to your comment' }
-      : { one: 'replied to your post', many: 'replied to your post' };
+    if (stackKey.includes('comment:')) {
+      return { one: 'replied to your comment', many: 'replied to your comment' };
+    }
+    const href = typeof data?.href === 'string' ? data.href : '';
+    if (data?.reel_id || href.startsWith('/round/')) {
+      return { one: 'commented on your Round', many: 'commented on your Round' };
+    }
+    if (data?.story_id || href.startsWith('/wave/')) {
+      return { one: 'commented on your Wave', many: 'commented on your Wave' };
+    }
+    return { one: 'commented on your post', many: 'commented on your post' };
   }
   if (type === 'mentioned') {
     return { one: 'tagged you', many: 'tagged you in a comment' };
@@ -148,7 +160,7 @@ export function collapseStackedNotifications(items: AppNotification[]): AppNotif
       ids.add(item.actor_id);
     }
     const count = Math.max(ids.size, Number(current.data.count) || 1, Number(item.data.count) || 1);
-    const suffix = stackedSuffix(current.type, key);
+    const suffix = stackedSuffix(current.type, key, current.data);
     const name = current.actor?.display_name || current.actor?.username || 'Someone';
     current.data = {
       ...current.data,

@@ -559,6 +559,8 @@ export type QuoteSnapshot = {
   media_preview_url: string | null;
   created_at: string;
   audience?: string | null;
+  reel_id?: string | null;
+  kind?: 'round';
 };
 
 export interface Post {
@@ -586,6 +588,7 @@ export interface Post {
   duration_ms?: number | null;
   overlays?: unknown[] | null;
   hidden_from_rail?: boolean | null;
+  parent_id?: string | null;
   created_at: string;
 }
 
@@ -613,6 +616,7 @@ export type ComposeInput = {
   source?: PostSource;
   type?: PostType;
   durationMs?: number | null;
+  parentId?: string | null;
 };
 
 export type PostMention = {

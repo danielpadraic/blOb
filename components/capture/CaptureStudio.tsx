@@ -368,7 +368,7 @@ export function CaptureStudio({
         return;
       }
       if (publishedReelId) {
-        router.replace(roundHref(publishedReelId, { from: 'home' }));
+        router.replace(roundHref(publishedReelId, { from: 'home', sharePrompt: true }));
         return;
       }
       close();

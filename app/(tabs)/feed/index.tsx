@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
@@ -33,6 +33,8 @@ export default function FeedScreen() {
   );
   const { user } = useAuth();
   const tone = useCopyTone();
+  const params = useLocalSearchParams<{ postId?: string }>();
+  const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
   const feed = useFeed();
   const stories = useActiveStories();
   const featured = useFeaturedOfficialChallenge();
@@ -100,6 +102,7 @@ export default function FeedScreen() {
         empty={<FeedEmptyState compact />}
         onRefresh={onRefresh}
         onRetry={() => void feed.refetch()}
+        highlightPostId={highlightPostId}
         onCompose={onCompose}
         onReact={onReact}
         onComment={onComment}

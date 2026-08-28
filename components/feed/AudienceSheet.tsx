@@ -48,6 +48,8 @@ export type AudienceDraft = {
   audience: PostAudience;
   audienceUserIds: string[];
   allowPublic?: boolean;
+  allowFriends?: boolean;
+  allowedUserIds?: string[];
   profileOnly?: boolean;
   onSave: (audience: PostAudience, audienceUserIds: string[]) => void | Promise<void>;
 };
@@ -61,6 +63,7 @@ export function AudienceSheet({
 }) {
   const friends = useFriends();
   const allowPublic = draft.allowPublic !== false;
+  const allowFriends = draft.allowFriends !== false;
   const [audience, setAudience] = useState<PostAudience>(draft.audience);
   const [ids, setIds] = useState<string[]>(draft.audienceUserIds);
 
@@ -100,12 +103,14 @@ export function AudienceSheet({
             onPress={() => apply('public')}
           />
         ) : null}
-        <Row
-          label="Friends"
-          selected={audience === 'friends'}
-          glyph={GLYPH.people}
-          onPress={() => apply('friends')}
-        />
+        {allowFriends ? (
+          <Row
+            label="Friends"
+            selected={audience === 'friends'}
+            glyph={GLYPH.people}
+            onPress={() => apply('friends')}
+          />
+        ) : null}
         {draft.profileOnly ? (
           <Row
             label="Only me"
@@ -131,6 +136,9 @@ export function AudienceSheet({
                   {(friends.data ?? []).map((row) => {
                     const id = row.profile?.id;
                     if (!id) {
+                      return null;
+                    }
+                    if (draft.allowedUserIds && !draft.allowedUserIds.includes(id)) {
                       return null;
                     }
                     const selected = ids.includes(id);

@@ -171,6 +171,7 @@ function postInsertPayload(
     source?: Post['source'];
     type?: Post['type'];
     duration_ms?: number | null;
+    parent_id?: string | null;
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -183,9 +184,13 @@ function postInsertPayload(
     payload.audience = base.audience ?? DEFAULT_POST_AUDIENCE;
     payload.audience_user_ids = base.audience_user_ids ?? [];
   }
-  if (schema.hasQuote && base.quoted_post_id) {
-    payload.quoted_post_id = base.quoted_post_id;
-    payload.quote_snapshot = base.quote_snapshot ?? null;
+  if (schema.hasQuote && (base.quoted_post_id || base.quote_snapshot || base.parent_id)) {
+    if (base.quoted_post_id) {
+      payload.quoted_post_id = base.quoted_post_id;
+    }
+    if (base.quote_snapshot) {
+      payload.quote_snapshot = base.quote_snapshot;
+    }
   }
   if (schema.hasWall && base.wall_host_id) {
     payload.wall_host_id = base.wall_host_id;
@@ -198,6 +203,9 @@ function postInsertPayload(
   }
   if (schema.hasDuration && base.duration_ms != null) {
     payload.duration_ms = base.duration_ms;
+  }
+  if (schema.hasParentId && base.parent_id) {
+    payload.parent_id = base.parent_id;
   }
   return payload;
 }
@@ -948,6 +956,7 @@ export function useCreatePost(challengeId?: string | null) {
         source: input.source ?? 'feed',
         type: input.type ?? 'feed',
         duration_ms: input.durationMs ?? null,
+        parent_id: input.parentId ?? null,
       });
       const created = await supabase.from('posts').insert(payload).select(schema.select).single();
       if (created.error) {
@@ -993,6 +1002,7 @@ export function useCreatePost(challengeId?: string | null) {
           source: input.source ?? 'feed',
           type: input.type ?? 'feed',
           duration_ms: input.durationMs ?? null,
+          parent_id: input.parentId ?? null,
           mentions: (input.mentionedUserIds ?? []).map((userId) => ({
             userId,
             username: '',

@@ -1044,14 +1044,19 @@ export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> 
   });
 }
 
-export async function fetchReel(id: string): Promise<ReelItem | null> {
-  const query = await supabase.from('reels').select(REEL_COLUMNS).eq('id', id).maybeSingle();
+async function fetchReelByColumn(column: 'id' | 'post_id', value: string): Promise<ReelItem | null> {
+  const query = await supabase.from('reels').select(REEL_COLUMNS).eq(column, value).maybeSingle();
   const { data, error } =
     query.error && /post_id|schema cache/i.test(query.error.message)
-      ? await supabase.from('reels').select(REEL_COLUMNS_FALLBACK).eq('id', id).maybeSingle()
+      ? column === 'id'
+        ? await supabase.from('reels').select(REEL_COLUMNS_FALLBACK).eq('id', value).maybeSingle()
+        : query
       : query;
   if (error) {
     if (isMissingRelationError(error)) {
+      return null;
+    }
+    if (column === 'post_id' && /post_id|schema cache/i.test(error.message)) {
       return null;
     }
     throwIfError(error);
@@ -1061,6 +1066,14 @@ export async function fetchReel(id: string): Promise<ReelItem | null> {
   }
   const [item] = await withReelProfiles([data as Reel]);
   return item ?? null;
+}
+
+export async function fetchReel(id: string): Promise<ReelItem | null> {
+  const byId = await fetchReelByColumn('id', id);
+  if (byId) {
+    return byId;
+  }
+  return fetchReelByColumn('post_id', id);
 }
 
 export async function createReel(userId: string, input: CreateReelInput): Promise<Reel> {

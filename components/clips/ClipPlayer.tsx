@@ -32,9 +32,11 @@ import { useClipSocial } from '@/hooks/useClipSocial';
 import { useBlockUser, useReportPost } from '@/hooks/usePostModeration';
 import { useFriends, useShareStory, useViewStory } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { RoundShareComposer } from '@/components/clips/RoundShareComposer';
 import { hideAuthorFromMyRail, setPostHiddenFromRail } from '@/lib/clipRail';
 import { clipSocialCounts } from '@/lib/clipPost';
 import { copy } from '@/lib/copy';
+import { canOfferShareToFeed } from '@/lib/roundShare';
 import { userReaction } from '@/lib/reactions';
 import { personDisplayName, type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
@@ -59,6 +61,11 @@ export type ClipPlayItem = {
   postId?: string | null;
   challengeId?: string | null;
   isOwn?: boolean;
+  audience?: string | null;
+  audienceUserIds?: string[];
+  coverUrl?: string | null;
+  username?: string | null;
+  privacyMode?: string | null;
 };
 
 const EMOJI_ROW: { emoji: string; type: ReactionType }[] = [
@@ -75,6 +82,7 @@ type ClipPlayerProps = {
   autoAdvance?: boolean;
   openComments?: boolean;
   challenges?: Map<string, FeedChallengePreview>;
+  sharePrompt?: boolean;
   onClose: () => void;
 };
 
@@ -84,6 +92,7 @@ export function ClipPlayer({
   autoAdvance = true,
   openComments = false,
   challenges,
+  sharePrompt = false,
   onClose,
 }: ClipPlayerProps) {
   const insets = useSafeAreaInsets();
@@ -91,9 +100,10 @@ export function ClipPlayer({
   const viewStory = useViewStory();
   const [index, setIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
-  const [sheet, setSheet] = useState<'comments' | 'share' | 'more' | 'caption' | null>(
+  const [sheet, setSheet] = useState<'comments' | 'share' | 'shareFeed' | 'more' | 'caption' | null>(
     openComments ? 'comments' : null,
   );
+  const [promptShare, setPromptShare] = useState(sharePrompt);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [burst, setBurst] = useState(0);
   const [floatEmoji, setFloatEmoji] = useState<string | null>(null);
@@ -326,6 +336,30 @@ export function ClipPlayer({
               }}
             />
           </View>
+          {promptShare && canOfferShareToFeed(clip) ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setPromptShare(false);
+                setSheet('shareFeed');
+              }}
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 16,
+                bottom: insets.bottom + 40,
+                minHeight: 44,
+                borderRadius: 18,
+                backgroundColor: 'rgba(16,19,18,0.88)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 14,
+              }}>
+              <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
+                {copy('round.sharePrompt')}
+              </AppText>
+            </Pressable>
+          ) : null}
         </View>
       </GestureDetector>
 
@@ -504,10 +538,10 @@ function ClipSheets({
   floatType,
 }: {
   clip: ClipPlayItem;
-  sheet: 'comments' | 'share' | 'more' | 'caption' | null;
+  sheet: 'comments' | 'share' | 'shareFeed' | 'more' | 'caption' | null;
   captionDraft: string;
   onCaptionDraft: (value: string) => void;
-  onOpenSheet: (next: 'comments' | 'share' | 'more' | 'caption') => void;
+  onOpenSheet: (next: 'comments' | 'share' | 'shareFeed' | 'more' | 'caption') => void;
   onCloseSheet: () => void;
   onClosePlayer: () => void;
   currentUserId?: string;
@@ -593,6 +627,16 @@ function ClipSheets({
             maxHeight: 360,
           }}>
           <AppText className="text-[15px] font-extrabold text-charcoal">Share</AppText>
+          {canOfferShareToFeed(clip) ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onOpenSheet('shareFeed')}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <AppText className="text-[15px] font-semibold text-charcoal">
+                {copy('round.shareFeed')}
+              </AppText>
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             onPress={() => {
@@ -751,6 +795,30 @@ function ClipSheets({
           </Pressable>
         </View>
       </ChromeOverlay>
+      <RoundShareComposer
+        visible={sheet === 'shareFeed'}
+        target={
+          clip.kind === 'round' && clip.postId
+            ? {
+                reelId: clip.id,
+                postId: clip.postId,
+                mediaUrl: clip.mediaUrl,
+                coverUrl: clip.coverUrl,
+                caption: clip.caption,
+                authorId: clip.authorId,
+                authorName: clip.authorName,
+                username: clip.username,
+                avatarUrl: clip.authorAvatar,
+                createdAt: clip.createdAt,
+                audience: clip.audience,
+                audienceUserIds: clip.audienceUserIds,
+                challengeId: clip.challengeId,
+                privacyMode: clip.privacyMode,
+              }
+            : null
+        }
+        onClose={onCloseSheet}
+      />
     </>
   );
 }

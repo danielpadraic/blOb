@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { FlatList, Platform, RefreshControl, ScrollView, View } from 'react-native';
 
 import { Composer } from '@/components/feed/Composer';
@@ -127,6 +127,26 @@ export function FeedList({
   const tone = useCopyTone();
   const visiblePosts = useMemo(() => posts.filter((post) => !post.deleted_at), [posts]);
   const challengeFeed = composeSource === 'challenge';
+  const scrolledTo = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!highlightPostId || scrolledTo.current === highlightPostId) {
+      return;
+    }
+    const index = visiblePosts.findIndex((post) => post.id === highlightPostId);
+    if (index < 0) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.12 });
+        scrolledTo.current = highlightPostId;
+      } catch {
+        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [highlightPostId, visiblePosts]);
 
   const onComposeSubmit = useCallback(
     async (input: ComposeInput) => {
@@ -278,6 +298,11 @@ export function FeedList({
         data={visiblePosts}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        onScrollToIndexFailed={(info) => {
+          setTimeout(() => {
+            listRef.current?.scrollToOffset({ offset: Math.max(info.averageItemLength * info.index, 0), animated: true });
+          }, 160);
+        }}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={() =>
           empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
