@@ -391,6 +391,68 @@ export function getPasswordUpdateMessage(error: unknown): string {
   return authMessage ? `${copy('error.passwordUpdate')} ${authMessage}` : copy('error.passwordUpdate');
 }
 
+function isMediaStorageError(message: string): boolean {
+  const hasStore = message.includes('storage') || message.includes('bucket');
+  const hasMedia =
+    message.includes('upload') ||
+    message.includes('photo') ||
+    message.includes('image') ||
+    message.includes('jpeg') ||
+    message.includes('png') ||
+    message.includes('mime') ||
+    message.includes('file');
+  return hasStore && hasMedia;
+}
+
+/** Confirm-email /auth/callback only. Never photo-save copy. Never raw Auth codes. */
+export function getAuthCallbackMessage(error: unknown): string {
+  logPostgrestError('auth-callback', error);
+  const code = extractAuthCode(error);
+  const raw = extractRawMessage(error);
+  const blob = `${code} ${raw}`.toLowerCase();
+  const failedSameBrowser = `${copy('auth.confirmFailed')} ${copy('auth.confirmSameBrowser')}`;
+
+  if (
+    blob.includes('code verifier') ||
+    blob.includes('pkce') ||
+    blob.includes('both auth code and code verifier') ||
+    blob.includes('verifier not found') ||
+    (blob.includes('verifier') &&
+      (blob.includes('missing') ||
+        blob.includes('empty') ||
+        blob.includes('invalid') ||
+        blob.includes('storage')))
+  ) {
+    return copy('auth.confirmPkce');
+  }
+  if (
+    code === 'otp_expired' ||
+    code === 'flow_state_not_found' ||
+    blob.includes('otp_expired') ||
+    blob.includes('flow_state_not_found') ||
+    blob.includes('already used') ||
+    blob.includes('token has expired') ||
+    blob.includes('expired')
+  ) {
+    return copy('auth.confirmExpired');
+  }
+  if (
+    isNetworkAuthError(blob) ||
+    blob.includes('failed to fetch') ||
+    blob.includes('load failed') ||
+    blob.includes('network')
+  ) {
+    return copy('auth.network');
+  }
+  if (code === 'access_denied' || blob.includes('access_denied')) {
+    return copy('auth.confirmExpired');
+  }
+  if (code || blob.includes('error_description') || blob.includes('error=')) {
+    return failedSameBrowser;
+  }
+  return failedSameBrowser;
+}
+
 function isNetworkAuthError(blob: string): boolean {
   return (
     blob.includes('load failed') ||
@@ -739,7 +801,7 @@ function humanize(raw: string): string {
   ) {
     return 'We couldn’t upload that photo. Try another JPEG or PNG.';
   }
-  if (message.includes('bucket') || message.includes('storage')) {
+  if (isMediaStorageError(message)) {
     return 'We couldn’t save that photo. Check your connection and try again.';
   }
   if (message.includes('title_required') || message.includes('give the challenge a title')) {

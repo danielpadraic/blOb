@@ -90,6 +90,9 @@ describe('emailAuthRedirectTo', () => {
     expect(loginHrefWithAuthError('Code expired\ntry again')).toBe(
       '/(auth)/login?authError=Code%20expired%20try%20again',
     );
+    expect(loginHrefWithAuthError('This confirmation link didn’t finish.', 'ada@blob.app')).toBe(
+      '/(auth)/login?authError=This%20confirmation%20link%20didn%E2%80%99t%20finish.&email=ada%40blob.app',
+    );
     expect(loginHrefAfterSignup('ada@blob.app')).toEqual({
       pathname: '/(auth)/login',
       params: { email: 'ada@blob.app', inbox: '1' },

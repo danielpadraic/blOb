@@ -2,9 +2,14 @@ export const AUTH_CALLBACK_PATH = '/auth/callback';
 export const AUTH_LOGIN_PATH = '/(auth)/login';
 export const NATIVE_EMAIL_CALLBACK = 'blob://auth/callback';
 
-export function loginHrefWithAuthError(message: string): string {
+export function loginHrefWithAuthError(message: string, email?: string): string {
   const safe = message.replace(/\s+/g, ' ').trim().slice(0, 180);
-  return `${AUTH_LOGIN_PATH}?authError=${encodeURIComponent(safe)}`;
+  const query = [`authError=${encodeURIComponent(safe)}`];
+  const trimmed = email?.trim();
+  if (trimmed) {
+    query.push(`email=${encodeURIComponent(trimmed)}`);
+  }
+  return `${AUTH_LOGIN_PATH}?${query.join('&')}`;
 }
 
 export function loginHrefAfterSignup(email: string): {

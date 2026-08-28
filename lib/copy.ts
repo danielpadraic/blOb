@@ -85,6 +85,13 @@ const STRINGS = {
   'auth.openBlob': 'Open blOb',
   'auth.continueInBrowser': 'Continue in browser',
   'auth.confirmLinkBad': 'This confirm link is missing or expired. Sign in.',
+  'auth.confirmTitle': 'Confirm email',
+  'auth.confirmFailed': 'This confirmation link didn’t finish.',
+  'auth.confirmSameBrowser':
+    'Open the link in the same browser you used to create the account. Or sign in with your email and password.',
+  'auth.confirmExpired': 'This link already ran or expired. Sign in with your email and password.',
+  'auth.confirmPkce':
+    'This browser doesn’t have the signup session. Sign in with the email and password you just created.',
   'auth.waitRetry': 'Please wait a few seconds and try again.',
   'auth.emailExists': 'That email already has an account. Sign in.',
   'auth.network': 'Couldn’t reach the server. Try again.',

@@ -18,7 +18,7 @@ import { nativeCallbackUrlFromParams, pickCanonicalAuthCallbackUrl } from '@/lib
 import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
-import { getAuthFormMessage, getErrorMessage } from '@/utils/errors';
+import { getAuthCallbackMessage, getErrorMessage } from '@/utils/errors';
 
 const EXCHANGE_MS = 15_000;
 
@@ -67,7 +67,18 @@ export default function AuthCallbackScreen() {
       currentWebHref(),
     ]);
     const parsed = url ? parseAuthRedirectParams(url) : parseAuthRedirectParams(null);
-    if (!url || (!hasAuthCallbackPayload(parsed) && !parsed.error)) {
+    if (!url || (!hasAuthCallbackPayload(parsed) && !parsed.error && !parsed.error_description)) {
+      return;
+    }
+
+    if (parsed.error || parsed.error_description) {
+      const message =
+        getAuthCallbackMessage({
+          code: parsed.error,
+          message: parsed.error_description || parsed.error,
+        }) || copy('auth.confirmLinkBad');
+      setExchanging(false);
+      setCallbackError(message);
       return;
     }
 
@@ -100,13 +111,13 @@ export default function AuthCallbackScreen() {
         }
       })
       .catch((error) => {
-        const message = getAuthFormMessage(error) || getErrorMessage(error);
+        const message = getAuthCallbackMessage(error) || copy('auth.confirmLinkBad');
         reportAppError({ route: 'auth/callback', error });
         console.log('[blob:auth-callback]', message);
         if (!cancelled) {
           clearTimeout(timer);
           setExchanging(false);
-          setCallbackError(message || copy('auth.confirmLinkBad'));
+          setCallbackError(message);
         }
       });
 
@@ -124,6 +135,7 @@ export default function AuthCallbackScreen() {
     params.email,
     params.type,
     params.error,
+    params.error_description,
   ]);
 
   async function openBlob() {
@@ -141,15 +153,19 @@ export default function AuthCallbackScreen() {
     }
   }
 
+  const callbackEmail = (Array.isArray(params.email) ? params.email[0] : params.email)?.trim() ?? '';
+
   if (callbackError) {
     return (
       <Screen>
         <MascotState
           kind="error"
-          title={copy('auth.signIn')}
+          title={copy('auth.confirmTitle')}
           body={callbackError}
           actionLabel={copy('auth.signIn')}
-          onAction={() => router.replace(loginHrefWithAuthError(callbackError) as Href)}
+          onAction={() =>
+            router.replace(loginHrefWithAuthError(callbackError, callbackEmail || undefined) as Href)
+          }
         />
       </Screen>
     );
