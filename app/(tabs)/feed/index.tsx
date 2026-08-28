@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
@@ -7,8 +7,8 @@ import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedList } from '@/components/feed/FeedList';
 import { ReelsRow } from '@/components/feed/ReelsRow';
 import { StoryTray } from '@/components/feed/StoryTray';
-import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
+import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
@@ -22,6 +22,7 @@ import {
 import { useActiveStories } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
+import { THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
 export default function FeedScreen() {
@@ -65,24 +66,11 @@ export default function FeedScreen() {
     [createComment],
   );
 
-  if (feed.error) {
-    return (
-      <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4">
-        <MascotState
-          kind="error"
-          title={copy('home.error', tone)}
-          actionLabel="Try again"
-          onAction={() => void feed.refetch()}
-        />
-      </Screen>
-    );
-  }
-
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4">
       <FeedList
         posts={posts}
-        isLoading={feed.isLoading}
+        isLoading={feed.isLoading && !feed.error}
         isRefreshing={refreshing}
         currentUserId={user?.id}
         emptyTitle={copy('home.empty', tone)}
@@ -96,7 +84,29 @@ export default function FeedScreen() {
             <StoryTray />
           </View>
         }
-        headerTop={<FeaturedOfficialStrip />}
+        headerTop={
+          <View>
+            {feed.error ? (
+              <View
+                className="flex-row items-center"
+                style={{ gap: 10, minHeight: 44, marginBottom: 8 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Try again"
+                  onPress={() => void feed.refetch()}
+                  style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                    Try again
+                  </AppText>
+                </Pressable>
+              </View>
+            ) : null}
+            <FeaturedOfficialStrip />
+          </View>
+        }
         headerExtra={<ReelsRow />}
         empty={<FeedEmptyState compact />}
         onRefresh={onRefresh}

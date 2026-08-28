@@ -8,7 +8,14 @@ import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { asPostAudience, DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
-import { resolvePostsSchema, type PostsSchema } from '@/lib/postsSelect';
+import { reportAppError } from '@/lib/appErrors';
+import {
+  dropCachedCircleId,
+  isMissingCircleIdColumn,
+  resolvePostsSchema,
+  selectWithoutCircleId,
+  type PostsSchema,
+} from '@/lib/postsSelect';
 import { supabase } from '@/lib/supabase';
 import type {
   CommentWithAuthor,
@@ -24,7 +31,7 @@ import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
 import { fetchCirclePreviews, viewerCanSeeHomeCirclePost } from '@/lib/circles';
 import { fetchFriends, type FriendEdge } from '@/lib/social';
-import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+import { getErrorMessage, isMissingRelationError, isUnknownColumnError } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 
@@ -76,6 +83,10 @@ type FeedScope =
   | { kind: 'wall'; hostId: string }
   | { kind: 'wallHosts'; hostIds: string[] };
 
+function isCircleScope(scope: FeedScope): boolean {
+  return scope.kind === 'circle' || scope.kind === 'circleIds' || scope.kind === 'circleDiscover';
+}
+
 async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
   if (scope.kind === 'ids' && scope.challengeIds.length === 0) {
     return [];
@@ -94,12 +105,28 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
   }
 
   const schema = await resolvePostsSchema();
-  const result = await fetchPostRows(schema.select, scope, true);
-  const { data, error } =
-    result.error && isMissingDeletedAt(result.error)
-      ? await fetchPostRows(schema.select, scope, false)
-      : result;
+  if (!schema.hasCircleId && isCircleScope(scope)) {
+    return [];
+  }
 
+  let select = schema.select;
+  let result = await fetchPostRows(select, scope, true);
+  if (result.error && isMissingDeletedAt(result.error)) {
+    result = await fetchPostRows(select, scope, false);
+  }
+  if (result.error && isMissingCircleIdColumn(result.error)) {
+    dropCachedCircleId();
+    if (isCircleScope(scope)) {
+      return [];
+    }
+    select = selectWithoutCircleId(select);
+    result = await fetchPostRows(select, scope, true);
+    if (result.error && isMissingDeletedAt(result.error)) {
+      result = await fetchPostRows(select, scope, false);
+    }
+  }
+
+  const { data, error } = result;
   if (error) {
     throw new Error(getErrorMessage(error));
   }
@@ -129,6 +156,7 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
   // Check-in posts stay on Home when they match joined challenges / friends.
   // Challenge detail still scopes by challenge_id + source.
   const hasSource = /(^|,\s*)source(,|$)/.test(select);
+  const hasCircleId = /(^|,\s*)circle_id(,|$)/.test(select);
   if (scope.kind === 'challenge') {
     query = query.eq('challenge_id', scope.challengeId);
     if (hasSource) {
@@ -137,13 +165,13 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
     return query;
   }
   if (scope.kind === 'circle') {
-    return query.eq('circle_id', scope.circleId);
+    return hasCircleId ? query.eq('circle_id', scope.circleId) : query.limit(0);
   }
   if (scope.kind === 'circleIds') {
-    return query.in('circle_id', scope.circleIds);
+    return hasCircleId ? query.in('circle_id', scope.circleIds) : query.limit(0);
   }
   if (scope.kind === 'circleDiscover') {
-    return query.not('circle_id', 'is', null);
+    return hasCircleId ? query.not('circle_id', 'is', null) : query.limit(0);
   }
   if (scope.kind === 'ids') {
     return query.in('challenge_id', scope.challengeIds);
@@ -286,16 +314,39 @@ async function withSocial(posts: PostWithMeta[], viewerId?: string): Promise<Pos
 }
 
 async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<PostWithMeta[]> {
+  try {
   const postIds = posts.map((post) => post.id);
   const commentIds = posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.id));
-  const [postMentionRows, commentMentionRows] = await Promise.all([
-    supabase.from('post_mentions').select('post_id, mentioned_user_id, challenge_id, circle_id').in('post_id', postIds),
+  type MentionRow = {
+    post_id: string;
+    mentioned_user_id?: string | null;
+    challenge_id?: string | null;
+    circle_id?: string | null;
+  };
+  let postMentionRows: { data: MentionRow[] | null; error: { message?: string; code?: string } | null } =
+    await supabase
+      .from('post_mentions')
+      .select('post_id, mentioned_user_id, challenge_id, circle_id')
+      .in('post_id', postIds);
+  if (
+    postMentionRows.error &&
+    (isMissingCircleIdColumn(postMentionRows.error) ||
+      isUnknownColumnError(postMentionRows.error) ||
+      /challenge_id|circle_id/.test(String(postMentionRows.error.message ?? '')))
+  ) {
+    postMentionRows = await supabase
+      .from('post_mentions')
+      .select('post_id, mentioned_user_id')
+      .in('post_id', postIds);
+  }
+  const commentMentionRows =
     commentIds.length > 0
-      ? supabase.from('comment_mentions').select('comment_id, mentioned_user_id').in('comment_id', commentIds)
-      : Promise.resolve({ data: [] as { comment_id: string; mentioned_user_id: string }[], error: null }),
-  ]);
-  if (postMentionRows.error && !isMissingRelationError(postMentionRows.error)) {
-    console.log('[blob:feed] post_mentions skipped', postMentionRows.error.message);
+      ? await supabase.from('comment_mentions').select('comment_id, mentioned_user_id').in('comment_id', commentIds)
+      : { data: [] as { comment_id: string; mentioned_user_id: string }[], error: null };
+  if (postMentionRows.error) {
+    if (!isMissingRelationError(postMentionRows.error)) {
+      console.log('[blob:feed] post_mentions skipped', postMentionRows.error.message);
+    }
   }
   const postMentions = postMentionRows.error
     ? []
@@ -322,7 +373,9 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
     challengeIds.length
       ? supabase.from('challenges').select('id, title').in('id', challengeIds)
       : Promise.resolve({ data: [] as { id: string; title: string | null }[], error: null }),
-    circleMentionIds.length ? fetchCirclePreviews(circleMentionIds) : Promise.resolve(new Map()),
+    circleMentionIds.length
+      ? fetchCirclePreviews(circleMentionIds).catch(() => new Map())
+      : Promise.resolve(new Map()),
   ]);
   const byId = new Map((profiles.data ?? []).map((row) => [row.id, row]));
   const blockedIds = new Set(blocked);
@@ -384,6 +437,12 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
       mentions: mentionsByComment.get(comment.id) ?? comment.mentions,
     })),
   }));
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:feed] mentions skipped', getErrorMessage(error));
+    }
+    return posts;
+  }
 }
 
 async function fetchReactions(input: {
@@ -477,11 +536,18 @@ async function hydrateCircles(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
   if (ids.length === 0) {
     return posts;
   }
-  const byId = await fetchCirclePreviews(ids);
-  return posts.map((post) => ({
-    ...post,
-    circle: post.circle_id ? byId.get(post.circle_id) ?? post.circle ?? null : null,
-  }));
+  try {
+    const byId = await fetchCirclePreviews(ids);
+    return posts.map((post) => ({
+      ...post,
+      circle: post.circle_id ? byId.get(post.circle_id) ?? post.circle ?? null : null,
+    }));
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:feed] circle hydrate skipped', getErrorMessage(error));
+    }
+    return posts;
+  }
 }
 
 function dedupePosts(groups: PostWithMeta[][]): PostWithMeta[] {
@@ -608,14 +674,21 @@ async function friendIdsForUser(userId: string): Promise<string[]> {
 }
 
 async function fetchJoinedCircleIds(userId: string): Promise<string[]> {
-  const { data, error } = await supabase.from('circle_members').select('circle_id').eq('user_id', userId);
-  if (error) {
+  try {
+    const { data, error } = await supabase.from('circle_members').select('circle_id').eq('user_id', userId);
+    if (error) {
+      if (!isMissingRelationError(error)) {
+        console.log('[blob:feed] circles lookup skipped', error.message);
+      }
+      return [];
+    }
+    return (data ?? []).map((row) => row.circle_id).filter(Boolean);
+  } catch (error) {
     if (!isMissingRelationError(error)) {
-      console.log('[blob:feed] circles lookup skipped', error.message);
+      console.log('[blob:feed] circles lookup skipped', getErrorMessage(error));
     }
     return [];
   }
-  return (data ?? []).map((row) => row.circle_id).filter(Boolean);
 }
 
 async function fetchHostedChallengeIds(userId: string): Promise<string[]> {
@@ -732,12 +805,29 @@ async function fetchPosts(input: {
   const authorIds = [...new Set([input.userId, ...friendIds, ...officialIds, ...recommendedIds])];
 
   const wallHostIds = [...new Set([input.userId, ...friendIds])];
+  const schema = await resolvePostsSchema();
+  let reportedHomeError = false;
+  const noteHomeError = (error: unknown) => {
+    if (reportedHomeError) {
+      return;
+    }
+    reportedHomeError = true;
+    reportAppError({ route: 'feed/home', error });
+  };
+  const safeQuery = async (run: () => Promise<PostWithMeta[]>) => {
+    try {
+      return await run();
+    } catch (error) {
+      noteHomeError(error);
+      return [] as PostWithMeta[];
+    }
+  };
   const [challengePosts, circlePosts, discoverCircles, people, wall] = await Promise.all([
-    queryPosts({ kind: 'ids', challengeIds }),
-    queryPosts({ kind: 'circleIds', circleIds }).catch(() => [] as PostWithMeta[]),
-    queryPosts({ kind: 'circleDiscover' }).catch(() => [] as PostWithMeta[]),
-    queryPosts({ kind: 'authors', authorIds }),
-    queryPosts({ kind: 'wallHosts', hostIds: wallHostIds }).catch(() => [] as PostWithMeta[]),
+    safeQuery(() => queryPosts({ kind: 'ids', challengeIds })),
+    safeQuery(() => queryPosts({ kind: 'circleIds', circleIds })),
+    schema.hasCircleId ? safeQuery(() => queryPosts({ kind: 'circleDiscover' })) : Promise.resolve([] as PostWithMeta[]),
+    safeQuery(() => queryPosts({ kind: 'authors', authorIds })),
+    safeQuery(() => queryPosts({ kind: 'wallHosts', hostIds: wallHostIds })),
   ]);
 
   const hidden = new Set(hiddenIds);
@@ -751,7 +841,8 @@ async function fetchPosts(input: {
     merged.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
   );
 
-  return hydrateAuthors(
+  try {
+  return await hydrateAuthors(
     await withSocial(
       merged
         .filter((post) => {
@@ -828,6 +919,10 @@ async function fetchPosts(input: {
       userId,
     ),
   );
+  } catch (error) {
+    noteHomeError(error);
+    throw error;
+  }
 }
 
 export async function insertWorkoutCheckInPost(input: {

@@ -109,6 +109,7 @@ const STRINGS = {
     neutral: 'Home didn’t load.',
     honest: 'Home didn’t load. Tapping again is allowed.',
   },
+  'home.refreshFailed': 'Couldn’t refresh Home.',
   'home.empty': {
     gentle: 'Nobody you know has posted. You can go first. I will watch.',
     neutral: 'Nobody you know has posted.',

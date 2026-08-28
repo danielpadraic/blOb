@@ -10,7 +10,7 @@ import { circleDetailHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, PublicProfile } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
 
 export const CIRCLE_PIN_CAP = 5;
 export const CIRCLE_PIN_CAP_COPY = 'You can pin up to 5.';
@@ -430,21 +430,30 @@ export async function fetchCirclePreviews(
   if (unique.length === 0) {
     return new Map();
   }
-  const { data, error } = await supabase.from('circles').select('id, name, visibility').in('id', unique);
-  if (error) {
-    console.log('[blob:circles] preview skipped', error.message);
+  try {
+    const { data, error } = await supabase.from('circles').select('id, name, visibility').in('id', unique);
+    if (error) {
+      if (!isMissingRelationError(error)) {
+        console.log('[blob:circles] preview skipped', error.message);
+      }
+      return new Map();
+    }
+    return new Map(
+      (data ?? []).map((row) => [
+        row.id,
+        {
+          id: row.id,
+          name: String(row.name ?? '').trim() || 'Circle',
+          visibility: asCircleVisibility(row.visibility),
+        },
+      ]),
+    );
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:circles] preview skipped', getErrorMessage(error));
+    }
     return new Map();
   }
-  return new Map(
-    (data ?? []).map((row) => [
-      row.id,
-      {
-        id: row.id,
-        name: String(row.name ?? '').trim() || 'Circle',
-        visibility: asCircleVisibility(row.visibility),
-      },
-    ]),
-  );
 }
 
 export async function createCircle(input: {

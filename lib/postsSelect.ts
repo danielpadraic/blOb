@@ -42,6 +42,7 @@ const CORE_SCHEMA: PostsSchema = {
 };
 
 let cached: Promise<PostsSchema> | null = null;
+let latest: PostsSchema | null = null;
 
 function schemaFromSelect(select: string): PostsSchema {
   return {
@@ -71,6 +72,33 @@ function isMissingColumnError(message: string, column: string): boolean {
       text.includes('42703') ||
       text.includes('pgrst204'))
   );
+}
+
+export function selectWithoutCircleId(select: string): string {
+  return select
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && part !== 'circle_id')
+    .join(', ');
+}
+
+export function isMissingCircleIdColumn(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) {
+    return false;
+  }
+  const message = String(error.message ?? '');
+  const code = String(error.code ?? '');
+  return isMissingColumnError(`${code} ${message}`, 'circle_id');
+}
+
+/** After a live select 400s on circle_id, later queries must not keep asking for it. */
+export function dropCachedCircleId(): PostsSchema | null {
+  if (!latest?.hasCircleId) {
+    return latest;
+  }
+  latest = schemaFromSelect(selectWithoutCircleId(latest.select));
+  cached = Promise.resolve(latest);
+  return latest;
 }
 
 async function trySelect(select: string): Promise<{ ok: boolean; message?: string }> {
@@ -132,11 +160,15 @@ async function loadPostsSchema(): Promise<PostsSchema> {
 /** No RPC. Probe with limit 0, then cache the working select list. */
 export function resolvePostsSchema(): Promise<PostsSchema> {
   if (!cached) {
-    cached = loadPostsSchema();
+    cached = loadPostsSchema().then((schema) => {
+      latest = schema;
+      return schema;
+    });
   }
   return cached;
 }
 
 export function resetPostsSchemaCache() {
   cached = null;
+  latest = null;
 }
