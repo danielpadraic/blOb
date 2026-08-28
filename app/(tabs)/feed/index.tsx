@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
@@ -20,10 +21,16 @@ import {
   useToggleReaction,
 } from '@/hooks/useFeed';
 import { useActiveStories } from '@/hooks/useSocial';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
 export default function FeedScreen() {
+  useFocusEffect(
+    useCallback(() => {
+      stopAllLiveMedia();
+    }, []),
+  );
   const { user } = useAuth();
   const tone = useCopyTone();
   const feed = useFeed();

@@ -8,9 +8,10 @@ describe('composerFieldHeight', () => {
     expect(composerFieldHeight({ collapsed: true, text: 'a\nb\nc' })).toBe(COMPOSER_MIN_HEIGHT);
   });
 
-  it('grows through eight lines then caps so the field can scroll', () => {
-    const eight = '1\n2\n3\n4\n5\n6\n7\n8';
-    expect(composerFieldHeight({ text: eight })).toBe(COMPOSER_MAX_HEIGHT);
-    expect(composerFieldHeight({ text: `${eight}\n9` })).toBe(COMPOSER_MAX_HEIGHT);
+  it('grows through six lines then caps so the field can scroll', () => {
+    const six = '1\n2\n3\n4\n5\n6';
+    expect(composerFieldHeight({ text: six })).toBe(COMPOSER_MAX_HEIGHT);
+    expect(composerFieldHeight({ text: `${six}\n7` })).toBe(COMPOSER_MAX_HEIGHT);
+    expect(composerFieldHeight({ text: '1\n2\n3\n4' })).toBeGreaterThan(COMPOSER_MIN_HEIGHT);
   });
 });

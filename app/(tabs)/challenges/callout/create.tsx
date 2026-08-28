@@ -200,7 +200,7 @@ export default function CreateCalloutScreen() {
           value={winCondition}
           onChangeText={setWinCondition}
           placeholder="First to 5 miles, most points, etc."
-          multiline
+          grow
           hint="Both of you must later agree who met this."
         />
         <View>

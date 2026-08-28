@@ -107,6 +107,7 @@ export function ExtraTasksEditor({
                 value={task.title}
                 onChangeText={(title) => patch(index, { title })}
                 onFocus={onTitleFocus}
+                grow
                 maxLength={80}
               />
             </View>

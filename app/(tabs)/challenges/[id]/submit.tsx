@@ -913,9 +913,7 @@ export default function SubmitWorkoutScreen() {
                     value={drafts[proof.id]?.text ?? ''}
                     onChangeText={(value) => onText(proof.id, value)}
                     editable={!busy && phase !== 'submitted'}
-                    multiline
-                    textAlignVertical="top"
-                    style={{ minHeight: 64 }}
+                    grow
                   />
                 </View>
               ))}

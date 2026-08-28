@@ -32,7 +32,7 @@ import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
 import { CAPTURE_REEL_HREF, LOBBY_HREF } from '@/lib/routes';
-import { primeCameraFromGesture } from '@/lib/cameraSession';
+import { primeCameraFromGesture, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { rememberLastCapture } from '@/lib/lastCapture';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
@@ -244,8 +244,15 @@ function TabLayoutInner() {
   }, [onOnboarding, router]);
 
   useEffect(() => {
+    stopMediaUnlessCameraPath(pathname);
+  }, [pathname]);
+
+  useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       const previous = appState.current;
+      if (next !== 'active') {
+        stopAllLiveMedia();
+      }
       if (next === 'background') {
         backgroundedAt.current = Date.now();
       }
@@ -308,9 +315,8 @@ function TabLayoutInner() {
       // Action id stays `reel`; capture URL stays mode=reel. User-facing name is Round.
       closeOverlays();
       rememberLastCapture(null);
-      void primeCameraFromGesture('video').then(() => {
-        setTimeout(() => router.push(CAPTURE_REEL_HREF), 60);
-      });
+      void primeCameraFromGesture('video');
+      router.push(CAPTURE_REEL_HREF);
       return;
     }
     if (id === 'coins') {

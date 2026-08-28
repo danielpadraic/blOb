@@ -7,7 +7,8 @@ import {
   useState,
   type RefObject,
 } from 'react';
-import { BackHandler, Platform, Pressable, View } from 'react-native';
+import { AppState, BackHandler, Platform, Pressable, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +25,11 @@ import {
   logCameraError,
   markWebCameraGranted,
   openWebCameraStream,
+  registerNativeCameraStop,
+  stopMedia,
+  stopPrimedCameraStream,
   takePrimedCameraStream,
+  watchLiveMedia,
   webCameraGrantedThisSession,
 } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
@@ -82,10 +87,13 @@ export function InAppCamera({
   clipTickSec,
 }: InAppCameraProps) {
   const insets = useSafeAreaInsets();
+  const focused = useIsFocused();
   const cameraRef = useRef<CameraView>(null);
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const [sessionOn, setSessionOn] = useState(true);
+  const focusedRef = useRef(focused);
   const chunksRef = useRef<Blob[]>([]);
   const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing(facingKind));
   const [capture, setCapture] = useState<CaptureMedia>(captureProp);
@@ -110,13 +118,80 @@ export function InAppCamera({
     setCapture(captureProp);
   }, [captureProp]);
 
+  function killSession() {
+    stopMedia({
+      stream: webStreamRef.current,
+      video: webVideoRef.current,
+      recorder: recorderRef.current,
+    });
+    webStreamRef.current = null;
+    recorderRef.current = null;
+    stopPrimedCameraStream();
+    if (recordingRef.current && !web) {
+      cameraRef.current?.stopRecording();
+    }
+    setSessionOn(false);
+  }
+
+  useEffect(() => {
+    return registerNativeCameraStop(() => {
+      stopMedia({
+        stream: webStreamRef.current,
+        video: webVideoRef.current,
+        recorder: recorderRef.current,
+      });
+      webStreamRef.current = null;
+      recorderRef.current = null;
+      stopPrimedCameraStream();
+      cameraRef.current?.stopRecording();
+      setSessionOn(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!focused) {
+      killSession();
+    } else if (!focusedRef.current) {
+      setSessionOn(true);
+      setRetry((value) => value + 1);
+    }
+    focusedRef.current = focused;
+  }, [focused]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        killSession();
+        return;
+      }
+      if (focusedRef.current) {
+        setSessionOn(true);
+        setRetry((value) => value + 1);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') {
+        killSession();
+      }
+    };
+    document.addEventListener('visibilitychange', onHidden);
+    return () => document.removeEventListener('visibilitychange', onHidden);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     setReady(false);
     setFail(null);
 
     void (async () => {
-      if (parentBlocked) {
+      if (parentBlocked || !focused || !sessionOn) {
         return;
       }
       if (web) {
@@ -137,15 +212,17 @@ export function InAppCamera({
             audio: true,
             existing: primed,
           });
-          if (cancelled) {
-            stream.getTracks().forEach((track) => track.stop());
+          if (cancelled || !focusedRef.current) {
+            stopMedia({ stream });
             return;
           }
           markWebCameraGranted();
           webStreamRef.current = stream;
+          watchLiveMedia({ stream });
           const node = webVideoRef.current;
           if (node) {
             node.srcObject = stream;
+            watchLiveMedia({ video: node });
             void node.play().catch((error) => logCameraError(error, 'video.play'));
           }
           setReady(true);
@@ -174,16 +251,15 @@ export function InAppCamera({
 
     return () => {
       cancelled = true;
-      if (web) {
-        webStreamRef.current?.getTracks().forEach((track) => track.stop());
-        webStreamRef.current = null;
-        const node = webVideoRef.current;
-        if (node) {
-          node.srcObject = null;
-        }
-      }
+      stopMedia({
+        stream: webStreamRef.current,
+        video: webVideoRef.current,
+        recorder: recorderRef.current,
+      });
+      webStreamRef.current = null;
+      recorderRef.current = null;
     };
-  }, [facing, parentBlocked, retry, web]);
+  }, [facing, focused, parentBlocked, retry, sessionOn, web]);
 
   useEffect(() => {
     if (parentBlocked || fail != null) {
@@ -211,6 +287,7 @@ export function InAppCamera({
     }
     if (node.srcObject !== stream) {
       node.srcObject = stream;
+      watchLiveMedia({ video: node, stream });
       void node.play().catch((error) => logCameraError(error, 'video.attach'));
     }
   }, []);
@@ -243,17 +320,8 @@ export function InAppCamera({
   const onCameraDenied = useCallback(() => setFail('denied'), []);
   const onCameraMissing = useCallback(() => setFail('missing'), []);
 
-  function stopWebTracks() {
-    webStreamRef.current?.getTracks().forEach((track) => track.stop());
-    webStreamRef.current = null;
-    const node = webVideoRef.current;
-    if (node) {
-      node.srcObject = null;
-    }
-  }
-
   function closeCamera() {
-    stopWebTracks();
+    killSession();
     onCancel();
   }
 
@@ -289,6 +357,7 @@ export function InAppCamera({
           mimeType: 'image/jpeg',
           blob,
         });
+        killSession();
         return;
       }
       let photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
@@ -303,6 +372,7 @@ export function InAppCamera({
           mimeType: 'image/jpeg',
           blob: null,
         });
+        killSession();
       }
     } catch (error) {
       logCameraError(error, 'takePhoto');
@@ -334,6 +404,7 @@ export function InAppCamera({
       chunksRef.current = [];
       const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       recorderRef.current = recorder;
+      watchLiveMedia({ recorder, stream });
       const startedAt = Date.now();
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -354,6 +425,8 @@ export function InAppCamera({
             durationMs: Date.now() - startedAt,
           });
         }
+        recorderRef.current = null;
+        killSession();
       };
       recordingRef.current = true;
       setRecording(true);
@@ -389,6 +462,7 @@ export function InAppCamera({
           blob: null,
           durationMs: Date.now() - startedAt,
         });
+        killSession();
       }
     } catch (error) {
       logCameraError(error, 'recordAsync');
@@ -406,6 +480,8 @@ export function InAppCamera({
     if (web) {
       if (recorderRef.current?.state === 'recording') {
         recorderRef.current.stop();
+      } else {
+        recorderRef.current = null;
       }
       return;
     }
@@ -462,9 +538,9 @@ export function InAppCamera({
 
   return (
     <View className="flex-1 overflow-hidden" style={{ backgroundColor: THEME.primary }}>
-      {web && !parentBlocked && fail == null ? (
+      {web && !parentBlocked && fail == null && sessionOn && focused ? (
         <WebCameraPreview attach={attachWebVideo} />
-      ) : !showDenied ? (
+      ) : !showDenied && sessionOn && focused ? (
         <NativeCameraPreview
           cameraRef={cameraRef}
           facing={facing}

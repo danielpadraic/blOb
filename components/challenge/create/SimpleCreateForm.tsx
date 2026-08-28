@@ -813,6 +813,8 @@ export function SimpleCreateForm() {
           placeholder={copy('create.titlePlaceholder')}
           value={draft.title}
           onChangeText={(title) => patch({ title })}
+          grow
+          growMaxLines={2}
           maxLength={80}
         />
         </View>
@@ -823,8 +825,8 @@ export function SimpleCreateForm() {
           placeholder={copy('create.descriptionPlaceholder')}
           value={draft.description}
           onChangeText={(description) => patch({ description })}
+          grow
           maxLength={120}
-          numberOfLines={1}
         />
 
         <ChallengePhotoField
@@ -937,6 +939,7 @@ export function SimpleCreateForm() {
               proofs: syncProofNameWithTask(draft.proofs, draft.task, task),
             })
           }
+          grow
           maxLength={80}
         />
         <ExtraTasksEditor
@@ -1028,6 +1031,7 @@ export function SimpleCreateForm() {
                           ),
                         })
                       }
+                      grow
                       maxLength={90}
                     />
                   </View>

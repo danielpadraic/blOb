@@ -2135,6 +2135,8 @@ function GoalSlide({
             onBlur={onBlur}
             onFocus={onTitleFocus}
             error={errors.title?.message}
+            grow
+            growMaxLines={2}
             maxLength={80}
           />
         )}
@@ -2154,9 +2156,7 @@ function GoalSlide({
             onBlur={onBlur}
             onFocus={onDescriptionFocus}
             error={errors.description?.message}
-            multiline
-            textAlignVertical="top"
-            style={{ minHeight: 96 }}
+            grow
           />
         )}
       />
@@ -2183,6 +2183,7 @@ function GoalSlide({
               onBlur={onBlur}
               onFocus={onTaskFocus}
               error={errors.task?.message}
+              grow
             />
           )}
         />

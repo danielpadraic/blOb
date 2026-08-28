@@ -3,7 +3,7 @@ import { Camera, CameraView } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 
-import { cameraErrorKind, logCameraError, webCameraGrantedThisSession } from '@/lib/cameraSession';
+import { cameraErrorKind, logCameraError, stopMedia, webCameraGrantedThisSession } from '@/lib/cameraSession';
 
 export type MediaPermissionKind = 'camera' | 'microphone' | 'library';
 
@@ -80,7 +80,7 @@ export async function ensureCameraPermission(): Promise<MediaPermissionResult> {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach((track) => track.stop());
+      stopMedia({ stream });
       return { ok: true };
     } catch (error) {
       logCameraError(error, 'ensureCameraPermission');
@@ -142,7 +142,7 @@ export async function openAppSettings(): Promise<void> {
   if (Platform.OS === 'web') {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach((track) => track.stop());
+      stopMedia({ stream });
     } catch (error) {
       logCameraError(error, 'openAppSettings');
     }

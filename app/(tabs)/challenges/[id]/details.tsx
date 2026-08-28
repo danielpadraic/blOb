@@ -224,6 +224,8 @@ export default function OfficialDetailsScreen() {
           placeholder={copy('create.titlePlaceholder')}
           value={draft.title}
           onChangeText={(title) => patch({ title })}
+          grow
+          growMaxLines={2}
           maxLength={80}
         />
         <Input
@@ -231,11 +233,8 @@ export default function OfficialDetailsScreen() {
           placeholder={copy('create.descriptionPlaceholder')}
           value={draft.description}
           onChangeText={(description) => patch({ description })}
+          grow
           maxLength={500}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-          style={{ minHeight: 88 }}
         />
         <ChallengePhotoField
           uri={draft.cover_image_url}
@@ -254,11 +253,8 @@ export default function OfficialDetailsScreen() {
           placeholder={copy('create.rulesPlaceholder')}
           value={draft.rules}
           onChangeText={(rules) => patch({ rules })}
+          grow
           maxLength={8000}
-          multiline
-          numberOfLines={8}
-          textAlignVertical="top"
-          style={{ minHeight: 168 }}
         />
 
         <View className="gap-2">
@@ -278,6 +274,7 @@ export default function OfficialDetailsScreen() {
                           ),
                         })
                       }
+                      grow
                       maxLength={120}
                     />
                   </View>

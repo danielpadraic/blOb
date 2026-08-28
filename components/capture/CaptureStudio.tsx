@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
 import { rememberLastCapture } from '@/lib/lastCapture';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { captureKindFor, type CapturedMedia, type CaptureMode } from '@/components/capture/types';
 import { AudienceIconButton, AudienceSheet } from '@/components/feed/AudienceSheet';
 import { Button } from '@/components/ui/Button';
@@ -121,6 +122,12 @@ export function CaptureStudio({
   }, [mode]);
 
   useEffect(() => {
+    return () => {
+      stopAllLiveMedia();
+    };
+  }, []);
+
+  useEffect(() => {
     if (mode === 'story') {
       return;
     }
@@ -150,6 +157,7 @@ export function CaptureStudio({
   }, [mode]);
 
   function close() {
+    stopAllLiveMedia();
     resetStudio();
     if (onClose) {
       onClose();
@@ -465,6 +473,7 @@ export function CaptureStudio({
                   return next;
                 })
               }
+              grow
               maxLength={140}
               hint={
                 (clipCaptions[index] ?? '').length > 0
@@ -480,6 +489,7 @@ export function CaptureStudio({
           placeholder="Add a caption"
           value={caption}
           onChangeText={setCaption}
+          grow
           maxLength={mode === 'post' ? 280 : 140}
           hint={caption.length > 0 ? `${caption.length}/${mode === 'post' ? 280 : 140}` : undefined}
         />

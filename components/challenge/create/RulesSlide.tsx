@@ -230,6 +230,7 @@ export function RulesSlide({
                           onBlur={onBlur}
                           onFocus={() => focus?.onFieldFocus(`tasks.${index}.title`)}
                           error={errors.tasks?.[index]?.title?.message}
+                          grow
                         />
                       )}
                     />
@@ -521,9 +522,7 @@ export function RulesSlide({
                             onBlur={onBlur}
                             onFocus={() => focus?.onFieldFocus(`extra_rules.${index}.text`)}
                             error={errors.extra_rules?.[index]?.text?.message}
-                            multiline
-                            textAlignVertical="top"
-                            style={{ minHeight: 72 }}
+                            grow
                           />
                         )}
                       />
@@ -544,9 +543,7 @@ export function RulesSlide({
                       onChangeText={setCustomDraft}
                       onBlur={flushCustomDraft}
                       onFocus={() => focus?.onFieldFocus('extra_rules')}
-                      multiline
-                      textAlignVertical="top"
-                      style={{ minHeight: 72 }}
+                      grow
                     />
                     <AppText className="mt-1 text-xs leading-5 text-muted">
                       Leave blank if you don’t need a custom limit. Next still works.

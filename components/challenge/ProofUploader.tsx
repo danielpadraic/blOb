@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { captureKindForProof } from '@/components/capture/types';
 import { HealthWorkoutSheet } from '@/components/challenge/HealthWorkoutSheet';
 import { AppText } from '@/components/ui/AppText';
@@ -159,6 +160,7 @@ export function ProofUploader({
   }
 
   function closeCamera() {
+    stopAllLiveMedia();
     setOpen(false);
     onCancel?.();
   }

@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 export function logCameraError(error: unknown, extra?: string) {
   const name =
@@ -36,8 +36,98 @@ export function cameraErrorKind(error: unknown): 'denied' | 'missing' | 'other' 
   return 'other';
 }
 
+export type StoppableTrack = {
+  stop: () => void;
+  enabled: boolean;
+};
+
+export type StoppableStream = {
+  getTracks: () => StoppableTrack[];
+};
+
+export type StoppableVideo = {
+  srcObject: unknown;
+  pause: () => void;
+};
+
+export type StoppableRecorder = {
+  state?: string;
+  stop: () => void;
+};
+
+export type StopMediaInput = {
+  stream?: StoppableStream | null;
+  video?: StoppableVideo | null;
+  recorder?: StoppableRecorder | null;
+};
+
+/** Wave / Round / web preview. MediaRecorder.stop() does not clear the iPhone status-bar light. */
+export function stopMedia(input: StopMediaInput = {}): void {
+  const recorder = input.recorder;
+  if (recorder) {
+    try {
+      if (recorder.state && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+    } catch {
+      // Already stopped.
+    }
+  }
+  input.stream?.getTracks().forEach((track) => {
+    try {
+      track.enabled = false;
+    } catch {
+      // Some mocks / ended tracks reject enabled.
+    }
+    try {
+      track.stop();
+    } catch {
+      // Already ended.
+    }
+  });
+  const video = input.video;
+  if (video) {
+    try {
+      video.pause();
+    } catch {
+      // Detached node.
+    }
+    video.srcObject = null;
+  }
+}
+
+const liveStreams = new Set<StoppableStream>();
+const liveVideos = new Set<StoppableVideo>();
+const liveRecorders = new Set<StoppableRecorder>();
+const nativeStops = new Set<() => void>();
+
+export function watchLiveMedia(input: StopMediaInput): void {
+  if (input.stream) {
+    liveStreams.add(input.stream);
+  }
+  if (input.video) {
+    liveVideos.add(input.video);
+  }
+  if (input.recorder) {
+    liveRecorders.add(input.recorder);
+  }
+}
+
+export function registerNativeCameraStop(stop: () => void): () => void {
+  nativeStops.add(stop);
+  return () => {
+    nativeStops.delete(stop);
+  };
+}
+
+export function isLiveCameraPath(pathname: string | null | undefined): boolean {
+  const path = String(pathname ?? '');
+  return path.includes('/capture') || path.includes('/submit');
+}
+
 let primed: MediaStream | null = null;
 let webGrantedThisSession = false;
+let lifecycleInstalled = false;
 
 export function markWebCameraGranted() {
   webGrantedThisSession = true;
@@ -50,6 +140,9 @@ export function webCameraGrantedThisSession() {
 export function takePrimedCameraStream(): MediaStream | null {
   const stream = primed;
   primed = null;
+  if (stream) {
+    watchLiveMedia({ stream });
+  }
   return stream;
 }
 
@@ -66,14 +159,79 @@ export async function primeCameraFromGesture(
       video: { facingMode: facing === 'front' ? 'user' : 'environment' },
       audio: kind === 'video',
     });
+    watchLiveMedia({ stream: primed });
+    const held = primed;
+    setTimeout(() => {
+      if (primed === held) {
+        stopPrimedCameraStream();
+      }
+    }, 8000);
   } catch (error) {
     logCameraError(error, 'prime');
   }
 }
 
 export function stopPrimedCameraStream() {
-  primed?.getTracks().forEach((track) => track.stop());
-  primed = null;
+  if (primed) {
+    stopMedia({ stream: primed });
+    liveStreams.delete(primed);
+    primed = null;
+  }
+}
+
+export function stopAllLiveMedia() {
+  stopPrimedCameraStream();
+  for (const stream of [...liveStreams]) {
+    stopMedia({ stream });
+    liveStreams.delete(stream);
+  }
+  for (const video of [...liveVideos]) {
+    stopMedia({ video });
+    liveVideos.delete(video);
+  }
+  for (const recorder of [...liveRecorders]) {
+    stopMedia({ recorder });
+    liveRecorders.delete(recorder);
+  }
+  for (const stop of [...nativeStops]) {
+    try {
+      stop();
+    } catch {
+      // Preview already torn down.
+    }
+  }
+}
+
+/** Kill leftover tracks when the user is not on Wave / Round / check-in camera. */
+export function stopMediaUnlessCameraPath(pathname: string | null | undefined) {
+  if (isLiveCameraPath(pathname)) {
+    return;
+  }
+  stopAllLiveMedia();
+}
+
+export function installMediaLifecycle() {
+  if (lifecycleInstalled) {
+    return;
+  }
+  lifecycleInstalled = true;
+
+  AppState.addEventListener('change', (state) => {
+    if (state !== 'active') {
+      stopAllLiveMedia();
+    }
+  });
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        stopAllLiveMedia();
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      stopAllLiveMedia();
+    });
+  }
 }
 
 export async function openWebCameraStream(input: {
@@ -82,15 +240,22 @@ export async function openWebCameraStream(input: {
   existing?: MediaStream | null;
 }): Promise<MediaStream> {
   if (input.existing && input.existing.getVideoTracks().some((track) => track.readyState === 'live')) {
+    watchLiveMedia({ stream: input.existing });
     return input.existing;
+  }
+  if (input.existing) {
+    stopMedia({ stream: input.existing });
+    liveStreams.delete(input.existing);
   }
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     const error = new Error('Camera isn’t on this device.');
     error.name = 'NotFoundError';
     throw error;
   }
-  return navigator.mediaDevices.getUserMedia({
+  const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: input.facing === 'front' ? 'user' : 'environment' },
     audio: input.audio,
   });
+  watchLiveMedia({ stream });
+  return stream;
 }

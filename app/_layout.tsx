@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { WalletProvider } from '@/hooks/useWallet';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useAppOpenPing } from '@/hooks/useAppOpenPing';
+import { installMediaLifecycle, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { takePendingInviteToken } from '@/lib/challengeInvites';
 import { inviteHref } from '@/lib/routes';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
@@ -31,6 +32,7 @@ export { AppErrorBoundary as ErrorBoundary };
 
 WebBrowser.maybeCompleteAuthSession();
 SplashScreen.preventAutoHideAsync();
+installMediaLifecycle();
 
 const ROOT_STACK_OPTIONS = {
   headerShown: false,
@@ -64,6 +66,10 @@ function RootNavigator() {
   const [bootExpired, setBootExpired] = useState(false);
   const blocking = isLoading || isBootstrapping || path === 'boot';
   useAppOpenPing();
+
+  useEffect(() => {
+    stopMediaUnlessCameraPath(pathname);
+  }, [pathname]);
 
   useEffect(() => {
     if (!blocking) {

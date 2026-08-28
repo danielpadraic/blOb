@@ -191,6 +191,11 @@ function MentionFieldInner(
     }
   }, [query]);
 
+  useEffect(() => {
+    const next = composerFieldHeight({ collapsed, text });
+    setHeight((current) => (current === next ? current : next));
+  }, [collapsed, text]);
+
   function pick(chip: MentionChip) {
     const next = insertMention(text, selection, chip.username, { suffix: ' ' });
     const nextChips = chips.some((row) => row.userId === chip.userId) ? chips : [...chips, chip];
@@ -365,7 +370,7 @@ function MentionFieldInner(
           color: THEME.textPrimary,
           fontSize: FONT,
           lineHeight: LINE,
-          textAlignVertical: collapsed || height <= MIN_HEIGHT + 2 ? 'center' : 'top',
+          textAlignVertical: 'top',
           ...(Platform.OS === 'web'
             ? ({
                 minHeight: collapsed ? MIN_HEIGHT : height,

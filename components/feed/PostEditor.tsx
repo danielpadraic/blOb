@@ -231,7 +231,7 @@ export function PostEditor({
             label="Caption"
             value={caption}
             onChangeText={setCaption}
-            multiline
+            grow
             placeholder="Write a caption…"
           />
           <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
