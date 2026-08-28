@@ -377,69 +377,59 @@ export function ChallengeInviteCard({
     return (
       <View
         style={{
-          borderRadius: 12,
-          backgroundColor: official ? THEME.accentSoft : THEME.surface,
+          borderRadius: 14,
+          backgroundColor: THEME.surface,
           borderWidth: 1,
           borderColor: THEME.border,
-          paddingHorizontal: 10,
-          paddingVertical: 8,
+          overflow: 'hidden',
+          ...themeShadow('card'),
         }}>
-        <View className="flex-row items-center" style={{ gap: 6, minHeight: 20, position: 'relative' }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Details"
-            hitSlop={8}
-            onPress={(event) => {
-              event.stopPropagation();
-              typeTip.show();
-            }}
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: 9,
-              borderWidth: 1,
-              borderColor: official ? THEME.accent : THEME.textMuted,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}>
-            <AppText
-              className="text-[11px] font-extrabold"
-              style={{ color: official ? THEME.accent : THEME.textMuted, lineHeight: 12 }}>
-              i
-            </AppText>
-          </Pressable>
-          <ChallengeTypeTip category={challenge.category} visible={typeTip.open} anchor="badge" />
+        <View style={{ height: 80, margin: 8, marginBottom: 0, borderRadius: 10, overflow: 'hidden' }}>
+          <MediaPanel
+            steps={mediaSteps}
+            visual={visual}
+            title={displayTitle}
+            openLabel={cardLabel}
+            category={challenge.category ?? undefined}
+            typeTipOpen={typeTip.open}
+            onOpen={() => void openDetail()}
+            onTypePress={typeTip.show}
+          />
+          <View pointerEvents="box-none" style={{ position: 'absolute', top: 4, left: 4, right: 4 }}>
+            <ChallengeTagRow tags={tags} compact />
+          </View>
+        </View>
+        <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4 }}>
           <Pressable
             onPress={() => void openDetail()}
             accessibilityRole="button"
-            accessibilityLabel={displayTitle}
-            style={[flexChildMin(), { flexGrow: 1.4 }]}>
+            accessibilityLabel={cardLabel}
+            style={{ marginTop: 4, minWidth: 0 }}>
             <AppText
-              className="text-[12px] font-semibold"
+              className="text-[13px] font-semibold"
               style={{ color: THEME.textPrimary }}
               numberOfLines={1}>
               {displayTitle}
             </AppText>
           </Pressable>
-          <AppText
-            className="text-[11px]"
-            style={[flexChildMin(), { flexGrow: 1, color: THEME.textMuted }]}
-            numberOfLines={1}>
-            {hostLabel}
-          </AppText>
-          <View style={{ flexShrink: 0 }}>
-            <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
+          <View className="flex-row items-center" style={{ marginTop: 2, gap: 8, minHeight: 18 }}>
+            <AppText
+              className="text-[11px]"
+              style={[flexChildMin(), { flexGrow: 1, color: THEME.textMuted }]}
+              numberOfLines={1}>
+              {hostLabel}
+            </AppText>
+            <View style={{ flexShrink: 0 }}>
+              <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
+            </View>
           </View>
         </View>
-        <View className="flex-row items-center" style={{ marginTop: 4, gap: 14, minHeight: 24 }}>
+        <View
+          className="flex-row items-center"
+          style={{ paddingHorizontal: 10, paddingBottom: 8, gap: 14, minHeight: 28 }}>
           <TextAction label="View" onPress={() => void openDetail()} />
           {canJoin ? (
-            <TextAction
-              label="Join"
-              loading={joining}
-              onPress={() => void onJoinOrView()}
-            />
+            <TextAction label="Join" loading={joining} onPress={() => void onJoinOrView()} />
           ) : null}
           {canCheckIn ? <TextAction label="Check In" onPress={onCheckIn} /> : null}
         </View>

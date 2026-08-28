@@ -67,6 +67,7 @@ export function ReelsRow() {
 
   return (
     <View className="gap-1.5" style={{ marginHorizontal: -16 }}>
+      <AppText className="px-4 text-[15px] font-extrabold text-charcoal">Rounds</AppText>
       <ScrollView
         horizontal
         nestedScrollEnabled

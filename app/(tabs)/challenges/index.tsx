@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
 import { ChallengeCarousel, type CarouselSocialProof } from '@/components/challenge/ChallengeCarousel';
@@ -12,7 +12,6 @@ import {
 import { remainingFromChallenge } from '@/components/challenge/ChallengePosterCard';
 import { ContinueDraftCard } from '@/components/challenge/create/wizardUi';
 import { MascotState } from '@/components/mascot/MascotState';
-import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { AppHeader } from '@/components/wallet/AppHeader';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
@@ -222,7 +221,21 @@ export default function ChallengesScreen() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
-      <AppHeader title="Lobby" />
+      <AppHeader
+        title="Lobby"
+        trailing={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Create"
+            onPress={() => router.push('/challenges/create')}
+            hitSlop={8}
+            style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+            <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+              Create
+            </AppText>
+          </Pressable>
+        }
+      />
 
       <TextInput
         value={query}
@@ -245,14 +258,6 @@ export default function ChallengesScreen() {
         }}
         accessibilityLabel="Search challenges"
       />
-
-      <View className="mt-3">
-        <Button
-          title="Create Challenge"
-          accessibilityLabel="Create Challenge"
-          onPress={() => router.push('/challenges/create')}
-        />
-      </View>
 
       {user && drafts.length > 0 ? (
         <View className="mt-3 gap-2">
@@ -282,7 +287,7 @@ export default function ChallengesScreen() {
         <MascotState
           kind="empty"
           title={copy('lobby.empty', tone)}
-          actionLabel={user ? 'Create a Challenge' : undefined}
+          actionLabel={user ? 'Create' : undefined}
           onAction={user ? () => router.push('/challenges/create') : undefined}
         />
       ) : (

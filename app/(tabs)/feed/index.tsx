@@ -91,13 +91,13 @@ export default function FeedScreen() {
         homeChrome
         draftKey="home"
         composing={createPost.isPending}
-        headerTop={<StoryTray />}
-        headerExtra={
-          <View className="gap-1.5">
-            <FeaturedOfficialStrip />
-            <ReelsRow />
+        stickyAbove={
+          <View style={{ marginBottom: 6 }}>
+            <StoryTray />
           </View>
         }
+        headerTop={<FeaturedOfficialStrip />}
+        headerExtra={<ReelsRow />}
         empty={<FeedEmptyState compact />}
         onRefresh={onRefresh}
         onRetry={() => void feed.refetch()}

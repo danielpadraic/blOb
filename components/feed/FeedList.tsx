@@ -24,6 +24,7 @@ type FeedListProps = {
   composing?: boolean;
   commenting?: boolean;
   embedded?: boolean;
+  stickyAbove?: ReactNode;
   headerTop?: ReactNode;
   headerExtra?: ReactNode;
   empty?: ReactNode;
@@ -110,6 +111,7 @@ export function FeedList({
   composing,
   commenting: _commenting,
   embedded,
+  stickyAbove,
   headerTop,
   headerExtra,
   empty,
@@ -204,6 +206,7 @@ export function FeedList({
     () => (
       <View className={homeChrome ? 'gap-2' : 'gap-3'}>
         {headerTop}
+        {homeChrome ? composer : null}
         {headerExtra}
         {!embedded && !homeChrome ? (
           <View className="flex-row items-end justify-between pt-1">
@@ -213,7 +216,7 @@ export function FeedList({
         ) : null}
       </View>
     ),
-    [embedded, headerExtra, headerTop, homeChrome],
+    [composer, embedded, headerExtra, headerTop, homeChrome],
   );
 
   const renderItem = useCallback(
@@ -256,7 +259,10 @@ export function FeedList({
   if (isLoading) {
     return (
       <View className="gap-3" style={[embedded ? undefined : { flex: 1 }, webColumn]}>
-        <View pointerEvents={tourLocked ? 'none' : 'auto'}>{composer}</View>
+        {stickyAbove}
+        {composer && !homeChrome ? (
+          <View pointerEvents={tourLocked ? 'none' : 'auto'}>{composer}</View>
+        ) : null}
         {listHeader}
         <MascotState kind="loading" title={copy('home.loading', tone)} compact={embedded} />
       </View>
@@ -297,8 +303,9 @@ export function FeedList({
 
   return (
     <View style={[{ flex: 1 }, webColumn]}>
-      {composer ? (
-        <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: homeChrome ? 8 : 12 }}>
+      {stickyAbove}
+      {composer && !homeChrome ? (
+        <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: 12 }}>
           {composer}
         </View>
       ) : null}
