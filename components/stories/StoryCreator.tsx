@@ -10,7 +10,9 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { useCreatePost } from '@/hooks/useFeed';
 import { useCreateFeedEvent, useCreateStory, useStoryChallengeOptions } from '@/hooks/useSocial';
+import { attachClipPostId } from '@/lib/social';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
@@ -33,6 +35,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
   const router = useRouter();
   const { user } = useAuth();
   const createStory = useCreateStory();
+  const createPost = useCreatePost();
   const createFeedEvent = useCreateFeedEvent();
   const challenges = useStoryChallengeOptions();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -128,6 +131,17 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
       setProgress(100);
       if (story) {
         try {
+          const posted = await createPost.mutateAsync({
+            content: caption.trim(),
+            mediaUrls: [mediaUrl],
+            challengeId: challengeId ?? undefined,
+            source: 'feed',
+          });
+          await attachClipPostId('story', story.id, posted.id);
+        } catch {
+          // The Wave is live even if the feed card does not land.
+        }
+        try {
           await createFeedEvent.mutateAsync({
             event_type: 'story_posted',
             target_type: 'story',
@@ -136,7 +150,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
             metadata: { media_type: story.media_type },
           });
         } catch {
-          // The Wave is live even if the feed card does not land.
+          // The Wave is live even if the activity card does not land.
         }
         onPosted?.(story.id);
       }

@@ -15,7 +15,7 @@ import { THEME } from '@/lib/theme';
 export default function StoryViewerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, comments } = useLocalSearchParams<{ id: string; comments?: string }>();
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const { groups, isLoading } = useStoryGroups();
@@ -112,6 +112,7 @@ export default function StoryViewerScreen() {
       startGroupIndex={playback.groupIndex}
       startStoryIndex={playback.storyIndex}
       challenges={challenges}
+      openComments={comments === '1' || (Array.isArray(comments) && comments[0] === '1')}
       onClose={close}
     />
   );

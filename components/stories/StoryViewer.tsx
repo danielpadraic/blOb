@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useEventListener } from 'expo';
 import { useRouter } from 'expo-router';
@@ -8,17 +8,14 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ClipSocial } from '@/components/feed/ClipSocial';
 import { StoryRing } from '@/components/stories/StoryRing';
-import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { useClipSocial } from '@/hooks/useClipSocial';
 import {
-  useCreateStoryComment,
   useFriends,
   useShareStory,
-  useStoryComments,
-  useStoryReactions,
-  useToggleStoryReaction,
   useViewStory,
 } from '@/hooks/useSocial';
 import { Button } from '@/components/ui/Button';
@@ -29,7 +26,7 @@ import { personDisplayName, storyTimeLeft, type FeedChallengePreview, type Story
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import { storyShareUrl } from '@/lib/waveShare';
 import { THEME } from '@/lib/theme';
-import type { Story, StoryReactionType } from '@/types/social';
+import type { Story } from '@/types/social';
 import { getErrorMessage } from '@/utils/errors';
 
 type StoryViewerProps = {
@@ -37,6 +34,7 @@ type StoryViewerProps = {
   startGroupIndex?: number;
   startStoryIndex?: number;
   challenges?: Map<string, FeedChallengePreview>;
+  openComments?: boolean;
   onClose: () => void;
 };
 
@@ -45,6 +43,7 @@ export function StoryViewer({
   startGroupIndex = 0,
   startStoryIndex = 0,
   challenges,
+  openComments = false,
   onClose,
 }: StoryViewerProps) {
   const insets = useSafeAreaInsets();
@@ -54,6 +53,7 @@ export function StoryViewer({
   const [storyIndex, setStoryIndex] = useState(startStoryIndex);
   const [videoProgress, setVideoProgress] = useState(0);
   const [panel, setPanel] = useState<'comments' | 'share' | null>(null);
+  const composerOpen = useRef(false);
   const paused = useRef(false);
   const marked = useRef(new Set<string>());
   const groupsRef = useRef(groups);
@@ -64,7 +64,7 @@ export function StoryViewer({
   groupsRef.current = groups;
   groupIndexRef.current = groupIndex;
   storyIndexRef.current = storyIndex;
-  paused.current = panel != null;
+  paused.current = panel != null || composerOpen.current;
 
   const group = groups[groupIndex];
   const story = group?.stories[storyIndex];
@@ -185,9 +185,8 @@ export function StoryViewer({
   const challenge = story.challenge_id ? challenges?.get(story.challenge_id) : undefined;
 
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View className="flex-1" style={[{ backgroundColor: '#101312' }, sheetStyle]}>
-        <View className="flex-1" style={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }}>
+    <Animated.View className="flex-1" style={[{ backgroundColor: '#101312' }, sheetStyle]}>
+      <View className="flex-1" style={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }}>
           <View className="flex-row gap-1 px-3">
             {group.stories.map((item, index) => (
               <StoryProgress
@@ -225,6 +224,7 @@ export function StoryViewer({
             </Pressable>
           </View>
 
+          <GestureDetector gesture={pan}>
           <View className="relative mt-3 flex-1">
             {story.media_type === 'video' ? (
               <StoryVideo
@@ -252,7 +252,7 @@ export function StoryViewer({
                 paused.current = true;
               }}
               onPressOut={() => {
-                paused.current = panel != null;
+                paused.current = panel != null || composerOpen.current;
               }}
               onPress={goPrev}
             />
@@ -265,11 +265,12 @@ export function StoryViewer({
                 paused.current = true;
               }}
               onPressOut={() => {
-                paused.current = panel != null;
+                paused.current = panel != null || composerOpen.current;
               }}
               onPress={goNext}
             />
           </View>
+          </GestureDetector>
 
           {story.caption ? (
             <AppText className="px-4 pt-3 text-[15px] leading-5" style={{ color: '#fff' }}>
@@ -291,148 +292,78 @@ export function StoryViewer({
               />
             </View>
           ) : null}
-          <WaveSocialBar storyId={story.id} onComments={() => setPanel('comments')} onShare={() => setPanel('share')} />
-          {panel === 'comments' ? <WaveComments storyId={story.id} onClose={() => setPanel(null)} /> : null}
-          {panel === 'share' ? <WaveShare storyId={story.id} onClose={() => setPanel(null)} /> : null}
-        </View>
-      </Animated.View>
-    </GestureDetector>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{
+              backgroundColor: THEME.surface,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: 320,
+              marginTop: 12,
+            }}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 }}>
+              <WavePlaybackSocial
+                key={story.id}
+                story={story}
+                openComments={openComments || panel === 'comments'}
+                onComposerFocus={(focused) => {
+                  composerOpen.current = focused;
+                  paused.current = focused || panel != null;
+                }}
+                onShare={() => setPanel('share')}
+              />
+              {panel === 'share' ? <WaveShare storyId={story.id} onClose={() => setPanel(null)} /> : null}
+            </ScrollView>
+          </KeyboardAvoidingView>
+      </View>
+    </Animated.View>
   );
 }
 
-function WaveSocialBar({
-  storyId,
-  onComments,
+function WavePlaybackSocial({
+  story,
+  openComments,
+  onComposerFocus,
   onShare,
 }: {
-  storyId: string;
-  onComments: () => void;
+  story: Story;
+  openComments: boolean;
+  onComposerFocus: (focused: boolean) => void;
   onShare: () => void;
 }) {
   const { user } = useAuth();
-  const reactions = useStoryReactions(storyId);
-  const comments = useStoryComments(storyId);
-  const toggle = useToggleStoryReaction(storyId);
-  const list = reactions.data ?? [];
-
-  function count(type: StoryReactionType) {
-    return list.filter((row) => row.reaction_type === type).length;
-  }
-  function mine(type: StoryReactionType) {
-    return list.some((row) => row.reaction_type === type && row.user_id === user?.id);
-  }
-
+  const social = useClipSocial({
+    kind: 'story',
+    clipId: story.id,
+    postId: story.post_id,
+    mediaUrl: story.media_url,
+    caption: story.caption,
+    challengeId: story.challenge_id,
+  });
   return (
-    <View className="mt-3 flex-row items-center px-4" style={{ gap: 4 }}>
-      <ReactChip label="Like" icon={mine('like') ? GLYPH.like : GLYPH.likeOutline} count={count('like')} active={mine('like')} color="#D24A5A" onPress={() => toggle.mutate('like')} />
-      <ReactChip label="Love" icon={GLYPH.love} count={count('love')} active={mine('love')} color="#E86A17" onPress={() => toggle.mutate('love')} />
-      <ReactChip label="Fire" icon={GLYPH.fire} count={count('fire')} active={mine('fire')} color="#E86A17" onPress={() => toggle.mutate('fire')} />
-      <ReactChip label="Strong" icon={GLYPH.strong} count={count('strong')} active={mine('strong')} color="#72D9CB" onPress={() => toggle.mutate('strong')} />
-      <ReactChip label="Comment" icon={GLYPH.reply} count={comments.data?.length ?? 0} onPress={onComments} />
-      <View className="flex-1" />
-      <ReactChip label="Share" icon={GLYPH.share} onPress={onShare} />
-    </View>
-  );
-}
-
-function ReactChip({
-  label,
-  icon,
-  count = 0,
-  active,
-  color = 'rgba(255,255,255,0.82)',
-  onPress,
-}: {
-  label: string;
-  icon: (typeof GLYPH)[keyof typeof GLYPH];
-  count?: number;
-  active?: boolean;
-  color?: string;
-  onPress: () => void;
-}) {
-  const tint = active ? color : 'rgba(255,255,255,0.82)';
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={count > 0 ? `${label} ${count}` : label}
-      onPress={onPress}
-      hitSlop={6}
-      className="h-11 flex-row items-center rounded-full px-1.5"
-      style={{ minHeight: 44 }}>
-      <Glyph name={icon} color={tint} size={18} />
-      {count > 0 ? (
-        <AppText className="ml-1 text-[12px] font-bold" style={{ color: tint }}>
-          {count}
+    <View className="gap-2">
+      <ClipSocial
+        showThread
+        startComposer={openComments}
+        post={social.post}
+        currentUserId={user?.id}
+        commenting={social.commenting}
+        onReact={social.onReact}
+        onComment={social.onComment}
+        onComposerFocus={onComposerFocus}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Share"
+        onPress={onShare}
+        hitSlop={8}
+        style={{ minHeight: 44, justifyContent: 'center' }}>
+        <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
+          Share
         </AppText>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function WaveComments({ storyId, onClose }: { storyId: string; onClose: () => void }) {
-  const comments = useStoryComments(storyId);
-  const create = useCreateStoryComment(storyId);
-  const [text, setText] = useState('');
-  return (
-    <View className="mx-4 mt-2 rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(16,19,18,0.92)', maxHeight: 240 }}>
-      <View className="flex-row items-center justify-between">
-        <AppText className="text-[13px] font-extrabold" style={{ color: '#fff' }}>
-          Comments
-        </AppText>
-        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close comments">
-          <AppText className="text-[16px] font-bold" style={{ color: '#fff' }}>
-            ×
-          </AppText>
-        </Pressable>
-      </View>
-      <ScrollView style={{ maxHeight: 140 }} className="mt-2">
-        {(comments.data ?? []).length === 0 ? (
-          <AppText className="text-[13px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
-            No comments yet.
-          </AppText>
-        ) : (
-          (comments.data ?? []).map((row) => (
-            <AppText key={row.id} className="mb-2 text-[13px] leading-5" style={{ color: '#fff' }}>
-              {row.body}
-            </AppText>
-          ))
-        )}
-      </ScrollView>
-      <View className="mt-2 flex-row items-center" style={{ gap: 8 }}>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Write a comment"
-          placeholderTextColor="rgba(255,255,255,0.45)"
-          style={{
-            flex: 1,
-            minHeight: 44,
-            borderRadius: 14,
-            paddingHorizontal: 12,
-            color: '#fff',
-            backgroundColor: 'rgba(255,255,255,0.08)',
-          }}
-        />
-        <Pressable
-          accessibilityRole="button"
-          disabled={!text.trim() || create.isPending}
-          onPress={() => {
-            const next = text.trim();
-            if (!next) {
-              return;
-            }
-            create.mutate(next, {
-              onSuccess: () => setText(''),
-              onError: (error) => Alert.alert('Couldn’t comment', getErrorMessage(error)),
-            });
-          }}
-          className="h-11 items-center justify-center rounded-full px-3"
-          style={{ backgroundColor: THEME.accent, minHeight: 44 }}>
-          <AppText className="text-[13px] font-bold" style={{ color: '#fff' }}>
-            Send
-          </AppText>
-        </Pressable>
-      </View>
+      </Pressable>
     </View>
   );
 }

@@ -2,9 +2,11 @@ import { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import { ClipCountRow, ClipSocial } from '@/components/feed/ClipSocial';
 import { StoryRing } from '@/components/stories/StoryRing';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { useClipSocial } from '@/hooks/useClipSocial';
 import { useStoryGroups } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import { copy } from '@/lib/copy';
@@ -110,8 +112,9 @@ function StoryBubble({
   onAdd: () => void;
 }) {
   const showAdd = group.isOwn;
+  const latest = group.stories[group.stories.length - 1];
   return (
-    <View className="w-[54px] items-center">
+    <View className="w-[80px] items-center">
       <View className="relative">
         <Pressable
           onPress={onPress}
@@ -146,6 +149,46 @@ function StoryBubble({
       <AppText className="mt-1.5 text-center text-[10px] text-muted" numberOfLines={1}>
         {group.isOwn ? copy('wave.yours') : group.name}
       </AppText>
+      {latest ? <WaveTraySocial storyId={latest.id} postId={latest.post_id} mediaUrl={latest.media_url} caption={latest.caption} challengeId={latest.challenge_id} /> : null}
+    </View>
+  );
+}
+
+function WaveTraySocial({
+  storyId,
+  postId,
+  mediaUrl,
+  caption,
+  challengeId,
+}: {
+  storyId: string;
+  postId?: string | null;
+  mediaUrl: string;
+  caption?: string | null;
+  challengeId?: string | null;
+}) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const social = useClipSocial({
+    kind: 'story',
+    clipId: storyId,
+    postId,
+    mediaUrl,
+    caption,
+    challengeId,
+  });
+  return (
+    <View className="mt-1 w-full items-center">
+      <ClipCountRow post={social.post} />
+      <ClipSocial
+        compact
+        post={social.post}
+        currentUserId={user?.id}
+        commenting={social.commenting}
+        onReact={social.onReact}
+        onComment={social.onComment}
+        onOpenComments={() => router.push(storyHref(storyId, { comments: true }))}
+      />
     </View>
   );
 }

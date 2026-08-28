@@ -1,9 +1,12 @@
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ClipSocial } from '@/components/feed/ClipSocial';
 import { AppText } from '@/components/ui/AppText';
+import { useAuth } from '@/hooks/useAuth';
+import { useClipSocial } from '@/hooks/useClipSocial';
 import { useReel } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { personDisplayName } from '@/lib/social';
@@ -12,8 +15,10 @@ import { THEME } from '@/lib/theme';
 export default function ReelViewerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const { id, comments } = useLocalSearchParams<{ id: string; comments?: string }>();
   const reelId = Array.isArray(id) ? id[0] : id;
+  const openComments = comments === '1' || (Array.isArray(comments) && comments[0] === '1');
   const reelQuery = useReel(reelId);
 
   function close() {
@@ -66,12 +71,9 @@ export default function ReelViewerScreen() {
           position: 'absolute',
           top: 0,
           right: 0,
-          bottom: 0,
           left: 0,
           paddingTop: insets.top + 8,
-          paddingBottom: insets.bottom + 16,
           paddingHorizontal: 16,
-          justifyContent: 'space-between',
         }}>
         <Pressable
           accessibilityRole="button"
@@ -83,7 +85,7 @@ export default function ReelViewerScreen() {
             Close
           </AppText>
         </Pressable>
-        <View>
+        <View className="mt-2">
           <AppText className="text-[13px] font-bold" style={{ color: 'rgba(255,255,255,0.8)' }}>
             {handle}
           </AppText>
@@ -92,7 +94,72 @@ export default function ReelViewerScreen() {
           </AppText>
         </View>
       </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{
+          position: 'absolute',
+          right: 0,
+          bottom: 0,
+          left: 0,
+          backgroundColor: THEME.surface,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          maxHeight: 340,
+          paddingBottom: insets.bottom + 8,
+        }}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10 }}>
+          <RoundPlaybackSocial
+            reelId={reel.id}
+            postId={reel.post_id}
+            videoUrl={reel.video_url}
+            caption={reel.caption}
+            challengeId={reel.challenge_id}
+            currentUserId={user?.id}
+            openComments={openComments}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
+  );
+}
+
+function RoundPlaybackSocial({
+  reelId,
+  postId,
+  videoUrl,
+  caption,
+  challengeId,
+  currentUserId,
+  openComments,
+}: {
+  reelId: string;
+  postId?: string | null;
+  videoUrl: string;
+  caption?: string | null;
+  challengeId?: string | null;
+  currentUserId?: string;
+  openComments: boolean;
+}) {
+  const social = useClipSocial({
+    kind: 'reel',
+    clipId: reelId,
+    postId,
+    mediaUrl: videoUrl,
+    caption,
+    challengeId,
+  });
+  return (
+    <ClipSocial
+      showThread
+      startComposer={openComments}
+      post={social.post}
+      currentUserId={currentUserId}
+      commenting={social.commenting}
+      onReact={social.onReact}
+      onComment={social.onComment}
+    />
   );
 }
 

@@ -60,18 +60,18 @@ export const STORY_CREATE_HREF = captureHref('story');
 export const CAPTURE_STORY_HREF = captureHref('story');
 export const CAPTURE_REEL_HREF = captureHref('reel');
 
-export function reelHref(id: string) {
+export function reelHref(id: string, extra?: { comments?: boolean }) {
   return {
     pathname: '/reel/[id]' as const,
-    params: { id },
+    params: { id, ...(extra?.comments ? { comments: '1' } : {}) },
   };
 }
 
 /** Viewer route stays `/story/[id]` so existing links keep working. User-facing name is Wave. */
-export function storyHref(id: string) {
+export function storyHref(id: string, extra?: { comments?: boolean }) {
   return {
     pathname: '/story/[id]' as const,
-    params: { id },
+    params: { id, ...(extra?.comments ? { comments: '1' } : {}) },
   };
 }
 

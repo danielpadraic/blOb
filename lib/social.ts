@@ -33,11 +33,11 @@ export const FRIENDSHIP_COLUMNS =
 export const FEED_EVENT_COLUMNS =
   'id, actor_id, event_type, target_type, target_id, challenge_id, metadata, visibility, created_at';
 export const STORY_COLUMNS =
-  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, sequence_id, sequence_index, clip_start_ms, clip_duration_ms, thumbnail_url';
+  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, sequence_id, sequence_index, clip_start_ms, clip_duration_ms, thumbnail_url, post_id';
 export const STORY_REACTION_COLUMNS = 'id, story_id, user_id, reaction_type, created_at';
 export const STORY_COMMENT_COLUMNS = 'id, story_id, user_id, body, created_at';
 export const REEL_COLUMNS =
-  'id, user_id, video_url, thumbnail_url, caption, challenge_id, duration_ms, created_at';
+  'id, user_id, video_url, thumbnail_url, caption, challenge_id, duration_ms, created_at, post_id';
 export const CONVERSATION_COLUMNS = 'id, is_group, challenge_id, created_at, updated_at';
 export const CONVERSATION_MEMBER_COLUMNS =
   'conversation_id, user_id, joined_at, last_read_at';
@@ -821,7 +821,7 @@ export async function fetchActiveStories(): Promise<Story[]> {
     .order('created_at', { ascending: false })
     .limit(80);
   const result =
-    query.error && /sequence_id|clip_start_ms|thumbnail_url|schema cache/i.test(query.error.message)
+    query.error && /sequence_id|clip_start_ms|thumbnail_url|post_id|schema cache/i.test(query.error.message)
       ? await supabase
           .from('stories')
           .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, thumbnail_url')
@@ -839,11 +839,15 @@ export async function fetchActiveStories(): Promise<Story[]> {
 }
 
 export async function fetchStory(id: string): Promise<Story | null> {
-  const { data, error } = await supabase
-    .from('stories')
-    .select(STORY_COLUMNS)
-    .eq('id', id)
-    .maybeSingle();
+  const query = await supabase.from('stories').select(STORY_COLUMNS).eq('id', id).maybeSingle();
+  const { data, error } =
+    query.error && /sequence_id|clip_start_ms|thumbnail_url|post_id|schema cache/i.test(query.error.message)
+      ? await supabase
+          .from('stories')
+          .select('id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, thumbnail_url')
+          .eq('id', id)
+          .maybeSingle()
+      : query;
   if (error) {
     if (isMissingRelationError(error)) {
       return null;
@@ -916,7 +920,7 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     clip_duration_ms: clip.durationMs || null,
   }));
   const { data, error } = await supabase.from('stories').insert(rows).select(STORY_COLUMNS);
-  if (error && /sequence_id|clip_start_ms|clip_duration_ms|thumbnail_url|schema cache/i.test(error.message)) {
+  if (error && /sequence_id|clip_start_ms|clip_duration_ms|thumbnail_url|post_id|schema cache/i.test(error.message)) {
     const fallback = await supabase
       .from('stories')
       .insert({
@@ -957,6 +961,19 @@ export async function persistReelThumbnail(reelId: string, thumbnailUrl: string)
   }
 }
 
+export async function attachClipPostId(
+  kind: 'story' | 'reel',
+  clipId: string,
+  postId: string,
+): Promise<void> {
+  const table = kind === 'reel' ? 'reels' : 'stories';
+  const { error } = await supabase.from(table).update({ post_id: postId }).eq('id', clipId);
+  if (error && /post_id|schema cache/i.test(error.message)) {
+    return;
+  }
+  throwIfError(error);
+}
+
 export async function viewStory(userId: string, storyId: string): Promise<void> {
   const { error } = await supabase.from('story_views').upsert(
     {
@@ -981,12 +998,27 @@ async function withReelProfiles(rows: Reel[]): Promise<ReelItem[]> {
   }));
 }
 
-export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> {
-  const { data, error } = await supabase
+const REEL_COLUMNS_FALLBACK =
+  'id, user_id, video_url, thumbnail_url, caption, challenge_id, duration_ms, created_at';
+
+async function selectReels(limit: number) {
+  const query = await supabase
     .from('reels')
     .select(REEL_COLUMNS)
     .order('created_at', { ascending: false })
     .limit(limit);
+  if (query.error && /post_id|schema cache/i.test(query.error.message)) {
+    return supabase
+      .from('reels')
+      .select(REEL_COLUMNS_FALLBACK)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+  }
+  return query;
+}
+
+export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> {
+  const { data, error } = await selectReels(limit);
   if (error) {
     if (isMissingRelationError(error)) {
       return [];
@@ -997,7 +1029,11 @@ export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> 
 }
 
 export async function fetchReel(id: string): Promise<ReelItem | null> {
-  const { data, error } = await supabase.from('reels').select(REEL_COLUMNS).eq('id', id).maybeSingle();
+  const query = await supabase.from('reels').select(REEL_COLUMNS).eq('id', id).maybeSingle();
+  const { data, error } =
+    query.error && /post_id|schema cache/i.test(query.error.message)
+      ? await supabase.from('reels').select(REEL_COLUMNS_FALLBACK).eq('id', id).maybeSingle()
+      : query;
   if (error) {
     if (isMissingRelationError(error)) {
       return null;

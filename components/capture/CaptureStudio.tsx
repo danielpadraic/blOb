@@ -41,6 +41,7 @@ import {
   waveClipWindows,
 } from '@/lib/waveClips';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
+import { attachClipPostId } from '@/lib/social';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { asGalleryMedia } from '@/utils/media';
 import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
@@ -271,7 +272,7 @@ export function CaptureStudio({
           duration_ms: draft.durationMs ?? null,
         });
         try {
-          await createPost.mutateAsync({
+          const posted = await createPost.mutateAsync({
             content: captionText,
             mediaUrls: [mediaUrl],
             audience,
@@ -279,6 +280,7 @@ export function CaptureStudio({
             challengeId: challengeId ?? undefined,
             source: 'feed',
           });
+          await attachClipPostId('reel', reel.id, posted.id);
         } catch (postError) {
           logPostgrestError('round-feed-post', postError);
         }
@@ -319,6 +321,21 @@ export function CaptureStudio({
           challenge_id: challengeId,
           clips,
         });
+        for (const story of stories) {
+          try {
+            const posted = await createPost.mutateAsync({
+              content: story.caption?.trim() || caption.trim(),
+              mediaUrls: [mediaUrl],
+              audience,
+              audienceUserIds: audience === 'specific' ? audienceUserIds : [],
+              challengeId: challengeId ?? undefined,
+              source: 'feed',
+            });
+            await attachClipPostId('story', story.id, posted.id);
+          } catch (postError) {
+            logPostgrestError('wave-feed-post', postError);
+          }
+        }
         const first = stories[0];
         if (first) {
           try {

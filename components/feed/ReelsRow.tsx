@@ -4,9 +4,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { ClipCountRow, ClipSocial } from '@/components/feed/ClipSocial';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
+import { useClipSocial } from '@/hooks/useClipSocial';
 import { useReels } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import { copy } from '@/lib/copy';
@@ -29,6 +31,10 @@ type MomentItem = {
   thumbUrl?: string | null;
   videoUrl?: string | null;
   ownerId?: string | null;
+  postId?: string | null;
+  caption?: string | null;
+  challengeId?: string | null;
+  commentsHref?: Href;
 };
 
 const VARIANTS: MomentVariant[] = ['teal', 'dark', 'dark', 'soft'];
@@ -59,6 +65,10 @@ export function ReelsRow() {
     thumbUrl: reel.thumbnail_url?.trim() || null,
     videoUrl: reel.video_url,
     ownerId: reel.user_id,
+    postId: reel.post_id,
+    caption: reel.caption,
+    challengeId: reel.challenge_id,
+    commentsHref: reelHref(reel.id, { comments: true }),
   }));
   const createCard: MomentItem = {
     id: 'new-reel',
@@ -79,7 +89,11 @@ export function ReelsRow() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingBottom: 2 }}>
         {cards.map((item) => (
-          <MomentCard key={item.id} item={item} onPress={() => router.push(item.href)} />
+          <MomentCard
+            key={item.id}
+            item={item}
+            onPress={() => router.push(item.href)}
+          />
         ))}
       </ScrollView>
       {liveReels.length === 0 ? (
@@ -96,12 +110,21 @@ function MomentCard({
   item: MomentItem;
   onPress: () => void;
 }) {
+  const router = useRouter();
   const { user } = useAuth();
   const generated = useVideoPoster(item.videoUrl, item.thumbUrl);
   const thumbUrl = item.thumbUrl || generated;
   const hasStill = Boolean(thumbUrl) || Boolean(item.videoUrl);
   const light = item.variant === 'soft' && !hasStill;
   const color = light ? '#12332D' : '#FFFFFF';
+  const social = useClipSocial({
+    kind: 'reel',
+    clipId: item.id,
+    postId: item.postId,
+    mediaUrl: item.videoUrl ?? '',
+    caption: item.caption,
+    challengeId: item.challengeId,
+  });
 
   useEffect(() => {
     if (!item.videoUrl || item.thumbUrl || !generated || !user?.id || item.ownerId !== user.id) {
@@ -121,6 +144,7 @@ function MomentCard({
   }, [generated, item.id, item.ownerId, item.thumbUrl, item.videoUrl, user?.id]);
 
   return (
+    <View>
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
@@ -190,7 +214,30 @@ function MomentCard({
           numberOfLines={3}>
           {item.title}
         </AppText>
+        {item.videoUrl ? (
+          <View pointerEvents="none" style={{ zIndex: 1, marginTop: 6 }}>
+            <ClipCountRow post={social.post} light />
+          </View>
+        ) : null}
       </LinearGradient>
     </Pressable>
+    {item.videoUrl ? (
+      <View className="mt-1" style={{ width: 112 }}>
+        <ClipSocial
+          compact
+          post={social.post}
+          currentUserId={user?.id}
+          commenting={social.commenting}
+          onReact={social.onReact}
+          onComment={social.onComment}
+          onOpenComments={() => {
+            if (item.commentsHref) {
+              router.push(item.commentsHref);
+            }
+          }}
+        />
+      </View>
+    ) : null}
+    </View>
   );
 }

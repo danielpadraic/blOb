@@ -54,6 +54,7 @@ export type Story = {
   clip_start_ms?: number | null;
   clip_duration_ms?: number | null;
   thumbnail_url?: string | null;
+  post_id?: string | null;
 };
 
 export type StoryReactionType = 'like' | 'love' | 'fire' | 'strong';
@@ -89,6 +90,7 @@ export type Reel = {
   challenge_id: string | null;
   duration_ms: number | null;
   created_at: string;
+  post_id?: string | null;
 };
 
 export type ReelTag = {

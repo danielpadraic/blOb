@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { useRef } from 'react';
 import { Alert } from 'react-native';
 
+import { clipPostsQueryKey } from '@/lib/clipPost';
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
@@ -801,6 +802,38 @@ export function useAuthorFeed(authorId?: string | null) {
   });
 }
 
+export async function fetchPostsByIds(ids: string[], viewerId?: string): Promise<PostWithMeta[]> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) {
+    return [];
+  }
+  const schema = await resolvePostsSchema();
+  const filtered = await supabase
+    .from('posts')
+    .select(schema.select)
+    .in('id', unique)
+    .is('deleted_at', null);
+  const { data, error } =
+    filtered.error && isMissingDeletedAt(filtered.error)
+      ? await supabase.from('posts').select(schema.select).in('id', unique)
+      : filtered;
+  if (error || !data) {
+    return [];
+  }
+  const rows = (data as unknown as PostWithMeta[]).filter((row) => !row.deleted_at);
+  return hydrateAuthors(await withSocial(rows, viewerId));
+}
+
+export function usePostsByIds(ids: string[]) {
+  const { user } = useAuth();
+  const key = [...new Set(ids.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: clipPostsQueryKey(key),
+    enabled: key.length > 0,
+    queryFn: () => fetchPostsByIds(key, user?.id),
+  });
+}
+
 export function usePost(postId?: string | null) {
   const { user } = useAuth();
   return useQuery({
@@ -1389,48 +1422,34 @@ export function useCreateComment(challengeId?: string | null) {
           author: asPublicProfile(profile ?? { id: user.id }),
           reactions: [],
         };
-        queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
-          if (!Array.isArray(current)) {
-            return current;
-          }
-          return (current as PostWithMeta[]).map((post) =>
-            post.id === input.postId
-              ? { ...post, comments: [...(post.comments ?? []), optimistic] }
-              : post,
-          );
-        });
+        patchFeedPosts(queryClient, input.postId, (post) => ({
+          ...post,
+          comments: [...(post.comments ?? []), optimistic],
+        }));
       }
       return { previous };
     },
     onSuccess: (data) => {
-      queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
-        if (!Array.isArray(current)) {
-          return current;
-        }
-        return (current as PostWithMeta[]).map((post) => {
-          if (post.id !== data.post_id) {
-            return post;
+      patchFeedPosts(queryClient, data.post_id, (post) => {
+        let replaced = false;
+        const comments = (post.comments ?? []).map((comment) => {
+          if (
+            replaced ||
+            !comment.id.startsWith('optimistic-comment-') ||
+            comment.content !== data.content ||
+            (comment.parent_id ?? null) !== (data.parent_id ?? null)
+          ) {
+            return comment;
           }
-          let replaced = false;
-          const comments = (post.comments ?? []).map((comment) => {
-            if (
-              replaced ||
-              !comment.id.startsWith('optimistic-comment-') ||
-              comment.content !== data.content ||
-              (comment.parent_id ?? null) !== (data.parent_id ?? null)
-            ) {
-              return comment;
-            }
-            replaced = true;
-            return {
-              ...comment,
-              id: data.id,
-              parent_id: data.parent_id,
-              created_at: data.created_at,
-            };
-          });
-          return { ...post, comments };
+          replaced = true;
+          return {
+            ...comment,
+            id: data.id,
+            parent_id: data.parent_id,
+            created_at: data.created_at,
+          };
         });
+        return { ...post, comments };
       });
     },
     onError: (_error, _input, context) => {
