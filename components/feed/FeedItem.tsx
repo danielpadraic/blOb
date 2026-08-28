@@ -74,7 +74,7 @@ export function FeedItem({ event, joined, onPressChallenge }: FeedItemProps) {
               <ChallengeInviteCard
                 challenge={event.challenge}
                 theme={event.challenge.is_official ? 'official' : 'user'}
-                context="feed"
+                context="lobby"
                 joined={joined}
                 host={
                   event.actor && event.challenge.created_by === event.actor_id

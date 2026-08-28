@@ -703,13 +703,13 @@ function ChallengeShareCard({
   const open = () =>
     void openTag({
       challengeId,
-      visibility: card?.visibility,
-      challenge_lane: card?.challenge_lane,
-      is_official: card?.is_official,
-      created_by: card?.created_by,
-      snapshot: card,
+      visibility: card?.id === challengeId ? card.visibility : undefined,
+      challenge_lane: card?.id === challengeId ? card.challenge_lane : undefined,
+      is_official: card?.id === challengeId ? card.is_official : undefined,
+      created_by: card?.id === challengeId ? card.created_by : undefined,
+      snapshot: card?.id === challengeId ? card : { id: challengeId },
     });
-  if (card) {
+  if (card?.id === challengeId) {
     const host =
       author && card.created_by && author.id === card.created_by
         ? { name: author.name, avatarUrl: author.avatarUrl }
@@ -719,7 +719,7 @@ function ChallengeShareCard({
         <ChallengeInviteCard
           challenge={card}
           theme={card.is_official ? 'official' : 'user'}
-          context="feed"
+          context="lobby"
           host={host}
           onPress={open}
         />

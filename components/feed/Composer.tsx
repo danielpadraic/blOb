@@ -499,7 +499,7 @@ export function Composer({
           <ChallengeInviteCard
             challenge={attachedChallenge}
             theme={attachedChallenge.is_official ? 'official' : 'user'}
-            context="feed"
+            context="lobby"
           />
         </View>
       ) : null}

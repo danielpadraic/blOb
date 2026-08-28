@@ -22,7 +22,7 @@ export function ChallengeShareEmbed({
     <ChallengeInviteCard
       challenge={challenge}
       theme={challenge.is_official ? 'official' : 'user'}
-      context="feed"
+      context="lobby"
       joined={joined}
       host={host}
       onPress={onPress}

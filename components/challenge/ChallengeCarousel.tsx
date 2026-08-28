@@ -43,7 +43,7 @@ const CARD_GAP = 12;
 export function ChallengeCarousel({
   title,
   challenges,
-  context = 'feed',
+  context = 'lobby',
   section,
   currentUserId,
   progressById,

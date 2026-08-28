@@ -14,7 +14,6 @@ import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
-import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
@@ -27,7 +26,6 @@ import { openChallengeLobby, prefetchChallengeDetail, seedChallengeDetailQuery }
 import { formatCash, formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { copy } from '@/lib/copy';
-import { namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
 import { isOfficialChallenge } from '@/lib/official';
 import { armingCountdownLabel, officialContestantsNeeded, officialGuaranteeAmount } from '@/lib/officialSeries';
 import { isClosedForLogs, isJoinWindowOpen } from '@/lib/settlement';
@@ -36,7 +34,6 @@ import { getErrorMessage } from '@/utils/errors';
 import { compactCountdown } from '@/utils/format';
 
 const BOB_WAVE = require('@/assets/login/blob-login.png');
-const BLOB_WORDMARK = require('@/assets/mascot/blob-logo.png');
 
 export type InviteChallenge = {
   id: string;
@@ -103,10 +100,7 @@ type InviteMedia =
   | { kind: 'bob' }
   | { kind: 'placeholder'; visual: InviteVisualTheme };
 
-const HEIGHT = 176;
-const RADIUS = 16;
 const PANEL_RADIUS = 12;
-const OFFICIAL_BG = '#123832';
 const TINT: Record<InviteVisualTheme, string> = {
   movement: 'rgba(44,155,137,0.12)',
   ranked: 'rgba(76,90,158,0.12)',
@@ -248,7 +242,7 @@ export function inviteCardCanCheckIn(input: {
 export function ChallengeInviteCard({
   challenge,
   theme,
-  context = 'feed',
+  context = 'lobby',
   section,
   joined: joinedProp,
   hosting = false,
@@ -271,7 +265,6 @@ export function ChallengeInviteCard({
     (challenge.starts_at != null && new Date(challenge.starts_at).getTime() > Date.now());
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [joining, setJoining] = useState(false);
-  const [sponsorLogoFailed, setSponsorLogoFailed] = useState(false);
   const joinSheet = useJoinConfirm();
   const openTag = useOpenChallengeFromTag();
   const typeTip = useChallengeTypeTip();
@@ -314,14 +307,9 @@ export function ChallengeInviteCard({
     checkinEnabled &&
     inviteCardCanCheckIn({ challenge, joined, eliminated }) &&
     !checkedIn;
-  const cta = canJoin ? 'Join' : 'View';
-  const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
-  const muted = official ? 'rgba(231,247,243,0.72)' : THEME.textMuted;
   const tags = challengeCardTags({ challenge, hosting, joined });
-  const namedSponsor = namedOfficialSponsor(challenge);
-  const sponsorName = namedSponsor || officialSponsorName(challenge) || 'blOb';
   const displayTitle = challengeDisplayTitle(challenge);
-  const cardLabel = `${displayTitle}. ${status}. ${canCheckIn ? 'View or check-in' : cta}`;
+  const cardLabel = `${displayTitle}. ${status}. ${canCheckIn ? 'View or check-in' : canJoin ? 'Join' : 'View'}`;
 
   async function openDetail() {
     const challengeId = firstRouteParam(challenge.id);
@@ -373,8 +361,7 @@ export function ChallengeInviteCard({
 
   const hostLabel = official ? 'blOb' : host?.name?.trim() || 'Host';
 
-  if (context === 'lobby') {
-    return (
+  return (
       <View
         style={{
           borderRadius: 14,
@@ -435,164 +422,6 @@ export function ChallengeInviteCard({
         </View>
       </View>
     );
-  }
-
-  return (
-    <View
-      className="flex-row overflow-hidden"
-      style={{
-        height: HEIGHT,
-        maxHeight: 180,
-        borderRadius: RADIUS,
-        backgroundColor: official ? OFFICIAL_BG : THEME.surface,
-        borderWidth: official ? 0 : 1,
-        borderColor: THEME.border,
-        ...(official ? null : themeShadow('card')),
-      }}>
-      <View style={{ width: '38%', paddingVertical: 8, paddingLeft: 8 }}>
-        <MediaPanel
-          steps={mediaSteps}
-          visual={visual}
-          title={displayTitle}
-          openLabel={cardLabel}
-          category={challenge.category ?? undefined}
-          typeTipOpen={typeTip.open}
-          onOpen={() => void openDetail()}
-          onTypePress={typeTip.show}
-        />
-      </View>
-      <View
-        className="flex-1"
-        style={{
-          paddingLeft: 10,
-          paddingRight: 10,
-          paddingVertical: 10,
-          justifyContent: 'space-between',
-          ...flexChildMin(),
-        }}>
-        <View>
-          <ChallengeTagRow tags={tags} compact />
-          <Pressable
-            onPress={() => void openDetail()}
-            accessibilityRole="button"
-            accessibilityLabel={cardLabel}
-            style={{ marginTop: 4, minWidth: 0 }}>
-            <AppText
-              className="text-[16px] font-semibold leading-5"
-              style={{ color: titleColor, minWidth: 0 }}
-              numberOfLines={2}>
-              {challengeDisplayTitle(challenge)}
-            </AppText>
-          </Pressable>
-        </View>
-
-        <Pressable
-          onPress={() => void openDetail()}
-          accessibilityRole="button"
-          accessibilityLabel={cardLabel}
-          style={{ minHeight: 28, justifyContent: 'center' }}>
-          {official ? (
-            <View
-              className="flex-row items-center"
-              style={{ gap: 8, minHeight: 32 }}
-              accessibilityLabel={`Sponsored by ${sponsorName}`}>
-              <AppText className="text-[12px] font-semibold" style={{ color: muted }} numberOfLines={1}>
-                Sponsored by
-              </AppText>
-              {namedSponsor ? (
-                <AppText
-                  className="min-w-0 flex-1 text-[12px] font-extrabold"
-                  style={{ color: titleColor }}
-                  numberOfLines={2}>
-                  {namedSponsor}
-                </AppText>
-              ) : asHttpUrl(challenge.sponsor_logo_url) && !sponsorLogoFailed ? (
-                <Image
-                  source={{ uri: asHttpUrl(challenge.sponsor_logo_url) }}
-                  style={{ width: 56, height: 28 }}
-                  contentFit="contain"
-                  accessibilityLabel={sponsorName}
-                  onError={() => setSponsorLogoFailed(true)}
-                />
-              ) : (
-                <Image
-                  source={BLOB_WORDMARK}
-                  style={{ width: 64, height: 26, backgroundColor: 'transparent' }}
-                  contentFit="contain"
-                  tintColor="#F7FFFC"
-                  accessibilityLabel="blOb"
-                />
-              )}
-            </View>
-          ) : host ? (
-            <View className="flex-row items-start" style={[{ gap: 6, minHeight: 28 }, flexChildMin()]}>
-              <Avatar uri={host.avatarUrl} name={host.name} size={20} />
-              <View style={[flexChildMin(), { flexGrow: 1 }]}>
-                <AppText
-                  className="text-[12px] leading-4"
-                  style={{ color: muted, minWidth: 0 }}
-                  numberOfLines={2}>
-                  Hosted by{' '}
-                  <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
-                    {host.name}
-                  </AppText>
-                </AppText>
-              </View>
-            </View>
-          ) : (
-            <View style={{ minHeight: 28 }} />
-          )}
-        </Pressable>
-
-        <View style={{ gap: canCheckIn ? 6 : 0 }}>
-          <View className="flex-row items-center" style={[{ gap: 8 }, flexChildMin()]}>
-            <View className="flex-1 flex-row items-center" style={[{ gap: 5 }, flexChildMin()]}>
-              <View style={{ flexShrink: 0 }}>
-                <LobbyMoneyMark challenge={challenge} color={titleColor} />
-              </View>
-              <AppText style={{ color: muted, flexShrink: 0 }}>·</AppText>
-              <AppText
-                className="flex-1 text-[12px] font-semibold"
-                style={{ color: muted, minWidth: 0, flexShrink: 1 }}
-                numberOfLines={1}>
-                {status}
-              </AppText>
-            </View>
-            {canCheckIn ? null : (
-              <ActionButton
-                label={cta}
-                accessibilityLabel={cta}
-                primary={canJoin}
-                official={official}
-                loading={joining}
-                onPress={() => void onJoinOrView()}
-              />
-            )}
-          </View>
-          {canCheckIn ? (
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <ActionButton
-                label="View"
-                accessibilityLabel="View"
-                primary={false}
-                official={official}
-                flex
-                onPress={() => void openDetail()}
-              />
-              <ActionButton
-                label="Check In"
-                accessibilityLabel="Check In"
-                primary
-                official={official}
-                flex
-                onPress={onCheckIn}
-              />
-            </View>
-          ) : null}
-        </View>
-      </View>
-    </View>
-  );
 }
 
 function TextAction({
@@ -620,60 +449,6 @@ function TextAction({
         <ActivityIndicator size="small" color={THEME.accent} />
       ) : (
         <AppText className="text-[12px] font-semibold" style={{ color: THEME.accent }}>
-          {label}
-        </AppText>
-      )}
-    </Pressable>
-  );
-}
-
-function ActionButton({
-  label,
-  accessibilityLabel,
-  primary,
-  official,
-  loading = false,
-  flex = false,
-  onPress,
-}: {
-  label: string;
-  accessibilityLabel: string;
-  primary: boolean;
-  official: boolean;
-  loading?: boolean;
-  flex?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ busy: loading }}
-      disabled={loading}
-      onPress={(event) => {
-        event.stopPropagation();
-        onPress();
-      }}
-      style={{
-        minHeight: 44,
-        minWidth: flex ? 0 : 72,
-        flex: flex ? 1 : undefined,
-        paddingHorizontal: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-        backgroundColor: primary ? THEME.accent : official ? 'rgba(255,255,255,0.12)' : THEME.surface,
-        borderWidth: 1,
-        borderColor: primary ? THEME.accent : official ? 'rgba(255,255,255,0.28)' : THEME.accent,
-      }}>
-      {loading ? (
-        <ActivityIndicator color={primary ? THEME.accentForeground : official ? '#FFFFFF' : THEME.accent} />
-      ) : (
-        <AppText
-          className="text-[14px] font-extrabold"
-          style={{ color: primary ? THEME.accentForeground : official ? '#FFFFFF' : THEME.accent }}
-          numberOfLines={1}>
           {label}
         </AppText>
       )}
@@ -737,7 +512,7 @@ function MediaPanel({
             <Image
               source={{ uri: resolved.uri }}
               style={{ width: '100%', height: '100%' }}
-              contentFit="cover"
+              contentFit="contain"
               contentPosition="center"
               cachePolicy="memory-disk"
               onError={failThrough}

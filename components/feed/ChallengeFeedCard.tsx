@@ -13,7 +13,7 @@ export function ChallengeFeedCard({ challenge, joined, onPress }: ChallengeFeedC
     <ChallengeInviteCard
       challenge={challenge}
       theme={challenge.is_official ? 'official' : 'user'}
-      context="feed"
+      context="lobby"
       joined={joined}
       onPress={onPress}
     />
