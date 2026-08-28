@@ -87,7 +87,8 @@ export function ReactionBar({
 }: ReactionBarProps) {
   const [trayOpen, setTrayOpen] = useState(false);
   const mine = userReaction(reactions, currentUserId);
-  const mineType = mine ? asReactionType(mine.reaction_type) : null;
+  const rawType = mine ? asReactionType(mine.reaction_type) : null;
+  const mineType = rawType && rawType in REACTION_GLYPH ? (rawType as PostReactionType) : rawType ? 'like' : null;
   const total = reactions?.length ?? 0;
 
   if (compact) {

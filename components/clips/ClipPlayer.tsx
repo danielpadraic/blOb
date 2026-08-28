@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated as RNAnimated,
   Dimensions,
   Platform,
   Pressable,
@@ -21,7 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { WaveRoundCommentSheet } from '@/components/clips/WaveRoundCommentSheet';
+import { WaveRoundCommentsFeed } from '@/components/clips/WaveRoundCommentsFeed';
 import { WatchSurface, useWatchSurface } from '@/components/clips/WatchSurface';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -32,11 +33,22 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useClipSocial } from '@/hooks/useClipSocial';
-import { useBlockUser, useReportPost } from '@/hooks/usePostModeration';
+import { useReportPost } from '@/hooks/usePostModeration';
 import { useFriends, useShareStory, useViewStory } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { RoundShareComposer } from '@/components/clips/RoundShareComposer';
-import { hideAuthorFromMyRail, setPostHiddenFromRail } from '@/lib/clipRail';
+import { downloadClipMedia } from '@/lib/clipDownload';
+import {
+  CLIP_REACTIONS,
+  DEFAULT_CLIP_REACTION,
+  asClipReactionType,
+  clipReactionEmoji,
+  commentsBandHeight,
+  loadLastClipReaction,
+  saveLastClipReaction,
+  type ClipReactionType,
+} from '@/lib/clipReactions';
+import { setPostHiddenFromRail } from '@/lib/clipRail';
 import { clipSocialCounts } from '@/lib/clipPost';
 import { copy } from '@/lib/copy';
 import { canOfferShareToFeed } from '@/lib/roundShare';
@@ -45,7 +57,6 @@ import { personDisplayName, type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import { roundShareUrl, storyShareUrl } from '@/lib/waveShare';
-import type { ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { formatFeedTime } from '@/utils/format';
 
@@ -71,13 +82,7 @@ export type ClipPlayItem = {
   privacyMode?: string | null;
 };
 
-const EMOJI_ROW: { emoji: string; type: ReactionType }[] = [
-  { emoji: '👋', type: 'care' },
-  { emoji: '🔥', type: 'fire' },
-  { emoji: '💪', type: 'like' },
-  { emoji: '😂', type: 'sad' },
-  { emoji: '❤️', type: 'love' },
-];
+const RAIL_HIT = 48;
 
 type ClipPlayerProps = {
   clips: ClipPlayItem[];
@@ -108,17 +113,17 @@ export function ClipPlayer({
   const viewStory = useViewStory();
   const [index, setIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
-  const [sheet, setSheet] = useState<'comments' | 'share' | 'shareFeed' | 'more' | 'caption' | null>(
-    openComments ? 'comments' : null,
-  );
+  const [sheet, setSheet] = useState<'share' | 'shareFeed' | 'more' | 'caption' | 'delete' | null>(null);
+  const [commentsMode, setCommentsMode] = useState(openComments);
   const [promptShare, setPromptShare] = useState(sharePrompt);
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [burst, setBurst] = useState(0);
-  const [floatEmoji, setFloatEmoji] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [lastReaction, setLastReaction] = useState<ClipReactionType>(DEFAULT_CLIP_REACTION);
+  const [float, setFloat] = useState<{ emoji: string; key: number } | null>(null);
   const [captionDraft, setCaptionDraft] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
   const paused = useRef(false);
   const sheetRef = useRef(sheet);
+  const commentsRef = useRef(commentsMode);
+  const persistReact = useRef<(type: ClipReactionType) => void>(() => undefined);
   const marked = useRef(new Set<string>());
   const clipsRef = useRef(clips);
   const indexRef = useRef(index);
@@ -127,15 +132,12 @@ export function ClipPlayer({
   clipsRef.current = clips;
   indexRef.current = index;
   sheetRef.current = sheet;
-  paused.current = emojiOpen;
+  commentsRef.current = commentsMode;
+  paused.current = pickerOpen;
 
   useEffect(() => {
-    if (!toast) {
-      return;
-    }
-    const handle = setTimeout(() => setToast(null), 2500);
-    return () => clearTimeout(handle);
-  }, [toast]);
+    void loadLastClipReaction().then(setLastReaction);
+  }, []);
 
   const clip = clips[index];
 
@@ -156,12 +158,28 @@ export function ClipPlayer({
     }
   }, []);
 
+  const applyReaction = useCallback((type: ClipReactionType) => {
+    setLastReaction(type);
+    void saveLastClipReaction(type);
+    setFloat({ emoji: clipReactionEmoji(type), key: Date.now() });
+    setPickerOpen(false);
+    persistReact.current(type);
+  }, []);
+
+  function requestClose() {
+    if (commentsRef.current) {
+      setCommentsMode(false);
+      return;
+    }
+    onClose();
+  }
+
   useEffect(() => {
     setProgress(0);
-    setBurst(0);
-    setFloatEmoji(null);
-    setSheet(openComments && index === startIndex ? 'comments' : null);
-    setEmojiOpen(false);
+    setFloat(null);
+    setPickerOpen(false);
+    setCommentsMode(openComments && index === startIndex);
+    setSheet(null);
     setCaptionDraft(clip?.caption ?? '');
   }, [clip?.id, index, openComments, startIndex]);
 
@@ -197,7 +215,7 @@ export function ClipPlayer({
             return;
           }
           if (event.translationY > 110) {
-            runOnJS(onClose)();
+            runOnJS(requestClose)();
             return;
           }
           translateY.value = withTiming(0);
@@ -214,13 +232,16 @@ export function ClipPlayer({
   }
 
   const origin = clip.challengeId ? challenges?.get(clip.challengeId) : undefined;
+  const bandH = commentsMode ? commentsBandHeight(watchHeight) : undefined;
+  const railPad = commentsMode ? 8 : bottomPad;
 
   return (
     <WatchSurface>
       <StatusBar style="light" />
     <Animated.View style={[{ flex: 1, backgroundColor: '#101312' }, sheetStyle]}>
+      <View style={{ flex: 1 }}>
       <GestureDetector gesture={pan}>
-        <View style={{ flex: 1 }}>
+          <View style={{ height: bandH, flex: bandH ? undefined : 1, overflow: 'hidden', backgroundColor: '#101312' }}>
           {clip.mediaType === 'video' ? (
             <ClipVideo
               key={clip.id}
@@ -242,23 +263,16 @@ export function ClipPlayer({
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Like"
+            accessibilityLabel="React"
             onPress={() => undefined}
-            onLongPress={() => {
-              paused.current = true;
-              setEmojiOpen(true);
-            }}
+            onLongPress={() => setPickerOpen(true)}
             delayLongPress={220}
             style={{ position: 'absolute', top: 0, right: 72, bottom: 0, left: 72 }}
           >
-            <DoubleTapLike
-              onLike={() => {
-                setBurst((value) => value + 1);
-              }}
-            />
+            <DoubleTapLike onLike={() => applyReaction(lastReaction)} />
           </Pressable>
 
-          {autoAdvance ? (
+          {autoAdvance && !commentsMode ? (
             <>
               <Pressable
                 accessibilityLabel={copy('wave.prev')}
@@ -280,16 +294,16 @@ export function ClipPlayer({
               top: 0,
               right: 0,
               left: 0,
-              paddingTop: topPad,
+              paddingTop: commentsMode ? 8 : topPad,
               paddingHorizontal: 12,
             }}>
             <View className="flex-row items-center">
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={clip.kind === 'wave' ? copy('wave.close') : 'Close'}
-                onPress={onClose}
+                accessibilityLabel={commentsMode ? 'Close comments' : clip.kind === 'wave' ? copy('wave.close') : 'Close'}
+                onPress={requestClose}
                 hitSlop={8}
-                style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}>
+                style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, justifyContent: 'center' }}>
                 <AppText className="text-[22px] font-bold" style={{ color: '#fff' }}>
                   ×
                 </AppText>
@@ -304,12 +318,19 @@ export function ClipPlayer({
                 </AppText>
               </View>
               {origin ? (
-                <View className="rounded-full px-3 py-1.5" style={{ backgroundColor: 'rgba(16,19,18,0.55)' }}>
+                <View className="mr-1 rounded-full px-3 py-1.5" style={{ backgroundColor: 'rgba(16,19,18,0.55)' }}>
                   <AppText className="text-[11px] font-bold" style={{ color: '#fff' }} numberOfLines={1}>
                     {origin.title}
                   </AppText>
                 </View>
               ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="More"
+                onPress={() => setSheet('more')}
+                style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
+                <Glyph name={GLYPH.more} color="#fff" size={22} />
+              </Pressable>
             </View>
           </View>
 
@@ -317,13 +338,15 @@ export function ClipPlayer({
             key={clip.id}
             clip={clip}
             currentUserId={user?.id}
-            onComments={() => setSheet('comments')}
-            onShare={() => setSheet('share')}
-            onMore={() => setSheet('more')}
-            onLikeBurst={() => setBurst((value) => value + 1)}
-            burstKey={burst}
-            floatEmoji={floatEmoji}
-            insetsBottom={bottomPad}
+            lastReaction={lastReaction}
+            pickerOpen={pickerOpen}
+            float={float}
+            insetsBottom={railPad}
+            persistReact={persistReact}
+            onComments={() => setCommentsMode(true)}
+            onLongReact={() => setPickerOpen(true)}
+            onPickReact={applyReaction}
+            onClosePicker={() => setPickerOpen(false)}
           />
 
           {clip.caption ? (
@@ -333,7 +356,7 @@ export function ClipPlayer({
                 position: 'absolute',
                 left: 16,
                 right: 88,
-                bottom: bottomPad + 20,
+                bottom: railPad + 20,
               }}>
               <AppText className="text-[15px] leading-5" style={{ color: '#fff' }} numberOfLines={3}>
                 {clip.caption}
@@ -347,7 +370,7 @@ export function ClipPlayer({
               position: 'absolute',
               right: 12,
               left: 12,
-              bottom: bottomPad,
+              bottom: railPad,
               height: 3,
               borderRadius: 2,
               backgroundColor: 'rgba(255,255,255,0.28)',
@@ -361,7 +384,7 @@ export function ClipPlayer({
               }}
             />
           </View>
-          {promptShare && canOfferShareToFeed(clip) ? (
+          {promptShare && canOfferShareToFeed(clip) && !commentsMode ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -372,7 +395,7 @@ export function ClipPlayer({
                 position: 'absolute',
                 left: 16,
                 right: 16,
-                bottom: bottomPad + 32,
+                bottom: railPad + 32,
                 minHeight: 44,
                 borderRadius: 18,
                 backgroundColor: 'rgba(16,19,18,0.88)',
@@ -385,56 +408,19 @@ export function ClipPlayer({
               </AppText>
             </Pressable>
           ) : null}
-          {toast ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                left: 16,
-                right: 88,
-                bottom: bottomPad + 72,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                borderRadius: 14,
-                backgroundColor: 'rgba(16,19,18,0.72)',
-              }}>
-              <AppText className="text-[14px] leading-5" style={{ color: '#fff' }} numberOfLines={3}>
-                {toast}
-              </AppText>
+          </View>
+      </GestureDetector>
+          {commentsMode ? (
+            <View style={{ flex: 1, minHeight: 0 }}>
+              <ClipCommentsPane
+                clip={clip}
+                currentUserId={user?.id}
+                avatarUrl={profile?.avatar_url}
+                displayName={profile?.display_name ?? profile?.username}
+              />
             </View>
           ) : null}
-        </View>
-      </GestureDetector>
-
-      {emojiOpen ? (
-        <View
-          pointerEvents="box-none"
-          style={{
-            position: 'absolute',
-            right: 0,
-            bottom: bottomPad + 64,
-            left: 0,
-            alignItems: 'center',
-          }}>
-          <View className="flex-row" style={{ gap: 10 }}>
-            {EMOJI_ROW.map((row) => (
-              <Pressable
-                key={row.emoji}
-                accessibilityRole="button"
-                accessibilityLabel={row.emoji}
-                onPress={() => {
-                  setFloatEmoji(row.emoji);
-                  setEmojiOpen(false);
-                  paused.current = false;
-                  setTimeout(() => setFloatEmoji(null), 900);
-                }}
-                style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-                <AppText className="text-[28px]">{row.emoji}</AppText>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : null}
+      </View>
 
       <ClipSheets
         key={`${clip.id}-sheets`}
@@ -445,14 +431,6 @@ export function ClipPlayer({
         onOpenSheet={setSheet}
         onCloseSheet={() => setSheet(null)}
         onClosePlayer={onClose}
-        currentUserId={user?.id}
-        avatarUrl={profile?.avatar_url}
-        displayName={profile?.display_name ?? profile?.username}
-        viewportHeight={watchHeight}
-        onToast={setToast}
-        floatType={
-          floatEmoji ? EMOJI_ROW.find((row) => row.emoji === floatEmoji)?.type : undefined
-        }
       />
     </Animated.View>
     </WatchSurface>
@@ -478,23 +456,27 @@ function DoubleTapLike({ onLike }: { onLike: () => void }) {
 function ClipSocialRail({
   clip,
   currentUserId,
-  onComments,
-  onShare,
-  onMore,
-  onLikeBurst,
-  burstKey,
-  floatEmoji,
+  lastReaction,
+  pickerOpen,
+  float,
   insetsBottom,
+  persistReact,
+  onComments,
+  onLongReact,
+  onPickReact,
+  onClosePicker,
 }: {
   clip: ClipPlayItem;
   currentUserId?: string;
-  onComments: () => void;
-  onShare: () => void;
-  onMore: () => void;
-  onLikeBurst: () => void;
-  burstKey: number;
-  floatEmoji: string | null;
+  lastReaction: ClipReactionType;
+  pickerOpen: boolean;
+  float: { emoji: string; key: number } | null;
   insetsBottom: number;
+  persistReact: { current: (type: ClipReactionType) => void };
+  onComments: () => void;
+  onLongReact: () => void;
+  onPickReact: (type: ClipReactionType) => void;
+  onClosePicker: () => void;
 }) {
   const social = useClipSocial({
     kind: clip.kind === 'round' ? 'reel' : 'story',
@@ -506,15 +488,15 @@ function ClipSocialRail({
     type: clip.kind,
   });
   const counts = clipSocialCounts(social.post);
-  const liked = Boolean(userReaction(social.post?.reactions, currentUserId));
+  const mine = userReaction(social.post?.reactions, currentUserId);
+  const mineType = mine ? asClipReactionType(mine.reaction_type) : null;
+  persistReact.current = (type) => {
+    void social.onReact(type);
+  };
 
-  useEffect(() => {
-    if (burstKey > 0) {
-      void social.onReact('like');
-    }
-    // Burst key is the trigger; social identity is stable enough for this overlay.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [burstKey]);
+  function fire(type: ClipReactionType) {
+    onPickReact(type);
+  }
 
   return (
     <View
@@ -524,61 +506,135 @@ function ClipSocialRail({
         right: 8,
         bottom: insetsBottom + 48,
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
       }}>
-      {floatEmoji ? (
-        <AppText className="text-[36px]" style={{ marginBottom: 8 }}>
-          {floatEmoji}
-        </AppText>
-      ) : burstKey > 0 ? (
-        <AppText className="text-[36px]" style={{ marginBottom: 8 }}>
-          ❤️
-        </AppText>
+      {pickerOpen ? (
+        <View
+          style={{
+            maxWidth: 220,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+            backgroundColor: 'rgba(16,19,18,0.88)',
+            borderRadius: 18,
+            padding: 6,
+            gap: 2,
+          }}>
+          {CLIP_REACTIONS.map((row) => (
+            <Pressable
+              key={row.type}
+              accessibilityRole="button"
+              accessibilityLabel={row.label}
+              onPress={() => fire(row.type)}
+              style={{
+                minWidth: RAIL_HIT,
+                minHeight: RAIL_HIT,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <AppText className="text-[22px]">{row.emoji}</AppText>
+            </Pressable>
+          ))}
+        </View>
       ) : null}
-      <RailButton
-        accessibilityLabel="Like"
-        glyph={liked ? GLYPH.like : GLYPH.likeOutline}
-        count={counts.reactions}
-        onPress={() => {
-          onLikeBurst();
-        }}
-      />
-      <RailButton
+      <View style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
+        {float ? <FloatEmoji emoji={float.emoji} token={float.key} /> : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Reaction"
+          onPress={() => fire(mineType ?? lastReaction)}
+          onLongPress={onLongReact}
+          delayLongPress={280}
+          style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
+          <AppText className="text-[28px]">{mineType ? clipReactionEmoji(mineType) : '♡'}</AppText>
+          <AppText className="text-[11px] font-bold" style={{ color: '#fff' }}>
+            {counts.reactions}
+          </AppText>
+        </Pressable>
+      </View>
+      <Pressable
+        accessibilityRole="button"
         accessibilityLabel="Comment"
-        glyph={GLYPH.reply}
-        count={counts.comments}
         onPress={onComments}
-      />
-      <RailButton accessibilityLabel="Share" glyph={GLYPH.share} onPress={onShare} />
-      <RailButton accessibilityLabel="More" glyph={GLYPH.more} onPress={onMore} />
+        style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
+        <Glyph name={GLYPH.reply} color="#fff" size={26} />
+        <AppText className="text-[11px] font-bold" style={{ color: '#fff' }}>
+          {counts.comments}
+        </AppText>
+      </Pressable>
+      {pickerOpen ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close reactions"
+          onPress={onClosePicker}
+          style={{ minWidth: RAIL_HIT, minHeight: 32, alignItems: 'center' }}>
+          <AppText className="text-[12px] font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Close
+          </AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
-function RailButton({
-  accessibilityLabel,
-  glyph,
-  count,
-  onPress,
-}: {
-  accessibilityLabel: string;
-  glyph: (typeof GLYPH)[keyof typeof GLYPH];
-  count?: number;
-  onPress: () => void;
-}) {
+function FloatEmoji({ emoji, token }: { emoji: string; token: number }) {
+  const y = useRef(new RNAnimated.Value(0)).current;
+  const opacity = useRef(new RNAnimated.Value(1)).current;
+  useEffect(() => {
+    y.setValue(0);
+    opacity.setValue(1);
+    RNAnimated.parallel([
+      RNAnimated.timing(y, { toValue: -56, duration: 1200, useNativeDriver: true }),
+      RNAnimated.timing(opacity, { toValue: 0, duration: 1200, useNativeDriver: true }),
+    ]).start();
+  }, [opacity, token, y]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-      <Glyph name={glyph} color="#fff" size={22} />
-      {count != null ? (
-        <AppText className="text-[11px] font-bold" style={{ color: '#fff' }}>
-          {count}
-        </AppText>
-      ) : null}
-    </Pressable>
+    <RNAnimated.View
+      pointerEvents="none"
+      style={{ position: 'absolute', transform: [{ translateY: y }], opacity }}>
+      <AppText className="text-[32px]">{emoji}</AppText>
+    </RNAnimated.View>
+  );
+}
+
+function ClipCommentsPane({
+  clip,
+  currentUserId,
+  avatarUrl,
+  displayName,
+}: {
+  clip: ClipPlayItem;
+  currentUserId?: string;
+  avatarUrl?: string | null;
+  displayName?: string | null;
+}) {
+  const social = useClipSocial({
+    kind: clip.kind === 'round' ? 'reel' : 'story',
+    clipId: clip.id,
+    postId: clip.postId,
+    mediaUrl: clip.mediaUrl,
+    caption: clip.caption,
+    challengeId: clip.challengeId,
+    type: clip.kind,
+  });
+  const report = useReportPost();
+  return (
+    <WaveRoundCommentsFeed
+      comments={social.post?.comments ?? []}
+      currentUserId={currentUserId}
+      avatarUrl={avatarUrl}
+      displayName={displayName}
+      submitting={social.commenting}
+      onSend={(content, parentId) => social.onComment(content, parentId)}
+      onReact={(commentId, type) => void social.onReact(type, commentId)}
+      onReport={async () => {
+        const postId = social.post?.id ?? clip.postId;
+        if (!postId) {
+          return;
+        }
+        await report.mutateAsync({ postId, reason: 'comment' });
+      }}
+    />
   );
 }
 
@@ -590,26 +646,14 @@ function ClipSheets({
   onOpenSheet,
   onCloseSheet,
   onClosePlayer,
-  currentUserId,
-  avatarUrl,
-  displayName,
-  viewportHeight,
-  onToast,
-  floatType,
 }: {
   clip: ClipPlayItem;
-  sheet: 'comments' | 'share' | 'shareFeed' | 'more' | 'caption' | null;
+  sheet: 'share' | 'shareFeed' | 'more' | 'caption' | 'delete' | null;
   captionDraft: string;
   onCaptionDraft: (value: string) => void;
-  onOpenSheet: (next: 'comments' | 'share' | 'shareFeed' | 'more' | 'caption') => void;
+  onOpenSheet: (next: 'share' | 'shareFeed' | 'more' | 'caption' | 'delete') => void;
   onCloseSheet: () => void;
   onClosePlayer: () => void;
-  currentUserId?: string;
-  avatarUrl?: string | null;
-  displayName?: string | null;
-  viewportHeight: number;
-  onToast: (value: string | null) => void;
-  floatType?: ReactionType;
 }) {
   const social = useClipSocial({
     kind: clip.kind === 'round' ? 'reel' : 'story',
@@ -624,33 +668,10 @@ function ClipSheets({
   const friends = useFriends();
   const share = useShareStory();
   const report = useReportPost();
-  const block = useBlockUser();
   const url = clip.kind === 'round' ? roundShareUrl(clip.id) : storyShareUrl(clip.id);
-
-  useEffect(() => {
-    if (floatType) {
-      void social.onReact(floatType);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [floatType]);
 
   return (
     <>
-      <WaveRoundCommentSheet
-        visible={sheet === 'comments'}
-        comments={social.post?.comments ?? []}
-        viewportHeight={viewportHeight}
-        avatarUrl={avatarUrl}
-        displayName={displayName}
-        authorId={currentUserId}
-        submitting={social.commenting}
-        onClose={onCloseSheet}
-        onSend={async (content) => {
-          await social.onComment(content);
-          onToast(content);
-        }}
-      />
-
       <ChromeOverlay visible={sheet === 'share'} onClose={onCloseSheet} dim zIndex={40}>
         <View
           style={{
@@ -726,74 +747,41 @@ function ClipSheets({
             paddingTop: 14,
             paddingBottom: 20,
           }}>
+          <MoreRow label="Share" onPress={() => onOpenSheet('share')} />
           {clip.isOwn ? (
             <>
               <MoreRow
-                label="Hide from rail"
-                onPress={() => {
-                  const postId = social.post?.id ?? clip.postId;
-                  if (!postId) {
-                    onCloseSheet();
-                    return;
-                  }
-                  void setPostHiddenFromRail(postId, true)
-                    .then(() => {
-                      void queryClient.invalidateQueries({ queryKey: ['stories'] });
-                      void queryClient.invalidateQueries({ queryKey: ['reels'] });
-                      onCloseSheet();
-                    })
-                    .catch((error) => Alert.alert('Couldn’t hide that', getErrorMessage(error)));
-                }}
-              />
-              <MoreRow
-                label="Edit caption"
+                label="Edit"
                 onPress={() => {
                   onCaptionDraft(clip.caption ?? '');
                   onOpenSheet('caption');
                 }}
               />
-            </>
-          ) : (
-            <>
               <MoreRow
-                label="Hide from my rail"
+                label="Download"
                 onPress={() => {
-                  void hideAuthorFromMyRail(clip.authorId).then(() => {
-                    void queryClient.invalidateQueries({ queryKey: ['stories'] });
-                    void queryClient.invalidateQueries({ queryKey: ['story-rail-filters'] });
-                    onCloseSheet();
-                    onClosePlayer();
-                  });
-                }}
-              />
-              <MoreRow
-                label="Report"
-                onPress={() => {
-                  const postId = social.post?.id ?? clip.postId;
-                  if (!postId) {
-                    onCloseSheet();
-                    return;
-                  }
-                  void report
-                    .mutateAsync({ postId, reason: 'clip' })
+                  void downloadClipMedia(clip.mediaUrl)
                     .then(onCloseSheet)
-                    .catch((error) => Alert.alert('Couldn’t report that', getErrorMessage(error)));
+                    .catch((error) => Alert.alert('Couldn’t save that', getErrorMessage(error)));
                 }}
               />
-              <MoreRow
-                label="Block"
-                onPress={() => {
-                  void block
-                    .mutateAsync(clip.authorId)
-                    .then(() => {
-                      onCloseSheet();
-                      onClosePlayer();
-                    })
-                    .catch((error) => Alert.alert('Couldn’t block that', getErrorMessage(error)));
-                }}
-              />
+              <MoreRow label="Delete" onPress={() => onOpenSheet('delete')} />
             </>
-          )}
+          ) : null}
+          <MoreRow
+            label="Report"
+            onPress={() => {
+              const postId = social.post?.id ?? clip.postId;
+              if (!postId) {
+                onCloseSheet();
+                return;
+              }
+              void report
+                .mutateAsync({ postId, reason: 'clip' })
+                .then(onCloseSheet)
+                .catch((error) => Alert.alert('Couldn’t report that', getErrorMessage(error)));
+            }}
+          />
         </View>
       </ChromeOverlay>
 
@@ -829,6 +817,42 @@ function ClipSheets({
             style={{ minHeight: 44, justifyContent: 'center' }}>
             <AppText className="text-[15px] font-bold text-charcoal">Save</AppText>
           </Pressable>
+        </View>
+      </ChromeOverlay>
+      <ChromeOverlay visible={sheet === 'delete'} onClose={onCloseSheet} dim zIndex={45}>
+        <View
+          style={{
+            backgroundColor: THEME.surface,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: 20,
+          }}>
+          <AppText className="text-[16px] font-extrabold text-charcoal">Remove this clip?</AppText>
+          <AppText className="mt-2 text-[14px] text-muted">
+            It leaves your rails. Other people will see that this clip isn’t available. Comments stay.
+          </AppText>
+          <MoreRow
+            label="Remove"
+            onPress={() => {
+              const postId = social.post?.id ?? clip.postId;
+              if (!postId) {
+                onCloseSheet();
+                return;
+              }
+              void setPostHiddenFromRail(postId, true)
+                .then(() => {
+                  void queryClient.invalidateQueries({ queryKey: ['stories'] });
+                  void queryClient.invalidateQueries({ queryKey: ['reels'] });
+                  void queryClient.invalidateQueries({ queryKey: ['story-rail-filters'] });
+                  onCloseSheet();
+                  onClosePlayer();
+                })
+                .catch((error) => Alert.alert('Couldn’t remove that', getErrorMessage(error)));
+            }}
+          />
+          <MoreRow label="Cancel" onPress={onCloseSheet} />
         </View>
       </ChromeOverlay>
       <RoundShareComposer

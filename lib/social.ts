@@ -855,7 +855,14 @@ export async function fetchStory(id: string): Promise<Story | null> {
     }
     throwIfError(error);
   }
-  return (data as Story | null) ?? null;
+  const story = (data as Story | null) ?? null;
+  if (story?.post_id) {
+    const hidden = await fetchHiddenRailPostIds([story.post_id]);
+    if (hidden.has(story.post_id)) {
+      return null;
+    }
+  }
+  return story;
 }
 
 export async function fetchViewedStoryIds(userId: string): Promise<string[]> {
@@ -1065,6 +1072,12 @@ async function fetchReelByColumn(column: 'id' | 'post_id', value: string): Promi
     return null;
   }
   const [item] = await withReelProfiles([data as Reel]);
+  if (item?.post_id) {
+    const hidden = await fetchHiddenRailPostIds([item.post_id]);
+    if (hidden.has(item.post_id)) {
+      return null;
+    }
+  }
   return item ?? null;
 }
 

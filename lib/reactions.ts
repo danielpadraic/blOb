@@ -14,7 +14,16 @@ export const POST_REACTION_COLORS: Record<PostReactionType, string> = {
 };
 
 export function asReactionType(value: string | null | undefined): ReactionType {
-  if (value === 'love' || value === 'care' || value === 'fire' || value === 'sad') {
+  if (
+    value === 'love' ||
+    value === 'care' ||
+    value === 'fire' ||
+    value === 'sad' ||
+    value === 'laugh' ||
+    value === 'shock' ||
+    value === 'applause' ||
+    value === 'praise'
+  ) {
     return value;
   }
   return 'like';
