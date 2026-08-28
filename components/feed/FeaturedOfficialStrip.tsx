@@ -85,15 +85,15 @@ export function FeaturedOfficialStrip() {
     <TourAnchor id="tour-official">
       <View
         style={{
-          minHeight: 58,
-          borderRadius: 18,
+          minHeight: 40,
+          borderRadius: 14,
           overflow: 'hidden',
           backgroundColor: BAR,
           flexDirection: 'row',
           alignItems: 'center',
-          paddingVertical: 8,
-          paddingRight: 8,
-          paddingLeft: 10,
+          paddingVertical: 4,
+          paddingRight: 6,
+          paddingLeft: 8,
         }}>
         <Pressable
           accessibilityRole="button"
@@ -102,7 +102,7 @@ export function FeaturedOfficialStrip() {
           style={{
             flex: 1,
             minWidth: 0,
-            minHeight: 42,
+            minHeight: 32,
             flexDirection: 'row',
             alignItems: 'center',
           }}>
@@ -118,21 +118,21 @@ export function FeaturedOfficialStrip() {
           />
           <Image
             source={BLOB_WORDMARK}
-            style={{ width: 56, height: 22, backgroundColor: 'transparent' }}
+            style={{ width: 40, height: 16, backgroundColor: 'transparent' }}
             contentFit="contain"
             tintColor="#F7FFFC"
             accessibilityLabel="blOb"
           />
           <View className="min-w-0 flex-1" style={{ paddingHorizontal: 10 }}>
             <AppText
-              className="text-[16px] font-extrabold"
-              numberOfLines={2}
+              className="text-[13px] font-extrabold"
+              numberOfLines={1}
               style={{ color: '#FFFFFF' }}>
               {title}
             </AppText>
             {meta ? (
               <AppText
-                className="mt-0.5 text-[12px] font-semibold"
+                className="mt-0.5 text-[11px] font-semibold"
                 numberOfLines={1}
                 style={{ color: 'rgba(231, 247, 243, 0.72)' }}>
                 {meta}
@@ -146,8 +146,8 @@ export function FeaturedOfficialStrip() {
           disabled={joinSheet.loading}
           onPress={onJoin}
           style={{
-            minHeight: 36,
-            paddingHorizontal: 14,
+            minHeight: 32,
+            paddingHorizontal: 12,
             borderRadius: 999,
             backgroundColor: THEME.accent,
             alignItems: 'center',

@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MascotState } from '@/components/mascot/MascotState';
 import { FriendCard } from '@/components/social/FriendCard';
 import { FriendRequestCard } from '@/components/social/FriendRequestCard';
+import { RecommendedProfiles } from '@/components/feed/RecommendedProfiles';
 import { FriendsHeader } from '@/components/social/FriendsHeader';
 import { UserSearchResult } from '@/components/social/UserSearchResult';
 import { Input } from '@/components/ui/Input';
@@ -313,6 +314,7 @@ function FriendsPane({
   if (friends.length === 0) {
     return (
       <PaneScroll refreshControl={refreshControl}>
+        <RecommendedProfiles />
         <MascotState
           kind="empty"
           title={copy('friends.empty', tone)}
@@ -330,6 +332,7 @@ function FriendsPane({
       keyExtractor={(friend) => `${friend.user_a_id}-${friend.user_b_id}`}
       style={PANE_SCROLL}
       contentContainerStyle={PANE_CONTENT}
+      ListHeaderComponent={<RecommendedProfiles />}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       initialNumToRender={16}

@@ -65,6 +65,7 @@ type ComposerProps = {
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
   tall?: boolean;
   draftKey?: string;
+  idleUntilFocus?: boolean;
   onSubmit: (input: ComposeInput) => Promise<unknown> | void;
 };
 
@@ -81,6 +82,7 @@ export function Composer({
   wallHost,
   tall: _tall,
   draftKey,
+  idleUntilFocus = false,
   onSubmit,
 }: ComposerProps) {
   const { user } = useAuth();
@@ -100,7 +102,13 @@ export function Composer({
   const [attachments, setAttachments] = useState<Attachment[]>(stored?.attachments ?? []);
   const [uploading, setUploading] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(
+    () =>
+      !idleUntilFocus ||
+      Boolean(autoFocus) ||
+      Boolean((stored?.doc.text ?? initialText)?.trim()) ||
+      Boolean(stored?.attachments?.length),
+  );
   const allowPublic = !audienceOptions || audienceOptions.some((item) => item.value === 'public');
   const [audience, setAudience] = useState<PostAudience>(
     hideAudience ? 'public' : (defaultAudience ?? (wallHost ? 'friends' : profileDefault)),
@@ -166,7 +174,7 @@ export function Composer({
     setAttachments([]);
     setGifOpen(false);
     setFieldKey((value) => value + 1);
-    setExpanded(true);
+    setExpanded(!idleUntilFocus);
     clearComposerDraft(scope);
   }
 
@@ -317,7 +325,13 @@ export function Composer({
   }
 
   return (
-    <Card padded={false} style={{ paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20 }}>
+    <Card
+      padded={false}
+      style={{
+        paddingHorizontal: idleUntilFocus ? 10 : 12,
+        paddingVertical: idleUntilFocus ? 8 : 10,
+        borderRadius: 20,
+      }}>
       <View className="flex-row items-end" style={{ gap: 8 }}>
         <Avatar
           uri={profile?.avatar_url}

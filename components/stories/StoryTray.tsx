@@ -42,7 +42,7 @@ export function StoryTray() {
         nestedScrollEnabled
         directionalLockEnabled
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 13, paddingHorizontal: 16, paddingVertical: 2 }}>
+        contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingVertical: 0 }}>
         {groups.map((group) => {
           const unseen = group.stories.some((story) => !viewedIds.has(story.id));
           return (

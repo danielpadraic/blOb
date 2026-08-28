@@ -28,7 +28,7 @@ function nameLines(profile: PublicProfile): { first: string; last: string | null
   return { first: profile.username, last: null };
 }
 
-export function RecommendedProfiles() {
+export function RecommendedProfiles({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const query = useRecommendedProfiles();
   const blocked = useBlockedPeerIds();
@@ -40,11 +40,13 @@ export function RecommendedProfiles() {
 
   return (
     <View>
-      <AppText className="text-[18px] font-extrabold text-charcoal">
+      <AppText
+        className="font-extrabold text-charcoal"
+        style={{ fontSize: compact ? 13 : 18 }}>
         {copy('feed.peopleYouMayKnow')}
       </AppText>
       <View
-        className="mt-2.5 py-3"
+        className={compact ? 'mt-1.5 py-2' : 'mt-2.5 py-3'}
         style={{
           backgroundColor: THEME.surface,
           borderRadius: THEME.radius,

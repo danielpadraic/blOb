@@ -3,7 +3,7 @@ import { Tabs, usePathname, useRouter, useSegments, type Href } from 'expo-route
 import { AppState, Platform, StyleSheet, View, type AppStateStatus } from 'react-native';
 
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
-import { QuickActionSheet, type QuickActionId } from '@/components/navigation/QuickActionSheet';
+import { PlusActionBar, type QuickActionId } from '@/components/navigation/PlusActionBar';
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeMediaLightbox, MediaLightboxHost } from '@/components/feed/MediaLightbox';
@@ -15,7 +15,7 @@ import { BugReportHost } from '@/components/bug/BugReportHost';
 import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { TourHost } from '@/components/tour/TourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
-import { TourProvider, useTour } from '@/components/tour/TourContext';
+import { TourProvider, useTour, useTourOptional } from '@/components/tour/TourContext';
 import {
   TabChromeHeader,
   isAlertsTab,
@@ -131,6 +131,8 @@ function TabLayoutInner() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const tour = useTourOptional();
   const loggable = useLoggableChallenges();
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const backgroundedAt = useRef<number | null>(null);
@@ -146,6 +148,7 @@ function TabLayoutInner() {
     setSearchOpen(false);
     setSheetOpen(false);
     setLogoMenuOpen(false);
+    setMessagesOpen(false);
     closeSocialSheets();
     closeMediaLightbox();
     wallet?.closeAll();
@@ -167,6 +170,7 @@ function TabLayoutInner() {
     setSearchOpen(false);
     setSheetOpen(false);
     setLogoMenuOpen(false);
+    setMessagesOpen(false);
     wallet?.closeAll();
     setAlertsOpen(true);
   }
@@ -179,6 +183,7 @@ function TabLayoutInner() {
     setAlertsOpen(false);
     setSheetOpen(false);
     setLogoMenuOpen(false);
+    setMessagesOpen(false);
     wallet?.closeAll();
     setSearchOpen(true);
   }
@@ -191,9 +196,24 @@ function TabLayoutInner() {
     setAlertsOpen(false);
     setSearchOpen(false);
     setLogoMenuOpen(false);
+    setMessagesOpen(false);
     closeSocialSheets();
     wallet?.closeAll();
     setSheetOpen(true);
+  }
+
+  function toggleMessages() {
+    if (messagesOpen) {
+      setMessagesOpen(false);
+      return;
+    }
+    setAlertsOpen(false);
+    setSearchOpen(false);
+    setSheetOpen(false);
+    setLogoMenuOpen(false);
+    closeSocialSheets();
+    wallet?.closeAll();
+    setMessagesOpen(true);
   }
 
   function toggleLogoMenu() {
@@ -204,9 +224,20 @@ function TabLayoutInner() {
     setAlertsOpen(false);
     setSearchOpen(false);
     setSheetOpen(false);
+    setMessagesOpen(false);
     closeSocialSheets();
     wallet?.closeAll();
     setLogoMenuOpen(true);
+  }
+
+  function onHomePress() {
+    closeOverlays();
+    if (pathname === '/feed' || pathname === '/feed/') {
+      tour?.scrollHomeToTop();
+      return;
+    }
+    router.navigate('/feed');
+    setTimeout(() => tour?.scrollHomeToTop(), 80);
   }
 
   useEffect(() => {
@@ -340,9 +371,12 @@ function TabLayoutInner() {
           alertsOpen={alertsOpen}
           searchOpen={searchOpen}
           logoMenuOpen={logoMenuOpen}
+          messagesOpen={messagesOpen}
           onToggleAlerts={toggleAlerts}
           onToggleSearch={toggleSearch}
           onToggleLogoMenu={toggleLogoMenu}
+          onToggleMessages={toggleMessages}
+          onHomePress={onHomePress}
           onLogoAction={(id: LogoMenuAction) => onAction(id)}
         />
       )}
@@ -412,7 +446,7 @@ function TabLayoutInner() {
       <View
         pointerEvents={sheetOpen ? 'auto' : 'none'}
         style={styles.sheetLayer}>
-        <QuickActionSheet
+        <PlusActionBar
           visible={sheetOpen}
           loggable={loggable.data}
           onClose={() => setSheetOpen(false)}

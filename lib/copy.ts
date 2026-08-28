@@ -110,6 +110,7 @@ const STRINGS = {
     neutral: 'What did you do?',
     honest: 'What did you actually do?',
   },
+  'home.shareThoughts': 'Share your thoughts.',
   'lobby.subtitle': 'Find a challenge. Pay the entry fee. Prove the work.',
   'lobby.loading': {
     gentle: 'Looking for Challenges. Stay here.',

@@ -34,6 +34,8 @@ type FeedListProps = {
   wallHost?: { id: string; name?: string | null; username?: string | null } | null;
   defaultAudience?: ComposeInput['audience'];
   draftKey?: string;
+  homeChrome?: boolean;
+  midFeedRail?: ReactNode;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -52,6 +54,7 @@ type FeedRowProps = {
   hideAudience?: boolean;
   challengeFeed?: boolean;
   highlighted?: boolean;
+  homeChrome?: boolean;
   onReact: FeedListProps['onReact'];
   onComment?: FeedListProps['onComment'];
 };
@@ -62,6 +65,7 @@ const FeedRow = memo(function FeedRow({
   hideAudience,
   challengeFeed,
   highlighted,
+  homeChrome,
   onReact,
   onComment,
 }: FeedRowProps) {
@@ -86,6 +90,7 @@ const FeedRow = memo(function FeedRow({
       hideAudience={hideAudience}
       challengeFeed={challengeFeed}
       highlighted={highlighted}
+      homeFeed={homeChrome}
       onReact={handleReact}
       onComment={handleComment}
     />
@@ -115,6 +120,8 @@ export function FeedList({
   wallHost,
   defaultAudience,
   draftKey,
+  homeChrome,
+  midFeedRail,
   onRefresh,
   onRetry,
   onCompose,
@@ -175,6 +182,7 @@ export function FeedList({
         wallHost={wallHost}
         defaultAudience={defaultAudience}
         draftKey={draftKey ?? (challengeFeed ? 'challenge' : 'home')}
+        idleUntilFocus={homeChrome}
         onSubmit={onComposeSubmit}
       />
     );
@@ -186,6 +194,7 @@ export function FeedList({
     defaultAudience,
     draftKey,
     hideAudience,
+    homeChrome,
     onCompose,
     onComposeSubmit,
     wallHost,
@@ -193,10 +202,10 @@ export function FeedList({
 
   const listHeader = useMemo(
     () => (
-      <View className="gap-3">
+      <View className={homeChrome ? 'gap-2' : 'gap-3'}>
         {headerTop}
         {headerExtra}
-        {!embedded ? (
+        {!embedded && !homeChrome ? (
           <View className="flex-row items-end justify-between pt-1">
             <AppText className="text-[18px] font-extrabold text-charcoal">Feed</AppText>
             <AppText className="text-[12px] text-muted">Latest</AppText>
@@ -204,24 +213,28 @@ export function FeedList({
         ) : null}
       </View>
     ),
-    [embedded, headerExtra, headerTop],
+    [embedded, headerExtra, headerTop, homeChrome],
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: PostWithMeta }) => (
-      <View className="mt-3">
+    ({ item, index }: { item: PostWithMeta; index: number }) => (
+      <View className={homeChrome ? 'mt-2' : 'mt-3'}>
         <FeedRow
           post={item}
           currentUserId={currentUserId}
           hideAudience={hideAudience}
           challengeFeed={challengeFeed}
           highlighted={highlightPostId === item.id}
+          homeChrome={homeChrome}
           onReact={onReact}
           onComment={onComment}
         />
+        {homeChrome && midFeedRail && index === 1 ? (
+          <View className="mt-2">{midFeedRail}</View>
+        ) : null}
       </View>
     ),
-    [challengeFeed, currentUserId, hideAudience, highlightPostId, onComment, onReact],
+    [challengeFeed, currentUserId, hideAudience, highlightPostId, homeChrome, midFeedRail, onComment, onReact],
   );
 
   if (error) {
@@ -285,7 +298,7 @@ export function FeedList({
   return (
     <View style={[{ flex: 1 }, webColumn]}>
       {composer ? (
-        <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: 12 }}>
+        <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: homeChrome ? 8 : 12 }}>
           {composer}
         </View>
       ) : null}

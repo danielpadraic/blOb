@@ -65,8 +65,8 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
         paddingTop: 18,
         marginTop: -18,
         backgroundColor: 'transparent',
-        zIndex: 80,
-        elevation: 80,
+        zIndex: 130,
+        elevation: 130,
       }}>
       <View
         pointerEvents={tourLocked ? 'none' : 'auto'}

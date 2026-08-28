@@ -22,9 +22,9 @@ export function ComposeTabButton({ open, onPress, style }: ComposeTabButtonProps
         disabled={tourLocked}
         onPress={onPress}
         hitSlop={4}
-        pointerEvents={open || tourLocked ? 'none' : 'auto'}
+        pointerEvents={tourLocked ? 'none' : 'auto'}
         className="items-center justify-start"
-        style={{ minWidth: 44, minHeight: 44, opacity: open ? 0 : 1 }}>
+        style={{ minWidth: 44, minHeight: 44 }}>
         <TourAnchor id="tour-tab-create">
           <View
             className="items-center justify-center"

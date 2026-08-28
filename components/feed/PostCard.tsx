@@ -48,6 +48,7 @@ import { flexChildMin, THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { displayUrl, mediaKind } from '@/utils/media';
+import { formatFeedTime } from '@/utils/format';
 
 const BODY_COLLAPSE_LINES = 4;
 const BODY_COLLAPSE_CHARS = 160;
@@ -65,6 +66,7 @@ type PostCardProps = {
   ) => Promise<unknown> | void;
   commenting?: boolean;
   highlighted?: boolean;
+  homeFeed?: boolean;
 };
 
 function PostCardInner({
@@ -76,6 +78,7 @@ function PostCardInner({
   onComment,
   commenting,
   highlighted,
+  homeFeed,
 }: PostCardProps) {
   const [showComposer, setShowComposer] = useState(false);
   const [composerExpanded, setComposerExpanded] = useState(true);
@@ -130,8 +133,8 @@ function PostCardInner({
     <Card
       padded={false}
       style={{
-        paddingHorizontal: 15,
-        paddingVertical: 15,
+        paddingHorizontal: homeFeed ? 12 : 15,
+        paddingVertical: homeFeed ? 10 : 15,
         borderRadius: THEME.radius,
         borderWidth: highlighted ? 1.5 : 1,
         borderColor: highlighted ? THEME.accent : THEME.border,
@@ -139,7 +142,7 @@ function PostCardInner({
       }}>
       <View className="flex-row items-center" style={{ gap: 10 }}>
         <ProfileLink username={post.author?.username} userId={post.author_id}>
-          <Avatar uri={post.author?.avatar_url} name={name} size={42} />
+          <Avatar uri={post.author?.avatar_url} name={name} size={homeFeed ? 32 : 42} />
         </ProfileLink>
         <View className="flex-1 justify-center" style={flexChildMin()}>
           <ProfileLink
@@ -149,22 +152,40 @@ function PostCardInner({
             <View className="flex-row flex-wrap items-center" style={[{ gap: 6 }, flexChildMin()]}>
               <AppText
                 className="font-semibold text-charcoal"
-                style={{ fontSize: 16, lineHeight: 20, minWidth: 0, flexShrink: 1, flexGrow: 1 }}
+                style={{
+                  fontSize: homeFeed ? 13 : 16,
+                  lineHeight: homeFeed ? 16 : 20,
+                  minWidth: 0,
+                  flexShrink: 1,
+                  flexGrow: 1,
+                }}
                 numberOfLines={2}>
                 {name}
               </AppText>
               <OfficialMark profile={post.author} compact />
               <AppText
-                className="text-[13px]"
                 style={{
+                  fontSize: homeFeed ? 11 : 13,
                   color: THEME.textMuted,
-                  lineHeight: 18,
+                  lineHeight: homeFeed ? 14 : 18,
                   minWidth: 0,
                   flexShrink: 1,
                 }}
                 numberOfLines={1}>
                 @{handle}
               </AppText>
+              {homeFeed ? (
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    color: THEME.textMuted,
+                    lineHeight: 14,
+                    flexShrink: 0,
+                  }}
+                  numberOfLines={1}>
+                  {formatFeedTime(post.created_at)}
+                </AppText>
+              ) : null}
             </View>
           </ProfileLink>
         </View>
@@ -362,7 +383,7 @@ function PostCardInner({
         {isRoundSharePost(post) ? null : <ProofMedia urls={post.media_urls ?? []} proof={checkin} />}
 
         <ReactionBar
-          createdAt={post.created_at}
+          createdAt={homeFeed ? undefined : post.created_at}
           reactions={post.reactions}
           currentUserId={currentUserId}
           commentCount={comments.length}

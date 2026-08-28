@@ -9,10 +9,16 @@ import { formatFeedTime } from '@/utils/format';
 type ConversationListItemProps = {
   conversation: ConversationPreview;
   userId?: string | null;
+  compact?: boolean;
   onPress: () => void;
 };
 
-export function ConversationListItem({ conversation, userId, onPress }: ConversationListItemProps) {
+export function ConversationListItem({
+  conversation,
+  userId,
+  compact = false,
+  onPress,
+}: ConversationListItemProps) {
   const name = conversationTitle(conversation);
   const stamp = conversation.last_message?.created_at ?? conversation.updated_at;
   return (
@@ -20,23 +26,29 @@ export function ConversationListItem({ conversation, userId, onPress }: Conversa
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={conversation.unread ? `${name}, unread` : name}
-      className="flex-row items-center px-4 py-3"
+      className="flex-row items-center"
       style={{
+        paddingHorizontal: compact ? 8 : 16,
+        paddingVertical: compact ? 8 : 12,
         backgroundColor: conversation.unread ? THEME.accentSoft : THEME.surface,
-        borderRadius: THEME.radius,
+        borderRadius: compact ? 14 : THEME.radius,
         borderWidth: 1,
         borderColor: conversation.unread ? THEME.accent : THEME.border,
+        minHeight: 44,
       }}>
-      <Avatar uri={conversation.peer?.avatar_url} name={name} size={48} />
+      <Avatar uri={conversation.peer?.avatar_url} name={name} size={compact ? 36 : 48} />
       <View className="ml-3 min-w-0 flex-1">
         <View className="flex-row items-center">
-          <AppText className="min-w-0 flex-1 text-[16px] font-bold text-charcoal" numberOfLines={1}>
+          <AppText
+            className="min-w-0 flex-1 font-bold text-charcoal"
+            style={{ fontSize: compact ? 13 : 16 }}
+            numberOfLines={1}>
             {name}
           </AppText>
           <AppText className="ml-2 text-[11px] text-muted">{formatFeedTime(stamp)}</AppText>
         </View>
         <AppText
-          className="mt-0.5 text-[13px]"
+          className={compact ? 'mt-0.5 text-[11px]' : 'mt-0.5 text-[13px]'}
           style={{ color: conversation.unread ? THEME.textPrimary : THEME.textMuted, fontWeight: conversation.unread ? '600' : '400' }}
           numberOfLines={1}>
           {messagePreview(conversation.last_message, userId)}

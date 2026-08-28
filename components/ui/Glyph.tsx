@@ -46,6 +46,7 @@ export const GLYPH = {
   camera: { ios: 'camera.fill', android: 'photo_camera', web: 'photo_camera' },
   album: { ios: 'photo.on.rectangle', android: 'photo_library', web: 'photo_library' },
   heartbeat: { ios: 'heart.fill', android: 'monitor_heart', web: 'monitor_heart' },
+  menu: { ios: 'line.3.horizontal', android: 'menu', web: 'menu' },
   search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
   bell: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
   send: { ios: 'paperplane.fill', android: 'send', web: 'send' },

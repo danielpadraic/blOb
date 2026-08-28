@@ -88,15 +88,16 @@ export default function FeedScreen() {
         currentUserId={user?.id}
         emptyTitle={copy('home.empty', tone)}
         emptyBody=""
-        composerPlaceholder={copy('home.composer', tone)}
+        composerPlaceholder={copy('home.shareThoughts')}
+        homeChrome
+        midFeedRail={posts.length >= 2 ? <RecommendedProfiles compact /> : null}
         draftKey="home"
         composing={createPost.isPending}
         headerTop={<FeaturedOfficialStrip />}
         headerExtra={
-          <View className="gap-2">
+          <View className="gap-1.5">
             <StoryTray />
             <ReelsRow />
-            <RecommendedProfiles />
           </View>
         }
         empty={<FeedEmptyState compact />}

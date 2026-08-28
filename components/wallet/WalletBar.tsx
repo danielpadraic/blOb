@@ -154,18 +154,18 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
         <View className="flex-row items-center" style={{ minHeight: 28, minWidth: 0, flexShrink: 1 }}>
           <CurrencyMark currency="coins" size={compact ? 15 : 18} />
           <AppText
-            className="ml-1 text-[12px] font-extrabold text-charcoal"
+            className="ml-1 text-[11px] font-extrabold text-charcoal"
             numberOfLines={1}
             style={{ fontVariant: ['tabular-nums'], minWidth: 0, flexShrink: 1 }}>
             {official ? copy('official.infinity') : formatCoins(displayCoins).replace(' Coins', '')}
           </AppText>
         </View>
       </TourAnchor>
-      <AppText className="mx-1 text-[12px] font-extrabold text-muted">·</AppText>
+      <AppText className="mx-1 text-[11px] font-extrabold text-muted">·</AppText>
       <TourAnchor id="tour-money">
         <View className="flex-row items-center" style={{ minHeight: 28, minWidth: 0, flexShrink: 1 }}>
           <AppText
-            className="text-[12px] font-extrabold"
+            className="text-[11px] font-extrabold"
             numberOfLines={1}
             style={{ color: '#1B7A4A', fontVariant: ['tabular-nums'], minWidth: 0, flexShrink: 1 }}>
             {formatCash(displayBucks)}

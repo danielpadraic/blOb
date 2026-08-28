@@ -76,8 +76,8 @@ export function ReelsRow() {
   const cards = [createCard, ...liveReels];
 
   return (
-    <View className="gap-2" style={{ marginHorizontal: -16 }}>
-      <AppText className="px-4 text-[13px] font-bold text-muted">{copy('round.title')}</AppText>
+    <View className="gap-1.5" style={{ marginHorizontal: -16 }}>
+      <AppText className="px-4 text-[12px] font-bold text-muted">{copy('round.title')}</AppText>
       <ScrollView
         horizontal
         nestedScrollEnabled
