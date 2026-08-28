@@ -2,6 +2,7 @@ import { usePathname, useRouter } from 'expo-router';
 
 import { AppText } from '@/components/ui/AppText';
 import { splitMentionedText, type MentionRecord } from '@/lib/mentions';
+import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 
 type MentionTextProps = {
@@ -18,16 +19,31 @@ export function MentionText({ content, mentions = [], numberOfLines, className }
   return (
     <AppText className={className ?? 'text-[14px] leading-[20px] text-ink'} numberOfLines={numberOfLines}>
       {parts.map((part, index) => {
-        if (part.type !== 'mention' || !part.mention?.available) {
+        const mention = part.mention;
+        if (part.type !== 'mention' || !mention) {
           return <AppText key={`${index}-${part.value}`}>{part.value}</AppText>;
         }
-        const handle = part.mention.username;
+        const kind = mention.kind ?? 'user';
+        if (kind === 'user' && !mention.available) {
+          return <AppText key={`${index}-${part.value}`}>{part.value}</AppText>;
+        }
+        const color = kind === 'circle' ? THEME.circle : THEME.accent;
         return (
           <AppText
-            key={`${index}-${part.mention.userId}`}
+            key={`${index}-${mention.userId}`}
             accessibilityRole="link"
-            onPress={() => router.push(profileHref(pathname, handle))}
-            style={{ color: THEME.accent, fontWeight: '700' }}>
+            onPress={() => {
+              if (kind === 'circle') {
+                router.push(circleDetailHref(mention.userId, { tab: 'details' }));
+                return;
+              }
+              if (kind === 'challenge') {
+                router.push(challengeDetailHref(mention.userId, 'feed'));
+                return;
+              }
+              router.push(profileHref(pathname, mention.username));
+            }}
+            style={{ color, fontWeight: '700' }}>
             {part.value}
           </AppText>
         );

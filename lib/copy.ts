@@ -166,6 +166,83 @@ const STRINGS = {
     honest: 'Nobody matches that. Check the spelling before you invent a person.',
   },
   'friends.searchPlaceholder': 'Name, @username, email, or phone',
+  'friends.people': 'People',
+  'friends.circles': 'Circles',
+  'circles.empty': 'Start a Circle for the people you keep showing up with.',
+  'circles.loading': {
+    gentle: 'Finding your Circles.',
+    neutral: 'Finding your Circles.',
+    honest: 'Looking up who you keep showing up with.',
+  },
+  'circles.new': 'New Circle',
+  'circles.createTitle': 'New Circle',
+  'circles.name': 'Name',
+  'circles.namePlaceholder': 'Saturday crew',
+  'circles.focus': 'Focus',
+  'circles.focusPlaceholder': 'Morning runs. No excuses.',
+  'circles.description': 'Description',
+  'circles.descriptionPlaceholder': 'Optional. What you show up for.',
+  'circles.banner': 'Banner',
+  'circles.create': 'Create',
+  'circles.needName': 'Give the Circle a name.',
+  'circles.needFocus': 'Say what this Circle is for.',
+  'circles.inviteTitle': 'Invite friends',
+  'circles.sendInvites': 'Send',
+  'circles.postToFriendsFeed': 'Post to Friends feed',
+  'circles.inviteSent': 'Invites sent.',
+  'circles.join': 'Join',
+  'circles.invite': 'Invite',
+  'circles.leave': 'Leave',
+  'circles.leaveConfirm': 'Leave this Circle?',
+  'circles.lastHost': 'You’re the only host. Assign another host before you leave.',
+  'circles.removeMember': 'Remove',
+  'circles.removeConfirm': 'Remove this person from the Circle?',
+  'circles.joinToSee': 'Join to see posts.',
+  'circles.hostedBy': 'Hosted by',
+  'circles.members': '{n} members',
+  'circles.memberOne': '1 member',
+  'circles.feedEmpty': 'Nobody has posted in this Circle yet.',
+  'circles.composer': 'What’s going on in the Circle?',
+  'circles.details': 'Details',
+  'circles.roster': 'Roster',
+  'circles.feed': 'Feed',
+  'circles.in': 'in {name}',
+  'circles.opened': '{name} opened {circle}',
+  'circles.joinedHome': '{name} joined',
+  'circles.joinedRoom': '{name} joined the circle.',
+  'circles.invitePush': '{name} invited you to {circle}.',
+  'circles.joinedNotify': '{name} joined {circle}.',
+  'circles.signIn': 'Sign in to create a Circle.',
+  'circles.visibility': 'Who can find this Circle',
+  'circles.visibilityFriends': 'Friends',
+  'circles.visibilityFriendsHelp': 'Your friends. Invite to join.',
+  'circles.visibilityFof': 'Friends + Friends of friends',
+  'circles.visibilityFofHelp': 'Two hops. Friends can pass the invite along.',
+  'circles.visibilityPublic': 'Public',
+  'circles.visibilityPublicHelp': 'Anyone on blOb can find this Circle and join.',
+  'circles.unavailable': 'Sorry, this Circle isn’t available.',
+  'circles.postToPublicFeed': 'Post to Public feed',
+  'circles.challenges': 'Challenges',
+  'circles.pinEmptyHost': 'Pin a challenge this Circle runs.',
+  'circles.pinEmptyVisitor': 'No challenges on the wall yet.',
+  'circles.pin': 'Pin',
+  'circles.unpin': 'Unpin',
+  'circles.pinSheet': 'Pin a challenge',
+  'circles.pinSearch': 'Search challenges',
+  'circles.pinCap': 'You can pin up to 5.',
+  'circles.corporateBlock': 'Keep this in the company challenge.',
+  'circles.createChallenge': 'Create Challenge',
+  'circles.shareToCircle': 'Share to Circle',
+  'circles.sharePick': 'Pick Circles',
+  'circles.shareCaption': 'Add a caption',
+  'circles.shareSend': 'Send',
+  'circles.shared': 'Shared to Circle.',
+  'circles.shareNotify': '{name} shared {challenge} in {circle}.',
+  'circles.inviteRoster': 'Invite the Circle',
+  'circles.inviteRosterBody': 'People in this Circle. They still join themselves.',
+  'circles.viewChallenge': 'View',
+  'circles.pinUp': 'Move up',
+  'circles.pinDown': 'Move down',
   'alerts.empty': {
     gentle: 'Nothing new. I’ll tap you when there is.',
     neutral: 'Nothing new.',
@@ -575,10 +652,10 @@ function interpolate(template: string, vars?: Record<string, string | number>): 
 }
 
 export function asCopyTone(value: unknown): CopyTone {
-  if (value === 'gentle' || value === 'neutral' || value === 'honest') {
-    return value;
+  if (value === 'honest') {
+    return 'honest';
   }
-  return 'neutral';
+  return 'gentle';
 }
 
 export const PROFILE_SETUP_TONE_OPTIONS: { value: CopyTone; key: CopyKey }[] = [
@@ -590,14 +667,13 @@ export function profileSetupTone(value: unknown): CopyTone {
   return value === 'honest' ? 'honest' : 'gentle';
 }
 
-export function copy(key: CopyKey, tone: CopyTone = 'neutral', vars?: Record<string, string | number>): string {
+export function copy(key: CopyKey, tone: CopyTone = 'gentle', vars?: Record<string, string | number>): string {
   const node = STRINGS[key] as CopyNode;
-  const template = typeof node === 'string' ? node : (node[tone] ?? node.neutral);
+  const template = typeof node === 'string' ? node : (node[tone] ?? node.gentle ?? node.neutral);
   return interpolate(template, vars);
 }
 
 export const COPY_TONE_OPTIONS: { value: CopyTone; key: CopyKey }[] = [
   { value: 'gentle', key: 'profile.toneGentle' },
-  { value: 'neutral', key: 'profile.toneNeutral' },
   { value: 'honest', key: 'profile.toneHonest' },
 ];

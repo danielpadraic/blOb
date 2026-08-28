@@ -24,6 +24,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { useAcceptCircleInvite } from '@/hooks/useCircles';
 import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { usePost, useUpdatePostAudience } from '@/hooks/useFeed';
@@ -45,6 +46,8 @@ import {
 import { roundHref, waveHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { circleDetailHref } from '@/lib/routes';
+import { circleDisplayName, circleIdFromPost } from '@/lib/circles';
 import { copy } from '@/lib/copy';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { flexChildMin, THEME } from '@/lib/theme';
@@ -115,17 +118,30 @@ function PostCardInner({
   const hideHome = useHidePostFromHome();
   const mine = Boolean(currentUserId && currentUserId === post.author_id);
   const tagged = Boolean(post.challenge_id);
+  const circleId = circleIdFromPost(post);
+  const circleShare = post.type === 'circle_challenge_share';
+  const circleJoin = post.type === 'circle_join';
+  const circleInvite = post.type === 'circle_invite';
   const hidePromoCard =
-    Boolean(challengeFeed) ||
+    (Boolean(challengeFeed) && !circleShare) ||
     checkin ||
-    post.source === 'challenge' ||
+    (post.source === 'challenge' && !circleShare) ||
     post.source === 'checkin';
   const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
   const previewRow = preview.data?.id === post.challenge_id ? preview.data : null;
   const challengeTitle = previewRow ? challengeDisplayTitle(previewRow) : null;
   const city = postLocality(post);
-  const caption = checkin ? checkinCardCaption(content, challengeTitle, post.edited_at) : content;
-  const showInLine = Boolean(tagged && !challengeFeed && hidePromoCard);
+  const inCircleRoom = Boolean(challengeFeed && circleId);
+  const caption = circleJoin
+    ? inCircleRoom
+      ? `${name} joined the circle.`
+      : `${name} joined`
+    : circleInvite
+      ? `${name} opened ${circleDisplayName(post.circle ?? { name: undefined })}`
+      : checkin
+        ? checkinCardCaption(content, challengeTitle, post.edited_at)
+        : content;
+  const showInLine = Boolean((tagged || circleId) && !challengeFeed && (circleId || hidePromoCard));
   const hiddenFromHome = Boolean(post.hidden_from_home);
   const mutedOwnerHome = mine && hiddenFromHome && !challengeFeed;
   const hideOnRail = Boolean(homeFeed && mine && !challengeFeed);
@@ -240,18 +256,24 @@ function PostCardInner({
           <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
         </Pressable>
       </View>
-      {showInLine && post.challenge_id ? (
+      {showInLine && (circleId || post.challenge_id) ? (
         <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: homeFeed ? 2 : 6, minWidth: 0 }}>
-          <View style={[flexChildMin(), { flexGrow: 1, flexShrink: 1, minWidth: 140 }]}>
-            <InChallengeLine
-              challengeId={post.challenge_id}
-              title={challengeTitle}
-              visibility={previewRow?.visibility}
-              challengeLane={previewRow?.challenge_lane}
-              isOfficial={previewRow?.is_official}
-              createdBy={previewRow?.created_by}
-              snapshot={previewRow}
-            />
+          <View
+            className="flex-row flex-wrap items-center"
+            style={[flexChildMin(), { flexGrow: 1, flexShrink: 1, minWidth: 140, gap: 8 }]}>
+            {post.challenge_id ? (
+              <InChallengeChip
+                challengeId={post.challenge_id}
+                title={challengeTitle}
+                titleOnly={Boolean(circleId)}
+                visibility={previewRow?.visibility}
+                challengeLane={previewRow?.challenge_lane}
+                isOfficial={previewRow?.is_official}
+                createdBy={previewRow?.created_by}
+                snapshot={previewRow}
+              />
+            ) : null}
+            {circleId ? <InCircleChip circleId={circleId} name={post.circle?.name} /> : null}
           </View>
           {!hideOnRail && mine && hiddenFromHome ? (
             <WebTapButton
@@ -326,17 +348,27 @@ function PostCardInner({
         {caption ? (
           <PostBody
             content={caption}
-            mentions={post.mentions}
+            mentions={circleJoin || circleInvite ? undefined : post.mentions}
             expanded={expanded}
             compact={homeFeed || !challengeFeed}
             canExpand={
-              checkin
-                ? caption.length > BODY_COLLAPSE_CHARS ||
-                  caption.split('\n').length > BODY_COLLAPSE_LINES
-                : canExpand
+              circleJoin || circleInvite
+                ? false
+                : checkin
+                  ? caption.length > BODY_COLLAPSE_CHARS ||
+                    caption.split('\n').length > BODY_COLLAPSE_LINES
+                  : canExpand
             }
             onToggle={() => setExpanded((value) => !value)}
           />
+        ) : null}
+        {circleInvite && !circleJoin && content && !inCircleRoom ? (
+          <AppText className="text-[13px] text-muted" numberOfLines={1}>
+            {content}
+          </AppText>
+        ) : null}
+        {circleInvite && circleId && currentUserId && currentUserId !== post.author_id ? (
+          <CircleInviteJoin circleId={circleId} />
         ) : null}
 
         {post.edited_at ? (
@@ -530,9 +562,66 @@ function ProofFlagButton({ postId }: { postId: string }) {
   );
 }
 
-function InChallengeLine({
+function OriginChip({
+  label,
+  color,
+  soft,
+  glyph,
+  onPress,
+}: {
+  label: string;
+  color: string;
+  soft: string;
+  glyph: (typeof GLYPH)[keyof typeof GLYPH];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={4}
+      style={{
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: 28,
+        maxWidth: '100%',
+        paddingHorizontal: 10,
+        borderRadius: 999,
+        backgroundColor: soft,
+      }}>
+      <Glyph name={glyph} color={color} size={12} />
+      <AppText
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        className="text-[12px] font-semibold"
+        style={{ color, flexShrink: 1, minWidth: 0 }}>
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
+function InCircleChip({ circleId, name }: { circleId: string; name?: string | null }) {
+  const router = useRouter();
+  const label = `in ${circleDisplayName({ name })}`;
+  return (
+    <OriginChip
+      label={label}
+      color={THEME.circle}
+      soft={THEME.circleSoft}
+      glyph={GLYPH.circle}
+      onPress={() => router.push(circleDetailHref(circleId))}
+    />
+  );
+}
+
+function InChallengeChip({
   challengeId,
   title,
+  titleOnly,
   visibility,
   challengeLane,
   isOfficial,
@@ -541,6 +630,7 @@ function InChallengeLine({
 }: {
   challengeId: string;
   title?: string | null;
+  titleOnly?: boolean;
   visibility?: string | null;
   challengeLane?: string | null;
   isOfficial?: boolean | null;
@@ -564,11 +654,15 @@ function InChallengeLine({
   } | null;
 }) {
   const openTag = useOpenChallengeFromTag();
-  const label = title?.trim() || 'this challenge';
+  const label = titleOnly
+    ? title?.trim() || 'this challenge'
+    : `in ${title?.trim() || 'this challenge'}`;
   return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={`in ${label}`}
+    <OriginChip
+      label={label}
+      color={THEME.accent}
+      soft={THEME.accentSoft}
+      glyph={GLYPH.flag}
       onPress={() =>
         void openTag({
           challengeId,
@@ -581,26 +675,34 @@ function InChallengeLine({
             : { id: challengeId, title, visibility, challenge_lane: challengeLane, is_official: isOfficial, created_by: createdBy },
         })
       }
-      hitSlop={4}
-      className="flex-row items-start"
-      style={{ minWidth: 0, maxWidth: '100%', flex: 1 }}>
-      <AppText
-        className="text-[13px] leading-5"
-        style={{ color: THEME.textMuted, flexShrink: 0 }}>
-        in{' '}
-      </AppText>
-      <AppText
-        numberOfLines={2}
-        ellipsizeMode="tail"
-        className="text-[13px] font-semibold leading-5"
-        style={{
-          color: THEME.accent,
-          fontWeight: '600',
-          flex: 1,
-          flexShrink: 1,
-          minWidth: 0,
-        }}>
-        {label}
+    />
+  );
+}
+
+function CircleInviteJoin({ circleId }: { circleId: string }) {
+  const router = useRouter();
+  const accept = useAcceptCircleInvite();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={copy('circles.join')}
+      disabled={accept.isPending}
+      onPress={() =>
+        accept.mutate(circleId, {
+          onSuccess: () => router.push(circleDetailHref(circleId, { tab: 'feed' })),
+          onError: (error) => Alert.alert('Couldn’t join that Circle', getErrorMessage(error)),
+        })
+      }
+      style={{
+        alignSelf: 'flex-start',
+        minHeight: 44,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        backgroundColor: THEME.circle,
+        justifyContent: 'center',
+      }}>
+      <AppText className="text-[13px] font-extrabold" style={{ color: THEME.primaryForeground }}>
+        {copy('circles.join')}
       </AppText>
     </Pressable>
   );

@@ -1,8 +1,11 @@
+export type MentionKind = 'user' | 'challenge' | 'circle';
+
 export type MentionChip = {
   userId: string;
   username: string;
   label: string;
   visibleName?: string;
+  kind?: MentionKind;
 };
 
 export type MentionRecord = {
@@ -10,6 +13,7 @@ export type MentionRecord = {
   username: string;
   displayName?: string | null;
   available: boolean;
+  kind?: MentionKind;
 };
 
 export type MentionDoc = {

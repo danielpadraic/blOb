@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardFormContext, useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import {
   CREATE_FOOTER_BODY,
@@ -32,6 +33,7 @@ import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useCreateChallenge, useChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
+import { useCircle, useCircleMembers, useCirclePins, usePinChallengeToCircle, useShareChallengeToCircle } from '@/hooks/useCircles';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallengeDrafts, useSaveChallengeDraft } from '@/hooks/useChallengeDraft';
@@ -97,8 +99,11 @@ import {
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
+import { firstRouteParam } from '@/lib/challengeLoad';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { CIRCLE_PIN_CAP } from '@/lib/circles';
 import { copy } from '@/lib/copy';
-import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
+import { circleDetailHref, LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { getCreateChallengeMessage } from '@/utils/errors';
 
@@ -154,8 +159,10 @@ export function SimpleCreateForm() {
     resume?: string;
     draftId?: string;
     from?: string;
+    circle?: string;
   }>();
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const circleId = firstRouteParam(params.circle);
   const funded = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
@@ -165,6 +172,12 @@ export function SimpleCreateForm() {
   const walletSheet = useWalletOptional();
   const create = useCreateChallenge();
   const update = useUpdateUserChallenge();
+  const sourceCircle = useCircle(circleId);
+  const sourceRoster = useCircleMembers(circleId, Boolean(circleId));
+  const sourcePins = useCirclePins(circleId);
+  const shareToCircle = useShareChallengeToCircle();
+  const pinToCircle = usePinChallengeToCircle(circleId);
+  const [rosterInvite, setRosterInvite] = useState<{ id: string; title: string } | null>(null);
   const saveDraft = useSaveChallengeDraft();
   const draftsQuery = useChallengeDrafts();
   const editing = useChallenge(editId);
@@ -503,6 +516,34 @@ export function SimpleCreateForm() {
         draft_id: simpleDraftIdRef.current,
       });
       clearPersistedSimpleDraft();
+      if (circleId) {
+        await shareToCircle.mutateAsync({
+          circleId,
+          challengeId: challenge.id,
+        });
+        if (
+          sourceCircle.data?.my_role === 'host' &&
+          (sourcePins.data?.length ?? 0) < CIRCLE_PIN_CAP
+        ) {
+          try {
+            await pinToCircle.mutateAsync(challenge.id);
+          } catch {
+            // Share still posted when the wall is already at 5.
+          }
+        }
+        const people = (sourceRoster.data ?? [])
+          .map((row) => row.profile)
+          .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile && profile.id !== user.id));
+        if (people.length === 0) {
+          router.replace(circleDetailHref(circleId, { tab: 'feed' }));
+          return;
+        }
+        setRosterInvite({
+          id: challenge.id,
+          title: challengeDisplayTitle(challenge) || challenge.title || 'this challenge',
+        });
+        return;
+      }
       router.replace(`/challenges/${challenge.id}`);
     } catch (err) {
       setError(getCreateChallengeMessage(err));
@@ -1276,13 +1317,44 @@ export function SimpleCreateForm() {
                 ? copy('create.backToReview')
                 : copy('create.review')
         }
-        nextLoading={view === 'review' && (editId ? update.isPending : create.isPending)}
+        nextLoading={
+          view === 'review' &&
+          (editId
+            ? update.isPending
+            : create.isPending || shareToCircle.isPending || pinToCircle.isPending)
+        }
         savePending={saveDraft.isPending}
         showSave={!editId}
         draftFlash={draftFlash}
       />
     </View>
     </Screen>
+    {circleId && rosterInvite ? (
+      <InviteToChallengeModal
+        visible
+        challengeId={rosterInvite.id}
+        challengeTitle={rosterInvite.title}
+        people={(sourceRoster.data ?? [])
+          .map((row) => row.profile)
+          .filter((profile): profile is NonNullable<typeof profile> =>
+            Boolean(profile && profile.id !== user?.id),
+          )}
+        initialSelectedIds={(sourceRoster.data ?? [])
+          .map((row) => row.user_id)
+          .filter((id) => id !== user?.id)}
+        title={copy('circles.inviteRoster')}
+        body={copy('circles.inviteRosterBody')}
+        allowSkip
+        onClose={() => {
+          setRosterInvite(null);
+          router.replace(circleDetailHref(circleId, { tab: 'feed' }));
+        }}
+        onSent={() => {
+          setRosterInvite(null);
+          router.replace(circleDetailHref(circleId, { tab: 'feed' }));
+        }}
+      />
+    ) : null}
     </View>
     </KeyboardFormContext.Provider>
     </ChallengeNotesProvider>

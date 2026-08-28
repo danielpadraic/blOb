@@ -13,6 +13,43 @@ export function adminMetricHref(metric: string, range: string): Href {
   return { pathname: '/admin/[metric]', params: { metric, range } } as unknown as Href;
 }
 
+export function circleDetailHref(
+  id: string,
+  extra?: { tab?: 'details' | 'roster' | 'feed'; postId?: string | null },
+): Href {
+  const circleId = String(id ?? '').trim();
+  const qs = new URLSearchParams();
+  if (extra?.tab) {
+    qs.set('tab', extra.tab);
+  }
+  if (extra?.postId) {
+    qs.set('postId', extra.postId);
+  }
+  const query = qs.toString();
+  return (`/circles/${circleId}${query ? `?${query}` : ''}`) as Href;
+}
+
+export const CIRCLES_CREATE_HREF = '/circles/create' as Href;
+
+export function createChallengeHref(extra?: {
+  mode?: 'simple' | 'advanced';
+  circleId?: string | null;
+  returnTo?: string;
+}): Href {
+  const qs = new URLSearchParams();
+  if (extra?.mode) {
+    qs.set('mode', extra.mode);
+  }
+  if (extra?.circleId) {
+    qs.set('circle', extra.circleId);
+  }
+  if (extra?.returnTo) {
+    qs.set('returnTo', extra.returnTo);
+  }
+  const query = qs.toString();
+  return (`/challenges/create${query ? `?${query}` : ''}`) as Href;
+}
+
 export function challengeDetailHref(
   id: string,
   returnTo: 'lobby' | 'feed' = 'lobby',

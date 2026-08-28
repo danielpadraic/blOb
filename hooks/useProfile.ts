@@ -302,8 +302,8 @@ export function useCompleteProfile() {
         primary_activities: patch.primary_activities ?? [],
         skill_tags: patch.skill_tags ?? [],
         show_fitness_stats_publicly: patch.show_fitness_stats_publicly ?? false,
-        motivation_tone: patch.motivation_tone ?? 'neutral',
-        encouragement_tone: patch.encouragement_tone ?? 'neutral',
+        motivation_tone: patch.motivation_tone ?? 'gentle',
+        encouragement_tone: patch.encouragement_tone ?? 'gentle',
         ...(patch.fitness_profile ? { fitness_profile: patch.fitness_profile } : {}),
       };
 

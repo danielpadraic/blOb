@@ -26,6 +26,7 @@ export const GLYPH = {
   more: { ios: 'ellipsis', android: 'more_horiz', web: 'more_horiz' },
   check: { ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' },
   flag: { ios: 'flag.fill', android: 'flag', web: 'flag' },
+  circle: { ios: 'circle', android: 'trip_origin', web: 'trip_origin' },
   streak: { ios: 'bolt.fill', android: 'bolt', web: 'bolt' },
   star: { ios: 'star.fill', android: 'star', web: 'star' },
   crown: { ios: 'crown.fill', android: 'workspace_premium', web: 'workspace_premium' },

@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
@@ -71,7 +72,9 @@ export function ReelsRow() {
 
   return (
     <View className="gap-1.5" style={{ marginHorizontal: -16 }}>
-      <AppText className="px-4 text-[15px] font-extrabold text-charcoal">Rounds</AppText>
+      <TourAnchor id="tour-rounds">
+        <AppText className="px-4 text-[15px] font-extrabold text-charcoal">Rounds</AppText>
+      </TourAnchor>
       <ScrollView
         horizontal
         nestedScrollEnabled

@@ -16,7 +16,7 @@ import { useConversations } from '@/hooks/useSocial';
 import { conversationHref, MESSAGES_HREF } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
 
-export type LogoMenuAction = 'create' | 'callout' | 'join' | 'coins';
+export type LogoMenuAction = 'create' | 'createCircle' | 'callout' | 'join' | 'coins';
 
 export const TAB_ROOT_EDGES: Edge[] = ['left', 'right'];
 
@@ -28,6 +28,7 @@ const TAB_CHROME_ROOTS = new Set([
   'profile',
   'messages',
   'capture',
+  'circles',
 ]);
 
 export function isInsideTabChrome(segments: string[]): boolean {
@@ -41,7 +42,7 @@ export function isMainTabRoute(segments: string[]): boolean {
     return false;
   }
   const [root, nested] = parts;
-  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages' || root === 'capture') {
+  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages' || root === 'capture' || root === 'circles') {
     return false;
   }
   return !nested || nested === 'index';
@@ -58,6 +59,14 @@ export function isLobbyListRoute(segments: string[]): boolean {
 }
 
 /** Nested `/challenges/[id]` (and submit), not lobby/create/callout/profile. */
+export function isCircleIdRoute(segments: string[]): boolean {
+  const parts = segments.filter((segment) => !segment.startsWith('('));
+  if (parts[0] !== 'circles' || !parts[1]) {
+    return false;
+  }
+  return parts[1] !== 'index' && parts[1] !== 'create';
+}
+
 export function isChallengeIdRoute(segments: string[]): boolean {
   const parts = segments.filter((segment) => !segment.startsWith('('));
   if (parts[0] !== 'challenges' || !parts[1]) {
@@ -82,6 +91,7 @@ type TabChromeHeaderProps = {
 
 const LOGO_MENU: { id: LogoMenuAction; label: string }[] = [
   { id: 'create', label: 'Create a Challenge' },
+  { id: 'createCircle', label: 'Create a Circle' },
   { id: 'callout', label: 'Call someone out' },
   { id: 'join', label: 'Join a Challenge' },
   { id: 'coins', label: 'Send Coins or $' },

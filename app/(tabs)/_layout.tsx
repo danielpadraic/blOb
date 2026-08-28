@@ -20,6 +20,7 @@ import {
   TabChromeHeader,
   isAlertsTab,
   isChallengeIdRoute,
+  isCircleIdRoute,
   type LogoMenuAction,
 } from '@/components/wallet/TabChrome';
 import { WalletHost } from '@/components/wallet/WalletHost';
@@ -31,7 +32,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
-import { isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
+import { CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
 import { stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
@@ -314,7 +315,7 @@ function TabLayoutInner() {
     setTimeout(() => router.push(href), 60);
   }
 
-  function onAction(id: QuickActionId, challenge?: LoggableChallenge) {
+  function onAction(id: QuickActionId | LogoMenuAction, challenge?: LoggableChallenge) {
     if (id === 'log') {
       const picked = challenge?.id;
       if (!picked) {
@@ -326,6 +327,10 @@ function TabLayoutInner() {
     if (id === 'create') {
       const root = (segments as string[]).filter((segment) => !segment.startsWith('('))[0];
       go(root === 'feed' ? '/challenges/create?returnTo=feed' : '/challenges/create');
+      return;
+    }
+    if (id === 'createCircle') {
+      go(CIRCLES_CREATE_HREF);
       return;
     }
     if (id === 'join') {
@@ -364,7 +369,7 @@ function TabLayoutInner() {
   return (
     <MediaLightboxHost>
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-      {watchOpen || isChallengeIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
+      {watchOpen || isChallengeIdRoute(segments as string[]) || isCircleIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
         <TabChromeHeader
           alertsOpen={alertsOpen}
           searchOpen={searchOpen}
@@ -414,6 +419,7 @@ function TabLayoutInner() {
             }}
             listeners={{ tabPress: closeOverlays }}
           />
+          <Tabs.Screen name="circles" options={{ href: null, title: 'Circles' }} />
           <Tabs.Screen name="notifications" options={{ href: null, title: 'Alerts' }} />
           <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
           <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />

@@ -20,6 +20,7 @@ import {
 
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useMentionCandidates } from '@/hooks/useMentionCandidates';
 import { copy } from '@/lib/copy';
 import {
@@ -35,7 +36,6 @@ import {
   type MentionDoc,
   type TextSelection,
 } from '@/lib/mentions';
-import { personDisplayName } from '@/lib/social';
 import {
   COMPOSER_LINE_HEIGHT,
   COMPOSER_MAX_HEIGHT,
@@ -256,14 +256,15 @@ function MentionFieldInner(
       ) : (
         candidates.data.slice(0, 8).map((row) => (
           <Pressable
-            key={row.id}
+            key={`${row.kind}-${row.id}`}
             accessibilityRole="button"
-            accessibilityLabel={`Mention ${personDisplayName(row)}`}
+            accessibilityLabel={`Mention ${row.label}`}
             onPress={() =>
               pick({
                 userId: row.id,
                 username: row.username,
-                label: personDisplayName(row),
+                label: row.label,
+                kind: row.kind,
               })
             }
             {...(Platform.OS === 'web'
@@ -280,14 +281,32 @@ function MentionFieldInner(
               alignItems: 'center',
               gap: 10,
             }}>
-            <Avatar uri={row.avatar_url} name={personDisplayName(row)} size={28} />
+            {row.kind === 'user' ? (
+              <Avatar uri={row.avatarUrl} name={row.label} size={28} />
+            ) : (
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: row.kind === 'circle' ? THEME.circleSoft : THEME.accentSoft,
+                }}>
+                <Glyph
+                  name={row.kind === 'circle' ? GLYPH.circle : GLYPH.flag}
+                  color={row.kind === 'circle' ? THEME.circle : THEME.accent}
+                  size={14}
+                />
+              </View>
+            )}
             <View style={{ flex: 1, minWidth: 0 }}>
               <AppText className="text-[14px] font-semibold text-charcoal" numberOfLines={1}>
-                {personDisplayName(row)}
+                {row.label}
               </AppText>
-              {row.username ? (
+              {row.subtitle ? (
                 <AppText className="text-[12px] text-muted" numberOfLines={1}>
-                  @{row.username}
+                  {row.subtitle}
                 </AppText>
               ) : null}
             </View>

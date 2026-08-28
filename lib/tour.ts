@@ -6,6 +6,8 @@ export type TourStepId =
   | 'bell'
   | 'menu'
   | 'official'
+  | 'waves'
+  | 'rounds'
   | 'tabFeed'
   | 'tabLobby'
   | 'tabCreate'
@@ -64,7 +66,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-menu',
     placement: 'below',
     title: 'Menu',
-    body: 'Create a Challenge, Call someone out, Join, or Send Coins. These live here — not on the +.',
+    body: 'Create a Challenge, Create a Circle, Call someone out, Join, or Send Coins. These live here — not on the +.',
   },
   {
     id: 'official',
@@ -72,6 +74,20 @@ export const TOUR_STEPS: TourStep[] = [
     placement: 'below',
     title: 'Featured Challenge',
     body: 'This week’s Official. Join or check in from the strip. Open it for the full challenge.',
+  },
+  {
+    id: 'waves',
+    target: 'tour-waves',
+    placement: 'below',
+    title: 'Waves',
+    body: 'Short clips — say hello, send a little encouragement, or a quick thought. About 30 seconds. Yours lives here. Tap + to make one.',
+  },
+  {
+    id: 'rounds',
+    target: 'tour-waves',
+    placement: 'below',
+    title: 'Rounds',
+    body: 'Longer clips — show a workout, teach form, demo a move, or invite people into a challenge you made. Up to 3 minutes. Share to Feed only when you choose to.',
   },
   {
     id: 'tabFeed',
@@ -99,7 +115,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-tab-friends',
     placement: 'above',
     title: 'Friends',
-    body: 'Send a request. They approve. Bob is already a friend.',
+    body: 'People you approve. Circles are your standing crew — a private group with its own feed, not a challenge and not a pot. Create a Circle from this tab.',
   },
   {
     id: 'tabYou',

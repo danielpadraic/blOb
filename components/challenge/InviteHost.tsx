@@ -10,13 +10,17 @@ import { Alert, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
+import { CircleShareSheet } from '@/components/circles/CircleShareSheet';
 import { Composer } from '@/components/feed/Composer';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
+import { useMyCircles } from '@/hooks/useCircles';
 import { useCreatePost } from '@/hooks/useFeed';
 import { challengeAnnounceCopy } from '@/lib/challengeFeedPost';
+import { copy } from '@/lib/copy';
 import { challengeShareUrl } from '@/lib/officialShare';
+import { isPrivateCorporate } from '@/lib/privacyMode';
 import type { PostAudience } from '@/lib/postAudience';
 import type { FeedChallengePreview } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -28,6 +32,7 @@ export type ChallengeShareTarget = {
   allowSendToPeople?: boolean;
   defaultAudience?: PostAudience;
   preview?: FeedChallengePreview | null;
+  privacyMode?: string | null;
 };
 
 type InviteHostValue = {
@@ -40,7 +45,7 @@ export function useInviteHost(): InviteHostValue | null {
   return useContext(InviteHostContext);
 }
 
-type Panel = 'menu' | 'feed' | 'people';
+type Panel = 'menu' | 'feed' | 'people' | 'circle';
 
 const FEED_AUDIENCE = [
   { value: 'friends' as const, label: 'Friends' },
@@ -52,6 +57,9 @@ export function InviteHost({ children }: { children: ReactNode }) {
   const [panel, setPanel] = useState<Panel>('menu');
   const [toast, setToast] = useState<string | null>(null);
   const createPost = useCreatePost();
+  const myCircles = useMyCircles();
+  const inACircle = (myCircles.data ?? []).length > 0;
+  const corporateBlocked = isPrivateCorporate(target?.privacyMode);
 
   const open = useCallback((next: ChallengeShareTarget) => {
     setTarget(next);
@@ -126,6 +134,14 @@ export function InviteHost({ children }: { children: ReactNode }) {
                 onPress={() => setPanel('people')}
               />
             ) : null}
+            {inACircle && !corporateBlocked ? (
+              <Button
+                title={copy('circles.shareToCircle')}
+                size="lg"
+                variant="outline"
+                onPress={() => setPanel('circle')}
+              />
+            ) : null}
             <Button title="Copy link" size="lg" variant="outline" onPress={() => void copyLink()} />
             <Button title="Close" variant="ghost" onPress={close} />
           </View>
@@ -168,6 +184,16 @@ export function InviteHost({ children }: { children: ReactNode }) {
           </View>
         </View>
       </ChromeOverlay>
+      <CircleShareSheet
+        visible={Boolean(target) && panel === 'circle'}
+        challengeId={target?.challengeId ?? ''}
+        challengeTitle={target?.challengeTitle ?? 'this challenge'}
+        onSent={() => {
+          close();
+          showToast(copy('circles.shared'));
+        }}
+        onClose={() => setPanel('menu')}
+      />
       <InviteToChallengeModal
         visible={Boolean(target) && panel === 'people'}
         challengeId={target?.challengeId ?? ''}

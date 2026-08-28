@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   TextInput,
@@ -15,6 +16,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
+import { CircleCard } from '@/components/circles/CircleCard';
 import { FriendCard } from '@/components/social/FriendCard';
 import { FriendRequestCard } from '@/components/social/FriendRequestCard';
 import { RecommendedProfiles } from '@/components/feed/RecommendedProfiles';
@@ -23,6 +25,7 @@ import { UserSearchResult } from '@/components/social/UserSearchResult';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { SharedTabs } from '@/components/ui/SharedTabs';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,10 +38,12 @@ import {
   useRejectFriendRequest,
   useSendFriendRequest,
 } from '@/hooks/useSocial';
+import { useMyCircles } from '@/hooks/useCircles';
 import { useCopyTone } from '@/hooks/useCopy';
+import type { CircleCardModel } from '@/lib/circles';
 import { copy } from '@/lib/copy';
 import { isOfficialAccount } from '@/lib/official';
-import { directMessageHref } from '@/lib/routes';
+import { CIRCLES_CREATE_HREF, directMessageHref } from '@/lib/routes';
 import {
   detectPeopleSearch,
   otherFriendshipUserId,
@@ -50,12 +55,18 @@ import { TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
+const PEOPLE_CIRCLES = [
+  { value: 'people', label: 'People' },
+  { value: 'circles', label: 'Circles' },
+] as const;
+
 const SEGMENTS = [
   { value: 'friends', label: 'Friends' },
   { value: 'requests', label: 'Requests' },
   { value: 'search', label: 'Find' },
 ] as const;
 
+type FriendsChip = (typeof PEOPLE_CIRCLES)[number]['value'];
 type FriendsSegment = (typeof SEGMENTS)[number]['value'];
 
 const PANE_FILL: ViewStyle = { flex: 1, minHeight: 0, overflow: 'visible' };
@@ -76,11 +87,13 @@ export default function FriendsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ segment?: string }>();
   const segmentParam = Array.isArray(params.segment) ? params.segment[0] : params.segment;
+  const [chip, setChip] = useState<FriendsChip>('people');
   const [segment, setSegment] = useState<FriendsSegment>('friends');
   const [query, setQuery] = useState('');
   const searchRef = useRef<TextInput>(null);
 
   const friendsQuery = useFriends();
+  const circlesQuery = useMyCircles();
   const requestsQuery = useFriendRequests();
   const followingQuery = useFollowing();
   const searchQuery = usePeopleSearch(query);
@@ -190,15 +203,34 @@ export default function FriendsScreen() {
         friendCount={friends.length}
         requestCount={requestCount}
       />
-      <SegmentedControl
-        value={segment}
-        options={segments}
-        onChange={setSegment}
-        accessibilityLabel="Friends sections"
+      <SharedTabs
+        value={chip}
+        options={PEOPLE_CIRCLES}
+        onChange={setChip}
+        accessibilityLabel="People or Circles"
       />
+      {chip === 'people' ? (
+        <SegmentedControl
+          value={segment}
+          options={segments}
+          onChange={setSegment}
+          accessibilityLabel="Friends sections"
+        />
+      ) : null}
 
       <View style={PANE_FILL}>
-        {segment === 'friends' ? (
+        {chip === 'circles' ? (
+          <CirclesPane
+            loading={circlesQuery.isLoading}
+            error={circlesQuery.error instanceof Error ? circlesQuery.error.message : null}
+            circles={circlesQuery.data ?? []}
+            refreshing={circlesQuery.isRefetching && !circlesQuery.isLoading}
+            onRefresh={() => void circlesQuery.refetch()}
+            onRetry={() => void circlesQuery.refetch()}
+            onCreate={() => router.push(CIRCLES_CREATE_HREF)}
+          />
+        ) : null}
+        {chip === 'people' && segment === 'friends' ? (
           <FriendsPane
             loading={friendsQuery.isLoading}
             error={friendsQuery.error instanceof Error ? friendsQuery.error.message : null}
@@ -216,7 +248,7 @@ export default function FriendsScreen() {
           />
         ) : null}
 
-        {segment === 'requests' ? (
+        {chip === 'people' && segment === 'requests' ? (
           <RequestsPane
             loading={requestsQuery.isLoading}
             error={requestsQuery.error instanceof Error ? requestsQuery.error.message : null}
@@ -244,7 +276,7 @@ export default function FriendsScreen() {
           />
         ) : null}
 
-        {segment === 'search' ? (
+        {chip === 'people' && segment === 'search' ? (
           <SearchPane
             query={query}
             inputRef={searchRef}
@@ -259,6 +291,88 @@ export default function FriendsScreen() {
         ) : null}
       </View>
     </Screen>
+  );
+}
+
+function CirclesPane({
+  loading,
+  error,
+  circles,
+  refreshing,
+  onRefresh,
+  onRetry,
+  onCreate,
+}: {
+  loading: boolean;
+  error: string | null;
+  circles: CircleCardModel[];
+  refreshing: boolean;
+  onRefresh: () => void;
+  onRetry: () => void;
+  onCreate: () => void;
+}) {
+  const tone = useCopyTone();
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.circle} />
+  );
+
+  if (loading) {
+    return (
+      <PaneScroll refreshControl={refreshControl}>
+        <MascotState kind="loading" title={copy('circles.loading', tone)} compact />
+      </PaneScroll>
+    );
+  }
+  if (error) {
+    return (
+      <PaneScroll refreshControl={refreshControl}>
+        <MascotState
+          kind="error"
+          title="Couldn’t load Circles"
+          body={error}
+          actionLabel="Retry"
+          onAction={onRetry}
+          compact
+        />
+      </PaneScroll>
+    );
+  }
+  if (circles.length === 0) {
+    return (
+      <PaneScroll refreshControl={refreshControl}>
+        <MascotState
+          kind="empty"
+          title={copy('circles.empty')}
+          actionLabel={copy('circles.new')}
+          onAction={onCreate}
+          compact
+        />
+      </PaneScroll>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={PANE_SCROLL}
+      contentContainerStyle={PANE_CONTENT}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}>
+      <View className="flex-row justify-end">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy('circles.new')}
+          onPress={onCreate}
+          style={{ minHeight: 44, justifyContent: 'center' }}>
+          <AppText className="text-[14px] font-extrabold" style={{ color: THEME.circle }}>
+            {copy('circles.new')}
+          </AppText>
+        </Pressable>
+      </View>
+      {circles.map((circle) => (
+        <CircleCard key={circle.id} circle={circle} />
+      ))}
+    </ScrollView>
   );
 }
 

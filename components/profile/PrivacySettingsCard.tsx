@@ -26,7 +26,6 @@ export function PrivacySettingsCard() {
           value={encouragement}
           options={[
             { value: 'gentle' as CopyTone, label: copy('profile.toneGentle') },
-            { value: 'neutral' as CopyTone, label: copy('profile.toneNeutral') },
             { value: 'honest' as CopyTone, label: copy('profile.toneHonest') },
           ]}
           onChange={(next) => update.mutate({ encouragement_tone: next })}

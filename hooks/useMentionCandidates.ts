@@ -3,14 +3,23 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFollowing, useFriends } from '@/hooks/useSocial';
+import { searchMentionCircles } from '@/lib/circles';
 import { isCreatorAccount } from '@/lib/creator';
-import { mentionSearchMatches } from '@/lib/mentions';
+import { mentionSearchMatches, type MentionKind } from '@/lib/mentions';
 import { asPostAudience, type PostAudience } from '@/lib/postAudience';
 import { fetchPublicProfilesByIds, searchPeople } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
 
-export type MentionCandidate = PublicProfile & { rank: 'friend' | 'creator' | 'search' | 'audience' };
+export type MentionCandidate = {
+  id: string;
+  kind: MentionKind;
+  label: string;
+  subtitle?: string;
+  avatarUrl?: string | null;
+  username: string;
+  rank: 'friend' | 'creator' | 'search' | 'audience' | 'challenge' | 'circle';
+};
 
 export function useMentionCandidates(input: {
   query: string;
@@ -62,6 +71,34 @@ export function useMentionCandidates(input: {
     queryFn: () => searchPeople(query, user!.id),
   });
 
+  const challenges = useQuery({
+    queryKey: ['mention-challenges', user?.id, query],
+    enabled: Boolean(user?.id && pickerOpen && query.length >= 2 && input.audienceUserIds.length === 0),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const safe = query.replace(/[%_,]/g, '').slice(0, 40);
+      if (!safe) {
+        return [] as { id: string; title: string | null; task: string | null }[];
+      }
+      const { data, error } = await supabase
+        .from('challenges')
+        .select('id, title, task')
+        .or(`title.ilike.%${safe}%,task.ilike.%${safe}%`)
+        .limit(8);
+      if (error) {
+        return [];
+      }
+      return data ?? [];
+    },
+  });
+
+  const circles = useQuery({
+    queryKey: ['mention-circles', user?.id, query],
+    enabled: Boolean(user?.id && pickerOpen && query.length >= 2 && input.audienceUserIds.length === 0),
+    staleTime: 30_000,
+    queryFn: () => searchMentionCircles(query, user!.id),
+  });
+
   const scoped = useQuery({
     queryKey: ['mention-audience', [...input.audienceUserIds].sort().join(',')],
     enabled: Boolean(pickerOpen && input.audienceUserIds.length > 0),
@@ -102,7 +139,15 @@ export function useMentionCandidates(input: {
         return;
       }
       seen.add(profile.id);
-      out.push({ ...profile, rank });
+      out.push({
+        id: profile.id,
+        kind: 'user',
+        label: profile.display_name?.trim() || profile.username,
+        subtitle: profile.username ? `@${profile.username}` : undefined,
+        avatarUrl: profile.avatar_url,
+        username: profile.username,
+        rank,
+      });
     }
 
     if (input.audienceUserIds.length > 0) {
@@ -121,10 +166,43 @@ export function useMentionCandidates(input: {
     for (const profile of searched.data ?? []) {
       take(profile, 'search');
     }
+    if (query.length >= 2) {
+      for (const row of challenges.data ?? []) {
+        const title = String(row.title ?? '').trim() || 'Challenge';
+        if (seen.has(row.id)) {
+          continue;
+        }
+        seen.add(row.id);
+        out.push({
+          id: row.id,
+          kind: 'challenge',
+          label: title,
+          subtitle: String(row.task ?? '').trim() || undefined,
+          username: title,
+          rank: 'challenge',
+        });
+      }
+      for (const row of circles.data ?? []) {
+        if (seen.has(row.id)) {
+          continue;
+        }
+        seen.add(row.id);
+        out.push({
+          id: row.id,
+          kind: 'circle',
+          label: row.name,
+          subtitle: row.focus || undefined,
+          username: row.name,
+          rank: 'circle',
+        });
+      }
+    }
     return out;
   }, [
     audience,
     blocked.data,
+    challenges.data,
+    circles.data,
     following.data,
     friends.data,
     input.audienceUserIds,

@@ -24,7 +24,11 @@ export function TourHost({ onFinished }: TourHostProps) {
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [index, setIndex] = useState(0);
   const step = TOUR_STEPS[index];
-  const rawRect = tour.rectFor(step?.target ?? null);
+  const target =
+    step?.id === 'rounds' && tour.rectFor('tour-rounds')
+      ? 'tour-rounds'
+      : (step?.target ?? null);
+  const rawRect = tour.rectFor(target);
   const hole = expandHole(rawRect, screenW, screenH);
   const bump = tour.bump;
   const setTargetId = tour.setTargetId;
@@ -47,17 +51,18 @@ export function TourHost({ onFinished }: TourHostProps) {
       setTargetId(null);
       return;
     }
-    setTargetId(step.target);
-    if (step.target === 'tour-official') {
+    setTargetId(target);
+    if (target === 'tour-official' || target === 'tour-waves' || target === 'tour-rounds') {
       scrollHomeToTop();
     }
-    const wait = step.target === 'tour-official' ? 380 : 80;
+    const wait =
+      target === 'tour-official' || target === 'tour-waves' || target === 'tour-rounds' ? 380 : 80;
     const handle = setTimeout(() => bump(), wait);
     return () => clearTimeout(handle);
-  }, [bump, scrollHomeToTop, setTargetId, step, tour.active]);
+  }, [bump, scrollHomeToTop, setTargetId, step, target, tour.active]);
 
   useEffect(() => {
-    if (!tour.active || !step?.target || rawRect) {
+    if (!tour.active || !target || rawRect) {
       return;
     }
     const poll = setInterval(() => bump(), 250);
@@ -66,7 +71,7 @@ export function TourHost({ onFinished }: TourHostProps) {
       clearInterval(poll);
       clearTimeout(stopPoll);
     };
-  }, [bump, rawRect, step?.target, tour.active]);
+  }, [bump, rawRect, target, tour.active]);
 
   const finish = useCallback(async () => {
     markHomeTourCompleted(user?.id);

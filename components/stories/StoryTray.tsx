@@ -3,11 +3,11 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { StoryRing } from '@/components/stories/StoryRing';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useStoryGroups } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
-import { railHasVisibleWaves } from '@/lib/clipRail';
 import { copy } from '@/lib/copy';
 import { waveHref } from '@/lib/routes';
 import { persistStoryThumbnail, type StoryGroup } from '@/lib/social';
@@ -18,9 +18,11 @@ import { THEME } from '@/lib/theme';
 
 export function StoryTray() {
   const router = useRouter();
-  const { groups, viewedIds } = useStoryGroups();
+  const { user } = useAuth();
+  const { groups, viewedIds } = useStoryGroups({ includeEmptyOwn: true });
+  const othersVisible = groups.some((group) => !group.isOwn && group.stories.length > 0);
 
-  if (!railHasVisibleWaves(groups)) {
+  if (!user?.id && !othersVisible) {
     return null;
   }
 
@@ -45,15 +47,22 @@ export function StoryTray() {
         contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingVertical: 0 }}>
         {groups.map((group) => {
           const unseen = group.stories.some((story) => !viewedIds.has(story.id));
-          return (
+          const bubble = (
             <StoryBubble
-              key={group.userId}
               group={group}
               seen={group.stories.length === 0 || (!group.isOwn && !unseen)}
               onPress={() => openGroup(group)}
               onAdd={() => startFreshWaveCapture(router)}
             />
           );
+          if (group.isOwn) {
+            return (
+              <TourAnchor key={group.userId} id="tour-waves">
+                {bubble}
+              </TourAnchor>
+            );
+          }
+          return <View key={group.userId}>{bubble}</View>;
         })}
       </ScrollView>
     </View>

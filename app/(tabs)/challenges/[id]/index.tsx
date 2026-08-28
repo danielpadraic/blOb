@@ -320,6 +320,7 @@ export default function ChallengeDetailScreen() {
       challengeTitle: challenge.title,
       allowSendToPeople: isOfficialJoinable(challenge) || isHost,
       defaultAudience: challenge.visibility === 'friends' ? 'friends' : 'public',
+      privacyMode: challenge.privacy_mode,
     });
   }
   const competitorCount = useMemo(() => {

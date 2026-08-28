@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -17,6 +17,11 @@ type InviteToChallengeModalProps = {
   visible: boolean;
   challengeId: string;
   challengeTitle: string;
+  people?: PublicProfile[];
+  initialSelectedIds?: string[];
+  title?: string;
+  body?: string;
+  allowSkip?: boolean;
   onClose: () => void;
   onSent?: (names: string[]) => void;
 };
@@ -29,6 +34,11 @@ export function InviteToChallengeModal({
   visible,
   challengeId,
   challengeTitle,
+  people,
+  initialSelectedIds,
+  title,
+  body,
+  allowSkip,
   onClose,
   onSent,
 }: InviteToChallengeModalProps) {
@@ -37,12 +47,14 @@ export function InviteToChallengeModal({
   const friends = useFriends();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const rosterPeople = people;
   const friendPeople = useMemo(
     () =>
+      rosterPeople ??
       (friends.data ?? [])
         .map((row) => row.profile)
         .filter((profile): profile is PublicProfile => Boolean(profile)),
-    [friends.data],
+    [friends.data, rosterPeople],
   );
   const visiblePeople = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -55,6 +67,15 @@ export function InviteToChallengeModal({
     });
   }, [friendPeople, query]);
   const selectedPeople = friendPeople.filter((person) => selected.has(person.id));
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    setSelected(new Set(initialSelectedIds ?? []));
+    // Seed once when the sheet opens so a parent rerender does not clear checks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   function close() {
     if (invite.isPending) {
@@ -115,7 +136,7 @@ export function InviteToChallengeModal({
     }
   }
 
-  const emptyFriends = !friends.isLoading && friendPeople.length === 0;
+  const emptyFriends = !rosterPeople && !friends.isLoading && friendPeople.length === 0;
 
   return (
     <ChromeOverlay visible={visible} onClose={close}>
@@ -131,9 +152,9 @@ export function InviteToChallengeModal({
         <View className="mb-3 items-center">
           <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
         </View>
-        <AppText className="text-xl font-bold text-charcoal">Send to people</AppText>
+        <AppText className="text-xl font-bold text-charcoal">{title ?? 'Send to people'}</AppText>
         <AppText className="mt-1 mb-4 text-muted">
-          Pick friends. They get a message and a notification — they still join themselves.
+          {body ?? 'Pick friends. They get a message and a notification — they still join themselves.'}
         </AppText>
         {emptyFriends ? (
           <View className="mb-2">
@@ -184,7 +205,12 @@ export function InviteToChallengeModal({
           </>
         )}
         <View className="mt-2">
-          <Button title="Close" variant="ghost" onPress={close} disabled={invite.isPending} />
+          <Button
+            title={allowSkip ? 'Not now' : 'Close'}
+            variant="ghost"
+            onPress={close}
+            disabled={invite.isPending}
+          />
         </View>
       </Pressable>
     </ChromeOverlay>

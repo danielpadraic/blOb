@@ -1,4 +1,5 @@
 import { clipReactionNotifyCopy } from '@/lib/clipNotify';
+import { circleNotificationPath } from '@/lib/circles';
 import { postHref } from '@/lib/postShare';
 import { challengeDetailHref, conversationHref, reelHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
@@ -13,6 +14,10 @@ export function notificationChallengeId(data?: NotificationData | null): string 
 
 export function notificationPostId(data?: NotificationData | null): string | undefined {
   return data?.post_id ?? data?.postId;
+}
+
+export function notificationCircleId(data?: NotificationData | null): string | undefined {
+  return data?.circle_id ?? data?.circleId;
 }
 
 export function notificationActorId(data?: NotificationData | null): string | undefined {
@@ -361,6 +366,10 @@ export function notificationHref(item: AppNotification): Href | null {
   if (data.reel_id) {
     return reelHref(data.reel_id);
   }
+  const circlePath = circleNotificationPath(item.type, notificationCircleId(data), notificationPostId(data));
+  if (circlePath) {
+    return circlePath as Href;
+  }
   if (item.type === 'friend_request') {
     return { pathname: '/friends', params: { segment: 'requests' } };
   }
@@ -441,6 +450,12 @@ export function notificationHref(item: AppNotification): Href | null {
 
 export function notificationGlyph(type: string, data?: NotificationData): string {
   switch (type) {
+    case 'circle_invite':
+    case 'circle_invite_accepted':
+    case 'circle_join':
+    case 'circle_post':
+    case 'circle_challenge_share':
+      return '🟠';
     case 'challenge_invite':
       return '🏁';
     case 'challenge_starting':

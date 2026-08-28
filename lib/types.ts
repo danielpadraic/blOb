@@ -577,6 +577,7 @@ export interface Post {
   id: string;
   author_id: string;
   challenge_id: string | null;
+  circle_id?: string | null;
   content: string | null;
   media_urls: string[];
   audience?: PostAudience;
@@ -602,7 +603,7 @@ export interface Post {
   created_at: string;
 }
 
-export type PostSource = 'challenge' | 'checkin' | 'feed' | 'share' | 'profile_photo';
+export type PostSource = 'challenge' | 'checkin' | 'feed' | 'share' | 'profile_photo' | 'circle';
 export type PostType =
   | 'feed'
   | 'checkin'
@@ -612,7 +613,10 @@ export type PostType =
   | 'wave'
   | 'round'
   | 'round_share'
-  | 'wave_share';
+  | 'wave_share'
+  | 'circle_invite'
+  | 'circle_join'
+  | 'circle_challenge_share';
 
 export type ComposeInput = {
   content: string;
@@ -620,10 +624,12 @@ export type ComposeInput = {
   audience?: PostAudience;
   audienceUserIds?: string[];
   mentionedUserIds?: string[];
+  mentionedEntities?: Array<{ kind: 'user' | 'challenge' | 'circle'; id: string }>;
   wallHostId?: string | null;
   quotedPostId?: string | null;
   quoteSnapshot?: QuoteSnapshot | null;
   challengeId?: string | null;
+  circleId?: string | null;
   source?: PostSource;
   type?: PostType;
   durationMs?: number | null;
@@ -635,6 +641,7 @@ export type PostMention = {
   username: string;
   displayName?: string | null;
   available: boolean;
+  kind?: 'user' | 'challenge' | 'circle';
 };
 
 export interface Comment {
@@ -656,6 +663,7 @@ export interface CommentWithAuthor extends Comment {
 export interface PostWithMeta extends Post {
   author?: PublicProfile | null;
   wall_host?: PublicProfile | null;
+  circle?: { id: string; name: string; visibility?: 'friends' | 'friends_of_friends' | 'public' } | null;
   comments?: CommentWithAuthor[];
   reactions?: Reaction[];
   mentions?: PostMention[];
@@ -749,11 +757,18 @@ export type NotificationType =
   | 'story_comment'
   | 'story_shared'
   | 'start_rolled'
-  | 'bob_encouragement';
+  | 'bob_encouragement'
+  | 'circle_invite'
+  | 'circle_invite_accepted'
+  | 'circle_join'
+  | 'circle_post'
+  | 'circle_challenge_share';
 
 export type NotificationData = {
   challenge_id?: string;
   challengeId?: string;
+  circle_id?: string;
+  circleId?: string;
   post_id?: string;
   postId?: string;
   actor_id?: string;
@@ -1219,6 +1234,128 @@ export type Database = {
         Partial<WalletLedgerEntry>,
         [Relationship<'wallet_ledger_user_id_fkey', 'user_id', 'profiles', 'id'>]
       >;
+      circles: TableDef<
+        {
+          id: string;
+          created_by: string;
+          name: string;
+          focus: string;
+          description: string | null;
+          banner_url: string | null;
+          visibility: 'friends' | 'friends_of_friends' | 'public';
+          created_at: string;
+          updated_at: string;
+        },
+        Partial<{
+          id: string;
+          created_by: string;
+          name: string;
+          focus: string;
+          description: string | null;
+          banner_url: string | null;
+          visibility: 'friends' | 'friends_of_friends' | 'public';
+          created_at: string;
+          updated_at: string;
+        }>,
+        Partial<{
+          id: string;
+          created_by: string;
+          name: string;
+          focus: string;
+          description: string | null;
+          banner_url: string | null;
+          visibility: 'friends' | 'friends_of_friends' | 'public';
+          created_at: string;
+          updated_at: string;
+        }>,
+        [Relationship<'circles_created_by_fkey', 'created_by', 'profiles', 'id'>]
+      >;
+      circle_members: TableDef<
+        {
+          circle_id: string;
+          user_id: string;
+          role: 'host' | 'member';
+          joined_at: string;
+        },
+        Partial<{
+          circle_id: string;
+          user_id: string;
+          role: 'host' | 'member';
+          joined_at: string;
+        }>,
+        Partial<{
+          circle_id: string;
+          user_id: string;
+          role: 'host' | 'member';
+          joined_at: string;
+        }>,
+        [
+          Relationship<'circle_members_circle_id_fkey', 'circle_id', 'circles', 'id'>,
+          Relationship<'circle_members_user_id_fkey', 'user_id', 'profiles', 'id'>,
+        ]
+      >;
+      circle_invites: TableDef<
+        {
+          id: string;
+          circle_id: string;
+          inviter_id: string;
+          invitee_id: string;
+          status: 'pending' | 'accepted' | 'declined';
+          channel: 'feed' | 'dm' | 'push';
+          created_at: string;
+        },
+        Partial<{
+          id: string;
+          circle_id: string;
+          inviter_id: string;
+          invitee_id: string;
+          status: 'pending' | 'accepted' | 'declined';
+          channel: 'feed' | 'dm' | 'push';
+          created_at: string;
+        }>,
+        Partial<{
+          id: string;
+          circle_id: string;
+          inviter_id: string;
+          invitee_id: string;
+          status: 'pending' | 'accepted' | 'declined';
+          channel: 'feed' | 'dm' | 'push';
+          created_at: string;
+        }>,
+        [
+          Relationship<'circle_invites_circle_id_fkey', 'circle_id', 'circles', 'id'>,
+          Relationship<'circle_invites_inviter_id_fkey', 'inviter_id', 'profiles', 'id'>,
+          Relationship<'circle_invites_invitee_id_fkey', 'invitee_id', 'profiles', 'id'>,
+        ]
+      >;
+      circle_pins: TableDef<
+        {
+          circle_id: string;
+          challenge_id: string;
+          pinned_by: string;
+          sort_index: number;
+          pinned_at: string;
+        },
+        Partial<{
+          circle_id: string;
+          challenge_id: string;
+          pinned_by: string;
+          sort_index: number;
+          pinned_at: string;
+        }>,
+        Partial<{
+          circle_id: string;
+          challenge_id: string;
+          pinned_by: string;
+          sort_index: number;
+          pinned_at: string;
+        }>,
+        [
+          Relationship<'circle_pins_circle_id_fkey', 'circle_id', 'circles', 'id'>,
+          Relationship<'circle_pins_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+          Relationship<'circle_pins_pinned_by_fkey', 'pinned_by', 'profiles', 'id'>,
+        ]
+      >;
       posts: TableDef<
         Post,
         Partial<Post>,
@@ -1226,6 +1363,7 @@ export type Database = {
         [
           Relationship<'posts_author_id_fkey', 'author_id', 'profiles', 'id'>,
           Relationship<'posts_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+          Relationship<'posts_circle_id_fkey', 'circle_id', 'circles', 'id'>,
           Relationship<'posts_quoted_post_id_fkey', 'quoted_post_id', 'posts', 'id'>,
         ]
       >;
@@ -1288,21 +1426,27 @@ export type Database = {
         {
           id: string;
           post_id: string;
-          mentioned_user_id: string;
+          mentioned_user_id: string | null;
+          challenge_id?: string | null;
+          circle_id?: string | null;
           author_id: string;
           created_at: string;
         },
         Partial<{
           id: string;
           post_id: string;
-          mentioned_user_id: string;
+          mentioned_user_id: string | null;
+          challenge_id: string | null;
+          circle_id: string | null;
           author_id: string;
           created_at: string;
         }>,
         Partial<{
           id: string;
           post_id: string;
-          mentioned_user_id: string;
+          mentioned_user_id: string | null;
+          challenge_id: string | null;
+          circle_id: string | null;
           author_id: string;
           created_at: string;
         }>,
@@ -1838,6 +1982,91 @@ export type Database = {
       set_challenge_profile_visibility: {
         Args: { p_challenge_id: string; p_visibility: string };
         Returns: undefined;
+      };
+      create_circle: {
+        Args: {
+          p_name: string;
+          p_focus: string;
+          p_description?: string | null;
+          p_banner_url?: string | null;
+          p_visibility?: string | null;
+        };
+        Returns: {
+          id: string;
+          created_by: string;
+          name: string;
+          focus: string;
+          description: string | null;
+          banner_url: string | null;
+          visibility: 'friends' | 'friends_of_friends' | 'public';
+          created_at: string;
+          updated_at: string;
+        };
+      };
+      invite_to_circle: {
+        Args: { p_circle_id: string; p_invitee_ids: string[]; p_post_to_feed?: boolean };
+        Returns: number;
+      };
+      accept_circle_invite: {
+        Args: { p_circle_id: string };
+        Returns: undefined;
+      };
+      decline_circle_invite: {
+        Args: { p_circle_id: string };
+        Returns: undefined;
+      };
+      leave_circle: {
+        Args: { p_circle_id: string };
+        Returns: undefined;
+      };
+      remove_circle_member: {
+        Args: { p_circle_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      circle_member_count: {
+        Args: { p_circle_id: string };
+        Returns: number;
+      };
+      can_join_circle: {
+        Args: { p_circle_id: string; p_user_id: string };
+        Returns: boolean;
+      };
+      list_circle_pins: {
+        Args: { p_circle_id: string };
+        Returns: Array<{
+          circle_id: string;
+          challenge_id: string;
+          pinned_by: string;
+          sort_index: number;
+          pinned_at: string;
+          title: string | null;
+          cover_image_url: string | null;
+          status: string | null;
+          created_by: string | null;
+          visibility: string | null;
+          prize_pool: number | null;
+          buy_in_amount: number | null;
+          currency: string | null;
+          is_official: boolean | null;
+          starts_at: string | null;
+          timezone: string | null;
+        }>;
+      };
+      pin_challenge_to_circle: {
+        Args: { p_circle_id: string; p_challenge_id: string };
+        Returns: undefined;
+      };
+      unpin_circle_challenge: {
+        Args: { p_circle_id: string; p_challenge_id: string };
+        Returns: undefined;
+      };
+      reorder_circle_pins: {
+        Args: { p_circle_id: string; p_challenge_ids: string[] };
+        Returns: undefined;
+      };
+      share_challenge_to_circle: {
+        Args: { p_circle_id: string; p_challenge_id: string; p_caption?: string | null };
+        Returns: string;
       };
     };
     Enums: Record<string, never>;

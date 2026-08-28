@@ -11,6 +11,8 @@ export const THEME = {
   accentSoft: '#E7F7F3',
   accentBright: '#72D9CB',
   accentForeground: '#FFFFFF',
+  circle: '#C4784A',
+  circleSoft: '#F6EDE4',
   gold: '#D7A62F',
   textPrimary: '#151716',
   textSecondary: '#151716',
@@ -110,5 +112,7 @@ export const COLORS = {
   line: THEME.border,
   white: THEME.surface,
   accentSoft: THEME.accentSoft,
+  circle: THEME.circle,
+  circleSoft: THEME.circleSoft,
   danger: THEME.danger,
 } as const;

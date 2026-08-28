@@ -22,6 +22,7 @@ import type {
 } from '@/lib/types';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
+import { fetchCirclePreviews, viewerCanSeeHomeCirclePost } from '@/lib/circles';
 import { fetchFriends, type FriendEdge } from '@/lib/social';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
@@ -66,6 +67,9 @@ async function insertMentionRowsOnce(
 
 type FeedScope =
   | { kind: 'challenge'; challengeId: string }
+  | { kind: 'circle'; circleId: string }
+  | { kind: 'circleIds'; circleIds: string[] }
+  | { kind: 'circleDiscover' }
   | { kind: 'global' }
   | { kind: 'ids'; challengeIds: string[] }
   | { kind: 'authors'; authorIds: string[] }
@@ -74,6 +78,9 @@ type FeedScope =
 
 async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
   if (scope.kind === 'ids' && scope.challengeIds.length === 0) {
+    return [];
+  }
+  if (scope.kind === 'circleIds' && scope.circleIds.length === 0) {
     return [];
   }
   if (scope.kind === 'authors' && scope.authorIds.length === 0) {
@@ -129,6 +136,15 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
     }
     return query;
   }
+  if (scope.kind === 'circle') {
+    return query.eq('circle_id', scope.circleId);
+  }
+  if (scope.kind === 'circleIds') {
+    return query.in('circle_id', scope.circleIds);
+  }
+  if (scope.kind === 'circleDiscover') {
+    return query.not('circle_id', 'is', null);
+  }
   if (scope.kind === 'ids') {
     return query.in('challenge_id', scope.challengeIds);
   }
@@ -161,6 +177,7 @@ function postInsertPayload(
   base: {
     author_id: string;
     challenge_id?: string | null;
+    circle_id?: string | null;
     content: string | null;
     media_urls: string[];
     audience?: string;
@@ -180,6 +197,9 @@ function postInsertPayload(
     content: base.content,
     media_urls: base.media_urls,
   };
+  if (schema.hasCircleId) {
+    payload.circle_id = base.circle_id ?? null;
+  }
   if (schema.hasAudience) {
     payload.audience = base.audience ?? DEFAULT_POST_AUDIENCE;
     payload.audience_user_ids = base.audience_user_ids ?? [];
@@ -269,7 +289,7 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
   const postIds = posts.map((post) => post.id);
   const commentIds = posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.id));
   const [postMentionRows, commentMentionRows] = await Promise.all([
-    supabase.from('post_mentions').select('post_id, mentioned_user_id').in('post_id', postIds),
+    supabase.from('post_mentions').select('post_id, mentioned_user_id, challenge_id, circle_id').in('post_id', postIds),
     commentIds.length > 0
       ? supabase.from('comment_mentions').select('comment_id, mentioned_user_id').in('comment_id', commentIds)
       : Promise.resolve({ data: [] as { comment_id: string; mentioned_user_id: string }[], error: null }),
@@ -277,33 +297,69 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
   if (postMentionRows.error && !isMissingRelationError(postMentionRows.error)) {
     console.log('[blob:feed] post_mentions skipped', postMentionRows.error.message);
   }
-  const postMentions = postMentionRows.error ? [] : (postMentionRows.data ?? []);
+  const postMentions = postMentionRows.error
+    ? []
+    : ((postMentionRows.data ?? []) as {
+        post_id: string;
+        mentioned_user_id?: string | null;
+        challenge_id?: string | null;
+        circle_id?: string | null;
+      }[]);
   const commentMentions = commentMentionRows.error ? [] : (commentMentionRows.data ?? []);
   const mentionedIds = [
-    ...postMentions.map((row) => row.mentioned_user_id),
-    ...commentMentions.map((row) => row.mentioned_user_id),
+    ...postMentions.map((row) => row.mentioned_user_id).filter((id): id is string => Boolean(id)),
+    ...commentMentions.map((row) => row.mentioned_user_id).filter((id): id is string => Boolean(id)),
     ...posts.map((post) => post.wall_host_id).filter((id): id is string => Boolean(id)),
   ];
   const unique = [...new Set(mentionedIds)];
-  const [profiles, blocked] = await Promise.all([
+  const challengeIds = [...new Set(postMentions.map((row) => row.challenge_id).filter((id): id is string => Boolean(id)))];
+  const circleMentionIds = [...new Set(postMentions.map((row) => row.circle_id).filter((id): id is string => Boolean(id)))];
+  const [profiles, blocked, challengeRows, circleRows] = await Promise.all([
     unique.length
       ? supabase.from('profiles').select('id, username, display_name, avatar_url, is_official').in('id', unique)
       : Promise.resolve({ data: [] as { id: string; username: string; display_name: string | null }[], error: null }),
     viewerId && unique.length ? fetchBlockedUserIds(viewerId) : Promise.resolve([] as string[]),
+    challengeIds.length
+      ? supabase.from('challenges').select('id, title').in('id', challengeIds)
+      : Promise.resolve({ data: [] as { id: string; title: string | null }[], error: null }),
+    circleMentionIds.length ? fetchCirclePreviews(circleMentionIds) : Promise.resolve(new Map()),
   ]);
   const byId = new Map((profiles.data ?? []).map((row) => [row.id, row]));
   const blockedIds = new Set(blocked);
+  const challengeById = new Map((challengeRows.data ?? []).map((row) => [row.id, row]));
 
   const mentionsByPost = new Map<string, PostMention[]>();
   for (const row of postMentions) {
-    const profile = byId.get(row.mentioned_user_id);
     const list = mentionsByPost.get(row.post_id) ?? [];
-    list.push({
-      userId: row.mentioned_user_id,
-      username: profile?.username ?? 'blob',
-      displayName: profile?.display_name,
-      available: Boolean(profile?.username) && !blockedIds.has(row.mentioned_user_id),
-    });
+    if (row.circle_id) {
+      const circle = circleRows.get(row.circle_id);
+      list.push({
+        userId: row.circle_id,
+        username: circle?.name ?? 'Circle',
+        displayName: circle?.name ?? 'Circle',
+        available: true,
+        kind: 'circle',
+      });
+    } else if (row.challenge_id) {
+      const challenge = challengeById.get(row.challenge_id);
+      const title = String(challenge?.title ?? '').trim() || 'this challenge';
+      list.push({
+        userId: row.challenge_id,
+        username: title,
+        displayName: title,
+        available: Boolean(challenge),
+        kind: 'challenge',
+      });
+    } else if (row.mentioned_user_id) {
+      const profile = byId.get(row.mentioned_user_id);
+      list.push({
+        userId: row.mentioned_user_id,
+        username: profile?.username ?? 'blob',
+        displayName: profile?.display_name,
+        available: Boolean(profile?.username) && !blockedIds.has(row.mentioned_user_id),
+        kind: 'user',
+      });
+    }
     mentionsByPost.set(row.post_id, list);
   }
   const mentionsByComment = new Map<string, PostMention[]>();
@@ -411,6 +467,20 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
       ...comment,
       author: comment.author ?? byId.get(comment.author_id),
     })),
+  }));
+}
+
+async function hydrateCircles(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
+  const ids = [
+    ...new Set(posts.map((post) => post.circle_id).filter((id): id is string => Boolean(id))),
+  ];
+  if (ids.length === 0) {
+    return posts;
+  }
+  const byId = await fetchCirclePreviews(ids);
+  return posts.map((post) => ({
+    ...post,
+    circle: post.circle_id ? byId.get(post.circle_id) ?? post.circle ?? null : null,
   }));
 }
 
@@ -537,6 +607,17 @@ async function friendIdsForUser(userId: string): Promise<string[]> {
   }
 }
 
+async function fetchJoinedCircleIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('circle_members').select('circle_id').eq('user_id', userId);
+  if (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:feed] circles lookup skipped', error.message);
+    }
+    return [];
+  }
+  return (data ?? []).map((row) => row.circle_id).filter(Boolean);
+}
+
 async function fetchHostedChallengeIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase.from('challenges').select('id').eq('created_by', userId);
   if (error) {
@@ -606,8 +687,21 @@ async function fetchRecommendedCreatorIds(userId: string): Promise<string[]> {
 
 async function fetchPosts(input: {
   challengeId?: string | null;
+  circleId?: string | null;
   userId?: string;
 }): Promise<PostWithMeta[]> {
+  if (input.circleId) {
+    const rows = await queryPosts({ kind: 'circle', circleId: input.circleId });
+    return hydrateCircles(
+      await hydrateAuthors(
+        await withSocial(
+          rows.filter((post) => post.type !== 'circle_invite'),
+          input.userId,
+        ),
+      ),
+    );
+  }
+
   if (input.challengeId) {
     const rows = await queryPosts({ kind: 'challenge', challengeId: input.challengeId });
     return hydrateAuthors(await withSocial(rows, input.userId));
@@ -617,10 +711,11 @@ async function fetchPosts(input: {
     return [];
   }
 
-  const [joinedIds, hostedIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
+  const [joinedIds, hostedIds, circleIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
     await Promise.all([
       fetchJoinedChallengeIds(input.userId),
       fetchHostedChallengeIds(input.userId),
+      fetchJoinedCircleIds(input.userId),
       friendIdsForUser(input.userId),
       fetchOfficialAuthorIds(),
       fetchRecommendedCreatorIds(input.userId),
@@ -630,14 +725,17 @@ async function fetchPosts(input: {
     ]);
   const challengeIds = [...new Set([...joinedIds, ...hostedIds])];
   const challengeIdSet = new Set(challengeIds);
+  const circleIdSet = new Set(circleIds);
   const official = new Set(officialIds);
   const friends = new Set(friendIds);
   const recommended = new Set(recommendedIds);
   const authorIds = [...new Set([input.userId, ...friendIds, ...officialIds, ...recommendedIds])];
 
   const wallHostIds = [...new Set([input.userId, ...friendIds])];
-  const [challengePosts, people, wall] = await Promise.all([
+  const [challengePosts, circlePosts, discoverCircles, people, wall] = await Promise.all([
     queryPosts({ kind: 'ids', challengeIds }),
+    queryPosts({ kind: 'circleIds', circleIds }).catch(() => [] as PostWithMeta[]),
+    queryPosts({ kind: 'circleDiscover' }).catch(() => [] as PostWithMeta[]),
     queryPosts({ kind: 'authors', authorIds }),
     queryPosts({ kind: 'wallHosts', hostIds: wallHostIds }).catch(() => [] as PostWithMeta[]),
   ]);
@@ -646,7 +744,9 @@ async function fetchPosts(input: {
   const muted = new Set(mutedIds);
   const blocked = new Set(blockedIds);
   const userId = input.userId;
-  const merged = dedupePosts([people, challengePosts, wall]);
+  const merged = await hydrateCircles(
+    dedupePosts([people, challengePosts, circlePosts, discoverCircles, wall]),
+  );
   const corporateIds = await fetchCorporateChallengeIds(
     merged.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
   );
@@ -655,7 +755,23 @@ async function fetchPosts(input: {
     await withSocial(
       merged
         .filter((post) => {
-          if (post.hidden_from_home && post.author_id !== userId) {
+          if (post.circle_id) {
+            if (
+              !viewerCanSeeHomeCirclePost({
+                circleId: post.circle_id,
+                type: post.type,
+                hiddenFromHome: post.hidden_from_home,
+                visibility: post.circle?.visibility,
+                authorId: post.author_id,
+                viewerId: userId,
+                viewerIsMember: circleIdSet.has(post.circle_id),
+                friendsWithAuthor: friends.has(post.author_id),
+                friendsOfFriendsWithAuthor: true,
+              })
+            ) {
+              return false;
+            }
+          } else if (post.hidden_from_home && post.author_id !== userId) {
             return false;
           }
           if (isHomeExcludedClipType(post.type)) {
@@ -676,7 +792,9 @@ async function fetchPosts(input: {
           if (post.author_id !== userId && blocked.has(post.author_id)) {
             return false;
           }
+          const circleHomePass = Boolean(post.circle_id);
           if (
+            !circleHomePass &&
             !viewerCanSeeHomePost({
               viewerId: userId,
               authorId: post.author_id,
@@ -696,6 +814,9 @@ async function fetchPosts(input: {
             return asPostAudience(post.audience) === 'public' || post.wall_host_id === userId;
           }
           if (post.challenge_id && challengeIdSet.has(post.challenge_id)) {
+            return true;
+          }
+          if (post.circle_id) {
             return true;
           }
           if (recommended.has(post.author_id)) {
@@ -785,6 +906,16 @@ export function useFeed(challengeId?: string | null) {
   });
 }
 
+export function useCircleFeed(circleId?: string | null) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: feedListKey(circleId ? `circle:${circleId}` : 'circle', user?.id),
+    enabled: Boolean(circleId),
+    staleTime: 30_000,
+    queryFn: () => fetchPosts({ circleId, userId: user?.id }),
+  });
+}
+
 export function useAuthorFeed(authorId?: string | null) {
   const { user } = useAuth();
   return useQuery({
@@ -844,7 +975,7 @@ export async function fetchPostsByIds(ids: string[], viewerId?: string): Promise
     return [];
   }
   const rows = (data as unknown as PostWithMeta[]).filter((row) => !row.deleted_at);
-  return hydrateAuthors(await withSocial(rows, viewerId));
+  return hydrateCircles(await hydrateAuthors(await withSocial(rows, viewerId)));
 }
 
 export function usePostsByIds(ids: string[]) {
@@ -933,7 +1064,11 @@ export function useCreatePost(challengeId?: string | null) {
       const audience_user_ids = audience === 'specific' ? (input.audienceUserIds ?? []) : [];
       const quoted_post_id = input.quotedPostId ?? null;
       const attachedId = input.challengeId ?? challengeId ?? null;
-      if (!content && media_urls.length === 0 && !quoted_post_id && !attachedId) {
+      const circleId = input.circleId ?? null;
+      if (attachedId && circleId && input.type !== 'circle_challenge_share') {
+        throw new Error('A post can’t belong to a challenge and a Circle.');
+      }
+      if (!content && media_urls.length === 0 && !quoted_post_id && !attachedId && !circleId) {
         throw new Error('Write something, or attach a photo first.');
       }
       if (audience === 'specific' && audience_user_ids.length === 0) {
@@ -946,6 +1081,7 @@ export function useCreatePost(challengeId?: string | null) {
       const payload = postInsertPayload(schema, {
         author_id: user.id,
         challenge_id: attachedId,
+        circle_id: circleId,
         content: content || null,
         media_urls,
         audience,
@@ -963,17 +1099,37 @@ export function useCreatePost(challengeId?: string | null) {
         throw new Error(getErrorMessage(created.error));
       }
       const createdPost = created.data as unknown as Post;
-      const mentionIds = [...new Set((input.mentionedUserIds ?? []).filter((id) => id && id !== user.id))];
-      if (mentionIds.length > 0 && createdPost.id) {
+      const entities = (input.mentionedEntities ?? []).filter((row) => row.id);
+      const mentionIds = [
+        ...new Set(
+          (entities.length > 0
+            ? entities.filter((row) => row.kind === 'user').map((row) => row.id)
+            : (input.mentionedUserIds ?? [])
+          ).filter((id) => id && id !== user.id),
+        ),
+      ];
+      const challengeMentions = [...new Set(entities.filter((row) => row.kind === 'challenge').map((row) => row.id))];
+      const circleMentions = [...new Set(entities.filter((row) => row.kind === 'circle').map((row) => row.id))];
+      if ((mentionIds.length > 0 || challengeMentions.length > 0 || circleMentions.length > 0) && createdPost.id) {
         try {
           await insertMentionRowsOnce(() =>
-            supabase.from('post_mentions').insert(
-              mentionIds.map((mentioned_user_id) => ({
+            supabase.from('post_mentions').insert([
+              ...mentionIds.map((mentioned_user_id) => ({
                 post_id: createdPost.id,
                 mentioned_user_id,
                 author_id: user.id,
               })),
-            ),
+              ...challengeMentions.map((challenge_id) => ({
+                post_id: createdPost.id,
+                challenge_id,
+                author_id: user.id,
+              })),
+              ...circleMentions.map((circle_id) => ({
+                post_id: createdPost.id,
+                circle_id,
+                author_id: user.id,
+              })),
+            ]),
           );
         } catch (error) {
           await supabase.from('posts').delete().eq('id', createdPost.id).eq('author_id', user.id);
@@ -983,7 +1139,7 @@ export function useCreatePost(challengeId?: string | null) {
       return createdPost;
     },
     onMutate: async (input) => {
-      const listKey = feedListKey(key, user?.id);
+      const listKey = feedListKey(input.circleId ? `circle:${input.circleId}` : key, user?.id);
       await queryClient.cancelQueries({ queryKey: listKey });
       const previous = queryClient.getQueryData<PostWithMeta[]>(listKey);
       const optimisticId = `optimistic-${Date.now()}`;
@@ -992,6 +1148,7 @@ export function useCreatePost(challengeId?: string | null) {
           id: optimisticId,
           author_id: user.id,
           challenge_id: input.challengeId ?? challengeId ?? null,
+          circle_id: input.circleId ?? null,
           content: input.content.trim() || null,
           media_urls: input.mediaUrls ?? [],
           audience: input.audience ?? DEFAULT_POST_AUDIENCE,

@@ -652,7 +652,7 @@ export function useStory(id?: string | null) {
   });
 }
 
-export function useStoryGroups() {
+export function useStoryGroups(options?: { includeEmptyOwn?: boolean }) {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const storiesQuery = useActiveStories();
@@ -751,9 +751,9 @@ export function useStoryGroups() {
         userId: user?.id,
         profiles,
         circleIds,
-        includeEmptyOwn: false,
+        includeEmptyOwn: Boolean(options?.includeEmptyOwn),
       }),
-    [circleIds, profiles, railStories, user?.id],
+    [circleIds, options?.includeEmptyOwn, profiles, railStories, user?.id],
   );
 
   const viewedIds = useMemo(() => new Set(viewedQuery.data ?? []), [viewedQuery.data]);

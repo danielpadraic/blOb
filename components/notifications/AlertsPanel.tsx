@@ -10,14 +10,17 @@ import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useMarkNotificationsRead, useNotifications } from '@/hooks/useNotifications';
 import { useResolveStartRoll } from '@/hooks/useChallenge';
+import { useAcceptCircleInvite, useDeclineCircleInvite } from '@/hooks/useCircles';
 import { useAcceptFriendRequest, useRejectFriendRequest } from '@/hooks/useSocial';
 import {
   friendRequestFromUserId,
   isCoinGrantAlert,
   isPersonAlert,
+  notificationCircleId,
   notificationGlyph,
   notificationHref,
 } from '@/lib/notifications';
+import { circleDetailHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
@@ -70,6 +73,8 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const resolveRoll = useResolveStartRoll();
   const acceptFriend = useAcceptFriendRequest();
   const denyFriend = useRejectFriendRequest();
+  const acceptCircle = useAcceptCircleInvite();
+  const declineCircle = useDeclineCircleInvite();
   const tone = useCopyTone();
   const items = list.data ?? [];
   const unreadCount = items.filter((item) => !item.read_at).length;
@@ -105,6 +110,40 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
       });
     },
     [acceptFriend, denyFriend, markRead],
+  );
+
+  const onCircleInvite = useCallback(
+    (item: AppNotification, action: 'confirm' | 'deny') => {
+      const circleId = notificationCircleId(item.data);
+      if (!circleId) {
+        return;
+      }
+      const busy = acceptCircle.isPending || declineCircle.isPending;
+      if (busy) {
+        return;
+      }
+      const mark = () => {
+        if (!item.read_at) {
+          markRead.mutate([item.id]);
+        }
+      };
+      if (action === 'confirm') {
+        acceptCircle.mutate(circleId, {
+          onSuccess: () => {
+            mark();
+            onClose?.();
+            router.push(circleDetailHref(circleId, { tab: 'feed' }));
+          },
+          onError: (error) => Alert.alert('Couldn’t join that Circle', getErrorMessage(error)),
+        });
+        return;
+      }
+      declineCircle.mutate(circleId, {
+        onSuccess: mark,
+        onError: (error) => Alert.alert('Couldn’t decline that invite', getErrorMessage(error)),
+      });
+    },
+    [acceptCircle, declineCircle, markRead, onClose, router],
   );
 
   const onOpen = useCallback(
@@ -176,6 +215,11 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
                     denyFriend.variables === friendRequestFromUserId(row.item))
                 }
                 onFriendRequest={(action) => onFriendRequest(row.item, action)}
+                circleActionPending={
+                  (acceptCircle.isPending && acceptCircle.variables === notificationCircleId(row.item.data)) ||
+                  (declineCircle.isPending && declineCircle.variables === notificationCircleId(row.item.data))
+                }
+                onCircleInvite={(action) => onCircleInvite(row.item, action)}
                 onResolveStart={(keep) => {
                   const challengeId = row.item.data?.challenge_id;
                   if (!challengeId || resolveRoll.isPending) {
@@ -242,12 +286,16 @@ function NotificationRow({
   onResolveStart,
   onFriendRequest,
   friendActionPending,
+  onCircleInvite,
+  circleActionPending,
 }: {
   item: AppNotification;
   onPress: () => void;
   onResolveStart?: (keep: boolean) => void;
   onFriendRequest?: (action: 'confirm' | 'deny') => void;
   friendActionPending?: boolean;
+  onCircleInvite?: (action: 'confirm' | 'deny') => void;
+  circleActionPending?: boolean;
 }) {
   const unread = !item.read_at;
   const keepDays = Math.max(Number(item.data?.keep_days) || 0, 1);
@@ -255,6 +303,8 @@ function NotificationRow({
   const canShorten = item.data?.can_shorten !== false;
   const showFriendActions =
     item.type === 'friend_request' && unread && Boolean(friendRequestFromUserId(item)) && onFriendRequest;
+  const showCircleActions =
+    item.type === 'circle_invite' && unread && Boolean(notificationCircleId(item.data)) && onCircleInvite;
   return (
     <Pressable
       accessibilityRole="button"
@@ -349,6 +399,42 @@ function NotificationRow({
               }}>
               <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
                 Deny
+              </AppText>
+            </Pressable>
+          </View>
+        ) : null}
+        {showCircleActions ? (
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            <Pressable
+              accessibilityRole="button"
+              disabled={circleActionPending}
+              onPress={(event) => {
+                event.stopPropagation();
+                onCircleInvite('confirm');
+              }}
+              className="rounded-full px-3"
+              style={{ minHeight: 44, justifyContent: 'center', backgroundColor: THEME.primary }}>
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
+                Accept
+              </AppText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={circleActionPending}
+              onPress={(event) => {
+                event.stopPropagation();
+                onCircleInvite('deny');
+              }}
+              className="rounded-full px-3"
+              style={{
+                minHeight: 44,
+                justifyContent: 'center',
+                backgroundColor: THEME.surface,
+                borderWidth: 1,
+                borderColor: THEME.border,
+              }}>
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
+                Decline
               </AppText>
             </Pressable>
           </View>

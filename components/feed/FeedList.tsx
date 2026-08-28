@@ -135,7 +135,7 @@ export function FeedList({
   const tourLocked = Boolean(tour?.active);
   const tone = useCopyTone();
   const visiblePosts = useMemo(() => posts.filter((post) => !post.deleted_at), [posts]);
-  const challengeFeed = composeSource === 'challenge';
+  const challengeFeed = composeSource === 'challenge' || composeSource === 'circle';
   const scrolledTo = useRef<string | null>(null);
 
   useEffect(() => {

@@ -305,7 +305,13 @@ export function Composer({
         mediaUrls,
         audience: postAudience,
         audienceUserIds: postAudience === 'specific' ? audienceUserIds : [],
-        mentionedUserIds: latest.chips.map((chip) => chip.userId),
+        mentionedUserIds: latest.chips
+          .filter((chip) => (chip.kind ?? 'user') === 'user')
+          .map((chip) => chip.userId),
+        mentionedEntities: latest.chips.map((chip) => ({
+          kind: chip.kind ?? 'user',
+          id: chip.userId,
+        })),
         wallHostId: wallHost?.id ?? null,
         quotedPostId: quote?.postId ?? null,
         quoteSnapshot: quote?.snapshot ?? null,
