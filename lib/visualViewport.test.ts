@@ -6,6 +6,36 @@ describe('visualViewportOcclusion', () => {
   it('returns 0 when visualViewport is missing', () => {
     expect(visualViewportOcclusion()).toBe(0);
   });
+
+  it('uses the layout viewport so iOS Safari keyboard is not 0', () => {
+    const previousWindow = (globalThis as { window?: unknown }).window;
+    const previousDocument = (globalThis as { document?: unknown }).document;
+    try {
+      Object.defineProperty(globalThis, 'document', {
+        configurable: true,
+        value: { documentElement: { clientHeight: 844 } },
+      });
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: {
+          innerHeight: 430,
+          visualViewport: { height: 430, offsetTop: 0 },
+        },
+      });
+      expect(visualViewportOcclusion()).toBe(414);
+    } finally {
+      if (previousDocument === undefined) {
+        Reflect.deleteProperty(globalThis, 'document');
+      } else {
+        Object.defineProperty(globalThis, 'document', { configurable: true, value: previousDocument });
+      }
+      if (previousWindow === undefined) {
+        Reflect.deleteProperty(globalThis, 'window');
+      } else {
+        Object.defineProperty(globalThis, 'window', { configurable: true, value: previousWindow });
+      }
+    }
+  });
 });
 
 describe('visualViewportBox', () => {

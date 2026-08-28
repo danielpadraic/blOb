@@ -18,7 +18,10 @@ import { nativeCallbackUrlFromParams, pickCanonicalAuthCallbackUrl } from '@/lib
 import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
+import { apexBlobUrl, canonicalizeWwwBlobHost } from '@/lib/webHost';
 import { getAuthCallbackMessage, getErrorMessage } from '@/utils/errors';
+
+canonicalizeWwwBlobHost();
 
 const EXCHANGE_MS = 15_000;
 
@@ -27,7 +30,7 @@ function currentWebHref(): string | null {
     return null;
   }
   try {
-    return typeof window !== 'undefined' ? window.location.href : null;
+    return typeof window !== 'undefined' ? apexBlobUrl(window.location.href) : null;
   } catch {
     return null;
   }

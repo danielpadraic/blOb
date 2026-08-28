@@ -40,7 +40,9 @@ import {
   queryWebCameraPermission,
   webMediaRecorderAvailable,
 } from '@/lib/mediaPermissions';
+import { clipShutterReleaseStopsRecording } from '@/lib/clipShutter';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
+import { applyWebVideoLock } from '@/lib/webVideo';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
 
 type CameraFail = 'denied' | 'missing' | null;
@@ -526,16 +528,17 @@ export function InAppCamera({
   }
 
   function onShutterPressOut() {
-    if (holdRef.current && recordingRef.current) {
+    if (clipShutterReleaseStopsRecording() && holdRef.current && recordingRef.current) {
       stopRecording();
     }
   }
 
-  const shutterLabel = shutterHint
-    ? shutterHint
+  const liveHint = video && recording ? copy('wave.shutterStop') : shutterHint;
+  const shutterLabel = liveHint
+    ? liveHint
     : video
       ? recording
-        ? 'Stop recording'
+        ? 'Tap to stop'
         : 'Start recording'
       : 'Take photo';
   const showDenied = parentBlocked || fail != null;
@@ -686,9 +689,9 @@ export function InAppCamera({
             </Pressable>
           </View>
         ) : null}
-        {shutterHint ? (
+        {liveHint ? (
           <AppText className="mb-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
-            {shutterHint}
+            {liveHint}
           </AppText>
         ) : null}
         <View className="flex-row items-center justify-between">
@@ -778,10 +781,16 @@ const WebCameraPreview = memo(function WebCameraPreview({
   return (
     <View style={{ flex: 1 }}>
       {createElement('video', {
-        ref: attach,
+        ref: (node: HTMLVideoElement | null) => {
+          applyWebVideoLock(node);
+          attach(node);
+        },
         autoPlay: true,
         muted: true,
         playsInline: true,
+        controls: false,
+        disablePictureInPicture: true,
+        'webkit-playsinline': 'true',
         style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#101312' },
       })}
     </View>

@@ -16,7 +16,7 @@ export function BodyFatSlider({ value, onChange }: BodyFatSliderProps) {
   const width = useSharedValue(1);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const pct = clampBodyFat(value);
+  const pct = Math.round(clampBodyFat(value));
   const ratio = (pct - BODY_FAT_MIN) / (BODY_FAT_MAX - BODY_FAT_MIN);
   const leftOnFill = ratio > 0.1;
   const rightOnFill = ratio > 0.9;
@@ -90,7 +90,7 @@ export function BodyFatSlider({ value, onChange }: BodyFatSliderProps) {
       </GestureDetector>
       <View className="flex-row items-end justify-between">
         <AppText className="text-[13px] text-muted">Current body fat</AppText>
-        <AppText className="text-[22px] font-extrabold text-charcoal">{Math.round(pct)}%</AppText>
+        <AppText className="text-[22px] font-extrabold text-charcoal">{pct}%</AppText>
       </View>
     </View>
   );

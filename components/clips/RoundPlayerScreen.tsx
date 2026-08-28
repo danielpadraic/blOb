@@ -100,7 +100,7 @@ export function RoundPlayerScreen() {
     router.replace(TABS_HREF);
   }
 
-  if (reelQuery.isLoading || (railQuery.isLoading && !railQuery.data)) {
+  if (!reel && (reelQuery.isLoading || (railQuery.isLoading && !railQuery.data))) {
     return (
       <WatchSurface>
         <View className="flex-1 items-center justify-center">

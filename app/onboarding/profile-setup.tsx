@@ -42,7 +42,7 @@ import {
   preferredUnitSystem,
   profileWeightKg,
 } from '@/lib/bodyMetrics';
-import { asCopyTone, copy, type CopyTone } from '@/lib/copy';
+import { PROFILE_SETUP_TONE_OPTIONS, copy, profileSetupTone, type CopyTone } from '@/lib/copy';
 import { fitnessProfileFromUser, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
@@ -97,7 +97,7 @@ export function ProfileSetupWizard() {
   const [formError, setFormError] = useState<string | null>(null);
   const [exactOpen, setExactOpen] = useState(false);
   const [exactDraft, setExactDraft] = useState(String(BODY_FAT_DEFAULT));
-  const [tone, setTone] = useState<CopyTone>(() => asCopyTone(profile?.motivation_tone));
+  const [tone, setTone] = useState<CopyTone>(() => profileSetupTone(profile?.motivation_tone));
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
 
   const defaults = useMemo(() => buildDefaults(profile), [profile]);
@@ -122,7 +122,7 @@ export function ProfileSetupWizard() {
 
   useEffect(() => {
     if (profile?.motivation_tone) {
-      setTone(asCopyTone(profile.motivation_tone));
+      setTone(profileSetupTone(profile.motivation_tone));
     }
   }, [profile?.motivation_tone]);
 
@@ -263,7 +263,9 @@ export function ProfileSetupWizard() {
       Number(values.current_weight),
       values.weight_unit === 'kg' ? 'metric' : 'imperial',
     );
-    const goal = parseOptionalNumber(values.goal_weight);
+    const goal = parseOptionalNumber(
+      /^optional$/i.test(values.goal_weight?.trim() ?? '') ? '' : values.goal_weight,
+    );
     const goalKg =
       goal != null
         ? inputWeightToKg(goal, values.weight_unit === 'kg' ? 'metric' : 'imperial')
@@ -325,6 +327,7 @@ export function ProfileSetupWizard() {
     <KeyboardFormShell
       scrollToTopKey={step}
       paddingHorizontal={16}
+      protectFieldFocus
       footer={
         <View className="gap-3">
           {formError ? (
@@ -335,7 +338,10 @@ export function ProfileSetupWizard() {
               title="Continue"
               size="lg"
               onPress={() => void goNext()}
-              disabled={step === 0 && (availability.isTaken || availability.isChecking)}
+              disabled={
+                step === 0 &&
+                (availability.isTaken || availability.isChecking || !availability.isAvailable)
+              }
             />
           ) : (
             <Button
@@ -389,8 +395,11 @@ export function ProfileSetupWizard() {
                 onChangeText={(text) => onChange(normalizeUsername(text))}
                 onBlur={onBlur}
                 error={
-                  errors.username?.message ??
-                  (availability.isTaken ? 'That username is taken' : undefined)
+                  availability.isTaken
+                    ? 'That username is taken'
+                    : value.trim()
+                      ? errors.username?.message
+                      : undefined
                 }
                 hint={errors.username?.message || availability.isTaken ? undefined : usernameHint}
               />
@@ -409,9 +418,14 @@ export function ProfileSetupWizard() {
                 label="Display name"
                 textContentType="name"
                 value={value}
-                onChangeText={onChange}
+                onChangeText={(text) => {
+                  onChange(text);
+                  if (text.trim().length >= 2) {
+                    void trigger('display_name');
+                  }
+                }}
                 onBlur={onBlur}
-                error={errors.display_name?.message}
+                error={value.trim().length >= 2 ? undefined : errors.display_name?.message}
               />
             )}
           />
@@ -429,7 +443,11 @@ export function ProfileSetupWizard() {
               />
             )}
           />
-          <MotivationToneChips value={tone} onChange={setTone} />
+          <MotivationToneChips
+            value={tone}
+            onChange={setTone}
+            options={PROFILE_SETUP_TONE_OPTIONS}
+          />
         </View>
       ) : null}
 
@@ -578,38 +596,44 @@ export function ProfileSetupWizard() {
             />
           )}
 
-          <Controller
-            control={control}
-            name="current_weight"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label={unit === 'lb' ? 'Current weight (lb)' : 'Current weight (kg)'}
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                placeholder={unit === 'lb' ? '165' : '75'}
-                error={errors.current_weight?.message}
-              />
-            )}
-          />
-          <Controller
-            control={control}
-            name="goal_weight"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label={unit === 'lb' ? 'Goal weight (lb)' : 'Goal weight (kg)'}
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                placeholder="Optional"
-                error={errors.goal_weight?.message}
-              />
-            )}
-          />
+          <KeyboardField>
+            <Controller
+              control={control}
+              name="current_weight"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label={unit === 'lb' ? 'Current weight (lb)' : 'Current weight (kg)'}
+                  keyboardType="decimal-pad"
+                  inputMode="decimal"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  placeholder={unit === 'lb' ? '165' : '75'}
+                  error={errors.current_weight?.message}
+                />
+              )}
+            />
+          </KeyboardField>
+          <KeyboardField>
+            <Controller
+              control={control}
+              name="goal_weight"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label={unit === 'lb' ? 'Goal weight (lb)' : 'Goal weight (kg)'}
+                  keyboardType="decimal-pad"
+                  inputMode="decimal"
+                  value={value === 'optional' || value === 'Optional' ? '' : value}
+                  onChangeText={(text) =>
+                    onChange(/^optional$/i.test(text.trim()) ? '' : text)
+                  }
+                  onBlur={onBlur}
+                  placeholder="Optional"
+                  error={errors.goal_weight?.message}
+                />
+              )}
+            />
+          </KeyboardField>
 
           {liveBmi != null ? (
             <Card>

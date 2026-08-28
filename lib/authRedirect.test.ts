@@ -51,6 +51,12 @@ describe('emailAuthRedirectTo', () => {
 
       Object.defineProperty(globalThis, 'window', {
         configurable: true,
+        value: { location: { origin: 'https://www.blob.mobi' } },
+      });
+      expect(emailAuthRedirectTo()).toBe('https://blob.mobi/auth/callback');
+
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
         value: { location: { origin: 'https://vercel.com' } },
       });
       expect(emailAuthRedirectTo()).toBeNull();

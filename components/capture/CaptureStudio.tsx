@@ -29,9 +29,11 @@ import { cameraIsAvailable, ensureCapturePermissions, ensureLibraryPermission, o
 import {
   asDefaultPostAudience,
   audienceLabel,
+  DEFAULT_POST_AUDIENCE,
   feedVisibilityForAudience,
   type PostAudience,
 } from '@/lib/postAudience';
+import type { ComposeInput, Post } from '@/lib/types';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import {
@@ -288,21 +290,17 @@ export function CaptureStudio({
           duration_ms: draft.durationMs ?? null,
         });
         publishedReelId = reel.id;
-        try {
-          const posted = await createPost.mutateAsync({
-            content: captionText,
-            mediaUrls: [mediaUrl],
-            audience,
-            audienceUserIds: audience === 'specific' ? audienceUserIds : [],
-            challengeId: challengeId ?? undefined,
-            source: 'feed',
-            type: 'round',
-            durationMs: draft.durationMs ?? null,
-          });
-          await attachClipPostId('reel', reel.id, posted.id);
-        } catch (postError) {
-          logPostgrestError('round-feed-post', postError);
-        }
+        const posted = await ensureClipFeedPost({
+          createPost: (input) => createPost.mutateAsync(input),
+          content: captionText,
+          mediaUrls: [mediaUrl],
+          audience,
+          audienceUserIds,
+          challengeId,
+          type: 'round',
+          durationMs: draft.durationMs ?? null,
+        });
+        await attachClipPostId('reel', reel.id, posted.id);
         try {
           await createFeedEvent.mutateAsync({
             event_type: 'reel_posted',
@@ -341,21 +339,17 @@ export function CaptureStudio({
           clips,
         });
         for (const story of stories) {
-          try {
-            const posted = await createPost.mutateAsync({
-              content: story.caption?.trim() || caption.trim(),
-              mediaUrls: [mediaUrl],
-              audience,
-              audienceUserIds: audience === 'specific' ? audienceUserIds : [],
-              challengeId: challengeId ?? undefined,
-              source: 'feed',
-              type: 'wave',
-              durationMs: story.clip_duration_ms ?? draft.durationMs ?? null,
-            });
-            await attachClipPostId('story', story.id, posted.id);
-          } catch (postError) {
-            logPostgrestError('wave-feed-post', postError);
-          }
+          const posted = await ensureClipFeedPost({
+            createPost: (input) => createPost.mutateAsync(input),
+            content: story.caption?.trim() || caption.trim(),
+            mediaUrls: [mediaUrl],
+            audience,
+            audienceUserIds,
+            challengeId,
+            type: 'wave',
+            durationMs: story.clip_duration_ms ?? draft.durationMs ?? null,
+          });
+          await attachClipPostId('story', story.id, posted.id);
         }
         publishedWaveId = stories[0]?.id ?? null;
         const first = stories[0];
@@ -407,7 +401,9 @@ export function CaptureStudio({
           capture={captureKind}
           facingKind={mode === 'post' ? 'proof' : 'social'}
           maxDuration={maxDuration}
-          shutterHint={mode === 'story' ? copy('wave.shutter') : mode === 'reel' ? copy('round.shutter') : undefined}
+          shutterHint={
+            mode === 'story' ? copy('wave.shutter') : mode === 'reel' ? copy('round.shutter') : undefined
+          }
           blocked={mode === 'story' ? false : Boolean(denied && denied.kind !== 'library')}
           blockedReason={
             denied?.kind === 'microphone'
@@ -599,6 +595,17 @@ export function CaptureStudio({
           </AppText>
           <AudienceIconButton audience={audience} />
         </Pressable>
+        {mode === 'story' || mode === 'reel' ? (
+          <AppText className="text-[12px] text-muted">
+            {audience === 'public'
+              ? copy(mode === 'reel' ? 'round.audiencePublic' : 'wave.audiencePublic')
+              : audience === 'friends'
+                ? copy(mode === 'reel' ? 'round.audienceFriends' : 'wave.audienceFriends')
+                : audience === 'specific'
+                  ? 'Only the people you pick can see this.'
+                  : copy(mode === 'reel' ? 'round.audienceFriends' : 'wave.audienceFriends')}
+          </AppText>
+        ) : null}
       </View>
 
       {progress > 0 ? (
@@ -640,6 +647,39 @@ export function CaptureStudio({
     ) : null}
     </View>
   );
+}
+
+async function ensureClipFeedPost(input: {
+  createPost: (payload: ComposeInput) => Promise<Post>;
+  content: string;
+  mediaUrls: string[];
+  audience: PostAudience;
+  audienceUserIds: string[];
+  challengeId: string | null;
+  type: 'wave' | 'round';
+  durationMs: number | null;
+}): Promise<Post> {
+  const audience = input.audience || DEFAULT_POST_AUDIENCE;
+  const payload: ComposeInput = {
+    content: input.content,
+    mediaUrls: input.mediaUrls,
+    audience,
+    audienceUserIds: audience === 'specific' ? input.audienceUserIds : [],
+    challengeId: input.challengeId ?? undefined,
+    source: 'feed',
+    type: input.type,
+    durationMs: input.durationMs,
+  };
+  try {
+    return await input.createPost(payload);
+  } catch (first) {
+    logPostgrestError('clip-feed-post', first);
+    return input.createPost({
+      ...payload,
+      audience: DEFAULT_POST_AUDIENCE,
+      audienceUserIds: [],
+    });
+  }
 }
 
 function DraftClipPreview({ uri }: { uri: string }) {

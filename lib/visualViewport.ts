@@ -1,12 +1,21 @@
 import type { VisualViewportBox } from '@/lib/clipWatch';
 
+function layoutViewportHeight(): number {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
+  const docH =
+    typeof document !== 'undefined' ? document.documentElement?.clientHeight ?? 0 : 0;
+  return docH > 0 ? docH : window.innerHeight;
+}
+
 /** Keyboard (or other chrome) covering the bottom of the visual viewport on web. */
 export function visualViewportOcclusion(): number {
   if (typeof window === 'undefined' || !window.visualViewport) {
     return 0;
   }
   const vv = window.visualViewport;
-  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  return Math.max(0, Math.round(layoutViewportHeight() - vv.height - vv.offsetTop));
 }
 
 export function visualViewportBox(): VisualViewportBox {

@@ -739,8 +739,9 @@ export function useStoryGroups() {
         hiddenPostIds: railFilterQuery.data?.hiddenPostIds ?? new Set(),
         corporateChallengeIds: railFilterQuery.data?.corporateChallengeIds ?? new Set(),
         hiddenAuthorIds: railFilterQuery.data?.hiddenAuthorIds ?? new Set(),
+        viewerId: user?.id,
       }),
-    [railFilterQuery.data, storiesQuery.data],
+    [railFilterQuery.data, storiesQuery.data, user?.id],
   );
 
   const groups = useMemo(
@@ -842,7 +843,19 @@ export function useCreateStory() {
         queryClient.setQueryData(socialKeys.stories(), context.previous);
       }
     },
+    onSuccess: (stories) => {
+      queryClient.setQueryData<Story[]>(socialKeys.stories(), (current) => {
+        const withoutOptimistic = (current ?? []).filter((row) => !row.id.startsWith('optimistic-'));
+        const ids = new Set(stories.map((row) => row.id));
+        return [...stories, ...withoutOptimistic.filter((row) => !ids.has(row.id))];
+      });
+      for (const story of stories) {
+        queryClient.setQueryData(socialKeys.story(story.id), story);
+      }
+    },
     onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['stories'] });
+      void queryClient.invalidateQueries({ queryKey: ['wave-groups'] });
       void queryClient.invalidateQueries({ queryKey: socialKeys.stories() });
     },
   });

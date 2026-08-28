@@ -85,6 +85,19 @@ describe('clip rail', () => {
     expect(kept.map((row) => row.id)).toEqual(['ok']);
   });
 
+  it('hides a hidden-from-rail Wave only on the owner’s rail', () => {
+    const hiddenOwn = story({ id: 'hid', user_id: 'me', post_id: 'p2' });
+    const hiddenFriend = story({ id: 'pal', user_id: 'pal', post_id: 'p2' });
+    const kept = filterStoriesForRail({
+      stories: [hiddenOwn, hiddenFriend],
+      hiddenPostIds: new Set(['p2']),
+      corporateChallengeIds: new Set(),
+      hiddenAuthorIds: new Set(),
+      viewerId: 'me',
+    });
+    expect(kept.map((row) => row.id)).toEqual(['pal']);
+  });
+
   it('plays Rounds in rail order and starts on the tapped clip', () => {
     const play = buildRoundPlayList([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 'b');
     expect(play.items.map((row) => row.id)).toEqual(['a', 'b', 'c']);

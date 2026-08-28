@@ -1,4 +1,5 @@
 import { hasAuthCallbackPayload, parseAuthRedirectParams } from '@/lib/authRedirectParams';
+import { apexBlobUrl } from '@/lib/webHost';
 
 /** Custom scheme from app.json. Do not change. */
 export const NATIVE_OAUTH_SCHEME = 'blob';
@@ -76,10 +77,10 @@ export function pickCanonicalAuthCallbackUrl(
   for (const url of urls) {
     const params = parseAuthRedirectParams(url);
     if (hasAuthCallbackPayload(params) || params.error) {
-      return url;
+      return apexBlobUrl(url);
     }
   }
-  return urls[0] ?? null;
+  return urls[0] ? apexBlobUrl(urls[0]) : null;
 }
 
 const GOOGLE_AUTH_HOST = /(?:^|\.)google\.com$/i;

@@ -4,6 +4,7 @@ export type TourStepId =
   | 'search'
   | 'dm'
   | 'bell'
+  | 'menu'
   | 'official'
   | 'tabFeed'
   | 'tabLobby'
@@ -59,6 +60,13 @@ export const TOUR_STEPS: TourStep[] = [
     body: 'Friend requests, messages, and coin grants land here.',
   },
   {
+    id: 'menu',
+    target: 'tour-menu',
+    placement: 'below',
+    title: 'Menu',
+    body: 'Create a Challenge, Call someone out, Join, or Send Coins. These live here — not on the +.',
+  },
+  {
     id: 'official',
     target: 'tour-official',
     placement: 'below',
@@ -84,7 +92,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-tab-create',
     placement: 'above',
     title: '+',
-    body: 'Create a Simple or Advanced challenge.',
+    body: 'Quick Start. Check In when you are in a challenge that needs proof. Post opens Wave, Round, or a Feed update.',
   },
   {
     id: 'tabFriends',

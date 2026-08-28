@@ -147,20 +147,22 @@ export function TabChromeHeader({
         }}>
         <View className="flex-row items-center" style={{ overflow: 'visible', minHeight: 44 }}>
           <View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={logoMenuOpen ? 'Close menu' : 'Open menu'}
-              accessibilityState={{ expanded: logoMenuOpen }}
-              onPress={onToggleLogoMenu}
-              hitSlop={4}
-              style={{
-                width: 44,
-                height: 44,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <Glyph name={GLYPH.menu} color={THEME.textPrimary} size={20} />
-            </Pressable>
+            <TourAnchor id="tour-menu" style={{ overflow: 'visible' }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={logoMenuOpen ? 'Close menu' : 'Open menu'}
+                accessibilityState={{ expanded: logoMenuOpen }}
+                onPress={onToggleLogoMenu}
+                hitSlop={4}
+                style={{
+                  width: 44,
+                  height: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Glyph name={GLYPH.menu} color={THEME.textPrimary} size={20} />
+              </Pressable>
+            </TourAnchor>
             {logoMenuOpen ? (
               <View
                 style={{

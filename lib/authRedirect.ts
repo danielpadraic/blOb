@@ -1,3 +1,5 @@
+import { apexBlobOrigin } from '@/lib/webHost';
+
 export const AUTH_CALLBACK_PATH = '/auth/callback';
 export const AUTH_LOGIN_PATH = '/(auth)/login';
 export const NATIVE_EMAIL_CALLBACK = 'blob://auth/callback';
@@ -87,7 +89,7 @@ function webOriginCallback(): string | null {
     if (!isBrowserWeb() || !window.location?.origin) {
       return null;
     }
-    const origin = String(window.location.origin).replace(/\/$/, '');
+    const origin = apexBlobOrigin(String(window.location.origin).replace(/\/$/, ''));
     if (!origin || /^blob:/i.test(origin) || isVercelComHost(origin)) {
       return null;
     }

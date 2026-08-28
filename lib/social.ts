@@ -4,7 +4,9 @@ import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
+import { filterClipsByAudience, type ClipLinkedPost } from '@/lib/clipAudience';
 import { fetchCorporateChallengeIds, fetchHiddenRailPostIds } from '@/lib/clipRail';
+import { isOfficialAccount, OFFICIAL_BOB_ID } from '@/lib/official';
 import { WAVE_CLIP_MS, type WaveClipWindow } from '@/lib/waveClips';
 import type {
   Conversation,
@@ -814,6 +816,95 @@ export async function createFeedEvent(
   return data as FeedEvent;
 }
 
+async function currentViewerId(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+
+export async function fetchAcceptedFriendIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('friendships')
+    .select('user_a_id, user_b_id')
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
+    .eq('status', 'accepted');
+  if (error) {
+    throwIfError(error);
+  }
+  const ids = new Set<string>();
+  for (const row of (data ?? []) as { user_a_id: string; user_b_id: string }[]) {
+    ids.add(row.user_a_id === userId ? row.user_b_id : row.user_a_id);
+  }
+  return ids;
+}
+
+export async function fetchClipLinkedPosts(postIds: string[]): Promise<Map<string, ClipLinkedPost>> {
+  const unique = [...new Set(postIds.filter(Boolean))];
+  const map = new Map<string, ClipLinkedPost>();
+  if (unique.length === 0) {
+    return map;
+  }
+  const { data, error } = await supabase
+    .from('posts')
+    .select('id, author_id, audience, audience_user_ids, type')
+    .in('id', unique);
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return map;
+    }
+    throwIfError(error);
+  }
+  for (const row of (data ?? []) as ClipLinkedPost[]) {
+    if (row.id) {
+      map.set(row.id, row);
+    }
+  }
+  return map;
+}
+
+async function fetchOfficialAuthorIds(authorIds: string[]): Promise<Set<string>> {
+  const unique = [...new Set(authorIds.filter(Boolean))];
+  const ids = new Set<string>();
+  if (unique.includes(OFFICIAL_BOB_ID)) {
+    ids.add(OFFICIAL_BOB_ID);
+  }
+  if (unique.length === 0) {
+    return ids;
+  }
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, is_official, is_admin, username')
+    .in('id', unique);
+  if (error) {
+    return ids;
+  }
+  for (const row of data ?? []) {
+    if (isOfficialAccount(row)) {
+      ids.add(row.id);
+    }
+  }
+  return ids;
+}
+
+async function clipsVisibleToViewer<T extends { user_id: string; post_id?: string | null }>(
+  clips: T[],
+): Promise<T[]> {
+  if (clips.length === 0) {
+    return clips;
+  }
+  const viewerId = await currentViewerId();
+  const [posts, friendIds, officialAuthorIds] = await Promise.all([
+    fetchClipLinkedPosts(clips.map((clip) => clip.post_id).filter((id): id is string => Boolean(id))),
+    viewerId ? fetchAcceptedFriendIds(viewerId) : Promise.resolve(new Set<string>()),
+    fetchOfficialAuthorIds(clips.map((clip) => clip.user_id)),
+  ]);
+  return filterClipsByAudience(clips, {
+    viewerId,
+    posts,
+    friendIds,
+    officialAuthorIds,
+  });
+}
+
 export async function fetchActiveStories(): Promise<Story[]> {
   const query = await supabase
     .from('stories')
@@ -836,7 +927,8 @@ export async function fetchActiveStories(): Promise<Story[]> {
     }
     throwIfError(result.error);
   }
-  return ((result.data ?? []) as Story[]).filter((story) => isActiveStory(story));
+  const active = ((result.data ?? []) as Story[]).filter((story) => isActiveStory(story));
+  return clipsVisibleToViewer(active);
 }
 
 export async function fetchStory(id: string): Promise<Story | null> {
@@ -856,13 +948,11 @@ export async function fetchStory(id: string): Promise<Story | null> {
     throwIfError(error);
   }
   const story = (data as Story | null) ?? null;
-  if (story?.post_id) {
-    const hidden = await fetchHiddenRailPostIds([story.post_id]);
-    if (hidden.has(story.post_id)) {
-      return null;
-    }
+  if (!story) {
+    return null;
   }
-  return story;
+  const visible = await clipsVisibleToViewer([story]);
+  return visible[0] ?? null;
 }
 
 export async function fetchViewedStoryIds(userId: string): Promise<string[]> {
@@ -1026,7 +1116,7 @@ async function selectReels(limit: number) {
 }
 
 export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> {
-  const { data, error } = await selectReels(limit);
+  const { data, error } = await selectReels(Math.max(limit * 4, SOCIAL_PAGE_SIZE));
   if (error) {
     if (isMissingRelationError(error)) {
       return [];
@@ -1034,21 +1124,23 @@ export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> 
     throwIfError(error);
   }
   const items = await withReelProfiles((data ?? []) as Reel[]);
+  const viewerId = await currentViewerId();
   const corporateIds = await fetchCorporateChallengeIds(
     items.map((reel) => reel.challenge_id).filter((id): id is string => Boolean(id)),
   );
   const hiddenPosts = await fetchHiddenRailPostIds(
     items.map((reel) => reel.post_id).filter((id): id is string => Boolean(id)),
   );
-  return items.filter((reel) => {
+  const allowed = await clipsVisibleToViewer(items);
+  return allowed.filter((reel) => {
     if (reel.challenge_id && corporateIds.has(reel.challenge_id)) {
       return false;
     }
-    if (reel.post_id && hiddenPosts.has(reel.post_id)) {
+    if (reel.post_id && hiddenPosts.has(reel.post_id) && reel.user_id === viewerId) {
       return false;
     }
     return true;
-  });
+  }).slice(0, limit);
 }
 
 async function fetchReelByColumn(column: 'id' | 'post_id', value: string): Promise<ReelItem | null> {
@@ -1072,13 +1164,11 @@ async function fetchReelByColumn(column: 'id' | 'post_id', value: string): Promi
     return null;
   }
   const [item] = await withReelProfiles([data as Reel]);
-  if (item?.post_id) {
-    const hidden = await fetchHiddenRailPostIds([item.post_id]);
-    if (hidden.has(item.post_id)) {
-      return null;
-    }
+  if (!item) {
+    return null;
   }
-  return item ?? null;
+  const visible = await clipsVisibleToViewer([item]);
+  return visible[0] ?? null;
 }
 
 export async function fetchReel(id: string): Promise<ReelItem | null> {

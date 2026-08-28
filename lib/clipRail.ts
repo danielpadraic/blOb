@@ -67,9 +67,14 @@ export function filterStoriesForRail(input: {
   hiddenPostIds: Set<string>;
   corporateChallengeIds: Set<string>;
   hiddenAuthorIds: Set<string>;
+  viewerId?: string | null;
 }): Story[] {
   return input.stories.filter((story) => {
-    if (story.post_id && input.hiddenPostIds.has(story.post_id)) {
+    if (
+      story.post_id &&
+      input.hiddenPostIds.has(story.post_id) &&
+      (!input.viewerId || story.user_id === input.viewerId)
+    ) {
       return false;
     }
     if (story.challenge_id && input.corporateChallengeIds.has(story.challenge_id)) {

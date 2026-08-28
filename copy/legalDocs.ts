@@ -117,7 +117,8 @@ export const LEGAL_DOCS: Record<
         body: [
           'Account data: email, display name, username, and authentication identifiers (including Google sign-in if you choose it).',
           'Profile data you choose to add: photo, bio, training preferences, and fitness history.',
-          'Body metrics you choose to add: gender, height, weight, body-fat estimate, and related fields. These stay private. Completing a fitness profile does not publish them.',
+          'Body metrics you choose to add: gender, height, weight, body-fat estimate, and related fields.',
+          'These stay private. Completing a fitness profile does not publish them.',
           'Usage data: challenges you create or join, proofs you submit, messages, friend relationships, notifications, and device tokens used to deliver alerts.',
           'Payment data needed for real-money and Official stakes is handled by our payment and identity vendors. We do not store full card numbers.',
         ],

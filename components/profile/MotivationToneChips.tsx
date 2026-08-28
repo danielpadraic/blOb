@@ -6,6 +6,7 @@ import {
   COPY_TONE_OPTIONS,
   asCopyTone,
   copy,
+  type CopyKey,
   type CopyTone,
 } from '@/lib/copy';
 
@@ -13,10 +14,12 @@ export function MotivationToneChips({
   value,
   onChange,
   label,
+  options = COPY_TONE_OPTIONS,
 }: {
   value?: string | null;
   onChange: (tone: CopyTone) => void;
   label?: string;
+  options?: { value: CopyTone; key: CopyKey }[];
 }) {
   const selected = asCopyTone(value);
   return (
@@ -25,7 +28,7 @@ export function MotivationToneChips({
         {label ?? copy('profile.toneLabel')}
       </AppText>
       <ChipRow>
-        {COPY_TONE_OPTIONS.map((option) => (
+        {options.map((option) => (
           <Chip
             key={option.value}
             label={copy(option.key)}

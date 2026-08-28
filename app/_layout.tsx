@@ -26,7 +26,10 @@ import { inviteHref } from '@/lib/routes';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { queryClient } from '@/lib/queryClient';
 import { paymentsProviderError } from '@/services/payments';
+import { canonicalizeWwwBlobHost } from '@/lib/webHost';
 import { isProfileComplete } from '@/utils/validators';
+
+canonicalizeWwwBlobHost();
 
 export { AppErrorBoundary as ErrorBoundary };
 

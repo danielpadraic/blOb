@@ -21,7 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
-import { loginHrefAfterSignup, registerStartsOnForm } from '@/lib/authRedirect';
+import { registerStartsOnForm } from '@/lib/authRedirect';
 import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
 import { getAuthFormMessage } from '@/utils/errors';
 import { registerSchema, type RegisterValues } from '@/utils/validators';
@@ -32,6 +32,7 @@ export default function RegisterScreen() {
   const fromLoginForm = registerStartsOnForm(start);
   const { signUp, signInWithGoogle, oauthLoading } = useAuth();
   const [emailStep, setEmailStep] = useState(fromLoginForm);
+  const [inboxEmail, setInboxEmail] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState(0);
@@ -61,7 +62,8 @@ export default function RegisterScreen() {
       try {
         const result = await signUp(values.email.trim(), values.password);
         if (result.needsEmailConfirmation) {
-          router.replace(loginHrefAfterSignup(values.email.trim()));
+          setInboxEmail(values.email.trim());
+          setInfo(null);
           return;
         }
       } catch (error) {
@@ -111,17 +113,19 @@ export default function RegisterScreen() {
 
   return (
     <AuthShell
-      scrollToTopKey={emailStep ? 'email' : 'gate'}
+      scrollToTopKey={inboxEmail ? 'inbox' : emailStep ? 'email' : 'gate'}
       footer={
         emailStep ? (
           <View className="gap-3">
-            <Button
-              title="Create an Account"
-              onPress={onCreateAccount}
-              loading={isSubmitting}
-              disabled={isSubmitting || lockedUntil > Date.now()}
-              size="lg"
-            />
+            {inboxEmail ? null : (
+              <Button
+                title="Create an Account"
+                onPress={onCreateAccount}
+                loading={isSubmitting}
+                disabled={isSubmitting || lockedUntil > Date.now()}
+                size="lg"
+              />
+            )}
             <View className="flex-row justify-center gap-1">
               <AppText style={{ color: 'rgba(255,255,255,0.55)' }}>Already competing?</AppText>
               <Pressable
@@ -138,7 +142,30 @@ export default function RegisterScreen() {
           </View>
         ) : undefined
       }>
-      {emailStep ? (
+      {inboxEmail ? (
+        <View className="mt-8 gap-4">
+          <AppText className="text-center text-[22px] font-extrabold" style={{ color: '#FFFFFF' }}>
+            {copy('auth.checkInboxTitle')}
+          </AppText>
+          <AppText className="text-center text-[15px] leading-6" style={{ color: 'rgba(255,255,255,0.78)' }}>
+            {copy('auth.checkInboxBody', 'neutral', { email: inboxEmail })}
+          </AppText>
+          <Input
+            key="inbox-email"
+            name="email"
+            label="Email"
+            autoCapitalize="none"
+            autoComplete="email"
+            autoCorrect={false}
+            textContentType="emailAddress"
+            keyboardType="email-address"
+            keyboardAppearance="dark"
+            inverted
+            value={inboxEmail}
+            editable={false}
+          />
+        </View>
+      ) : emailStep ? (
         <View className="mt-8 gap-4">
           <AuthBackButton
             onPress={() => {

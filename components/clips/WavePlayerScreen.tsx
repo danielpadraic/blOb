@@ -80,6 +80,7 @@ export function WavePlayerScreen() {
         postId: story.post_id,
         challengeId: story.challenge_id,
         isOwn: story.user_id === user?.id,
+        coverUrl: story.thumbnail_url ?? null,
       };
       return item;
     }),
@@ -98,7 +99,7 @@ export function WavePlayerScreen() {
     router.replace(TABS_HREF);
   }
 
-  if (isLoading || (storyQuery.isLoading && clips.length === 0)) {
+  if (clips.length === 0 && (storyQuery.isLoading || (isLoading && !storyQuery.data))) {
     return (
       <WatchSurface>
         <View className="flex-1 items-center justify-center">

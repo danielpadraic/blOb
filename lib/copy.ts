@@ -81,6 +81,8 @@ const STRINGS = {
   'auth.createAccount': 'Create account',
   'auth.signIn': 'Sign in',
   'auth.checkInboxThenSignIn': 'Check your inbox, then sign in here.',
+  'auth.checkInboxTitle': 'Check your inbox',
+  'auth.checkInboxBody': 'We sent a confirm link to {email}.',
   'auth.emailConfirmed': 'Email confirmed. Open blOb.',
   'auth.openBlob': 'Open blOb',
   'auth.continueInBrowser': 'Continue in browser',
@@ -419,10 +421,13 @@ const STRINGS = {
   'wave.add': 'Add Wave',
   'wave.recordAnother': 'Record another',
   'wave.share': 'Share Wave',
+  'wave.audienceFriends': 'Friends can see this Wave.',
+  'wave.audiencePublic': 'Anyone on blOb can see this Wave.',
   'wave.new': 'New Wave',
   'wave.noun': 'Wave',
   'wave.hint': 'Nobody has waved yet.',
-  'wave.shutter': 'Hold to wave · 30s',
+  'wave.shutter': 'Tap to wave · 30s',
+  'wave.shutterStop': 'Tap to stop',
   'wave.cameraNeed': 'blOb needs the camera for Waves.',
   'wave.gone': 'This clip isn’t available.',
   'wave.goneBody': 'It may have expired, or the link is no longer valid.',
@@ -439,9 +444,12 @@ const STRINGS = {
   'round.empty': 'No Rounds yet. Post one from New Round.',
   'round.gone': 'This clip isn’t available.',
   'round.goneBody': 'It may have been deleted.',
-  'round.shutter': 'Show the work · up to 3:00',
+  'round.shutter': 'Tap to record · 3:00',
+  'round.shutterStop': 'Tap to stop',
   'round.new': 'New Round',
   'round.share': 'Share Round',
+  'round.audienceFriends': 'Friends can see this Round.',
+  'round.audiencePublic': 'Anyone on blOb can see this Round.',
   'round.noun': 'Round',
   'round.title': 'Rounds',
   'round.fallback': 'Round',
@@ -571,6 +579,15 @@ export function asCopyTone(value: unknown): CopyTone {
     return value;
   }
   return 'neutral';
+}
+
+export const PROFILE_SETUP_TONE_OPTIONS: { value: CopyTone; key: CopyKey }[] = [
+  { value: 'gentle', key: 'profile.toneGentle' },
+  { value: 'honest', key: 'profile.toneHonest' },
+];
+
+export function profileSetupTone(value: unknown): CopyTone {
+  return value === 'honest' ? 'honest' : 'gentle';
 }
 
 export function copy(key: CopyKey, tone: CopyTone = 'neutral', vars?: Record<string, string | number>): string {

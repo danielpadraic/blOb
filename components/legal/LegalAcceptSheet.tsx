@@ -98,7 +98,7 @@ export function LegalAcceptSheet({ doc, onClose, onAgree }: LegalAcceptSheetProp
                     <AppText
                       key={paragraph.slice(0, 48)}
                       className="text-[14px] leading-6"
-                      style={{ color: THEME.textPrimary }}>
+                      style={{ color: THEME.textPrimary, overflow: 'visible', paddingTop: 2 }}>
                       {paragraph}
                     </AppText>
                   ))}

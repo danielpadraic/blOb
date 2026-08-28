@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated as RNAnimated,
@@ -67,6 +67,7 @@ import { userReaction } from '@/lib/reactions';
 import { personDisplayName, type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
+import { applyWebVideoLock, preventWebVideoFullscreen, WEB_VIDEO_LOCK } from '@/lib/webVideo';
 import { roundShareUrl, storyShareUrl } from '@/lib/waveShare';
 import { getErrorMessage } from '@/utils/errors';
 import { formatFeedTime } from '@/utils/format';
@@ -421,17 +422,27 @@ export function ClipPlayer({
             onLayout={(event) => setVideoWidth(event.nativeEvent.layout.width)}
             style={[{ height: bandH, flex: bandH ? undefined : 1, overflow: 'hidden', backgroundColor: '#101312' }, swipeStyle]}>
           {clip.mediaType === 'video' ? (
-            <ClipVideo
-              key={clip.id}
-              uri={clip.mediaUrl}
-              startMs={clip.startMs ?? 0}
-              durationMs={clip.durationMs}
-              loop={!autoAdvance}
-              muted={muted}
-              pausedRef={paused}
-              onEnded={autoAdvance ? goNextClip : undefined}
-              onProgress={setProgress}
-            />
+            <>
+              {clip.coverUrl ? (
+                <Image
+                  source={{ uri: clip.coverUrl }}
+                  style={{ position: 'absolute', width: '100%', height: '100%' }}
+                  contentFit="cover"
+                />
+              ) : null}
+              <ClipVideo
+                key={clip.id}
+                uri={clip.mediaUrl}
+                poster={clip.coverUrl}
+                startMs={clip.startMs ?? 0}
+                durationMs={clip.durationMs}
+                loop={!autoAdvance}
+                muted={muted}
+                pausedRef={paused}
+                onEnded={autoAdvance ? goNextClip : undefined}
+                onProgress={setProgress}
+              />
+            </>
           ) : (
             <Image
               source={{ uri: clip.mediaUrl }}
@@ -1254,6 +1265,56 @@ function MoreRow({ label, onPress }: { label: string; onPress: () => void }) {
 
 function ClipVideo({
   uri,
+  poster,
+  startMs,
+  durationMs,
+  loop,
+  muted,
+  pausedRef,
+  onEnded,
+  onProgress,
+}: {
+  uri: string;
+  poster?: string | null;
+  startMs: number;
+  durationMs: number;
+  loop: boolean;
+  muted: boolean;
+  pausedRef: { current: boolean };
+  onEnded?: () => void;
+  onProgress: (value: number) => void;
+}) {
+  if (Platform.OS === 'web') {
+    return (
+      <WebClipVideo
+        uri={uri}
+        poster={poster}
+        startMs={startMs}
+        durationMs={durationMs}
+        loop={loop}
+        muted={muted}
+        pausedRef={pausedRef}
+        onEnded={onEnded}
+        onProgress={onProgress}
+      />
+    );
+  }
+  return (
+    <NativeClipVideo
+      uri={uri}
+      startMs={startMs}
+      durationMs={durationMs}
+      loop={loop}
+      muted={muted}
+      pausedRef={pausedRef}
+      onEnded={onEnded}
+      onProgress={onProgress}
+    />
+  );
+}
+
+function NativeClipVideo({
+  uri,
   startMs,
   durationMs,
   loop,
@@ -1325,9 +1386,139 @@ function ClipVideo({
   return (
     <VideoView
       player={player}
-      style={{ width: '100%', height: '100%', backgroundColor: '#101312' }}
+      style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }}
       contentFit="cover"
       nativeControls={false}
+      pointerEvents="none"
     />
+  );
+}
+
+function WebClipVideo({
+  uri,
+  poster,
+  startMs,
+  durationMs,
+  loop,
+  muted,
+  pausedRef,
+  onEnded,
+  onProgress,
+}: {
+  uri: string;
+  poster?: string | null;
+  startMs: number;
+  durationMs: number;
+  loop: boolean;
+  muted: boolean;
+  pausedRef: { current: boolean };
+  onEnded?: () => void;
+  onProgress: (value: number) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const endedRef = useRef(false);
+  const [ready, setReady] = useState(false);
+  const startSec = Math.max(startMs, 0) / 1000;
+  const endSec = startSec + Math.max(durationMs || WAVE_CLIP_MS, 400) / 1000;
+
+  const attach = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      applyWebVideoLock(node, poster);
+      if (!node) {
+        return;
+      }
+      node.addEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
+      node.addEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+    },
+    [poster],
+  );
+
+  useEffect(() => {
+    const node = videoRef.current;
+    if (!node) {
+      return;
+    }
+    applyWebVideoLock(node, poster);
+    endedRef.current = false;
+    node.loop = loop;
+    node.muted = muted;
+    node.currentTime = startSec;
+    const play = () => {
+      if (pausedRef.current) {
+        node.pause();
+        return;
+      }
+      void node.play().catch(() => undefined);
+    };
+    const onTime = () => {
+      const span = Math.max(endSec - startSec, 0.4);
+      onProgress(Math.max(0, Math.min(1, (node.currentTime - startSec) / span)));
+      if (!loop && !endedRef.current && node.currentTime >= endSec - 0.05) {
+        endedRef.current = true;
+        node.pause();
+        onEnded?.();
+      }
+    };
+    const onReady = () => {
+      setReady(true);
+      play();
+    };
+    const onEndedNative = () => {
+      if (loop || endedRef.current) {
+        return;
+      }
+      endedRef.current = true;
+      onEnded?.();
+    };
+    node.addEventListener('loadeddata', onReady);
+    node.addEventListener('playing', onReady);
+    node.addEventListener('timeupdate', onTime);
+    node.addEventListener('ended', onEndedNative);
+    play();
+    const id = window.setInterval(() => {
+      if (pausedRef.current) {
+        node.pause();
+      } else if (node.paused) {
+        play();
+      }
+      onTime();
+    }, 120);
+    return () => {
+      window.clearInterval(id);
+      node.removeEventListener('loadeddata', onReady);
+      node.removeEventListener('playing', onReady);
+      node.removeEventListener('timeupdate', onTime);
+      node.removeEventListener('ended', onEndedNative);
+      node.pause();
+    };
+  }, [endSec, loop, muted, onEnded, onProgress, pausedRef, poster, startSec, uri]);
+
+  return (
+    <View style={{ width: '100%', height: '100%', backgroundColor: '#101312' }}>
+      {poster && !ready ? (
+        <Image
+          source={{ uri: poster }}
+          style={{ position: 'absolute', width: '100%', height: '100%' }}
+          contentFit="cover"
+        />
+      ) : null}
+      {createElement('video', {
+        ref: attach,
+        src: uri,
+        poster: poster ?? undefined,
+        autoPlay: true,
+        muted,
+        loop,
+        ...WEB_VIDEO_LOCK,
+        style: {
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          backgroundColor: 'transparent',
+          pointerEvents: 'none',
+        },
+      })}
+    </View>
   );
 }

@@ -65,6 +65,10 @@ export function ReelsRow() {
   }));
   const cards = liveReels;
 
+  if (cards.length === 0) {
+    return null;
+  }
+
   return (
     <View className="gap-1.5" style={{ marginHorizontal: -16 }}>
       <AppText className="px-4 text-[15px] font-extrabold text-charcoal">Rounds</AppText>
@@ -82,9 +86,6 @@ export function ReelsRow() {
           />
         ))}
       </ScrollView>
-      {liveReels.length === 0 ? (
-        <AppText className="px-4 text-[12px] text-muted">{copy('round.empty')}</AppText>
-      ) : null}
     </View>
   );
 }

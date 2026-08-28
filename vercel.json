@@ -5,6 +5,14 @@
   "installCommand": "npm install",
   "framework": null,
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.blob.mobi" }],
+      "destination": "https://blob.mobi/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/:path*",
