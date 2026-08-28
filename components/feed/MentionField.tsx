@@ -26,7 +26,9 @@ import {
   applyTokenAwareTextChange,
   insertMention,
   mentionDocFromState,
+  mentionInsertLabel,
   mentionQueryAtCursor,
+  mentionRangeKey,
   mentionTokenRanges,
   snapSelectionOutOfToken,
   type MentionChip,
@@ -104,6 +106,7 @@ function MentionFieldInner(
     end: initialText?.length ?? 0,
   });
   const [chips, setChips] = useState<MentionChip[]>([]);
+  const [punctReadyIds, setPunctReadyIds] = useState<string[]>([]);
   const [forced, setForced] = useState<TextSelection | null>(null);
   const [suppressed, setSuppressed] = useState(false);
   const [height, setHeight] = useState(MIN_HEIGHT);
@@ -111,8 +114,7 @@ function MentionFieldInner(
   textRef.current = text;
   chipsRef.current = chips;
 
-  const chipNames = useMemo(() => chips.map((chip) => chip.username), [chips]);
-  const tokens = useMemo(() => mentionTokenRanges(text, chipNames), [chipNames, text]);
+  const tokens = useMemo(() => mentionTokenRanges(text, chips), [chips, text]);
   const query = mentionQueryAtCursor(text, selection.start);
   const open = Boolean(query) && !suppressed && !collapsed;
   const candidates = useMentionCandidates({
@@ -132,17 +134,13 @@ function MentionFieldInner(
     nextSelection: TextSelection,
     nextChips = chips,
     forceCaret = false,
+    nextPunct = punctReadyIds,
   ) {
-    const snapped = snapSelectionOutOfToken(
-      nextSelection,
-      mentionTokenRanges(
-        nextText,
-        nextChips.map((chip) => chip.username),
-      ),
-    );
+    const snapped = snapSelectionOutOfToken(nextSelection, mentionTokenRanges(nextText, nextChips));
     setText(nextText);
     setSelection(snapped);
     setChips(nextChips);
+    setPunctReadyIds(nextPunct);
     setForced(forceCaret ? snapped : null);
     if (!mentionQueryAtCursor(nextText, snapped.start)) {
       setSuppressed(false);
@@ -175,10 +173,10 @@ function MentionFieldInner(
       return;
     }
     seeded.current = true;
-    if (!initialMention?.username || textRef.current.trim()) {
+    if (!initialMention?.userId || textRef.current.trim()) {
       return;
     }
-    const next = insertMention('', { start: 0, end: 0 }, initialMention.username, { suffix: ' ' });
+    const next = insertMention('', { start: 0, end: 0 }, mentionInsertLabel(initialMention));
     commit(next.text, next.selection, [initialMention], true);
     keepFocus();
     // Seed the reply @author token once. Do not re-run when the parent re-renders.
@@ -197,10 +195,10 @@ function MentionFieldInner(
   }, [collapsed, text]);
 
   function pick(chip: MentionChip) {
-    const next = insertMention(text, selection, chip.username, { suffix: ' ' });
+    const next = insertMention(text, selection, mentionInsertLabel(chip));
     const nextChips = chips.some((row) => row.userId === chip.userId) ? chips : [...chips, chip];
     setSuppressed(true);
-    commit(next.text, next.selection, nextChips, true);
+    commit(next.text, next.selection, nextChips, true, []);
     keepFocus();
   }
 
@@ -213,6 +211,9 @@ function MentionFieldInner(
     const native = event.nativeEvent.selection;
     const next = snapSelectionOutOfToken(native, tokens);
     setSelection(next);
+    setPunctReadyIds((ids) =>
+      ids.filter((id) => tokens.some((range) => mentionRangeKey(range) === id && next.start === range.end)),
+    );
     if (next.start !== native.start || next.end !== native.end) {
       setForced(next);
     } else if (forced) {
@@ -257,7 +258,7 @@ function MentionFieldInner(
           <Pressable
             key={row.id}
             accessibilityRole="button"
-            accessibilityLabel={`Mention ${row.username}`}
+            accessibilityLabel={`Mention ${personDisplayName(row)}`}
             onPress={() =>
               pick({
                 userId: row.id,
@@ -282,11 +283,11 @@ function MentionFieldInner(
             <Avatar uri={row.avatar_url} name={personDisplayName(row)} size={28} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <AppText className="text-[14px] font-semibold text-charcoal" numberOfLines={1}>
-                {row.username}
+                {personDisplayName(row)}
               </AppText>
-              {personDisplayName(row) !== row.username ? (
+              {row.username ? (
                 <AppText className="text-[12px] text-muted" numberOfLines={1}>
-                  {personDisplayName(row)}
+                  @{row.username}
                 </AppText>
               ) : null}
             </View>
@@ -328,10 +329,9 @@ function MentionFieldInner(
         onSelectionChange={onSelectionChange}
         onKeyPress={onKeyPress}
         onChangeText={(value) => {
-          const next = applyTokenAwareTextChange(text, value, selection, tokens);
-          const liveChips = mentionDocFromState(next.text, chips).chips;
+          const next = applyTokenAwareTextChange(text, value, selection, chips, punctReadyIds);
           setSuppressed(false);
-          commit(next.text, next.selection, liveChips, next.forced);
+          commit(next.text, next.selection, next.chips, next.forced, next.punctReadyIds);
           const nextHeight = composerFieldHeight({ collapsed, text: next.text });
           if (nextHeight !== height) {
             setHeight(nextHeight);

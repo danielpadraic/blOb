@@ -625,7 +625,9 @@ function ClipCommentsPane({
       avatarUrl={avatarUrl}
       displayName={displayName}
       submitting={social.commenting}
-      onSend={(content, parentId) => social.onComment(content, parentId)}
+      onSend={(content, parentId, mentionedUserIds) =>
+        social.onComment(content, parentId, mentionedUserIds)
+      }
       onReact={(commentId, type) => void social.onReact(type, commentId)}
       onReport={async () => {
         const postId = social.post?.id ?? clip.postId;

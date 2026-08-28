@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useFollowing, useFriends } from '@/hooks/useSocial';
 import { isCreatorAccount } from '@/lib/creator';
+import { mentionSearchMatches } from '@/lib/mentions';
 import { asPostAudience, type PostAudience } from '@/lib/postAudience';
 import { fetchPublicProfilesByIds, searchPeople } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -97,7 +98,7 @@ export function useMentionCandidates(input: {
       if (audience === 'specific' && rank !== 'audience' && !input.audienceUserIds.includes(profile.id)) {
         return;
       }
-      if (query && !matchesQuery(profile, query) && rank !== 'search') {
+      if (query && !mentionSearchMatches(profile, query)) {
         return;
       }
       seen.add(profile.id);
@@ -140,10 +141,4 @@ export function useMentionCandidates(input: {
       pickerOpen &&
       (input.audienceUserIds.length > 0 ? scoped.isLoading : friends.isLoading || following.isLoading),
   };
-}
-
-function matchesQuery(profile: PublicProfile, query: string) {
-  const username = profile.username?.toLowerCase() ?? '';
-  const name = profile.display_name?.toLowerCase() ?? '';
-  return username.includes(query) || name.includes(query);
 }

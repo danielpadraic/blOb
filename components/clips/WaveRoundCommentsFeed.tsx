@@ -5,16 +5,17 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  TextInput,
   View,
 } from 'react-native';
 
+import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { MentionText } from '@/components/feed/MentionText';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { copy } from '@/lib/copy';
+import type { MentionChip, MentionDoc } from '@/lib/mentions';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, PublicProfile, ReactionType } from '@/lib/types';
 import { nestComments } from '@/utils/comments';
@@ -24,6 +25,7 @@ import { formatFeedTime } from '@/utils/format';
 type ReplyHandler = (
   content: string,
   parentId?: string | null,
+  mentionedUserIds?: string[],
 ) => Promise<unknown> | void;
 
 type WaveRoundCommentsFeedProps = {
@@ -32,7 +34,11 @@ type WaveRoundCommentsFeedProps = {
   avatarUrl?: string | null;
   displayName?: string | null;
   submitting?: boolean;
-  onSend: (content: string, parentId?: string | null) => Promise<unknown> | void;
+  onSend: (
+    content: string,
+    parentId?: string | null,
+    mentionedUserIds?: string[],
+  ) => Promise<unknown> | void;
   onReact?: (commentId: string, type: ReactionType) => void;
   onReport?: (commentId: string) => Promise<unknown> | void;
 };
@@ -47,11 +53,8 @@ export function WaveRoundCommentsFeed({
   onReact,
   onReport,
 }: WaveRoundCommentsFeedProps) {
-  const [draft, setDraft] = useState('');
   const [local, setLocal] = useState<CommentWithAuthor[]>([]);
-  const draftRef = useRef(draft);
   const scrollRef = useRef<ScrollView>(null);
-  draftRef.current = draft;
 
   const thread = [...comments];
   for (const row of local) {
@@ -75,12 +78,16 @@ export function WaveRoundCommentsFeed({
     return () => clearTimeout(handle);
   }, [thread.length]);
 
-  async function send(parentId?: string | null, textOverride?: string) {
-    const text = (textOverride ?? draftRef.current).trim();
+  async function send(
+    parentId?: string | null,
+    textOverride?: string,
+    mentionedUserIds?: string[],
+  ) {
+    const text = (textOverride ?? '').trim();
     if (!text || submitting) {
       return;
     }
-    await onSend(text, parentId);
+    await onSend(text, parentId, mentionedUserIds);
     const author = {
       display_name: displayName ?? 'You',
       username: displayName ?? 'you',
@@ -98,9 +105,6 @@ export function WaveRoundCommentsFeed({
         author,
       },
     ]);
-    if (!parentId) {
-      setDraft('');
-    }
   }
 
   const body = (
@@ -124,7 +128,9 @@ export function WaveRoundCommentsFeed({
               nested={false}
               currentUserId={currentUserId}
               submitting={submitting}
-              onReply={(content, parentId) => send(parentId, content)}
+              onReply={(content, parentId, mentionedUserIds) =>
+                send(parentId, content, mentionedUserIds)
+              }
               onReact={onReact}
               onReport={onReport}
             />
@@ -132,12 +138,12 @@ export function WaveRoundCommentsFeed({
         )}
       </ScrollView>
       <SimpleComposer
-        value={draft}
-        onChange={setDraft}
         submitting={submitting}
         avatarUrl={avatarUrl}
         displayName={displayName}
-        onSend={() => void send()}
+        onSend={async (content, mentionedUserIds) => {
+          await send(null, content, mentionedUserIds);
+        }}
       />
     </View>
   );
@@ -171,7 +177,6 @@ function FeedItem({
   onReport?: (commentId: string) => Promise<unknown> | void;
 }) {
   const [replyOpen, setReplyOpen] = useState(false);
-  const [replyDraft, setReplyDraft] = useState('');
   const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
   const handle = comment.author?.username ?? 'blob';
   const replies = comment.replies ?? [];
@@ -229,17 +234,15 @@ function FeedItem({
       {replyOpen ? (
         <View style={{ marginLeft: nested ? 0 : 28 }}>
           <SimpleComposer
-            value={replyDraft}
-            onChange={setReplyDraft}
             submitting={submitting}
             placeholder={`Reply to ${name}`}
-            onSend={async () => {
-              const text = replyDraft.trim();
-              if (!text) {
-                return;
-              }
-              await onReply(text, comment.id);
-              setReplyDraft('');
+            initialMention={{
+              userId: comment.author_id,
+              username: handle,
+              label: name,
+            }}
+            onSend={async (content, mentionedUserIds) => {
+              await onReply(content, comment.id, mentionedUserIds);
               setReplyOpen(false);
             }}
           />
@@ -262,23 +265,41 @@ function FeedItem({
 }
 
 function SimpleComposer({
-  value,
-  onChange,
   onSend,
   submitting,
   avatarUrl,
   displayName,
   placeholder,
+  initialMention,
 }: {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
   submitting?: boolean;
   avatarUrl?: string | null;
   displayName?: string | null;
   placeholder?: string;
+  initialMention?: MentionChip | null;
 }) {
-  const canSend = value.trim().length > 0 && !submitting;
+  const fieldRef = useRef<MentionFieldHandle>(null);
+  const docRef = useRef<MentionDoc>({ text: '', chips: [] });
+  const [fieldKey, setFieldKey] = useState(0);
+  const [hasText, setHasText] = useState(Boolean(initialMention));
+  const canSend = hasText && !submitting;
+
+  async function send() {
+    const doc = fieldRef.current?.getDoc() ?? docRef.current;
+    const text = doc.text.trim();
+    if (!text || submitting) {
+      return;
+    }
+    await onSend(
+      text,
+      doc.chips.map((chip) => chip.userId),
+    );
+    docRef.current = { text: '', chips: [] };
+    setHasText(false);
+    setFieldKey((key) => key + 1);
+  }
+
   return (
     <View
       className="flex-row items-end px-3 py-2"
@@ -289,32 +310,28 @@ function SimpleComposer({
         backgroundColor: THEME.surface,
       }}>
       {avatarUrl !== undefined ? <Avatar uri={avatarUrl} name={displayName} size={32} /> : null}
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder ?? copy('clip.comment')}
-        placeholderTextColor={THEME.textMuted}
-        multiline
-        blurOnSubmit={false}
-        editable={!submitting}
-        accessibilityLabel={placeholder ?? copy('clip.comment')}
-        style={{
-          flex: 1,
-          minHeight: 48,
-          maxHeight: 96,
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          borderRadius: 16,
-          backgroundColor: THEME.background,
-          color: THEME.textPrimary,
-          fontSize: 15,
-        }}
-      />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <MentionField
+          key={fieldKey}
+          ref={fieldRef}
+          compact
+          pickerPlacement="above"
+          placeholder={placeholder ?? copy('clip.comment')}
+          initialMention={initialMention}
+          audience="public"
+          audienceUserIds={[]}
+          accessibilityLabel={placeholder ?? copy('clip.comment')}
+          onChange={(doc) => {
+            docRef.current = doc;
+            setHasText(doc.text.trim().length > 0);
+          }}
+        />
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={copy('clip.commentSend')}
         disabled={!canSend}
-        onPress={onSend}
+        onPress={() => void send()}
         style={{
           minWidth: 48,
           minHeight: 48,
