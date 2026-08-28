@@ -24,7 +24,7 @@ import { fetchChallengeById } from '@/lib/challenges';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { openChallengeLobby, prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
-import { formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
+import { formatCash, formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { copy } from '@/lib/copy';
 import { namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
@@ -248,6 +248,7 @@ export function inviteCardCanCheckIn(input: {
 export function ChallengeInviteCard({
   challenge,
   theme,
+  context = 'feed',
   section,
   joined: joinedProp,
   hosting = false,
@@ -285,8 +286,10 @@ export function ChallengeInviteCard({
 
   const status = inviteCardStatus(challenge, nowMs);
   const canJoin = inviteCardCanJoin({ challenge, joined, hosting });
+  const checkinEnabled =
+    joined && !eliminated && (context === 'lobby' || section === 'active');
   const periodCheckin = usePeriodCheckin(
-    section === 'active' && joined && !eliminated ? challenge.id : undefined,
+    checkinEnabled ? challenge.id : undefined,
     {
       is_official: challenge.is_official,
       series_id: challenge.series_id,
@@ -308,7 +311,7 @@ export function ChallengeInviteCard({
   const checkedIn =
     periodCheckin.data?.phase === 'submitted' || Boolean(periodCheckin.data?.submitted_at);
   const canCheckIn =
-    section === 'active' &&
+    checkinEnabled &&
     inviteCardCanCheckIn({ challenge, joined, eliminated }) &&
     !checkedIn;
   const cta = canJoin ? 'Join' : 'View';
@@ -366,6 +369,82 @@ export function ChallengeInviteCard({
 
   function onCheckIn() {
     router.push(`/challenges/${challenge.id}/submit`);
+  }
+
+  const hostLabel = official ? 'blOb' : host?.name?.trim() || 'Host';
+
+  if (context === 'lobby') {
+    return (
+      <View
+        style={{
+          borderRadius: 12,
+          backgroundColor: official ? THEME.accentSoft : THEME.surface,
+          borderWidth: 1,
+          borderColor: THEME.border,
+          paddingHorizontal: 10,
+          paddingVertical: 8,
+        }}>
+        <View className="flex-row items-center" style={{ gap: 6, minHeight: 20, position: 'relative' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Details"
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation();
+              typeTip.show();
+            }}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              borderWidth: 1,
+              borderColor: official ? THEME.accent : THEME.textMuted,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+            <AppText
+              className="text-[11px] font-extrabold"
+              style={{ color: official ? THEME.accent : THEME.textMuted, lineHeight: 12 }}>
+              i
+            </AppText>
+          </Pressable>
+          <ChallengeTypeTip category={challenge.category} visible={typeTip.open} anchor="badge" />
+          <Pressable
+            onPress={() => void openDetail()}
+            accessibilityRole="button"
+            accessibilityLabel={displayTitle}
+            style={[flexChildMin(), { flexGrow: 1.4 }]}>
+            <AppText
+              className="text-[12px] font-semibold"
+              style={{ color: THEME.textPrimary }}
+              numberOfLines={1}>
+              {displayTitle}
+            </AppText>
+          </Pressable>
+          <AppText
+            className="text-[11px]"
+            style={[flexChildMin(), { flexGrow: 1, color: THEME.textMuted }]}
+            numberOfLines={1}>
+            {hostLabel}
+          </AppText>
+          <View style={{ flexShrink: 0 }}>
+            <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
+          </View>
+        </View>
+        <View className="flex-row items-center" style={{ marginTop: 4, gap: 14, minHeight: 24 }}>
+          <TextAction label="View" onPress={() => void openDetail()} />
+          {canJoin ? (
+            <TextAction
+              label="Join"
+              loading={joining}
+              onPress={() => void onJoinOrView()}
+            />
+          ) : null}
+          {canCheckIn ? <TextAction label="Check In" onPress={onCheckIn} /> : null}
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -523,6 +602,38 @@ export function ChallengeInviteCard({
         </View>
       </View>
     </View>
+  );
+}
+
+function TextAction({
+  label,
+  loading = false,
+  onPress,
+}: {
+  label: string;
+  loading?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ busy: loading }}
+      disabled={loading}
+      onPress={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
+      hitSlop={6}
+      style={{ minHeight: 24, justifyContent: 'center' }}>
+      {loading ? (
+        <ActivityIndicator size="small" color={THEME.accent} />
+      ) : (
+        <AppText className="text-[12px] font-semibold" style={{ color: THEME.accent }}>
+          {label}
+        </AppText>
+      )}
+    </Pressable>
   );
 }
 
@@ -734,52 +845,73 @@ function lobbyCardShowsPrize(challenge: InviteChallenge, nowMs = Date.now()): bo
   return status !== 'cancelled' && status !== 'cancelled_underfilled';
 }
 
-function LobbyMoneyMark({ challenge, color }: { challenge: InviteChallenge; color: string }) {
+function LobbyMoneyMark({
+  challenge,
+  color,
+  compact = false,
+}: {
+  challenge: InviteChallenge;
+  color: string;
+  compact?: boolean;
+}) {
+  const type = compact ? 'text-[11px] font-extrabold' : 'text-[14px] font-extrabold';
+  const icon = compact ? 12 : 15;
   if (lobbyCardShowsPrize(challenge)) {
     const prize = Math.max(Number(challenge.prize_pool) || 0, 0);
     if (isBucksChallenge(challenge)) {
       return (
-        <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
-          {formatCashPrizeAmount(prize)}
+        <AppText className={type} style={{ color }} numberOfLines={1}>
+          {compact ? formatCash(prize) : formatCashPrizeAmount(prize)}
         </AppText>
       );
     }
     return (
-      <View className="flex-row items-center" style={{ gap: 4 }}>
-        <CurrencyMark currency={challenge.currency} size={15} />
-        <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
-          {Number.isInteger(prize) ? String(prize) : prize.toFixed(2)}
+      <View className="flex-row items-center" style={{ gap: compact ? 3 : 4 }}>
+        <CurrencyMark currency={challenge.currency} size={icon} />
+        <AppText className={type} style={{ color }} numberOfLines={1}>
+          {compact ? String(Math.round(prize)) : Number.isInteger(prize) ? String(prize) : prize.toFixed(2)}
         </AppText>
       </View>
     );
   }
-  return <EntryMark challenge={challenge} color={color} />;
+  return <EntryMark challenge={challenge} color={color} compact={compact} />;
 }
 
-function EntryMark({ challenge, color }: { challenge: InviteChallenge; color: string }) {
+function EntryMark({
+  challenge,
+  color,
+  compact = false,
+}: {
+  challenge: InviteChallenge;
+  color: string;
+  compact?: boolean;
+}) {
+  const type = compact ? 'text-[11px] font-extrabold' : 'text-[14px] font-extrabold';
+  const icon = compact ? 12 : 15;
   const amount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   if (amount <= 0) {
     return (
       <EntryFeeAmount
         amount={0}
         currency={challenge.currency}
-        textClassName="text-[14px] font-extrabold"
+        textClassName={type}
         color={color}
+        size={icon}
       />
     );
   }
   if (isBucksChallenge(challenge)) {
     return (
-      <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
-        {formatCashCompact(amount)}
+      <AppText className={type} style={{ color }} numberOfLines={1}>
+        {compact ? formatCash(amount) : formatCashCompact(amount)}
       </AppText>
     );
   }
   return (
-    <View className="flex-row items-center" style={{ gap: 4 }}>
-      <CurrencyMark currency={challenge.currency} size={15} />
-      <AppText className="text-[14px] font-extrabold" style={{ color }} numberOfLines={1}>
-        {Number.isInteger(amount) ? String(amount) : amount.toFixed(2)}
+    <View className="flex-row items-center" style={{ gap: compact ? 3 : 4 }}>
+      <CurrencyMark currency={challenge.currency} size={icon} />
+      <AppText className={type} style={{ color }} numberOfLines={1}>
+        {compact ? String(Math.round(amount)) : Number.isInteger(amount) ? String(amount) : amount.toFixed(2)}
       </AppText>
     </View>
   );

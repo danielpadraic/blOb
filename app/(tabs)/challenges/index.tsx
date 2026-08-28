@@ -306,6 +306,7 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railOfficial')}
             challenges={official}
+            context="lobby"
             section="official"
             currentUserId={user?.id}
             progressById={progressById}
@@ -321,6 +322,7 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railActive')}
             challenges={active}
+            context="lobby"
             section="active"
             currentUserId={user?.id}
             progressById={progressById}
@@ -337,6 +339,7 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railFriends')}
             challenges={friends.map((row) => row.challenge)}
+            context="lobby"
             section="friends"
             currentUserId={user?.id}
             progressById={progressById}
@@ -348,6 +351,7 @@ export default function ChallengesScreen() {
           <ChallengeCarousel
             title={copy('lobby.railHosting')}
             challenges={hosting}
+            context="lobby"
             section="hosting"
             currentUserId={user?.id}
             progressById={progressById}

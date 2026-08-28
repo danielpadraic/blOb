@@ -15,6 +15,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -37,11 +38,11 @@ import {
   useMutedUserIds,
   useRemoveFromWall,
   useReportPost,
-  useSoftDeletePost,
   useToggleMute,
 } from '@/hooks/usePostModeration';
 import { useHidePostFromHome, usePostEdits } from '@/hooks/usePostEdit';
-import { isCheckinPost } from '@/lib/checkinPost';
+import { submitBugReport } from '@/lib/bugReports';
+import { OFFICIAL_BOB_ID } from '@/lib/official';
 import {
   useFriends,
   useFriendshipStatus,
@@ -369,11 +370,14 @@ function OverflowPopover({
   const hideHome = useHidePostFromHome();
   const report = useReportPost();
   const removeFromWall = useRemoveFromWall();
-  const softDelete = useSoftDeletePost();
   const friends = useFriends();
   const startChat = useGetOrCreateConversation();
   const send = useSendMessage();
   const [busy, setBusy] = useState(false);
+  const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
+    null,
+  );
+  const [reportNote, setReportNote] = useState('');
   const mine = Boolean(userId && userId === post.author_id);
   const host = Boolean(userId && post.wall_host_id && userId === post.wall_host_id && !post.wall_removed_at);
 
@@ -403,6 +407,49 @@ function OverflowPopover({
     onToast('Sent.');
   }
 
+  async function sendPostReport() {
+    if (!reportReason || busy) {
+      return;
+    }
+    setBusy(true);
+    const note = reportNote.trim();
+    const reasonLabel =
+      REPORT_REASONS.find((row) => row.value === reportReason)?.label ?? reportReason;
+    const body = [
+      'Post report',
+      `Reporter: ${userId ?? 'unknown'}`,
+      `Post: ${post.id}`,
+      `Reason: ${reasonLabel}`,
+      note ? `Description: ${note}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      await submitBugReport({
+        message: body,
+        route: `/feed/p/${post.id}`,
+      });
+      if (userId !== OFFICIAL_BOB_ID) {
+        const conversation = await startChat.mutateAsync(OFFICIAL_BOB_ID);
+        await send.mutateAsync({
+          conversation_id: conversation.id,
+          body,
+        });
+      }
+      try {
+        await report.mutateAsync({ postId: post.id, reason: reportReason });
+      } catch {
+        // post_reports is extra; Bob already has the DM and Reports row.
+      }
+      onClose();
+      onToast('Sent to blOb.');
+    } catch (error) {
+      Alert.alert('Couldn’t send that', getErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <AnchoredPopover anchor={anchor} onClose={onClose}>
       {panel === 'menu' ? (
@@ -430,11 +477,6 @@ function OverflowPopover({
                 }}
               />
             ) : null}
-            <IconAction
-              label="Share"
-              icon={GLYPH.share}
-              onPress={() => onPanel('share')}
-            />
             {!mine ? (
               <IconAction
                 label="Hide"
@@ -456,29 +498,6 @@ function OverflowPopover({
               />
             ) : null}
           </View>
-          {mine && !isCheckinPost(post) ? (
-            <ListRow
-              label={copy('post.delete')}
-              onPress={() => {
-                Alert.alert(copy('post.deleteConfirm'), undefined, [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: copy('post.delete'),
-                    style: 'destructive',
-                    onPress: () => {
-                      softDelete.mutate(post.id, {
-                        onSuccess: () => {
-                          onClose();
-                          onToast('Deleted.');
-                        },
-                        onError: (error) => Alert.alert('Couldn’t delete that', getErrorMessage(error)),
-                      });
-                    },
-                  },
-                ]);
-              }}
-            />
-          ) : null}
           {host ? (
             <ListRow label={copy('wall.remove')} onPress={() => void onRemoveFromWall()} />
           ) : null}
@@ -504,28 +523,59 @@ function OverflowPopover({
       ) : null}
 
       {panel === 'report' ? (
-        <View style={{ minWidth: 196, paddingHorizontal: 6, paddingVertical: 4 }}>
-          <AppText className="px-1 pb-2 text-[13px] font-extrabold text-charcoal">Report</AppText>
+        <View style={{ minWidth: 220, maxWidth: 280, paddingHorizontal: 6, paddingVertical: 4 }}>
+          <AppText className="px-1 pb-2 text-[13px] font-extrabold text-charcoal">
+            Report this post to blOb.
+          </AppText>
           <ChipRow>
             {REPORT_REASONS.map((reason) => (
               <Chip
                 key={reason.value}
                 label={reason.label}
-                onPress={() => {
-                  report.mutate(
-                    { postId: post.id, reason: reason.value },
-                    {
-                      onSuccess: () => {
-                        onClose();
-                        onToast('Reported.');
-                      },
-                      onError: (error) => Alert.alert('Couldn’t report that', getErrorMessage(error)),
-                    },
-                  );
-                }}
+                selected={reportReason === reason.value}
+                onPress={() => setReportReason(reason.value)}
               />
             ))}
           </ChipRow>
+          <TextInput
+            value={reportNote}
+            onChangeText={setReportNote}
+            placeholder="Optional description"
+            placeholderTextColor={THEME.textMuted}
+            maxLength={140}
+            returnKeyType="done"
+            style={{
+              marginTop: 10,
+              minHeight: 36,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              color: THEME.textPrimary,
+              fontSize: 13,
+            }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            accessibilityState={{ disabled: !reportReason || busy, busy }}
+            disabled={!reportReason || busy}
+            onPress={() => void sendPostReport()}
+            style={{
+              marginTop: 10,
+              minHeight: 40,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: reportReason && !busy ? THEME.primary : THEME.surface2,
+            }}>
+            <AppText
+              className="text-[13px] font-extrabold"
+              style={{ color: reportReason && !busy ? THEME.primaryForeground : THEME.textMuted }}>
+              Send
+            </AppText>
+          </Pressable>
         </View>
       ) : null}
 
