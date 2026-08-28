@@ -113,6 +113,7 @@ import {
   withFreshSchedule,
   type StartPreset,
 } from '@/lib/challengeSchedule';
+import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
 import {
   COMPARABLE_POINTS_METHOD,
   parseComparablePointsConfig,
@@ -1438,6 +1439,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         preset: startPreset,
         starts_at: formValues.starts_at,
         duration_days: formValues.duration_days || formValues.duration_value,
+        timezone: resolveChallengeTimezone(),
       });
       if (startPreset === 'custom') {
         const start = Date.parse(schedule.starts_at);

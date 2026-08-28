@@ -7,6 +7,7 @@ import { applyLaneForPublish } from '@/lib/challengeLane';
 import { parseComparablePointsConfig } from '@/lib/comparablePoints';
 import { asPrivacyMode } from '@/lib/privacyMode';
 import { durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
+import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
 import {
   fetchChallengeShareState,
   fetchActiveChallenges,
@@ -245,12 +246,13 @@ export function useChallengeShareState(id: string | null | undefined) {
 
 export function useChallengeFeedPreview(id: string | null | undefined) {
   return useQuery({
-    queryKey: ['challenge-feed-preview', id],
+    queryKey: ['challenge-preview', id],
     enabled: Boolean(id),
     staleTime: 60_000,
     queryFn: async () => {
       const rows = await fetchChallengePreviewsByIds([id!]);
-      return rows[0] ?? null;
+      const row = rows[0] ?? null;
+      return row?.id === id ? row : null;
     },
   });
 }
@@ -277,7 +279,7 @@ export function useChallenge(id: string | undefined) {
       if (last) {
         return last;
       }
-      const preview = queryClient.getQueryData<FeedChallengePreview>(['challenge-feed-preview', id]);
+      const preview = queryClient.getQueryData<FeedChallengePreview>(['challenge-preview', id]);
       if (preview?.id === id && challengeSnapshotHasIdentity(preview)) {
         return challengeFromFeedPreview(preview);
       }
@@ -839,6 +841,7 @@ export function useCreateChallenge() {
         ends_at: unlimited ? null : schedule.ends_at,
         end_mode: unlimited ? 'indefinite_lms' : publishEndMode(schedule.end_mode),
         length_value: durationDays,
+        duration_days: durationDays,
         length_unit: unlimited ? null : schedule.duration_unit,
         category: values.category,
         challenge_type: unlimited ? 'consistency' : values.challenge_type,
@@ -888,7 +891,7 @@ export function useCreateChallenge() {
             : values.prize_structure === 'top_places'
               ? 'top_places'
               : 'even_split_remaining'),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        timezone: resolveChallengeTimezone(),
         start_rule: 'at_starts_at',
         discoverability: values.discoverability ?? null,
         privacy_mode: asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane),

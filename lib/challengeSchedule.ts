@@ -1,5 +1,10 @@
 import { addDays, addMonths, addWeeks, differenceInCalendarDays, differenceInHours, format } from 'date-fns';
 
+import {
+  addZonedCalendarDays,
+  resolveChallengeTimezone,
+  startTomorrowInZone,
+} from '@/lib/challengeTimezone';
 import type { CreateChallengeValues } from '@/utils/validators';
 
 export type ChallengeEndMode = 'date' | 'length';
@@ -20,11 +25,9 @@ export function defaultChallengeStart(now = new Date()): Date {
   return next;
 }
 
-export function tomorrowMorning(now = new Date()): Date {
-  const next = new Date(now);
-  next.setDate(next.getDate() + 1);
-  next.setHours(9, 0, 0, 0);
-  return next;
+/** Next local calendar date at 00:00 in the challenge timezone. Not +24h. */
+export function tomorrowMorning(now = new Date(), timeZone?: string | null): Date {
+  return startTomorrowInZone(now, resolveChallengeTimezone(timeZone));
 }
 
 export function inOneHour(now = new Date()): Date {
@@ -140,11 +143,15 @@ export function durationDaysFromValues(values: {
   return Math.min(Math.max(challengeLengthDays(start, amount, unit), 1), MAX_CHALLENGE_DURATION_DAYS);
 }
 
-/** ends_at = starts_at + N calendar days, same clock time. */
-export function endsAtFromStartAndDays(startsAt: string | null | undefined, days: number): string {
+/** ends_at = starts_at + N calendar days in the challenge timezone. */
+export function endsAtFromStartAndDays(
+  startsAt: string | null | undefined,
+  days: number,
+  timeZone?: string | null,
+): string {
   const start = parseScheduleDate(startsAt) ?? defaultChallengeStart();
   const n = Math.min(Math.max(Math.floor(days) || 1, 1), MAX_CHALLENGE_DURATION_DAYS);
-  return addDays(start, n).toISOString();
+  return addZonedCalendarDays(start.toISOString(), n, timeZone);
 }
 
 export function formatChallengeEndLine(iso: string | null | undefined): string | null {
@@ -164,10 +171,10 @@ export function ensureSchedule(
 > {
   const start = parseScheduleDate(values.starts_at) ?? defaultChallengeStart(now);
   const days = durationDaysFromValues({ ...values, starts_at: start.toISOString() });
-  const end = addDays(start, days);
+  const starts_at = start.toISOString();
   return {
-    starts_at: start.toISOString(),
-    ends_at: end.toISOString(),
+    starts_at,
+    ends_at: endsAtFromStartAndDays(starts_at, days),
     end_mode: 'length',
     duration_value: String(days),
     duration_unit: 'days',
@@ -256,20 +263,22 @@ export function resolveStartForPublish(input: {
   preset?: StartPreset | null;
   starts_at?: string | null;
   duration_days?: string | number | null;
+  timezone?: string | null;
   now?: Date;
 }): { starts_at: string; ends_at: string } {
   const now = input.now ?? new Date();
+  const timeZone = resolveChallengeTimezone(input.timezone);
   const preset = input.preset ?? startPresetFromValues(input.starts_at, now);
   const start =
     preset === 'hour'
       ? inOneHour(now)
       : preset === 'tomorrow'
-        ? tomorrowMorning(now)
+        ? tomorrowMorning(now, timeZone)
         : parseScheduleDate(input.starts_at) ?? inOneHour(now);
   const starts_at = start.toISOString();
   return {
     starts_at,
-    ends_at: endsAtFromStartAndDays(starts_at, Number(input.duration_days) || 7),
+    ends_at: endsAtFromStartAndDays(starts_at, Number(input.duration_days) || 7, timeZone),
   };
 }
 

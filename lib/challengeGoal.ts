@@ -37,9 +37,14 @@ export function storedDurationDays(challenge: {
   days_required?: number | null;
   length_value?: number | null;
   length_unit?: string | null;
+  duration_days?: number | null;
 } | null | undefined): number | null {
   if (!challenge) {
     return null;
+  }
+  const explicit = Math.floor(Number(challenge.duration_days) || 0);
+  if (explicit > 0) {
+    return explicit;
   }
   const length = Math.floor(Number(challenge.length_value) || 0);
   if (length > 0) {
@@ -65,6 +70,7 @@ export function challengeDurationDays(
     target_count?: number | null;
     length_value?: number | null;
     length_unit?: string | null;
+    duration_days?: number | null;
     starts_at?: string | null;
     ends_at?: string | null;
   } | null | undefined,

@@ -18,17 +18,23 @@ export function challengeDetailHref(
   returnTo: 'lobby' | 'feed' = 'lobby',
   postId?: string | null,
   extra?: { tab?: 'overview' | 'board' | 'feed'; receipt?: boolean },
-) {
-  return {
-    pathname: '/challenges/[id]' as const,
-    params: {
-      id,
-      returnTo,
-      ...(postId ? { postId } : {}),
-      ...(extra?.tab ? { tab: extra.tab } : {}),
-      ...(extra?.receipt ? { receipt: '1' } : {}),
-    },
-  };
+): Href {
+  const challengeId = String(id ?? '').trim();
+  const qs = new URLSearchParams();
+  if (returnTo === 'feed') {
+    qs.set('returnTo', 'feed');
+  }
+  if (postId) {
+    qs.set('postId', postId);
+  }
+  if (extra?.tab) {
+    qs.set('tab', extra.tab);
+  }
+  if (extra?.receipt) {
+    qs.set('receipt', '1');
+  }
+  const query = qs.toString();
+  return (`/challenges/${challengeId}${query ? `?${query}` : ''}`) as Href;
 }
 
 export function inviteHref(token: string) {

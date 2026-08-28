@@ -98,6 +98,7 @@ export type CreateChallengeInput = {
   end_mode?: string | null;
   length_value?: number | null;
   length_unit?: string | null;
+  duration_days?: number | null;
   category: string;
   challenge_type: string;
   visibility: string;
@@ -1493,8 +1494,9 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     starts_at: input.starts_at,
     end_mode: input.is_unlimited ? 'indefinite_lms' : input.end_mode ?? 'length',
     ends_at: input.ends_at,
-    length_value: input.is_unlimited ? null : input.length_value ?? undefined,
+    length_value: input.is_unlimited ? null : input.length_value ?? input.duration_days ?? undefined,
     length_unit: input.is_unlimited ? null : input.length_unit ?? 'days',
+    duration_days: input.is_unlimited ? null : input.duration_days ?? input.length_value ?? undefined,
     is_unlimited: input.is_unlimited,
     max_participants: input.max_participants,
     min_participants: input.min_participants ?? 2,

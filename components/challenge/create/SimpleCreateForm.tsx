@@ -86,6 +86,7 @@ import {
   tomorrowMorning,
   type StartPreset,
 } from '@/lib/challengeSchedule';
+import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
 import {
   SIMPLE_PROOF_CAP,
   defaultSentenceForMethod,
@@ -487,6 +488,7 @@ export function SimpleCreateForm() {
         preset: draft.start_preset,
         starts_at: draft.starts_at,
         duration_days: draft.duration_preset === 'custom' ? draft.duration_days : draft.duration_preset,
+        timezone: resolveChallengeTimezone(),
       });
       const toPublish = { ...draft, starts_at: schedule.starts_at };
       if (toPublish.start_preset === 'custom') {

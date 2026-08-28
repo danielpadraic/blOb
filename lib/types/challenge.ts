@@ -62,6 +62,7 @@ export type PublishChallengePayload = {
   ends_at?: string | null;
   length_value?: number | null;
   length_unit?: ChallengeLengthUnit | string | null;
+  duration_days?: number | null;
   is_unlimited?: boolean;
   max_participants?: number | null;
   min_participants?: number | null;

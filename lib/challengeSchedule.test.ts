@@ -5,6 +5,7 @@ import {
   resolveStartForPublish,
   startPresetFromValues,
 } from '@/lib/challengeSchedule';
+import { startTomorrowInZone } from '@/lib/challengeTimezone';
 
 describe('challenge start presets', () => {
   it('resolves hour at T+3h to about 1 hour from then, not the original stamp', () => {
@@ -19,6 +20,20 @@ describe('challenge start presets', () => {
     });
     expect(Math.abs(new Date(resolved.starts_at).getTime() - inOneHour(later).getTime())).toBeLessThan(2000);
     expect(resolved.starts_at).not.toBe(original);
+  });
+
+  it('resolves Start tomorrow as the next Denver calendar date with a 30-day end', () => {
+    const tenAmDenver = new Date('2026-08-27T16:00:00.000Z');
+    const resolved = resolveStartForPublish({
+      preset: 'tomorrow',
+      starts_at: tenAmDenver.toISOString(),
+      duration_days: 30,
+      timezone: 'America/Denver',
+      now: tenAmDenver,
+    });
+    expect(resolved.starts_at).toBe(startTomorrowInZone(tenAmDenver, 'America/Denver').toISOString());
+    expect(resolved.ends_at).toBe('2026-09-27T06:00:00.000Z');
+    expect(new Date(resolved.starts_at).getTime()).toBeGreaterThan(tenAmDenver.getTime());
   });
 
   it('keeps a custom start in the past as custom', () => {

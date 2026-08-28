@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 
 import { firstRouteParam } from '@/lib/challengeLoad';
+import { isChallengeRouteId } from '@/lib/challengeTimezone';
 
-/** Wait while Expo Router’s `[id]` is empty. Never reuse a previous challenge id. */
+/** Wait while Expo Router’s `[id]` is empty. A real URL uuid is never replaced by a cached id. */
 export function useStableChallengeRouteId(routeParam: unknown): { id: string; waiting: boolean } {
   const fromRoute = firstRouteParam(routeParam);
-  const [waiting, setWaiting] = useState(!fromRoute);
+  const stableId = isChallengeRouteId(fromRoute) || fromRoute ? fromRoute : '';
+  const [waiting, setWaiting] = useState(!stableId);
 
   useEffect(() => {
-    if (fromRoute) {
+    if (stableId) {
       setWaiting(false);
       return;
     }
@@ -19,11 +21,11 @@ export function useStableChallengeRouteId(routeParam: unknown): { id: string; wa
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [fromRoute]);
+  }, [stableId]);
 
   return {
-    id: fromRoute,
-    waiting: !fromRoute || waiting,
+    id: stableId,
+    waiting: !stableId || waiting,
   };
 }
 

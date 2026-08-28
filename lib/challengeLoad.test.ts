@@ -90,6 +90,31 @@ describe('challenge load helpers', () => {
     expect(client.setQueryData).not.toHaveBeenCalled();
   });
 
+  it('does not seed another challenge’s snapshot onto this id', () => {
+    const store = new Map();
+    const client = {
+      getQueryData: (key: unknown) => store.get(JSON.stringify(key)),
+      setQueryData: (key: unknown, value: unknown) => {
+        store.set(JSON.stringify(key), value);
+      },
+      prefetchQuery: vi.fn(),
+    };
+    const push = vi.fn();
+    expect(
+      openChallengeLobby(
+        { push },
+        {
+          id: 'bbb',
+          snapshot: { id: 'aaa', title: 'Workout Group #2', prize_pool: 20 },
+        },
+        client as never,
+      ),
+    ).toBe(true);
+    expect(push).toHaveBeenCalledWith('/challenges/bbb');
+    expect(client.getQueryData(['challenge', 'bbb'])).toBeUndefined();
+    expect(client.getQueryData(['challenge', 'aaa'])).toBeUndefined();
+  });
+
   it('does not seed a hollow id-only challenge shell', () => {
     const store = new Map();
     const client = {
@@ -101,6 +126,7 @@ describe('challenge load helpers', () => {
     };
     const push = vi.fn();
     expect(openChallengeLobby({ push }, { id: 'abc' }, client as never)).toBe(true);
+    expect(push).toHaveBeenCalledWith('/challenges/abc');
     expect(client.getQueryData(['challenge', 'abc'])).toBeUndefined();
     expect(seedChallengeDetailQuery({ id: 'abc' }, client)).toBe('abc');
     expect(client.getQueryData(['challenge', 'abc'])).toBeUndefined();

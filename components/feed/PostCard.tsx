@@ -98,7 +98,8 @@ function PostCardInner({
     post.source === 'challenge' ||
     post.source === 'checkin';
   const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
-  const challengeTitle = preview.data ? challengeDisplayTitle(preview.data) : null;
+  const previewRow = preview.data?.id === post.challenge_id ? preview.data : null;
+  const challengeTitle = previewRow ? challengeDisplayTitle(previewRow) : null;
   const city = postLocality(post);
   const caption = checkin ? checkinCardCaption(content, challengeTitle, post.edited_at) : content;
   const showInLine = Boolean(tagged && !challengeFeed && hidePromoCard);
@@ -200,11 +201,11 @@ function PostCardInner({
             <InChallengeLine
               challengeId={post.challenge_id}
               title={challengeTitle}
-              visibility={preview.data?.visibility}
-              challengeLane={preview.data?.challenge_lane}
-              isOfficial={preview.data?.is_official}
-              createdBy={preview.data?.created_by}
-              snapshot={preview.data}
+              visibility={previewRow?.visibility}
+              challengeLane={previewRow?.challenge_lane}
+              isOfficial={previewRow?.is_official}
+              createdBy={previewRow?.created_by}
+              snapshot={previewRow}
             />
           </View>
           {mine && hiddenFromHome ? (
@@ -629,7 +630,7 @@ function ChallengeShareCard({
   const openTag = useOpenChallengeFromTag();
   const share = useChallengeShareState(challengeId);
   const preview = useChallengeFeedPreview(challengeId);
-  const card = preview.data;
+  const card = preview.data?.id === challengeId ? preview.data : null;
   if (share.data?.reason === 'geo') {
     return <GeoUnavailable />;
   }

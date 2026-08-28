@@ -99,6 +99,12 @@ export function challengeFromFeedPreview(preview: FeedChallengePreview): Challen
   };
 }
 
+export const CHALLENGE_PREVIEW_KEY = 'challenge-preview' as const;
+
+export function challengePreviewQueryKey(id: string) {
+  return [CHALLENGE_PREVIEW_KEY, id] as const;
+}
+
 export function seedChallengeFeedPreview(
   snapshot: ChallengeLoadSnapshot | ChallengeWithStats | FeedChallengePreview | null | undefined,
   client: Pick<QueryClient, 'getQueryData' | 'setQueryData'> = appQueryClient,
@@ -107,12 +113,12 @@ export function seedChallengeFeedPreview(
   if (!id || !snapshot || !challengeSnapshotHasIdentity(snapshot)) {
     return;
   }
-  const existing = client.getQueryData<FeedChallengePreview>(['challenge-feed-preview', id]);
+  const existing = client.getQueryData<FeedChallengePreview>(challengePreviewQueryKey(id));
   if (existing?.id === id && challengeSnapshotHasIdentity(existing)) {
     return;
   }
   const row = snapshot as FeedChallengePreview & ChallengeLoadSnapshot;
-  client.setQueryData(['challenge-feed-preview', id], {
+  client.setQueryData(challengePreviewQueryKey(id), {
     id,
     title: String(row.title ?? ''),
     status: String(row.status ?? 'open'),
@@ -229,12 +235,15 @@ export function openChallengeLobby(
   if (!id) {
     return false;
   }
-  if (input.snapshot && challengeSnapshotHasIdentity(input.snapshot)) {
-    seedChallengeDetailQuery({ ...input.snapshot, id }, client);
+  const snapshotId = firstRouteParam(input.snapshot?.id);
+  const snapshot =
+    input.snapshot && (!snapshotId || snapshotId === id) ? { ...input.snapshot, id } : { id };
+  if (challengeSnapshotHasIdentity(snapshot)) {
+    seedChallengeDetailQuery(snapshot, client);
   } else {
-    seedChallengeFeedPreview(input.snapshot ? { ...input.snapshot, id } : null, client);
+    seedChallengeFeedPreview(snapshot, client);
   }
-  prefetchChallengeDetail(id, input.snapshot, client);
+  prefetchChallengeDetail(id, challengeSnapshotHasIdentity(snapshot) ? snapshot : undefined, client);
   router.push(challengeDetailHref(id, input.returnTo ?? 'lobby', input.postId, input.extra));
   return true;
 }
