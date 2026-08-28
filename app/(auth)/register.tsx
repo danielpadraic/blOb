@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
@@ -21,15 +21,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
-import { loginHrefAfterSignup } from '@/lib/authRedirect';
+import { loginHrefAfterSignup, registerStartsOnForm } from '@/lib/authRedirect';
 import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
 import { getAuthFormMessage } from '@/utils/errors';
 import { registerSchema, type RegisterValues } from '@/utils/validators';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { start } = useLocalSearchParams<{ start?: string | string[] }>();
+  const fromLoginForm = registerStartsOnForm(start);
   const { signUp, signInWithGoogle, oauthLoading } = useAuth();
-  const [emailStep, setEmailStep] = useState(false);
+  const [emailStep, setEmailStep] = useState(fromLoginForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState(0);
@@ -138,7 +140,15 @@ export default function RegisterScreen() {
       }>
       {emailStep ? (
         <View className="mt-8 gap-4">
-          <AuthBackButton onPress={() => setEmailStep(false)} />
+          <AuthBackButton
+            onPress={() => {
+              if (fromLoginForm) {
+                router.replace('/(auth)/login');
+                return;
+              }
+              setEmailStep(false);
+            }}
+          />
           <Controller
             control={control}
             name="email"

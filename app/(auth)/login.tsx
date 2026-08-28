@@ -22,6 +22,7 @@ import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
 import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
+import { registerHrefWithForm } from '@/lib/authRedirect';
 import { googleWebClientId } from '@/lib/googleSignInConfig';
 import { getAuthFormMessage } from '@/utils/errors';
 import { loginSchema, type LoginValues } from '@/utils/validators';
@@ -238,7 +239,7 @@ export default function LoginScreen() {
             <AuthOutlineButton
               title="Create an Account"
               disabled={isSubmitting || oauthLoading}
-              onPress={() => router.push('/(auth)/register')}
+              onPress={() => router.push(registerHrefWithForm())}
             />
           </View>
         </>

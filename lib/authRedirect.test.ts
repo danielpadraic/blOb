@@ -9,6 +9,8 @@ import {
   isVercelComHost,
   loginHrefAfterSignup,
   loginHrefWithAuthError,
+  registerHrefWithForm,
+  registerStartsOnForm,
 } from '@/lib/authRedirect';
 
 const ENV_KEY = 'EXPO_PUBLIC_AUTH_REDIRECT_URL';
@@ -97,6 +99,14 @@ describe('emailAuthRedirectTo', () => {
       pathname: '/(auth)/login',
       params: { email: 'ada@blob.app', inbox: '1' },
     });
+    expect(registerHrefWithForm()).toEqual({
+      pathname: '/(auth)/register',
+      params: { start: 'form' },
+    });
+    expect(registerStartsOnForm('form')).toBe(true);
+    expect(registerStartsOnForm(['form'])).toBe(true);
+    expect(registerStartsOnForm(undefined)).toBe(false);
+    expect(registerStartsOnForm('gate')).toBe(false);
   });
 
   it('builds a blob deep link without using vercel.com', () => {

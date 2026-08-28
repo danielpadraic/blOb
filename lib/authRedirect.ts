@@ -22,6 +22,21 @@ export function loginHrefAfterSignup(email: string): {
   };
 }
 
+export function registerHrefWithForm(): {
+  pathname: '/(auth)/register';
+  params: { start: 'form' };
+} {
+  return {
+    pathname: '/(auth)/register',
+    params: { start: 'form' },
+  };
+}
+
+export function registerStartsOnForm(start?: string | string[] | null): boolean {
+  const value = Array.isArray(start) ? start[0] : start;
+  return value === 'form';
+}
+
 function hostnameOf(value: string): string | null {
   try {
     return new URL(value).hostname.toLowerCase();
