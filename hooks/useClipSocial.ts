@@ -12,6 +12,7 @@ type ClipSocialInput = {
   mediaUrl: string;
   caption?: string | null;
   challengeId?: string | null;
+  type?: 'wave' | 'round';
 };
 
 function asMeta(post: PostWithMeta | { id: string }): PostWithMeta {
@@ -48,6 +49,7 @@ export function useClipSocial(input: ClipSocialInput) {
       mediaUrls: input.mediaUrl ? [input.mediaUrl] : [],
       challengeId: input.challengeId ?? undefined,
       source: 'feed',
+      type: input.type ?? (input.kind === 'reel' ? 'round' : 'wave'),
     });
     await attachClipPostId(input.kind, input.clipId, created.id);
     setLinkedId(created.id);

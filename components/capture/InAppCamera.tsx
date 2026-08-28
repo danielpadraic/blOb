@@ -33,6 +33,7 @@ import {
   webCameraGrantedThisSession,
 } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
+import { capHaptic } from '@/lib/haptics';
 import {
   ensureCapturePermissions,
   openAppSettings,
@@ -62,8 +63,9 @@ type InAppCameraProps = {
   hrScreenshot?: boolean;
   faceHint?: string | null;
   facingKind?: CameraFacingKind;
-  /** When set, show tick marks at this interval (seconds) while recording. Wave uses 15. */
+  /** When set, show tick marks at this interval (seconds) while recording. */
   clipTickSec?: number;
+  shutterHint?: string;
 };
 
 export function InAppCamera({
@@ -85,6 +87,7 @@ export function InAppCamera({
   faceHint = null,
   facingKind = 'proof',
   clipTickSec,
+  shutterHint,
 }: InAppCameraProps) {
   const insets = useSafeAreaInsets();
   const focused = useIsFocused();
@@ -441,6 +444,7 @@ export function InAppCamera({
       }
       window.setTimeout(() => {
         if (recorderRef.current === recorder && recorder.state === 'recording') {
+          void capHaptic();
           recorder.stop();
         }
       }, maxDuration * 1000);
@@ -454,6 +458,9 @@ export function InAppCamera({
     const startedAt = Date.now();
     try {
       const clip = await cameraRef.current.recordAsync({ maxDuration });
+      if (Date.now() - startedAt >= maxDuration * 1000 - 400) {
+        void capHaptic();
+      }
       if (clip?.uri) {
         onCaptured({
           uri: clip.uri,
@@ -524,11 +531,13 @@ export function InAppCamera({
     }
   }
 
-  const shutterLabel = video
-    ? recording
-      ? 'Stop recording'
-      : 'Start recording'
-    : 'Take photo';
+  const shutterLabel = shutterHint
+    ? shutterHint
+    : video
+      ? recording
+        ? 'Stop recording'
+        : 'Start recording'
+      : 'Take photo';
   const showDenied = parentBlocked || fail != null;
   const deniedLine = webFallback
     ? needCopy
@@ -676,6 +685,11 @@ export function InAppCamera({
               </AppText>
             </Pressable>
           </View>
+        ) : null}
+        {shutterHint ? (
+          <AppText className="mb-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
+            {shutterHint}
+          </AppText>
         ) : null}
         <View className="flex-row items-center justify-between">
           <Pressable

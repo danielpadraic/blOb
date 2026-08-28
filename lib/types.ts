@@ -582,10 +582,23 @@ export interface Post {
   edited_at?: string | null;
   hidden_media_urls?: string[] | null;
   hidden_from_home?: boolean | null;
+  type?: PostType | null;
+  duration_ms?: number | null;
+  overlays?: unknown[] | null;
+  hidden_from_rail?: boolean | null;
   created_at: string;
 }
 
 export type PostSource = 'challenge' | 'checkin' | 'feed' | 'share' | 'profile_photo';
+export type PostType =
+  | 'feed'
+  | 'checkin'
+  | 'challenge'
+  | 'share'
+  | 'profile_photo'
+  | 'wave'
+  | 'round'
+  | 'round_share';
 
 export type ComposeInput = {
   content: string;
@@ -598,6 +611,8 @@ export type ComposeInput = {
   quoteSnapshot?: QuoteSnapshot | null;
   challengeId?: string | null;
   source?: PostSource;
+  type?: PostType;
+  durationMs?: number | null;
 };
 
 export type PostMention = {
@@ -732,6 +747,7 @@ export type NotificationData = {
   notification_id?: string;
   comment_id?: string;
   story_id?: string;
+  reel_id?: string;
   username?: string;
   amount?: number;
   transfer_id?: string;

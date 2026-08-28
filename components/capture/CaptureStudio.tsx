@@ -34,12 +34,13 @@ import {
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import {
-  WAVE_CLIP_MS,
+  ROUND_RECORD_MAX_SEC,
   WAVE_RECORD_MAX_SEC,
   formatWaveClipLabel,
   resolveMediaDurationMs,
   waveClipWindows,
 } from '@/lib/waveClips';
+import { waveHref, roundHref } from '@/lib/routes';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
 import { attachClipPostId } from '@/lib/social';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
@@ -52,7 +53,7 @@ type CaptureStudioProps = {
   onClose?: () => void;
 };
 
-const REEL_MAX = 45;
+const REEL_MAX = ROUND_RECORD_MAX_SEC;
 const POST_MAX = 60;
 
 export function CaptureStudio({
@@ -184,7 +185,7 @@ export function CaptureStudio({
       mediaTypes: videos && images ? ['images', 'videos'] : videos ? ['videos'] : ['images'],
       quality: 0.8,
       allowsEditing: false,
-      ...(mode === 'story' ? {} : { videoMaxDuration: maxDuration }),
+      videoMaxDuration: maxDuration,
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
@@ -238,6 +239,8 @@ export function CaptureStudio({
     const tick = setInterval(() => {
       setProgress((value) => (value > 0 && value < 82 ? Math.min(82, value + 6) : value));
     }, 180);
+    let publishedWaveId: string | null = null;
+    let publishedReelId: string | null = null;
     try {
       const mediaUrl = await (mode === 'story'
         ? uploadStoryMedia({
@@ -271,6 +274,7 @@ export function CaptureStudio({
           challenge_id: challengeId,
           duration_ms: draft.durationMs ?? null,
         });
+        publishedReelId = reel.id;
         try {
           const posted = await createPost.mutateAsync({
             content: captionText,
@@ -279,6 +283,8 @@ export function CaptureStudio({
             audienceUserIds: audience === 'specific' ? audienceUserIds : [],
             challengeId: challengeId ?? undefined,
             source: 'feed',
+            type: 'round',
+            durationMs: draft.durationMs ?? null,
           });
           await attachClipPostId('reel', reel.id, posted.id);
         } catch (postError) {
@@ -330,12 +336,15 @@ export function CaptureStudio({
               audienceUserIds: audience === 'specific' ? audienceUserIds : [],
               challengeId: challengeId ?? undefined,
               source: 'feed',
+              type: 'wave',
+              durationMs: story.clip_duration_ms ?? draft.durationMs ?? null,
             });
             await attachClipPostId('story', story.id, posted.id);
           } catch (postError) {
             logPostgrestError('wave-feed-post', postError);
           }
         }
+        publishedWaveId = stories[0]?.id ?? null;
         const first = stories[0];
         if (first) {
           try {
@@ -352,7 +361,16 @@ export function CaptureStudio({
         }
       }
       setProgress(100);
+      stopAllLiveMedia();
       resetStudio();
+      if (publishedWaveId) {
+        router.replace(waveHref(publishedWaveId, { from: 'home' }));
+        return;
+      }
+      if (publishedReelId) {
+        router.replace(roundHref(publishedReelId, { from: 'home' }));
+        return;
+      }
       close();
     } catch (caught) {
       setProgress(0);
@@ -376,7 +394,7 @@ export function CaptureStudio({
           capture={captureKind}
           facingKind={mode === 'post' ? 'proof' : 'social'}
           maxDuration={maxDuration}
-          clipTickSec={mode === 'story' ? WAVE_CLIP_MS / 1000 : undefined}
+          shutterHint={mode === 'story' ? copy('wave.shutter') : mode === 'reel' ? copy('round.shutter') : undefined}
           blocked={mode === 'story' ? false : Boolean(denied && denied.kind !== 'library')}
           blockedReason={
             denied?.kind === 'microphone'

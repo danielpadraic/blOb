@@ -17,6 +17,9 @@ export type PostsSchema = {
   hasCheckin: boolean;
   hasSource: boolean;
   hasHiddenFromHome: boolean;
+  hasType: boolean;
+  hasDuration: boolean;
+  hasHiddenFromRail: boolean;
 };
 
 const CORE_SCHEMA: PostsSchema = {
@@ -29,6 +32,9 @@ const CORE_SCHEMA: PostsSchema = {
   hasCheckin: false,
   hasSource: false,
   hasHiddenFromHome: false,
+  hasType: false,
+  hasDuration: false,
+  hasHiddenFromRail: false,
 };
 
 let cached: Promise<PostsSchema> | null = null;
@@ -44,6 +50,9 @@ function schemaFromSelect(select: string): PostsSchema {
     hasCheckin: select.includes('checkin_id'),
     hasSource: /(^|,\s*)source(,|$)/.test(select),
     hasHiddenFromHome: select.includes('hidden_from_home'),
+    hasType: /(^|,\s*)type(,|$)/.test(select),
+    hasDuration: select.includes('duration_ms'),
+    hasHiddenFromRail: select.includes('hidden_from_rail'),
   };
 }
 
@@ -102,7 +111,10 @@ async function loadPostsSchema(): Promise<PostsSchema> {
   working = edits.ok ? withEdits : working;
   const withHomeHide = `${working}, hidden_from_home`;
   const homeHide = await trySelect(withHomeHide);
-  return schemaFromSelect(homeHide.ok ? withHomeHide : working);
+  working = homeHide.ok ? withHomeHide : working;
+  const withClip = `${working}, type, duration_ms, overlays, hidden_from_rail`;
+  const clip = await trySelect(withClip);
+  return schemaFromSelect(clip.ok ? withClip : working);
 }
 
 /** No RPC. Probe with limit 0, then cache the working select list. */

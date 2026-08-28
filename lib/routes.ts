@@ -60,19 +60,33 @@ export const STORY_CREATE_HREF = captureHref('story');
 export const CAPTURE_STORY_HREF = captureHref('story');
 export const CAPTURE_REEL_HREF = captureHref('reel');
 
-export function reelHref(id: string, extra?: { comments?: boolean }) {
-  return {
-    pathname: '/reel/[id]' as const,
-    params: { id, ...(extra?.comments ? { comments: '1' } : {}) },
-  };
+function clipHref(base: 'wave' | 'round', id: string, extra?: { comments?: boolean; from?: string }): Href {
+  const clipId = String(id ?? '').trim();
+  const qs = new URLSearchParams();
+  if (extra?.comments) {
+    qs.set('comments', '1');
+  }
+  if (extra?.from) {
+    qs.set('from', extra.from);
+  }
+  const query = qs.toString();
+  return (`/${base}/${clipId}${query ? `?${query}` : ''}`) as Href;
 }
 
-/** Viewer route stays `/story/[id]` so existing links keep working. User-facing name is Wave. */
-export function storyHref(id: string, extra?: { comments?: boolean }) {
-  return {
-    pathname: '/story/[id]' as const,
-    params: { id, ...(extra?.comments ? { comments: '1' } : {}) },
-  };
+export function waveHref(id: string, extra?: { comments?: boolean; from?: string }) {
+  return clipHref('wave', id, extra);
+}
+
+export function roundHref(id: string, extra?: { comments?: boolean; from?: string }) {
+  return clipHref('round', id, extra);
+}
+
+export function reelHref(id: string, extra?: { comments?: boolean; from?: string }) {
+  return roundHref(id, extra);
+}
+
+export function storyHref(id: string, extra?: { comments?: boolean; from?: string }) {
+  return waveHref(id, extra);
 }
 
 export const MESSAGES_HREF = '/messages' as const;

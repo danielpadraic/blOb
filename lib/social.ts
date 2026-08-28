@@ -4,7 +4,8 @@ import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
-import type { WaveClipWindow } from '@/lib/waveClips';
+import { fetchCorporateChallengeIds, fetchHiddenRailPostIds } from '@/lib/clipRail';
+import { WAVE_CLIP_MS, type WaveClipWindow } from '@/lib/waveClips';
 import type {
   Conversation,
   ConversationMember,
@@ -902,7 +903,7 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
   const clips =
     input.clips && input.clips.length > 0
       ? input.clips
-      : [{ startMs: 0, durationMs: input.media_type === 'image' ? 15_000 : 0 }];
+      : [{ startMs: 0, durationMs: input.media_type === 'image' ? WAVE_CLIP_MS : 0 }];
   const sequenceId = clips.length > 1 ? (globalThis.crypto?.randomUUID?.() ?? `seq_${Date.now()}`) : null;
   const rows = clips.map((clip, index) => ({
     user_id: userId,
@@ -1025,7 +1026,22 @@ export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> 
     }
     throwIfError(error);
   }
-  return withReelProfiles((data ?? []) as Reel[]);
+  const items = await withReelProfiles((data ?? []) as Reel[]);
+  const corporateIds = await fetchCorporateChallengeIds(
+    items.map((reel) => reel.challenge_id).filter((id): id is string => Boolean(id)),
+  );
+  const hiddenPosts = await fetchHiddenRailPostIds(
+    items.map((reel) => reel.post_id).filter((id): id is string => Boolean(id)),
+  );
+  return items.filter((reel) => {
+    if (reel.challenge_id && corporateIds.has(reel.challenge_id)) {
+      return false;
+    }
+    if (reel.post_id && hiddenPosts.has(reel.post_id)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export async function fetchReel(id: string): Promise<ReelItem | null> {

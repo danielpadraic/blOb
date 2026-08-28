@@ -1,5 +1,5 @@
 import { WavePlayerScreen } from '@/components/clips/WavePlayerScreen';
 
-export default function StoryViewerScreen() {
+export default function WaveRoute() {
   return <WavePlayerScreen />;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { clipPostsQueryKey, clipSocialCounts, isClipSocialPost } from '@/lib/clipPost';
+import { clipPostsQueryKey, clipSocialCounts, isClipSocialPost, isHomeExcludedClipType } from '@/lib/clipPost';
 
 describe('clip social posts', () => {
   it('rejects check-in posts as Wave / Round rows', () => {
@@ -16,6 +16,13 @@ describe('clip social posts', () => {
       comments: 1,
     });
     expect(clipSocialCounts(null)).toEqual({ reactions: 0, comments: 0 });
+  });
+
+  it('keeps wave and round off Home, and leaves round_share on Feed', () => {
+    expect(isHomeExcludedClipType('wave')).toBe(true);
+    expect(isHomeExcludedClipType('round')).toBe(true);
+    expect(isHomeExcludedClipType('round_share')).toBe(false);
+    expect(isHomeExcludedClipType('feed')).toBe(false);
   });
 
   it('keys the clip preview cache by sorted post ids', () => {

@@ -9,6 +9,7 @@ export type ClipSocialCounts = {
 export function isClipSocialPost(post: {
   source?: string | null;
   checkin_id?: string | null;
+  type?: string | null;
 } | null | undefined): boolean {
   if (!post) {
     return false;
@@ -17,6 +18,11 @@ export function isClipSocialPost(post: {
     return false;
   }
   return true;
+}
+
+/** Home / public profile cards. round_share stays on Feed. */
+export function isHomeExcludedClipType(type?: string | null): boolean {
+  return type === 'wave' || type === 'round';
 }
 
 export function clipSocialCounts(post: {

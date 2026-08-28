@@ -1,5 +1,5 @@
 import { postHref } from '@/lib/postShare';
-import { challengeDetailHref, conversationHref, storyHref } from '@/lib/routes';
+import { challengeDetailHref, conversationHref, reelHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
@@ -341,6 +341,9 @@ export function notificationHref(item: AppNotification): Href | null {
   }
   if (data.story_id) {
     return storyHref(data.story_id);
+  }
+  if (data.reel_id) {
+    return reelHref(data.reel_id);
   }
   if (item.type === 'friend_request') {
     return { pathname: '/friends', params: { segment: 'requests' } };

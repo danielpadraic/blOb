@@ -14,6 +14,7 @@ import { useCreatePost } from '@/hooks/useFeed';
 import { useCreateFeedEvent, useCreateStory, useStoryChallengeOptions } from '@/hooks/useSocial';
 import { attachClipPostId } from '@/lib/social';
 import { copy } from '@/lib/copy';
+import { waveHref } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
 import { getErrorMessage } from '@/utils/errors';
@@ -75,7 +76,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
       mediaTypes,
       quality: 0.8,
       allowsEditing: false,
-      videoMaxDuration: 15,
+      videoMaxDuration: 30,
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
@@ -136,6 +137,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
             mediaUrls: [mediaUrl],
             challengeId: challengeId ?? undefined,
             source: 'feed',
+            type: 'wave',
           });
           await attachClipPostId('story', story.id, posted.id);
         } catch {
@@ -153,6 +155,8 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
           // The Wave is live even if the activity card does not land.
         }
         onPosted?.(story.id);
+        router.replace(waveHref(story.id, { from: 'home' }));
+        return;
       }
       close();
     } catch (caught) {
@@ -174,7 +178,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
         <View className="flex-1 pr-3">
           <AppText className="text-[22px] font-bold text-charcoal">{copy('wave.new')}</AppText>
           <AppText className="mt-1 text-[14px] text-muted">
-            A photo or 15-second clip. It disappears in 24 hours.
+            A photo or 30-second clip. It disappears in 24 hours.
           </AppText>
         </View>
         <Pressable
@@ -214,7 +218,7 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
           />
           <PickTile
             label="Video"
-            hint="Up to 15 seconds"
+            hint="Up to 30 seconds"
             onPress={() => void pick(['videos'])}
           />
         </View>

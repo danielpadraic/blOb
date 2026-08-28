@@ -4,7 +4,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
+import {
+  fetchCorporateChallengeIds,
+  fetchHiddenRailPostIds,
+  filterStoriesForRail,
+  loadHiddenRailAuthors,
+} from '@/lib/clipRail';
+import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { supabase } from '@/lib/supabase';
+import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import {
   SOCIAL_PAGE_SIZE,
   acceptFriendRequest,
@@ -95,6 +103,8 @@ export const socialKeys = {
   storyViews: (userId: string) => ['story-views', userId] as const,
   storyAuthors: (ids: string[]) => ['story-authors', ids] as const,
   storyChallengePreviews: (ids: string[]) => ['story-challenge-previews', ids] as const,
+  storyRailFilters: (postIds: string[], challengeIds: string[]) =>
+    ['story-rail-filters', [...postIds].sort().join(','), [...challengeIds].sort().join(',')] as const,
   storyReactions: (storyId: string) => ['story-reactions', storyId] as const,
   storyComments: (storyId: string) => ['story-comments', storyId] as const,
   reels: (limit: number) => ['reels', limit] as const,
@@ -663,6 +673,7 @@ export function useStoryGroups() {
 
   const circleIds = useMemo(() => {
     const ids = new Set<string>();
+    ids.add(OFFICIAL_BOB_ID);
     if (user?.id) {
       ids.add(user.id);
     }
@@ -698,16 +709,50 @@ export function useStoryGroups() {
     return map;
   }, [authorsQuery.data, friendsQuery.data, followingQuery.data, profile]);
 
+  const postIds = useMemo(
+    () => (storiesQuery.data ?? []).map((story) => story.post_id).filter((id): id is string => Boolean(id)),
+    [storiesQuery.data],
+  );
+  const challengeIds = useMemo(
+    () =>
+      (storiesQuery.data ?? [])
+        .map((story) => story.challenge_id)
+        .filter((id): id is string => Boolean(id)),
+    [storiesQuery.data],
+  );
+  const railFilterQuery = useQuery({
+    queryKey: socialKeys.storyRailFilters(postIds, challengeIds),
+    enabled: Boolean(user?.id) && (postIds.length > 0 || challengeIds.length > 0),
+    queryFn: async () => {
+      const [hiddenPostIds, corporateChallengeIds, hiddenAuthorIds] = await Promise.all([
+        fetchHiddenRailPostIds(postIds),
+        fetchCorporateChallengeIds(challengeIds),
+        loadHiddenRailAuthors(),
+      ]);
+      return { hiddenPostIds, corporateChallengeIds, hiddenAuthorIds };
+    },
+  });
+  const railStories = useMemo(
+    () =>
+      filterStoriesForRail({
+        stories: storiesQuery.data ?? [],
+        hiddenPostIds: railFilterQuery.data?.hiddenPostIds ?? new Set(),
+        corporateChallengeIds: railFilterQuery.data?.corporateChallengeIds ?? new Set(),
+        hiddenAuthorIds: railFilterQuery.data?.hiddenAuthorIds ?? new Set(),
+      }),
+    [railFilterQuery.data, storiesQuery.data],
+  );
+
   const groups = useMemo(
     () =>
       groupStories({
-        stories: storiesQuery.data ?? [],
+        stories: railStories,
         userId: user?.id,
         profiles,
         circleIds,
-        includeEmptyOwn: true,
+        includeEmptyOwn: false,
       }),
-    [circleIds, profiles, storiesQuery.data, user?.id],
+    [circleIds, profiles, railStories, user?.id],
   );
 
   const viewedIds = useMemo(() => new Set(viewedQuery.data ?? []), [viewedQuery.data]);
@@ -771,7 +816,7 @@ export function useCreateStory() {
       const previous = queryClient.getQueryData<Story[]>(socialKeys.stories());
       if (user?.id) {
         const now = new Date();
-        const clips = input.clips?.length ? input.clips : [{ startMs: 0, durationMs: 15_000 }];
+        const clips = input.clips?.length ? input.clips : [{ startMs: 0, durationMs: WAVE_CLIP_MS }];
         const optimistic = clips.map((clip, index) => ({
           id: `optimistic-${now.getTime()}-${index}`,
           user_id: user.id,

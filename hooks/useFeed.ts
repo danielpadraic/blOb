@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { Alert } from 'react-native';
 
 import { clipPostsQueryKey } from '@/lib/clipPost';
+import { isHomeExcludedClipType } from '@/lib/clipPost';
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
@@ -168,6 +169,8 @@ function postInsertPayload(
     quote_snapshot?: PostWithMeta['quote_snapshot'];
     wall_host_id?: string | null;
     source?: Post['source'];
+    type?: Post['type'];
+    duration_ms?: number | null;
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -189,6 +192,12 @@ function postInsertPayload(
   }
   if (schema.hasSource) {
     payload.source = base.source ?? 'feed';
+  }
+  if (schema.hasType) {
+    payload.type = base.type ?? 'feed';
+  }
+  if (schema.hasDuration && base.duration_ms != null) {
+    payload.duration_ms = base.duration_ms;
   }
   return payload;
 }
@@ -426,6 +435,9 @@ function viewerCanSeeProfilePost(
   if (post.hidden_from_home && post.author_id !== input.viewerId) {
     return false;
   }
+  if (isHomeExcludedClipType(post.type)) {
+    return false;
+  }
   if (post.wall_removed_at) {
     return false;
   }
@@ -636,6 +648,9 @@ async function fetchPosts(input: {
       merged
         .filter((post) => {
           if (post.hidden_from_home && post.author_id !== userId) {
+            return false;
+          }
+          if (isHomeExcludedClipType(post.type)) {
             return false;
           }
           if (post.source === 'challenge') {
@@ -931,6 +946,8 @@ export function useCreatePost(challengeId?: string | null) {
         quote_snapshot: quoted_post_id ? (input.quoteSnapshot ?? null) : null,
         wall_host_id: input.wallHostId ?? null,
         source: input.source ?? 'feed',
+        type: input.type ?? 'feed',
+        duration_ms: input.durationMs ?? null,
       });
       const created = await supabase.from('posts').insert(payload).select(schema.select).single();
       if (created.error) {
@@ -974,6 +991,8 @@ export function useCreatePost(challengeId?: string | null) {
           quote_snapshot: input.quoteSnapshot ?? null,
           wall_host_id: input.wallHostId ?? null,
           source: input.source ?? 'feed',
+          type: input.type ?? 'feed',
+          duration_ms: input.durationMs ?? null,
           mentions: (input.mentionedUserIds ?? []).map((userId) => ({
             userId,
             username: '',
@@ -984,7 +1003,9 @@ export function useCreatePost(challengeId?: string | null) {
           comments: [],
           reactions: [],
         };
-        queryClient.setQueryData<PostWithMeta[]>(listKey, [optimistic, ...(previous ?? [])]);
+        if (!isHomeExcludedClipType(optimistic.type)) {
+          queryClient.setQueryData<PostWithMeta[]>(listKey, [optimistic, ...(previous ?? [])]);
+        }
       }
       return { previous, optimisticId, listKey };
     },
@@ -997,6 +1018,9 @@ export function useCreatePost(challengeId?: string | null) {
         asPublicProfile(profile ?? { id: user.id }),
         input.mentionedUserIds,
       );
+      if (isHomeExcludedClipType(posted.type ?? input.type)) {
+        return;
+      }
       queryClient.setQueryData<PostWithMeta[]>(context.listKey, (current) => {
         if (!current) {
           return [posted];

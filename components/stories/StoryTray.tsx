@@ -2,15 +2,14 @@ import { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { ClipCountRow, ClipSocial } from '@/components/feed/ClipSocial';
 import { StoryRing } from '@/components/stories/StoryRing';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-import { useClipSocial } from '@/hooks/useClipSocial';
 import { useStoryGroups } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
+import { railHasVisibleWaves } from '@/lib/clipRail';
 import { copy } from '@/lib/copy';
-import { storyHref } from '@/lib/routes';
+import { waveHref } from '@/lib/routes';
 import { persistStoryThumbnail, type StoryGroup } from '@/lib/social';
 import { persistGeneratedPoster } from '@/lib/videoPoster';
 import { previewFromStory } from '@/lib/wavePreview';
@@ -21,12 +20,19 @@ export function StoryTray() {
   const router = useRouter();
   const { groups, viewedIds } = useStoryGroups();
 
+  if (!railHasVisibleWaves(groups)) {
+    return null;
+  }
+
   function openGroup(group: StoryGroup) {
-    if (group.stories.length === 0) {
+    const latest = [...group.stories].sort(
+      (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+    )[0];
+    if (!latest) {
       startFreshWaveCapture(router);
       return;
     }
-    router.push(storyHref(group.stories[0]!.id));
+    router.push(waveHref(latest.id, { from: 'home' }));
   }
 
   return (
@@ -50,16 +56,15 @@ export function StoryTray() {
           );
         })}
       </ScrollView>
-      {groups.every((group) => group.stories.length === 0) ? (
-        <AppText className="px-4 pt-1 text-[12px] text-muted">{copy('wave.hint')}</AppText>
-      ) : null}
     </View>
   );
 }
 
 function WaveRing({ group, seen }: { group: StoryGroup; seen: boolean }) {
   const { user } = useAuth();
-  const latest = group.stories[group.stories.length - 1];
+  const latest = [...group.stories].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+  )[0];
   const stored = latest ? previewFromStory(latest) : null;
   const generated = useVideoPoster(
     latest?.media_type === 'video' ? latest.media_url : null,
@@ -112,7 +117,6 @@ function StoryBubble({
   onAdd: () => void;
 }) {
   const showAdd = group.isOwn;
-  const latest = group.stories[group.stories.length - 1];
   return (
     <View className="w-[80px] items-center">
       <View className="relative">
@@ -149,46 +153,6 @@ function StoryBubble({
       <AppText className="mt-1.5 text-center text-[10px] text-muted" numberOfLines={1}>
         {group.isOwn ? copy('wave.yours') : group.name}
       </AppText>
-      {latest ? <WaveTraySocial storyId={latest.id} postId={latest.post_id} mediaUrl={latest.media_url} caption={latest.caption} challengeId={latest.challenge_id} /> : null}
-    </View>
-  );
-}
-
-function WaveTraySocial({
-  storyId,
-  postId,
-  mediaUrl,
-  caption,
-  challengeId,
-}: {
-  storyId: string;
-  postId?: string | null;
-  mediaUrl: string;
-  caption?: string | null;
-  challengeId?: string | null;
-}) {
-  const router = useRouter();
-  const { user } = useAuth();
-  const social = useClipSocial({
-    kind: 'story',
-    clipId: storyId,
-    postId,
-    mediaUrl,
-    caption,
-    challengeId,
-  });
-  return (
-    <View className="mt-1 w-full items-center">
-      <ClipCountRow post={social.post} />
-      <ClipSocial
-        compact
-        post={social.post}
-        currentUserId={user?.id}
-        commenting={social.commenting}
-        onReact={social.onReact}
-        onComment={social.onComment}
-        onOpenComments={() => router.push(storyHref(storyId, { comments: true }))}
-      />
     </View>
   );
 }

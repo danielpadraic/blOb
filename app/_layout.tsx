@@ -147,6 +147,8 @@ function RootNavigator() {
           {/* Route group `story` stays so `/story/[id]` links keep working. User-facing name is Wave. */}
           <Stack.Screen name="story" options={{ headerShown: false, animation: 'fade' }} />
           <Stack.Screen name="reel" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="wave" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="round" options={{ headerShown: false, animation: 'fade' }} />
         </Stack.Protected>
         <Stack.Screen name="+not-found" />
       </Stack>

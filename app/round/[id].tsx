@@ -1,5 +1,5 @@
 import { RoundPlayerScreen } from '@/components/clips/RoundPlayerScreen';
 
-export default function ReelViewerScreen() {
+export default function RoundRoute() {
   return <RoundPlayerScreen />;
 }

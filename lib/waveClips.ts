@@ -1,11 +1,12 @@
-/** Playback / published Wave segment length. */
-export const WAVE_CLIP_MS = 15_000;
+/** Playback / published Wave length. Hard stop at 30.00s. */
+export const WAVE_CLIP_MS = 30_000;
 
-/**
- * Continuous Wave record cap (camera + web MediaRecorder).
- * Publish still splits on WAVE_CLIP_MS. Do not use this as playback length.
- */
-export const WAVE_RECORD_MAX_SEC = 90;
+/** Continuous Wave record cap (camera + web MediaRecorder). Equals WAVE_CLIP_MS. */
+export const WAVE_RECORD_MAX_SEC = 30;
+
+/** Round record / playback cap. 3:00. */
+export const ROUND_RECORD_MAX_MS = 180_000;
+export const ROUND_RECORD_MAX_SEC = 180;
 
 export type WaveClipWindow = {
   startMs: number;
