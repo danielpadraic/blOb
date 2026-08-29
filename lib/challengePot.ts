@@ -21,20 +21,28 @@ export function isEndedPrizeStatus(status?: string | null): boolean {
   return ENDED_POT_STATUSES.has(String(status ?? ''));
 }
 
+function hostBudgetAmount(challenge: ChallengePotInput): number {
+  return Math.max(
+    Number(challenge.host_budget) || Number(challenge.creator_contribution) || 0,
+    0,
+  );
+}
+
 /** Live/upcoming: challenges.prize_pool. After settle that column is zeroed. */
 export function displayChallengePot(challenge: ChallengePotInput): number {
   if (!isEndedPrizeStatus(challenge.status)) {
     return Math.max(Number(challenge.prize_pool) || 0, 0);
   }
   if (challenge.settled_prize_pool != null && Number.isFinite(Number(challenge.settled_prize_pool))) {
-    return Math.max(Number(challenge.settled_prize_pool), 0);
+    const settled = Math.max(Number(challenge.settled_prize_pool), 0);
+    if (settled > 0) {
+      return settled;
+    }
+    return hostBudgetAmount(challenge);
   }
-  const budget = Math.max(
-    Number(challenge.host_budget) || Number(challenge.creator_contribution) || 0,
-    0,
-  );
-  if (budget > 0) {
-    return budget;
+  const livePool = Math.max(Number(challenge.prize_pool) || 0, 0);
+  if (livePool > 0) {
+    return livePool;
   }
-  return 0;
+  return hostBudgetAmount(challenge);
 }

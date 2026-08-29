@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { prizeDistributionLabel } from '@/lib/challenges';
+import { displayChallengePot } from '@/lib/challengePot';
 import { cashPrizeLabel, isBucksChallenge } from '@/lib/currency';
 import type { Challenge } from '@/lib/types';
 
@@ -12,7 +13,11 @@ export function ChallengePrizeLine({
 }: {
   challenge: Pick<
     Challenge,
+    | 'status'
     | 'prize_pool'
+    | 'settled_prize_pool'
+    | 'host_budget'
+    | 'creator_contribution'
     | 'currency'
     | 'prize_structure'
     | 'top_places_distribution'
@@ -20,7 +25,7 @@ export function ChallengePrizeLine({
   >;
   textClassName?: string;
 }) {
-  const amount = Number(challenge.prize_pool) || 0;
+  const amount = displayChallengePot(challenge);
   const distribution = prizeDistributionLabel(challenge);
   if (isBucksChallenge(challenge)) {
     return (

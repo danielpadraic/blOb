@@ -44,7 +44,7 @@ export function remainingEligible(
   );
 }
 
-/** Coins: ceil(pool / winners), same whole number each. Bucks keep a cents split. */
+/** Coins: floor(pool / n) plus leftover 1s on the first winners. Bucks keep a cents split. */
 export function evenSplitShares(
   pool: number,
   count: number,
@@ -61,8 +61,13 @@ export function evenSplitShares(
       index === count - 1 ? Math.round((share + leftover) * 100) / 100 : share,
     );
   }
-  const share = Math.ceil(Math.max(pool, 0) / count);
-  return Array.from({ length: count }, () => share);
+  const total = Math.floor(Math.max(pool, 0));
+  if (total <= 0) {
+    return [];
+  }
+  const share = Math.floor(total / count);
+  const leftover = total - share * count;
+  return Array.from({ length: count }, (_, index) => share + (index < leftover ? 1 : 0));
 }
 
 export function payoutSlices(

@@ -122,9 +122,17 @@ describe('even-split remaining', () => {
       { user_id: 'a', amount: 5, place: 1, reason: 'distribute_win' },
       { user_id: 'b', amount: 5, place: 1, reason: 'distribute_win' },
     ]);
-    expect(evenSplitShares(15, 7)).toEqual([3, 3, 3, 3, 3, 3, 3]);
-    expect(evenSplitShares(100, 3)).toEqual([34, 34, 34]);
     expect(evenSplitShares(100, 3, 'bucks')).toEqual([33.33, 33.33, 33.34]);
+  });
+
+  it('splits whole coins with leftover on the first winners', () => {
+    expect(evenSplitShares(10, 3)).toEqual([4, 3, 3]);
+    expect(evenSplitShares(10, 3).reduce((sum, share) => sum + share, 0)).toBe(10);
+    expect(evenSplitShares(15, 7)).toEqual([3, 2, 2, 2, 2, 2, 2]);
+    expect(evenSplitShares(35, 4)).toEqual([9, 9, 9, 8]);
+    expect(evenSplitShares(1, 3)).toEqual([1, 0, 0]);
+    expect(evenSplitShares(0, 2)).toEqual([]);
+    expect(evenSplitShares(100, 3)).toEqual([34, 33, 33]);
   });
 
   it('forfeits cleanly when nobody remaining', () => {

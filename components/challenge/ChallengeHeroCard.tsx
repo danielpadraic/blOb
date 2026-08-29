@@ -17,6 +17,7 @@ import { AppText } from '@/components/ui/AppText';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { challengeCardTags } from '@/lib/challengeTags';
+import { displayChallengePot } from '@/lib/challengePot';
 import { formatCash, isBucksChallenge } from '@/lib/currency';
 import { isOfficialJoinable } from '@/lib/officialSeries';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
@@ -79,7 +80,7 @@ export function ChallengeHeroCard({
     showNotJoined: showNotJoined && !joined,
   });
   const subtitle = challengeGoalSubtitle(challenge);
-  const pool = Number(challenge.prize_pool) || 0;
+  const pool = displayChallengePot(challenge);
   const bucks = isBucksChallenge(challenge);
   const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
   const muted = official ? 'rgba(255,255,255,0.78)' : THEME.textMuted;

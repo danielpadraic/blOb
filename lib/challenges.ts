@@ -1141,10 +1141,12 @@ export async function fetchChallengeById(
       }
       try {
         const [hydrated] = await hydrateOfficialDisplay([data]);
-        return normalizeChallenge(hydrated ?? data);
+        const [withPot] = await attachSettledPots([normalizeChallenge(hydrated ?? data)]);
+        return withPot;
       } catch (hydrateError) {
         try {
-          return normalizeChallenge(data);
+          const [withPot] = await attachSettledPots([normalizeChallenge(data)]);
+          return withPot;
         } catch {
           throw createChallengeLoadError('server', hydrateError);
         }
