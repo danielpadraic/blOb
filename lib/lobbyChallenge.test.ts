@@ -391,4 +391,17 @@ describe('fill gate pair', () => {
     });
     expect(fillGateLabel({ min_participants: 10, participant_count: 3 })).toBe('3/10 needed');
   });
+
+  it('uses joined / 1.5× min headcount for Official Home strip', () => {
+    expect(
+      fillGatePair({
+        is_official: true,
+        host_budget: 10,
+        prize_pool: 3,
+        buy_in_amount: 1,
+        participant_count: 3,
+        min_participants: 0,
+      }),
+    ).toEqual({ count: 3, min: 15 });
+  });
 });

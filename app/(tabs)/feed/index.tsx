@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedList } from '@/components/feed/FeedList';
+import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
 import { ReelsRow } from '@/components/feed/ReelsRow';
 import { StoryTray } from '@/components/feed/StoryTray';
 import { Screen } from '@/components/ui/Screen';
@@ -13,7 +14,6 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
 import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/hooks/useFeed';
-import { rawFeedError } from '@/lib/feedError';
 import { socialKeys } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
@@ -36,8 +36,7 @@ export default function FeedScreen() {
   const createComment = useCreateComment();
   const toggleReaction = useToggleReaction();
   const posts = feed.data ?? [];
-  const feedWarning = feed.warning ?? (feed.error ? rawFeedError(feed.error) : null);
-  const showFeedBanner = Boolean(feed.error || feedWarning);
+  const showFeedBanner = Boolean(feed.error);
   const refreshing = feed.isRefetching && !feed.isLoading && !feed.isFetchingNextPage;
 
   const onRefresh = useCallback(() => {
@@ -88,33 +87,28 @@ export default function FeedScreen() {
         }
         headerTop={
           showFeedBanner ? (
-            <View style={{ marginBottom: 8, gap: 4 }}>
-              <View className="flex-row items-center" style={{ gap: 10, minHeight: 44 }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Try again"
-                  onPress={() => void feed.refetch()}
-                  style={{ minHeight: 44, justifyContent: 'center' }}>
-                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                    Try again
-                  </AppText>
-                </Pressable>
+            <View className="flex-row items-center" style={{ marginBottom: 8, gap: 10, minHeight: 44 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
               </View>
-              {feedWarning ? (
-                <AppText
-                  className="text-[12px]"
-                  numberOfLines={1}
-                  style={{ color: THEME.textMuted }}>
-                  {feedWarning}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry"
+                onPress={() => void feed.refetch()}
+                style={{ minHeight: 44, justifyContent: 'center' }}>
+                <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                  Retry
                 </AppText>
-              ) : null}
+              </Pressable>
             </View>
           ) : undefined
         }
-        headerExtra={<ReelsRow />}
+        headerExtra={
+          <View style={{ gap: 8 }}>
+            <FeaturedOfficialStrip />
+            <ReelsRow />
+          </View>
+        }
         empty={<FeedEmptyState compact />}
         onRefresh={onRefresh}
         onRetry={() => void feed.refetch()}
