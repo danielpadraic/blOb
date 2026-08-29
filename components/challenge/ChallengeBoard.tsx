@@ -76,8 +76,18 @@ export function ChallengeBoard({
           : null,
         viewerId,
         joined,
+        currency: challenge.currency,
       }),
-    [challenge.prize_pool, challenge.status, completedUserIds, joined, roster, settlement, viewerId],
+    [
+      challenge.currency,
+      challenge.prize_pool,
+      challenge.status,
+      completedUserIds,
+      joined,
+      roster,
+      settlement,
+      viewerId,
+    ],
   );
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;

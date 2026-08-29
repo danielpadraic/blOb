@@ -64,9 +64,9 @@ describe('Skill Tournament funding', () => {
   it('even-splits the combined prize among remaining finishers', () => {
     const prize = predictedPrize({ entryFee: 10, hostContribution: 20, participantCount: 3 });
     expect(prize).toBe(50);
-    expect(evenSplitCombinedPrize(prize, 2)).toEqual([25, 25]);
-    expect(evenSplitShares(50, 2)).toEqual([25, 25]);
-    expect(evenSplitCombinedPrize(100, 3)).toEqual([33.33, 33.33, 33.34]);
+    expect(evenSplitCombinedPrize(prize, 2, 'bucks')).toEqual([25, 25]);
+    expect(evenSplitShares(50, 2, 'bucks')).toEqual([25, 25]);
+    expect(evenSplitCombinedPrize(100, 3, 'bucks')).toEqual([33.33, 33.33, 33.34]);
   });
 
   it('forfeits when 0 remaining finishers', () => {

@@ -12,8 +12,8 @@ import {
 import { armingCountdownLabel } from '@/lib/officialSeries';
 
 export function formatCoins(amount: number | null | undefined): string {
-  const value = Number(amount ?? 0);
-  return `${value.toFixed(2)} Coins`;
+  const value = Math.round(Number(amount ?? 0));
+  return `${value} Coins`;
 }
 
 export function formatBucks(amount: number | null | undefined): string {

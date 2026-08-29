@@ -27,6 +27,7 @@ import { dateStampInZone } from '@/lib/officialDays';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { getErrorMessage } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
+import { checkedInForCurrentPeriod } from '@/lib/lobbyChallenge';
 import { signedProofUrl } from '@/utils/upload';
 
 const CHECKIN_COLUMNS =
@@ -404,4 +405,37 @@ type ChallengeParticipantLike = {
 
 export function parseCheckinParts(value: unknown) {
   return parseProofParts(value);
+}
+
+export function useLobbyTodayCheckins(
+  challenges: Array<CheckinPeriodChallenge & { id: string }>,
+) {
+  const { user } = useAuth();
+  const ids = challenges.map((row) => row.id).filter(Boolean);
+  return useQuery({
+    queryKey: ['lobby-today-checkins', user?.id, ids.join(',')],
+    enabled: Boolean(user?.id) && ids.length > 0,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from('challenge_checkins')
+        .select('challenge_id, period_key, status, submitted_at')
+        .eq('user_id', user!.id)
+        .in('challenge_id', ids);
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+      const byId = new Map(challenges.map((row) => [row.id, row]));
+      const submitted = new Set<string>();
+      for (const row of data ?? []) {
+        const challengeId = String((row as { challenge_id?: string }).challenge_id ?? '');
+        if (!challengeId) {
+          continue;
+        }
+        if (checkedInForCurrentPeriod(row, byId.get(challengeId))) {
+          submitted.add(challengeId);
+        }
+      }
+      return submitted;
+    },
+  });
 }

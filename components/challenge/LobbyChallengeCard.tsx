@@ -1,5 +1,6 @@
 export {
   ChallengeInviteCard as LobbyChallengeCard,
+  LobbyChallengeRow,
   inviteCardCanCheckIn as lobbyCardCanCheckIn,
   inviteCardCanJoin as lobbyCardCanJoin,
   inviteCardStatus as lobbyCardStatus,

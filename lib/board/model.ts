@@ -1,4 +1,5 @@
 import { lifecyclePhase, type LifecyclePhase } from '@/lib/settlement/lifecycle';
+import { evenSplitShares } from '@/lib/settlement/shares';
 
 function isLiveCompetitor(row: { status?: string | null; eliminated_at?: string | null }): boolean {
   if (row.eliminated_at) {
@@ -117,6 +118,7 @@ export function buildBoard(input: {
   } | null;
   viewerId?: string | null;
   joined?: boolean;
+  currency?: string | null;
 }): BoardView {
   const completed = new Set(input.completedUserIds ?? []);
   const phase = lifecyclePhase(input.status);
@@ -193,7 +195,10 @@ export function buildBoard(input: {
     forfeited,
     phase,
     prizePool,
-    shareEstimate: remainingCount > 0 ? prizePool / remainingCount : 0,
+    shareEstimate:
+      remainingCount > 0
+        ? (evenSplitShares(prizePool, remainingCount, input.currency)[0] ?? 0)
+        : 0,
     yourPayout,
     youPaid: Number(yourPayout) > 0,
     spectator: !joined,

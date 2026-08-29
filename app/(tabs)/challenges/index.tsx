@@ -3,7 +3,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { remainingFromChallenge } from '@/components/challenge/ChallengePosterCard';
-import { LobbyChallengeCard, type InviteHost } from '@/components/challenge/LobbyChallengeCard';
+import {
+  LobbyChallengeCard,
+  LobbyChallengeRow,
+  type InviteHost,
+} from '@/components/challenge/LobbyChallengeCard';
 import { ContinueDraftCard } from '@/components/challenge/create/wizardUi';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
@@ -19,16 +23,28 @@ import {
   useMyChallengeProgress,
   useOfficialDiscoverChallenges,
 } from '@/hooks/useChallenge';
+import { useLobbyTodayCheckins } from '@/hooks/useChallengeCheckin';
 import { useChallengeDrafts, useDiscardChallengeDraft } from '@/hooks/useChallengeDraft';
 import { createHrefForDraft, isVisibleDraft } from '@/lib/challengeDraft';
 import { isJoinableNotStarted } from '@/lib/challengeDiscoverability';
+import { openChallengeLobby } from '@/lib/challengeOpen';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
-import { isOfficialChallenge } from '@/lib/official';
+import { asCopyTone, copy } from '@/lib/copy';
+import {
+  isLobbyActiveParticipantStatus,
+  isOfficialLobbyRow,
+  loadLobbyLayout,
+  loadLobbyUncheckedFilter,
+  saveLobbyLayout,
+  saveLobbyUncheckedFilter,
+  scheduleNeedsTick,
+  sortEndingSoonest,
+  type LobbyLayout,
+  type LobbyTab,
+} from '@/lib/lobbyChallenge';
+import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
 import { AppText } from '@/components/ui/AppText';
-import { openChallengeLobby } from '@/lib/challengeOpen';
-import { asCopyTone, copy } from '@/lib/copy';
-import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import type { ChallengeWithStats } from '@/lib/types';
 import { useQuery } from '@tanstack/react-query';
 
@@ -37,13 +53,6 @@ const LOBBY_TABS = [
   { value: 'active', label: 'Active' },
   { value: 'hosting', label: 'Hosting' },
 ] as const;
-
-type LobbyTab = (typeof LOBBY_TABS)[number]['value'];
-
-function isLobbyParticipant(status: string | null | undefined) {
-  const value = status ?? 'joined';
-  return value === 'joined' || value === 'active' || value === 'completed';
-}
 
 function matchesSearch(title: string, query: string) {
   const needle = query.trim().toLowerCase();
@@ -79,6 +88,10 @@ function uniqueById<T extends { id: string }>(rows: T[]): T[] {
   return out;
 }
 
+function hostByIdHas(map: Map<string, InviteHost>, id?: string | null) {
+  return Boolean(id && map.has(id));
+}
+
 export default function ChallengesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ notice?: string }>();
@@ -86,6 +99,9 @@ export default function ChallengesScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [tab, setTab] = useState<LobbyTab>('official');
   const [tabReady, setTabReady] = useState(false);
+  const [layout, setLayout] = useState<LobbyLayout>('card');
+  const [uncheckedOnly, setUncheckedOnly] = useState(true);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const tone = asCopyTone(profile?.motivation_tone);
@@ -97,6 +113,15 @@ export default function ChallengesScreen() {
   const draftsQuery = useChallengeDrafts();
   const discardDraft = useDiscardChallengeDraft();
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    void Promise.all([loadLobbyLayout(), loadLobbyUncheckedFilter()]).then(
+      ([nextLayout, nextFilter]) => {
+        setLayout(nextLayout);
+        setUncheckedOnly(nextFilter);
+      },
+    );
+  }, []);
 
   useEffect(() => {
     if (notice !== 'cancelled') {
@@ -113,7 +138,7 @@ export default function ChallengesScreen() {
   const progressById = useMemo(() => {
     const map = new Map<string, { days: number; status: string; eliminated?: boolean }>();
     for (const row of mine.data ?? []) {
-      if (!isLobbyParticipant(row.status)) {
+      if (!isLobbyActiveParticipantStatus(row.status)) {
         continue;
       }
       map.set(row.challenge_id, {
@@ -134,36 +159,27 @@ export default function ChallengesScreen() {
     };
   }, [profile, user]);
 
-  const hostingAll = useMemo(() => {
-    const hosted = new Map<string, ChallengeWithStats>();
-    for (const row of hostingQuery.data ?? []) {
-      hosted.set(row.id, row);
-    }
-    for (const row of activeQuery.data ?? []) {
-      if (user?.id && row.created_by === user.id) {
-        hosted.set(row.id, row);
-      }
-    }
-    return uniqueById([...hosted.values()]);
-  }, [activeQuery.data, hostingQuery.data, user?.id]);
-  const hostingIds = useMemo(() => new Set(hostingAll.map((row) => row.id)), [hostingAll]);
-
-  const officialAll = useMemo(() => {
-    const joinedOfficial = (activeQuery.data ?? []).filter(
-      (row) => isOfficialChallenge(row) && !hostingIds.has(row.id),
-    );
-    const discover = (officialQuery.data ?? []).filter((row) => !hostingIds.has(row.id));
-    return uniqueById([...discover, ...joinedOfficial]);
-  }, [activeQuery.data, hostingIds, officialQuery.data]);
+  const officialAll = useMemo(
+    () =>
+      uniqueById([
+        ...(officialQuery.data ?? []).filter(isOfficialLobbyRow),
+        ...(activeQuery.data ?? []).filter(isOfficialLobbyRow),
+        ...(hostingQuery.data ?? []).filter(isOfficialLobbyRow),
+      ]),
+    [activeQuery.data, hostingQuery.data, officialQuery.data],
+  );
 
   const activeAll = useMemo(
-    () =>
-      (activeQuery.data ?? []).filter(
-        (row) => !isOfficialChallenge(row) && !hostingIds.has(row.id),
-      ),
-    [activeQuery.data, hostingIds],
+    () => (activeQuery.data ?? []).filter((row) => !isOfficialLobbyRow(row)),
+    [activeQuery.data],
   );
   const activeIds = useMemo(() => new Set(activeAll.map((row) => row.id)), [activeAll]);
+
+  const hostingAll = useMemo(
+    () => (hostingQuery.data ?? []).filter((row) => !isOfficialLobbyRow(row)),
+    [hostingQuery.data],
+  );
+  const hostingIds = useMemo(() => new Set(hostingAll.map((row) => row.id)), [hostingAll]);
 
   const friendsAll = useMemo(
     () =>
@@ -172,11 +188,18 @@ export default function ChallengesScreen() {
           !progressById.has(row.challenge.id) &&
           !activeIds.has(row.challenge.id) &&
           !hostingIds.has(row.challenge.id) &&
-          !isOfficialChallenge(row.challenge) &&
+          !isOfficialLobbyRow(row.challenge) &&
           isLobbyDiscoverCard(row.challenge, false),
       ),
     [activeIds, friendsQuery.data, hostingIds, progressById],
   );
+
+  const todaySource = useMemo(
+    () => uniqueById([...officialAll, ...activeAll, ...hostingAll, ...friendsAll.map((row) => row.challenge)]),
+    [activeAll, friendsAll, hostingAll, officialAll],
+  );
+  const todayCheckins = useLobbyTodayCheckins(todaySource);
+  const checkedToday = todayCheckins.data ?? new Set<string>();
 
   useEffect(() => {
     if (tabReady) {
@@ -202,11 +225,21 @@ export default function ChallengesScreen() {
     tabReady,
   ]);
 
-  const official = officialAll.filter((row) => matchesSearch(challengeDisplayTitle(row), search));
-  const active = activeAll.filter((row) => matchesSearch(challengeDisplayTitle(row), search));
-  const hosting = hostingAll.filter((row) => matchesSearch(challengeDisplayTitle(row), search));
-  const friends = friendsAll.filter((row) =>
-    matchesSearch(challengeDisplayTitle(row.challenge), search),
+  function applyList(rows: ChallengeWithStats[]) {
+    const searched = rows.filter((row) => matchesSearch(challengeDisplayTitle(row), search));
+    const filtered = uncheckedOnly
+      ? searched.filter((row) => !checkedToday.has(row.id))
+      : searched;
+    return sortEndingSoonest(filtered);
+  }
+
+  const official = applyList(officialAll);
+  const active = applyList(activeAll);
+  const hosting = applyList(hostingAll);
+  const friends = sortEndingSoonest(
+    friendsAll
+      .filter((row) => matchesSearch(challengeDisplayTitle(row.challenge), search))
+      .filter((row) => !uncheckedOnly || !checkedToday.has(row.challenge.id)),
   );
   const visibleDrafts =
     tab === 'hosting' ? drafts.filter((item) => matchesSearch(item.title ?? '', search)) : [];
@@ -259,9 +292,12 @@ export default function ChallengesScreen() {
   }, [friendProfiles.data, friendsAll, hostProfiles.data]);
 
   const loading =
-    (hostingQuery.isPending && !hostingQuery.data) &&
-    (activeQuery.isPending && !activeQuery.data) &&
-    (officialQuery.isPending && !officialQuery.data);
+    hostingQuery.isPending &&
+    !hostingQuery.data &&
+    activeQuery.isPending &&
+    !activeQuery.data &&
+    officialQuery.isPending &&
+    !officialQuery.data;
   const failed =
     hostingQuery.isError &&
     activeQuery.isError &&
@@ -270,8 +306,21 @@ export default function ChallengesScreen() {
     !activeQuery.data &&
     !officialQuery.data;
 
+  const tabRows = tab === 'official' ? official : tab === 'active' ? active : hosting;
+  const ticking = [...tabRows, ...friends.map((row) => row.challenge)].some((row) =>
+    scheduleNeedsTick(row, nowMs),
+  );
+
+  useEffect(() => {
+    if (!ticking) {
+      return;
+    }
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [ticking]);
+
   function openChallenge(id: string, snapshot?: ChallengeWithStats) {
-    openChallengeLobby(router, { id, snapshot, returnTo: 'lobby' });
+    openChallengeLobby(router, { id, snapshot, returnTo: 'lobby', extra: { tab: 'overview' } });
   }
 
   async function onRefresh() {
@@ -282,11 +331,23 @@ export default function ChallengesScreen() {
       friendsQuery.refetch(),
       mine.refetch(),
       draftsQuery.refetch(),
+      todayCheckins.refetch(),
     ]);
   }
 
-  const tabRows =
-    tab === 'official' ? official : tab === 'active' ? active : hosting;
+  function onLayoutChange(next: LobbyLayout) {
+    setLayout(next);
+    void saveLobbyLayout(next);
+  }
+
+  function onUncheckedToggle() {
+    setUncheckedOnly((current) => {
+      const next = !current;
+      void saveLobbyUncheckedFilter(next);
+      return next;
+    });
+  }
+
   const tabEmpty =
     tabRows.length === 0 &&
     (tab !== 'active' || friends.length === 0) &&
@@ -341,6 +402,48 @@ export default function ChallengesScreen() {
         />
       </View>
 
+      <View className="mt-2 flex-row items-center" style={{ gap: 12, minHeight: 36 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cards"
+          accessibilityState={{ selected: layout === 'card' }}
+          onPress={() => onLayoutChange('card')}
+          hitSlop={6}
+          style={{ minHeight: 36, justifyContent: 'center' }}>
+          <AppText
+            className="text-[13px] font-semibold"
+            style={{ color: layout === 'card' ? THEME.accent : THEME.textMuted }}>
+            Cards
+          </AppText>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="List"
+          accessibilityState={{ selected: layout === 'list' }}
+          onPress={() => onLayoutChange('list')}
+          hitSlop={6}
+          style={{ minHeight: 36, justifyContent: 'center' }}>
+          <AppText
+            className="text-[13px] font-semibold"
+            style={{ color: layout === 'list' ? THEME.accent : THEME.textMuted }}>
+            List
+          </AppText>
+        </Pressable>
+        <View style={{ flexGrow: 1 }} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={uncheckedOnly ? 'Showing not checked in today. Tap to show all.' : 'Showing all. Tap to hide checked in today.'}
+          onPress={onUncheckedToggle}
+          hitSlop={6}
+          style={{ minHeight: 36, justifyContent: 'center' }}>
+          <AppText
+            className="text-[13px] font-semibold"
+            style={{ color: uncheckedOnly ? THEME.accent : THEME.textMuted }}>
+            {uncheckedOnly ? 'Not checked in today' : 'All'}
+          </AppText>
+        </Pressable>
+      </View>
+
       {loading ? (
         <MascotState kind="loading" title={copy('lobby.loading', tone)} />
       ) : failed ? (
@@ -352,7 +455,7 @@ export default function ChallengesScreen() {
         />
       ) : (
         <ScrollView
-          className="mt-4 flex-1"
+          className="mt-3 flex-1"
           contentContainerClassName="pb-8"
           refreshControl={
             <RefreshControl
@@ -409,6 +512,8 @@ export default function ChallengesScreen() {
                       key={row.challenge.id}
                       challenge={row.challenge}
                       section="active"
+                      layout={layout}
+                      nowMs={nowMs}
                       currentUserId={user?.id}
                       progress={progressById.get(row.challenge.id)}
                       host={
@@ -424,6 +529,8 @@ export default function ChallengesScreen() {
                   key={challenge.id}
                   challenge={challenge}
                   section={tab === 'official' ? 'official' : tab === 'hosting' ? 'hosting' : 'active'}
+                  layout={layout}
+                  nowMs={nowMs}
                   currentUserId={user?.id}
                   progress={progressById.get(challenge.id)}
                   host={
@@ -459,13 +566,11 @@ export default function ChallengesScreen() {
   );
 }
 
-function hostByIdHas(map: Map<string, InviteHost>, id?: string | null) {
-  return Boolean(id && map.has(id));
-}
-
 function LobbyListCard({
   challenge,
   section,
+  layout,
+  nowMs,
   currentUserId,
   progress,
   host,
@@ -473,12 +578,23 @@ function LobbyListCard({
 }: {
   challenge: ChallengeWithStats;
   section: 'official' | 'active' | 'hosting';
+  layout: LobbyLayout;
+  nowMs: number;
   currentUserId?: string;
   progress?: { days: number; status: string; eliminated?: boolean };
   host?: InviteHost | null;
   onPress: (id: string, snapshot?: ChallengeWithStats) => void;
 }) {
   const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
+  function open() {
+    if (!challenge.id) {
+      return;
+    }
+    onPress(challenge.id, challenge);
+  }
+  if (layout === 'list') {
+    return <LobbyChallengeRow challenge={challenge} nowMs={nowMs} onPress={open} />;
+  }
   return (
     <LobbyChallengeCard
       challenge={challenge}
@@ -489,12 +605,7 @@ function LobbyListCard({
       hosting={hosting}
       eliminated={Boolean(progress?.eliminated)}
       host={host}
-      onPress={() => {
-        if (!challenge.id) {
-          return;
-        }
-        onPress(challenge.id, challenge);
-      }}
+      onPress={open}
     />
   );
 }

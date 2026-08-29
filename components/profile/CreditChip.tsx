@@ -8,7 +8,7 @@ type CreditChipProps = {
 };
 
 export function CreditChip({ credits }: CreditChipProps) {
-  const amount = Number(credits ?? 0).toFixed(2);
+  const amount = String(Math.round(Number(credits ?? 0)));
 
   return (
     <View

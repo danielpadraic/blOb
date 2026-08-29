@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
@@ -97,6 +98,11 @@ export function ChallengeHeroCard({
         numberOfLines={2}>
         {challengeDisplayTitle(challenge)}
       </AppText>
+      <ChallengeScheduleMeta
+        challenge={challenge}
+        nowMs={nowMs}
+        tone={official ? 'dark' : 'light'}
+      />
       {official ? (
         <OfficialSponsorLine
           challenge={challenge}
@@ -185,7 +191,7 @@ export function ChallengeHeroCard({
                     className="text-[22px] font-extrabold"
                     style={{ color: titleColor }}
                     numberOfLines={1}>
-                    {pool.toFixed(2)}
+                    {String(Math.round(pool))}
                   </AppText>
                 </>
               )}

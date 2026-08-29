@@ -91,8 +91,16 @@ export function predictedPrize(input: {
   return Number((host + fee * count).toFixed(2));
 }
 
-export function evenSplitCombinedPrize(prizeTotal: number, remainingFinishers: number): number[] {
-  return evenSplitShares(Math.max(Number(prizeTotal) || 0, 0), Math.max(remainingFinishers, 0));
+export function evenSplitCombinedPrize(
+  prizeTotal: number,
+  remainingFinishers: number,
+  currency?: string | null,
+): number[] {
+  return evenSplitShares(
+    Math.max(Number(prizeTotal) || 0, 0),
+    Math.max(remainingFinishers, 0),
+    currency,
+  );
 }
 
 export function canRefundEntryFee(status?: string | null): boolean {

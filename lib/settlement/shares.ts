@@ -44,24 +44,33 @@ export function remainingEligible(
   );
 }
 
-/** Even split to cents. Last share absorbs leftover so the pool always sums. */
-export function evenSplitShares(pool: number, count: number): number[] {
+/** Coins: ceil(pool / winners), same whole number each. Bucks keep a cents split. */
+export function evenSplitShares(
+  pool: number,
+  count: number,
+  currency?: string | null,
+): number[] {
   if (!Number.isFinite(pool) || count <= 0) {
     return [];
   }
-  const total = Math.round(pool * 100) / 100;
-  const share = Math.round((total / count) * 100) / 100;
-  const leftover = Math.round((total - share * count) * 100) / 100;
-  return Array.from({ length: count }, (_, index) =>
-    index === count - 1 ? Math.round((share + leftover) * 100) / 100 : share,
-  );
+  if (String(currency ?? 'coins') === 'bucks') {
+    const total = Math.round(pool * 100) / 100;
+    const share = Math.round((total / count) * 100) / 100;
+    const leftover = Math.round((total - share * count) * 100) / 100;
+    return Array.from({ length: count }, (_, index) =>
+      index === count - 1 ? Math.round((share + leftover) * 100) / 100 : share,
+    );
+  }
+  const share = Math.ceil(Math.max(pool, 0) / count);
+  return Array.from({ length: count }, () => share);
 }
 
 export function payoutSlices(
   userIds: string[],
   pool: number,
+  currency?: string | null,
 ): Array<{ user_id: string; amount: number; place: 1; reason: 'distribute_win' }> {
-  const shares = evenSplitShares(pool, userIds.length);
+  const shares = evenSplitShares(pool, userIds.length, currency);
   return userIds.map((user_id, index) => ({
     user_id,
     amount: shares[index] ?? 0,

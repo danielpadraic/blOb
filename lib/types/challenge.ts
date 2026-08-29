@@ -190,6 +190,8 @@ export type ChallengeParticipant = {
   status: ParticipantEscrowStatus | string;
   buy_in_paid: number;
   currency: 'coins' | 'bucks' | string;
+  place?: number | null;
+  result?: 'pending' | 'remaining' | 'dropped' | 'won' | 'lost' | 'split' | 'forfeited' | string;
 };
 
 export type WalletLedgerEntry = {

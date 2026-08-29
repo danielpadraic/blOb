@@ -10,8 +10,7 @@ export function formatSettlementAmount(
   if (String(currency ?? 'coins') === 'bucks') {
     return formatCash(amount);
   }
-  const value = Number(amount ?? 0);
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  return String(Math.round(Number(amount ?? 0)));
 }
 
 export function receiptHeadline(input: {

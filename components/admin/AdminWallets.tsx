@@ -15,7 +15,7 @@ import { THEME } from '@/lib/theme';
 type WalletSort = 'coins' | 'bucks';
 
 function coinLabel(amount: number): string {
-  return Number(amount).toFixed(2);
+  return String(Math.round(Number(amount) || 0));
 }
 
 export function AdminWallets() {

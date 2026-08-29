@@ -10,6 +10,7 @@ import {
   ChallengeTypeTip,
   useChallengeTypeTip,
 } from '@/components/challenge/ChallengeTypeIcon';
+import { ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { challengeCardTags } from '@/lib/challengeTags';
@@ -18,11 +19,14 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
-import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
+import { useMyProfile } from '@/hooks/useProfile';
+import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { fetchChallengeById } from '@/lib/challenges';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
-import { openChallengeLobby, prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
+import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
+import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
+import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { formatCash, formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { copy } from '@/lib/copy';
@@ -56,6 +60,12 @@ export type InviteChallenge = {
   creator_contribution?: number | null;
   official_started_at?: string | null;
   start_rule?: string | null;
+  start_mode?: string | null;
+  start_within_value?: number | null;
+  start_within_unit?: string | null;
+  min_participants?: number | null;
+  participant_count?: number | null;
+  distributed_at?: string | null;
   visibility?: string | null;
   challenge_lane?: unknown;
   category?: string | null;
@@ -220,6 +230,10 @@ export function inviteCardCanJoin(input: {
   if (input.joined || input.hosting) {
     return false;
   }
+  const phase = challengeScheduleState(input.challenge).phase;
+  if (phase === 'ended' || phase === 'settled') {
+    return false;
+  }
   return isJoinWindowOpen(input.challenge);
 }
 
@@ -248,25 +262,23 @@ export function ChallengeInviteCard({
   hosting = false,
   eliminated = false,
   host,
-  onPress,
+  onPress: _onPress,
 }: ChallengeInviteCardProps) {
   const official =
     isOfficialChallenge(challenge) || theme === 'official' || section === 'official';
   const visual = official ? 'official' : inviteVisualTheme(challenge);
   const mediaSteps = resolveInviteMedia(challenge, official);
   const { user } = useAuth();
+  const { profile } = useMyProfile();
   const router = useRouter();
   const mine = useMyChallengeProgress();
   const joined =
     joinedProp ??
     Boolean(user?.id && mine.data?.some((row) => row.challenge_id === challenge.id));
-  const ticking =
-    String(challenge.status) === 'arming' ||
-    (challenge.starts_at != null && new Date(challenge.starts_at).getTime() > Date.now());
+  const ticking = scheduleNeedsTick(challenge);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [joining, setJoining] = useState(false);
   const joinSheet = useJoinConfirm();
-  const openTag = useOpenChallengeFromTag();
   const typeTip = useChallengeTypeTip();
 
   useEffect(() => {
@@ -318,23 +330,9 @@ export function ChallengeInviteCard({
     }
     seedChallengeDetailQuery({ ...challenge, id: challengeId });
     prefetchChallengeDetail(challengeId, challenge);
-    if (onPress) {
-      onPress();
-      return;
-    }
-    try {
-      await openTag({
-        challengeId,
-        visibility: challenge.visibility,
-        challenge_lane: challenge.challenge_lane,
-        is_official: challenge.is_official,
-        created_by: challenge.created_by,
-        isParticipant: joined,
-        snapshot: challenge,
-      });
-    } catch {
-      openChallengeLobby(router, { id: challengeId, snapshot: challenge, returnTo: 'feed' });
-    }
+    router.push(
+      challengeDetailHref(challengeId, context === 'feed' ? 'feed' : 'lobby', null, { tab: 'overview' }),
+    );
   }
 
   async function onJoinOrView() {
@@ -343,6 +341,10 @@ export function ChallengeInviteCard({
       return;
     }
     if (joining || joinSheet.loading) {
+      return;
+    }
+    if (official && user && !hasCompletedBodyMetrics(profile)) {
+      router.push(BODY_METRICS_HREF);
       return;
     }
     setJoining(true);
@@ -362,7 +364,10 @@ export function ChallengeInviteCard({
   const hostLabel = official ? 'blOb' : host?.name?.trim() || 'Host';
 
   return (
-      <View
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={cardLabel}
+        onPress={() => void openDetail()}
         style={{
           borderRadius: 14,
           backgroundColor: THEME.surface,
@@ -386,20 +391,15 @@ export function ChallengeInviteCard({
             <ChallengeTagRow tags={tags} compact />
           </View>
         </View>
-        <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4 }}>
-          <Pressable
-            onPress={() => void openDetail()}
-            accessibilityRole="button"
-            accessibilityLabel={cardLabel}
-            style={{ marginTop: 4, minWidth: 0 }}>
-            <AppText
-              className="text-[13px] font-semibold"
-              style={{ color: THEME.textPrimary }}
-              numberOfLines={1}>
-              {displayTitle}
-            </AppText>
-          </Pressable>
-          <View className="flex-row items-center" style={{ marginTop: 2, gap: 8, minHeight: 18 }}>
+        <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4, gap: 4 }}>
+          <AppText
+            className="text-[13px] font-semibold"
+            style={{ color: THEME.textPrimary }}
+            numberOfLines={1}>
+            {displayTitle}
+          </AppText>
+          <ChallengeScheduleMeta challenge={challenge} nowMs={nowMs} compact />
+          <View className="flex-row items-center" style={{ gap: 8, minHeight: 18 }}>
             <AppText
               className="text-[11px]"
               style={[flexChildMin(), { flexGrow: 1, color: THEME.textMuted }]}
@@ -414,13 +414,12 @@ export function ChallengeInviteCard({
         <View
           className="flex-row items-center"
           style={{ paddingHorizontal: 10, paddingBottom: 8, gap: 14, minHeight: 28 }}>
-          <TextAction label="View" onPress={() => void openDetail()} />
           {canJoin ? (
             <TextAction label="Join" loading={joining} onPress={() => void onJoinOrView()} />
           ) : null}
           {canCheckIn ? <TextAction label="Check In" onPress={onCheckIn} /> : null}
         </View>
-      </View>
+      </Pressable>
     );
 }
 
@@ -463,7 +462,7 @@ function MediaPanel({
   openLabel,
   category,
   typeTipOpen,
-  onOpen,
+  onOpen: _onOpen,
   onTypePress,
 }: {
   steps: InviteMedia[];
@@ -502,10 +501,10 @@ function MediaPanel({
         overflow: 'hidden',
         backgroundColor: visual === 'official' ? THEME_WASH.official[0] : THEME_WASH[visual][0],
       }}>
-      <Pressable
-        accessibilityRole="button"
+      <View
+        accessible
+        accessibilityRole="imagebutton"
         accessibilityLabel={openLabel}
-        onPress={onOpen}
         style={{ flex: 1 }}>
         {resolved.kind === 'photo' ? (
           <View style={{ flex: 1 }} pointerEvents="none">
@@ -549,7 +548,7 @@ function MediaPanel({
         ) : (
           <ChallengeTypePlaceholder category={category} />
         )}
-      </Pressable>
+      </View>
       <ChallengeTypeBadge category={category} onPress={onTypePress} />
       <ChallengeTypeTip
         category={category}
@@ -634,7 +633,7 @@ function LobbyMoneyMark({
       <View className="flex-row items-center" style={{ gap: compact ? 3 : 4 }}>
         <CurrencyMark currency={challenge.currency} size={icon} />
         <AppText className={type} style={{ color }} numberOfLines={1}>
-          {compact ? String(Math.round(prize)) : Number.isInteger(prize) ? String(prize) : prize.toFixed(2)}
+          {String(Math.round(prize))}
         </AppText>
       </View>
     );
@@ -676,8 +675,76 @@ function EntryMark({
     <View className="flex-row items-center" style={{ gap: compact ? 3 : 4 }}>
       <CurrencyMark currency={challenge.currency} size={icon} />
       <AppText className={type} style={{ color }} numberOfLines={1}>
-        {compact ? String(Math.round(amount)) : Number.isInteger(amount) ? String(amount) : amount.toFixed(2)}
+        {String(Math.round(amount))}
       </AppText>
     </View>
+  );
+}
+
+export function LobbyChallengeRow({
+  challenge,
+  context = 'lobby',
+  nowMs,
+  onPress: _onPress,
+}: {
+  challenge: InviteChallenge;
+  context?: 'lobby' | 'feed';
+  nowMs?: number;
+  onPress?: () => void;
+}) {
+  const router = useRouter();
+  const displayTitle = challengeDisplayTitle(challenge);
+  const clock = Date.now();
+  const ticking = scheduleNeedsTick(challenge, clock);
+  const [tickMs, setTickMs] = useState(clock);
+
+  useEffect(() => {
+    if (!ticking || nowMs != null) {
+      return;
+    }
+    const timer = setInterval(() => setTickMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [nowMs, ticking]);
+
+  function openDetail() {
+    const challengeId = firstRouteParam(challenge.id);
+    if (!challengeId) {
+      return;
+    }
+    seedChallengeDetailQuery({ ...challenge, id: challengeId });
+    prefetchChallengeDetail(challengeId, challenge);
+    router.push(
+      challengeDetailHref(challengeId, context === 'feed' ? 'feed' : 'lobby', null, { tab: 'overview' }),
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${displayTitle}. Open challenge`}
+      onPress={openDetail}
+      style={{
+        borderRadius: 14,
+        backgroundColor: THEME.surface,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        gap: 4,
+        ...themeShadow('card'),
+      }}>
+      <View className="flex-row items-start" style={{ gap: 10 }}>
+        <AppText
+          className="text-[14px] font-semibold"
+          style={[flexChildMin(), { flexGrow: 1, color: THEME.textPrimary }]}
+          numberOfLines={2}>
+          {displayTitle}
+        </AppText>
+        <View style={{ flexShrink: 0, paddingTop: 1 }}>
+          <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
+        </View>
+      </View>
+      <ChallengeScheduleMeta challenge={challenge} nowMs={nowMs ?? tickMs} compact />
+    </Pressable>
   );
 }

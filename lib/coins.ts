@@ -5,14 +5,18 @@ import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { getErrorMessage } from '@/utils/errors';
 
 const MIN_TRANSFER = 0.01;
+const MIN_COIN_TRANSFER = 1;
 const MAX_TRANSFER = 10000;
 
-export function normalizeCoinAmount(raw: string): number {
+export function normalizeCoinAmount(raw: string, currency?: string | null): number {
   const parsed = Number(String(raw).replace(/[^0-9.]/g, ''));
   if (!Number.isFinite(parsed)) {
     return 0;
   }
-  return Math.round(parsed * 100) / 100;
+  if (asWalletCurrency(currency) === 'bucks') {
+    return Math.round(parsed * 100) / 100;
+  }
+  return Math.round(parsed);
 }
 
 export function transferAmountError(
@@ -22,8 +26,9 @@ export function transferAmountError(
   options?: { unlimited?: boolean },
 ): string | null {
   const noun = currencyNoun(currency);
-  if (amount < MIN_TRANSFER) {
-    return `Send at least 0.01 ${noun}.`;
+  const minimum = asWalletCurrency(currency) === 'bucks' ? MIN_TRANSFER : MIN_COIN_TRANSFER;
+  if (amount < minimum) {
+    return `Send at least ${minimum} ${noun}.`;
   }
   if (options?.unlimited) {
     return null;

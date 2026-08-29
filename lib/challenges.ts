@@ -43,6 +43,7 @@ import {
   isJoinableNotStarted,
   isLiveOrUpcoming,
 } from '@/lib/challengeDiscoverability';
+import { isLobbyActiveParticipantStatus } from '@/lib/lobbyChallenge';
 
 import {
   classifyChallengeLoadFailure,
@@ -266,7 +267,7 @@ async function fetchJoinedChallengeIds(userId: string): Promise<string[]> {
     throw new Error(getErrorMessage(error));
   }
   return (data ?? [])
-    .filter((row) => isLiveCompetitorStatus((row as { status?: string }).status))
+    .filter((row) => isLobbyActiveParticipantStatus((row as { status?: string }).status))
     .map((row) => (row as { challenge_id: string }).challenge_id)
     .filter(Boolean);
 }

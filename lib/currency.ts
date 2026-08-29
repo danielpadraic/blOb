@@ -31,8 +31,7 @@ export function isSponsoredBucks(
 }
 
 export function formatWalletNumber(amount: number | null | undefined): string {
-  const value = Number(amount ?? 0);
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  return String(Math.round(Number(amount ?? 0)));
 }
 
 /** Cash on challenge cards: $1.00 only. Never “Bucks” or a buck icon. */
@@ -84,14 +83,14 @@ export function cashPrizeLabel(amount: number | null | undefined): string {
   return `${formatCashPrizeAmount(amount)} Cash Prize`;
 }
 
-/** Amount without the word “Coins.” Cash: $10.00. Coins: 10.00. */
+/** Amount without the word “Coins.” Cash: $10.00. Coins: 10. */
 export function formatWalletAmount(
   amount: number | null | undefined,
   currency?: string | null,
 ): string {
   return asWalletCurrency(currency) === 'bucks'
     ? formatCash(amount)
-    : Number(amount ?? 0).toFixed(2);
+    : formatWalletNumber(amount);
 }
 
 export function formatWallet(

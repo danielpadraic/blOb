@@ -23,7 +23,7 @@ export function WalletBalances({ profile }: WalletBalancesProps) {
       <Tile>
         <CurrencyMark currency="coins" size={22} />
         <AppText className="ml-1.5 text-[15px] font-extrabold text-charcoal">
-          {official ? copy('official.infinity') : Number(coins).toFixed(2)}
+          {official ? copy('official.infinity') : String(Math.round(coins))}
         </AppText>
       </Tile>
       <Tile>

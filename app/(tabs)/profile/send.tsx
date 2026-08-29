@@ -52,7 +52,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
 
   const search = useCoinRecipientSearch(query);
   const wallet = walletBalance(profile, currency);
-  const amount = normalizeCoinAmount(amountDraft);
+  const amount = normalizeCoinAmount(amountDraft, currency);
   const officialCoins = isOfficialAccount(profile) && currency === 'coins';
   const amountLabel =
     currency === 'bucks' ? formatWalletWithUsd(amount, 'bucks') : formatWallet(amount, 'coins');

@@ -61,7 +61,7 @@ export default function CreateCalloutScreen() {
 
   const search = useCoinRecipientSearch(query);
   const wallet = walletBalance(profile, currency);
-  const amount = normalizeCoinAmount(amountDraft);
+  const amount = normalizeCoinAmount(amountDraft, currency);
   const amountIssue = transferAmountError(amount, wallet, currency);
   const noun = currencyNoun(currency);
   const amountLabel =

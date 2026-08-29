@@ -71,7 +71,7 @@ export function StakeAmount({
   return (
     <View className="flex-row items-center" style={{ gap: 6 }}>
       <AppText className={textClassName}>
-        {value <= 0 ? '0.00' : value.toFixed(2)}
+        {String(Math.round(value))}
       </AppText>
       <CurrencyMark currency={currency} size={size} />
     </View>
