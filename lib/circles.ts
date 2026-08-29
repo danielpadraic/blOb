@@ -232,6 +232,71 @@ export function viewerCanSeeHomeCirclePost(input: {
   return false;
 }
 
+/** Viewer and author share at least one accepted friend (not each other). */
+export function sharesAcceptedFriend(input: {
+  viewerId?: string | null;
+  authorId?: string | null;
+  viewerFriendIds: Iterable<string>;
+  authorFriendIds: Iterable<string>;
+}): boolean {
+  const viewerId = String(input.viewerId ?? '').trim();
+  const authorId = String(input.authorId ?? '').trim();
+  if (!viewerId || !authorId || viewerId === authorId) {
+    return false;
+  }
+  const viewerFriends = new Set(input.viewerFriendIds);
+  viewerFriends.delete(viewerId);
+  viewerFriends.delete(authorId);
+  for (const id of input.authorFriendIds) {
+    if (id && id !== viewerId && id !== authorId && viewerFriends.has(id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Authors who share an accepted friend with the viewer. Soft-fails to none. */
+export async function fetchAuthorsSharingAcceptedFriend(
+  viewerId: string,
+  viewerFriendIds: Set<string>,
+  authorIds: string[],
+): Promise<Set<string>> {
+  const shared = new Set<string>();
+  const candidates = [...new Set(authorIds.filter((id) => id && id !== viewerId && !viewerFriendIds.has(id)))];
+  if (!viewerId || viewerFriendIds.size === 0 || candidates.length === 0) {
+    return shared;
+  }
+  const { data, error } = await supabase
+    .from('friendships')
+    .select('user_a_id, user_b_id')
+    .eq('status', 'accepted')
+    .or(`user_a_id.in.(${candidates.join(',')}),user_b_id.in.(${candidates.join(',')})`);
+  if (error) {
+    if (!isMissingRelationError(error)) {
+      console.log('[blob:feed] circle FoF lookup skipped', error.message);
+    }
+    return shared;
+  }
+  const authorFriends = new Map<string, Set<string>>();
+  for (const id of candidates) {
+    authorFriends.set(id, new Set());
+  }
+  for (const row of (data ?? []) as { user_a_id: string; user_b_id: string }[]) {
+    if (candidates.includes(row.user_a_id)) {
+      authorFriends.get(row.user_a_id)?.add(row.user_b_id);
+    }
+    if (candidates.includes(row.user_b_id)) {
+      authorFriends.get(row.user_b_id)?.add(row.user_a_id);
+    }
+  }
+  for (const [authorId, friends] of authorFriends) {
+    if (sharesAcceptedFriend({ viewerId, authorId, viewerFriendIds, authorFriendIds: friends })) {
+      shared.add(authorId);
+    }
+  }
+  return shared;
+}
+
 function asCircle(row: CircleRow): CircleRow {
   return {
     ...row,

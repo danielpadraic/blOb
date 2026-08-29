@@ -65,7 +65,7 @@ export function RoundShareComposer({
   const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
   const shareKind = target?.kind ?? (target?.storyId && !target?.reelId ? 'wave' : 'round');
   const canPublish = comment.trim().length > 0 && Boolean(target?.postId);
-  const blocked = !target || !canShareRoundToFeed(target.privacyMode);
+  const blocked = !target || shareKind !== 'round' || !canShareRoundToFeed(target.privacyMode);
 
   const cover = target?.coverUrl || target?.mediaUrl || null;
 
@@ -97,7 +97,7 @@ export function RoundShareComposer({
         audienceUserIds: nextIds,
         challengeId: undefined,
         source: 'share',
-        type: shareKind === 'wave' ? 'wave_share' : 'round_share',
+        type: 'round_share',
         parentId: target.postId,
         quotedPostId: target.postId,
         quoteSnapshot: snapshotFromRound({

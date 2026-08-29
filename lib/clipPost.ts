@@ -20,9 +20,9 @@ export function isClipSocialPost(post: {
   return true;
 }
 
-/** Home / public profile cards. round_share stays on Feed. */
+/** Home / public profile cards. round_share stays on Feed. wave_share is not offered. */
 export function isHomeExcludedClipType(type?: string | null): boolean {
-  return type === 'wave' || type === 'round';
+  return type === 'wave' || type === 'round' || type === 'wave_share';
 }
 
 export function clipSocialCounts(post: {

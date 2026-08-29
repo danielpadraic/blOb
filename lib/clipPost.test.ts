@@ -18,11 +18,11 @@ describe('clip social posts', () => {
     expect(clipSocialCounts(null)).toEqual({ reactions: 0, comments: 0 });
   });
 
-  it('keeps wave and round off Home, and leaves round_share on Feed', () => {
+  it('keeps wave, round, and wave_share off Home, and leaves round_share on Feed', () => {
     expect(isHomeExcludedClipType('wave')).toBe(true);
     expect(isHomeExcludedClipType('round')).toBe(true);
     expect(isHomeExcludedClipType('round_share')).toBe(false);
-    expect(isHomeExcludedClipType('wave_share')).toBe(false);
+    expect(isHomeExcludedClipType('wave_share')).toBe(true);
     expect(isHomeExcludedClipType('feed')).toBe(false);
   });
 

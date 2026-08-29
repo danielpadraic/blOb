@@ -36,6 +36,7 @@ import { asPostAudience } from '@/lib/postAudience';
 import {
   clipShareKind,
   isClipSharePost,
+  isRoundSharePost,
   reelIdFromShare,
   storyIdFromShare,
   roundShareClipUnavailable,
@@ -106,6 +107,7 @@ function PostCardInner({
     !parentRound.isLoading &&
     (roundShareClipUnavailable(parentRound.data) || !parentRound.data);
   const shareKind = clipShareKind(post);
+  const homeRoundShare = Boolean(homeFeed && isRoundSharePost(post));
   const shareClipId =
     shareKind === 'wave'
       ? storyIdFromShare(post) ?? shareParentId ?? null
@@ -436,6 +438,7 @@ function PostCardInner({
           />
         )}
 
+        {homeRoundShare ? null : (
         <ReactionBar
           createdAt={homeFeed ? undefined : post.created_at}
           reactions={post.reactions}
@@ -452,8 +455,9 @@ function PostCardInner({
               : undefined
           }
         />
+        )}
 
-        {showComposer && onComment ? (
+        {homeRoundShare || !showComposer || !onComment ? null : (
           <View>
             <Pressable
               accessibilityRole="button"
@@ -507,7 +511,7 @@ function PostCardInner({
               ) : null}
             </View>
           </View>
-        ) : null}
+        )}
       </View>
     </Card>
   );

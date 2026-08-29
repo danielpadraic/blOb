@@ -27,10 +27,10 @@ export function canOfferShareToFeed(input: {
   challengeId?: string | null;
   privacyMode?: string | null;
 }): boolean {
-  if (!input.postId || (input.kind !== 'round' && input.kind !== 'wave')) {
+  if (!input.postId || input.kind !== 'round') {
     return false;
   }
-  if (input.kind === 'round' && input.challengeId && input.privacyMode == null) {
+  if (input.challengeId && input.privacyMode == null) {
     return false;
   }
   return canShareRoundToFeed(input.privacyMode);

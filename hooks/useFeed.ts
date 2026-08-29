@@ -30,7 +30,12 @@ import type {
 } from '@/lib/types';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
-import { fetchCirclePreviews, viewerCanSeeHomeCirclePost } from '@/lib/circles';
+import {
+  asCircleVisibility,
+  fetchAuthorsSharingAcceptedFriend,
+  fetchCirclePreviews,
+  viewerCanSeeHomeCirclePost,
+} from '@/lib/circles';
 import { fetchFriends, type FriendEdge } from '@/lib/social';
 import { getErrorMessage, isMissingRelationError, isUnknownColumnError } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
@@ -881,87 +886,104 @@ async function fetchPosts(input: {
     noteHomeError(error);
   }
 
+  let fofAuthors = new Set<string>();
   try {
-    return await hydrateAuthors(
-    await withSocial(
-      merged
-        .filter((post) => {
-          if (post.circle_id) {
-            if (
-              !viewerCanSeeHomeCirclePost({
-                circleId: post.circle_id,
-                type: post.type,
-                hiddenFromHome: post.hidden_from_home,
-                visibility: post.circle?.visibility,
-                authorId: post.author_id,
-                viewerId: userId,
-                viewerIsMember: circleIdSet.has(post.circle_id),
-                friendsWithAuthor: friends.has(post.author_id),
-                friendsOfFriendsWithAuthor: true,
-              })
-            ) {
+    const fofCandidates = [
+      ...new Set(
+        merged
+          .filter((post) => {
+            if (!post.circle_id || post.author_id === userId) {
               return false;
             }
-          } else if (post.hidden_from_home && post.author_id !== userId) {
-            return false;
-          }
-          if (isHomeExcludedClipType(post.type)) {
-            return false;
-          }
-          if (post.source === 'challenge') {
-            return false;
-          }
-          if (post.challenge_id && corporateIds.has(post.challenge_id)) {
-            return false;
-          }
-          if (hidden.has(post.id)) {
-            return false;
-          }
-          if (post.author_id !== userId && muted.has(post.author_id) && !official.has(post.author_id)) {
-            return false;
-          }
-          if (post.author_id !== userId && blocked.has(post.author_id)) {
-            return false;
-          }
-          const circleHomePass = Boolean(post.circle_id);
-          if (
-            !circleHomePass &&
-            !viewerCanSeeHomePost({
-              viewerId: userId,
-              authorId: post.author_id,
-              audience: post.audience,
-              audienceUserIds: post.audience_user_ids,
-              friendsWithAuthor: friends.has(post.author_id),
-              officialAuthor: official.has(post.author_id),
-              wallHostId: post.wall_host_id,
-            })
-          ) {
-            return false;
-          }
-          if (official.has(post.author_id) || post.author_id === userId || friends.has(post.author_id)) {
-            return true;
-          }
-          if (post.wall_host_id && (post.wall_host_id === userId || friends.has(post.wall_host_id))) {
-            return asPostAudience(post.audience) === 'public' || post.wall_host_id === userId;
-          }
-          if (post.challenge_id && challengeIdSet.has(post.challenge_id)) {
-            return true;
-          }
-          if (post.circle_id) {
-            return true;
-          }
-          if (recommended.has(post.author_id)) {
-            return asPostAudience(post.audience) === 'public';
-          }
-          return false;
-        })
-        .slice(0, 50),
-      userId,
-    ),
-    );
+            if (circleIdSet.has(post.circle_id) || friends.has(post.author_id)) {
+              return false;
+            }
+            return asCircleVisibility(post.circle?.visibility) === 'friends_of_friends';
+          })
+          .map((post) => post.author_id),
+      ),
+    ];
+    fofAuthors = await fetchAuthorsSharingAcceptedFriend(userId, friends, fofCandidates);
   } catch (error) {
     noteHomeError(error);
-    return merged.slice(0, 50);
+  }
+
+  const visible = merged.filter((post) => {
+    if (post.circle_id) {
+      if (
+        !viewerCanSeeHomeCirclePost({
+          circleId: post.circle_id,
+          type: post.type,
+          hiddenFromHome: post.hidden_from_home,
+          visibility: post.circle?.visibility,
+          authorId: post.author_id,
+          viewerId: userId,
+          viewerIsMember: circleIdSet.has(post.circle_id),
+          friendsWithAuthor: friends.has(post.author_id),
+          friendsOfFriendsWithAuthor: fofAuthors.has(post.author_id),
+        })
+      ) {
+        return false;
+      }
+    } else if (post.hidden_from_home && post.author_id !== userId) {
+      return false;
+    }
+    if (isHomeExcludedClipType(post.type)) {
+      return false;
+    }
+    if (post.source === 'challenge') {
+      return false;
+    }
+    if (post.challenge_id && corporateIds.has(post.challenge_id)) {
+      return false;
+    }
+    if (hidden.has(post.id)) {
+      return false;
+    }
+    if (post.author_id !== userId && muted.has(post.author_id) && !official.has(post.author_id)) {
+      return false;
+    }
+    if (post.author_id !== userId && blocked.has(post.author_id)) {
+      return false;
+    }
+    const circleHomePass = Boolean(post.circle_id);
+    if (
+      !circleHomePass &&
+      !viewerCanSeeHomePost({
+        viewerId: userId,
+        authorId: post.author_id,
+        audience: post.audience,
+        audienceUserIds: post.audience_user_ids,
+        friendsWithAuthor: friends.has(post.author_id),
+        officialAuthor: official.has(post.author_id),
+        wallHostId: post.wall_host_id,
+      })
+    ) {
+      return false;
+    }
+    if (official.has(post.author_id) || post.author_id === userId || friends.has(post.author_id)) {
+      return true;
+    }
+    if (post.wall_host_id && (post.wall_host_id === userId || friends.has(post.wall_host_id))) {
+      return asPostAudience(post.audience) === 'public' || post.wall_host_id === userId;
+    }
+    if (post.challenge_id && challengeIdSet.has(post.challenge_id)) {
+      return true;
+    }
+    if (post.circle_id) {
+      return true;
+    }
+    if (recommended.has(post.author_id)) {
+      return asPostAudience(post.audience) === 'public';
+    }
+    return false;
+  });
+
+  try {
+    return await hydrateAuthors(await withSocial(visible.slice(0, 50), userId));
+  } catch (error) {
+    noteHomeError(error);
+    return visible.slice(0, 50);
   }
   } catch (error) {
     noteHomeError(error);

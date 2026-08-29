@@ -14,6 +14,7 @@ import {
   isCircleChallengeShare,
   lastHostLeaveCopy,
   postHasCircleOrigin,
+  sharesAcceptedFriend,
   viewerCanSeeHomeCirclePost,
 } from '@/lib/circles';
 
@@ -61,6 +62,49 @@ describe('circle origin', () => {
         friendsWithAuthor: true,
       }),
     ).toBe(false);
+  });
+
+  it('does not show FoF Circle posts to a stranger', () => {
+    expect(
+      viewerCanSeeHomeCirclePost({
+        circleId: 'circ-1',
+        type: 'feed',
+        visibility: 'friends_of_friends',
+        authorId: 'a',
+        viewerId: 'z',
+        viewerIsMember: false,
+        friendsWithAuthor: false,
+        friendsOfFriendsWithAuthor: false,
+      }),
+    ).toBe(false);
+    expect(
+      viewerCanSeeHomeCirclePost({
+        circleId: 'circ-1',
+        type: 'feed',
+        visibility: 'friends_of_friends',
+        authorId: 'a',
+        viewerId: 'z',
+        viewerIsMember: false,
+        friendsWithAuthor: false,
+        friendsOfFriendsWithAuthor: true,
+      }),
+    ).toBe(true);
+    expect(
+      sharesAcceptedFriend({
+        viewerId: 'z',
+        authorId: 'a',
+        viewerFriendIds: ['pal'],
+        authorFriendIds: ['other'],
+      }),
+    ).toBe(false);
+    expect(
+      sharesAcceptedFriend({
+        viewerId: 'z',
+        authorId: 'a',
+        viewerFriendIds: ['pal'],
+        authorFriendIds: ['pal'],
+      }),
+    ).toBe(true);
   });
 
   it('lets a non-member see a Public Circle Home card', () => {
