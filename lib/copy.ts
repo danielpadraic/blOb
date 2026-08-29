@@ -116,11 +116,7 @@ const STRINGS = {
     neutral: 'Nobody you know has posted.',
     honest: 'Empty on purpose until someone posts. That can be you.',
   },
-  'home.composer': {
-    gentle: 'What did you do? Even a little counts.',
-    neutral: 'What did you do?',
-    honest: 'What did you actually do?',
-  },
+  'home.composer': 'What did you accomplish today?',
   'home.shareThoughts': 'What did you accomplish today?',
   'lobby.subtitle': 'Find a challenge. Pay the entry fee. Prove the work.',
   'lobby.loading': {

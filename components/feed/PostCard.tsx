@@ -54,6 +54,7 @@ import { flexChildMin, THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { displayUrl, mediaKind } from '@/utils/media';
+import { directedWallHost } from '@/lib/profileWall';
 import { formatFeedTime } from '@/utils/format';
 
 const BODY_COLLAPSE_LINES = 4;
@@ -150,6 +151,8 @@ function PostCardInner({
   const mutedOwnerHome = mine && hiddenFromHome && !challengeFeed;
   const hideOnRail = Boolean(homeFeed && mine && !challengeFeed);
   const officialOnHome = !homeFeed || isHomeOfficialAuthor(post.author);
+  const wallHost = directedWallHost(post);
+  const wallName = wallHost ? wallHost.display_name?.trim() || wallHost.username?.trim() || 'blob' : '';
 
   function toggleHomeHide() {
     hideHome.mutate(
@@ -174,13 +177,13 @@ function PostCardInner({
           <Avatar uri={post.author?.avatar_url} name={name} size={homeFeed ? 32 : 42} />
         </ProfileLink>
         <View className="flex-1 justify-center" style={flexChildMin()}>
-          <ProfileLink
-            username={post.author?.username}
-            userId={post.author_id}
-            style={[flexChildMin(), { maxWidth: '100%' }]}>
-            <View
-              className="flex-row items-center"
-              style={[{ gap: homeFeed ? 4 : 6, flexWrap: homeFeed ? 'nowrap' : 'wrap' }, flexChildMin()]}>
+          <View
+            className="flex-row items-center"
+            style={[{ gap: homeFeed ? 4 : 6, flexWrap: wallHost ? 'wrap' : homeFeed ? 'nowrap' : 'wrap' }, flexChildMin()]}>
+            <ProfileLink
+              username={post.author?.username}
+              userId={post.author_id}
+              style={[flexChildMin(), { maxWidth: '100%' }]}>
               <AppText
                 className="font-semibold text-charcoal"
                 style={{
@@ -192,19 +195,41 @@ function PostCardInner({
                 numberOfLines={homeFeed ? 1 : 2}>
                 {name}
               </AppText>
-              {officialOnHome ? <OfficialMark profile={post.author} compact /> : null}
-              <AppText
-                style={{
-                  fontSize: 11,
-                  color: THEME.textMuted,
-                  lineHeight: 14,
-                  flexShrink: 0,
-                }}
-                numberOfLines={1}>
-                {formatFeedTime(post.created_at)}
-              </AppText>
-            </View>
-          </ProfileLink>
+            </ProfileLink>
+            {officialOnHome ? <OfficialMark profile={post.author} compact /> : null}
+            {wallHost ? (
+              <ProfileLink username={wallHost.username} userId={wallHost.id} style={{ flexShrink: 1, minWidth: 0 }}>
+                <View className="flex-row items-center" style={{ gap: 4, minWidth: 0 }}>
+                  <AppText
+                    style={{ fontSize: homeFeed ? 13 : 16, lineHeight: homeFeed ? 16 : 20, color: THEME.textMuted, flexShrink: 0 }}>
+                    →
+                  </AppText>
+                  <Avatar uri={wallHost.avatar_url} name={wallName} size={homeFeed ? 20 : 28} />
+                  <AppText
+                    className="font-semibold text-charcoal"
+                    style={{
+                      fontSize: homeFeed ? 13 : 16,
+                      lineHeight: homeFeed ? 16 : 20,
+                      minWidth: 0,
+                      flexShrink: 1,
+                    }}
+                    numberOfLines={1}>
+                    {wallName}
+                  </AppText>
+                </View>
+              </ProfileLink>
+            ) : null}
+            <AppText
+              style={{
+                fontSize: 11,
+                color: THEME.textMuted,
+                lineHeight: 14,
+                flexShrink: 0,
+              }}
+              numberOfLines={1}>
+              {formatFeedTime(post.created_at)}
+            </AppText>
+          </View>
         </View>
         {hideAudience || post.checkin_id ? null : currentUserId && currentUserId === post.author_id ? (
           <AudienceIconButton
@@ -309,13 +334,9 @@ function PostCardInner({
             </WebTapButton>
           ) : null}
         </View>
-      ) : (post.wall_host && !challengeFeed) || (!hideOnRail && mine && !challengeFeed) || (!hideOnRail && mine && hiddenFromHome) ? (
+      ) : (!hideOnRail && mine && !challengeFeed) || (!hideOnRail && mine && hiddenFromHome) ? (
         <View className="flex-row flex-wrap items-center" style={{ gap: 8, marginTop: homeFeed ? 2 : 4, minWidth: 0 }}>
-          {post.wall_host && !challengeFeed ? (
-            <WallHostLine host={post.wall_host} />
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
+          <View style={{ flex: 1 }} />
           {!hideOnRail && mine && hiddenFromHome ? (
             <WebTapButton
               accessibilityLabel={copy('post.unhideOnHome')}
@@ -720,40 +741,6 @@ function CircleInviteJoin({ circleId }: { circleId: string }) {
         {copy('circles.join')}
       </AppText>
     </Pressable>
-  );
-}
-
-function WallHostLine({
-  host,
-}: {
-  host: { id?: string | null; username?: string | null; display_name?: string | null; avatar_url?: string | null };
-}) {
-  const name = host.display_name?.trim() || host.username?.trim();
-  if (!host.id && !host.username) {
-    return (
-      <AppText className="flex-1 text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={2}>
-        {copy('wall.onHost', tone, { name: name || 'this blob' })}
-      </AppText>
-    );
-  }
-  return (
-    <ProfileLink
-      username={host.username}
-      userId={host.id}
-      style={[flexChildMin(), { flex: 1, minWidth: 0 }]}>
-      <View className="flex-row flex-wrap items-center" style={{ gap: 6, minWidth: 0 }}>
-        <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted, flexShrink: 0 }}>
-          {copy('wall.to')}
-        </AppText>
-        <Avatar uri={host.avatar_url} name={name || 'blob'} size={28} />
-        <AppText
-          className="font-semibold text-charcoal"
-          style={{ fontSize: 14, lineHeight: 18, minWidth: 0, flexShrink: 1 }}
-          numberOfLines={2}>
-          {name || 'blob'}
-        </AppText>
-      </View>
-    </ProfileLink>
   );
 }
 

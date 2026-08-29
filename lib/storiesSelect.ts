@@ -1,17 +1,10 @@
 import { supabase } from '@/lib/supabase';
 
-/** Columns that exist on live stories today. Probe extras before adding them. */
+/** Live stories columns. These exist in Postgres — do not drop them on 42703. */
 export const STORIES_CORE_COLUMNS =
-  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at';
+  'id, user_id, media_url, media_type, challenge_id, caption, expires_at, created_at, sequence_id, sequence_index, clip_start_ms, clip_duration_ms, thumbnail_url, post_id';
 
-export const STORIES_OPTIONAL_COLUMNS = [
-  'sequence_id',
-  'sequence_index',
-  'clip_start_ms',
-  'clip_duration_ms',
-  'thumbnail_url',
-  'post_id',
-] as const;
+export const STORIES_OPTIONAL_COLUMNS = [] as const;
 
 export type StoriesOptionalColumn = (typeof STORIES_OPTIONAL_COLUMNS)[number];
 

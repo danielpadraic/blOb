@@ -551,6 +551,9 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
     if (!post.author) {
       ids.add(post.author_id);
     }
+    if (post.wall_host_id && !post.wall_host) {
+      ids.add(post.wall_host_id);
+    }
     for (const comment of post.comments ?? []) {
       if (!comment.author) {
         ids.add(comment.author_id);
@@ -573,6 +576,8 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
   return posts.map((post) => ({
     ...post,
     author: post.author ?? byId.get(post.author_id),
+    wall_host: post.wall_host
+      ?? (post.wall_host_id ? byId.get(post.wall_host_id) ?? post.wall_host ?? null : post.wall_host),
     comments: (post.comments ?? []).map((comment) => ({
       ...comment,
       author: comment.author ?? byId.get(comment.author_id),
@@ -1554,6 +1559,7 @@ export function useCreatePost(challengeId?: string | null) {
           quoted_post_id: input.quotedPostId ?? null,
           quote_snapshot: input.quoteSnapshot ?? null,
           wall_host_id: input.wallHostId ?? null,
+          wall_host: input.wallHostId ? { id: input.wallHostId } : null,
           source: input.source ?? 'feed',
           type: input.type ?? 'feed',
           duration_ms: input.durationMs ?? null,

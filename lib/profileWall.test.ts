@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canPostOnProfile } from '@/lib/profileWall';
+import { canPostOnProfile, directedWallHost } from '@/lib/profileWall';
 
 describe('canPostOnProfile', () => {
   it('allows a friend to write on a public profile', () => {
@@ -67,5 +67,22 @@ describe('canPostOnProfile', () => {
         blocked: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe('directedWallHost', () => {
+  it('returns the wall owner when the author wrote on someone else', () => {
+    expect(
+      directedWallHost({
+        author_id: 'daniel',
+        wall_host_id: 'courtney',
+        wall_host: { id: 'courtney', display_name: 'Courtney', username: 'coco9228' },
+      }),
+    ).toEqual({ id: 'courtney', display_name: 'Courtney', username: 'coco9228' });
+  });
+
+  it('hides chrome when the post is not on another profile', () => {
+    expect(directedWallHost({ author_id: 'daniel', wall_host_id: null })).toBeNull();
+    expect(directedWallHost({ author_id: 'daniel', wall_host_id: 'daniel' })).toBeNull();
   });
 });

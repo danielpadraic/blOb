@@ -41,3 +41,26 @@ export function canPostOnProfile(input: {
 export function wallHostLabel(host: { display_name?: string | null; username?: string | null } | null | undefined) {
   return host?.display_name?.trim() || host?.username?.trim() || 'this blob';
 }
+
+export type DirectedWallHost = {
+  id: string;
+  username?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+};
+
+/** Someone else’s profile wall. Own-wall writes stay unscoped. */
+export function directedWallHost(post: {
+  author_id?: string | null;
+  wall_host_id?: string | null;
+  wall_host?: DirectedWallHost | null;
+}): DirectedWallHost | null {
+  const id = String(post.wall_host_id ?? post.wall_host?.id ?? '').trim();
+  if (!id || id === post.author_id) {
+    return null;
+  }
+  if (post.wall_host?.id === id) {
+    return post.wall_host;
+  }
+  return { id };
+}

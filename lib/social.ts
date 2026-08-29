@@ -958,6 +958,7 @@ export async function fetchActiveStories(): Promise<Story[]> {
         .limit(80),
     );
     if (result.error) {
+      console.log('[blob:stories]', result.error.message ?? result.error.code ?? 'stories select failed');
       return [];
     }
     const active = ((result.data ?? []) as Story[]).filter((story) => isActiveStory(story));
@@ -1052,10 +1053,7 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
   );
   const { data, error } = await supabase.from('stories').insert(rows).select(schema.select);
   if (error) {
-    const missing = missingStoriesColumn(error);
-    if (missing) {
-      dropCachedStoriesColumn(missing);
-    }
+    console.log('[blob:stories]', error.message ?? error.code ?? 'stories insert failed');
     const fallback = await supabase
       .from('stories')
       .insert({
