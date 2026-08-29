@@ -55,6 +55,7 @@ import {
   useToggleReaction,
 } from '@/hooks/useFeed';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
+import { useWalletOptional } from '@/hooks/useWallet';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { useChallengeBoardRealtime } from '@/hooks/useChallengeBoardRealtime';
 import { isChallengeRealtimeId } from '@/lib/challengeBoardRealtime';
@@ -115,7 +116,7 @@ import { heroRingDays } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { challengeGoalLabel, challengeDurationDays } from '@/lib/challengeGoal';
-import { bucksJoinCta } from '@/lib/joinCta';
+import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { tabBarLift, THEME } from '@/lib/theme';
@@ -201,6 +202,7 @@ export default function ChallengeDetailScreen() {
   useDismissTo(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useMyProfile();
+  const wallet = useWalletOptional();
   const challengeQuery = useChallenge(id || undefined);
   const previewQuery = useChallengeFeedPreview(id || undefined);
   const loadKind = challengeLoadKind(challengeQuery.error);
@@ -387,7 +389,7 @@ export default function ChallengeDetailScreen() {
     !isHost &&
     !needsBodyMetrics &&
     !joinBlocked;
-  const canJoin = canJoinBase && !joinCta.needsTopUp;
+  const canJoin = canJoinBase;
   const wasCancelled = challenge?.status === 'cancelled';
 
   useEffect(() => {
@@ -574,6 +576,11 @@ export default function ChallengeDetailScreen() {
     }
     if (needsBodyMetrics) {
       router.push(BODY_METRICS_HREF);
+      return;
+    }
+    if (needsTopUp) {
+      setActionError(INSUFFICIENT_JOIN_COPY);
+      wallet?.openWallet();
       return;
     }
     setActionError(null);
@@ -1250,7 +1257,7 @@ export default function ChallengeDetailScreen() {
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: tabClearance,
+          bottom: 0,
           zIndex: 20,
           paddingHorizontal: 16,
         }}>
@@ -1264,13 +1271,6 @@ export default function ChallengeDetailScreen() {
                 title="Add body metrics"
                 size="md"
                 onPress={() => router.push(BODY_METRICS_HREF)}
-              />
-            ) : needsTopUp ? (
-              <Button
-                title={joinCta.topUpLabel}
-                size="md"
-                loading={joinSheet.loading}
-                onPress={onJoinPress}
               />
             ) : (
               <JoinCtaButton

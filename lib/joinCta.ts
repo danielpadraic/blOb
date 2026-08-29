@@ -1,9 +1,15 @@
-import { isBucksChallenge } from '@/lib/currency';
+import { formatCashCompact, isBucksChallenge } from '@/lib/currency';
 import { participateLabel, topUpToParticipateLabel } from '@/lib/funding/copy';
 import { joinShortfall as fundingShortfall } from '@/lib/funding/model';
 
+export const INSUFFICIENT_JOIN_COPY = 'You need to add money to join.';
+
 export function joinShortfall(wallet: number, buyIn: number): number {
   return fundingShortfall(wallet, buyIn);
+}
+
+export function entryFeeCtaLabel(amount: number): string {
+  return `${formatCashCompact(amount)} Entry Fee`;
 }
 
 export function bucksJoinCta(input: {
@@ -18,7 +24,10 @@ export function bucksJoinCta(input: {
   return {
     needsTopUp: cashBuyIn && buyIn > 0 && input.hasProfile && shortfall > 0,
     shortfall,
-    joinLabel: participateLabel({ amount: buyIn, currency: input.currency }),
+    joinLabel:
+      cashBuyIn && buyIn > 0
+        ? entryFeeCtaLabel(buyIn)
+        : participateLabel({ amount: buyIn, currency: input.currency }),
     topUpLabel: topUpToParticipateLabel(shortfall > 0 ? shortfall : buyIn),
   };
 }

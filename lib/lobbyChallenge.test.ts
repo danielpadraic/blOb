@@ -17,6 +17,7 @@ import {
   lobbyFilterBadgeCount,
   lobbyFilterChips,
   lobbyTabForChallenge,
+  lobbyTabsForChallenge,
   sortEndingSoonest,
   sortLobbyRows,
   splitLobbyClockLine,
@@ -30,7 +31,31 @@ describe('lobby tabs', () => {
       lobbyTabForChallenge({ isOfficial: false, isParticipant: false, isCreator: true }),
     ).toBe('hosting');
     expect(
-      lobbyTabForChallenge({ isOfficial: true, isParticipant: true, isCreator: false }),
+      lobbyTabForChallenge({ isOfficial: true, isParticipant: false, isCreator: false }),
+    ).toBe('official');
+  });
+
+  it('lists Official plus Hosting/Active from created_by and membership, not sponsor', () => {
+    expect(
+      lobbyTabsForChallenge({
+        isOfficial: true,
+        isParticipant: false,
+        isCreator: true,
+      }),
+    ).toEqual(['official', 'hosting']);
+    expect(
+      lobbyTabsForChallenge({
+        isOfficial: true,
+        isParticipant: true,
+        isCreator: true,
+      }),
+    ).toEqual(['official', 'active']);
+    expect(
+      lobbyTabForChallenge({
+        isOfficial: true,
+        isParticipant: false,
+        isCreator: true,
+      }),
     ).toBe('official');
   });
 

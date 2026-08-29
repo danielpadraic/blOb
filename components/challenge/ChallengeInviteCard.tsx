@@ -28,7 +28,7 @@ import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
-import { namedOfficialSponsor } from '@/lib/challengeSponsor';
+import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { copy } from '@/lib/copy';
 import { isOfficialChallenge } from '@/lib/official';
@@ -39,7 +39,6 @@ import { getErrorMessage } from '@/utils/errors';
 import { compactCountdown } from '@/utils/format';
 
 const BOB_WAVE = require('@/assets/login/blob-login.png');
-const BLOB_MARK = require('@/assets/mascot/blob-logo.png');
 
 export type InviteChallenge = {
   id: string;
@@ -376,7 +375,6 @@ export function ChallengeInviteCard({
   }
 
   const hostLabel = host?.name?.trim() || 'Host';
-  const sponsorName = official ? namedOfficialSponsor(challenge) : '';
 
   function onShare() {
     if (!shareHost) {
@@ -449,29 +447,21 @@ export function ChallengeInviteCard({
             </AppText>
           ) : null}
           {official ? (
-            sponsorName ? (
-              <AppText
-                className="text-[11px] font-semibold"
-                style={{ color: THEME.textPrimary }}
-                numberOfLines={1}>
-                {sponsorName}
-              </AppText>
-            ) : (
-              <Image
-                source={BLOB_MARK}
-                style={{ width: 16, height: 16, backgroundColor: 'transparent' }}
-                contentFit="contain"
-                accessibilityLabel="blOb"
-              />
-            )
-          ) : (
+            <OfficialSponsorLine
+              challenge={challenge}
+              muted={THEME.textMuted}
+              titleColor={THEME.textPrimary}
+              compact
+            />
+          ) : null}
+          {host ? (
             <View className="flex-row items-center" style={{ gap: 6, minHeight: 18 }}>
-              {host?.avatarUrl ? <Avatar uri={host.avatarUrl} name={hostLabel} size={16} /> : null}
+              {host.avatarUrl ? <Avatar uri={host.avatarUrl} name={hostLabel} size={16} /> : null}
               <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
                 {hostLabel}
               </AppText>
             </View>
-          )}
+          ) : null}
           <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
         </View>
         <View

@@ -171,25 +171,36 @@ export function isEndedLobbyStatus(status: string | null | undefined): boolean {
   return (ENDED_LOBBY_STATUSES as readonly string[]).includes(status ?? '');
 }
 
+/** Tab lock: ended → host+player Active → host-only Hosting. Official is not exclusive. */
 export function lobbyTabForChallenge(input: {
   status?: string | null;
   isOfficial?: boolean | null;
   isParticipant: boolean;
   isCreator: boolean;
 }): LobbyTab {
+  return lobbyTabsForChallenge(input)[0] ?? 'active';
+}
+
+/** Official (is_official) plus Hosting/Active from created_by / membership. Never sponsor_name. */
+export function lobbyTabsForChallenge(input: {
+  status?: string | null;
+  isOfficial?: boolean | null;
+  isParticipant: boolean;
+  isCreator: boolean;
+}): LobbyTab[] {
   if (isEndedLobbyStatus(input.status)) {
-    return 'ended';
+    return ['ended'];
   }
+  const tabs: LobbyTab[] = [];
   if (input.isOfficial) {
-    return 'official';
+    tabs.push('official');
   }
   if (input.isParticipant) {
-    return 'active';
+    tabs.push('active');
+  } else if (input.isCreator) {
+    tabs.push('hosting');
   }
-  if (input.isCreator) {
-    return 'hosting';
-  }
-  return 'active';
+  return tabs.length > 0 ? tabs : ['active'];
 }
 
 export function sortEndingSoonest<T extends { ends_at?: string | null; is_unlimited?: boolean | null }>(
@@ -548,7 +559,10 @@ export async function saveLobbyUncheckedFilter(on: boolean): Promise<void> {
   await authStorage.setItem(LOBBY_UNCHECKED_KEY, on ? '1' : '0');
 }
 
-export function isOfficialLobbyRow(row: { is_official?: boolean | null }): boolean {
+export function isOfficialLobbyRow(row: {
+  is_official?: boolean | null;
+  created_by?: string | null;
+}): boolean {
   return isOfficialChallenge(row);
 }
 

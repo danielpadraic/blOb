@@ -2,7 +2,8 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
-import { formatCash, formatWalletNumber, isBucksChallenge } from '@/lib/currency';
+import { formatWalletNumber, isBucksChallenge } from '@/lib/currency';
+import { entryFeeCtaLabel } from '@/lib/joinCta';
 import { THEME } from '@/lib/theme';
 
 export const JOIN_CTA_HEIGHT = 48;
@@ -17,7 +18,7 @@ type JoinCtaButtonProps = {
   onPress: () => void;
 };
 
-/** Coins: verb + coin icon + amount. Cash: “Join $1.00”. Never the word “Coins.” */
+/** Coins: verb + coin icon + amount. Cash: “$1 Entry Fee”. Never the word “Coins.” */
 export function JoinCtaButton({
   currency,
   amount,
@@ -32,10 +33,11 @@ export function JoinCtaButton({
   const free = buyIn <= 0;
   const isDisabled = Boolean(disabled || loading);
   const height = size === 'lg' ? 56 : JOIN_CTA_HEIGHT;
+  const cashLabel = entryFeeCtaLabel(buyIn);
   const a11y = free
     ? `${verb} free`
     : cash
-      ? `${verb} ${formatCash(buyIn)}`
+      ? cashLabel
       : `${verb} ${formatWalletNumber(buyIn)}`;
 
   return (
@@ -67,7 +69,7 @@ export function JoinCtaButton({
         <AppText
           className="text-[16px] font-semibold"
           style={{ color: THEME.primaryForeground }}>
-          {`${verb} ${formatCash(buyIn)}`}
+          {cashLabel}
         </AppText>
       ) : (
         <View className="flex-row items-center" style={{ gap: 8 }}>

@@ -127,8 +127,10 @@ export default function ChallengesScreen() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const tone = asCopyTone(profile?.motivation_tone);
-  const hostingQuery = useHostingChallenges({ enabled: tab === 'hosting' });
-  const activeQuery = useCompetingChallenges({ enabled: tab === 'active' || !tabReady });
+  const hostingQuery = useHostingChallenges({
+    enabled: tab === 'hosting' || tab === 'official' || !tabReady,
+  });
+  const activeQuery = useCompetingChallenges({ enabled: tab === 'active' || tab === 'official' || !tabReady });
   const officialQuery = useOfficialDiscoverChallenges({ enabled: tab === 'official' || !tabReady });
   const endedQuery = useEndedChallenges({ enabled: tab === 'ended' });
   const friendsQuery = useFriendsDiscoverChallenges({ enabled: tab === 'active' });
@@ -200,19 +202,13 @@ export default function ChallengesScreen() {
   );
 
   const activeAll = useMemo(
-    () =>
-      (activeQuery.data ?? []).filter(
-        (row) => !isOfficialLobbyRow(row) && !isEndedLobbyStatus(row.status),
-      ),
+    () => (activeQuery.data ?? []).filter((row) => !isEndedLobbyStatus(row.status)),
     [activeQuery.data],
   );
   const activeIds = useMemo(() => new Set(activeAll.map((row) => row.id)), [activeAll]);
 
   const hostingAll = useMemo(
-    () =>
-      (hostingQuery.data ?? []).filter(
-        (row) => !isOfficialLobbyRow(row) && !isEndedLobbyStatus(row.status),
-      ),
+    () => (hostingQuery.data ?? []).filter((row) => !isEndedLobbyStatus(row.status)),
     [hostingQuery.data],
   );
   const hostingIds = useMemo(() => new Set(hostingAll.map((row) => row.id)), [hostingAll]);
@@ -267,7 +263,8 @@ export default function ChallengesScreen() {
     }
     const pending =
       (activeQuery.isPending && !activeQuery.data) ||
-      (officialQuery.isPending && !officialQuery.data);
+      (officialQuery.isPending && !officialQuery.data) ||
+      (hostingQuery.isPending && !hostingQuery.data);
     if (pending) {
       return;
     }
@@ -277,6 +274,8 @@ export default function ChallengesScreen() {
     activeAll.length,
     activeQuery.data,
     activeQuery.isPending,
+    hostingQuery.data,
+    hostingQuery.isPending,
     officialQuery.data,
     officialQuery.isPending,
     tabReady,
@@ -333,17 +332,18 @@ export default function ChallengesScreen() {
   const hostIds = useMemo(() => {
     const ids = new Set<string>();
     for (const row of [
+      ...officialAll,
       ...activeAll,
       ...hostingAll,
       ...endedAll,
       ...friendsAll.map((item) => item.challenge),
     ]) {
-      if (!row.is_official && row.created_by && row.created_by !== user?.id) {
+      if (row.created_by && row.created_by !== user?.id) {
         ids.add(row.created_by);
       }
     }
     return [...ids];
-  }, [activeAll, endedAll, friendsAll, hostingAll, user?.id]);
+  }, [activeAll, endedAll, friendsAll, hostingAll, officialAll, user?.id]);
   const hostProfiles = useQuery({
     queryKey: ['lobby-host-profiles', hostIds.join(',')],
     enabled: hostIds.length > 0,
@@ -375,7 +375,8 @@ export default function ChallengesScreen() {
 
   const loading = !tabReady
     ? (officialQuery.isPending && !officialQuery.data) ||
-      (activeQuery.isPending && !activeQuery.data)
+      (activeQuery.isPending && !activeQuery.data) ||
+      (hostingQuery.isPending && !hostingQuery.data)
     : tab === 'ended'
       ? endedQuery.isPending && !endedQuery.data
       : tab === 'hosting'
@@ -725,11 +726,9 @@ export default function ChallengesScreen() {
                   progress={progressById.get(challenge.id)}
                   checkedInToday={checkedToday.has(challenge.id)}
                   host={
-                    challenge.is_official
-                      ? null
-                      : challenge.created_by === user?.id
-                        ? selfHost
-                        : (challenge.created_by && hostById.get(challenge.created_by)) || null
+                    challenge.created_by === user?.id
+                      ? selfHost
+                      : (challenge.created_by && hostById.get(challenge.created_by)) || null
                   }
                   onPress={openChallenge}
                 />

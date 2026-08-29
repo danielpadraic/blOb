@@ -114,11 +114,12 @@ export function ChallengeHeroCard({
           muted={muted}
           titleColor={titleColor}
         />
-      ) : host ? (
+      ) : null}
+      {host ? (
         <ProfileLink username={host.username} userId={host.id}>
           <AppText className="text-[13px]" style={{ color: muted }}>
             Hosted by{' '}
-            <AppText className="font-semibold" style={{ color: THEME.textPrimary }}>
+            <AppText className="font-semibold" style={{ color: official ? titleColor : THEME.textPrimary }}>
               {hostName}
             </AppText>
           </AppText>
@@ -166,7 +167,7 @@ export function ChallengeHeroCard({
           <OfficialFillingStats
             challenge={challenge}
             nowMs={nowMs}
-            showStartLine={filling}
+            showStartLine={false}
             tone="hero"
           />
         </View>

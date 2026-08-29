@@ -45,6 +45,7 @@ import {
   isLiveOrUpcoming,
 } from '@/lib/challengeDiscoverability';
 import { isEndedLobbyStatus, isLobbyActiveParticipantStatus } from '@/lib/lobbyChallenge';
+import { isOfficialChallenge } from '@/lib/official';
 
 import {
   classifyChallengeLoadFailure,
@@ -850,6 +851,16 @@ async function attachSettledPots(rows: Challenge[]): Promise<Challenge[]> {
   });
 }
 
+const OFFICIAL_DISCOVER_STATUSES = [
+  'upcoming',
+  'open',
+  'starting',
+  'filling',
+  'arming',
+  'live',
+  'in_progress',
+] as const;
+
 export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<Challenge[]> {
   try {
     await supabase.rpc('tick_official_series');
@@ -858,34 +869,37 @@ export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<
   }
 
   const listed = await supabase.rpc('list_official_joinable');
+  let series: Challenge[] = [];
   if (!listed.error && listed.data) {
-    const rows = (await hydrateOfficialDisplay(asChallengeRows(listed.data as unknown as ChallengeRow[])))
+    series = (await hydrateOfficialDisplay(asChallengeRows(listed.data as unknown as ChallengeRow[])))
       .map(normalizeChallenge)
-      .filter((row) => row.is_official && row.series_id && (row.status === 'filling' || row.status === 'arming'));
-    return sortOfficialFirst(rows);
+      .filter((row) => isOfficialChallenge(row) && isLiveOrUpcoming(row.status));
+  } else {
+    console.log('[blob:lobby] official-joinable rpc skipped', listed.error?.message);
   }
-  console.log('[blob:lobby] official-joinable rpc skipped', listed.error?.message);
 
-  const fallback = await selectChallengeList(
+  const listedOfficial = await selectChallengeList(
     (query) =>
       query
         .eq('is_official', true as unknown as string)
-        .in('status', ['filling', 'arming'])
-        .not('series_id', 'is', null)
+        .in('status', [...OFFICIAL_DISCOVER_STATUSES])
         .order('created_at', { ascending: true })
         .limit(LOBBY_PAGE_SIZE),
     'official-discover',
-  );
+  ).catch((error) => {
+    console.log('[blob:lobby] official-discover skipped', error);
+    return [] as ChallengeRow[];
+  });
+
   const joined = new Set(userId ? await fetchJoinedChallengeIds(userId) : []);
-  const rows = fallback
-    .map(normalizeChallenge)
-    .filter((row) => {
-      if (!row.is_official || !row.series_id || joined.has(row.id)) {
-        return false;
-      }
-      return row.status === 'filling' || row.status === 'arming';
-    });
-  return sortOfficialFirst(rows);
+  const merged = new Map<string, Challenge>();
+  for (const row of [...series, ...listedOfficial.map(normalizeChallenge)]) {
+    if (!isOfficialChallenge(row) || !isLiveOrUpcoming(row.status) || joined.has(row.id)) {
+      continue;
+    }
+    merged.set(row.id, row);
+  }
+  return sortOfficialFirst([...merged.values()]);
 }
 
 export type FriendChallengeProof = {

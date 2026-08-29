@@ -12,9 +12,7 @@ import { copy } from '@/lib/copy';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
-  officialContestantsNeeded,
   officialGuaranteeAmount,
-  officialStartNeededLabel,
   showsGuaranteedPrize,
 } from '@/lib/officialSeries';
 import { THEME } from '@/lib/theme';
@@ -50,13 +48,10 @@ export function OfficialMoneyBoard({
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const joined = Math.max(Number(challenge.participant_count) || 0, 0);
-  const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
   const startLine =
-    needed > 0
-      ? officialStartNeededLabel(needed)
-      : challenge.status === 'arming'
-        ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
-        : null;
+    challenge.status === 'arming'
+      ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
+      : null;
 
   return (
     <View

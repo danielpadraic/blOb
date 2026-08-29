@@ -14,9 +14,6 @@ import {
   armingCountdownLabel,
   isOfficialJoinable,
   isOfficialSeriesChallenge,
-  officialContestantsNeeded,
-  officialGuaranteeAmount,
-  officialStartNeededLabel,
 } from '@/lib/officialSeries';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -192,17 +189,11 @@ export function OfficialFillingStats({
   showStartLine?: boolean;
   tone?: 'card' | 'hero';
 }) {
-  const guarantee = officialGuaranteeAmount(challenge);
-  const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
-  const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
-  const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
   const startLine = !showStartLine
     ? null
-    : needed > 0
-      ? officialStartNeededLabel(needed)
-      : challenge.status === 'arming'
-        ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
-        : null;
+    : challenge.status === 'arming'
+      ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
+      : null;
   const hero = tone === 'hero';
 
   return (
