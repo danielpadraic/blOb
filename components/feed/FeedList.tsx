@@ -384,7 +384,7 @@ export function FeedList({
               />
             ) : isLoading ? (
               <HomeFeedPlaceholders />
-            ) : (
+            ) : error ? null : (
               empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
             )
           ) : (

@@ -10,6 +10,7 @@ import {
   filterStoriesForRail,
   loadHiddenRailAuthors,
 } from '@/lib/clipRail';
+import { withSatelliteTimeout } from '@/lib/homeFeed';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { supabase } from '@/lib/supabase';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
@@ -781,7 +782,14 @@ export function useActiveStories() {
   return useQuery({
     queryKey: socialKeys.stories(),
     enabled: Boolean(user?.id),
-    queryFn: fetchActiveStories,
+    retry: false,
+    queryFn: async () => {
+      try {
+        return await withSatelliteTimeout(fetchActiveStories(), []);
+      } catch {
+        return [];
+      }
+    },
   });
 }
 

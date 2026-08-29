@@ -128,7 +128,7 @@ export default function ChallengesScreen() {
   const { profile } = useMyProfile();
   const tone = asCopyTone(profile?.motivation_tone);
   const hostingQuery = useHostingChallenges({
-    enabled: tab === 'hosting' || tab === 'official' || !tabReady,
+    enabled: tab === 'hosting' || tab === 'official',
   });
   const activeQuery = useCompetingChallenges({ enabled: tab === 'active' || tab === 'official' || !tabReady });
   const officialQuery = useOfficialDiscoverChallenges({ enabled: tab === 'official' || !tabReady });
@@ -263,8 +263,7 @@ export default function ChallengesScreen() {
     }
     const pending =
       (activeQuery.isPending && !activeQuery.data) ||
-      (officialQuery.isPending && !officialQuery.data) ||
-      (hostingQuery.isPending && !hostingQuery.data);
+      (officialQuery.isPending && !officialQuery.data);
     if (pending) {
       return;
     }
@@ -274,8 +273,6 @@ export default function ChallengesScreen() {
     activeAll.length,
     activeQuery.data,
     activeQuery.isPending,
-    hostingQuery.data,
-    hostingQuery.isPending,
     officialQuery.data,
     officialQuery.isPending,
     tabReady,
@@ -373,29 +370,30 @@ export default function ChallengesScreen() {
     return map;
   }, [friendProfiles.data, friendsAll, hostProfiles.data]);
 
+  const officialBusy = officialQuery.isPending && officialAll.length === 0;
+  const officialFailed = officialQuery.isError && officialAll.length === 0;
+  const officialErrored = tab === 'official' && officialQuery.isError;
   const loading = !tabReady
-    ? (officialQuery.isPending && !officialQuery.data) ||
-      (activeQuery.isPending && !activeQuery.data) ||
-      (hostingQuery.isPending && !hostingQuery.data)
+    ? officialBusy || (activeQuery.isPending && !activeQuery.data)
     : tab === 'ended'
       ? endedQuery.isPending && !endedQuery.data
       : tab === 'hosting'
         ? hostingQuery.isPending && !hostingQuery.data
         : tab === 'active'
           ? activeQuery.isPending && !activeQuery.data
-          : officialQuery.isPending && !officialQuery.data;
+          : officialBusy;
   const failed = !tabReady
     ? officialQuery.isError &&
       activeQuery.isError &&
-      !officialQuery.data &&
-      !activeQuery.data
+      officialAll.length === 0 &&
+      activeAll.length === 0
     : tab === 'ended'
       ? endedQuery.isError && !endedQuery.data
       : tab === 'hosting'
         ? hostingQuery.isError && !hostingQuery.data
         : tab === 'active'
           ? activeQuery.isError && !activeQuery.data
-          : officialQuery.isError && !officialQuery.data;
+          : officialFailed;
 
   const tabRows =
     tab === 'official' ? official : tab === 'active' ? active : tab === 'hosting' ? hosting : ended;
@@ -494,7 +492,9 @@ export default function ChallengesScreen() {
     persistStore({ ...store, [tab]: { ...prefs, filters: displayFilters } });
   }, [displayFilters, filters, prefs, rawForTab.length, store, tab, touchedTabs]);
   const tabEmpty =
+    !officialErrored &&
     tabRows.length === 0 &&
+    (tab !== 'official' || officialQuery.isSuccess) &&
     (tab !== 'active' || friends.length === 0) &&
     (tab !== 'hosting' || visibleDrafts.length === 0);
 
@@ -639,9 +639,9 @@ export default function ChallengesScreen() {
 
       <LobbyFilterChips chips={chips} onDismiss={(id) => onFiltersCommit(clearLobbyFilterChip(displayFilters, id))} />
 
-      {loading ? (
+      {loading && tab !== 'official' ? (
         <MascotState kind="loading" title={copy('lobby.loading', tone)} />
-      ) : failed ? (
+      ) : failed && tab !== 'official' ? (
         <MascotState
           kind="error"
           title={copy('lobby.unreachable')}
@@ -667,6 +667,22 @@ export default function ChallengesScreen() {
             />
           }
           showsVerticalScrollIndicator={false}>
+          {officialErrored ? (
+            <View className="mb-3 flex-row items-center" style={{ gap: 10, minHeight: 44 }}>
+              <AppText className="flex-1 text-[13px] text-muted" style={{ minWidth: 0 }}>
+                {copy('lobby.unreachable')}
+              </AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry"
+                onPress={() => void officialQuery.refetch()}
+                style={{ minHeight: 44, justifyContent: 'center' }}>
+                <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                  Retry
+                </AppText>
+              </Pressable>
+            </View>
+          ) : null}
           {tab === 'hosting' && user && visibleDrafts.length > 0 ? (
             <View className="mb-3 gap-2">
               {visibleDrafts.map((item) => (

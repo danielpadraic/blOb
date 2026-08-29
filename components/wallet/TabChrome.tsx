@@ -89,6 +89,10 @@ type TabChromeHeaderProps = {
   onLogoAction?: (id: LogoMenuAction) => void;
 };
 
+/** Header row is 44. Wordmark fills that height minus 4px pad; width stays proportional (asset is ~1:0.55). */
+const HEADER_WORDMARK_HEIGHT = 40;
+const HEADER_WORDMARK_WIDTH = Math.round(HEADER_WORDMARK_HEIGHT / 0.55);
+
 const LOGO_MENU: { id: LogoMenuAction; label: string }[] = [
   { id: 'create', label: 'Create a Challenge' },
   { id: 'createCircle', label: 'Create a Circle' },
@@ -106,7 +110,6 @@ export function TabChromeHeader({
   onToggleSearch,
   onToggleLogoMenu,
   onToggleMessages,
-  onHomePress,
   onLogoAction,
 }: TabChromeHeaderProps) {
   const router = useRouter();
@@ -209,12 +212,19 @@ export function TabChromeHeader({
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Home"
-            onPress={onHomePress}
+            accessibilityLabel={logoMenuOpen ? 'Close menu' : 'Open menu'}
+            accessibilityState={{ expanded: logoMenuOpen }}
+            onPress={onToggleLogoMenu}
             hitSlop={4}
             className="flex-row items-center"
-            style={{ minHeight: 44, paddingRight: 4 }}>
-            <BlobMascot variant="logo" size={36} />
+            style={{
+              height: 44,
+              maxHeight: 44,
+              paddingRight: 4,
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+            <BlobMascot variant="logo" size={HEADER_WORDMARK_WIDTH} />
           </Pressable>
 
           <View style={{ flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center' }}>

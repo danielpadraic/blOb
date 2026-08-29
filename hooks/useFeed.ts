@@ -53,6 +53,7 @@ import {
   homeFeedCursorFrom,
   takeHomeVisiblePage,
   uniquePostsById,
+  withSatelliteTimeout,
   type HomeFeedAllowContext,
   type HomeFeedCursor,
 } from '@/lib/homeFeed';
@@ -847,17 +848,21 @@ async function loadHomeFeedContext(userId: string, fresh = false): Promise<HomeF
       return [] as string[];
     }
   };
-  const [joinedIds, hostedIds, circleIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
+  const satelliteIds = (run: () => Promise<string[]>) =>
+    withSatelliteTimeout(emptyIds(run), [] as string[]);
+  const [joinedIds, friendIds] = await Promise.all([
+    emptyIds(() => fetchJoinedChallengeIds(userId)),
+    satelliteIds(() => friendIdsForUser(userId)),
+  ]);
+  const [hostedIds, circleIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
     await Promise.all([
-      emptyIds(() => fetchJoinedChallengeIds(userId)),
-      emptyIds(() => fetchHostedChallengeIds(userId)),
-      emptyIds(() => fetchJoinedCircleIds(userId)),
-      emptyIds(() => friendIdsForUser(userId)),
-      emptyIds(() => fetchOfficialAuthorIds()),
-      emptyIds(() => fetchRecommendedCreatorIds(userId)),
-      emptyIds(() => fetchHiddenPostIds(userId)),
-      emptyIds(() => fetchMutedUserIds(userId)),
-      emptyIds(() => fetchBlockedUserIds(userId)),
+      satelliteIds(() => fetchHostedChallengeIds(userId)),
+      satelliteIds(() => fetchJoinedCircleIds(userId)),
+      satelliteIds(() => fetchOfficialAuthorIds()),
+      satelliteIds(() => fetchRecommendedCreatorIds(userId)),
+      satelliteIds(() => fetchHiddenPostIds(userId)),
+      satelliteIds(() => fetchMutedUserIds(userId)),
+      satelliteIds(() => fetchBlockedUserIds(userId)),
     ]);
   const value = {
     challengeIds: [...new Set([...joinedIds, ...hostedIds])],
@@ -891,30 +896,40 @@ async function queryHomeSources(input: {
       lastHomeFeedWarning = message;
     }
   };
-  const [challengePosts, circlePosts, discoverCircles, people, wall] = await Promise.all([
-    queryPosts({ kind: 'ids', challengeIds: input.challengeIds }, page).catch((error) => {
-      note(error);
-      return none;
-    }),
-    queryPosts({ kind: 'circleIds', circleIds: input.circleIds }, page).catch((error) => {
-      note(error);
-      return none;
-    }),
-    input.hasCircleId
-      ? queryPosts({ kind: 'circleDiscover' }, page).catch((error) => {
-          note(error);
-          return none;
-        })
-      : Promise.resolve(none),
+  const skip = (error: unknown) => {
+    note(error);
+    return none;
+  };
+  let primaryError: unknown = null;
+  const [people, challengePosts] = await Promise.all([
     queryPosts({ kind: 'authors', authorIds: input.authorIds }, page).catch((error) => {
-      note(error);
-      return none;
+      primaryError = error;
+      return skip(error);
     }),
-    queryPosts({ kind: 'wallHosts', hostIds: input.wallHostIds }, page).catch((error) => {
-      note(error);
-      return none;
+    queryPosts({ kind: 'ids', challengeIds: input.challengeIds }, page).catch((error) => {
+      primaryError = error;
+      return skip(error);
     }),
   ]);
+  const [circlePosts, discoverCircles, wall] = await Promise.all([
+    withSatelliteTimeout(
+      queryPosts({ kind: 'circleIds', circleIds: input.circleIds }, page).catch(skip),
+      none,
+    ),
+    input.hasCircleId
+      ? withSatelliteTimeout(
+          queryPosts({ kind: 'circleDiscover' }, page).catch(skip),
+          none,
+        )
+      : Promise.resolve(none),
+    withSatelliteTimeout(
+      queryPosts({ kind: 'wallHosts', hostIds: input.wallHostIds }, page).catch(skip),
+      none,
+    ),
+  ]);
+  if (primaryError && people.length === 0 && challengePosts.length === 0) {
+    throw primaryError instanceof Error ? primaryError : new Error(rawFeedError(primaryError));
+  }
   return dedupePosts([people, challengePosts, circlePosts, discoverCircles, wall]);
 }
 
@@ -1181,7 +1196,7 @@ export function useFeed(challengeId?: string | null) {
         console.log('[blob:feed]', message);
         reportAppError({ route: 'feed/home', error, message });
         lastHomeFeedWarning = lastHomeFeedWarning ?? message;
-        return { posts: [] as PostWithMeta[], cursor: null, hasMore: false };
+        throw error;
       }
     },
     getNextPageParam: (last, all) => {

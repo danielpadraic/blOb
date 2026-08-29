@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { discardChallengeDraft } from '@/lib/challengeDraft';
 import { announceCreatedChallenge } from '@/lib/challengeFeedPost';
@@ -100,11 +100,6 @@ async function prepareLobby(_userId?: string) {
     } catch (error) {
       console.log('[blob:lobby] official series tick skipped', error);
     }
-    try {
-      await syncChallengeStatuses();
-    } catch (error) {
-      console.log('[blob:lobby] status sync skipped', error);
-    }
   })();
   return lobbyBootstrap;
 }
@@ -161,8 +156,11 @@ export function useOfficialDiscoverChallenges(options?: LobbyQueryOptions) {
   return useQuery({
     queryKey: ['lobby-official', user?.id],
     enabled: options?.enabled !== false,
+    staleTime: 30_000,
+    retry: false,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<ChallengeWithStats[]> => {
-      await prepareLobby(user?.id);
+      // Official list is challenges only. Never import or await stories.
       return withParticipantCounts(await fetchOfficialDiscoverChallenges(user?.id));
     },
   });
@@ -192,8 +190,8 @@ export function useFeedActiveChallenges() {
   return useQuery({
     queryKey: ['feed-active-challenges', user?.id],
     enabled: Boolean(user?.id),
+    retry: false,
     queryFn: async (): Promise<ChallengeWithStats[]> => {
-      await prepareLobby(user?.id);
       return withParticipantCounts(await fetchActiveChallenges(user!.id));
     },
   });

@@ -11,6 +11,7 @@ import {
   shouldShowHomeSplash,
   takeHomeVisiblePage,
   uniquePostsById,
+  withSatelliteTimeout,
   type HomeFeedAllowContext,
   type HomeFeedPost,
 } from '@/lib/homeFeed';
@@ -49,7 +50,7 @@ describe('home feed splash', () => {
     expect(
       shouldShowHomeSplash({ postCount: 0, isLoading: true, waitedMs: HOME_FEED_SPLASH_MS }),
     ).toBe(true);
-    expect(shouldShowHomeSplash({ postCount: 0, failed: true, waitedMs: 0 })).toBe(true);
+    expect(shouldShowHomeSplash({ postCount: 0, failed: true, waitedMs: 0 })).toBe(false);
     expect(shouldShowHomeSplash({ postCount: 3, isLoading: true, failed: true, waitedMs: 4000 })).toBe(
       false,
     );
@@ -94,5 +95,12 @@ describe('home feed pages', () => {
     expect(
       filterHomeFeedPosts(raw.slice(0, 4), ctx({ friends, blocked: new Set(['blocked-user']) })),
     ).toEqual([]);
+  });
+});
+
+describe('satellite timeout', () => {
+  it('returns the fallback when the satellite hangs', async () => {
+    const hung = new Promise<string[]>(() => undefined);
+    await expect(withSatelliteTimeout(hung, [], 20)).resolves.toEqual([]);
   });
 });

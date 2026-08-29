@@ -3,12 +3,48 @@ import { asCircleVisibility, viewerCanSeeHomeCirclePost } from '@/lib/circles';
 import { asPostAudience, viewerCanSeeHomePost } from '@/lib/postAudience';
 
 export const HOME_FEED_SPLASH_MS = 3000;
+export const HOME_SATELLITE_MS = 2500;
 export const HOME_PAGE_SIZE = 10;
 export const HOME_PAGE_MIN = 8;
 export const HOME_PAGE_MAX = 12;
 /** Raw rows per source. Not 50 — first paint is one screen after filters. */
 export const HOME_RAW_WINDOW = 16;
 export const HOME_FIRST_PAINT_WINDOWS = 2;
+
+export function withSatelliteTimeout<T>(
+  run: Promise<T>,
+  fallback: T,
+  ms = HOME_SATELLITE_MS,
+): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(fallback);
+    }, ms);
+    run.then(
+      (value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}
 
 export type HomeFeedCursor = {
   createdAt: string;
@@ -53,8 +89,9 @@ export function shouldShowHomeSplash(input: {
   if (input.postCount > 0) {
     return false;
   }
+  // Failed fetch uses the compact banner. Bob only on a slow empty first load.
   if (input.failed) {
-    return true;
+    return false;
   }
   return Boolean(input.isLoading) && (input.waitedMs ?? 0) >= HOME_FEED_SPLASH_MS;
 }

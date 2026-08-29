@@ -859,23 +859,25 @@ const OFFICIAL_DISCOVER_STATUSES = [
   'arming',
   'live',
   'in_progress',
+  'judging',
 ] as const;
 
-export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<Challenge[]> {
-  try {
-    await supabase.rpc('tick_official_series');
-  } catch (error) {
-    console.log('[blob:lobby] official tick skipped', error);
-  }
+export async function fetchOfficialDiscoverChallenges(_userId?: string): Promise<Challenge[]> {
+  void supabase.rpc('tick_official_series').then(
+    () => undefined,
+    (error: unknown) => {
+      console.log('[blob:lobby] official tick skipped', error);
+    },
+  );
 
   const listed = await supabase.rpc('list_official_joinable');
   let series: Challenge[] = [];
   if (!listed.error && listed.data) {
     series = (await hydrateOfficialDisplay(asChallengeRows(listed.data as unknown as ChallengeRow[])))
       .map(normalizeChallenge)
-      .filter((row) => isOfficialChallenge(row) && isLiveOrUpcoming(row.status));
-  } else {
-    console.log('[blob:lobby] official-joinable rpc skipped', listed.error?.message);
+      .filter((row) => isOfficialChallenge(row) && !isEndedLobbyStatus(row.status));
+  } else if (listed.error) {
+    console.log('[blob:lobby] official-joinable rpc skipped', listed.error.message);
   }
 
   const listedOfficial = await selectChallengeList(
@@ -886,15 +888,11 @@ export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<
         .order('created_at', { ascending: true })
         .limit(LOBBY_PAGE_SIZE),
     'official-discover',
-  ).catch((error) => {
-    console.log('[blob:lobby] official-discover skipped', error);
-    return [] as ChallengeRow[];
-  });
+  );
 
-  const joined = new Set(userId ? await fetchJoinedChallengeIds(userId) : []);
   const merged = new Map<string, Challenge>();
   for (const row of [...series, ...listedOfficial.map(normalizeChallenge)]) {
-    if (!isOfficialChallenge(row) || !isLiveOrUpcoming(row.status) || joined.has(row.id)) {
+    if (!isOfficialChallenge(row) || isEndedLobbyStatus(row.status)) {
       continue;
     }
     merged.set(row.id, row);
