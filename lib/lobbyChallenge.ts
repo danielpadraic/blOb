@@ -3,9 +3,15 @@ import { format, isSameDay } from 'date-fns';
 import { usesComparablePointsScoring } from '@/lib/challengeExperience';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { checkinPeriodKeyCandidates, normalizePeriodKey, type CheckinPeriodChallenge } from '@/lib/checkinPeriod';
-import { ENDED_LOBBY_STATUSES } from '@/lib/constants';
+import {
+  CHALLENGE_CATEGORIES,
+  challengeCategoryLabel,
+  ENDED_LOBBY_STATUSES,
+  normalizeChallengeCategory,
+} from '@/lib/constants';
 import { displayChallengePot } from '@/lib/challengePot';
 import { challengeCurrency } from '@/lib/currency';
+import type { ChallengeCategory } from '@/lib/types';
 import { isOfficialChallenge } from '@/lib/official';
 import {
   armingCountdownLabel,
@@ -17,16 +23,17 @@ import { authStorage } from '@/lib/utils/secureStore';
 
 export const LOBBY_LAYOUT_KEY = 'blob.lobby-layout';
 export const LOBBY_UNCHECKED_KEY = 'blob.lobby-unchecked-today';
-export const LOBBY_FILTERS_KEY = 'blob.lobby.filters.v1';
+export const LOBBY_FILTERS_KEY = 'blob.lobby.filters.v2';
 
 export const LOBBY_TAB_VALUES = ['official', 'active', 'hosting', 'ended'] as const;
 export type LobbyTab = (typeof LOBBY_TAB_VALUES)[number];
 export type LobbyLayout = 'card' | 'list';
 
-export type LobbyWhen = 'day' | 'week' | '30d' | 'year' | 'all' | 'custom';
+export type LobbyWhen = 'upcoming' | 'day' | 'week' | '30d' | 'year' | 'all' | 'custom';
 export type LobbyStart = 'started' | 'tomorrow' | 'next7' | 'next30' | 'custom';
 export type LobbyDuration = '1-7' | '8-30' | '31+' | 'custom';
 export type LobbyTypeFilter = 'consistency' | 'points' | 'official_weekly';
+export type LobbyCategoryFilter = ChallengeCategory;
 export type LobbyCurrencyFilter = 'coins' | 'bucks' | 'free';
 export type LobbyCostFilter = 'free' | 'host_funded' | 'buy_in';
 export type LobbyMoreFilter = 'friends' | 'spots_left';
@@ -49,6 +56,7 @@ export type LobbyFilterState = {
   durationMin: number | null;
   durationMax: number | null;
   types: LobbyTypeFilter[];
+  categories: LobbyCategoryFilter[];
   currencies: LobbyCurrencyFilter[];
   costs: LobbyCostFilter[];
   costMin: number | null;
@@ -97,6 +105,7 @@ export type LobbyFilterable = {
   participant_count?: number | null;
   is_unlimited?: boolean | null;
   title?: string | null;
+  category?: string | null;
 };
 
 export type LobbyFilterContext = {
@@ -119,6 +128,12 @@ export type ChallengeScheduleState = {
   chip: string | null;
   gate: string | null;
   countdown: string | null;
+  urgent: boolean;
+};
+
+export type LobbyCardClock = {
+  line: string;
+  lines: string[];
   urgent: boolean;
 };
 
@@ -439,6 +454,60 @@ export function challengeScheduleState(
   };
 }
 
+export function splitLobbyClockLine(line: string): string[] {
+  const match = /^(Starts|Ends|Ended)\s+(.+)$/.exec(line.trim());
+  if (!match) {
+    return [line];
+  }
+  const rest = match[2];
+  const comma = rest.lastIndexOf(',');
+  if (comma < 0) {
+    return [line];
+  }
+  const second = rest.slice(comma + 1).trim();
+  if (!second) {
+    return [line];
+  }
+  return [`${match[1]} ${rest.slice(0, comma + 1)}`.trim(), second];
+}
+
+function withClockLines(line: string, urgent: boolean): LobbyCardClock {
+  return { line, lines: splitLobbyClockLine(line), urgent };
+}
+
+export function lobbyCardClock(
+  challenge: ScheduleChallenge,
+  nowMs = Date.now(),
+  forceEnded = false,
+): LobbyCardClock | null {
+  if (forceEnded) {
+    return endedCardClock(challenge, nowMs);
+  }
+  const state = challengeScheduleState(challenge, nowMs);
+  if (state.phase === 'prestart') {
+    return withClockLines(state.datetime ?? 'Starts soon', false);
+  }
+  if (state.phase === 'live') {
+    if (state.countdown && state.countdown !== 'Ended') {
+      return withClockLines(`Ends in ${state.countdown}`, state.urgent);
+    }
+    const end = parseInstant(challenge.ends_at);
+    if (end && end.getTime() <= nowMs) {
+      return endedCardClock(challenge, nowMs);
+    }
+    if (state.datetime) {
+      return withClockLines(state.datetime, false);
+    }
+    return null;
+  }
+  return endedCardClock(challenge, nowMs);
+}
+
+function endedCardClock(challenge: ScheduleChallenge, nowMs: number): LobbyCardClock {
+  const at = parseInstant(challenge.ends_at) ?? parseInstant(challenge.distributed_at);
+  return withClockLines(at ? `Ended ${formatShortLocal(at, nowMs)}` : 'Ended', false);
+}
+
 export function scheduleNeedsTick(challenge: ScheduleChallenge, nowMs = Date.now()): boolean {
   const state = challengeScheduleState(challenge, nowMs);
   if (state.phase === 'prestart') {
@@ -483,9 +552,9 @@ export function isOfficialLobbyRow(row: { is_official?: boolean | null }): boole
   return isOfficialChallenge(row);
 }
 
-export function defaultFiltersForTab(tab: LobbyTab): LobbyFilterState {
+export function defaultFiltersForTab(_tab: LobbyTab): LobbyFilterState {
   return {
-    when: tab === 'ended' ? '30d' : 'all',
+    when: 'all',
     customFrom: null,
     customTo: null,
     start: null,
@@ -495,6 +564,7 @@ export function defaultFiltersForTab(tab: LobbyTab): LobbyFilterState {
     durationMin: null,
     durationMax: null,
     types: [],
+    categories: [],
     currencies: [],
     costs: [],
     costMin: null,
@@ -594,6 +664,7 @@ function sanitizeFilters(tab: LobbyTab, raw: unknown): LobbyFilterState {
   }
   const row = raw as Partial<LobbyFilterState>;
   const when: LobbyWhen =
+    row.when === 'upcoming' ||
     row.when === 'day' ||
     row.when === 'week' ||
     row.when === '30d' ||
@@ -626,6 +697,9 @@ function sanitizeFilters(tab: LobbyTab, raw: unknown): LobbyFilterState {
     types: asStringArray(row.types).filter(
       (item): item is LobbyTypeFilter =>
         item === 'consistency' || item === 'points' || item === 'official_weekly',
+    ),
+    categories: asStringArray(row.categories).filter((item): item is LobbyCategoryFilter =>
+      (CHALLENGE_CATEGORIES as readonly string[]).includes(item),
     ),
     currencies: asStringArray(row.currencies).filter(
       (item): item is LobbyCurrencyFilter =>
@@ -897,7 +971,19 @@ function matchesMore(row: LobbyFilterable, more: LobbyMoreFilter[], ctx: LobbyFi
   });
 }
 
+function matchesCategory(row: LobbyFilterable, categories: LobbyCategoryFilter[]): boolean {
+  if (categories.length === 0) {
+    return true;
+  }
+  const key = normalizeChallengeCategory(row.category, 'other');
+  return categories.includes(key);
+}
+
 function matchesWhen(row: LobbyFilterable, tab: LobbyTab, filters: LobbyFilterState, nowMs: number): boolean {
+  if (filters.when === 'upcoming') {
+    const start = startInstant(row);
+    return start != null && start > nowMs;
+  }
   const window = whenWindow(filters, nowMs);
   if (!window) {
     return true;
@@ -949,11 +1035,28 @@ export function applyLobbyFilters<T extends LobbyFilterable>(
       matchesStart(row, tab, filters, ctx.nowMs) &&
       matchesDuration(row, filters) &&
       matchesType(row, filters.types) &&
+      matchesCategory(row, filters.categories) &&
       matchesCurrency(row, filters.currencies) &&
       matchesCost(row, filters) &&
       matchesStatus(row, tab, filters, ctx) &&
       matchesMore(row, filters.more, ctx),
   );
+}
+
+/** Drop saved filters that hide every row so Official/Active never open empty. */
+export function effectiveLobbyFilters<T extends LobbyFilterable>(
+  tab: LobbyTab,
+  filters: LobbyFilterState,
+  rows: T[],
+  ctx: LobbyFilterContext,
+): LobbyFilterState {
+  if (rows.length === 0 || isDefaultLobbyFilters(tab, filters)) {
+    return filters;
+  }
+  if (applyLobbyFilters(rows, tab, filters, ctx).length > 0) {
+    return filters;
+  }
+  return defaultFiltersForTab(tab);
 }
 
 function prizeAmount(row: LobbyFilterable): number {
@@ -990,6 +1093,7 @@ export function lobbyFilterChips(tab: LobbyTab, filters: LobbyFilterState): Lobb
   const chips: LobbyFilterChip[] = [];
   if (filters.when !== defaults.when) {
     const whenLabel: Record<LobbyWhen, string> = {
+      upcoming: 'Upcoming',
       day: 'Past day',
       week: 'Past week',
       '30d': 'Past 30 days',
@@ -1024,6 +1128,12 @@ export function lobbyFilterChips(tab: LobbyTab, filters: LobbyFilterState): Lobb
     chips.push({
       id: `type:${type}`,
       label: type === 'official_weekly' ? 'Official weekly' : type === 'points' ? 'Points' : 'Consistency',
+    });
+  }
+  for (const category of filters.categories) {
+    chips.push({
+      id: `category:${category}`,
+      label: challengeCategoryLabel(category),
     });
   }
   for (const currency of filters.currencies) {
@@ -1101,6 +1211,10 @@ export function clearLobbyFilterChip(
     next.types = next.types.filter((item) => item !== value);
     return next;
   }
+  if (group === 'category') {
+    next.categories = next.categories.filter((item) => item !== value);
+    return next;
+  }
   if (group === 'currency') {
     next.currencies = next.currencies.filter((item) => item !== value);
     return next;
@@ -1136,7 +1250,7 @@ export function lobbyResultLine(input: {
     return 'You didn’t place';
   }
   if (result === 'forfeited') {
-    return 'Prize forfeited';
+    return 'Nobody finished';
   }
   if (result === 'dropped') {
     return 'You dropped';

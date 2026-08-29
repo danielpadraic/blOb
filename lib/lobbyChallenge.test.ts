@@ -7,15 +7,19 @@ import {
   challengeScheduleState,
   defaultFiltersForTab,
   defaultSortForTab,
+  effectiveLobbyFilters,
   fillGateLabel,
   fillGatePair,
   formatEndCountdown,
   formatStartsLine,
   isLobbyActiveParticipantStatus,
+  lobbyCardClock,
+  lobbyFilterBadgeCount,
   lobbyFilterChips,
   lobbyTabForChallenge,
   sortEndingSoonest,
   sortLobbyRows,
+  splitLobbyClockLine,
 } from '@/lib/lobbyChallenge';
 describe('lobby tabs', () => {
   it('puts host+player on Active and host-only on Hosting', () => {
@@ -157,6 +161,41 @@ describe('challenge schedule copy', () => {
     expect(state.gate).toBeNull();
   });
 
+  it('prints lobby card time as Starts, Ends in, or Ended datetime', () => {
+    const now = new Date(2026, 7, 29, 12, 0, 0).getTime();
+    expect(
+      lobbyCardClock(
+        { status: 'upcoming', starts_at: new Date(2026, 7, 24, 8, 0, 0).toISOString() },
+        now,
+      )?.lines,
+    ).toEqual(['Starts Aug 24,', '8:00 AM']);
+    expect(splitLobbyClockLine('Starts Aug 24, 8:00 AM')).toEqual(['Starts Aug 24,', '8:00 AM']);
+    expect(
+      lobbyCardClock(
+        { status: 'upcoming', starts_at: new Date(2026, 7, 31, 23, 0, 0).toISOString() },
+        now,
+      )?.line,
+    ).toBe('Starts Aug 31, 11:00 PM');
+    expect(
+      lobbyCardClock(
+        { status: 'live', ends_at: new Date(2026, 7, 29, 12, 40, 0).toISOString() },
+        now,
+      ),
+    ).toEqual({ line: 'Ends in 40:00', lines: ['Ends in 40:00'], urgent: true });
+    expect(
+      lobbyCardClock(
+        { status: 'live', ends_at: new Date(2026, 7, 31, 23, 0, 0).toISOString() },
+        now,
+      )?.line,
+    ).toBe('Ends Aug 31, 11:00 PM');
+    expect(
+      lobbyCardClock(
+        { status: 'settled', ends_at: new Date(2026, 7, 28, 15, 0, 0).toISOString() },
+        now,
+      )?.line,
+    ).toBe('Ended Aug 28, 3:00 PM');
+  });
+
   it('uses live arming mm:ss instead of a static 1 hour chip', () => {
     const now = Date.parse('2026-08-29T12:00:00.000Z');
     expect(
@@ -171,8 +210,9 @@ describe('challenge schedule copy', () => {
 describe('lobby filters', () => {
   const now = Date.parse('2026-08-29T12:00:00.000Z');
 
-  it('defaults Ended to the past 30 days and live tabs to ending soonest', () => {
-    expect(defaultFiltersForTab('ended').when).toBe('30d');
+  it('defaults every tab to empty When and live tabs to ending soonest', () => {
+    expect(defaultFiltersForTab('ended').when).toBe('all');
+    expect(defaultFiltersForTab('official').when).toBe('all');
     expect(defaultSortForTab('ended')).toBe('ended_recently');
     expect(defaultSortForTab('active')).toBe('ending_soonest');
     expect(defaultFiltersForTab('active').when).toBe('all');
@@ -238,6 +278,83 @@ describe('lobby filters', () => {
     expect(sortLobbyRows(filtered, 'title').map((row) => row.id)).toEqual(['a', 'b']);
     expect(sortLobbyRows(filtered, 'prize_desc').map((row) => row.id)).toEqual(['a', 'b']);
     expect(lobbyFilterChips('ended', filters).map((chip) => chip.id)).toEqual(chipsBefore);
+  });
+
+  it('hides live rows when When is Upcoming and keeps Score separate from Challenge type', () => {
+    const filters = {
+      ...defaultFiltersForTab('active'),
+      when: 'upcoming' as const,
+      types: ['consistency' as const],
+      categories: ['fitness' as const],
+    };
+    const rows = [
+      {
+        id: 'live',
+        title: 'Workout Group #2',
+        status: 'live',
+        starts_at: '2026-08-20T12:00:00.000Z',
+        ends_at: '2026-08-31T23:00:00.000Z',
+        challenge_type: 'consistency',
+        category: 'fitness',
+      },
+      {
+        id: 'soon',
+        title: 'Later',
+        status: 'upcoming',
+        starts_at: '2026-09-01T12:00:00.000Z',
+        challenge_type: 'consistency',
+        category: 'fitness',
+      },
+      {
+        id: 'points',
+        title: 'Points later',
+        status: 'upcoming',
+        starts_at: '2026-09-01T12:00:00.000Z',
+        challenge_type: 'points',
+        category: 'fitness',
+      },
+      {
+        id: 'reading',
+        title: 'Read later',
+        status: 'upcoming',
+        starts_at: '2026-09-01T12:00:00.000Z',
+        challenge_type: 'consistency',
+        category: 'reading',
+      },
+    ];
+    expect(applyLobbyFilters(rows, 'active', filters, { nowMs: now }).map((row) => row.id)).toEqual([
+      'soon',
+    ]);
+    expect(lobbyFilterChips('active', filters).map((chip) => chip.id)).toEqual([
+      'when',
+      'type:consistency',
+      'category:fitness',
+    ]);
+  });
+
+  it('keeps Currency Free and Cost Free as separate chips', () => {
+    const filters = {
+      ...defaultFiltersForTab('active'),
+      currencies: ['free' as const],
+      costs: ['free' as const],
+    };
+    expect(lobbyFilterChips('active', filters)).toEqual([
+      { id: 'currency:free', label: 'Free' },
+      { id: 'cost:free', label: 'Free' },
+    ]);
+  });
+
+  it('opens Official with a zero badge and drops saved filters that hide every row', () => {
+    expect(lobbyFilterBadgeCount('official', defaultFiltersForTab('official'))).toBe(0);
+    const rows = [
+      { id: 'rookies', title: 'Rookies vs. Rockstars', is_official: true, status: 'upcoming' },
+      { id: 'weekly', title: 'Weekly $10', is_official: true, status: 'filling' },
+    ];
+    const saved = { ...defaultFiltersForTab('official'), statuses: ['live'] };
+    expect(applyLobbyFilters(rows, 'official', saved, { nowMs: now })).toEqual([]);
+    expect(effectiveLobbyFilters('official', saved, rows, { nowMs: now })).toEqual(
+      defaultFiltersForTab('official'),
+    );
   });
 });
 

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, Platform, RefreshControl, ScrollView, View, type ViewToken } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, View, type ViewToken } from 'react-native';
 
 import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
@@ -9,6 +9,7 @@ import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
+import { shouldShowHomeSplash } from '@/lib/homeFeed';
 import { FEED_COLUMN_MAX, TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
@@ -38,6 +39,8 @@ type FeedListProps = {
   draftKey?: string;
   homeChrome?: boolean;
   midFeedRail?: ReactNode;
+  isFetchingNextPage?: boolean;
+  onEndReached?: () => void;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose?: (input: ComposeInput) => Promise<unknown> | void;
@@ -125,6 +128,8 @@ export function FeedList({
   draftKey,
   homeChrome,
   midFeedRail,
+  isFetchingNextPage,
+  onEndReached,
   onRefresh,
   onRetry,
   onCompose,
@@ -143,6 +148,27 @@ export function FeedList({
   const visiblePosts = useMemo(() => posts.filter((post) => !post.deleted_at), [posts]);
   const challengeFeed = composeSource === 'challenge' || composeSource === 'circle';
   const scrolledTo = useRef<string | null>(null);
+  const [waitedMs, setWaitedMs] = useState(0);
+
+  useEffect(() => {
+    if (!homeChrome || visiblePosts.length > 0 || !isLoading) {
+      setWaitedMs(0);
+      return;
+    }
+    const started = Date.now();
+    const timer = setInterval(() => setWaitedMs(Date.now() - started), 250);
+    return () => clearInterval(timer);
+  }, [homeChrome, isLoading, visiblePosts.length]);
+
+  const showHomeSplash = Boolean(
+    homeChrome &&
+      shouldShowHomeSplash({
+        postCount: visiblePosts.length,
+        isLoading,
+        failed: Boolean(error),
+        waitedMs,
+      }),
+  );
 
   useEffect(() => {
     if (!highlightPostId || scrolledTo.current === highlightPostId) {
@@ -262,7 +288,7 @@ export function FeedList({
       ? { width: '100%' as const, maxWidth: FEED_COLUMN_MAX, alignSelf: 'center' as const }
       : null;
 
-  if (isLoading) {
+  if (isLoading && !homeChrome) {
     return (
       <View className="gap-3" style={[embedded ? undefined : { flex: 1 }, webColumn]}>
         {stickyAbove}
@@ -325,6 +351,20 @@ export function FeedList({
         data={visiblePosts}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        onEndReached={() => {
+          if (!onEndReached || isFetchingNextPage) {
+            return;
+          }
+          onEndReached();
+        }}
+        onEndReachedThreshold={homeChrome ? 0.5 : 0.2}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View className="items-center py-3">
+              <ActivityIndicator color={THEME.accent} />
+            </View>
+          ) : null
+        }
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         onScrollToIndexFailed={(info) => {
@@ -334,7 +374,22 @@ export function FeedList({
         }}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={() =>
-          empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
+          homeChrome ? (
+            showHomeSplash ? (
+              <MascotState
+                kind={error ? 'error' : 'loading'}
+                title={copy('home.loadingSlow')}
+                actionLabel="Retry"
+                onAction={onRetry}
+              />
+            ) : isLoading ? (
+              <HomeFeedPlaceholders />
+            ) : (
+              empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
+            )
+          ) : (
+            empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
+          )
         }
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -362,6 +417,25 @@ export function FeedList({
         }
         />
       </VisiblePostsProvider>
+    </View>
+  );
+}
+
+function HomeFeedPlaceholders() {
+  return (
+    <View className="mt-2" style={{ gap: 10 }}>
+      {[0, 1, 2].map((key) => (
+        <View
+          key={key}
+          style={{
+            height: 132,
+            borderRadius: THEME.radius,
+            backgroundColor: THEME.surface,
+            borderWidth: 1,
+            borderColor: THEME.border,
+          }}
+        />
+      ))}
     </View>
   );
 }

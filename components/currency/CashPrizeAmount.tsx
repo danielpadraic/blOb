@@ -1,6 +1,6 @@
 import { AppText } from '@/components/ui/AppText';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
-import { cashPrizeLabel, isBucksChallenge } from '@/lib/currency';
+import { formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 
 export function CashPrizeAmount({
   amount,
@@ -18,7 +18,7 @@ export function CashPrizeAmount({
   if (isBucksChallenge({ currency })) {
     return (
       <AppText className={textClassName} style={color ? { color } : undefined}>
-        {cashPrizeLabel(amount)}
+        {formatCashPrizeAmount(amount)}
       </AppText>
     );
   }

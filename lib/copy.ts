@@ -1,4 +1,4 @@
-export const COPY_TONES = ['gentle', 'neutral', 'honest'] as const;
+export const COPY_TONES = ['gentle', 'honest'] as const;
 
 export type CopyTone = (typeof COPY_TONES)[number];
 
@@ -104,6 +104,7 @@ const STRINGS = {
     neutral: 'Checking who showed up.',
     honest: 'If this takes a while, it is not because you stretched.',
   },
+  'home.loadingSlow': "It's not because you stretched.",
   'home.error': {
     gentle: 'Home didn’t load. Try again when you’re ready.',
     neutral: 'Home didn’t load.',
@@ -504,7 +505,7 @@ const STRINGS = {
   'wave.new': 'New Wave',
   'wave.noun': 'Wave',
   'wave.hint': 'Nobody has waved yet.',
-  'wave.shutter': 'Tap to wave · 30s',
+  'wave.shutter': 'Tap to wave',
   'wave.shutterStop': 'Tap to stop',
   'wave.cameraNeed': 'blOb needs the camera for Waves.',
   'wave.gone': 'This clip isn’t available.',
@@ -522,7 +523,7 @@ const STRINGS = {
   'round.empty': 'No Rounds yet. Post one from New Round.',
   'round.gone': 'This clip isn’t available.',
   'round.goneBody': 'It may have been deleted.',
-  'round.shutter': 'Tap to record · 3:00',
+  'round.shutter': 'Tap to record',
   'round.shutterStop': 'Tap to stop',
   'round.new': 'New Round',
   'round.share': 'Share Round',
@@ -637,7 +638,9 @@ const STRINGS = {
 
 export type CopyKey = keyof typeof STRINGS;
 
-type CopyNode = string | { readonly [K in CopyTone]: string };
+type CopyNode =
+  | string
+  | { readonly gentle: string; readonly honest: string; readonly neutral?: string };
 
 export function interpolateCopy(template: string, vars?: Record<string, string | number>): string {
   if (!vars) {

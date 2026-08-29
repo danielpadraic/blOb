@@ -8,6 +8,7 @@ import {
   defaultFiltersForTab,
   isDefaultLobbyFilters,
   statusOptionsForTab,
+  type LobbyCategoryFilter,
   type LobbyCostFilter,
   type LobbyCurrencyFilter,
   type LobbyDuration,
@@ -18,6 +19,7 @@ import {
   type LobbyTypeFilter,
   type LobbyWhen,
 } from '@/lib/lobbyChallenge';
+import { CHALLENGE_CATEGORIES, CHALLENGE_CATEGORY_LABEL } from '@/lib/constants';
 import { THEME } from '@/lib/theme';
 
 type LobbyFilterSheetProps = {
@@ -26,6 +28,7 @@ type LobbyFilterSheetProps = {
   filters: LobbyFilterState;
   onChange: (next: LobbyFilterState) => void;
   onClose: () => void;
+  onDone?: () => void;
 };
 
 function toggle<T extends string>(list: T[], value: T): T[] {
@@ -134,6 +137,7 @@ export function LobbyFilterSheet({
   filters,
   onChange,
   onClose,
+  onDone,
 }: LobbyFilterSheetProps) {
   function setWhen(when: LobbyWhen) {
     onChange({
@@ -177,6 +181,11 @@ export function LobbyFilterSheet({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <Section title="When">
+            <Chip
+              label="Upcoming"
+              selected={filters.when === 'upcoming'}
+              onPress={() => setWhen('upcoming')}
+            />
             <Chip label="Past day" selected={filters.when === 'day'} onPress={() => setWhen('day')} />
             <Chip label="Past week" selected={filters.when === 'week'} onPress={() => setWhen('week')} />
             <Chip
@@ -298,7 +307,7 @@ export function LobbyFilterSheet({
             ) : null}
           </Section>
 
-          <Section title="Type">
+          <Section title="Score">
             {([
               ['consistency', 'Consistency'],
               ['points', 'Points'],
@@ -315,7 +324,23 @@ export function LobbyFilterSheet({
             ))}
           </Section>
 
-          <Section title="Currency + cost">
+          <Section title="Challenge type">
+            {CHALLENGE_CATEGORIES.map((value) => (
+              <Chip
+                key={value}
+                label={CHALLENGE_CATEGORY_LABEL[value]}
+                selected={filters.categories.includes(value)}
+                onPress={() =>
+                  onChange({
+                    ...filters,
+                    categories: toggle<LobbyCategoryFilter>(filters.categories, value),
+                  })
+                }
+              />
+            ))}
+          </Section>
+
+          <Section title="Currency">
             {([
               ['coins', 'Coins'],
               ['bucks', 'Bucks'],
@@ -333,10 +358,13 @@ export function LobbyFilterSheet({
                 }
               />
             ))}
+          </Section>
+
+          <Section title="Cost">
             {([
-              ['free', 'Free'],
               ['host_funded', 'Host-funded'],
               ['buy_in', 'Buy-in'],
+              ['free', 'Free'],
             ] as const).map(([value, label]) => (
               <Chip
                 key={`cost-${value}`}
@@ -392,7 +420,13 @@ export function LobbyFilterSheet({
               onPress={() => onChange(defaultFiltersForTab(tab))}
             />
           ) : null}
-          <Button title="Done" onPress={onClose} />
+          <Button
+            title="Done"
+            onPress={() => {
+              onDone?.();
+              onClose();
+            }}
+          />
         </View>
       </View>
     </ChromeOverlay>

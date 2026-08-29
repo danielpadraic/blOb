@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { ChallengeCardVisual, type CardHost } from '@/components/challenge/ChallengeCardVisual';
+import { ChallengeCardClock } from '@/components/challenge/ChallengeScheduleMeta';
 import { ChallengeOverflowButton, type MenuAnchor } from '@/components/challenge/ChallengeOverflowMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
+import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { isOfficialJoinable } from '@/lib/officialSeries';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -40,6 +42,7 @@ export function ChallengeCard({
   host,
   onOverflow,
 }: ChallengeCardProps) {
+  const tone = useCopyTone();
   const official = Boolean(challenge.is_official);
   const ticking = official && (isOfficialJoinable(challenge) || challenge.status === 'live');
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -80,17 +83,16 @@ export function ChallengeCard({
           showOfficialShare={official}
           compact={variant === 'rail'}
         />
-        {onOverflow ? (
-          <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}>
-            <ChallengeOverflowButton onPress={onOverflow} light={official} />
-          </View>
-        ) : null}
+        <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, alignItems: 'flex-end' }}>
+          <ChallengeCardClock challenge={challenge} nowMs={nowMs} overlay light={official} />
+          {onOverflow ? <ChallengeOverflowButton onPress={onOverflow} light={official} /> : null}
+        </View>
       </View>
       {variant === 'rail' && socialProof && socialProof.kind === 'joined' ? (
         <View className="mt-2 flex-row items-center" style={{ minHeight: 44 }}>
           <Avatar uri={socialProof.avatarUrl} name={socialProof.name} size={28} />
           <AppText className="ml-2 flex-1 text-[12px] font-semibold text-charcoal" numberOfLines={1}>
-            {copy('lobby.friendsJoined', 'neutral', { name: socialProof.name })}
+            {copy('lobby.friendsJoined', tone, { name: socialProof.name })}
           </AppText>
         </View>
       ) : null}

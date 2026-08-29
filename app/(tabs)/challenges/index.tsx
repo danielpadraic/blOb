@@ -40,6 +40,7 @@ import {
   clearLobbyFilterChip,
   defaultFiltersForTab,
   defaultLobbyFilterStore,
+  effectiveLobbyFilters,
   isDefaultLobbyFilters,
   isEndedLobbyStatus,
   isLobbyActiveParticipantStatus,
@@ -119,6 +120,7 @@ export default function ChallengesScreen() {
   const [tabReady, setTabReady] = useState(false);
   const [layout, setLayout] = useState<LobbyLayout>('card');
   const [store, setStore] = useState<LobbyFilterStore>(defaultLobbyFilterStore);
+  const [touchedTabs, setTouchedTabs] = useState(() => new Set<LobbyTab>());
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -285,10 +287,18 @@ export default function ChallengesScreen() {
     [checkedToday, friendCounts, nowMs],
   );
 
+  function filtersFor(listTab: LobbyTab, rows: ChallengeWithStats[]) {
+    const current = store[listTab].filters;
+    if (touchedTabs.has(listTab)) {
+      return current;
+    }
+    return effectiveLobbyFilters(listTab, current, rows, filterCtx);
+  }
+
   function applyList(rows: ChallengeWithStats[], listTab: LobbyTab) {
     const searched = rows.filter((row) => matchesSearch(challengeDisplayTitle(row), search));
     return sortLobbyRows(
-      applyLobbyFilters(searched, listTab, store[listTab].filters, filterCtx),
+      applyLobbyFilters(searched, listTab, filtersFor(listTab, rows), filterCtx),
       store[listTab].sort,
     );
   }
@@ -303,7 +313,7 @@ export default function ChallengesScreen() {
         .map((row) => row.challenge)
         .filter((row) => matchesSearch(challengeDisplayTitle(row), search)),
       'active',
-      store.active.filters,
+      filtersFor('active', friendsAll.map((row) => row.challenge)),
       filterCtx,
     ),
     store.active.sort,
@@ -433,8 +443,29 @@ export default function ChallengesScreen() {
     void saveLobbyFilterStore(next);
   }
 
+  function markFiltersTouched() {
+    setTouchedTabs((prev) => {
+      if (prev.has(tab)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  }
+
   function onFiltersChange(next: LobbyFilterState) {
+    markFiltersTouched();
+    setStore({ ...store, [tab]: { ...prefs, filters: next } });
+  }
+
+  function onFiltersCommit(next: LobbyFilterState) {
+    markFiltersTouched();
     persistStore({ ...store, [tab]: { ...prefs, filters: next } });
+  }
+
+  function onFilterDone() {
+    void saveLobbyFilterStore(store);
   }
 
   function onSortChange(next: LobbySort) {
@@ -442,16 +473,25 @@ export default function ChallengesScreen() {
   }
 
   function onClearFilters() {
-    onFiltersChange(defaultFiltersForTab(tab));
+    onFiltersCommit(defaultFiltersForTab(tab));
   }
 
-  function onShowAllTime() {
-    onFiltersChange({ ...filters, when: 'all', customFrom: null, customTo: null });
-  }
+  const rawForTab =
+    tab === 'official' ? officialAll : tab === 'active' ? activeAll : tab === 'hosting' ? hostingAll : endedAll;
+  const displayFilters = filtersFor(tab, rawForTab);
+  const chips = lobbyFilterChips(tab, displayFilters);
+  const badge = lobbyFilterBadgeCount(tab, displayFilters);
+  const filtersDefault = isDefaultLobbyFilters(tab, displayFilters);
 
-  const chips = lobbyFilterChips(tab, filters);
-  const badge = lobbyFilterBadgeCount(tab, filters);
-  const filtersDefault = isDefaultLobbyFilters(tab, filters);
+  useEffect(() => {
+    if (touchedTabs.has(tab) || rawForTab.length === 0) {
+      return;
+    }
+    if (JSON.stringify(displayFilters) === JSON.stringify(filters)) {
+      return;
+    }
+    persistStore({ ...store, [tab]: { ...prefs, filters: displayFilters } });
+  }, [displayFilters, filters, prefs, rawForTab.length, store, tab, touchedTabs]);
   const tabEmpty =
     tabRows.length === 0 &&
     (tab !== 'active' || friends.length === 0) &&
@@ -460,9 +500,6 @@ export default function ChallengesScreen() {
   function emptyCopy() {
     if (!filtersDefault) {
       return { title: 'Nothing matches these filters.', action: 'Clear filters', onAction: onClearFilters };
-    }
-    if (tab === 'ended' && filters.when === '30d') {
-      return { title: 'No ended challenges in the last 30 days.', action: 'Show all-time', onAction: onShowAllTime };
     }
     if (tab === 'hosting') {
       return {
@@ -599,7 +636,7 @@ export default function ChallengesScreen() {
         </Pressable>
       </View>
 
-      <LobbyFilterChips chips={chips} onDismiss={(id) => onFiltersChange(clearLobbyFilterChip(filters, id))} />
+      <LobbyFilterChips chips={chips} onDismiss={(id) => onFiltersCommit(clearLobbyFilterChip(displayFilters, id))} />
 
       {loading ? (
         <MascotState kind="loading" title={copy('lobby.loading', tone)} />
@@ -721,6 +758,7 @@ export default function ChallengesScreen() {
         tab={tab}
         filters={filters}
         onChange={onFiltersChange}
+        onDone={onFilterDone}
         onClose={() => setFilterOpen(false)}
       />
       <LobbySortMenu

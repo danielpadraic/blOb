@@ -1,19 +1,15 @@
-import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeCardVisual } from '@/components/challenge/ChallengeCardVisual';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
-import { BuckUsdAmount, StakeAmount } from '@/components/currency/CurrencyMark';
-import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
+import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
+import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { isLiveCompetitorStatus, isPointsChallenge } from '@/lib/challenges';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { copy } from '@/lib/copy';
-import { entryFieldNote, prizeFieldNote, type FieldNoteKey } from '@/lib/challengeFieldNotes';
-import { cashPrizeLabel } from '@/lib/currency';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
@@ -21,7 +17,6 @@ import {
   officialContestantsNeeded,
   officialGuaranteeAmount,
   officialStartNeededLabel,
-  showsGuaranteedPrize,
 } from '@/lib/officialSeries';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -198,7 +193,6 @@ export function OfficialFillingStats({
   tone?: 'card' | 'hero';
 }) {
   const guarantee = officialGuaranteeAmount(challenge);
-  const showGuarantee = showsGuaranteedPrize(challenge);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
@@ -210,49 +204,15 @@ export function OfficialFillingStats({
         ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
         : null;
   const hero = tone === 'hero';
-  const amountClass = hero
-    ? 'text-[12px] font-extrabold'
-    : 'text-[12px] font-extrabold text-charcoal';
-  const amountColor = hero ? '#fff' : undefined;
-  const labelColor = hero ? 'rgba(255,255,255,0.62)' : undefined;
 
   return (
     <View>
-      <View className="flex-row" style={{ gap: 8 }}>
-        <PosterStat
-          label={buyIn <= 0 ? 'Entry' : copy('create.buyIn')}
-          value={
-            <EntryFeeAmount
-              amount={buyIn}
-              currency={challenge.currency}
-              textClassName={amountClass}
-              color={amountColor}
-              labeled
-            />
-          }
-          labelColor={labelColor}
-          note={entryFieldNote(challenge)}
-          tint={hero ? 'light' : 'dark'}
-        />
-        {showGuarantee ? (
-          <PosterStat
-            label={copy('board.guarantee')}
-            value={<BuckUsdAmount amount={guarantee} textClassName={amountClass} color={amountColor} />}
-            labelColor={labelColor}
-          />
-        ) : null}
-        <PosterStat
-          label={copy('board.pot')}
-          value={
-            <AppText className={amountClass} style={amountColor ? { color: amountColor } : undefined} numberOfLines={2}>
-              {cashPrizeLabel(pot)}
-            </AppText>
-          }
-          labelColor={labelColor}
-          note={prizeFieldNote(challenge)}
-          tint={hero ? 'light' : 'dark'}
-        />
-      </View>
+      <LobbyEntryPrizeRow
+        challenge={challenge}
+        color={hero ? '#FFFFFF' : THEME.textPrimary}
+        compact
+        light={hero}
+      />
       {startLine ? (
         <View className="mt-1 flex-row items-start" style={{ gap: 6 }}>
           <FieldNoteLabel
@@ -294,48 +254,3 @@ function posterStatus({
   return `${remaining} remaining · tap to view`;
 }
 
-function PosterStat({
-  label,
-  value,
-  labelColor,
-  note,
-  tint = 'dark',
-}: {
-  label: string;
-  value: ReactNode;
-  labelColor?: string;
-  note?: FieldNoteKey;
-  tint?: 'light' | 'dark';
-}) {
-  const labelStyle = { color: labelColor ?? THEME.textMuted, letterSpacing: 0.2 };
-  return (
-    <View style={{ flex: 1, minWidth: 0 }}>
-      {note ? (
-        <FieldNoteLabel
-          note={note}
-          tint={tint}
-          numberOfLines={1}
-          textClassName="text-[9px] font-semibold uppercase"
-          textStyle={labelStyle}>
-          {label}
-        </FieldNoteLabel>
-      ) : (
-        <AppText
-          className="text-[9px] font-semibold uppercase"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-          style={labelStyle}>
-          {label}
-        </AppText>
-      )}
-      {typeof value === 'string' ? (
-        <AppText className="mt-0.5 text-[12px] font-extrabold text-charcoal" numberOfLines={1}>
-          {value}
-        </AppText>
-      ) : (
-        <View className="mt-0.5">{value}</View>
-      )}
-    </View>
-  );
-}

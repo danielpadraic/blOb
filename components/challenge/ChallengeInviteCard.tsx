@@ -10,12 +10,12 @@ import {
   ChallengeTypeTip,
   useChallengeTypeTip,
 } from '@/components/challenge/ChallengeTypeIcon';
+import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
 import { ChallengeCardClock, ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
@@ -28,10 +28,8 @@ import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
-import { displayChallengePot } from '@/lib/challengePot';
+import { namedOfficialSponsor } from '@/lib/challengeSponsor';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
-import { formatCash, formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
-import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { copy } from '@/lib/copy';
 import { isOfficialChallenge } from '@/lib/official';
 import { armingCountdownLabel, officialContestantsNeeded, officialGuaranteeAmount } from '@/lib/officialSeries';
@@ -84,6 +82,8 @@ export type InviteChallenge = {
   cover_image_url?: string | null;
   sponsor_logo_url?: string | null;
   sponsor_name?: string | null;
+  organization_name?: string | null;
+  organization?: string | null;
   task?: string | null;
   tasks?: Array<{ title?: string | null }> | null;
 };
@@ -375,7 +375,8 @@ export function ChallengeInviteCard({
     router.push(`/challenges/${challenge.id}/submit`);
   }
 
-  const hostLabel = official ? 'blOb' : host?.name?.trim() || 'Host';
+  const hostLabel = host?.name?.trim() || 'Host';
+  const sponsorName = official ? namedOfficialSponsor(challenge) : '';
 
   function onShare() {
     if (!shareHost) {
@@ -414,19 +415,27 @@ export function ChallengeInviteCard({
             onTypePress={typeTip.show}
           />
           <View pointerEvents="box-none" style={{ position: 'absolute', top: 4, left: 4, right: 4 }}>
-            <ChallengeTagRow tags={tags} compact />
+            <View className="flex-row items-start justify-between" style={{ gap: 8 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <ChallengeTagRow tags={tags} compact />
+              </View>
+              <ChallengeCardClock
+                challenge={challenge}
+                nowMs={nowMs}
+                forceEnded={section === 'ended'}
+                overlay
+                light={official}
+              />
+            </View>
           </View>
         </View>
         <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6, gap: 4 }}>
-          <View className="flex-row items-start" style={{ gap: 8 }}>
-            <AppText
-              className="text-[13px] font-semibold"
-              style={[flexChildMin(), { flexGrow: 1, color: THEME.textPrimary }]}
-              numberOfLines={1}>
-              {displayTitle}
-            </AppText>
-            <ChallengeCardClock challenge={challenge} nowMs={nowMs} forceEnded={section === 'ended'} />
-          </View>
+          <AppText
+            className="text-[13px] font-semibold"
+            style={{ color: THEME.textPrimary }}
+            numberOfLines={2}>
+            {displayTitle}
+          </AppText>
           <ChallengeScheduleMeta
             challenge={challenge}
             nowMs={nowMs}
@@ -439,31 +448,31 @@ export function ChallengeInviteCard({
               {resultLine}
             </AppText>
           ) : null}
-          <View className="flex-row items-center" style={{ gap: 8, minHeight: 18 }}>
-            {official ? (
-              <View className="flex-row items-center" style={[flexChildMin(), { flexGrow: 1, gap: 5 }]}>
-                <Image
-                  source={BLOB_MARK}
-                  style={{ width: 14, height: 14, backgroundColor: 'transparent' }}
-                  contentFit="contain"
-                  accessibilityLabel="blOb"
-                />
-                <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
-                  blOb
-                </AppText>
-              </View>
+          {official ? (
+            sponsorName ? (
+              <AppText
+                className="text-[11px] font-semibold"
+                style={{ color: THEME.textPrimary }}
+                numberOfLines={1}>
+                {sponsorName}
+              </AppText>
             ) : (
-              <View className="flex-row items-center" style={[flexChildMin(), { flexGrow: 1, gap: 6 }]}>
-                {host?.avatarUrl ? <Avatar uri={host.avatarUrl} name={hostLabel} size={16} /> : null}
-                <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
-                  {hostLabel}
-                </AppText>
-              </View>
-            )}
-            <View style={{ flexShrink: 0 }}>
-              <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
+              <Image
+                source={BLOB_MARK}
+                style={{ width: 16, height: 16, backgroundColor: 'transparent' }}
+                contentFit="contain"
+                accessibilityLabel="blOb"
+              />
+            )
+          ) : (
+            <View className="flex-row items-center" style={{ gap: 6, minHeight: 18 }}>
+              {host?.avatarUrl ? <Avatar uri={host.avatarUrl} name={hostLabel} size={16} /> : null}
+              <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
+                {hostLabel}
+              </AppText>
             </View>
-          </View>
+          )}
+          <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
         </View>
         <View
           className="flex-row items-center"
@@ -655,93 +664,6 @@ function OfficialBobPanel({ onError }: { onError: () => void }) {
   );
 }
 
-function lobbyCardShowsPrize(challenge: InviteChallenge, nowMs = Date.now()): boolean {
-  const status = String(challenge.status ?? '');
-  if (status === 'live' || status === 'in_progress') {
-    return true;
-  }
-  if (status === 'judging' || status === 'settled' || status === 'distributing') {
-    return true;
-  }
-  const start = challenge.starts_at ? new Date(challenge.starts_at).getTime() : NaN;
-  if (!Number.isFinite(start) || start > nowMs) {
-    return false;
-  }
-  return status !== 'cancelled' && status !== 'cancelled_underfilled';
-}
-
-function LobbyMoneyMark({
-  challenge,
-  color,
-  compact = false,
-}: {
-  challenge: InviteChallenge;
-  color: string;
-  compact?: boolean;
-}) {
-  const type = compact ? 'text-[11px] font-extrabold' : 'text-[14px] font-extrabold';
-  const icon = compact ? 12 : 15;
-  if (lobbyCardShowsPrize(challenge)) {
-    const prize = displayChallengePot(challenge);
-    if (isBucksChallenge(challenge)) {
-      return (
-        <AppText className={type} style={{ color }} numberOfLines={1}>
-          {compact ? formatCash(prize) : formatCashPrizeAmount(prize)}
-        </AppText>
-      );
-    }
-    return (
-      <View className="flex-row items-center" style={{ gap: compact ? 3 : 4 }}>
-        <CurrencyMark currency={challenge.currency} size={icon} />
-        <AppText className={type} style={{ color }} numberOfLines={1}>
-          {String(Math.round(prize))}
-        </AppText>
-      </View>
-    );
-  }
-  return <EntryMark challenge={challenge} color={color} compact={compact} />;
-}
-
-function EntryMark({
-  challenge,
-  color,
-  compact = false,
-}: {
-  challenge: InviteChallenge;
-  color: string;
-  compact?: boolean;
-}) {
-  const type = compact ? 'text-[11px] font-extrabold' : 'text-[14px] font-extrabold';
-  const icon = compact ? 12 : 15;
-  const amount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
-  if (amount <= 0) {
-    return (
-      <EntryFeeAmount
-        amount={0}
-        currency={challenge.currency}
-        textClassName={type}
-        color={color}
-        size={icon}
-      />
-    );
-  }
-  if (isBucksChallenge(challenge)) {
-    return (
-      <AppText className={type} style={{ color }} numberOfLines={1}>
-        {compact ? formatCash(amount) : formatCashCompact(amount)}
-      </AppText>
-    );
-  }
-  return (
-    <View className="flex-row items-center" style={{ gap: compact ? 3 : 4 }}>
-      <CurrencyMark currency={challenge.currency} size={icon} />
-      <AppText className={type} style={{ color }} numberOfLines={1}>
-        {String(Math.round(amount))}
-      </AppText>
-    </View>
-  );
-}
-
 export function LobbyChallengeRow({
   challenge,
   context = 'lobby',
@@ -805,7 +727,7 @@ export function LobbyChallengeRow({
           numberOfLines={2}>
           {displayTitle}
         </AppText>
-        <ChallengeCardClock challenge={challenge} nowMs={nowMs ?? tickMs} forceEnded={forceEnded} />
+        <ChallengeCardClock challenge={challenge} nowMs={nowMs ?? tickMs} forceEnded={forceEnded} overlay />
       </View>
       <View className="flex-row items-center" style={{ gap: 8 }}>
         <View style={{ flexGrow: 1, minWidth: 0 }}>
@@ -817,8 +739,8 @@ export function LobbyChallengeRow({
             forceEnded={forceEnded}
           />
         </View>
-        <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
       </View>
+      <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
       {resultLine ? (
         <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }} numberOfLines={1}>
           {resultLine}

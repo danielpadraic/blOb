@@ -38,7 +38,7 @@ export default function FeedScreen() {
   const posts = feed.data ?? [];
   const feedWarning = feed.warning ?? (feed.error ? rawFeedError(feed.error) : null);
   const showFeedBanner = Boolean(feed.error || feedWarning);
-  const refreshing = feed.isRefetching && !feed.isLoading;
+  const refreshing = feed.isRefetching && !feed.isLoading && !feed.isFetchingNextPage;
 
   const onRefresh = useCallback(() => {
     void feed.refetch();
@@ -65,8 +65,15 @@ export default function FeedScreen() {
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4">
       <FeedList
         posts={posts}
-        isLoading={Boolean(feed.isLoading && posts.length === 0 && !showFeedBanner)}
+        isLoading={Boolean(feed.isLoading && posts.length === 0)}
         isRefreshing={refreshing}
+        isFetchingNextPage={feed.isFetchingNextPage}
+        onEndReached={() => {
+          if (feed.hasNextPage && !feed.isFetchingNextPage) {
+            void feed.fetchNextPage();
+          }
+        }}
+        error={feed.error ? copy('home.refreshFailed') : null}
         currentUserId={user?.id}
         emptyTitle={copy('home.empty', tone)}
         emptyBody=""

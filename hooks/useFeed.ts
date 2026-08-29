@@ -1,5 +1,13 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useRef } from 'react';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from '@tanstack/react-query';
+import { useEffect, useMemo, useRef } from 'react';
 import { Alert } from 'react-native';
 
 import { clipPostsQueryKey } from '@/lib/clipPost';
@@ -8,7 +16,7 @@ import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { isClipSharePost } from '@/lib/roundShare';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
-import { asPostAudience, DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
+import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { reportAppError } from '@/lib/appErrors';
 import { rawFeedError } from '@/lib/feedError';
 import {
@@ -31,16 +39,23 @@ import type {
 } from '@/lib/types';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
-import {
-  asCircleVisibility,
-  fetchAuthorsSharingAcceptedFriend,
-  fetchCirclePreviews,
-  viewerCanSeeHomeCirclePost,
-} from '@/lib/circles';
+import { fetchAuthorsSharingAcceptedFriend, fetchCirclePreviews } from '@/lib/circles';
 import { fetchFriends, type FriendEdge } from '@/lib/social';
 import { getErrorMessage, isMissingRelationError, isUnknownColumnError } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
+import {
+  HOME_FIRST_PAINT_WINDOWS,
+  HOME_PAGE_SIZE,
+  HOME_RAW_WINDOW,
+  circleFofCandidateIds,
+  filterHomeFeedPosts,
+  homeFeedCursorFrom,
+  takeHomeVisiblePage,
+  uniquePostsById,
+  type HomeFeedAllowContext,
+  type HomeFeedCursor,
+} from '@/lib/homeFeed';
 
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at';
@@ -102,7 +117,23 @@ function isCircleScope(scope: FeedScope): boolean {
   return scope.kind === 'circle' || scope.kind === 'circleIds' || scope.kind === 'circleDiscover';
 }
 
-async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
+type PostPage = {
+  limit?: number;
+  before?: HomeFeedCursor | null;
+};
+
+export type HomeFeedPage = {
+  posts: PostWithMeta[];
+  cursor: HomeFeedCursor | null;
+  hasMore: boolean;
+};
+
+export type HomePageParam = {
+  cursor: HomeFeedCursor | null;
+  seenIds: string[];
+};
+
+async function queryPosts(scope: FeedScope, page?: PostPage): Promise<PostWithMeta[]> {
   if (scope.kind === 'ids' && scope.challengeIds.length === 0) {
     return [];
   }
@@ -125,9 +156,9 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
   }
 
   let select = schema.select;
-  let result = await fetchPostRows(select, scope, true);
+  let result = await fetchPostRows(select, scope, true, page);
   if (result.error && isMissingDeletedAt(result.error)) {
-    result = await fetchPostRows(select, scope, false);
+    result = await fetchPostRows(select, scope, false, page);
   }
   if (result.error && isMissingCircleIdColumn(result.error)) {
     dropCachedCircleId();
@@ -135,9 +166,9 @@ async function queryPosts(scope: FeedScope): Promise<PostWithMeta[]> {
       return [];
     }
     select = selectWithoutCircleId(select);
-    result = await fetchPostRows(select, scope, true);
+    result = await fetchPostRows(select, scope, true, page);
     if (result.error && isMissingDeletedAt(result.error)) {
-      result = await fetchPostRows(select, scope, false);
+      result = await fetchPostRows(select, scope, false, page);
     }
   }
 
@@ -163,8 +194,12 @@ function isMissingDeletedAt(error: { message?: string }): boolean {
   );
 }
 
-function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean) {
-  let query = supabase.from('posts').select(select).order('created_at', { ascending: false }).limit(50);
+function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean, page?: PostPage) {
+  const limit = page?.limit ?? 50;
+  let query = supabase.from('posts').select(select).order('created_at', { ascending: false }).limit(limit);
+  if (page?.before?.createdAt) {
+    query = query.lt('created_at', page.before.createdAt);
+  }
   if (hideDeleted) {
     query = query.is('deleted_at', null);
   }
@@ -773,6 +808,250 @@ async function fetchRecommendedCreatorIds(userId: string): Promise<string[]> {
   return fetchOfficialAuthorIds();
 }
 
+type HomeFeedContextBase = {
+  challengeIds: string[];
+  circleIds: string[];
+  friendIds: string[];
+  officialIds: string[];
+  recommendedIds: string[];
+  hiddenIds: string[];
+  mutedIds: string[];
+  blockedIds: string[];
+};
+
+let homeCtxCache: { userId: string; at: number; value: HomeFeedContextBase } | null = null;
+
+async function loadHomeFeedContext(userId: string, fresh = false): Promise<HomeFeedContextBase> {
+  if (
+    !fresh &&
+    homeCtxCache &&
+    homeCtxCache.userId === userId &&
+    Date.now() - homeCtxCache.at < 30_000
+  ) {
+    return homeCtxCache.value;
+  }
+  lastHomeFeedWarning = null;
+  const noteHomeError = (error: unknown) => {
+    const message = rawFeedError(error);
+    console.log('[blob:feed]', message);
+    if (!lastHomeFeedWarning) {
+      lastHomeFeedWarning = message;
+      reportAppError({ route: 'feed/home', error, message });
+    }
+  };
+  const emptyIds = async (run: () => Promise<string[]>) => {
+    try {
+      return await run();
+    } catch (error) {
+      noteHomeError(error);
+      return [] as string[];
+    }
+  };
+  const [joinedIds, hostedIds, circleIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
+    await Promise.all([
+      emptyIds(() => fetchJoinedChallengeIds(userId)),
+      emptyIds(() => fetchHostedChallengeIds(userId)),
+      emptyIds(() => fetchJoinedCircleIds(userId)),
+      emptyIds(() => friendIdsForUser(userId)),
+      emptyIds(() => fetchOfficialAuthorIds()),
+      emptyIds(() => fetchRecommendedCreatorIds(userId)),
+      emptyIds(() => fetchHiddenPostIds(userId)),
+      emptyIds(() => fetchMutedUserIds(userId)),
+      emptyIds(() => fetchBlockedUserIds(userId)),
+    ]);
+  const value = {
+    challengeIds: [...new Set([...joinedIds, ...hostedIds])],
+    circleIds,
+    friendIds,
+    officialIds,
+    recommendedIds,
+    hiddenIds,
+    mutedIds,
+    blockedIds,
+  };
+  homeCtxCache = { userId, at: Date.now(), value };
+  return value;
+}
+
+async function queryHomeSources(input: {
+  challengeIds: string[];
+  circleIds: string[];
+  authorIds: string[];
+  wallHostIds: string[];
+  hasCircleId: boolean;
+  before: HomeFeedCursor | null;
+}): Promise<PostWithMeta[]> {
+  const page = { limit: HOME_RAW_WINDOW, before: input.before };
+  const none: PostWithMeta[] = [];
+  const note = (error: unknown) => {
+    const message = rawFeedError(error);
+    console.log('[blob:feed]', message);
+    reportAppError({ route: 'feed/home', error, message });
+    if (!lastHomeFeedWarning) {
+      lastHomeFeedWarning = message;
+    }
+  };
+  const [challengePosts, circlePosts, discoverCircles, people, wall] = await Promise.all([
+    queryPosts({ kind: 'ids', challengeIds: input.challengeIds }, page).catch((error) => {
+      note(error);
+      return none;
+    }),
+    queryPosts({ kind: 'circleIds', circleIds: input.circleIds }, page).catch((error) => {
+      note(error);
+      return none;
+    }),
+    input.hasCircleId
+      ? queryPosts({ kind: 'circleDiscover' }, page).catch((error) => {
+          note(error);
+          return none;
+        })
+      : Promise.resolve(none),
+    queryPosts({ kind: 'authors', authorIds: input.authorIds }, page).catch((error) => {
+      note(error);
+      return none;
+    }),
+    queryPosts({ kind: 'wallHosts', hostIds: input.wallHostIds }, page).catch((error) => {
+      note(error);
+      return none;
+    }),
+  ]);
+  return dedupePosts([people, challengePosts, circlePosts, discoverCircles, wall]);
+}
+
+async function fetchHomeFeedPage(input: {
+  userId: string;
+  cursor: HomeFeedCursor | null;
+  seenIds: string[];
+}): Promise<HomeFeedPage> {
+  const first = !input.cursor;
+  const base = await loadHomeFeedContext(input.userId, first);
+  const schema = await resolvePostsSchema();
+  const authorIds = [...new Set([input.userId, ...base.friendIds, ...base.officialIds, ...base.recommendedIds])];
+  const wallHostIds = [...new Set([input.userId, ...base.friendIds])];
+  const friends = new Set(base.friendIds);
+  const official = new Set(base.officialIds);
+  const recommended = new Set(base.recommendedIds);
+  const challengeIdSet = new Set(base.challengeIds);
+  const circleIdSet = new Set(base.circleIds);
+  const hidden = new Set(base.hiddenIds);
+  const muted = new Set(base.mutedIds);
+  const blocked = new Set(base.blockedIds);
+
+  let cursor = input.cursor;
+  let scanned: PostWithMeta[] = [];
+  let hasMore = false;
+  const windows = first ? HOME_FIRST_PAINT_WINDOWS : 2;
+
+  for (let i = 0; i < windows; i += 1) {
+    const raw = await queryHomeSources({
+      challengeIds: base.challengeIds,
+      circleIds: base.circleIds,
+      authorIds,
+      wallHostIds,
+      hasCircleId: schema.hasCircleId,
+      before: cursor,
+    });
+    if (raw.length === 0) {
+      hasMore = false;
+      break;
+    }
+    scanned = uniquePostsById([...scanned, ...raw]);
+    hasMore = raw.length >= HOME_RAW_WINDOW;
+    cursor = homeFeedCursorFrom(raw);
+    if (!cursor) {
+      hasMore = false;
+      break;
+    }
+    const preview = await hydrateCircles(scanned);
+    let corporateIds = new Set<string>();
+    try {
+      corporateIds = await fetchCorporateChallengeIds(
+        preview.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
+      );
+    } catch (error) {
+      console.log('[blob:feed]', rawFeedError(error));
+    }
+    let fofAuthors = new Set<string>();
+    try {
+      fofAuthors = await fetchAuthorsSharingAcceptedFriend(
+        input.userId,
+        friends,
+        circleFofCandidateIds(preview, {
+          viewerId: input.userId,
+          friends,
+          circleIds: circleIdSet,
+        }),
+      );
+    } catch (error) {
+      console.log('[blob:feed]', rawFeedError(error));
+    }
+    const allow: HomeFeedAllowContext = {
+      viewerId: input.userId,
+      hidden,
+      muted,
+      blocked,
+      friends,
+      official,
+      recommended,
+      challengeIds: challengeIdSet,
+      circleIds: circleIdSet,
+      corporateIds,
+      fofAuthors,
+    };
+    const filtered = filterHomeFeedPosts(preview, allow);
+    const visible = takeHomeVisiblePage(filtered, input.seenIds);
+    if (visible.length >= HOME_PAGE_SIZE || !hasMore) {
+      const page = await hydrateAuthors(visible);
+      return {
+        posts: page,
+        cursor: homeFeedCursorFrom(page) ?? cursor,
+        hasMore: hasMore || filtered.length > visible.length,
+      };
+    }
+  }
+
+  const preview = scanned.length > 0 ? await hydrateCircles(scanned) : [];
+  let corporateIds = new Set<string>();
+  try {
+    corporateIds = await fetchCorporateChallengeIds(
+      preview.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
+    );
+  } catch {
+    corporateIds = new Set();
+  }
+  let fofAuthors = new Set<string>();
+  try {
+    fofAuthors = await fetchAuthorsSharingAcceptedFriend(
+      input.userId,
+      friends,
+      circleFofCandidateIds(preview, { viewerId: input.userId, friends, circleIds: circleIdSet }),
+    );
+  } catch {
+    fofAuthors = new Set();
+  }
+  const allow: HomeFeedAllowContext = {
+    viewerId: input.userId,
+    hidden,
+    muted,
+    blocked,
+    friends,
+    official,
+    recommended,
+    challengeIds: challengeIdSet,
+    circleIds: circleIdSet,
+    corporateIds,
+    fofAuthors,
+  };
+  const filtered = filterHomeFeedPosts(preview, allow);
+  const visible = takeHomeVisiblePage(filtered, input.seenIds);
+  const page = await hydrateAuthors(visible);
+  return {
+    posts: page,
+    cursor: homeFeedCursorFrom(page) ?? homeFeedCursorFrom(scanned),
+    hasMore: hasMore || filtered.length > visible.length,
+  };
+}
+
 async function fetchPosts(input: {
   challengeId?: string | null;
   circleId?: string | null;
@@ -798,216 +1077,14 @@ async function fetchPosts(input: {
   if (!input.userId) {
     return [];
   }
-
-  lastHomeFeedWarning = null;
-  const noteHomeError = (error: unknown) => {
+  try {
+    const page = await fetchHomeFeedPage({ userId: input.userId, cursor: null, seenIds: [] });
+    return page.posts;
+  } catch (error) {
     const message = rawFeedError(error);
     console.log('[blob:feed]', message);
-    if (!lastHomeFeedWarning) {
-      lastHomeFeedWarning = message;
-      reportAppError({ route: 'feed/home', error, message });
-    }
-  };
-
-  const emptyIds = async (run: () => Promise<string[]>) => {
-    try {
-      return await run();
-    } catch (error) {
-      noteHomeError(error);
-      return [] as string[];
-    }
-  };
-
-  try {
-  const [joinedIds, hostedIds, circleIds, friendIds, officialIds, recommendedIds, hiddenIds, mutedIds, blockedIds] =
-    await Promise.all([
-      emptyIds(() => fetchJoinedChallengeIds(input.userId!)),
-      emptyIds(() => fetchHostedChallengeIds(input.userId!)),
-      emptyIds(() => fetchJoinedCircleIds(input.userId!)),
-      emptyIds(() => friendIdsForUser(input.userId!)),
-      emptyIds(() => fetchOfficialAuthorIds()),
-      emptyIds(() => fetchRecommendedCreatorIds(input.userId!)),
-      emptyIds(() => fetchHiddenPostIds(input.userId!)),
-      emptyIds(() => fetchMutedUserIds(input.userId!)),
-      emptyIds(() => fetchBlockedUserIds(input.userId!)),
-    ]);
-  const challengeIds = [...new Set([...joinedIds, ...hostedIds])];
-  const challengeIdSet = new Set(challengeIds);
-  const circleIdSet = new Set(circleIds);
-  const official = new Set(officialIds);
-  const friends = new Set(friendIds);
-  const recommended = new Set(recommendedIds);
-  const authorIds = [...new Set([input.userId, ...friendIds, ...officialIds, ...recommendedIds])];
-
-  const wallHostIds = [...new Set([input.userId, ...friendIds])];
-  const schema = await resolvePostsSchema();
-  const none: PostWithMeta[] = [];
-  const [challengePosts, circlePosts, discoverCircles, people, wall] = await Promise.all([
-    queryPosts({ kind: 'ids', challengeIds }).catch((error) => {
-      noteHomeError(error);
-      return none;
-    }),
-    queryPosts({ kind: 'circleIds', circleIds }).catch((error) => {
-      const message = rawFeedError(error);
-      console.log('[blob:feed]', message);
-      reportAppError({ route: 'feed/home', error, message });
-      return none;
-    }),
-    schema.hasCircleId
-      ? queryPosts({ kind: 'circleDiscover' }).catch((error) => {
-          const message = rawFeedError(error);
-          console.log('[blob:feed]', message);
-          reportAppError({ route: 'feed/home', error, message });
-          return none;
-        })
-      : Promise.resolve(none),
-    queryPosts({ kind: 'authors', authorIds }).catch((error) => {
-      noteHomeError(error);
-      return none;
-    }),
-    queryPosts({ kind: 'wallHosts', hostIds: wallHostIds }).catch((error) => {
-      noteHomeError(error);
-      return none;
-    }),
-  ]);
-
-  const hidden = new Set(hiddenIds);
-  const muted = new Set(mutedIds);
-  const blocked = new Set(blockedIds);
-  const userId = input.userId;
-  const merged = await hydrateCircles(
-    dedupePosts([people, challengePosts, circlePosts, discoverCircles, wall]),
-  );
-  let corporateIds = new Set<string>();
-  try {
-    corporateIds = await fetchCorporateChallengeIds(
-      merged.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
-    );
-  } catch (error) {
-    noteHomeError(error);
-  }
-
-  let fofAuthors = new Set<string>();
-  try {
-    const fofCandidates = [
-      ...new Set(
-        merged
-          .filter((post) => {
-            if (!post.circle_id || post.author_id === userId) {
-              return false;
-            }
-            if (circleIdSet.has(post.circle_id) || friends.has(post.author_id)) {
-              return false;
-            }
-            return asCircleVisibility(post.circle?.visibility) === 'friends_of_friends';
-          })
-          .map((post) => post.author_id),
-      ),
-    ];
-    fofAuthors = await fetchAuthorsSharingAcceptedFriend(userId, friends, fofCandidates);
-  } catch (error) {
-    noteHomeError(error);
-  }
-
-  const visible = merged.filter((post) => {
-    if (post.circle_id) {
-      if (
-        !viewerCanSeeHomeCirclePost({
-          circleId: post.circle_id,
-          type: post.type,
-          hiddenFromHome: post.hidden_from_home,
-          visibility: post.circle?.visibility,
-          authorId: post.author_id,
-          viewerId: userId,
-          viewerIsMember: circleIdSet.has(post.circle_id),
-          friendsWithAuthor: friends.has(post.author_id),
-          friendsOfFriendsWithAuthor: fofAuthors.has(post.author_id),
-        })
-      ) {
-        return false;
-      }
-    } else if (post.hidden_from_home && post.author_id !== userId) {
-      return false;
-    }
-    if (isHomeExcludedClipType(post.type)) {
-      return false;
-    }
-    if (post.source === 'challenge') {
-      return false;
-    }
-    if (post.challenge_id && corporateIds.has(post.challenge_id)) {
-      return false;
-    }
-    if (hidden.has(post.id)) {
-      return false;
-    }
-    if (post.author_id !== userId && muted.has(post.author_id) && !official.has(post.author_id)) {
-      return false;
-    }
-    if (post.author_id !== userId && blocked.has(post.author_id)) {
-      return false;
-    }
-    const circleHomePass = Boolean(post.circle_id);
-    if (
-      !circleHomePass &&
-      !viewerCanSeeHomePost({
-        viewerId: userId,
-        authorId: post.author_id,
-        audience: post.audience,
-        audienceUserIds: post.audience_user_ids,
-        friendsWithAuthor: friends.has(post.author_id),
-        officialAuthor: official.has(post.author_id),
-        wallHostId: post.wall_host_id,
-      })
-    ) {
-      return false;
-    }
-    if (official.has(post.author_id) || post.author_id === userId || friends.has(post.author_id)) {
-      return true;
-    }
-    if (post.wall_host_id && (post.wall_host_id === userId || friends.has(post.wall_host_id))) {
-      return asPostAudience(post.audience) === 'public' || post.wall_host_id === userId;
-    }
-    if (post.challenge_id && challengeIdSet.has(post.challenge_id)) {
-      return true;
-    }
-    if (post.circle_id) {
-      return true;
-    }
-    if (recommended.has(post.author_id)) {
-      return asPostAudience(post.audience) === 'public';
-    }
-    return false;
-  });
-
-  try {
-    const page = visible.slice(0, 50);
-    const parentIds = [
-      ...new Set(
-        page
-          .filter((post) => isClipSharePost(post))
-          .map((post) => post.parent_id ?? post.quoted_post_id)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
-    const [hydrated, parents] = await Promise.all([
-      hydrateAuthors(await withSocial(page, userId)),
-      parentIds.length > 0 ? fetchPostsByIds(parentIds, userId) : Promise.resolve([] as PostWithMeta[]),
-    ]);
-    const byId = new Map(parents.map((row) => [row.id, row]));
-    return hydrated.map((post) => {
-      if (!isClipSharePost(post)) {
-        return post;
-      }
-      const parentId = post.parent_id ?? post.quoted_post_id;
-      return { ...post, share_parent: parentId ? byId.get(parentId) ?? null : null };
-    });
-  } catch (error) {
-    noteHomeError(error);
-    return visible.slice(0, 50);
-  }
-  } catch (error) {
-    noteHomeError(error);
+    lastHomeFeedWarning = lastHomeFeedWarning ?? message;
+    reportAppError({ route: 'feed/home', error, message });
     return [];
   }
 }
@@ -1079,33 +1156,136 @@ export async function insertWorkoutCheckInPost(input: {
 
 export function useFeed(challengeId?: string | null) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const key = challengeId ?? 'global';
   const home = !challengeId;
+  const homeKey = feedListKey('global', user?.id);
+  const hydratedSocial = useRef(new Set<string>());
 
-  const query = useQuery({
-    queryKey: feedListKey(key, user?.id),
+  const homeQuery = useInfiniteQuery({
+    queryKey: homeKey,
+    enabled: home && Boolean(user?.id),
     staleTime: 30_000,
-    retry: home ? false : 1,
-    placeholderData: home ? keepPreviousData : undefined,
-    queryFn: async () => {
+    retry: false,
+    placeholderData: keepPreviousData,
+    initialPageParam: null as HomePageParam | null,
+    queryFn: async ({ pageParam }) => {
       try {
-        return await fetchPosts({ challengeId, userId: user?.id });
+        return await fetchHomeFeedPage({
+          userId: user!.id,
+          cursor: pageParam?.cursor ?? null,
+          seenIds: pageParam?.seenIds ?? [],
+        });
       } catch (error) {
         const message = rawFeedError(error);
         console.log('[blob:feed]', message);
         reportAppError({ route: 'feed/home', error, message });
-        if (home) {
-          lastHomeFeedWarning = lastHomeFeedWarning ?? message;
-          return [];
-        }
-        throw error;
+        lastHomeFeedWarning = lastHomeFeedWarning ?? message;
+        return { posts: [] as PostWithMeta[], cursor: null, hasMore: false };
       }
+    },
+    getNextPageParam: (last, all) => {
+      if (!last.hasMore) {
+        return undefined;
+      }
+      return {
+        cursor: last.cursor,
+        seenIds: uniquePostsById(all.flatMap((page) => page.posts)).map((post) => post.id),
+      };
     },
   });
 
+  const challengeQuery = useQuery({
+    queryKey: feedListKey(key, user?.id),
+    enabled: !home,
+    staleTime: 30_000,
+    retry: 1,
+    queryFn: async () => {
+      return await fetchPosts({ challengeId, userId: user?.id });
+    },
+  });
+
+  const homePosts = useMemo(
+    () => uniquePostsById(homeQuery.data?.pages.flatMap((page) => page.posts) ?? []),
+    [homeQuery.data],
+  );
+
+  useEffect(() => {
+    if (home && homeQuery.isRefetching && !homeQuery.isFetchingNextPage) {
+      hydratedSocial.current.clear();
+    }
+  }, [home, homeQuery.isFetchingNextPage, homeQuery.isRefetching]);
+
+  useEffect(() => {
+    if (!home || !user?.id || homePosts.length === 0) {
+      return;
+    }
+    const pending = homePosts.filter(
+      (post) => !Array.isArray(post.comments) && !hydratedSocial.current.has(post.id),
+    );
+    if (pending.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      void (async () => {
+        try {
+          const parentIds = [
+            ...new Set(
+              pending
+                .filter((post) => isClipSharePost(post))
+                .map((post) => post.parent_id ?? post.quoted_post_id)
+                .filter((id): id is string => Boolean(id)),
+            ),
+          ];
+          const [hydrated, parents] = await Promise.all([
+            hydrateAuthors(await withSocial(pending, user.id)),
+            parentIds.length > 0 ? fetchPostsByIds(parentIds, user.id) : Promise.resolve([] as PostWithMeta[]),
+          ]);
+          if (cancelled) {
+            return;
+          }
+          const parentsById = new Map(parents.map((row) => [row.id, row]));
+          const byId = new Map(
+            hydrated.map((post) => {
+              if (!isClipSharePost(post)) {
+                return [post.id, post] as const;
+              }
+              const parentId = post.parent_id ?? post.quoted_post_id;
+              return [post.id, { ...post, share_parent: parentId ? parentsById.get(parentId) ?? null : null }] as const;
+            }),
+          );
+          for (const id of byId.keys()) {
+            hydratedSocial.current.add(id);
+          }
+          queryClient.setQueryData<InfiniteData<HomeFeedPage, HomePageParam | null>>(homeKey, (current) =>
+            mapInfiniteHomePages(current, (post) => byId.get(post.id) ?? post),
+          );
+        } catch (error) {
+          console.log('[blob:feed] social hydrate skipped', rawFeedError(error));
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [home, homeKey, homePosts, queryClient, user?.id]);
+
+  if (home) {
+    return {
+      ...homeQuery,
+      data: homePosts,
+      warning: lastHomeFeedWarning,
+    };
+  }
+
   return {
-    ...query,
-    warning: home ? lastHomeFeedWarning : null,
+    ...challengeQuery,
+    fetchNextPage: async () => challengeQuery,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    warning: null,
   };
 }
 
@@ -1344,7 +1524,7 @@ export function useCreatePost(challengeId?: string | null) {
     onMutate: async (input) => {
       const listKey = feedListKey(input.circleId ? `circle:${input.circleId}` : key, user?.id);
       await queryClient.cancelQueries({ queryKey: listKey });
-      const previous = queryClient.getQueryData<PostWithMeta[]>(listKey);
+      const previous = queryClient.getQueryData(listKey);
       const optimisticId = `optimistic-${Date.now()}`;
       if (user) {
         const optimistic: PostWithMeta = {
@@ -1374,7 +1554,7 @@ export function useCreatePost(challengeId?: string | null) {
           reactions: [],
         };
         if (!isHomeExcludedClipType(optimistic.type)) {
-          queryClient.setQueryData<PostWithMeta[]>(listKey, [optimistic, ...(previous ?? [])]);
+          queryClient.setQueryData(listKey, prependFeedCache(previous, optimistic));
         }
       }
       return { previous, optimisticId, listKey };
@@ -1391,19 +1571,19 @@ export function useCreatePost(challengeId?: string | null) {
       if (isHomeExcludedClipType(posted.type ?? input.type)) {
         return;
       }
-      queryClient.setQueryData<PostWithMeta[]>(context.listKey, (current) => {
-        if (!current) {
-          return [posted];
-        }
+      queryClient.setQueryData(context.listKey, (current) => {
         let replaced = false;
-        const next = current.map((post) => {
-          if (post.id !== context.optimisticId) {
-            return post;
-          }
-          replaced = true;
-          return { ...posted, comments: post.comments ?? [], reactions: post.reactions ?? [] };
+        const mapped = mapFeedCache(current, (posts) => {
+          const next = posts.map((post) => {
+            if (post.id !== context.optimisticId) {
+              return post;
+            }
+            replaced = true;
+            return { ...posted, comments: post.comments ?? [], reactions: post.reactions ?? [] };
+          });
+          return replaced ? next : [posted, ...posts.filter((post) => post.id !== posted.id)];
         });
-        return replaced ? next : [posted, ...current.filter((post) => post.id !== posted.id)];
+        return mapped ?? prependFeedCache(current, posted);
       });
     },
     onError: (_error, _input, context) => {
@@ -1448,15 +1628,17 @@ export function useUpdatePostAudience() {
       return input;
     },
     onSuccess: (input) => {
-      queryClient.setQueriesData<PostWithMeta[]>({ queryKey: ['feed'] }, (current) =>
-        current?.map((post) =>
-          post.id === input.postId
-            ? {
-                ...post,
-                audience: input.audience,
-                audience_user_ids: input.audience === 'specific' ? (input.audienceUserIds ?? []) : [],
-              }
-            : post,
+      queryClient.setQueriesData({ queryKey: ['feed'] }, (current) =>
+        mapFeedCache(current, (posts) =>
+          posts.map((post) =>
+            post.id === input.postId
+              ? {
+                  ...post,
+                  audience: input.audience,
+                  audience_user_ids: input.audience === 'specific' ? (input.audienceUserIds ?? []) : [],
+                }
+              : post,
+          ),
         ),
       );
     },
@@ -1586,6 +1768,79 @@ function optimisticReactionId(type: ReactionType, targetId: string, userId: stri
   return `optimistic-${type}-${targetId}-${userId}`;
 }
 
+function isInfiniteHomeData(value: unknown): value is InfiniteData<HomeFeedPage, HomePageParam | null> {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      Array.isArray((value as InfiniteData<HomeFeedPage>).pages) &&
+      (value as InfiniteData<HomeFeedPage>).pages.every(
+        (page) => page && Array.isArray((page as HomeFeedPage).posts),
+      ),
+  );
+}
+
+function mapInfiniteHomePages(
+  current: InfiniteData<HomeFeedPage, HomePageParam | null> | undefined,
+  mapPost: (post: PostWithMeta) => PostWithMeta,
+): InfiniteData<HomeFeedPage, HomePageParam | null> | undefined {
+  if (!current) {
+    return current;
+  }
+  return {
+    ...current,
+    pages: current.pages.map((page) => ({
+      ...page,
+      posts: page.posts.map(mapPost),
+    })),
+  };
+}
+
+function mapFeedCache(current: unknown, mapPosts: (posts: PostWithMeta[]) => PostWithMeta[]): unknown {
+  if (!current) {
+    return current;
+  }
+  if (Array.isArray(current)) {
+    return mapPosts(current as PostWithMeta[]);
+  }
+  if (isInfiniteHomeData(current)) {
+    return {
+      ...current,
+      pages: current.pages.map((page) => ({
+        ...page,
+        posts: mapPosts(page.posts),
+      })),
+    };
+  }
+  if (typeof current === 'object' && current && (current as PostWithMeta).id) {
+    const [next] = mapPosts([current as PostWithMeta]);
+    return next ?? current;
+  }
+  return current;
+}
+
+function prependFeedCache(current: unknown, post: PostWithMeta): unknown {
+  if (!current) {
+    return [post];
+  }
+  if (Array.isArray(current)) {
+    return [post, ...(current as PostWithMeta[]).filter((row) => row.id !== post.id)];
+  }
+  if (isInfiniteHomeData(current)) {
+    const first = current.pages[0] ?? { posts: [], cursor: null, hasMore: true };
+    return {
+      ...current,
+      pages: [
+        { ...first, posts: [post, ...first.posts.filter((row) => row.id !== post.id)] },
+        ...current.pages.slice(1).map((page) => ({
+          ...page,
+          posts: page.posts.filter((row) => row.id !== post.id),
+        })),
+      ],
+    };
+  }
+  return current;
+}
+
 export function isHomeSocialFeedKey(queryKey: readonly unknown[]): boolean {
   return (
     queryKey[0] === 'feed' &&
@@ -1596,18 +1851,8 @@ export function isHomeSocialFeedKey(queryKey: readonly unknown[]): boolean {
 export function removePostFromHomeFeeds(queryClient: QueryClient, postId: string) {
   queryClient.setQueriesData(
     { predicate: (query) => isHomeSocialFeedKey(query.queryKey) },
-    (current) => {
-      if (!current) {
-        return current;
-      }
-      if (Array.isArray(current)) {
-        return current.filter((post) => !post || (post as PostWithMeta).id !== postId);
-      }
-      if (typeof current === 'object' && (current as PostWithMeta).id === postId) {
-        return null;
-      }
-      return current;
-    },
+    (current) =>
+      mapFeedCache(current, (posts) => posts.filter((post) => !post || post.id !== postId)),
   );
 }
 
@@ -1616,26 +1861,19 @@ export function patchFeedPosts(
   postId: string,
   updater: (post: PostWithMeta) => PostWithMeta,
 ) {
-  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
-    if (!current) {
-      return current;
-    }
-    if (Array.isArray(current)) {
+  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) =>
+    mapFeedCache(current, (posts) => {
       let changed = false;
-      const next = current.map((post) => {
-        if (!post || (post as PostWithMeta).id !== postId) {
+      const next = posts.map((post) => {
+        if (!post || post.id !== postId) {
           return post;
         }
         changed = true;
-        return updater(post as PostWithMeta);
+        return updater(post);
       });
-      return changed ? next : current;
-    }
-    if (typeof current === 'object' && current && (current as PostWithMeta).id === postId) {
-      return updater(current as PostWithMeta);
-    }
-    return current;
-  });
+      return changed ? next : posts;
+    }),
+  );
 }
 
 function findUserReaction(
@@ -1872,13 +2110,10 @@ export function useDeletePost(_challengeId?: string | null) {
       await queryClient.cancelQueries({ queryKey: ['feed'] });
       const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
       queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
-        if (!current) {
-          return current;
+        if (isInfiniteHomeData(current) || Array.isArray(current)) {
+          return mapFeedCache(current, (posts) => posts.filter((post) => !post || post.id !== postId));
         }
-        if (Array.isArray(current)) {
-          return current.filter((post) => !post || (post as PostWithMeta).id !== postId);
-        }
-        if (typeof current === 'object' && (current as PostWithMeta).id === postId) {
+        if (typeof current === 'object' && current && (current as PostWithMeta).id === postId) {
           return { ...(current as PostWithMeta), deleted_at: new Date().toISOString() };
         }
         return current;

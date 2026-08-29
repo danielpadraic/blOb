@@ -10,7 +10,12 @@ export function OfficialSponsorLine({
   titleColor,
   compact = false,
 }: {
-  challenge: { sponsor_name?: string | null; is_official?: boolean | null };
+  challenge: {
+    sponsor_name?: string | null;
+    organization_name?: string | null;
+    organization?: string | null;
+    is_official?: boolean | null;
+  };
   muted: string;
   titleColor?: string;
   compact?: boolean;

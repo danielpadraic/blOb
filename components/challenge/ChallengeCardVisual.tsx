@@ -7,9 +7,7 @@ import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { officialFitnessProofIcons } from '@/components/challenge/ProofRequirementIcons';
-import { CashPrizeAmount } from '@/components/currency/CashPrizeAmount';
-import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
-import { BuckUsdAmount } from '@/components/currency/CurrencyMark';
+import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
@@ -22,7 +20,6 @@ import { challengeCardTags } from '@/lib/challengeTags';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { usesCumulativeScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialGuaranteeAmount, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
-import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 import { compactCountsFromStats } from '@/lib/board';
@@ -443,82 +440,12 @@ function ProofMark({ proof, dark }: { proof: ProofChip; dark: boolean }) {
 }
 
 function MoneyRow({ challenge, dark }: { challenge: ChallengeWithStats; dark: boolean }) {
-  const official = Boolean(challenge.is_official);
-  const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
-  const guarantee = officialGuaranteeAmount(challenge);
-  const prize = Math.max(Number(challenge.prize_pool) || 0, 0);
-  const labelColor = dark ? 'rgba(231,247,243,0.62)' : THEME.accent;
-  const valueClass = dark
-    ? 'text-[15px] font-extrabold'
-    : 'text-[18px] font-extrabold text-charcoal';
-  const valueColor = dark ? '#FFFFFF' : undefined;
-  const cols: Array<{ key: string; label: string; node: ReactNode }> = [];
-
-  if (official || buyIn >= 0) {
-    cols.push({
-      key: 'entry',
-      label: buyIn <= 0 ? 'Entry' : copy('create.buyIn'),
-      node: (
-        <EntryFeeAmount
-          amount={buyIn}
-          currency={challenge.currency}
-          textClassName={valueClass}
-          color={valueColor}
-          labeled
-        />
-      ),
-    });
-  }
-  if (official && guarantee > 0) {
-    cols.push({
-      key: 'guarantee',
-      label: copy('board.guarantee'),
-      node: <BuckUsdAmount amount={guarantee} textClassName={valueClass} color={valueColor} />,
-    });
-  }
-  cols.push({
-    key: 'prize',
-    label: copy('board.pot'),
-    node: (
-      <CashPrizeAmount
-        amount={prize}
-        currency={challenge.currency}
-        textClassName={valueClass}
-        color={valueColor}
-      />
-    ),
-  });
-
   return (
-    <View>
-      {cols.length === 1 ? (
-        <View>
-          <SectionLabel color={labelColor}>{cols[0].label}</SectionLabel>
-          <View className="mt-1">{cols[0].node}</View>
-        </View>
-      ) : (
-        <View className="flex-row" style={{ gap: 0 }}>
-          {cols.map((col, index) => (
-            <View
-              key={col.key}
-              className="flex-1"
-              style={{
-                paddingHorizontal: index === 0 ? 0 : 10,
-                borderLeftWidth: index === 0 ? 0 : 1,
-                borderLeftColor: dark ? 'rgba(255,255,255,0.16)' : THEME.border,
-              }}>
-              <AppText
-                className="text-[9px] font-extrabold uppercase"
-                style={{ color: labelColor, letterSpacing: 0.4 }}
-                numberOfLines={1}>
-                {col.label}
-              </AppText>
-              <View className="mt-0.5">{col.node}</View>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
+    <LobbyEntryPrizeRow
+      challenge={challenge}
+      color={dark ? '#FFFFFF' : THEME.textPrimary}
+      light={dark}
+    />
   );
 }
 

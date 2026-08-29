@@ -3,22 +3,19 @@ import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
+import { ChallengeCardClock, ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
+import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
-import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { ChallengeHeroOverflowButton } from '@/components/challenge/ChallengeDetailOverflow';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
 import { ProfileLink } from '@/components/profile/ProfileLink';
-import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { challengeCardTags } from '@/lib/challengeTags';
-import { displayChallengePot } from '@/lib/challengePot';
-import { formatCash, isBucksChallenge } from '@/lib/currency';
 import { isOfficialJoinable } from '@/lib/officialSeries';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -80,8 +77,6 @@ export function ChallengeHeroCard({
     showNotJoined: showNotJoined && !joined,
   });
   const subtitle = challengeGoalSubtitle(challenge);
-  const pool = displayChallengePot(challenge);
-  const bucks = isBucksChallenge(challenge);
   const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
   const muted = official ? 'rgba(255,255,255,0.78)' : THEME.textMuted;
   const labelMuted = official ? 'rgba(255,255,255,0.62)' : THEME.textMuted;
@@ -92,17 +87,26 @@ export function ChallengeHeroCard({
 
   const summary = (
     <View className="gap-3">
-      <ChallengeTagRow tags={tags} tone={official ? 'dark' : 'light'} />
-      <AppText
-        className="text-[24px] font-extrabold leading-7"
-        style={{ color: titleColor }}
-        numberOfLines={2}>
-        {challengeDisplayTitle(challenge)}
-      </AppText>
+      <View className="flex-row items-start">
+        <View className="min-w-0 flex-1">
+          <ChallengeTagRow tags={tags} tone={official ? 'dark' : 'light'} />
+          <AppText
+            className="mt-2 text-[24px] font-extrabold leading-7"
+            style={{ color: titleColor }}
+            numberOfLines={2}>
+            {challengeDisplayTitle(challenge)}
+          </AppText>
+        </View>
+        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+          <ChallengeCardClock challenge={challenge} nowMs={nowMs} overlay light={official} />
+          <ChallengeHeroOverflowButton light={official} />
+        </View>
+      </View>
       <ChallengeScheduleMeta
         challenge={challenge}
         nowMs={nowMs}
         tone={official ? 'dark' : 'light'}
+        hideClock
       />
       {official ? (
         <OfficialSponsorLine
@@ -169,34 +173,7 @@ export function ChallengeHeroCard({
       ) : (
         <View className="flex-row items-start justify-between gap-3">
           <View className="min-w-0 flex-1">
-            <FieldNoteLabel
-              note="pot"
-              tint="dark"
-              numberOfLines={1}
-              textClassName="text-[11px] font-semibold uppercase"
-              textStyle={{ color: labelMuted, letterSpacing: 0.2 }}>
-              Prize
-            </FieldNoteLabel>
-            <View className="mt-1 flex-row items-center" style={{ gap: 6, minWidth: 0 }}>
-              {bucks ? (
-                <AppText
-                  className="text-[22px] font-extrabold"
-                  style={{ color: titleColor }}
-                  numberOfLines={1}>
-                  {formatCash(pool)}
-                </AppText>
-              ) : (
-                <>
-                  <CurrencyMark currency="coins" size={22} />
-                  <AppText
-                    className="text-[22px] font-extrabold"
-                    style={{ color: titleColor }}
-                    numberOfLines={1}>
-                    {String(Math.round(pool))}
-                  </AppText>
-                </>
-              )}
-            </View>
+            <LobbyEntryPrizeRow challenge={challenge} color={titleColor} />
           </View>
           {showProgressRing && joined ? (
             <View className="items-center">
@@ -276,21 +253,16 @@ export function ChallengeHeroCard({
         />
       ) : null}
       <View className="gap-3 p-4">
-        <View className="flex-row items-start">
-          <View className="min-w-0 flex-1">
-            {onOpen ? (
-              <Pressable
-                onPress={onOpen}
-                accessibilityRole="button"
-                accessibilityLabel={challenge.title}>
-                {summary}
-              </Pressable>
-            ) : (
-              summary
-            )}
-          </View>
-          <ChallengeHeroOverflowButton light={official} />
-        </View>
+        {onOpen ? (
+          <Pressable
+            onPress={onOpen}
+            accessibilityRole="button"
+            accessibilityLabel={challenge.title}>
+            {summary}
+          </Pressable>
+        ) : (
+          summary
+        )}
         {filling ? (
           <OfficialInviteButton
             challengeId={challenge.id}

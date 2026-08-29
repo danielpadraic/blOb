@@ -5,6 +5,7 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import {
   challengeScheduleState,
   endedDatetimeLine,
+  lobbyCardClock,
   type ScheduleChallenge,
 } from '@/lib/lobbyChallenge';
 import { THEME } from '@/lib/theme';
@@ -96,35 +97,42 @@ export function ChallengeCardClock({
   challenge,
   nowMs,
   forceEnded = false,
+  overlay = false,
+  light = false,
 }: {
   challenge: ScheduleChallenge;
   nowMs?: number;
   forceEnded?: boolean;
+  overlay?: boolean;
+  light?: boolean;
 }) {
-  const live = challengeScheduleState(challenge, nowMs);
-  const datetime = forceEnded
-    ? endedDatetimeLine(challenge.ends_at, challenge.distributed_at)
-    : live.datetime;
-  const countdown = forceEnded ? null : live.countdown;
-  const urgent = !forceEnded && live.urgent;
-  if (!datetime && !countdown) {
+  const clock = lobbyCardClock(challenge, nowMs, forceEnded);
+  if (!clock) {
     return null;
   }
+  const muted = light ? 'rgba(255,255,255,0.86)' : THEME.textMuted;
   return (
-    <View style={{ alignItems: 'flex-end', flexShrink: 0, maxWidth: 132 }}>
-      {datetime ? (
-        <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
-          {datetime}
-        </AppText>
-      ) : null}
-      {countdown ? (
+    <View
+      style={{
+        alignItems: 'flex-end',
+        flexGrow: 0,
+        flexShrink: 0,
+        maxWidth: overlay ? undefined : 148,
+      }}>
+      {clock.lines.map((line) => (
         <AppText
-          className="text-[11px] font-semibold"
-          style={{ color: urgent ? THEME.danger : THEME.textMuted, fontVariant: ['tabular-nums'] }}
-          numberOfLines={1}>
-          {countdown}
+          key={line}
+          className={clock.urgent ? 'font-semibold' : undefined}
+          style={{
+            color: clock.urgent ? THEME.danger : muted,
+            fontSize: 10,
+            lineHeight: 13,
+            textAlign: 'right',
+            fontVariant: line.startsWith('Ends in') ? ['tabular-nums'] : undefined,
+          }}>
+          {line}
         </AppText>
-      ) : null}
+      ))}
     </View>
   );
 }
