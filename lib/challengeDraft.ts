@@ -676,6 +676,16 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
               proofs: ['photo'] as CreateChallengeValues['proofs'],
             })) ?? [emptyChallengeTask()],
     prize_structure: normalizePrizeStructure(challenge.prize_structure),
+    payout_mode:
+      challenge.payout_mode === 'winner_take_all' ||
+      challenge.payout_mode === 'top_places' ||
+      challenge.payout_mode === 'even_split_remaining'
+        ? challenge.payout_mode
+        : challenge.prize_structure === 'winner_take_all'
+          ? 'winner_take_all'
+          : challenge.prize_structure === 'top_places'
+            ? 'top_places'
+            : 'even_split_remaining',
     top_places_mode: normalizeTopPlacesMode(challenge.top_places_mode) ?? 'percent',
     top_places_value: String(challenge.top_places_value ?? 10),
     top_places_distribution: normalizeTopPlacesDistribution(challenge.top_places_distribution) ?? 'even',

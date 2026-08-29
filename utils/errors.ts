@@ -200,6 +200,10 @@ const CREATE_RPC_MESSAGES: Record<string, string> = {
   START_IN_PAST: 'Start time has to be in the future.',
   OFFICIAL_NOT_ALLOWED: 'Official competitions are hosted by blOb.',
   PRIVATE_NO_PLAYER_BUY_IN: 'Private challenges can’t charge competitors an entry fee for the prize.',
+  CONSISTENCY_NO_TOP_PLACES:
+    'Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.',
+  POINTS_NO_EVEN_SPLIT:
+    'Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.',
 };
 
 export function getCreateChallengeMessage(error: unknown): string {
@@ -905,6 +909,12 @@ function humanize(raw: string): string {
     message.includes('duration has to stay')
   ) {
     return 'Duration has to stay at least 1 day.';
+  }
+  if (message.includes('consistency_no_top_places')) {
+    return CREATE_RPC_MESSAGES.CONSISTENCY_NO_TOP_PLACES;
+  }
+  if (message.includes('points_no_even_split')) {
+    return CREATE_RPC_MESSAGES.POINTS_NO_EVEN_SPLIT;
   }
   if (
     message.includes('not enough people') ||

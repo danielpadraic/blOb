@@ -18,6 +18,7 @@ import {
   defaultSentenceForMethod,
   ensureProofSentence,
   firstProofMethod,
+  isDefaultFitnessProofRequirements,
   makeProof,
   proofDistanceMeters,
   proofRequirementsFrom,
@@ -34,6 +35,13 @@ import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
 import type { CreateChallengeValues, ExtraCreateTask } from '@/utils/validators';
 import { challengeRulesFromCreateValues } from '@/lib/challengeRuleCopy';
 import { copy } from '@/lib/copy';
+import {
+  defaultPayoutIdForFamily,
+  formatFamilyOf,
+  pairFromPayoutControl,
+  payoutControlFromPair,
+  type PayoutControlId,
+} from '@/lib/formatPayout';
 import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
 
 export type SimpleCurrency = 'coins' | 'bucks';
@@ -154,6 +162,8 @@ export type SimpleChallengeDraft = {
   cumulative_window?: 'challenge' | 'week' | 'day';
   distance_unit?: 'mi' | 'km';
   allowed_misses?: number;
+  payout?: PayoutControlId;
+  top_places_value?: number;
 };
 
 export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
@@ -187,6 +197,8 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     cumulative_window: 'challenge',
     distance_unit: 'mi',
     allowed_misses: 0,
+    payout: 'even_split_remaining',
+    top_places_value: 3,
   };
 }
 
@@ -306,6 +318,16 @@ export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | 
         duration_days: Math.max(Number(row.duration_days) || base.duration_days, 1),
       },
     ),
+    payout:
+      row.payout === 'even_split_remaining' ||
+      row.payout === 'last_standing' ||
+      row.payout === 'winner_take_all' ||
+      row.payout === 'top_count' ||
+      row.payout === 'top_percent' ||
+      row.payout === 'scaled'
+        ? row.payout
+        : defaultPayoutIdForFamily(formatFamilyOf({ scoring: row.scoring as string })),
+    top_places_value: Math.max(Number(row.top_places_value) || 0, 0) || base.top_places_value,
   });
 }
 
@@ -468,6 +490,27 @@ export function applyBeforeAfterHrPreset(): ChallengeProof[] {
   return BEFORE_AFTER_HR_PRESET.map((item) => makeProof(item.name, item.method, item.minutes));
 }
 
+function isOfficialFitnessProofBlob(proofs: ChallengeProof[]): boolean {
+  if (isDefaultFitnessProofRequirements(proofRequirementsFrom(proofs))) {
+    return true;
+  }
+  const names = proofs.map((item) => item.name.toLowerCase());
+  return (
+    names.some((name) => name.includes('pre-workout selfie')) &&
+    names.some((name) => name.includes('post-workout selfie'))
+  );
+}
+
+function simpleProofsForPublish(proofs: ChallengeProof[]): ChallengeProof[] {
+  if (proofs.length === 0 || isOfficialFitnessProofBlob(proofs)) {
+    return [];
+  }
+  if (proofs.every((item) => item.method === 'honor')) {
+    return proofs.slice(0, 1);
+  }
+  return proofs;
+}
+
 export function addSimpleProof(proofs: ChallengeProof[]): ChallengeProof[] {
   if (proofs.length >= SIMPLE_PROOF_CAP) {
     return proofs;
@@ -501,7 +544,6 @@ export function syncProofNameWithTask(
 export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateChallengeValues {
   const type = SIMPLE_TYPES.find((item) => item.value === draft.type) ?? SIMPLE_TYPES[0];
   const days = durationDaysOf(draft);
-  const required = requiredCheckinsOf(draft);
   const bucks = draft.currency === 'bucks';
   const corporate = draft.privacy_mode === 'private_corporate';
   const invite = corporate || draft.visibility === 'invite';
@@ -510,11 +552,27 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const fundingModel =
     buyIn > 0 && hostContribution > 0 ? 'hybrid' : hostContribution > 0 ? 'creator' : 'participants';
   const extra_tasks = filledExtraTasks(draft);
-  let proofs = (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
-    ensureProofSentence(item, item.minutes ?? DEFAULT_MIN_MINUTES),
-  );
   const howYouWin = simpleHowYouWin(draft);
-  if (howYouWin === 'cumulative' && !proofs.some((item) => item.method === 'distance')) {
+  const family = formatFamilyOf({ scoring: howYouWin, challenge_type: howYouWin, format: howYouWin });
+  const payoutId =
+    draft.payout &&
+    (family === 'consistency'
+      ? draft.payout === 'even_split_remaining' || draft.payout === 'last_standing'
+      : draft.payout === 'winner_take_all' ||
+        draft.payout === 'top_count' ||
+        draft.payout === 'top_percent' ||
+        draft.payout === 'scaled')
+      ? draft.payout
+      : defaultPayoutIdForFamily(family);
+  const payout = pairFromPayoutControl(payoutId, {
+    top_places_value: draft.top_places_value != null ? String(draft.top_places_value) : undefined,
+  });
+  let proofs = simpleProofsForPublish(
+    (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
+      ensureProofSentence(item, item.minutes ?? DEFAULT_MIN_MINUTES),
+    ),
+  );
+  if (howYouWin === 'cumulative' && proofs.length > 0 && !proofs.some((item) => item.method === 'distance')) {
     proofs = [
       makeProof(
         defaultSentenceForMethod('distance', 30, { unit: draft.distance_unit }),
@@ -555,7 +613,7 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     duration_value: String(days),
     duration_unit: 'days',
     duration_days: String(days),
-    target_count: String(required),
+    target_count: String(days),
     frequency: publishFrequencyOf(draft),
     rule_activity: type.activity,
     points_to_win: '',
@@ -564,7 +622,10 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     proofs: legacyTypes,
     challenge_proofs: proofs,
     tasks: DEFAULT_CREATE_VALUES.tasks,
-    prize_structure: 'equal_split',
+    prize_structure: payout.prize_structure,
+    top_places_mode: payout.top_places_mode,
+    top_places_value: payout.top_places_value,
+    top_places_distribution: payout.top_places_distribution,
     funding_model: fundingModel,
     creator_contribution: String(hostContribution),
     participant_cap: 'unlimited',
@@ -583,13 +644,15 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
       proofDistanceMeters(proofs.find((item) => item.method === 'distance')),
     ),
     proof_review: 'auto',
-    proof_type: proofTypeFromMethod(firstProofMethod(proofs)) as CreateChallengeValues['proof_type'],
+    proof_type: (proofs.length === 0
+      ? 'honor'
+      : proofTypeFromMethod(firstProofMethod(proofs))) as CreateChallengeValues['proof_type'],
     task: draft.task.trim(),
-    host_funded: bucks || hostContribution > 0,
+    host_funded: bucks ? hostContribution > 0 : hostContribution > 0,
     host_budget: String((draft.guarantee_enabled ?? false) ? hostContribution : 0),
     guarantee_enabled: draft.guarantee_enabled ?? !corporate,
-    required_checkins: String(required),
-    payout_mode: 'even_split_remaining',
+    required_checkins: String(days),
+    payout_mode: payout.payout_mode,
     format: howYouWin,
     currency: bucks ? 'bucks' : 'coins',
     creator_participating: true,
@@ -677,6 +740,13 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
       duration_preset,
       duration_days: days,
     }),
+    payout: payoutControlFromPair(formatFamilyOf(challenge), {
+      prize_structure: challenge.prize_structure,
+      payout_mode: challenge.payout_mode,
+      top_places_mode: challenge.top_places_mode,
+      top_places_distribution: challenge.top_places_distribution,
+    }),
+    top_places_value: Math.max(Number(challenge.top_places_value) || 0, 0) || 3,
   };
 }
 
@@ -764,6 +834,13 @@ export function createValuesToSimpleDraft(values: CreateChallengeValues): Simple
       values.cumulative_window === 'week' || values.cumulative_window === 'day' ? values.cumulative_window : 'challenge',
     distance_unit: 'mi',
     allowed_misses: clampAllowedMisses(Number(values.misses_allowed) || 0, { duration_preset, duration_days: days }),
+    payout: payoutControlFromPair(formatFamilyOf(values), {
+      prize_structure: values.prize_structure,
+      payout_mode: values.payout_mode,
+      top_places_mode: values.top_places_mode,
+      top_places_distribution: values.top_places_distribution,
+    }),
+    top_places_value: Math.max(Number(values.top_places_value) || 0, 0) || 3,
   });
 }
 

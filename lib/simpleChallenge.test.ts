@@ -40,6 +40,8 @@ describe('Simple How you win', () => {
     expect(values.challenge_type).toBe('cumulative');
     expect(values.format).toBe('cumulative');
     expect(values.challenge_type).not.toBe('points');
+    expect(values.prize_structure).toBe('winner_take_all');
+    expect(values.payout_mode).toBe('winner_take_all');
   });
 
   it('does not publish a leftover Simple Points draft as a points board', () => {
@@ -54,6 +56,28 @@ describe('Simple How you win', () => {
     expect(values.format).toBe('consistency');
     expect(values.points_to_win).toBe('');
     expect(values.prize_structure).toBe('equal_split');
+  });
+
+  it('writes the duration integer onto days, length, check-ins, and target', () => {
+    const draft = defaultSimpleDraft();
+    draft.title = 'Thirty';
+    draft.duration_preset = 30;
+    draft.duration_days = 30;
+    const values = simpleDraftToCreateValues(draft);
+    expect(values.duration_days).toBe('30');
+    expect(values.duration_value).toBe('30');
+    expect(values.required_checkins).toBe('30');
+    expect(values.target_count).toBe('30');
+  });
+
+  it('clears even-split when Simple switches to Cumulative', () => {
+    const draft = defaultSimpleDraft();
+    draft.title = 'Hit 100';
+    draft.scoring = 'cumulative';
+    draft.payout = 'winner_take_all';
+    const values = simpleDraftToCreateValues(draft);
+    expect(values.payout_mode).toBe('winner_take_all');
+    expect(values.prize_structure).not.toBe('top_places');
   });
 });
 

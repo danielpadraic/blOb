@@ -81,9 +81,6 @@ import {
   COLORS,
   DURATION_PRESETS,
   FUNDING_MODELS,
-  PRIZE_STRUCTURES,
-  TOP_PLACES_DISTRIBUTIONS,
-  TOP_PLACES_MODES,
 } from '@/lib/constants';
 import { wizardBobOops, wizardBobTips, wizardEntryTabTipIndex, wizardGoalTypeTipIndex, wizardStepForField, entryTabFromValues, type EntryTab } from '@/lib/createBobCopy';
 import { composeChallengeRules } from '@/lib/consistencyRules';
@@ -101,6 +98,14 @@ import {
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 import { applyLaneToFormValues, normalizeUserChallengeLane, type UserChallengeLane } from '@/lib/challengeLane';
 import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
+import {
+  defaultPayoutPairForFamily,
+  formatFamilyOf,
+  pairFromPayoutControl,
+  payoutControlFromPair,
+  payoutOptionsForFamily,
+  type PayoutControlId,
+} from '@/lib/formatPayout';
 import {
   endsAtFromStartAndDays,
   ensureSchedule,
@@ -865,6 +870,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     setValue('format', next === 'cumulative' ? 'cumulative' : next === 'points' ? 'points' : 'consistency', {
       shouldValidate: false,
     });
+    const family = formatFamilyOf({
+      challenge_type: next,
+      format: next === 'cumulative' ? 'cumulative' : next === 'points' ? 'points' : 'consistency',
+      duration_type: getValues('duration_type'),
+    });
+    const pair = defaultPayoutPairForFamily(family);
+    setValue('prize_structure', pair.prize_structure, { shouldValidate: true });
+    setValue('payout_mode', pair.payout_mode, { shouldValidate: false });
+    setValue('top_places_mode', pair.top_places_mode, { shouldValidate: false });
+    setValue('top_places_value', pair.top_places_value, { shouldValidate: false });
+    setValue('top_places_distribution', pair.top_places_distribution, { shouldValidate: false });
     if (next === 'cumulative') {
       setValue('misses_allowed', '0', { shouldDirty: false, shouldValidate: false });
       setValue('cumulative_metric', 'distance_m', { shouldDirty: false, shouldValidate: false });
@@ -933,7 +949,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return;
     }
     setValue('challenge_type', 'consistency', { shouldValidate: true });
+    setValue('format', 'lms', { shouldValidate: false });
     setValue('prize_structure', 'winner_take_all', { shouldValidate: true });
+    setValue('payout_mode', 'winner_take_all', { shouldValidate: false });
     const freq = getValues('frequency');
     if (freq !== 'daily' && freq !== 'weekly') {
       setValue('frequency', 'weekly', { shouldValidate: true });
@@ -1742,14 +1760,28 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               control={control}
               errors={errors}
               isUnlimited={isUnlimited}
+              family={formatFamilyOf(values)}
               prizeStructure={values.prize_structure}
+              payoutMode={values.payout_mode}
               topPlacesMode={values.top_places_mode}
+              topPlacesValue={values.top_places_value}
               topPlacesDistribution={values.top_places_distribution}
-              onPrizeChange={(value) => setValue('prize_structure', value, { shouldValidate: true })}
+              onPayoutChange={(id) => {
+                const pair = pairFromPayoutControl(id, {
+                  prize_structure: values.prize_structure,
+                  payout_mode: values.payout_mode,
+                  top_places_mode: values.top_places_mode,
+                  top_places_value: values.top_places_value,
+                  top_places_distribution: values.top_places_distribution,
+                });
+                setValue('prize_structure', pair.prize_structure, { shouldValidate: true });
+                setValue('payout_mode', pair.payout_mode, { shouldValidate: false });
+                setValue('top_places_mode', pair.top_places_mode, { shouldValidate: true });
+                setValue('top_places_value', pair.top_places_value, { shouldValidate: true });
+                setValue('top_places_distribution', pair.top_places_distribution, { shouldValidate: true });
+              }}
+              onTopValueChange={(value) => setValue('top_places_value', value, { shouldValidate: true })}
               onModeChange={(value) => setValue('top_places_mode', value, { shouldValidate: true })}
-              onDistributionChange={(value) =>
-                setValue('top_places_distribution', value, { shouldValidate: true })
-              }
             />
           ) : null}
           {step === STEP_SCORING ? (
@@ -2245,7 +2277,7 @@ function TypeSlide({
                     : item.value === 'consistency'
                       ? 'Check in on a schedule. Hit the target to finish.'
                       : item.value === 'cumulative'
-                        ? 'Add up distance. Everyone who hits the total splits the prize.'
+                        ? 'Add up distance. Ranked payout — winner take all or top places.'
                       : 'Earn points from a task list. Totals decide ranking.'
                 }
                 disabled={pointsLocked || (isUnlimited && item.value === 'cumulative')}
@@ -2509,26 +2541,41 @@ function PrizeSlide({
   control,
   errors,
   isUnlimited,
+  family,
   prizeStructure,
+  payoutMode,
   topPlacesMode,
+  topPlacesValue,
   topPlacesDistribution,
-  onPrizeChange,
+  onPayoutChange,
+  onTopValueChange,
   onModeChange,
-  onDistributionChange,
 }: {
   control: ReturnType<typeof useForm<CreateChallengeValues>>['control'];
   errors: ReturnType<typeof useForm<CreateChallengeValues>>['formState']['errors'];
   isUnlimited: boolean;
+  family: ReturnType<typeof formatFamilyOf>;
   prizeStructure: PrizeStructure;
+  payoutMode?: CreateChallengeValues['payout_mode'];
   topPlacesMode: CreateChallengeValues['top_places_mode'];
+  topPlacesValue: string;
   topPlacesDistribution: CreateChallengeValues['top_places_distribution'];
-  onPrizeChange: (value: PrizeStructure) => void;
+  onPayoutChange: (value: PayoutControlId) => void;
+  onTopValueChange: (value: string) => void;
   onModeChange: (value: CreateChallengeValues['top_places_mode']) => void;
-  onDistributionChange: (value: CreateChallengeValues['top_places_distribution']) => void;
 }) {
+  const selected = isUnlimited
+    ? 'last_standing'
+    : payoutControlFromPair(family, {
+        prize_structure: prizeStructure,
+        payout_mode: payoutMode,
+        top_places_mode: topPlacesMode,
+        top_places_distribution: topPlacesDistribution,
+      });
   const options = isUnlimited
-    ? PRIZE_STRUCTURES.filter((item) => item.value === 'winner_take_all')
-    : PRIZE_STRUCTURES;
+    ? payoutOptionsForFamily('consistency').filter((item) => item.id === 'last_standing')
+    : payoutOptionsForFamily(family);
+  const needsPlaces = !isUnlimited && (selected === 'top_count' || selected === 'top_percent' || selected === 'scaled');
 
   return (
     <View className="gap-3">
@@ -2540,33 +2587,34 @@ function PrizeSlide({
         <View className="gap-2">
           {options.map((item) => (
             <ChoiceCard
-              key={item.value}
-              selected={isUnlimited || prizeStructure === item.value}
+              key={item.id}
+              selected={selected === item.id}
               title={item.label}
-              body={
-                isUnlimited
-                  ? 'The last person still meeting the requirement wins the entire prize.'
-                  : item.helper
-              }
-              onPress={() => onPrizeChange(item.value)}
+              body={item.helper}
+              onPress={() => onPayoutChange(item.id)}
             />
           ))}
         </View>
       </FieldLabel>
       </FieldAnchor>
 
-      {isUnlimited || prizeStructure !== 'top_places' ? null : (
+      {needsPlaces ? (
         <View className="gap-3">
-          <FieldAnchor name="top_places_mode">
-          <FieldLabel label="Who counts as top places" error={errors.top_places_mode?.message}>
-            <SegmentedControl
-              accessibilityLabel="Top places mode"
-              value={topPlacesMode}
-              options={TOP_PLACES_MODES.map((item) => ({ value: item.value, label: item.label }))}
-              onChange={onModeChange}
-            />
-          </FieldLabel>
-          </FieldAnchor>
+          {selected === 'scaled' ? (
+            <FieldAnchor name="top_places_mode">
+            <FieldLabel label="Who those places are" error={errors.top_places_mode?.message}>
+              <SegmentedControl
+                accessibilityLabel="Top places mode"
+                value={topPlacesMode}
+                options={[
+                  { value: 'count', label: 'Top #' },
+                  { value: 'percent', label: 'Top %' },
+                ]}
+                onChange={onModeChange}
+              />
+            </FieldLabel>
+            </FieldAnchor>
+          ) : null}
           <FieldAnchor name="top_places_value">
           <Controller
             control={control}
@@ -2574,39 +2622,22 @@ function PrizeSlide({
             render={({ field: { onChange, onBlur, value, ref } }) => (
               <Input
                 ref={ref}
-                label={topPlacesMode === 'count' ? 'How many people' : 'What percent'}
-                placeholder="10"
+                label={selected === 'top_percent' || topPlacesMode === 'percent' ? 'What percent' : 'How many people'}
+                placeholder={selected === 'top_percent' ? '25' : '3'}
                 keyboardType="number-pad"
                 value={value}
-                onChangeText={onChange}
+                onChangeText={(next) => {
+                  onChange(next);
+                  onTopValueChange(next);
+                }}
                 onBlur={onBlur}
                 error={errors.top_places_value?.message}
-                hint={
-                  topPlacesMode === 'count'
-                    ? 'e.g. 3 means 1st, 2nd, and 3rd share the prize.'
-                    : 'e.g. 10 means the top 10% of finishers share the prize.'
-                }
               />
             )}
           />
           </FieldAnchor>
-          <FieldAnchor name="top_places_distribution">
-          <FieldLabel label="How those places split it" error={errors.top_places_distribution?.message}>
-            <View className="gap-2">
-              {TOP_PLACES_DISTRIBUTIONS.map((item) => (
-                <ChoiceCard
-                  key={item.value}
-                  selected={topPlacesDistribution === item.value}
-                  title={item.label}
-                  body={item.helper}
-                  onPress={() => onDistributionChange(item.value)}
-                />
-              ))}
-            </View>
-          </FieldLabel>
-          </FieldAnchor>
         </View>
-      )}
+      ) : null}
     </View>
   );
 }

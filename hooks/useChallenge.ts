@@ -14,6 +14,7 @@ import {
   fetchCompetingChallenges,
   fetchDiscoverChallenges,
   fetchFriendsDiscoverChallenges,
+  fetchEndedLobbyChallenges,
   fetchHostingChallenges,
   fetchJoinedLobbyChallenges,
   fetchLobbyChallenges,
@@ -79,6 +80,7 @@ import { leaveChallenge, topUpChallengePrize } from '@/lib/api/challenges';
 import { cancelProviderRef, getPaymentsProvider } from '@/services/payments';
 import { getErrorMessage } from '@/utils/errors';
 import { challengeCurrency, formatCash, formatWallet, walletBalance } from '@/lib/currency';
+import { durationIntegerForPublish, publishPayoutFields } from '@/lib/formatPayout';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchCurrentUserProfile } from '@/hooks/useProfile';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -127,6 +129,17 @@ export function useCompetingChallenges() {
     enabled: Boolean(user?.id),
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       return withParticipantCounts(await fetchCompetingChallenges(user!.id));
+    },
+  });
+}
+
+export function useEndedChallenges() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['lobby-ended', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<ChallengeWithStats[]> => {
+      return withParticipantCounts(await fetchEndedLobbyChallenges(user!.id));
     },
   });
 }
@@ -412,18 +425,21 @@ export function useMyChallengeProgress() {
     queryKey: ['my-challenge-progress', user?.id],
     enabled: Boolean(user?.id),
     queryFn: async (): Promise<
-      Pick<ChallengeParticipant, 'challenge_id' | 'days_completed' | 'status' | 'eliminated_at'>[]
+      Pick<
+        ChallengeParticipant,
+        'challenge_id' | 'days_completed' | 'status' | 'eliminated_at' | 'place' | 'result'
+      >[]
     > => {
       const { data, error } = await supabase
         .from('challenge_participants')
-        .select('challenge_id, days_completed, status, eliminated_at')
+        .select('challenge_id, days_completed, status, eliminated_at, place, result')
         .eq('user_id', user!.id);
       if (error) {
         throw new Error(getErrorMessage(error));
       }
       return (data ?? []) as Pick<
         ChallengeParticipant,
-        'challenge_id' | 'days_completed' | 'status' | 'eliminated_at'
+        'challenge_id' | 'days_completed' | 'status' | 'eliminated_at' | 'place' | 'result'
       >[];
     },
   });
@@ -775,7 +791,17 @@ export function useCreateChallenge() {
       const schedule = ensureSchedule(values);
       const isPoints = !unlimited && values.challenge_type === 'points';
       const durationDays = unlimited ? null : durationDaysFromValues(schedule);
-      const targetCount = checkinTargetForStore(values, durationDays);
+      const durationInt = unlimited ? null : durationIntegerForPublish(durationDays);
+      const targetCount = isPoints ? checkinTargetForStore(values, durationDays) : durationInt ?? 1;
+      const payout = unlimited
+        ? {
+            prize_structure: 'winner_take_all' as const,
+            payout_mode: 'winner_take_all' as const,
+            top_places_mode: null as const,
+            top_places_value: null as const,
+            top_places_distribution: null as const,
+          }
+        : publishPayoutFields(values);
       const rulesText = composeChallengeRules(values);
       const rulesStructured = buildRulesStructured(values);
       const tasks = persistTasksForPublish(values, isPoints);
@@ -825,14 +851,18 @@ export function useCreateChallenge() {
         description: values.description?.trim() ? values.description.trim() : null,
         rules: rulesText || null,
         created_by: user.id,
-        buy_in_amount: lane.buy_in_amount,
-        days_required: durationDays ?? targetCount,
+        buy_in_amount: lane.currency === 'bucks' ? 0 : lane.buy_in_amount,
+        days_required: durationInt ?? targetCount,
         min_minutes: minMinutes,
         proof_requirements: isPoints
           ? []
           : namedProofs.length > 0
             ? proofRequirementsFrom(namedProofs)
-            : values.proofs.map((type) => ({ type, required: true })),
+            : values.proof_type === 'honor' || values.proofs.every((type) => type === 'honor')
+              ? []
+              : values.proofs
+                  .filter((type) => type !== 'pre_selfie' && type !== 'post_selfie' && type !== 'hr_monitor')
+                  .map((type) => ({ type, required: true })),
         proofs: isPoints ? [] : proofsForStorage(namedProofs),
         target_count: targetCount,
         frequency: isPoints ? 'once' : values.frequency,
@@ -840,19 +870,18 @@ export function useCreateChallenge() {
         starts_at: schedule.starts_at,
         ends_at: unlimited ? null : schedule.ends_at,
         end_mode: unlimited ? 'indefinite_lms' : publishEndMode(schedule.end_mode),
-        length_value: durationDays,
-        duration_days: durationDays,
+        length_value: durationInt,
+        duration_days: durationInt,
         length_unit: unlimited ? null : schedule.duration_unit,
         category: values.category,
         challenge_type: unlimited ? 'consistency' : values.challenge_type,
         visibility: lane.visibility,
-        prize_structure: unlimited ? 'winner_take_all' : values.prize_structure,
-        top_places_mode:
-          values.prize_structure === 'top_places' ? values.top_places_mode : null,
+        prize_structure: payout.prize_structure,
+        top_places_mode: payout.prize_structure === 'top_places' ? payout.top_places_mode : null,
         top_places_value:
-          values.prize_structure === 'top_places' ? Number(values.top_places_value) : null,
+          payout.prize_structure === 'top_places' ? Number(payout.top_places_value) : null,
         top_places_distribution:
-          values.prize_structure === 'top_places' ? values.top_places_distribution : null,
+          payout.prize_structure === 'top_places' ? payout.top_places_distribution : null,
         funding_model: values.funding_model,
         creator_contribution: contribution,
         max_participants: maxParticipants,
@@ -875,7 +904,7 @@ export function useCreateChallenge() {
             : 0,
         format: unlimited ? 'lms' : values.format ?? values.challenge_type,
         task: values.task?.trim() || values.rule_activity.trim() || null,
-        required_checkins: isPoints ? 1 : Number(values.required_checkins) || targetCount,
+        required_checkins: durationInt ?? (isPoints ? 1 : targetCount),
         misses_allowed:
           isPoints || values.challenge_type === 'cumulative'
             ? 0
@@ -884,13 +913,7 @@ export function useCreateChallenge() {
           values.proof_type ??
           proofTypeFromMethod(firstProofMethod(namedProofs)),
         proof_review: values.proof_review ?? 'auto',
-        payout_mode:
-          values.payout_mode ??
-          (values.prize_structure === 'winner_take_all'
-            ? 'winner_take_all'
-            : values.prize_structure === 'top_places'
-              ? 'top_places'
-              : 'even_split_remaining'),
+        payout_mode: payout.payout_mode,
         timezone: resolveChallengeTimezone(),
         start_rule: 'at_starts_at',
         discoverability: values.discoverability ?? null,
@@ -1073,7 +1096,17 @@ export function useUpdateUserChallenge() {
       const schedule = ensureSchedule(values);
       const isPoints = !unlimited && values.challenge_type === 'points';
       const durationDays = unlimited ? null : durationDaysFromValues(schedule);
-      const targetCount = checkinTargetForStore(values, durationDays);
+      const durationInt = unlimited ? null : durationIntegerForPublish(durationDays);
+      const targetCount = isPoints ? checkinTargetForStore(values, durationDays) : durationInt ?? 1;
+      const payout = unlimited
+        ? {
+            prize_structure: 'winner_take_all' as const,
+            payout_mode: 'winner_take_all' as const,
+            top_places_mode: null as const,
+            top_places_value: null as const,
+            top_places_distribution: null as const,
+          }
+        : publishPayoutFields(values);
       const namedProofs = namedProofsForPublish(values);
       const placeError = proofsReadyToPublish(namedProofs);
       if (placeError) {
@@ -1088,9 +1121,9 @@ export function useUpdateUserChallenge() {
         ends_at: unlimited ? null : schedule.ends_at,
         is_unlimited: unlimited,
         min_participants: Math.max(Number(values.min_participants) || 2, 2),
-        days_required: durationDays ?? targetCount,
-        length_value: durationDays,
-        duration_days: durationDays,
+        days_required: durationInt ?? targetCount,
+        length_value: durationInt,
+        duration_days: durationInt,
         target_count: targetCount,
         min_minutes: minMinutesForPublish(values),
         frequency: isPoints ? 'once' : values.frequency,
@@ -1098,7 +1131,7 @@ export function useUpdateUserChallenge() {
         proof_requirements:
           namedProofs.length > 0
             ? proofRequirementsFrom(namedProofs)
-            : values.proofs.map((type) => ({ type, required: true })),
+            : [],
         tasks: persistTasksForPublish(values, isPoints),
         rules_list: buildRulesStructured(values),
         visibility: values.visibility,
@@ -1106,7 +1139,7 @@ export function useUpdateUserChallenge() {
         privacy_mode: privacyMode,
         task: values.task?.trim() || values.rule_activity.trim() || null,
         length_unit: unlimited ? null : schedule.duration_unit,
-        required_checkins: isPoints ? 1 : Number(values.required_checkins) || targetCount,
+        required_checkins: durationInt ?? (isPoints ? 1 : targetCount),
         misses_allowed:
           isPoints || values.challenge_type === 'cumulative'
             ? 0
@@ -1115,6 +1148,13 @@ export function useUpdateUserChallenge() {
         cover_image_url: values.cover_image_url?.trim() || null,
         rules_video_url: values.rules_video_url?.trim() || null,
         format: unlimited ? 'lms' : values.format ?? values.challenge_type,
+        challenge_type: unlimited ? 'consistency' : values.challenge_type,
+        prize_structure: payout.prize_structure,
+        payout_mode: payout.payout_mode,
+        top_places_mode: payout.prize_structure === 'top_places' ? payout.top_places_mode : null,
+        top_places_value: payout.prize_structure === 'top_places' ? Number(payout.top_places_value) : null,
+        top_places_distribution:
+          payout.prize_structure === 'top_places' ? payout.top_places_distribution : null,
         cumulative_metric: values.challenge_type === 'cumulative' ? values.cumulative_metric ?? 'distance_m' : null,
         cumulative_target:
           values.challenge_type === 'cumulative' ? Math.max(Number(values.cumulative_target) || 0, 0) : null,

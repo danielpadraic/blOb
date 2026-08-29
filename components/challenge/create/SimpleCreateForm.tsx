@@ -41,6 +41,11 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { wizardStepIndex } from '@/lib/challengeTemplates';
 import {
+  defaultPayoutIdForFamily,
+  formatFamilyOf,
+  payoutOptionsForFamily,
+} from '@/lib/formatPayout';
+import {
   createHrefForDraft,
   isSimpleCreateDraft,
   pickSimpleDraft,
@@ -341,7 +346,7 @@ export function SimpleCreateForm() {
       const next = remote.simple ?? draftRef.current;
       if (isLeftoverSimplePointsDraft(next)) {
         setLeftoverPointsNotice(true);
-        setDraft({ ...next, scoring: 'consistency' });
+        setDraft({ ...next, scoring: 'consistency', payout: 'even_split_remaining' });
         return;
       }
       setDraft(next);
@@ -792,6 +797,7 @@ export function SimpleCreateForm() {
                     proofs: nextProofs,
                     cumulative_window: draft.cumulative_window ?? 'challenge',
                     cumulative_target_meters: draft.cumulative_target_meters || milesToMeters(100),
+                    payout: defaultPayoutIdForFamily(item.value === 'cumulative' ? 'points' : 'consistency'),
                   });
                 }}
               />
@@ -837,10 +843,32 @@ export function SimpleCreateForm() {
                   />
                 ))}
               </View>
-              <AppText className="text-[12px] leading-5 text-muted">
-                Everyone who hits the total splits the prize.
-              </AppText>
             </View>
+          ) : null}
+          <SectionLabel>Payout</SectionLabel>
+          <View className="flex-row flex-wrap gap-2">
+            {payoutOptionsForFamily(
+              formatFamilyOf({ scoring: simpleHowYouWin(draft), challenge_type: simpleHowYouWin(draft) }),
+            ).map((item) => (
+              <IconChip
+                key={item.id}
+                icon=""
+                label={item.label}
+                selected={(draft.payout ?? defaultPayoutIdForFamily(
+                  formatFamilyOf({ scoring: simpleHowYouWin(draft) }),
+                )) === item.id}
+                onPress={() => patch({ payout: item.id })}
+              />
+            ))}
+          </View>
+          {(draft.payout === 'top_count' || draft.payout === 'top_percent' || draft.payout === 'scaled') ? (
+            <StepperField
+              label={draft.payout === 'top_percent' ? 'Top percent' : 'Top places'}
+              value={Math.max(Number(draft.top_places_value) || (draft.payout === 'top_percent' ? 25 : 3), 1)}
+              min={1}
+              max={draft.payout === 'top_percent' ? 100 : 99}
+              onChange={(top_places_value) => patch({ top_places_value })}
+            />
           ) : null}
         </View>
 

@@ -42,6 +42,10 @@ const RPC_MESSAGES: Record<string, string> = {
   LANE_REQUIRED: 'Choose Coin Challenge or Private Challenge.',
   OFFICIAL_NOT_ALLOWED: 'Official competitions are hosted by blOb.',
   PRIVATE_NO_PLAYER_BUY_IN: 'Private challenges can’t charge competitors an entry fee for the prize. You fund the prize.',
+  CONSISTENCY_NO_TOP_PLACES:
+    'Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.',
+  POINTS_NO_EVEN_SPLIT:
+    'Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.',
   START_IN_PAST: 'Start time has to be in the future.',
   CHALLENGE_NOT_FOUND: 'Challenge not found.',
   ALREADY_STARTED: 'This challenge already started.',
