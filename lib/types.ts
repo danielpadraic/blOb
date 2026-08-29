@@ -669,6 +669,7 @@ export interface PostWithMeta extends Post {
   comments?: CommentWithAuthor[];
   reactions?: Reaction[];
   mentions?: PostMention[];
+  share_parent?: PostWithMeta | null;
 }
 
 export interface Reaction {

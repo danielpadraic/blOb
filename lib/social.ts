@@ -1136,7 +1136,7 @@ async function selectReels(limit: number) {
 }
 
 export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> {
-  const { data, error } = await selectReels(Math.max(limit * 4, SOCIAL_PAGE_SIZE));
+  const { data, error } = await selectReels(Math.max(1, limit));
   if (error) {
     if (isMissingRelationError(error)) {
       return [];

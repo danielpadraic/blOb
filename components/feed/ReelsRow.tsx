@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
-import { Pressable, ScrollView, View } from 'react-native';
+import { InteractionManager, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
@@ -50,7 +50,30 @@ function reelHandle(profile?: PublicProfile | null): string {
 
 export function ReelsRow() {
   const router = useRouter();
-  const reels = useReels(8);
+  const [railReady, setRailReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const arm = () => {
+      if (!cancelled) {
+        setRailReady(true);
+      }
+    };
+    if (Platform.OS === 'web' && typeof requestIdleCallback === 'function') {
+      const idleId = requestIdleCallback(arm, { timeout: 800 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(idleId);
+      };
+    }
+    const handle = InteractionManager.runAfterInteractions(arm);
+    return () => {
+      cancelled = true;
+      handle.cancel();
+    };
+  }, []);
+
+  const reels = useReels(8, { enabled: railReady });
   const liveReels = (reels.data ?? []).slice(0, 8).map((reel, index) => ({
     id: reel.id,
     handle: reelHandle(reel.profile),

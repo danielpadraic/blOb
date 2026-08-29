@@ -107,6 +107,7 @@ type ChallengeInviteCardProps = {
   host?: InviteHost | null;
   showStateTags?: boolean;
   resultLine?: string | null;
+  checkedInToday?: boolean;
   onPress?: () => void;
 };
 
@@ -271,6 +272,7 @@ export function ChallengeInviteCard({
   eliminated = false,
   host,
   resultLine,
+  checkedInToday,
   onPress: _onPress,
 }: ChallengeInviteCardProps) {
   const official =
@@ -304,7 +306,7 @@ export function ChallengeInviteCard({
   const checkinEnabled =
     joined && !eliminated && (context === 'lobby' || section === 'active');
   const periodCheckin = usePeriodCheckin(
-    checkinEnabled ? challenge.id : undefined,
+    typeof checkedInToday === 'boolean' || !checkinEnabled ? undefined : challenge.id,
     {
       is_official: challenge.is_official,
       series_id: challenge.series_id,
@@ -324,7 +326,9 @@ export function ChallengeInviteCard({
     },
   );
   const checkedIn =
-    periodCheckin.data?.phase === 'submitted' || Boolean(periodCheckin.data?.submitted_at);
+    typeof checkedInToday === 'boolean'
+      ? checkedInToday
+      : periodCheckin.data?.phase === 'submitted' || Boolean(periodCheckin.data?.submitted_at);
   const canCheckIn =
     checkinEnabled &&
     inviteCardCanCheckIn({ challenge, joined, eliminated }) &&

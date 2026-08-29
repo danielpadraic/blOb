@@ -125,11 +125,11 @@ export default function ChallengesScreen() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const tone = asCopyTone(profile?.motivation_tone);
-  const hostingQuery = useHostingChallenges();
-  const activeQuery = useCompetingChallenges();
-  const officialQuery = useOfficialDiscoverChallenges();
-  const endedQuery = useEndedChallenges();
-  const friendsQuery = useFriendsDiscoverChallenges();
+  const hostingQuery = useHostingChallenges({ enabled: tab === 'hosting' });
+  const activeQuery = useCompetingChallenges({ enabled: tab === 'active' || !tabReady });
+  const officialQuery = useOfficialDiscoverChallenges({ enabled: tab === 'official' || !tabReady });
+  const endedQuery = useEndedChallenges({ enabled: tab === 'ended' });
+  const friendsQuery = useFriendsDiscoverChallenges({ enabled: tab === 'active' });
   const mine = useMyChallengeProgress();
   const draftsQuery = useChallengeDrafts();
   const discardDraft = useDiscardChallengeDraft();
@@ -264,7 +264,6 @@ export default function ChallengesScreen() {
       return;
     }
     const pending =
-      (hostingQuery.isPending && !hostingQuery.data) ||
       (activeQuery.isPending && !activeQuery.data) ||
       (officialQuery.isPending && !officialQuery.data);
     if (pending) {
@@ -276,8 +275,6 @@ export default function ChallengesScreen() {
     activeAll.length,
     activeQuery.data,
     activeQuery.isPending,
-    hostingQuery.data,
-    hostingQuery.isPending,
     officialQuery.data,
     officialQuery.isPending,
     tabReady,
@@ -366,21 +363,28 @@ export default function ChallengesScreen() {
     return map;
   }, [friendProfiles.data, friendsAll, hostProfiles.data]);
 
-  const loading =
-    (hostingQuery.isPending &&
-      !hostingQuery.data &&
-      activeQuery.isPending &&
-      !activeQuery.data &&
-      officialQuery.isPending &&
-      !officialQuery.data) ||
-    (tab === 'ended' && endedQuery.isPending && !endedQuery.data);
-  const failed =
-    hostingQuery.isError &&
-    activeQuery.isError &&
-    officialQuery.isError &&
-    !hostingQuery.data &&
-    !activeQuery.data &&
-    !officialQuery.data;
+  const loading = !tabReady
+    ? (officialQuery.isPending && !officialQuery.data) ||
+      (activeQuery.isPending && !activeQuery.data)
+    : tab === 'ended'
+      ? endedQuery.isPending && !endedQuery.data
+      : tab === 'hosting'
+        ? hostingQuery.isPending && !hostingQuery.data
+        : tab === 'active'
+          ? activeQuery.isPending && !activeQuery.data
+          : officialQuery.isPending && !officialQuery.data;
+  const failed = !tabReady
+    ? officialQuery.isError &&
+      activeQuery.isError &&
+      !officialQuery.data &&
+      !activeQuery.data
+    : tab === 'ended'
+      ? endedQuery.isError && !endedQuery.data
+      : tab === 'hosting'
+        ? hostingQuery.isError && !hostingQuery.data
+        : tab === 'active'
+          ? activeQuery.isError && !activeQuery.data
+          : officialQuery.isError && !officialQuery.data;
 
   const tabRows =
     tab === 'official' ? official : tab === 'active' ? active : tab === 'hosting' ? hosting : ended;
@@ -399,17 +403,24 @@ export default function ChallengesScreen() {
   }
 
   async function onRefresh() {
-    await Promise.all([
-      hostingQuery.refetch(),
-      activeQuery.refetch(),
+    const jobs = [
       officialQuery.refetch(),
-      endedQuery.refetch(),
-      friendsQuery.refetch(),
+      activeQuery.refetch(),
       mine.refetch(),
       draftsQuery.refetch(),
       todayCheckins.refetch(),
       friendCountsQuery.refetch(),
-    ]);
+    ];
+    if (tab === 'hosting') {
+      jobs.push(hostingQuery.refetch());
+    }
+    if (tab === 'ended') {
+      jobs.push(endedQuery.refetch());
+    }
+    if (tab === 'active') {
+      jobs.push(friendsQuery.refetch());
+    }
+    await Promise.all(jobs);
   }
 
   function onLayoutChange(next: LobbyLayout) {
@@ -606,11 +617,11 @@ export default function ChallengesScreen() {
           refreshControl={
             <RefreshControl
               refreshing={
-                (hostingQuery.isRefetching ||
+                (officialQuery.isRefetching ||
                   activeQuery.isRefetching ||
-                  officialQuery.isRefetching ||
-                  endedQuery.isRefetching ||
-                  friendsQuery.isRefetching) &&
+                  (tab === 'hosting' && hostingQuery.isRefetching) ||
+                  (tab === 'ended' && endedQuery.isRefetching) ||
+                  (tab === 'active' && friendsQuery.isRefetching)) &&
                 !loading
               }
               onRefresh={() => void onRefresh()}
@@ -657,6 +668,7 @@ export default function ChallengesScreen() {
                       nowMs={nowMs}
                       currentUserId={user?.id}
                       progress={progressById.get(challenge.id)}
+                      checkedInToday={checkedToday.has(challenge.id)}
                       host={
                         (challenge.created_by && hostById.get(challenge.created_by)) || null
                       }
@@ -674,6 +686,7 @@ export default function ChallengesScreen() {
                   nowMs={nowMs}
                   currentUserId={user?.id}
                   progress={progressById.get(challenge.id)}
+                  checkedInToday={checkedToday.has(challenge.id)}
                   host={
                     challenge.is_official
                       ? null
@@ -728,6 +741,7 @@ function LobbyListCard({
   nowMs,
   currentUserId,
   progress,
+  checkedInToday,
   host,
   onPress,
 }: {
@@ -737,6 +751,7 @@ function LobbyListCard({
   nowMs: number;
   currentUserId?: string;
   progress?: { days: number; status: string; eliminated?: boolean; result?: string | null; place?: number | null };
+  checkedInToday?: boolean;
   host?: InviteHost | null;
   onPress: (id: string, snapshot?: ChallengeWithStats) => void;
 }) {
@@ -773,6 +788,7 @@ function LobbyListCard({
       eliminated={Boolean(progress?.eliminated)}
       host={host}
       resultLine={resultLine}
+      checkedInToday={checkedInToday}
       onPress={open}
     />
   );

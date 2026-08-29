@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Pressable, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
@@ -13,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
 import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/hooks/useFeed';
 import { rawFeedError } from '@/lib/feedError';
-import { useActiveStories } from '@/hooks/useSocial';
+import { socialKeys } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
@@ -27,22 +28,22 @@ export default function FeedScreen() {
   );
   const { user } = useAuth();
   const tone = useCopyTone();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ postId?: string }>();
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
   const feed = useFeed();
-  const stories = useActiveStories();
   const createPost = useCreatePost();
   const createComment = useCreateComment();
   const toggleReaction = useToggleReaction();
   const posts = feed.data ?? [];
   const feedWarning = feed.warning ?? (feed.error ? rawFeedError(feed.error) : null);
   const showFeedBanner = Boolean(feed.error || feedWarning);
-  const refreshing = (feed.isRefetching || stories.isRefetching) && !feed.isLoading;
+  const refreshing = feed.isRefetching && !feed.isLoading;
 
   const onRefresh = useCallback(() => {
     void feed.refetch();
-    void stories.refetch();
-  }, [feed, stories]);
+    void queryClient.invalidateQueries({ queryKey: socialKeys.stories() });
+  }, [feed, queryClient]);
 
   const onCompose = useCallback(
     (input: ComposeInput) => createPost.mutateAsync(input),

@@ -84,18 +84,32 @@ import { useAuth } from '@/hooks/useAuth';
 import { fetchCurrentUserProfile } from '@/hooks/useProfile';
 import type { CreateChallengeValues } from '@/utils/validators';
 
+let lobbyBootstrap: Promise<void> | null = null;
+let lobbyBootstrapAt = 0;
+const LOBBY_BOOTSTRAP_MS = 30_000;
+
 async function prepareLobby(_userId?: string) {
-  try {
-    await supabase.rpc('tick_official_series');
-  } catch (error) {
-    console.log('[blob:lobby] official series tick skipped', error);
+  const now = Date.now();
+  if (lobbyBootstrap && now - lobbyBootstrapAt < LOBBY_BOOTSTRAP_MS) {
+    return lobbyBootstrap;
   }
-  try {
-    await syncChallengeStatuses();
-  } catch (error) {
-    console.log('[blob:lobby] status sync skipped', error);
-  }
+  lobbyBootstrapAt = now;
+  lobbyBootstrap = (async () => {
+    try {
+      await supabase.rpc('tick_official_series');
+    } catch (error) {
+      console.log('[blob:lobby] official series tick skipped', error);
+    }
+    try {
+      await syncChallengeStatuses();
+    } catch (error) {
+      console.log('[blob:lobby] status sync skipped', error);
+    }
+  })();
+  return lobbyBootstrap;
 }
+
+type LobbyQueryOptions = { enabled?: boolean };
 
 export function useDiscoverChallenges() {
   const { user } = useAuth();
@@ -109,44 +123,44 @@ export function useDiscoverChallenges() {
   });
 }
 
-export function useHostingChallenges() {
+export function useHostingChallenges(options?: LobbyQueryOptions) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['lobby-hosting', user?.id],
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id) && options?.enabled !== false,
     queryFn: async (): Promise<ChallengeWithStats[]> => {
-      await prepareLobby(user?.id);
       return withParticipantCounts(await fetchHostingChallenges(user!.id));
     },
   });
 }
 
-export function useCompetingChallenges() {
+export function useCompetingChallenges(options?: LobbyQueryOptions) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['lobby-active', user?.id],
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id) && options?.enabled !== false,
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       return withParticipantCounts(await fetchCompetingChallenges(user!.id));
     },
   });
 }
 
-export function useEndedChallenges() {
+export function useEndedChallenges(options?: LobbyQueryOptions) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['lobby-ended', user?.id],
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id) && options?.enabled !== false,
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       return withParticipantCounts(await fetchEndedLobbyChallenges(user!.id));
     },
   });
 }
 
-export function useOfficialDiscoverChallenges() {
+export function useOfficialDiscoverChallenges(options?: LobbyQueryOptions) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['lobby-official', user?.id],
+    enabled: options?.enabled !== false,
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       await prepareLobby(user?.id);
       return withParticipantCounts(await fetchOfficialDiscoverChallenges(user?.id));
@@ -154,11 +168,11 @@ export function useOfficialDiscoverChallenges() {
   });
 }
 
-export function useFriendsDiscoverChallenges() {
+export function useFriendsDiscoverChallenges(options?: LobbyQueryOptions) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['lobby-friends', user?.id],
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id) && options?.enabled !== false,
     queryFn: async (): Promise<Array<FriendChallengeProof & { challenge: ChallengeWithStats }>> => {
       const rows = await fetchFriendsDiscoverChallenges(user!.id);
       const withCounts = await withParticipantCounts(rows.map((row) => row.challenge));

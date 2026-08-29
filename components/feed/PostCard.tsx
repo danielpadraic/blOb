@@ -46,6 +46,7 @@ import { supabase } from '@/lib/supabase';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { circleDetailHref } from '@/lib/routes';
 import { circleDisplayName, circleIdFromPost } from '@/lib/circles';
+import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
@@ -85,6 +86,7 @@ function PostCardInner({
   highlighted,
   homeFeed,
 }: PostCardProps) {
+  const tone = useCopyTone();
   const [showComposer, setShowComposer] = useState(false);
   const [composerExpanded, setComposerExpanded] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -101,11 +103,13 @@ function PostCardInner({
   const content = post.content?.trim() ?? '';
   const quote = asQuoteSnapshot(post.quote_snapshot);
   const shareParentId = isClipSharePost(post) ? post.parent_id ?? post.quoted_post_id : null;
-  const parentRound = usePost(shareParentId);
+  const shareParentBatched = isClipSharePost(post) && post.share_parent !== undefined;
+  const parentRound = usePost(shareParentBatched ? null : shareParentId);
+  const shareParent = shareParentBatched ? post.share_parent ?? null : parentRound.data;
   const shareUnavailable =
     isClipSharePost(post) &&
-    !parentRound.isLoading &&
-    (roundShareClipUnavailable(parentRound.data) || !parentRound.data);
+    !(shareParentBatched ? false : parentRound.isLoading) &&
+    (roundShareClipUnavailable(shareParent) || !shareParent);
   const shareKind = clipShareKind(post);
   const homeRoundShare = Boolean(homeFeed && isRoundSharePost(post));
   const shareClipId =
@@ -404,7 +408,7 @@ function PostCardInner({
 
         {isClipSharePost(post) ? (
           <RoundShareEmbed
-            coverUrl={quote?.media_preview_url ?? parentRound.data?.media_urls?.[0] ?? null}
+            coverUrl={quote?.media_preview_url ?? shareParent?.media_urls?.[0] ?? null}
             unavailable={Boolean(shareUnavailable)}
             onPress={
               shareUnavailable || !shareClipId
@@ -728,7 +732,7 @@ function WallHostLine({
   if (!host.id && !host.username) {
     return (
       <AppText className="flex-1 text-[13px] leading-5" style={{ color: THEME.textMuted }} numberOfLines={2}>
-        {copy('wall.onHost', 'neutral', { name: name || 'this blob' })}
+        {copy('wall.onHost', tone, { name: name || 'this blob' })}
       </AppText>
     );
   }

@@ -6,6 +6,7 @@ import { clipPostsQueryKey } from '@/lib/clipPost';
 import { isHomeExcludedClipType } from '@/lib/clipPost';
 import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
 import { asQuoteSnapshot } from '@/lib/quotePost';
+import { isClipSharePost } from '@/lib/roundShare';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { asPostAudience, DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { reportAppError } from '@/lib/appErrors';
@@ -980,7 +981,27 @@ async function fetchPosts(input: {
   });
 
   try {
-    return await hydrateAuthors(await withSocial(visible.slice(0, 50), userId));
+    const page = visible.slice(0, 50);
+    const parentIds = [
+      ...new Set(
+        page
+          .filter((post) => isClipSharePost(post))
+          .map((post) => post.parent_id ?? post.quoted_post_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const [hydrated, parents] = await Promise.all([
+      hydrateAuthors(await withSocial(page, userId)),
+      parentIds.length > 0 ? fetchPostsByIds(parentIds, userId) : Promise.resolve([] as PostWithMeta[]),
+    ]);
+    const byId = new Map(parents.map((row) => [row.id, row]));
+    return hydrated.map((post) => {
+      if (!isClipSharePost(post)) {
+        return post;
+      }
+      const parentId = post.parent_id ?? post.quoted_post_id;
+      return { ...post, share_parent: parentId ? byId.get(parentId) ?? null : null };
+    });
   } catch (error) {
     noteHomeError(error);
     return visible.slice(0, 50);
