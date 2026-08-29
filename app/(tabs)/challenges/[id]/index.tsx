@@ -712,7 +712,6 @@ export default function ChallengeDetailScreen() {
     challenge.status === 'live' || hasCheckins
       ? null
       : userStartNeededLabel(challenge, competitorCount);
-  const remainingNow = competitorCount;
   const goalLabel =
     previewHero && !challengeHasDurationHint(challenge)
       ? ''
@@ -721,9 +720,14 @@ export default function ChallengeDetailScreen() {
           taskCount: Math.max(tasks.length, 1),
           distanceMetersCompleted: participation?.distance_meters_total ?? 0,
         });
+  const prizeEnded = challenge.status === 'settled' || challenge.status === 'ended';
+  const settlementWinners = settlement?.settlement.winner_count;
+  const settlementDistributed = settlement?.settlement.distributed;
   const prizeForfeited =
-    remainingNow <= 0 &&
-    (Number(challenge.participant_count) > 0 || Number(challenge.eliminated_count) > 0);
+    prizeEnded &&
+    Boolean(settlement) &&
+    ((settlementWinners != null && Number(settlementWinners) === 0) ||
+      (Array.isArray(settlementDistributed) && settlementDistributed.length === 0));
   const progressRatio = isUnlimited
     ? 1
     : daysCompleted / Math.max(isPoints ? Math.max(tasks.length, 1) : target, 1);
@@ -835,18 +839,16 @@ export default function ChallengeDetailScreen() {
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
         {pageTab === 'overview' ? (
-        <View className="mt-3">
-          <ChallengeLeaderboard
-            challenge={challenge}
-            roster={boardRoster}
-            completedUserIds={completions.data ?? new Set()}
-            joined={isJoined}
-            viewerId={user?.id}
-            settlement={receipt}
-            variant="compact"
-            onOpenReceipt={() => setPageTab('board')}
-          />
-        </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="View board"
+            onPress={() => setPageTab('board')}
+            className="mt-3"
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
+              View board
+            </AppText>
+          </Pressable>
         ) : null}
 
         {challenge.status === 'settling' && !receipt ? (

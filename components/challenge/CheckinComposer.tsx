@@ -92,7 +92,7 @@ export function CheckinComposer({
   onRetake,
   onOpenGallery,
   onAddProof,
-  onRemoveProof,
+  onRemoveProof: _onRemoveProof,
   onExtrasChange,
   onCaptionChange,
   onSend,
@@ -365,18 +365,31 @@ export function CheckinComposer({
     }
   }
 
+  function requiredSlotsFilled(): boolean {
+    return proofs.every((proof) => {
+      const draft = drafts[proof.id];
+      return Boolean(draft?.uri || draft?.text);
+    });
+  }
+
+  function canRemovePage(page: ReviewPage): boolean {
+    if (page.kind === 'proof') {
+      return false;
+    }
+    return requiredSlotsFilled();
+  }
+
   function confirmRemove(page: ReviewPage) {
+    if (!canRemovePage(page)) {
+      return;
+    }
     Alert.alert('Remove this photo from the check-in?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
         onPress: () => {
-          if (page.kind === 'proof') {
-            onRemoveProof(page.proof);
-          } else {
-            onExtrasChange(extras.filter((item) => item.id !== page.extra.id));
-          }
+          onExtrasChange(extras.filter((item) => item.id !== page.extra.id));
         },
       },
     ]);
@@ -471,7 +484,9 @@ export function CheckinComposer({
                 }
               }}
             />
-            <OverlayChip label="Remove" onPress={() => confirmRemove(current)} />
+            {canRemovePage(current) ? (
+              <OverlayChip label="Remove" onPress={() => confirmRemove(current)} />
+            ) : null}
             <OverlayChip
               label="Gallery"
               onPress={() => {
@@ -505,12 +520,6 @@ export function CheckinComposer({
                     const index = pages.findIndex((page) => page.kind === 'proof' && page.proof.id === proof.id);
                     if (index >= 0) {
                       goToPage(index);
-                    }
-                  }}
-                  onLongPress={() => {
-                    const page = pages.find((row) => row.kind === 'proof' && row.proof.id === proof.id);
-                    if (page) {
-                      confirmRemove(page);
                     }
                   }}
                   style={{
