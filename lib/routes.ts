@@ -161,7 +161,7 @@ export const FITNESS_HISTORY_HREF = '/profile/fitness-history' as const;
 
 export function conversationHref(
   id: string,
-  extra?: { peerId?: string; focus?: boolean },
+  extra?: { peerId?: string; focus?: boolean; draft?: string },
 ) {
   return {
     pathname: '/messages/[id]' as const,
@@ -169,6 +169,7 @@ export function conversationHref(
       id,
       ...(extra?.peerId ? { peerId: extra.peerId } : {}),
       ...(extra?.focus ? { focus: '1' } : {}),
+      ...(extra?.draft ? { draft: extra.draft } : {}),
     },
   };
 }

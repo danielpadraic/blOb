@@ -801,6 +801,10 @@ export type NotificationData = {
   actor_ids?: string[];
   count?: number;
   stack_key?: string;
+  high_five?: boolean;
+  winner_ids?: string[];
+  challenge_title?: string;
+  period_key?: string;
 };
 
 export interface AppNotification {

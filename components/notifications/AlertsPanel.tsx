@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -8,10 +8,18 @@ import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
+import { useAuth } from '@/hooks/useAuth';
 import { useMarkNotificationsRead, useNotifications } from '@/hooks/useNotifications';
 import { useResolveStartRoll } from '@/hooks/useChallenge';
 import { useAcceptCircleInvite, useDeclineCircleInvite } from '@/hooks/useCircles';
 import { useAcceptFriendRequest, useRejectFriendRequest } from '@/hooks/useSocial';
+import {
+  highFiveChallengeId,
+  highFiveMemberIds,
+  highFivePrefill,
+  notificationHasHighFive,
+  openHighFiveConversation,
+} from '@/lib/highFive';
 import {
   friendRequestFromUserId,
   isCoinGrantAlert,
@@ -20,7 +28,7 @@ import {
   notificationGlyph,
   notificationHref,
 } from '@/lib/notifications';
-import { circleDetailHref } from '@/lib/routes';
+import { circleDetailHref, conversationHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 import { copy } from '@/lib/copy';
@@ -68,6 +76,7 @@ function groupByDay(items: AppNotification[]): ListRow[] {
 
 export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const list = useNotifications();
   const markRead = useMarkNotificationsRead();
   const resolveRoll = useResolveStartRoll();
@@ -76,6 +85,7 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const acceptCircle = useAcceptCircleInvite();
   const declineCircle = useDeclineCircleInvite();
   const tone = useCopyTone();
+  const [highFiveBusyId, setHighFiveBusyId] = useState<string | null>(null);
   const items = list.data ?? [];
   const unreadCount = items.filter((item) => !item.read_at).length;
   const rows = useMemo(() => groupByDay(items), [items]);
@@ -146,8 +156,41 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
     [acceptCircle, declineCircle, markRead, onClose, router],
   );
 
+  const onHighFive = useCallback(
+    async (item: AppNotification) => {
+      const challengeId = highFiveChallengeId(item);
+      const members = highFiveMemberIds(item);
+      if (!challengeId || members.length === 0 || highFiveBusyId) {
+        return;
+      }
+      setHighFiveBusyId(item.id);
+      try {
+        if (!item.read_at) {
+          markRead.mutate([item.id]);
+        }
+        const conversation = await openHighFiveConversation(challengeId, members, user?.id);
+        onClose?.();
+        router.push(
+          conversationHref(conversation.id, {
+            focus: true,
+            draft: highFivePrefill(item),
+          }),
+        );
+      } catch (error) {
+        Alert.alert('Couldn’t open that chat', getErrorMessage(error));
+      } finally {
+        setHighFiveBusyId(null);
+      }
+    },
+    [highFiveBusyId, markRead, onClose, router, user?.id],
+  );
+
   const onOpen = useCallback(
     (item: AppNotification) => {
+      if (notificationHasHighFive(item)) {
+        void onHighFive(item);
+        return;
+      }
       if (!item.read_at) {
         markRead.mutate([item.id]);
       }
@@ -157,7 +200,7 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
         router.push(href);
       }
     },
-    [markRead, onClose, router],
+    [markRead, onClose, onHighFive, router],
   );
 
   return (
@@ -208,6 +251,8 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
               <NotificationRow
                 item={row.item}
                 onPress={() => onOpen(row.item)}
+                highFivePending={highFiveBusyId === row.item.id}
+                onHighFive={() => void onHighFive(row.item)}
                 friendActionPending={
                   (acceptFriend.isPending &&
                     acceptFriend.variables === friendRequestFromUserId(row.item)) ||
@@ -288,6 +333,8 @@ function NotificationRow({
   friendActionPending,
   onCircleInvite,
   circleActionPending,
+  onHighFive,
+  highFivePending,
 }: {
   item: AppNotification;
   onPress: () => void;
@@ -296,6 +343,8 @@ function NotificationRow({
   friendActionPending?: boolean;
   onCircleInvite?: (action: 'confirm' | 'deny') => void;
   circleActionPending?: boolean;
+  onHighFive?: () => void;
+  highFivePending?: boolean;
 }) {
   const unread = !item.read_at;
   const tone = useCopyTone();
@@ -306,6 +355,7 @@ function NotificationRow({
     item.type === 'friend_request' && unread && Boolean(friendRequestFromUserId(item)) && onFriendRequest;
   const showCircleActions =
     item.type === 'circle_invite' && unread && Boolean(notificationCircleId(item.data)) && onCircleInvite;
+  const showHighFive = notificationHasHighFive(item) && Boolean(onHighFive);
   return (
     <Pressable
       accessibilityRole="button"
@@ -322,7 +372,7 @@ function NotificationRow({
         <View className="flex-row items-center justify-between gap-2">
           <AppText
             className={`flex-1 text-charcoal ${unread ? 'font-bold' : 'font-medium'}`}
-            numberOfLines={item.type === 'bob_encouragement' ? 4 : 2}>
+            numberOfLines={item.type === 'bob_encouragement' || showHighFive ? 4 : 2}>
             {item.title}
           </AppText>
           <AppText className="text-[11px] text-muted">{formatFeedTime(item.created_at)}</AppText>
@@ -400,6 +450,23 @@ function NotificationRow({
               }}>
               <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
                 Deny
+              </AppText>
+            </Pressable>
+          </View>
+        ) : null}
+        {showHighFive ? (
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            <Pressable
+              accessibilityRole="button"
+              disabled={highFivePending}
+              onPress={(event) => {
+                event.stopPropagation();
+                onHighFive?.();
+              }}
+              className="rounded-full px-3"
+              style={{ minHeight: 36, justifyContent: 'center', backgroundColor: THEME.primary }}>
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
+                High-five
               </AppText>
             </Pressable>
           </View>

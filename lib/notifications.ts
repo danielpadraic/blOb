@@ -1,5 +1,6 @@
 import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { circleNotificationPath } from '@/lib/circles';
+import { collapseChallengeDigests } from '@/lib/notifyDigest';
 import { postHref } from '@/lib/postShare';
 import { challengeDetailHref, conversationHref, reelHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
@@ -184,7 +185,7 @@ export function collapseStackedNotifications(items: AppNotification[]): AppNotif
       current.read_at = null;
     }
   }
-  return out;
+  return collapseChallengeDigests(out);
 }
 
 export async function fetchNotifications(): Promise<AppNotification[]> {

@@ -41,9 +41,10 @@ export default function ConversationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const params = useLocalSearchParams<{ id: string; peerId?: string; focus?: string }>();
+  const params = useLocalSearchParams<{ id: string; peerId?: string; focus?: string; draft?: string }>();
   const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
   const peerIdParam = Array.isArray(params.peerId) ? params.peerId[0] : params.peerId;
+  const draftParam = Array.isArray(params.draft) ? params.draft[0] : params.draft;
   const focus = (Array.isArray(params.focus) ? params.focus[0] : params.focus) === '1';
   const conversationId = rawId && UUID_RE.test(rawId) ? rawId : null;
 
@@ -296,6 +297,7 @@ export default function ConversationScreen() {
           sending={sendMessage.isPending}
           autoFocus={focus && composerReady}
           disabled={!composerReady}
+          draft={draftParam}
         />
       </View>
     </View>

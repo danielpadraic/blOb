@@ -24,17 +24,28 @@ type MessageInputProps = {
   sending?: boolean;
   autoFocus?: boolean;
   disabled?: boolean;
+  draft?: string;
   onSend: (payload: MessageSendPayload) => void;
 };
 
-export function MessageInput({ sending, autoFocus = false, disabled = false, onSend }: MessageInputProps) {
+export function MessageInput({
+  sending,
+  autoFocus = false,
+  disabled = false,
+  draft,
+  onSend,
+}: MessageInputProps) {
   const { user } = useAuth();
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(() => draft?.trim() ?? '');
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const trimmed = value.trim();
   const blocked = disabled || Boolean(sending) || uploading;
   const canSendText = trimmed.length > 0 && !blocked;
+
+  useEffect(() => {
+    setValue(draft?.trim() ?? '');
+  }, [draft]);
 
   useEffect(() => {
     if (!autoFocus || disabled) {
