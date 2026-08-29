@@ -1,16 +1,13 @@
 import { memo, useRef, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, View } from 'react-native';
+import { Alert, Linking, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
-
-import { useVideoPoster } from '@/hooks/useVideoPoster';
 
 import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
-import { useMediaLightboxOptional } from '@/components/feed/MediaLightbox';
+import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import { MentionText } from '@/components/feed/MentionText';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
@@ -50,6 +47,7 @@ import { circleDetailHref } from '@/lib/routes';
 import { circleDisplayName, circleIdFromPost } from '@/lib/circles';
 import { copy } from '@/lib/copy';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
+import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { flexChildMin, THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -427,7 +425,16 @@ function PostCardInner({
           />
         ) : null}
 
-        {isClipSharePost(post) ? null : <ProofMedia urls={post.media_urls ?? []} proof={checkin} />}
+        {isClipSharePost(post) ? null : (
+          <ProofMedia
+            postId={post.id}
+            urls={post.media_urls ?? []}
+            hidden={post.hidden_media_urls}
+            isOwner={mine}
+            proof={checkin}
+            pauseCycle={showComposer || menuOpen}
+          />
+        )}
 
         <ReactionBar
           createdAt={homeFeed ? undefined : post.created_at}
@@ -887,127 +894,6 @@ const PROOF_LABELS = [
   PROOF_META.distance.short,
 ];
 
-const SINGLE_IMAGE_HEIGHT = 220;
-const TILE_HEIGHT = 118;
-
-function imageColumns(count: number) {
-  if (count <= 1) {
-    return 1;
-  }
-  if (count === 2) {
-    return 2;
-  }
-  return 3;
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const rows: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    rows.push(items.slice(index, index + size));
-  }
-  return rows;
-}
-
-function MediaFrame({
-  uri,
-  height,
-  radius,
-  label,
-  onPress,
-}: {
-  uri: string;
-  height: number;
-  radius: number;
-  label?: string;
-  onPress?: () => void;
-}) {
-  const kind = mediaKind(uri);
-  return (
-    <Pressable
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={label ? `Open ${label}` : 'Open photo'}
-      disabled={!onPress}
-      onPress={onPress}
-      style={{
-        height,
-        width: '100%',
-        borderRadius: radius,
-        overflow: 'hidden',
-        backgroundColor: THEME.surface,
-      }}>
-      {kind === 'video' ? (
-        <PostVideo uri={uri} />
-      ) : (
-        <Image
-          source={{ uri }}
-          style={{ width: '100%', height: '100%' }}
-          contentFit="contain"
-          contentPosition="center"
-          cachePolicy="memory-disk"
-          recyclingKey={uri}
-        />
-      )}
-    </Pressable>
-  );
-}
-
-function PostVideo({ uri }: { uri: string }) {
-  const [playing, setPlaying] = useState(false);
-  const poster = useVideoPoster(uri);
-  if (!playing) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Play video"
-        onPress={() => setPlaying(true)}
-        style={{
-          width: '100%',
-          height: '100%',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: THEME.primary,
-          overflow: 'hidden',
-        }}>
-        {poster ? (
-          <Image
-            source={{ uri: poster }}
-            contentFit="cover"
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-          />
-        ) : null}
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(16,19,18,0.55)',
-          }}>
-          <Glyph name={GLYPH.play} color="#fff" size={18} />
-        </View>
-      </Pressable>
-    );
-  }
-  return <PostVideoPlayer uri={uri} />;
-}
-
-function PostVideoPlayer({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (instance) => {
-    instance.loop = false;
-    instance.muted = true;
-    instance.play();
-  });
-  return (
-    <VideoView
-      player={player}
-      style={{ width: '100%', height: '100%', backgroundColor: THEME.surface, overflow: 'hidden' }}
-      contentFit="contain"
-      nativeControls
-    />
-  );
-}
-
 function RoundShareEmbed({
   coverUrl,
   unavailable,
@@ -1069,72 +955,36 @@ function RoundShareEmbed({
 }
 
 function ProofMedia({
+  postId,
   urls,
+  hidden,
+  isOwner,
   proof,
+  pauseCycle,
 }: {
+  postId: string;
   urls: string[];
+  hidden?: string[] | null;
+  isOwner?: boolean;
   proof?: boolean;
+  pauseCycle?: boolean;
 }) {
-  const lightbox = useMediaLightboxOptional();
-  const items = urls.filter(Boolean);
-  if (items.length === 0) {
-    return null;
-  }
-
-  const visuals = items.filter((url) => {
-    const kind = mediaKind(url);
-    return kind === 'image' || kind === 'video';
-  });
-  const others = items.filter((url) => {
+  const visuals = pagerUrlsForViewer({ urls, hidden, isOwner });
+  const others = urls.filter((url) => {
+    if (!url) {
+      return false;
+    }
     const kind = mediaKind(url);
     return kind !== 'image' && kind !== 'video';
   });
-  const labels = proof || visuals.length === 3 ? PROOF_LABELS.slice(0, visuals.length) : undefined;
-  const columns = imageColumns(visuals.length);
-  const lightboxItems = visuals.map((uri, index) => ({
-    uri,
-    label: labels?.[index],
-  }));
-
-  function openAt(index: number) {
-    lightbox?.openLightbox(lightboxItems, index);
+  if (visuals.length === 0 && others.length === 0) {
+    return null;
   }
+  const labels = proof || visuals.length === 3 ? PROOF_LABELS.slice(0, visuals.length) : undefined;
 
   return (
     <View style={{ gap: 6 }}>
-      {visuals.length === 1 ? (
-        <MediaFrame
-          uri={visuals[0]}
-          height={SINGLE_IMAGE_HEIGHT}
-          radius={14}
-          onPress={lightbox ? () => openAt(0) : undefined}
-        />
-      ) : visuals.length > 1 ? (
-        <View style={{ gap: 6 }}>
-          {chunk(visuals, columns).map((row, rowIndex) => (
-            <View key={`row-${rowIndex}`} className="flex-row" style={{ gap: 6 }}>
-              {row.map((uri, index) => {
-                const itemIndex = rowIndex * columns + index;
-                return (
-                  <View key={`${uri}-${itemIndex}`} className="flex-1">
-                    <MediaFrame
-                      uri={uri}
-                      height={TILE_HEIGHT}
-                      radius={12}
-                      onPress={lightbox ? () => openAt(itemIndex) : undefined}
-                    />
-                  </View>
-                );
-              })}
-              {row.length < columns
-                ? Array.from({ length: columns - row.length }, (_, slot) => (
-                    <View key={`pad-${slot}`} className="flex-1" />
-                  ))
-                : null}
-            </View>
-          ))}
-        </View>
-      ) : null}
+      <PostMediaCarousel postId={postId} urls={visuals} labels={labels} pauseCycle={pauseCycle} />
       {others.map((url) => (
         <MediaChip key={url} url={url} />
       ))}

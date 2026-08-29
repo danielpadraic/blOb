@@ -41,6 +41,7 @@ type LightboxState = {
 type MediaLightboxValue = {
   openLightbox: (items: LightboxItem[], index?: number) => void;
   closeLightbox: () => void;
+  open: boolean;
 };
 
 const MediaLightboxContext = createContext<MediaLightboxValue | null>(null);
@@ -92,8 +93,8 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
   }, [closeLightbox]);
 
   const value = useMemo(
-    () => ({ openLightbox, closeLightbox }),
-    [openLightbox, closeLightbox],
+    () => ({ openLightbox, closeLightbox, open: Boolean(state) }),
+    [closeLightbox, openLightbox, state],
   );
 
   return (

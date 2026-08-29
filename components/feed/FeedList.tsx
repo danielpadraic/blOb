@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { FlatList, Platform, RefreshControl, ScrollView, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { FlatList, Platform, RefreshControl, ScrollView, View, type ViewToken } from 'react-native';
 
 import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
+import { VisiblePostsProvider } from '@/components/feed/PostMediaCarousel';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
@@ -131,6 +132,11 @@ export function FeedList({
   onComment,
 }: FeedListProps) {
   const listRef = useRef<FlatList<PostWithMeta>>(null);
+  const [visibleIds, setVisibleIds] = useState<ReadonlySet<string>>(() => new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    setVisibleIds(new Set(viewableItems.map((row) => String((row.item as PostWithMeta).id))));
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 35, minimumViewTime: 80 }).current;
   const tour = useTourOptional();
   const tourLocked = Boolean(tour?.active);
   const tone = useCopyTone();
@@ -309,7 +315,8 @@ export function FeedList({
           {composer}
         </View>
       ) : null}
-      <FlatList
+      <VisiblePostsProvider ids={visibleIds}>
+        <FlatList
         ref={(node) => {
           listRef.current = node;
           tour?.setHomeScroll(node as unknown as ScrollView);
@@ -318,6 +325,8 @@ export function FeedList({
         data={visiblePosts}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
             listRef.current?.scrollToOffset({ offset: Math.max(info.averageItemLength * info.index, 0), animated: true });
@@ -348,10 +357,11 @@ export function FeedList({
         }
         style={
           Platform.OS === 'web'
-            ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden' } as object)
+            ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehaviorX: 'none' } as object)
             : { flex: 1 }
         }
-      />
+        />
+      </VisiblePostsProvider>
     </View>
   );
 }
