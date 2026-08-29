@@ -55,6 +55,9 @@ export function isEvenSplitPayout(challenge: EvenSplitPayoutInput | null | undef
 export function settlementRpcForPayout(
   challenge: EvenSplitPayoutInput | null | undefined,
 ): SettlementPayoutRpc {
+  if (isPointsBoard(challenge) && isRankedPrize(challenge)) {
+    return 'settle_ended_challenge';
+  }
   return isEvenSplitPayout(challenge) ? 'settle_ended_challenge' : 'distribute_challenge';
 }
 

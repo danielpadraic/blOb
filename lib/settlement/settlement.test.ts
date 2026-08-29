@@ -70,7 +70,13 @@ describe('lifecycle', () => {
         challenge_type: 'points',
         prize_structure: 'winner_take_all',
       }),
-    ).toBe('distribute_challenge');
+    ).toBe('settle_ended_challenge');
+    expect(
+      settlementRpcForPayout({
+        format: 'points',
+        prize_structure: 'top_places',
+      }),
+    ).toBe('settle_ended_challenge');
     expect(
       settlementRpcForPayout({
         challenge_type: 'points',
