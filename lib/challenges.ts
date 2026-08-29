@@ -2,6 +2,7 @@ import { getPaymentsProvider } from '@/services/payments';
 import { publishChallenge } from '@/lib/api/challenges';
 import {
   DISCOVER_CHALLENGE_STATUSES,
+  ENDED_LOBBY_STATUSES,
   LOBBY_CHALLENGE_STATUSES,
   LOBBY_PAGE_SIZE,
   PROOF_TYPES,
@@ -43,7 +44,7 @@ import {
   isJoinableNotStarted,
   isLiveOrUpcoming,
 } from '@/lib/challengeDiscoverability';
-import { isLobbyActiveParticipantStatus } from '@/lib/lobbyChallenge';
+import { isEndedLobbyStatus, isLobbyActiveParticipantStatus } from '@/lib/lobbyChallenge';
 
 import {
   classifyChallengeLoadFailure,
@@ -772,6 +773,63 @@ export async function fetchCompetingChallenges(userId?: string): Promise<Challen
   return sortMyLobby(
     mine.filter((row) => joinedIds.has(row.id) && isLiveOrUpcoming(row.status)),
   );
+}
+
+/** Ended / settling / settled from Official + Active + Hosting universes. */
+export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challenge[]> {
+  if (!userId) {
+    return [];
+  }
+  const joinedIds = await fetchJoinedChallengeIds(userId);
+  const endedLimit = Math.max(LOBBY_PAGE_SIZE, 80);
+
+  const createdPromise = selectChallengeList(
+    (query) =>
+      query
+        .eq('created_by', userId)
+        .in('status', ENDED_LOBBY_STATUSES)
+        .order('ends_at', { ascending: false })
+        .limit(endedLimit),
+    'ended-created',
+  )
+    .then((rows) => rows.map(normalizeChallenge).filter((row) => isEndedLobbyStatus(row.status)))
+    .catch((error) => {
+      console.log('[blob:lobby] ended-created skipped', error);
+      return [] as Challenge[];
+    });
+
+  const joinedPromise =
+    joinedIds.length === 0
+      ? Promise.resolve([] as Challenge[])
+      : selectChallengeList(
+          (query) =>
+            query
+              .in('id', joinedIds)
+              .in('status', ENDED_LOBBY_STATUSES)
+              .order('ends_at', { ascending: false })
+              .limit(Math.max(joinedIds.length, endedLimit)),
+          'ended-joined',
+        )
+          .then((rows) =>
+            rows
+              .map(normalizeChallenge)
+              .filter((row) => joinedIds.includes(row.id) && isEndedLobbyStatus(row.status)),
+          )
+          .catch((error) => {
+            console.log('[blob:lobby] ended-joined skipped', error);
+            return [] as Challenge[];
+          });
+
+  const seen = new Set<string>();
+  const out: Challenge[] = [];
+  for (const row of [...(await createdPromise), ...(await joinedPromise)]) {
+    if (!row.id || seen.has(row.id)) {
+      continue;
+    }
+    seen.add(row.id);
+    out.push(row);
+  }
+  return out;
 }
 
 export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<Challenge[]> {

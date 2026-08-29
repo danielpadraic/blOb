@@ -8,6 +8,9 @@ import {
   LobbyChallengeRow,
   type InviteHost,
 } from '@/components/challenge/LobbyChallengeCard';
+import { LobbyFilterChips } from '@/components/challenge/LobbyFilterChips';
+import { LobbyFilterSheet } from '@/components/challenge/LobbyFilterSheet';
+import { LobbySortMenu } from '@/components/challenge/LobbySortMenu';
 import { ContinueDraftCard } from '@/components/challenge/create/wizardUi';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
@@ -18,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
   useCompetingChallenges,
+  useEndedChallenges,
   useFriendsDiscoverChallenges,
   useHostingChallenges,
   useMyChallengeProgress,
@@ -29,17 +33,30 @@ import { createHrefForDraft, isVisibleDraft } from '@/lib/challengeDraft';
 import { isJoinableNotStarted } from '@/lib/challengeDiscoverability';
 import { openChallengeLobby } from '@/lib/challengeOpen';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { fetchLobbyFriendCounts } from '@/lib/challenges';
 import { asCopyTone, copy } from '@/lib/copy';
 import {
+  applyLobbyFilters,
+  clearLobbyFilterChip,
+  defaultFiltersForTab,
+  defaultLobbyFilterStore,
+  isDefaultLobbyFilters,
+  isEndedLobbyStatus,
   isLobbyActiveParticipantStatus,
   isOfficialLobbyRow,
+  loadLobbyFilterStore,
   loadLobbyLayout,
-  loadLobbyUncheckedFilter,
+  lobbyFilterBadgeCount,
+  lobbyFilterChips,
+  lobbyResultLine,
+  saveLobbyFilterStore,
   saveLobbyLayout,
-  saveLobbyUncheckedFilter,
   scheduleNeedsTick,
-  sortEndingSoonest,
+  sortLobbyRows,
+  type LobbyFilterState,
+  type LobbyFilterStore,
   type LobbyLayout,
+  type LobbySort,
   type LobbyTab,
 } from '@/lib/lobbyChallenge';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
@@ -52,6 +69,7 @@ const LOBBY_TABS = [
   { value: 'official', label: 'Official' },
   { value: 'active', label: 'Active' },
   { value: 'hosting', label: 'Hosting' },
+  { value: 'ended', label: 'Ended' },
 ] as const;
 
 function matchesSearch(title: string, query: string) {
@@ -100,7 +118,9 @@ export default function ChallengesScreen() {
   const [tab, setTab] = useState<LobbyTab>('official');
   const [tabReady, setTabReady] = useState(false);
   const [layout, setLayout] = useState<LobbyLayout>('card');
-  const [uncheckedOnly, setUncheckedOnly] = useState(true);
+  const [store, setStore] = useState<LobbyFilterStore>(defaultLobbyFilterStore);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const { user } = useAuth();
   const { profile } = useMyProfile();
@@ -108,19 +128,22 @@ export default function ChallengesScreen() {
   const hostingQuery = useHostingChallenges();
   const activeQuery = useCompetingChallenges();
   const officialQuery = useOfficialDiscoverChallenges();
+  const endedQuery = useEndedChallenges();
   const friendsQuery = useFriendsDiscoverChallenges();
   const mine = useMyChallengeProgress();
   const draftsQuery = useChallengeDrafts();
   const discardDraft = useDiscardChallengeDraft();
   const [query, setQuery] = useState('');
 
+  const prefs = store[tab];
+  const filters = prefs.filters;
+  const sort = prefs.sort;
+
   useEffect(() => {
-    void Promise.all([loadLobbyLayout(), loadLobbyUncheckedFilter()]).then(
-      ([nextLayout, nextFilter]) => {
-        setLayout(nextLayout);
-        setUncheckedOnly(nextFilter);
-      },
-    );
+    void Promise.all([loadLobbyLayout(), loadLobbyFilterStore()]).then(([nextLayout, nextStore]) => {
+      setLayout(nextLayout);
+      setStore(nextStore);
+    });
   }, []);
 
   useEffect(() => {
@@ -136,15 +159,20 @@ export default function ChallengesScreen() {
   const drafts = (draftsQuery.data ?? []).filter(isVisibleDraft);
   const search = query.trim();
   const progressById = useMemo(() => {
-    const map = new Map<string, { days: number; status: string; eliminated?: boolean }>();
+    const map = new Map<
+      string,
+      { days: number; status: string; eliminated?: boolean; result?: string | null; place?: number | null }
+    >();
     for (const row of mine.data ?? []) {
-      if (!isLobbyActiveParticipantStatus(row.status)) {
+      if (!isLobbyActiveParticipantStatus(row.status) && !row.result && !row.place) {
         continue;
       }
       map.set(row.challenge_id, {
         days: Number(row.days_completed ?? 0),
         status: row.status ?? 'joined',
         eliminated: Boolean(row.eliminated_at),
+        result: row.result,
+        place: row.place,
       });
     }
     return map;
@@ -165,21 +193,32 @@ export default function ChallengesScreen() {
         ...(officialQuery.data ?? []).filter(isOfficialLobbyRow),
         ...(activeQuery.data ?? []).filter(isOfficialLobbyRow),
         ...(hostingQuery.data ?? []).filter(isOfficialLobbyRow),
-      ]),
+      ]).filter((row) => !isEndedLobbyStatus(row.status)),
     [activeQuery.data, hostingQuery.data, officialQuery.data],
   );
 
   const activeAll = useMemo(
-    () => (activeQuery.data ?? []).filter((row) => !isOfficialLobbyRow(row)),
+    () =>
+      (activeQuery.data ?? []).filter(
+        (row) => !isOfficialLobbyRow(row) && !isEndedLobbyStatus(row.status),
+      ),
     [activeQuery.data],
   );
   const activeIds = useMemo(() => new Set(activeAll.map((row) => row.id)), [activeAll]);
 
   const hostingAll = useMemo(
-    () => (hostingQuery.data ?? []).filter((row) => !isOfficialLobbyRow(row)),
+    () =>
+      (hostingQuery.data ?? []).filter(
+        (row) => !isOfficialLobbyRow(row) && !isEndedLobbyStatus(row.status),
+      ),
     [hostingQuery.data],
   );
   const hostingIds = useMemo(() => new Set(hostingAll.map((row) => row.id)), [hostingAll]);
+
+  const endedAll = useMemo(
+    () => (endedQuery.data ?? []).filter((row) => isEndedLobbyStatus(row.status)),
+    [endedQuery.data],
+  );
 
   const friendsAll = useMemo(
     () =>
@@ -189,6 +228,7 @@ export default function ChallengesScreen() {
           !activeIds.has(row.challenge.id) &&
           !hostingIds.has(row.challenge.id) &&
           !isOfficialLobbyRow(row.challenge) &&
+          !isEndedLobbyStatus(row.challenge.status) &&
           isLobbyDiscoverCard(row.challenge, false),
       ),
     [activeIds, friendsQuery.data, hostingIds, progressById],
@@ -200,6 +240,24 @@ export default function ChallengesScreen() {
   );
   const todayCheckins = useLobbyTodayCheckins(todaySource);
   const checkedToday = todayCheckins.data ?? new Set<string>();
+
+  const friendSourceIds = useMemo(
+    () =>
+      uniqueById([
+        ...officialAll,
+        ...activeAll,
+        ...hostingAll,
+        ...endedAll,
+        ...friendsAll.map((row) => row.challenge),
+      ]).map((row) => row.id),
+    [activeAll, endedAll, friendsAll, hostingAll, officialAll],
+  );
+  const friendCountsQuery = useQuery({
+    queryKey: ['lobby-friend-counts', user?.id, friendSourceIds.join(',')],
+    enabled: Boolean(user?.id && friendSourceIds.length > 0),
+    queryFn: () => fetchLobbyFriendCounts(user!.id, friendSourceIds),
+  });
+  const friendCounts = friendCountsQuery.data ?? new Map<string, number>();
 
   useEffect(() => {
     if (tabReady) {
@@ -225,21 +283,33 @@ export default function ChallengesScreen() {
     tabReady,
   ]);
 
-  function applyList(rows: ChallengeWithStats[]) {
+  const filterCtx = useMemo(
+    () => ({ nowMs, checkedToday, friendCounts }),
+    [checkedToday, friendCounts, nowMs],
+  );
+
+  function applyList(rows: ChallengeWithStats[], listTab: LobbyTab) {
     const searched = rows.filter((row) => matchesSearch(challengeDisplayTitle(row), search));
-    const filtered = uncheckedOnly
-      ? searched.filter((row) => !checkedToday.has(row.id))
-      : searched;
-    return sortEndingSoonest(filtered);
+    return sortLobbyRows(
+      applyLobbyFilters(searched, listTab, store[listTab].filters, filterCtx),
+      store[listTab].sort,
+    );
   }
 
-  const official = applyList(officialAll);
-  const active = applyList(activeAll);
-  const hosting = applyList(hostingAll);
-  const friends = sortEndingSoonest(
-    friendsAll
-      .filter((row) => matchesSearch(challengeDisplayTitle(row.challenge), search))
-      .filter((row) => !uncheckedOnly || !checkedToday.has(row.challenge.id)),
+  const official = applyList(officialAll, 'official');
+  const active = applyList(activeAll, 'active');
+  const hosting = applyList(hostingAll, 'hosting');
+  const ended = applyList(endedAll, 'ended');
+  const friends = sortLobbyRows(
+    applyLobbyFilters(
+      friendsAll
+        .map((row) => row.challenge)
+        .filter((row) => matchesSearch(challengeDisplayTitle(row), search)),
+      'active',
+      store.active.filters,
+      filterCtx,
+    ),
+    store.active.sort,
   );
   const visibleDrafts =
     tab === 'hosting' ? drafts.filter((item) => matchesSearch(item.title ?? '', search)) : [];
@@ -255,13 +325,18 @@ export default function ChallengesScreen() {
   });
   const hostIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const row of [...activeAll, ...hostingAll, ...friendsAll.map((item) => item.challenge)]) {
+    for (const row of [
+      ...activeAll,
+      ...hostingAll,
+      ...endedAll,
+      ...friendsAll.map((item) => item.challenge),
+    ]) {
       if (!row.is_official && row.created_by && row.created_by !== user?.id) {
         ids.add(row.created_by);
       }
     }
     return [...ids];
-  }, [activeAll, friendsAll, hostingAll, user?.id]);
+  }, [activeAll, endedAll, friendsAll, hostingAll, user?.id]);
   const hostProfiles = useQuery({
     queryKey: ['lobby-host-profiles', hostIds.join(',')],
     enabled: hostIds.length > 0,
@@ -292,12 +367,13 @@ export default function ChallengesScreen() {
   }, [friendProfiles.data, friendsAll, hostProfiles.data]);
 
   const loading =
-    hostingQuery.isPending &&
-    !hostingQuery.data &&
-    activeQuery.isPending &&
-    !activeQuery.data &&
-    officialQuery.isPending &&
-    !officialQuery.data;
+    (hostingQuery.isPending &&
+      !hostingQuery.data &&
+      activeQuery.isPending &&
+      !activeQuery.data &&
+      officialQuery.isPending &&
+      !officialQuery.data) ||
+    (tab === 'ended' && endedQuery.isPending && !endedQuery.data);
   const failed =
     hostingQuery.isError &&
     activeQuery.isError &&
@@ -306,10 +382,9 @@ export default function ChallengesScreen() {
     !activeQuery.data &&
     !officialQuery.data;
 
-  const tabRows = tab === 'official' ? official : tab === 'active' ? active : hosting;
-  const ticking = [...tabRows, ...friends.map((row) => row.challenge)].some((row) =>
-    scheduleNeedsTick(row, nowMs),
-  );
+  const tabRows =
+    tab === 'official' ? official : tab === 'active' ? active : tab === 'hosting' ? hosting : ended;
+  const ticking = [...tabRows, ...friends].some((row) => scheduleNeedsTick(row, nowMs));
 
   useEffect(() => {
     if (!ticking) {
@@ -328,10 +403,12 @@ export default function ChallengesScreen() {
       hostingQuery.refetch(),
       activeQuery.refetch(),
       officialQuery.refetch(),
+      endedQuery.refetch(),
       friendsQuery.refetch(),
       mine.refetch(),
       draftsQuery.refetch(),
       todayCheckins.refetch(),
+      friendCountsQuery.refetch(),
     ]);
   }
 
@@ -340,18 +417,59 @@ export default function ChallengesScreen() {
     void saveLobbyLayout(next);
   }
 
-  function onUncheckedToggle() {
-    setUncheckedOnly((current) => {
-      const next = !current;
-      void saveLobbyUncheckedFilter(next);
-      return next;
-    });
+  function persistStore(next: LobbyFilterStore) {
+    setStore(next);
+    void saveLobbyFilterStore(next);
   }
 
+  function onFiltersChange(next: LobbyFilterState) {
+    persistStore({ ...store, [tab]: { ...prefs, filters: next } });
+  }
+
+  function onSortChange(next: LobbySort) {
+    persistStore({ ...store, [tab]: { ...prefs, sort: next } });
+  }
+
+  function onClearFilters() {
+    onFiltersChange(defaultFiltersForTab(tab));
+  }
+
+  function onShowAllTime() {
+    onFiltersChange({ ...filters, when: 'all', customFrom: null, customTo: null });
+  }
+
+  const chips = lobbyFilterChips(tab, filters);
+  const badge = lobbyFilterBadgeCount(tab, filters);
+  const filtersDefault = isDefaultLobbyFilters(tab, filters);
   const tabEmpty =
     tabRows.length === 0 &&
     (tab !== 'active' || friends.length === 0) &&
     (tab !== 'hosting' || visibleDrafts.length === 0);
+
+  function emptyCopy() {
+    if (!filtersDefault) {
+      return { title: 'Nothing matches these filters.', action: 'Clear filters', onAction: onClearFilters };
+    }
+    if (tab === 'ended' && filters.when === '30d') {
+      return { title: 'No ended challenges in the last 30 days.', action: 'Show all-time', onAction: onShowAllTime };
+    }
+    if (tab === 'hosting') {
+      return {
+        title: 'You’re not hosting yet.',
+        action: user ? 'Create' : undefined,
+        onAction: user ? () => router.push('/challenges/create') : undefined,
+      };
+    }
+    if (tab === 'active') {
+      return { title: 'No active challenges yet.' };
+    }
+    if (tab === 'ended') {
+      return { title: 'No ended challenges yet.' };
+    }
+    return { title: copy('lobby.empty', tone) };
+  }
+
+  const empty = emptyCopy();
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4 pt-1">
@@ -432,17 +550,45 @@ export default function ChallengesScreen() {
         <View style={{ flexGrow: 1 }} />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={uncheckedOnly ? 'Showing not checked in today. Tap to show all.' : 'Showing all. Tap to hide checked in today.'}
-          onPress={onUncheckedToggle}
+          accessibilityLabel={badge > 0 ? `Filters, ${badge} on` : 'Filters'}
+          onPress={() => setFilterOpen(true)}
           hitSlop={6}
-          style={{ minHeight: 36, justifyContent: 'center' }}>
+          style={{ minHeight: 36, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <AppText
             className="text-[13px] font-semibold"
-            style={{ color: uncheckedOnly ? THEME.accent : THEME.textMuted }}>
-            {uncheckedOnly ? 'Not checked in today' : 'All'}
+            style={{ color: badge > 0 ? THEME.accent : THEME.textMuted }}>
+            Filters
+          </AppText>
+          {badge > 0 ? (
+            <View
+              style={{
+                minWidth: 18,
+                height: 18,
+                paddingHorizontal: 5,
+                borderRadius: 999,
+                backgroundColor: THEME.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <AppText className="text-[11px] font-extrabold" style={{ color: THEME.primaryForeground }}>
+                {badge}
+              </AppText>
+            </View>
+          ) : null}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Sort"
+          onPress={() => setSortOpen(true)}
+          hitSlop={6}
+          style={{ minHeight: 36, justifyContent: 'center' }}>
+          <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
+            Sort
           </AppText>
         </Pressable>
       </View>
+
+      <LobbyFilterChips chips={chips} onDismiss={(id) => onFiltersChange(clearLobbyFilterChip(filters, id))} />
 
       {loading ? (
         <MascotState kind="loading" title={copy('lobby.loading', tone)} />
@@ -463,6 +609,7 @@ export default function ChallengesScreen() {
                 (hostingQuery.isRefetching ||
                   activeQuery.isRefetching ||
                   officialQuery.isRefetching ||
+                  endedQuery.isRefetching ||
                   friendsQuery.isRefetching) &&
                 !loading
               }
@@ -489,15 +636,9 @@ export default function ChallengesScreen() {
           {tabEmpty ? (
             <MascotState
               kind="empty"
-              title={
-                tab === 'hosting'
-                  ? 'You’re not hosting yet.'
-                  : tab === 'active'
-                    ? 'No active challenges yet.'
-                    : copy('lobby.empty', tone)
-              }
-              actionLabel={tab === 'hosting' && user ? 'Create' : undefined}
-              onAction={tab === 'hosting' && user ? () => router.push('/challenges/create') : undefined}
+              title={empty.title}
+              actionLabel={empty.action}
+              onAction={empty.onAction}
               compact
             />
           ) : (
@@ -507,17 +648,17 @@ export default function ChallengesScreen() {
                   <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
                     From friends
                   </AppText>
-                  {friends.map((row) => (
+                  {friends.map((challenge) => (
                     <LobbyListCard
-                      key={row.challenge.id}
-                      challenge={row.challenge}
+                      key={challenge.id}
+                      challenge={challenge}
                       section="active"
                       layout={layout}
                       nowMs={nowMs}
                       currentUserId={user?.id}
-                      progress={progressById.get(row.challenge.id)}
+                      progress={progressById.get(challenge.id)}
                       host={
-                        (row.challenge.created_by && hostById.get(row.challenge.created_by)) || null
+                        (challenge.created_by && hostById.get(challenge.created_by)) || null
                       }
                       onPress={openChallenge}
                     />
@@ -528,7 +669,7 @@ export default function ChallengesScreen() {
                 <LobbyListCard
                   key={challenge.id}
                   challenge={challenge}
-                  section={tab === 'official' ? 'official' : tab === 'hosting' ? 'hosting' : 'active'}
+                  section={tab}
                   layout={layout}
                   nowMs={nowMs}
                   currentUserId={user?.id}
@@ -562,6 +703,20 @@ export default function ChallengesScreen() {
           </View>
         </View>
       ) : null}
+      <LobbyFilterSheet
+        visible={filterOpen}
+        tab={tab}
+        filters={filters}
+        onChange={onFiltersChange}
+        onClose={() => setFilterOpen(false)}
+      />
+      <LobbySortMenu
+        visible={sortOpen}
+        tab={tab}
+        value={sort}
+        onChange={onSortChange}
+        onClose={() => setSortOpen(false)}
+      />
     </Screen>
   );
 }
@@ -577,15 +732,19 @@ function LobbyListCard({
   onPress,
 }: {
   challenge: ChallengeWithStats;
-  section: 'official' | 'active' | 'hosting';
+  section: LobbyTab;
   layout: LobbyLayout;
   nowMs: number;
   currentUserId?: string;
-  progress?: { days: number; status: string; eliminated?: boolean };
+  progress?: { days: number; status: string; eliminated?: boolean; result?: string | null; place?: number | null };
   host?: InviteHost | null;
   onPress: (id: string, snapshot?: ChallengeWithStats) => void;
 }) {
   const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
+  const resultLine =
+    section === 'ended' && progress
+      ? lobbyResultLine({ result: progress.result, place: progress.place })
+      : null;
   function open() {
     if (!challenge.id) {
       return;
@@ -593,18 +752,27 @@ function LobbyListCard({
     onPress(challenge.id, challenge);
   }
   if (layout === 'list') {
-    return <LobbyChallengeRow challenge={challenge} nowMs={nowMs} onPress={open} />;
+    return (
+      <LobbyChallengeRow
+        challenge={challenge}
+        nowMs={nowMs}
+        resultLine={resultLine}
+        forceEnded={section === 'ended'}
+        onPress={open}
+      />
+    );
   }
   return (
     <LobbyChallengeCard
       challenge={challenge}
       theme={challenge.is_official ? 'official' : 'user'}
       context="lobby"
-      section={section}
+      section={section === 'ended' ? 'ended' : section === 'official' ? 'official' : section === 'hosting' ? 'hosting' : 'active'}
       joined={Boolean(progress)}
       hosting={hosting}
       eliminated={Boolean(progress?.eliminated)}
       host={host}
+      resultLine={resultLine}
       onPress={open}
     />
   );

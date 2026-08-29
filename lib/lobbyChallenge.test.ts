@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyLobbyFilters,
   automationChip,
   challengeEndMeta,
   challengeScheduleState,
+  defaultFiltersForTab,
+  defaultSortForTab,
   fillGateLabel,
   formatEndCountdown,
   formatStartsLine,
   isLobbyActiveParticipantStatus,
+  lobbyFilterChips,
   lobbyTabForChallenge,
   sortEndingSoonest,
+  sortLobbyRows,
 } from '@/lib/lobbyChallenge';
 
 describe('lobby tabs', () => {
@@ -23,6 +28,33 @@ describe('lobby tabs', () => {
     expect(
       lobbyTabForChallenge({ isOfficial: true, isParticipant: true, isCreator: false }),
     ).toBe('official');
+  });
+
+  it('puts ended rows on Ended even when official or host+play', () => {
+    expect(
+      lobbyTabForChallenge({
+        status: 'settled',
+        isOfficial: true,
+        isParticipant: true,
+        isCreator: false,
+      }),
+    ).toBe('ended');
+    expect(
+      lobbyTabForChallenge({
+        status: 'ended',
+        isOfficial: false,
+        isParticipant: true,
+        isCreator: true,
+      }),
+    ).toBe('ended');
+    expect(
+      lobbyTabForChallenge({
+        status: 'live',
+        isOfficial: false,
+        isParticipant: true,
+        isCreator: true,
+      }),
+    ).toBe('active');
   });
 
   it('treats withdrawn and refunded as not Active participants', () => {
@@ -133,5 +165,78 @@ describe('challenge schedule copy', () => {
         now,
       ),
     ).toBe('Starts in 20:00');
+  });
+});
+
+describe('lobby filters', () => {
+  const now = Date.parse('2026-08-29T12:00:00.000Z');
+
+  it('defaults Ended to the past 30 days and live tabs to ending soonest', () => {
+    expect(defaultFiltersForTab('ended').when).toBe('30d');
+    expect(defaultSortForTab('ended')).toBe('ended_recently');
+    expect(defaultSortForTab('active')).toBe('ending_soonest');
+    expect(defaultFiltersForTab('active').when).toBe('all');
+  });
+
+  it('ANDs stacked groups and keeps only matching rows', () => {
+    const filters = {
+      ...defaultFiltersForTab('ended'),
+      when: 'week' as const,
+      durations: ['8-30' as const],
+      currencies: ['coins' as const],
+    };
+    const rows = [
+      {
+        id: 'keep',
+        title: 'Keep',
+        currency: 'coins',
+        days_required: 14,
+        ends_at: '2026-08-25T12:00:00.000Z',
+        prize_pool: 10,
+      },
+      {
+        id: 'bucks',
+        title: 'Bucks',
+        currency: 'bucks',
+        days_required: 14,
+        ends_at: '2026-08-25T12:00:00.000Z',
+        prize_pool: 20,
+      },
+      {
+        id: 'short',
+        title: 'Short',
+        currency: 'coins',
+        days_required: 3,
+        ends_at: '2026-08-25T12:00:00.000Z',
+        prize_pool: 30,
+      },
+      {
+        id: 'old',
+        title: 'Old',
+        currency: 'coins',
+        days_required: 14,
+        ends_at: '2026-07-01T12:00:00.000Z',
+        prize_pool: 40,
+      },
+    ];
+    const filtered = applyLobbyFilters(rows, 'ended', filters, { nowMs: now });
+    expect(filtered.map((row) => row.id)).toEqual(['keep']);
+  });
+
+  it('sorts without changing which filters are stacked', () => {
+    const filters = {
+      ...defaultFiltersForTab('ended'),
+      when: 'week' as const,
+      currencies: ['coins' as const],
+    };
+    const chipsBefore = lobbyFilterChips('ended', filters).map((chip) => chip.id);
+    const rows = [
+      { id: 'b', title: 'Beta', currency: 'coins', ends_at: '2026-08-28T12:00:00.000Z', prize_pool: 5 },
+      { id: 'a', title: 'Alpha', currency: 'coins', ends_at: '2026-08-26T12:00:00.000Z', prize_pool: 9 },
+    ];
+    const filtered = applyLobbyFilters(rows, 'ended', filters, { nowMs: now });
+    expect(sortLobbyRows(filtered, 'title').map((row) => row.id)).toEqual(['a', 'b']);
+    expect(sortLobbyRows(filtered, 'prize_desc').map((row) => row.id)).toEqual(['a', 'b']);
+    expect(lobbyFilterChips('ended', filters).map((chip) => chip.id)).toEqual(chipsBefore);
   });
 });

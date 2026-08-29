@@ -338,6 +338,8 @@ export const LOBBY_CHALLENGE_STATUSES = [
   'settled',
 ] as const;
 
+export const ENDED_LOBBY_STATUSES = ['ended', 'settling', 'settled'] as const;
+
 /** Joinable Lobby / Discover statuses. Includes in_progress — sync flips open → in_progress after starts_at. */
 export const DISCOVER_CHALLENGE_STATUSES = [
   'open',

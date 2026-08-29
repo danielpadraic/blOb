@@ -89,7 +89,7 @@ export type InviteHost = {
 };
 
 export type InviteVisualTheme = 'movement' | 'ranked' | 'habits' | 'creative' | 'official';
-export type InviteSection = 'official' | 'active' | 'friends' | 'hosting';
+export type InviteSection = 'official' | 'active' | 'friends' | 'hosting' | 'ended';
 
 type ChallengeInviteCardProps = {
   challenge: InviteChallenge;
@@ -101,6 +101,7 @@ type ChallengeInviteCardProps = {
   eliminated?: boolean;
   host?: InviteHost | null;
   showStateTags?: boolean;
+  resultLine?: string | null;
   onPress?: () => void;
 };
 
@@ -180,6 +181,8 @@ export function resolveInviteMedia(challenge: InviteChallenge, official: boolean
 
 function isEndedStatus(status: string): boolean {
   return (
+    status === 'ended' ||
+    status === 'settling' ||
     status === 'settled' ||
     status === 'cancelled' ||
     status === 'cancelled_underfilled' ||
@@ -262,6 +265,7 @@ export function ChallengeInviteCard({
   hosting = false,
   eliminated = false,
   host,
+  resultLine,
   onPress: _onPress,
 }: ChallengeInviteCardProps) {
   const official =
@@ -391,14 +395,24 @@ export function ChallengeInviteCard({
             <ChallengeTagRow tags={tags} compact />
           </View>
         </View>
-        <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4, gap: 4 }}>
+        <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: section === 'ended' || (!canJoin && !canCheckIn) ? 8 : 4, gap: 4 }}>
           <AppText
             className="text-[13px] font-semibold"
             style={{ color: THEME.textPrimary }}
             numberOfLines={1}>
             {displayTitle}
           </AppText>
-          <ChallengeScheduleMeta challenge={challenge} nowMs={nowMs} compact />
+          <ChallengeScheduleMeta
+            challenge={challenge}
+            nowMs={nowMs}
+            compact
+            forceEnded={section === 'ended'}
+          />
+          {resultLine ? (
+            <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }} numberOfLines={1}>
+              {resultLine}
+            </AppText>
+          ) : null}
           <View className="flex-row items-center" style={{ gap: 8, minHeight: 18 }}>
             <AppText
               className="text-[11px]"
@@ -411,6 +425,7 @@ export function ChallengeInviteCard({
             </View>
           </View>
         </View>
+        {section === 'ended' || (!canJoin && !canCheckIn) ? null : (
         <View
           className="flex-row items-center"
           style={{ paddingHorizontal: 10, paddingBottom: 8, gap: 14, minHeight: 28 }}>
@@ -419,6 +434,7 @@ export function ChallengeInviteCard({
           ) : null}
           {canCheckIn ? <TextAction label="Check In" onPress={onCheckIn} /> : null}
         </View>
+        )}
       </Pressable>
     );
 }
@@ -685,11 +701,15 @@ export function LobbyChallengeRow({
   challenge,
   context = 'lobby',
   nowMs,
+  resultLine,
+  forceEnded = false,
   onPress: _onPress,
 }: {
   challenge: InviteChallenge;
   context?: 'lobby' | 'feed';
   nowMs?: number;
+  resultLine?: string | null;
+  forceEnded?: boolean;
   onPress?: () => void;
 }) {
   const router = useRouter();
@@ -744,7 +764,17 @@ export function LobbyChallengeRow({
           <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
         </View>
       </View>
-      <ChallengeScheduleMeta challenge={challenge} nowMs={nowMs ?? tickMs} compact />
+      <ChallengeScheduleMeta
+        challenge={challenge}
+        nowMs={nowMs ?? tickMs}
+        compact
+        forceEnded={forceEnded}
+      />
+      {resultLine ? (
+        <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }} numberOfLines={1}>
+          {resultLine}
+        </AppText>
+      ) : null}
     </Pressable>
   );
 }

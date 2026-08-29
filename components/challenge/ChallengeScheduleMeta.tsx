@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import {
   challengeScheduleState,
+  endedDatetimeLine,
   type ScheduleChallenge,
 } from '@/lib/lobbyChallenge';
 import { THEME } from '@/lib/theme';
@@ -12,13 +13,25 @@ export function ChallengeScheduleMeta({
   nowMs,
   compact = false,
   tone = 'light',
+  forceEnded = false,
 }: {
   challenge: ScheduleChallenge;
   nowMs?: number;
   compact?: boolean;
   tone?: 'light' | 'dark';
+  forceEnded?: boolean;
 }) {
-  const state = challengeScheduleState(challenge, nowMs);
+  const live = challengeScheduleState(challenge, nowMs);
+  const state = forceEnded
+    ? {
+        ...live,
+        datetime: endedDatetimeLine(challenge.ends_at, challenge.distributed_at),
+        chip: null,
+        gate: null,
+        countdown: null,
+        urgent: false,
+      }
+    : live;
   if (!state.datetime && !state.chip && !state.gate && !state.countdown) {
     return null;
   }
