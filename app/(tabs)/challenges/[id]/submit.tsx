@@ -644,7 +644,7 @@ export default function SubmitWorkoutScreen() {
   }
 
   if (
-    (failKind === 'offline' || failKind === 'permission' || failKind === 'upload') &&
+    (failKind === 'offline' || failKind === 'upload') &&
     !hasReviewDraft &&
     extras.length === 0
   ) {
@@ -654,11 +654,7 @@ export default function SubmitWorkoutScreen() {
         <MascotState
           kind="error"
           title={
-            failKind === 'offline'
-              ? copy('checkin.offlineBob')
-              : failKind === 'permission'
-                ? copy('checkin.permissionBob')
-                : copy('checkin.uploadFailBob')
+            failKind === 'offline' ? copy('checkin.offlineBob') : copy('checkin.uploadFailBob')
           }
           body={error ?? CHECKIN_BOB[failKind]}
           actionLabel="Try again"

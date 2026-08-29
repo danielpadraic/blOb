@@ -1,4 +1,8 @@
-import { FORFEIT_RECEIPT } from '@/lib/settlement/receipts';
+import {
+  FORFEIT_RECEIPT,
+  voidReceiptCopy,
+  type SettlementVoidKind,
+} from '@/lib/settlement/receipts';
 
 import { FUNDING_COPY, formatFundingAmount } from './copy';
 import type { FundingSnapshot } from './model';
@@ -21,6 +25,7 @@ export function fundingReceiptLines(input: {
   viewerPayout?: number | null;
   winnerCount: number;
   spectator?: boolean;
+  voidKind?: SettlementVoidKind;
 }): FundingReceiptLines {
   const { funding } = input;
   const currency = funding.currency;
@@ -48,6 +53,11 @@ export function fundingReceiptLines(input: {
         ? `Your share ${formatFundingAmount(input.viewerPayout, currency)}`
         : null,
     remainingFinishers: `${FUNDING_COPY.remainingFinishers} ${winnerCount}`,
-    forfeit: winnerCount <= 0 ? FORFEIT_RECEIPT : null,
+    forfeit:
+      input.voidKind && input.voidKind !== 'historical_forfeit'
+        ? voidReceiptCopy(input.voidKind)
+        : winnerCount <= 0
+          ? FORFEIT_RECEIPT
+          : null,
   };
 }

@@ -3,7 +3,7 @@
 export type ClipShutterKind = 'wave' | 'round';
 
 export function clipShutterIdleLabel(kind: ClipShutterKind): string {
-  return kind === 'wave' ? 'Tap to wave · 30s' : 'Tap to record · 3:00';
+  return kind === 'wave' ? 'Tap to wave' : 'Tap to record';
 }
 
 export function clipShutterLabel(kind: ClipShutterKind, recording: boolean): string {

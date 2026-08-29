@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 
 import { useAuth } from '@/hooks/useAuth';
-import { copy } from '@/lib/copy';
+import { useMyProfile } from '@/hooks/useProfile';
+import { asCopyTone, copy } from '@/lib/copy';
 import { fetchHealthConnection, upsertHealthConnection } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
 import { getErrorMessage } from '@/utils/errors';
@@ -22,6 +23,8 @@ export function useHealthAvailable() {
 
 export function useHealthConnection() {
   const { user } = useAuth();
+  const { profile } = useMyProfile();
+  const tone = asCopyTone(profile?.motivation_tone);
   const queryClient = useQueryClient();
   const showRow = Platform.OS === 'ios' || Platform.OS === 'android';
   const available = useHealthAvailable();
@@ -132,7 +135,7 @@ export function useHealthConnection() {
           : copy('health.notConnected');
   const lastSyncedLabel =
     Platform.OS === 'ios' && status === 'connected' && row?.lastSyncedAt
-      ? copy('health.lastSynced', 'neutral', {
+      ? copy('health.lastSynced', tone, {
           when: formatDistanceToNow(new Date(row.lastSyncedAt), { addSuffix: true }),
         })
       : null;

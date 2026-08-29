@@ -48,6 +48,9 @@ export type StoppableStream = {
 export type StoppableVideo = {
   srcObject: unknown;
   pause: () => void;
+  src?: string;
+  removeAttribute?: (name: string) => void;
+  load?: () => void;
 };
 
 export type StoppableRecorder = {
@@ -93,6 +96,17 @@ export function stopMedia(input: StopMediaInput = {}): void {
       // Detached node.
     }
     video.srcObject = null;
+    try {
+      if (typeof video.removeAttribute === 'function') {
+        video.removeAttribute('src');
+      }
+      if ('src' in video) {
+        video.src = '';
+      }
+      video.load?.();
+    } catch {
+      // Camera preview nodes and mocks may have no src.
+    }
   }
 }
 
@@ -110,6 +124,18 @@ export function watchLiveMedia(input: StopMediaInput): void {
   }
   if (input.recorder) {
     liveRecorders.add(input.recorder);
+  }
+}
+
+export function unwatchLiveMedia(input: StopMediaInput): void {
+  if (input.stream) {
+    liveStreams.delete(input.stream);
+  }
+  if (input.video) {
+    liveVideos.delete(input.video);
+  }
+  if (input.recorder) {
+    liveRecorders.delete(input.recorder);
   }
 }
 

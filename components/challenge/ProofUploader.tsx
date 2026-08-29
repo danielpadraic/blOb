@@ -13,7 +13,6 @@ import { copy } from '@/lib/copy';
 import type { ChallengeProof } from '@/lib/challengeProofs';
 import {
   cameraIsAvailable,
-  ensureCapturePermissions,
   ensureLibraryPermission,
   openAppSettings,
 } from '@/lib/mediaPermissions';
@@ -125,17 +124,11 @@ export function ProofUploader({
       onRequestOpen();
       return;
     }
-    const permission = await ensureCapturePermissions(capture);
-    if (!permission.ok) {
-      setBlocked(true);
-      setBlockedReason(permission.kind === 'microphone' ? 'Microphone is off.' : 'Camera is off.');
-    } else {
-      setBlocked(false);
-      setBlockedReason(undefined);
-      const available = await cameraIsAvailable();
-      setWebFallback(!available);
-    }
+    setBlocked(false);
+    setBlockedReason(undefined);
     setOpen(true);
+    const available = await cameraIsAvailable();
+    setWebFallback(!available);
   }
 
   async function openLibrary() {
@@ -178,8 +171,9 @@ export function ProofUploader({
             : { height: Math.max(previewHeight, 320), borderRadius: THEME.radius, overflow: 'hidden' }
         }>
         <InAppCamera
-          capture={capture}
-          maxDuration={video ? 30 : 15}
+          capture="photo"
+          checkin
+          maxDuration={15}
           blocked={blocked}
           blockedReason={blockedReason}
           webFallback={webFallback}

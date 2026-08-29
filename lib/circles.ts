@@ -122,7 +122,7 @@ export function circleJoinedNotifyCopy(name: string, circleName: string, tone: C
   return clipAfterName(name, rest);
 }
 
-export function lastHostLeaveCopy(tone: CopyTone = 'neutral'): string {
+export function lastHostLeaveCopy(tone: CopyTone = 'gentle'): string {
   return copy('circles.lastHost', tone);
 }
 

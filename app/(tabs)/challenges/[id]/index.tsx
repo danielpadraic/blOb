@@ -99,11 +99,14 @@ import {
   isDistributeGateOpen,
   isEvenSplitAutoSettle,
   isJoinWindowOpen,
+  nobodyFinishedRuleCopy,
   payoutCountdownLabel,
   settlementErrorCopy,
+  settlementVoidKind,
   shouldAutoSettle,
   startsInLabel,
   trySettleIfEnded,
+  voidReceiptCopy,
 } from '@/lib/settlement';
 import {
   isOfficialJoinable,
@@ -728,13 +731,15 @@ export default function ChallengeDetailScreen() {
           distanceMetersCompleted: participation?.distance_meters_total ?? 0,
         });
   const prizeEnded = challenge.status === 'settled' || challenge.status === 'ended';
-  const settlementWinners = settlement?.settlement.winner_count;
-  const settlementDistributed = settlement?.settlement.distributed;
-  const prizeForfeited =
-    prizeEnded &&
-    Boolean(settlement) &&
-    ((settlementWinners != null && Number(settlementWinners) === 0) ||
-      (Array.isArray(settlementDistributed) && settlementDistributed.length === 0));
+  const prizeVoidKind = settlement
+    ? settlementVoidKind({
+        winnerCount: settlement.settlement.winner_count,
+        payouts: settlement.payouts,
+        slices: settlement.settlement.slices,
+      })
+    : null;
+  const prizeForfeited = prizeEnded && Boolean(settlement) && prizeVoidKind != null;
+  const voidRuleLine = nobodyFinishedRuleCopy(challenge);
   const progressRatio = isUnlimited
     ? 1
     : daysCompleted / Math.max(isPoints ? Math.max(tasks.length, 1) : target, 1);
@@ -1077,6 +1082,11 @@ export default function ChallengeDetailScreen() {
               <RuleLine text={lastManStandingRequirement(challenge)} />
             </View>
           ) : null}
+          {voidRuleLine ? (
+            <View className="mt-3">
+              <RuleLine text={voidRuleLine} />
+            </View>
+          ) : null}
           {challenge.rules_video_url ? (
             <Pressable
               onPress={() => void Linking.openURL(challenge.rules_video_url!)}
@@ -1099,7 +1109,7 @@ export default function ChallengeDetailScreen() {
           </FieldNoteLabel>
           {prizeForfeited ? (
             <AppText className="mt-2 text-[17px] font-semibold leading-6 text-charcoal">
-              Nobody remaining. The prize is forfeited. No refunds.
+              {voidReceiptCopy(prizeVoidKind)}
             </AppText>
           ) : (
             <View className="mt-2">

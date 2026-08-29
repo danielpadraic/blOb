@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { CurrencyMark, StakeAmount } from '@/components/currency/CurrencyMark';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
-import { payoutDisplayName, personalSettlementCopy } from '@/lib/settlement';
+import { payoutDisplayName, personalSettlementCopy, settlementVoidKind, voidReceiptCopy } from '@/lib/settlement';
 import { THEME } from '@/lib/theme';
 import type { ChallengeSettlementView } from '@/lib/types';
 import { formatWallet } from '@/lib/currency';
@@ -36,6 +36,11 @@ export function SettlementSummary({
   prizePool,
 }: SettlementSummaryProps) {
   const mine = settlement.payouts.find((payout) => payout.user_id === userId);
+  const voidKind = settlementVoidKind({
+    winnerCount: settlement.settlement.winner_count,
+    payouts: settlement.payouts,
+    slices: settlement.settlement.slices,
+  });
   const personal = personalSettlementCopy({
     payout: mine,
     prizeStructure: settlement.settlement.prize_structure,
@@ -45,6 +50,7 @@ export function SettlementSummary({
     currency,
     official,
     winnerCount: settlement.settlement.winner_count,
+    voidKind,
   });
   const pool = Number(prizePool ?? settlement.settlement.prize_pool ?? 0);
   const paid = Number(settlement.settlement.distributed ?? 0);
@@ -61,6 +67,7 @@ export function SettlementSummary({
     viewerPayout: mine?.amount,
     winnerCount: winners,
     spectator: !joined,
+    voidKind,
   });
 
   return (
@@ -129,7 +136,7 @@ export function SettlementSummary({
         ) : null}
         <AppText className="mt-3 text-sm leading-5 text-muted">
           {winners === 0
-            ? 'Nobody remaining. The prize is forfeited. No refunds.'
+            ? voidReceiptCopy(voidKind)
             : `Paid ${formatWallet(paid || pool, currency)} on ${formatDate(settlement.settlement.settled_at, 'MMM d')}.`}
         </AppText>
       </Card>

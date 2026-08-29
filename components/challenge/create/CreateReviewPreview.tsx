@@ -19,6 +19,7 @@ import {
   comparablePointsHeadline,
   parseComparablePointsConfig,
 } from '@/lib/comparablePoints';
+import { nobodyFinishedRuleCopy } from '@/lib/settlement/receipts';
 import { THEME } from '@/lib/theme';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -61,6 +62,8 @@ export function CreateReviewPreview({
     currency: values.currency === 'bucks' ? 'bucks' : preview.currency,
     host_funded:
       Boolean(values.host_funded) || Math.max(Number(values.creator_contribution) || 0, 0) > 0,
+    host_budget: Math.max(Number(values.host_budget ?? values.creator_contribution) || 0, 0),
+    creator_contribution: Math.max(Number(values.creator_contribution) || 0, 0),
     buy_in_amount: Math.max(Number(values.buy_in) || 0, 0),
   };
   const ruleCopy = challengeRuleCopy(challenge);
@@ -199,6 +202,11 @@ export function CreateReviewPreview({
               </AppText>
             ))}
           </View>
+        ) : null}
+        {nobodyFinishedRuleCopy(challenge) ? (
+          <AppText className="mt-2 text-sm leading-5 text-muted">
+            {nobodyFinishedRuleCopy(challenge)}
+          </AppText>
         ) : null}
       </Card>
 

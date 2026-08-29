@@ -399,8 +399,7 @@ export function notificationHref(item: AppNotification): Href | null {
     const settledId = notificationChallengeId(data);
     if (settledId) {
       return challengeDetailHref(settledId, 'lobby', notificationPostId(data), {
-        tab: 'board',
-        receipt: true,
+        tab: 'overview',
       });
     }
   }

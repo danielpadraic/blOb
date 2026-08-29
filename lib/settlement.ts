@@ -17,7 +17,11 @@ import { getErrorMessage } from '@/utils/errors';
 import { compactCountdown, formatRelative } from '@/utils/format';
 import { formatWallet } from '@/lib/currency';
 import { officialBob } from '@/copy/officialBob';
-import { FORFEIT_RECEIPT } from '@/lib/settlement/receipts';
+import {
+  FORFEIT_RECEIPT,
+  voidReceiptCopy,
+  type SettlementVoidKind,
+} from '@/lib/settlement/receipts';
 import { isEvenSplitAutoSettle } from '@/lib/settlement/lifecycle';
 import { settlementRpcForPayout, type EvenSplitPayoutInput } from '@/lib/settlement/payout';
 import {
@@ -38,7 +42,14 @@ export {
   settlePayoutConfirmCopy,
   settlementRpcForPayout,
 } from '@/lib/settlement/payout';
-export { FORFEIT_RECEIPT, formatSettlementAmount, receiptHeadline } from '@/lib/settlement/receipts';
+export {
+  FORFEIT_RECEIPT,
+  formatSettlementAmount,
+  nobodyFinishedRuleCopy,
+  receiptHeadline,
+  settlementVoidKind,
+  voidReceiptCopy,
+} from '@/lib/settlement/receipts';
 import { settlementErrorCopy } from '@/lib/settlement/errors';
 export { classifySettlementError, settlementErrorCopy } from '@/lib/settlement/errors';
 export { trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
@@ -362,9 +373,13 @@ export function personalSettlementCopy(input: {
   currency?: WalletCurrency | string | null;
   official?: boolean;
   winnerCount?: number | null;
+  voidKind?: SettlementVoidKind;
 }): string {
   if (!input.joined) {
     return 'You were not in this challenge.';
+  }
+  if (input.voidKind && input.voidKind !== 'historical_forfeit') {
+    return voidReceiptCopy(input.voidKind);
   }
   if (Number(input.winnerCount) === 0) {
     return FORFEIT_RECEIPT;
@@ -515,7 +530,17 @@ export async function fetchChallengeSettlement(
 
     const settlement = asSettlement(data as Record<string, unknown>);
     const fromTable = (payoutsQuery.data ?? []).map((row) => asPayout(row as Record<string, unknown>));
-    const payouts = fromTable.length > 0 ? fromTable : settlement.slices ?? [];
+    const slices = settlement.slices ?? [];
+    const payouts = (fromTable.length > 0 ? fromTable : slices).map((row, index) => {
+      if (row.reason) {
+        return row;
+      }
+      const match =
+        slices.find(
+          (slice) => slice.user_id === row.user_id && Number(slice.amount) === Number(row.amount),
+        ) ?? slices[index];
+      return match?.reason ? { ...row, reason: match.reason } : row;
+    });
 
     return {
       already_settled: true,

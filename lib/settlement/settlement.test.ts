@@ -7,6 +7,7 @@ import {
   evenSplitShares,
   forfeitNotifyCopy,
   formatSettlementAmount,
+  nobodyFinishedRuleCopy,
   isEvenSplitAutoSettle,
   isEvenSplitPayout,
   lifecycleLabel,
@@ -16,8 +17,14 @@ import {
   payoutSlices,
   receiptHeadline,
   remainingEligible,
+  settlementVoidKind,
   settledCongratulateCopy,
   settlePayoutConfirmCopy,
+  VOID_BOTH_RECEIPT,
+  VOID_BUYIN_RECEIPT,
+  VOID_HOST_RECEIPT,
+  voidNotifyCopy,
+  voidReceiptCopy,
   settlementErrorCopy,
   settlementRequiredDays,
   settlementRpcForPayout,
@@ -158,6 +165,46 @@ describe('even-split remaining', () => {
     expect(lobbyResultCopy({ title: 'Rookies vs. Rockstars', remaining: 0, forfeited: true })).toContain(
       'Prize forfeited',
     );
+  });
+
+  it('voids 0 winners with refund copy, and keeps old forfeit for empty historical rows', () => {
+    expect(settlementVoidKind({ winnerCount: 0, payouts: [] })).toBe('historical_forfeit');
+    expect(voidReceiptCopy('historical_forfeit')).toBe(FORFEIT_RECEIPT);
+    expect(
+      settlementVoidKind({
+        winnerCount: 0,
+        payouts: [{ reason: 'refund_buyin' }],
+      }),
+    ).toBe('buyin');
+    expect(
+      settlementVoidKind({
+        winnerCount: 0,
+        payouts: [{ reason: 'return_host_funding' }],
+      }),
+    ).toBe('host');
+    expect(
+      settlementVoidKind({
+        winnerCount: 0,
+        payouts: [{ reason: 'refund_buyin' }, { reason: 'return_host_funding' }],
+      }),
+    ).toBe('both');
+    expect(voidReceiptCopy('buyin')).toBe(VOID_BUYIN_RECEIPT);
+    expect(voidReceiptCopy('host')).toBe(VOID_HOST_RECEIPT);
+    expect(voidReceiptCopy('both')).toBe(VOID_BOTH_RECEIPT);
+    expect(voidNotifyCopy('Dawn Miles', 'host')).toBe(
+      'Dawn Miles settled. Nobody finished. Prize returned to the host.',
+    );
+    expect(lobbyResultCopy({ title: 'Dawn Miles', remaining: 0, forfeited: false, voidKind: 'buyin' })).toBe(
+      'Dawn Miles settled. Nobody finished. Entry coins were returned.',
+    );
+    expect(nobodyFinishedRuleCopy({ buyInAmount: 10 })).toBe(
+      'If nobody finishes, entry coins are returned.',
+    );
+    expect(nobodyFinishedRuleCopy({ hostFunded: true, hostBudget: 25 })).toBe(
+      'If nobody finishes, the prize is returned to the host.',
+    );
+    expect(receiptHeadline({ joined: true, winnerCount: 0, voidKind: 'buyin' })).toBe(VOID_BUYIN_RECEIPT);
+    expect(receiptHeadline({ joined: true, winnerCount: 0 })).toBe(FORFEIT_RECEIPT);
   });
 });
 

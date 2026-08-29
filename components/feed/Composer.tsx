@@ -361,7 +361,7 @@ export function Composer({
           <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end' }}>
             {wallHost ? (
               <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
-                {copy('wall.onHost', 'neutral', { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
+                {copy('wall.onHost', asCopyTone(profile?.motivation_tone), { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
               </AppText>
             ) : null}
             <MentionField

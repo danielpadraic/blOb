@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-import { copy } from '@/lib/copy';
+import { asCopyTone, copy } from '@/lib/copy';
 import { fetchLatestWorkoutStart } from '@/lib/health/remote';
 import { rankHealthWorkouts } from '@/lib/health/match';
 import { challengeHealthWindow } from '@/lib/health/period';
@@ -67,7 +67,7 @@ export async function notifyForgotToBegin(input: {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'blOb',
-        body: copy('health.prompt', 'neutral', {
+        body: copy('health.prompt', asCopyTone(), {
           duration: input.duration,
           activity: input.activity,
         }),

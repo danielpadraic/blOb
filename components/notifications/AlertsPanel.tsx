@@ -298,6 +298,7 @@ function NotificationRow({
   circleActionPending?: boolean;
 }) {
   const unread = !item.read_at;
+  const tone = useCopyTone();
   const keepDays = Math.max(Number(item.data?.keep_days) || 0, 1);
   const showRoll = item.type === 'start_rolled' && Boolean(item.data?.challenge_id) && onResolveStart;
   const canShorten = item.data?.can_shorten !== false;
@@ -342,7 +343,7 @@ function NotificationRow({
               className="rounded-full px-3"
               style={{ minHeight: 36, justifyContent: 'center', backgroundColor: THEME.primary }}>
               <AppText className="text-[13px] font-semibold" style={{ color: THEME.primaryForeground }}>
-                {copy('challenge.keepDays', 'neutral', { n: keepDays })}
+                {copy('challenge.keepDays', tone, { n: keepDays })}
               </AppText>
             </Pressable>
             {canShorten ? (

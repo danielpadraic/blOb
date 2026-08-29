@@ -11,6 +11,7 @@ import {
   startMovedBody,
   startRollKeepDays,
 } from '@/lib/challengeStart';
+import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { Challenge } from '@/lib/types';
@@ -34,6 +35,7 @@ export function StartRollSheet({
   onClose,
   onApply,
 }: StartRollSheetProps) {
+  const tone = useCopyTone();
   const keepDays = startRollKeepDays(challenge);
   const [startsAt, setStartsAt] = useState(() => nextStartAt(challenge.starts_at));
   const canShorten = canShortenStartRoll({
@@ -78,7 +80,7 @@ export function StartRollSheet({
             <AppText className="text-sm leading-5 text-coral-dark">{error}</AppText>
           ) : null}
           <Button
-            title={copy('challenge.keepDays', 'neutral', { n: keepDays })}
+            title={copy('challenge.keepDays', tone, { n: keepDays })}
             size="lg"
             loading={loading}
             onPress={() => onApply(startsAt, 'keep')}

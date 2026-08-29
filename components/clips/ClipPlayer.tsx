@@ -36,7 +36,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useClipSocial } from '@/hooks/useClipSocial';
 import { useReportPost } from '@/hooks/usePostModeration';
 import { useFriends, useShareStory, useViewStory } from '@/hooks/useSocial';
-import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { registerNativeCameraStop, stopAllLiveMedia, stopMedia, unwatchLiveMedia, watchLiveMedia } from '@/lib/cameraSession';
 import { RoundShareComposer } from '@/components/clips/RoundShareComposer';
 import { startClipRepostCapture } from '@/lib/clipAttach';
 import { downloadClipMedia } from '@/lib/clipDownload';
@@ -54,7 +54,6 @@ import {
   authorRanges,
   nextAuthorEntryIndex,
   nextStoryIndex,
-  preloadStoryIndex,
   prevAuthorEntryIndex,
   prevStoryIndex,
   rangeAt,
@@ -193,6 +192,7 @@ export function ClipPlayer({
   const applyIndex = useCallback((next: number | 'close' | null) => {
     if (next === 'close' || next == null) {
       if (next === 'close') {
+        stopAllLiveMedia();
         onClose();
       }
       return;
@@ -271,6 +271,7 @@ export function ClipPlayer({
       setCommentsMode(false);
       return;
     }
+    stopAllLiveMedia();
     onClose();
   }
 
@@ -450,14 +451,6 @@ export function ClipPlayer({
               contentFit="cover"
             />
           )}
-          {(() => {
-            const nextAt =
-              kind === 'wave' ? preloadStoryIndex(ranges, index) : index + 1 < clips.length ? index + 1 : null;
-            const next = nextAt != null ? clips[nextAt] : null;
-            return next?.mediaType === 'video' ? (
-              <PreloadClip key={`preload-${next.id}`} uri={next.mediaUrl} startMs={next.startMs ?? 0} />
-            ) : null;
-          })()}
 
           {!commentsMode ? (
             <Pressable
@@ -749,15 +742,6 @@ export function ClipPlayer({
     </Animated.View>
     </WatchSurface>
   );
-}
-
-function PreloadClip({ uri, startMs }: { uri: string; startMs: number }) {
-  useVideoPlayer(uri, (instance) => {
-    instance.muted = true;
-    instance.currentTime = Math.max(startMs, 0) / 1000;
-    instance.pause();
-  });
-  return null;
 }
 
 function ClipSocialRail({
@@ -1355,6 +1339,16 @@ function NativeClipVideo({
   });
 
   useEffect(() => {
+    return registerNativeCameraStop(() => {
+      try {
+        player.pause();
+      } catch {
+        // Player already released.
+      }
+    });
+  }, [player]);
+
+  useEffect(() => {
     endedRef.current = false;
     player.currentTime = startSec;
     player.play();
@@ -1421,18 +1415,63 @@ function WebClipVideo({
   const startSec = Math.max(startMs, 0) / 1000;
   const endSec = startSec + Math.max(durationMs || WAVE_CLIP_MS, 400) / 1000;
 
+  const detach = useCallback((node: HTMLVideoElement | null) => {
+    if (!node) {
+      return;
+    }
+    node.removeEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
+    node.removeEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+    stopMedia({ video: node });
+    unwatchLiveMedia({ video: node });
+  }, []);
+
   const attach = useCallback(
     (node: HTMLVideoElement | null) => {
+      if (videoRef.current && videoRef.current !== node) {
+        detach(videoRef.current);
+      }
       videoRef.current = node;
       applyWebVideoLock(node, poster);
       if (!node) {
         return;
       }
+      watchLiveMedia({ video: node });
       node.addEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
       node.addEventListener('webkitendfullscreen', preventWebVideoFullscreen);
     },
-    [poster],
+    [detach, poster],
   );
+
+  useEffect(() => {
+    return () => {
+      detach(videoRef.current);
+      videoRef.current = null;
+    };
+  }, [detach]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+    const restore = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      const node = videoRef.current;
+      if (!node || node.getAttribute('src') || !uri) {
+        return;
+      }
+      node.src = uri;
+      applyWebVideoLock(node, poster);
+      watchLiveMedia({ video: node });
+      endedRef.current = false;
+      if (!pausedRef.current) {
+        void node.play().catch(() => undefined);
+      }
+    };
+    document.addEventListener('visibilitychange', restore);
+    return () => document.removeEventListener('visibilitychange', restore);
+  }, [pausedRef, poster, uri]);
 
   useEffect(() => {
     const node = videoRef.current;
@@ -1448,6 +1487,14 @@ function WebClipVideo({
       if (pausedRef.current) {
         node.pause();
         return;
+      }
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      if (!node.getAttribute('src') && uri) {
+        node.src = uri;
+        applyWebVideoLock(node, poster);
+        watchLiveMedia({ video: node });
       }
       void node.play().catch(() => undefined);
     };
@@ -1477,7 +1524,7 @@ function WebClipVideo({
     node.addEventListener('ended', onEndedNative);
     play();
     const id = window.setInterval(() => {
-      if (pausedRef.current) {
+      if (pausedRef.current || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) {
         node.pause();
       } else if (node.paused) {
         play();

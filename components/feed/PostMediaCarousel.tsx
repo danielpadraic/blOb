@@ -1,14 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
+  Animated,
   Image as RnImage,
+  PanResponder,
   Platform,
   Pressable,
-  ScrollView,
   View,
   useWindowDimensions,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -19,12 +18,14 @@ import { useVideoPoster } from '@/hooks/useVideoPoster';
 import {
   POST_MEDIA_CYCLE_MS,
   canAutoCyclePager,
+  carouselClaimsHorizontal,
   isStillPostMedia,
   nextAutoCycleIndex,
   orientationFromSize,
   pagerFrameHeight,
   rememberPagerIndex,
   rememberedPagerIndex,
+  snapCarouselIndex,
   stillCountInPager,
   type MediaSize,
 } from '@/lib/postMediaCarousel';
@@ -45,20 +46,9 @@ export function VisiblePostsProvider({
   return <VisiblePostsContext.Provider value={ids}>{children}</VisiblePostsContext.Provider>;
 }
 
-const WEB_PAGER =
+const WEB_FEED_TOUCH =
   Platform.OS === 'web'
-    ? ({
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        scrollSnapType: 'x mandatory',
-        overscrollBehaviorX: 'contain',
-        touchAction: 'pan-x',
-      } as object)
-    : undefined;
-
-const WEB_PAGE =
-  Platform.OS === 'web'
-    ? ({ scrollSnapAlign: 'start', scrollSnapStop: 'always', flexShrink: 0 } as object)
+    ? ({ touchAction: 'pan-y pinch-zoom' } as object)
     : undefined;
 
 function useReduceMotion() {
@@ -172,7 +162,6 @@ export function PostMediaCarousel({
   const stillCount = stillCountInPager(urls);
   const reducedMotion = useReduceMotion();
   const { ref: inViewRef, inView } = useInViewport(stillCount >= 2 && !reducedMotion, postId);
-  const pager = useRef<ScrollView>(null);
   const pageWidth = Math.max(cardWidth, 1);
   const [index, setIndex] = useState(() => rememberedPagerIndex(postId, urls.length));
   const [userPaused, setUserPaused] = useState(false);
@@ -182,67 +171,104 @@ export function PostMediaCarousel({
   const autoScrolling = useRef(false);
   const indexRef = useRef(index);
   const urlsRef = useRef(urls);
+  const pageWidthRef = useRef(pageWidth);
+  const shift = useRef(new Animated.Value(-rememberedPagerIndex(postId, urls.length) * pageWidth)).current;
+  const shiftOffset = useRef(-rememberedPagerIndex(postId, urls.length) * pageWidth);
   const urlsKey = urls.join('\0');
   indexRef.current = index;
   urlsRef.current = urls;
+  pageWidthRef.current = pageWidth;
 
   const lightboxItems: LightboxItem[] = urls.map((uri, itemIndex) => ({
     uri,
     label: labels?.[itemIndex],
   }));
 
-  const goTo = useCallback(
-    (next: number, animated: boolean) => {
-      const clamped = Math.min(Math.max(next, 0), Math.max(urls.length - 1, 0));
+  const settleAt = useCallback(
+    (next: number, animated: boolean, fromUser: boolean) => {
+      const clamped = Math.min(Math.max(next, 0), Math.max(urlsRef.current.length - 1, 0));
       setIndex(clamped);
       rememberPagerIndex(postId, clamped);
+      if (fromUser) {
+        setUserPaused(true);
+      }
+      const to = -clamped * pageWidthRef.current;
+      shiftOffset.current = to;
       autoScrolling.current = true;
-      pager.current?.scrollTo({ x: clamped * pageWidth, animated });
-      requestAnimationFrame(() => {
+      if (!animated) {
+        shift.setValue(to);
+        autoScrolling.current = false;
+        return;
+      }
+      Animated.timing(shift, {
+        toValue: to,
+        duration: 240,
+        useNativeDriver: true,
+      }).start(() => {
         autoScrolling.current = false;
       });
     },
-    [pageWidth, postId, urls.length],
+    [postId, shift],
+  );
+
+  const goTo = useCallback(
+    (next: number, animated: boolean) => {
+      settleAt(next, animated, false);
+    },
+    [settleAt],
   );
 
   useEffect(() => {
     const start = rememberedPagerIndex(postId, urls.length);
     setIndex(start);
-    requestAnimationFrame(() => {
-      pager.current?.scrollTo({ x: start * pageWidth, animated: false });
-    });
-  }, [pageWidth, postId, urls.length]);
+    settleAt(start, false, false);
+  }, [pageWidth, postId, settleAt, urls.length]);
 
   const markUserPaused = useCallback(() => {
     setUserPaused(true);
   }, []);
 
-  function pageFromOffset(x: number) {
-    const next = Math.round(x / pageWidth);
-    if (!Number.isFinite(next)) {
-      return;
-    }
-    const clamped = Math.min(Math.max(next, 0), Math.max(urls.length - 1, 0));
-    setIndex((current) => {
-      if (current === clamped) {
-        return current;
-      }
-      rememberPagerIndex(postId, clamped);
-      if (!autoScrolling.current) {
-        setUserPaused(true);
-      }
-      return clamped;
-    });
-  }
-
-  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    pageFromOffset(event.nativeEvent.contentOffset.x);
-  }
-
-  function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    pageFromOffset(event.nativeEvent.contentOffset.x);
-    dragging.current = false;
-  }
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          carouselClaimsHorizontal(gesture.dx, gesture.dy),
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          carouselClaimsHorizontal(gesture.dx, gesture.dy),
+        onPanResponderTerminationRequest: () => !dragging.current,
+        onPanResponderGrant: () => {
+          dragging.current = true;
+          markUserPaused();
+          shift.stopAnimation((value) => {
+            shiftOffset.current = value;
+          });
+        },
+        onPanResponderMove: (_, gesture) => {
+          const width = pageWidthRef.current;
+          const last = Math.max(urlsRef.current.length - 1, 0);
+          const min = -last * width;
+          shift.setValue(Math.min(0, Math.max(min, shiftOffset.current + gesture.dx)));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const next = snapCarouselIndex({
+            from: indexRef.current,
+            dx: gesture.dx,
+            vx: gesture.vx,
+            pageWidth: pageWidthRef.current,
+            length: urlsRef.current.length,
+          });
+          dragging.current = false;
+          settleAt(next, true, true);
+        },
+        onPanResponderTerminate: () => {
+          dragging.current = false;
+          settleAt(indexRef.current, true, false);
+        },
+      }),
+    [markUserPaused, settleAt, shift],
+  );
 
   const cycling = canAutoCyclePager({
     stillCount,
@@ -292,7 +318,7 @@ export function PostMediaCarousel({
           setCardWidth(next);
         }
       }}
-      style={{ overflow: 'hidden', width: '100%' }}
+      style={[{ overflow: 'hidden', width: '100%' }, WEB_FEED_TOUCH]}
       {...hoverProps}>
       {urls.length === 1 ? (
         <MediaSlide
@@ -305,41 +331,33 @@ export function PostMediaCarousel({
         />
       ) : (
         <View>
-          <ScrollView
-            ref={pager}
-            horizontal
-            pagingEnabled
-            nestedScrollEnabled
-            directionalLockEnabled
-            disableIntervalMomentum
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            keyboardShouldPersistTaps="handled"
-            style={[{ width: pageWidth, height: frameH }, WEB_PAGER]}
-            contentContainerStyle={{ height: frameH }}
-            contentOffset={{ x: index * pageWidth, y: 0 }}
-            scrollEventThrottle={16}
-            onScroll={onScroll}
-            onScrollBeginDrag={() => {
-              dragging.current = true;
-              markUserPaused();
-            }}
-            onMomentumScrollEnd={onScrollEnd}
-            onScrollEndDrag={onScrollEnd}
-            onTouchStart={markUserPaused}>
-            {urls.map((uri, itemIndex) => (
-              <View key={`${uri}-${itemIndex}`} style={[{ width: pageWidth, height: frameH }, WEB_PAGE]}>
-                <MediaSlide
-                  uri={uri}
-                  width={pageWidth}
-                  height={frameH}
-                  active={itemIndex === index}
-                  onOpen={lightbox && isStillPostMedia(uri) ? () => openAt(itemIndex) : undefined}
-                  onPlayingChange={itemIndex === index ? setVideoPlaying : undefined}
-                />
-              </View>
-            ))}
-          </ScrollView>
+          <View
+            {...pan.panHandlers}
+            style={[
+              { width: pageWidth, height: frameH, overflow: 'hidden' },
+              WEB_FEED_TOUCH,
+            ]}>
+            <Animated.View
+              style={{
+                flexDirection: 'row',
+                width: pageWidth * urls.length,
+                height: frameH,
+                transform: [{ translateX: shift }],
+              }}>
+              {urls.map((uri, itemIndex) => (
+                <View key={`${uri}-${itemIndex}`} style={{ width: pageWidth, height: frameH }}>
+                  <MediaSlide
+                    uri={uri}
+                    width={pageWidth}
+                    height={frameH}
+                    active={itemIndex === index}
+                    onOpen={lightbox && isStillPostMedia(uri) ? () => openAt(itemIndex) : undefined}
+                    onPlayingChange={itemIndex === index ? setVideoPlaying : undefined}
+                  />
+                </View>
+              ))}
+            </Animated.View>
+          </View>
           <View pointerEvents="box-none" style={dotBarStyle}>
             <View style={dotChipStyle}>
               {urls.map((uri, itemIndex) => (
@@ -379,6 +397,7 @@ function MediaSlide({
   onOpen?: () => void;
   onPlayingChange?: (playing: boolean) => void;
 }) {
+  const tapStart = useRef<{ x: number; y: number; at: number } | null>(null);
   const kind = mediaKind(uri);
   const frameStyle = {
     width,
@@ -401,17 +420,34 @@ function MediaSlide({
         pointerEvents="none"
       />
     );
-  if (!onOpen) {
-    return <View style={frameStyle}>{body}</View>;
-  }
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Open photo"
-      onPress={onOpen}
-      style={frameStyle}>
+    <View
+      accessibilityRole={onOpen ? 'button' : undefined}
+      accessibilityLabel={onOpen ? 'Open photo' : undefined}
+      onAccessibilityTap={onOpen}
+      onTouchStart={(event) => {
+        tapStart.current = {
+          x: event.nativeEvent.pageX,
+          y: event.nativeEvent.pageY,
+          at: Date.now(),
+        };
+      }}
+      onTouchEnd={(event) => {
+        const start = tapStart.current;
+        tapStart.current = null;
+        if (!onOpen || !start) {
+          return;
+        }
+        const dx = event.nativeEvent.pageX - start.x;
+        const dy = event.nativeEvent.pageY - start.y;
+        if (Date.now() - start.at > 450 || Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+          return;
+        }
+        onOpen();
+      }}
+      style={[frameStyle, WEB_FEED_TOUCH]}>
       {body}
-    </Pressable>
+    </View>
   );
 }
 

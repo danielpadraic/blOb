@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { useHealthLogPrompt } from '@/hooks/useHealthLogPrompt';
+import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { challengeDetailHref } from '@/lib/routes';
 import { formatHealthDuration } from '@/lib/health/proofSummary';
@@ -11,6 +12,7 @@ import { THEME, themeShadow } from '@/lib/theme';
 export function HealthLogPromptHost() {
   const segments = useSegments();
   const router = useRouter();
+  const tone = useCopyTone();
   const prompt = useHealthLogPrompt();
 
   const onSubmit = (segments as string[]).includes('submit');
@@ -20,7 +22,7 @@ export function HealthLogPromptHost() {
     return null;
   }
 
-  const label = copy('health.prompt', 'neutral', {
+  const label = copy('health.prompt', tone, {
     duration: formatHealthDuration(prompt.workout.durationSec),
     activity: prompt.workout.activityLabel,
   });

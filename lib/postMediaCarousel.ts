@@ -3,6 +3,34 @@ import { hiddenMediaSet } from '@/lib/postEdit';
 import { mediaKind } from '@/utils/media';
 
 export const POST_MEDIA_CYCLE_MS = 3200;
+export const CAROUSEL_GESTURE_SLOP = 10;
+
+/** Carousel claims the touch only after a clear sideways move. Vertical stays with the feed. */
+export function carouselClaimsHorizontal(
+  dx: number,
+  dy: number,
+  slop = CAROUSEL_GESTURE_SLOP,
+): boolean {
+  return Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy);
+}
+
+export function snapCarouselIndex(input: {
+  from: number;
+  dx: number;
+  vx: number;
+  pageWidth: number;
+  length: number;
+}): number {
+  const width = Math.max(input.pageWidth, 1);
+  const last = Math.max(input.length - 1, 0);
+  let next = input.from;
+  if (input.dx < -width * 0.22 || input.vx < -0.45) {
+    next += 1;
+  } else if (input.dx > width * 0.22 || input.vx > 0.45) {
+    next -= 1;
+  }
+  return Math.min(Math.max(next, 0), last);
+}
 
 export type PagerOrientation = 'portrait' | 'landscape';
 

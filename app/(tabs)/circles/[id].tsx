@@ -90,7 +90,7 @@ export default function CirclePageScreen() {
   const memberLabel =
     (circle?.member_count ?? 0) === 1
       ? copy('circles.memberOne')
-      : copy('circles.members', 'neutral', { n: circle?.member_count ?? 0 });
+      : copy('circles.members', tone, { n: circle?.member_count ?? 0 });
 
   const hostRow = useMemo(
     () => (roster.data ?? []).find((row) => row.role === 'host') ?? null,

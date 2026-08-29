@@ -2,8 +2,10 @@ import { describe, expect, it, beforeEach } from 'vitest';
 
 import {
   canAutoCyclePager,
+  carouselClaimsHorizontal,
   clearPagerIndexMemory,
   nextAutoCycleIndex,
+  snapCarouselIndex,
   orientationFromSize,
   pagerFrameHeight,
   pagerUrlsForViewer,
@@ -64,6 +66,16 @@ describe('post media carousel', () => {
     rememberPagerIndex('p1', 2);
     expect(rememberedPagerIndex('p1', 3)).toBe(2);
     expect(rememberedPagerIndex('p1', 2)).toBe(1);
+  });
+
+  it('lets the feed keep vertical pans and only pages on a clear sideways move', () => {
+    expect(carouselClaimsHorizontal(4, 1)).toBe(false);
+    expect(carouselClaimsHorizontal(12, 20)).toBe(false);
+    expect(carouselClaimsHorizontal(16, 8)).toBe(true);
+    expect(carouselClaimsHorizontal(-16, 8)).toBe(true);
+    expect(snapCarouselIndex({ from: 0, dx: -90, vx: 0, pageWidth: 390, length: 3 })).toBe(1);
+    expect(snapCarouselIndex({ from: 1, dx: 90, vx: 0, pageWidth: 390, length: 3 })).toBe(0);
+    expect(snapCarouselIndex({ from: 0, dx: -20, vx: 0, pageWidth: 390, length: 3 })).toBe(0);
   });
 
   it('auto-cycles only 2+ stills in view, never after a swipe or while a video plays', () => {

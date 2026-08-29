@@ -18,7 +18,7 @@ import {
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
 import { normalizeCoinAmount, transferAmountError } from '@/lib/coins';
-import { copy } from '@/lib/copy';
+import { asCopyTone, copy } from '@/lib/copy';
 import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '@/lib/currency';
 import { isOfficialAccount } from '@/lib/official';
 import { THEME } from '@/lib/theme';
@@ -95,7 +95,7 @@ export function SendCoinsPanel({ onClose }: { onClose: () => void }) {
         currency,
         note: currency === 'coins' ? note : null,
       });
-      showSentToast(copy('wallet.sent', 'neutral', { amount: amountLabel }));
+      showSentToast(copy('wallet.sent', asCopyTone(profile?.motivation_tone), { amount: amountLabel }));
       onClose();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : `Couldn’t send those ${noun}.`);

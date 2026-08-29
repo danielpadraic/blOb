@@ -16,7 +16,23 @@ describe('stopMedia', () => {
   it('stops tracks, disables them, clears the video, and stops the recorder', () => {
     const a = track();
     const b = track();
-    const video = { srcObject: { id: 'live' } as unknown, paused: false, pause() { this.paused = true; } };
+    const video = {
+      srcObject: { id: 'live' } as unknown,
+      src: 'https://cdn.example/clip.mp4',
+      paused: false,
+      loaded: false,
+      pause() {
+        this.paused = true;
+      },
+      removeAttribute(name: string) {
+        if (name === 'src') {
+          this.src = '';
+        }
+      },
+      load() {
+        this.loaded = true;
+      },
+    };
     const recorder = { state: 'recording', stopped: false, stop() { this.stopped = true; this.state = 'inactive'; } };
 
     stopMedia({
@@ -30,6 +46,8 @@ describe('stopMedia', () => {
     expect(a.stopped).toBe(true);
     expect(b.stopped).toBe(true);
     expect(video.srcObject).toBeNull();
+    expect(video.src).toBe('');
+    expect(video.loaded).toBe(true);
     expect(video.paused).toBe(true);
     expect(recorder.stopped).toBe(true);
   });

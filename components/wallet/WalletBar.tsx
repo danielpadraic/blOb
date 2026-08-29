@@ -39,28 +39,21 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
     if (!profile || official) {
       return;
     }
-    if (
-      shownCoins.current === coins ||
-      coins <= lastShownCoins ||
-      tourLocked ||
-      !profile.tutorial_completed_at
-    ) {
+    if (tourLocked || !profile.tutorial_completed_at) {
       setDisplayCoins(coins);
       shownCoins.current = coins;
-      if (profile.tutorial_completed_at && coins < lastShownCoins) {
+      return;
+    }
+    if (coins <= lastShownCoins) {
+      setDisplayCoins(coins);
+      shownCoins.current = coins;
+      if (coins < lastShownCoins) {
         void markCoinsShown();
       }
       return;
     }
     if (!animatingCoins.current) {
-      void runCount(
-        lastShownCoins,
-        coins,
-        setDisplayCoins,
-        animatingCoins,
-        shownCoins,
-        markCoinsShown,
-      );
+      setDisplayCoins(lastShownCoins);
     }
   }, [coins, lastShownCoins, official, profile?.id, profile?.tutorial_completed_at, tourLocked]);
 
@@ -89,8 +82,8 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
   }, [bucks, lastShownBucks, official, profile?.id]);
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (official || state !== 'active') {
+    function countCoinsIfRose() {
+      if (official || tourLocked || !profile?.tutorial_completed_at) {
         return;
       }
       if (coins > lastShownCoins && !animatingCoins.current) {
@@ -103,6 +96,16 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
           markCoinsShown,
         );
       }
+    }
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        return;
+      }
+      countCoinsIfRose();
+      if (official) {
+        return;
+      }
       if (bucks > lastShownBucks && !animatingBucks.current) {
         void runCount(
           lastShownBucks,
@@ -114,8 +117,30 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
         );
       }
     });
-    return () => sub.remove();
-  }, [bucks, coins, lastShownBucks, lastShownCoins, official]);
+    function onDocumentVisible() {
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+        return;
+      }
+      countCoinsIfRose();
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onDocumentVisible);
+    }
+    return () => {
+      sub.remove();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onDocumentVisible);
+      }
+    };
+  }, [
+    bucks,
+    coins,
+    lastShownBucks,
+    lastShownCoins,
+    official,
+    profile?.tutorial_completed_at,
+    tourLocked,
+  ]);
 
   async function markCoinsShown() {
     await supabase.rpc('mark_coin_balance_shown');

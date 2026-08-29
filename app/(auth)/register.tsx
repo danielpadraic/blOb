@@ -18,6 +18,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
+import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
@@ -31,6 +32,7 @@ export default function RegisterScreen() {
   const { start } = useLocalSearchParams<{ start?: string | string[] }>();
   const fromLoginForm = registerStartsOnForm(start);
   const { signUp, signInWithGoogle, oauthLoading } = useAuth();
+  const tone = useCopyTone();
   const [emailStep, setEmailStep] = useState(fromLoginForm);
   const [inboxEmail, setInboxEmail] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -148,7 +150,7 @@ export default function RegisterScreen() {
             {copy('auth.checkInboxTitle')}
           </AppText>
           <AppText className="text-center text-[15px] leading-6" style={{ color: 'rgba(255,255,255,0.78)' }}>
-            {copy('auth.checkInboxBody', 'neutral', { email: inboxEmail })}
+            {copy('auth.checkInboxBody', tone, { email: inboxEmail })}
           </AppText>
           <Input
             key="inbox-email"

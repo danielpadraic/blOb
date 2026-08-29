@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { AppState, BackHandler, Platform, Pressable, View } from 'react-native';
 import { useIsFocused } from 'expo-router';
-import { CameraView, type CameraMountError, type CameraType } from 'expo-camera';
+import { Camera, CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,8 +34,9 @@ import {
 } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import { capHaptic } from '@/lib/haptics';
+import { cameraAskLine, resolveCameraAsk, type CameraAsk } from '@/lib/cameraAsk';
 import {
-  ensureCapturePermissions,
+  ensureMicrophonePermission,
   openAppSettings,
   queryWebCameraPermission,
   webMediaRecorderAvailable,
@@ -44,8 +45,6 @@ import { clipShutterReleaseStopsRecording } from '@/lib/clipShutter';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
 import { applyWebVideoLock } from '@/lib/webVideo';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
-
-type CameraFail = 'denied' | 'missing' | null;
 
 type InAppCameraProps = {
   capture: CaptureMedia;
@@ -68,6 +67,8 @@ type InAppCameraProps = {
   /** When set, show tick marks at this interval (seconds) while recording. */
   clipTickSec?: number;
   shutterHint?: string;
+  /** Check-in stills: Close / shutter / Flip only. No Wave recorder chrome. */
+  checkin?: boolean;
 };
 
 export function InAppCamera({
@@ -88,8 +89,9 @@ export function InAppCamera({
   hrScreenshot = false,
   faceHint = null,
   facingKind = 'proof',
-  clipTickSec,
+  clipTickSec: _clipTickSec,
   shutterHint,
+  checkin = false,
 }: InAppCameraProps) {
   const insets = useSafeAreaInsets();
   const focused = useIsFocused();
@@ -101,27 +103,30 @@ export function InAppCamera({
   const focusedRef = useRef(focused);
   const chunksRef = useRef<Blob[]>([]);
   const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing(facingKind));
-  const [capture, setCapture] = useState<CaptureMedia>(captureProp);
+  const [capture, setCapture] = useState<CaptureMedia>(checkin ? 'photo' : captureProp);
   const [, setReady] = useState(false);
-  const [fail, setFail] = useState<CameraFail>(null);
+  const [ask, setAsk] = useState<CameraAsk>('prompt');
   const [retry, setRetry] = useState(0);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const recordingRef = useRef(false);
   const holdRef = useRef(false);
   const skipPressRef = useRef(false);
-  const video = capture === 'video';
+  const video = !checkin && capture === 'video';
   const web = Platform.OS === 'web';
   const parentBlocked = blocked || webFallback;
-  const previewOk = !parentBlocked && fail == null;
-  const shutterEnabled = previewOk && !busy;
-  const shutterOpaque = recording || previewOk;
+  const readyPreview = !parentBlocked && ask === 'ready';
+  const shutterEnabled = readyPreview && !busy;
+  const shutterOpaque = recording || readyPreview;
   const bottomPad = chromeInset ? TAB_BAR_PEEK : Math.max(insets.bottom, 16) + 8;
-  const needCopy = deniedTitle ?? 'Camera is off.';
+  const askLine =
+    parentBlocked
+      ? deniedTitle ?? blockedReason ?? (webFallback ? 'Camera isn’t available here.' : 'Turn on camera in Settings.')
+      : cameraAskLine(ask, checkin);
 
   useEffect(() => {
-    setCapture(captureProp);
-  }, [captureProp]);
+    setCapture(checkin ? 'photo' : captureProp);
+  }, [captureProp, checkin]);
 
   function killSession() {
     stopMedia({
@@ -193,28 +198,31 @@ export function InAppCamera({
   useEffect(() => {
     let cancelled = false;
     setReady(false);
-    setFail(null);
+    setAsk('prompt');
 
     void (async () => {
       if (parentBlocked || !focused || !sessionOn) {
         return;
       }
       if (web) {
+        const queried = webCameraGrantedThisSession()
+          ? 'granted'
+          : await queryWebCameraPermission();
+        if (cancelled) {
+          return;
+        }
+        setAsk(resolveCameraAsk({ queried }));
+        if (queried === 'denied') {
+          return;
+        }
         try {
-          const primed = takePrimedCameraStream();
-          if (!webCameraGrantedThisSession() && !primed) {
-            const queried = await queryWebCameraPermission();
-            if (cancelled) {
-              return;
-            }
-            if (queried === 'denied') {
-              setFail('denied');
-              return;
-            }
+          const primed = video ? takePrimedCameraStream() : null;
+          if (!video) {
+            stopPrimedCameraStream();
           }
           const stream = await openWebCameraStream({
             facing: facing === 'front' ? 'front' : 'back',
-            audio: true,
+            audio: video,
             existing: primed,
           });
           if (cancelled || !focusedRef.current) {
@@ -231,27 +239,47 @@ export function InAppCamera({
             void node.play().catch((error) => logCameraError(error, 'video.play'));
           }
           setReady(true);
-          setFail(null);
+          setAsk('ready');
         } catch (error) {
           logCameraError(error, 'web stream');
           if (cancelled) {
             return;
           }
-          setFail(cameraErrorKind(error) === 'missing' ? 'missing' : 'denied');
+          setAsk(resolveCameraAsk({ queried, errorKind: cameraErrorKind(error) }));
         }
         return;
       }
 
-      const permission = await ensureCapturePermissions(video ? 'video' : 'photo');
+      const current = await Camera.getCameraPermissionsAsync();
       if (cancelled) {
         return;
       }
-      if (!permission.ok) {
-        setFail(permission.kind === 'camera' || permission.kind === 'microphone' ? 'denied' : 'denied');
-        return;
+      if (!current.granted) {
+        setAsk(current.canAskAgain === false ? 'denied' : 'prompt');
+        if (current.canAskAgain === false) {
+          return;
+        }
+        const next = await Camera.requestCameraPermissionsAsync();
+        if (cancelled) {
+          return;
+        }
+        if (!next.granted) {
+          setAsk('denied');
+          return;
+        }
+      }
+      if (video) {
+        const mic = await ensureMicrophonePermission();
+        if (cancelled) {
+          return;
+        }
+        if (!mic.ok && !mic.canAskAgain) {
+          setAsk('denied');
+          return;
+        }
       }
       setReady(true);
-      setFail(null);
+      setAsk('ready');
     })();
 
     return () => {
@@ -264,17 +292,17 @@ export function InAppCamera({
       webStreamRef.current = null;
       recorderRef.current = null;
     };
-  }, [facing, focused, parentBlocked, retry, sessionOn, web]);
+  }, [facing, focused, parentBlocked, retry, sessionOn, video, web]);
 
   useEffect(() => {
-    if (parentBlocked || fail != null) {
+    if (parentBlocked || ask !== 'ready') {
       return;
     }
     const timer = setTimeout(() => {
       setReady(true);
     }, 300);
     return () => clearTimeout(timer);
-  }, [fail, facing, parentBlocked, retry, web]);
+  }, [ask, facing, parentBlocked, retry, web]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -299,7 +327,7 @@ export function InAppCamera({
 
   const onCameraReady = useCallback(() => {
     setReady(true);
-    setFail(null);
+    setAsk('ready');
   }, []);
 
   async function waitOneFrame() {
@@ -322,8 +350,8 @@ export function InAppCamera({
     });
   }
 
-  const onCameraDenied = useCallback(() => setFail('denied'), []);
-  const onCameraMissing = useCallback(() => setFail('missing'), []);
+  const onCameraDenied = useCallback(() => setAsk('denied'), []);
+  const onCameraMissing = useCallback(() => setAsk('error'), []);
 
   function closeCamera() {
     killSession();
@@ -533,7 +561,7 @@ export function InAppCamera({
     }
   }
 
-  const liveHint = video && recording ? copy('wave.shutterStop') : shutterHint;
+  const liveHint = checkin ? undefined : video && recording ? copy('wave.shutterStop') : shutterHint;
   const shutterLabel = liveHint
     ? liveHint
     : video
@@ -541,18 +569,15 @@ export function InAppCamera({
         ? 'Tap to stop'
         : 'Start recording'
       : 'Take photo';
-  const showDenied = parentBlocked || fail != null;
-  const deniedLine = webFallback
-    ? needCopy
-    : fail === 'missing'
-      ? needCopy
-      : blockedReason ?? needCopy;
+  const showDenied = parentBlocked || ask === 'denied';
+  const showRetry = !parentBlocked && ask === 'error';
+  const showFrame = sessionOn && focused && !showDenied;
 
   return (
     <View className="flex-1 overflow-hidden" style={{ backgroundColor: THEME.primary }}>
-      {web && !parentBlocked && fail == null && sessionOn && focused ? (
+      {showFrame && web ? (
         <WebCameraPreview attach={attachWebVideo} />
-      ) : !showDenied && sessionOn && focused ? (
+      ) : showFrame && ask === 'ready' ? (
         <NativeCameraPreview
           cameraRef={cameraRef}
           facing={facing}
@@ -563,30 +588,50 @@ export function InAppCamera({
           onMissing={onCameraMissing}
         />
       ) : (
-        <View className="flex-1 items-center justify-center px-6">
-          <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
-            {needCopy}
+        <View className="flex-1" style={{ backgroundColor: THEME.primary }} />
+      )}
+      {askLine ? (
+        <View
+          pointerEvents="box-none"
+          className="absolute left-6 right-6 items-center"
+          style={{ top: Math.max(insets.top, 12) + 56, zIndex: 3 }}>
+          <AppText className="text-center text-[15px] font-semibold" style={{ color: '#fff' }}>
+            {askLine}
           </AppText>
-          <AppText className="mt-2 text-center text-[13px]" style={{ color: 'rgba(255,255,255,0.72)' }}>
-            {deniedLine === needCopy ? 'Open Settings to turn the camera on.' : deniedLine}
-          </AppText>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              void openAppSettings().then(() => {
-                setFail(null);
+          {showDenied ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                void openAppSettings().then(() => {
+                  setAsk('prompt');
+                  setReady(false);
+                  setRetry((value) => value + 1);
+                });
+              }}
+              className="mt-3 items-center justify-center rounded-full px-4"
+              style={{ minHeight: 44, backgroundColor: 'rgba(255,255,255,0.16)' }}>
+              <AppText className="text-[13px] font-bold" style={{ color: '#fff' }}>
+                Open Settings
+              </AppText>
+            </Pressable>
+          ) : null}
+          {showRetry ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setAsk('prompt');
                 setReady(false);
                 setRetry((value) => value + 1);
-              });
-            }}
-            className="mt-4 items-center justify-center rounded-full px-4"
-            style={{ minHeight: 44, backgroundColor: 'rgba(255,255,255,0.16)' }}>
-            <AppText className="text-[13px] font-bold" style={{ color: '#fff' }}>
-              Open Settings
-            </AppText>
-          </Pressable>
+              }}
+              className="mt-3 items-center justify-center rounded-full px-4"
+              style={{ minHeight: 44, backgroundColor: 'rgba(255,255,255,0.16)' }}>
+              <AppText className="text-[13px] font-bold" style={{ color: '#fff' }}>
+                Retry
+              </AppText>
+            </Pressable>
+          ) : null}
         </View>
-      )}
+      ) : null}
 
       <View
         className="absolute left-3 right-3 flex-row items-center justify-between"
@@ -601,12 +646,8 @@ export function InAppCamera({
             Close
           </AppText>
         </Pressable>
-        <RecordingClock
-          recording={recording}
-          maxDuration={maxDuration}
-          clipTickSec={clipTickSec}
-        />
-        {onUseWorkout || onStartWatch ? (
+        <View style={{ minWidth: 64 }} />
+        {!checkin && (onUseWorkout || onStartWatch) ? (
           <View className="items-end" style={{ gap: 8, maxWidth: 168 }}>
             {onUseWorkout ? (
               <Pressable
@@ -649,12 +690,12 @@ export function InAppCamera({
       </View>
 
       <View className="absolute left-6 right-6" style={{ bottom: bottomPad }}>
-        {faceHint && !hrScreenshot ? (
+        {faceHint && !hrScreenshot && !checkin ? (
           <AppText className="mb-3 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
             {faceHint}
           </AppText>
         ) : null}
-        {hrScreenshot ? (
+        {hrScreenshot && !checkin ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Heart-rate screenshot"
@@ -671,7 +712,7 @@ export function InAppCamera({
             </AppText>
           </Pressable>
         ) : null}
-        {allowModeToggle ? (
+        {allowModeToggle && !checkin ? (
           <View className="mb-3 flex-row items-center justify-center" style={{ gap: 18 }}>
             <Pressable accessibilityRole="button" onPress={() => setCapture('photo')}>
               <AppText
@@ -695,14 +736,18 @@ export function InAppCamera({
           </AppText>
         ) : null}
         <View className="flex-row items-center justify-between">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open gallery"
-            onPress={onOpenGallery}
-            className="h-12 w-12 items-center justify-center rounded-2xl"
-            style={{ backgroundColor: 'rgba(16,19,18,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }}>
-            <Glyph name={GLYPH.album} color="#fff" size={22} />
-          </Pressable>
+          {checkin ? (
+            <View style={{ width: 48 }} />
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open gallery"
+              onPress={onOpenGallery}
+              className="h-12 w-12 items-center justify-center rounded-2xl"
+              style={{ backgroundColor: 'rgba(16,19,18,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }}>
+              <Glyph name={GLYPH.album} color="#fff" size={22} />
+            </Pressable>
+          )}
 
           <View style={{ width: 82, height: 82, alignItems: 'center', justifyContent: 'center' }}>
             {video ? <RecordingRing recording={recording} maxDuration={maxDuration} /> : null}
@@ -857,54 +902,6 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
     />
   );
 }, (prev, next) => prev.facing === next.facing && prev.video === next.video && prev.cameraRef === next.cameraRef);
-
-function formatRecordClock(seconds: number) {
-  const total = Math.max(0, Math.floor(seconds));
-  const minutes = Math.floor(total / 60);
-  const rest = total % 60;
-  return `${minutes}:${String(rest).padStart(2, '0')}`;
-}
-
-function RecordingClock({
-  recording,
-  maxDuration,
-  clipTickSec,
-}: {
-  recording: boolean;
-  maxDuration: number;
-  clipTickSec?: number;
-}) {
-  const elapsed = useRecordingElapsed(recording, maxDuration);
-  const ticks = clipTickSec && clipTickSec > 0 ? Math.floor(maxDuration / clipTickSec) : 0;
-  return (
-    <View className="items-center">
-      <AppText className="text-[12px] font-semibold" style={{ color: '#fff' }}>
-        {recording
-          ? `${formatRecordClock(elapsed)} / ${formatRecordClock(maxDuration)}`
-          : formatRecordClock(maxDuration)}
-      </AppText>
-      {ticks > 0 ? (
-        <View className="mt-1 flex-row items-center" style={{ gap: 4 }}>
-          {Array.from({ length: ticks }, (_, index) => {
-            const mark = (index + 1) * clipTickSec!;
-            const filled = recording && elapsed >= mark;
-            return (
-              <View
-                key={mark}
-                style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: 2.5,
-                  backgroundColor: filled ? THEME.accentBright : 'rgba(255,255,255,0.35)',
-                }}
-              />
-            );
-          })}
-        </View>
-      ) : null}
-    </View>
-  );
-}
 
 function RecordingRing({ recording, maxDuration }: { recording: boolean; maxDuration: number }) {
   const elapsed = useRecordingElapsed(recording, maxDuration);

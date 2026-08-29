@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { COPY_TONE_OPTIONS, PROFILE_SETUP_TONE_OPTIONS, asCopyTone, profileSetupTone } from '@/lib/copy';
+import {
+  COPY_TONES,
+  COPY_TONE_OPTIONS,
+  PROFILE_SETUP_TONE_OPTIONS,
+  asCopyTone,
+  profileSetupTone,
+} from '@/lib/copy';
 import { TOUR_STEPS } from '@/lib/tour';
 
 describe('home tour copy', () => {
@@ -65,6 +71,7 @@ describe('home tour copy', () => {
     expect(asCopyTone(null)).toBe('gentle');
     expect(asCopyTone(undefined)).toBe('gentle');
     expect(profileSetupTone('neutral')).toBe('gentle');
+    expect(COPY_TONES).toEqual(['gentle', 'honest']);
     expect(COPY_TONE_OPTIONS.map((option) => option.value)).toEqual(['gentle', 'honest']);
     expect(PROFILE_SETUP_TONE_OPTIONS.map((option) => option.value)).toEqual(['gentle', 'honest']);
   });
