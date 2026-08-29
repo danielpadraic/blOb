@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import { Pressable, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
-import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedList } from '@/components/feed/FeedList';
 import { ReelsRow } from '@/components/feed/ReelsRow';
@@ -12,7 +11,6 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
-import { useHomeOfficialChallenges } from '@/hooks/useChallenge';
 import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/hooks/useFeed';
 import { rawFeedError } from '@/lib/feedError';
 import { useActiveStories } from '@/hooks/useSocial';
@@ -33,7 +31,6 @@ export default function FeedScreen() {
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
   const feed = useFeed();
   const stories = useActiveStories();
-  const officials = useHomeOfficialChallenges();
   const createPost = useCreatePost();
   const createComment = useCreateComment();
   const toggleReaction = useToggleReaction();
@@ -45,8 +42,7 @@ export default function FeedScreen() {
   const onRefresh = useCallback(() => {
     void feed.refetch();
     void stories.refetch();
-    void officials.refetch();
-  }, [feed, officials, stories]);
+  }, [feed, stories]);
 
   const onCompose = useCallback(
     (input: ComposeInput) => createPost.mutateAsync(input),
@@ -83,35 +79,32 @@ export default function FeedScreen() {
           </View>
         }
         headerTop={
-          <View>
-            {showFeedBanner ? (
-              <View style={{ marginBottom: 8, gap: 4 }}>
-                <View className="flex-row items-center" style={{ gap: 10, minHeight: 44 }}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Try again"
-                    onPress={() => void feed.refetch()}
-                    style={{ minHeight: 44, justifyContent: 'center' }}>
-                    <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                      Try again
-                    </AppText>
-                  </Pressable>
+          showFeedBanner ? (
+            <View style={{ marginBottom: 8, gap: 4 }}>
+              <View className="flex-row items-center" style={{ gap: 10, minHeight: 44 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
                 </View>
-                {feedWarning ? (
-                  <AppText
-                    className="text-[12px]"
-                    numberOfLines={1}
-                    style={{ color: THEME.textMuted }}>
-                    {feedWarning}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Try again"
+                  onPress={() => void feed.refetch()}
+                  style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                    Try again
                   </AppText>
-                ) : null}
+                </Pressable>
               </View>
-            ) : null}
-            <FeaturedOfficialStrip />
-          </View>
+              {feedWarning ? (
+                <AppText
+                  className="text-[12px]"
+                  numberOfLines={1}
+                  style={{ color: THEME.textMuted }}>
+                  {feedWarning}
+                </AppText>
+              ) : null}
+            </View>
+          ) : undefined
         }
         headerExtra={<ReelsRow />}
         empty={<FeedEmptyState compact />}

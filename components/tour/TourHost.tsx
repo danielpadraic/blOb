@@ -52,11 +52,10 @@ export function TourHost({ onFinished }: TourHostProps) {
       return;
     }
     setTargetId(target);
-    if (target === 'tour-official' || target === 'tour-waves' || target === 'tour-rounds') {
+    if (target === 'tour-waves' || target === 'tour-rounds') {
       scrollHomeToTop();
     }
-    const wait =
-      target === 'tour-official' || target === 'tour-waves' || target === 'tour-rounds' ? 380 : 80;
+    const wait = target === 'tour-waves' || target === 'tour-rounds' ? 380 : 80;
     const handle = setTimeout(() => bump(), wait);
     return () => clearTimeout(handle);
   }, [bump, scrollHomeToTop, setTargetId, step, target, tour.active]);

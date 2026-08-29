@@ -272,17 +272,6 @@ export function formatStartsLine(startsAt?: string | null, nowMs = Date.now()): 
   return `Starts ${formatShortLocal(start, nowMs)}`;
 }
 
-export function officialStripStart(
-  challenge: { status?: string | null; starts_at?: string | null },
-  nowMs = Date.now(),
-): string {
-  const status = String(challenge.status ?? '');
-  if (status === 'live' || status === 'in_progress') {
-    return 'Live';
-  }
-  return formatStartsLine(challenge.starts_at, nowMs) ?? 'Starts soon';
-}
-
 export function formatShortLocal(at: Date, nowMs = Date.now()): string {
   const now = new Date(nowMs);
   if (isNextLocalMorning(at, now)) {

@@ -70,10 +70,10 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'official',
-    target: 'tour-official',
-    placement: 'below',
-    title: 'Featured Challenge',
-    body: 'This week’s Official. Join or check in from the strip. Open it for the full challenge.',
+    target: 'tour-tab-lobby',
+    placement: 'above',
+    title: 'Official',
+    body: 'This week’s Official lives in Lobby. Open Official to join Weekly $10.',
   },
   {
     id: 'waves',
@@ -94,7 +94,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tour-tab-feed',
     placement: 'above',
     title: 'Feed',
-    body: 'Home. Friends, posts, and this week’s challenge.',
+    body: 'Home. Friends, posts, Waves, and Rounds.',
   },
   {
     id: 'tabLobby',
@@ -126,7 +126,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'goal',
-    target: 'tour-official',
+    target: 'tour-tab-feed',
     placement: 'center-low',
     title: 'Why we are here',
     body: 'So you actually do the thing you already meant to do.',

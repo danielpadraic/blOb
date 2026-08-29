@@ -2,17 +2,6 @@ export const OFFICIAL_WEEK_10_SLUG = 'week_10';
 
 export const OFFICIAL_JOINABLE_STATUSES = ['filling', 'arming'] as const;
 export const OFFICIAL_ACTIVE_STATUSES = ['filling', 'arming', 'live'] as const;
-export const HOME_OFFICIAL_STATUSES = ['filling', 'arming', 'live', 'open', 'upcoming', 'in_progress'] as const;
-
-export function isHomeOfficialSlide(challenge: {
-  is_official?: boolean | null;
-  status?: string | null;
-}): boolean {
-  if (!challenge.is_official) {
-    return false;
-  }
-  return (HOME_OFFICIAL_STATUSES as readonly string[]).includes(String(challenge.status ?? ''));
-}
 
 const ALREADY_STARTED = 'This challenge already started.';
 
@@ -74,18 +63,6 @@ export function officialGuaranteeAmount(challenge: { host_budget?: number | null
   return Math.max(Number(challenge.host_budget) || 0, 0);
 }
 
-/** Home Official strip pot: guaranteed or the live pool / host budget, whichever is higher. */
-export function officialStripPrize(challenge: {
-  prize_pool?: number | null;
-  host_budget?: number | null;
-}): number {
-  return Math.max(
-    officialGuaranteeAmount(challenge),
-    Math.max(Number(challenge.prize_pool) || 0, 0),
-    Math.max(Number(challenge.host_budget) || 0, 0),
-  );
-}
-
 export function showsGuaranteedPrize(challenge: { host_budget?: number | null }): boolean {
   return officialGuaranteeAmount(challenge) > 0;
 }
@@ -119,20 +96,3 @@ export function officialStartNeededLabel(needed: number): string | null {
   return `${needed} more contestants needed`;
 }
 
-/** Home Featured Challenge: live week_10 if the viewer is in it, else filling, else arming. */
-export function pickFeaturedOfficialChallenge<T extends { status?: string | null }>(input: {
-  liveJoined: T | null;
-  filling: T | null;
-  arming: T | null;
-}): T | null {
-  if (input.liveJoined) {
-    return input.liveJoined;
-  }
-  if (input.filling) {
-    return input.filling;
-  }
-  if (input.arming) {
-    return input.arming;
-  }
-  return null;
-}

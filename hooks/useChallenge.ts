@@ -19,8 +19,6 @@ import {
   fetchJoinedLobbyChallenges,
   fetchLobbyChallenges,
   fetchLobbyFriendCounts,
-  fetchFeaturedOfficialChallenge,
-  fetchHomeOfficialChallenges,
   fetchOfficialDiscoverChallenges,
   insertUserChallenge,
   persistPrivacyMode,
@@ -152,33 +150,6 @@ export function useOfficialDiscoverChallenges() {
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       await prepareLobby(user?.id);
       return withParticipantCounts(await fetchOfficialDiscoverChallenges(user?.id));
-    },
-  });
-}
-
-export function useFeaturedOfficialChallenge() {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ['featured-official', user?.id],
-    queryFn: async (): Promise<ChallengeWithStats | null> => {
-      await prepareLobby(user?.id);
-      const row = await fetchFeaturedOfficialChallenge(user?.id);
-      if (!row) {
-        return null;
-      }
-      const [withCount] = await withParticipantCounts([row]);
-      return withCount ?? null;
-    },
-  });
-}
-
-export function useHomeOfficialChallenges() {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ['home-officials', user?.id],
-    queryFn: async (): Promise<ChallengeWithStats[]> => {
-      await prepareLobby(user?.id);
-      return withParticipantCounts(await fetchHomeOfficialChallenges());
     },
   });
 }
@@ -612,7 +583,6 @@ export function useJoinChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
-      void queryClient.invalidateQueries({ queryKey: ['featured-official'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
       void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -755,7 +725,6 @@ export function useLeaveChallenge() {
       void queryClient.invalidateQueries({ queryKey: ['lobby-hosting'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-active'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-official'] });
-      void queryClient.invalidateQueries({ queryKey: ['featured-official'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-friends'] });
       void queryClient.invalidateQueries({ queryKey: ['feed-active-challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
