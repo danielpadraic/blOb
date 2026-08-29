@@ -4,6 +4,7 @@ import { usesComparablePointsScoring } from '@/lib/challengeExperience';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { checkinPeriodKeyCandidates, normalizePeriodKey, type CheckinPeriodChallenge } from '@/lib/checkinPeriod';
 import { ENDED_LOBBY_STATUSES } from '@/lib/constants';
+import { displayChallengePot } from '@/lib/challengePot';
 import { challengeCurrency } from '@/lib/currency';
 import { isOfficialChallenge } from '@/lib/official';
 import {
@@ -91,6 +92,7 @@ export type LobbyFilterable = {
   creator_contribution?: number | null;
   funding_model?: string | null;
   prize_pool?: number | null;
+  settled_prize_pool?: number | null;
   max_participants?: number | null;
   participant_count?: number | null;
   is_unlimited?: boolean | null;
@@ -227,7 +229,7 @@ export function challengeEndMeta(
   if (Number.isNaN(end.getTime())) {
     return { datetime: null, countdown: null, urgent: false };
   }
-  const datetime = `Ends ${format(end, 'MMM d')} · ${format(end, 'h:mm a')}`;
+  const datetime = `Ends ${formatShortLocal(end, nowMs)}`;
   const remaining = end.getTime() - nowMs;
   if (remaining <= 0) {
     return { datetime, countdown: 'Ended', urgent: false };
@@ -267,10 +269,28 @@ export function formatStartsLine(startsAt?: string | null, nowMs = Date.now()): 
     return null;
   }
   const now = new Date(nowMs);
-  if (isNextLocalMorning(start, now)) {
-    return `Starts Tomorrow ${format(start, 'h:mm a')}`;
+  return `Starts ${formatShortLocal(start, nowMs)}`;
+}
+
+export function formatShortLocal(at: Date, nowMs = Date.now()): string {
+  const now = new Date(nowMs);
+  if (isNextLocalMorning(at, now)) {
+    return `Tomorrow ${format(at, 'h:mm a')}`;
   }
-  return `Starts ${format(start, 'MMM d')} · ${format(start, 'h:mm a')}`;
+  if (isSameDay(at, now)) {
+    return format(at, 'h:mm a');
+  }
+  if (at.getFullYear() === now.getFullYear()) {
+    return `${format(at, 'MMM d')}, ${format(at, 'h:mm a')}`;
+  }
+  return `${format(at, 'MMM d, yyyy')}, ${format(at, 'h:mm a')}`;
+}
+
+export function formatShortDate(at: Date, nowMs = Date.now()): string {
+  if (at.getFullYear() === new Date(nowMs).getFullYear()) {
+    return format(at, 'MMM d');
+  }
+  return format(at, 'MMM d, yyyy');
 }
 
 function isStartAfterFill(challenge: ScheduleChallenge): boolean {
@@ -316,9 +336,9 @@ export function fillGateLabel(challenge: ScheduleChallenge): string | null {
     return null;
   }
   if (min - count === 1) {
-    return '1 more person needed';
+    return '1 more needed';
   }
-  return `${count}/${min} needed to begin`;
+  return `${count}/${min} needed`;
 }
 
 export function automationChip(
@@ -364,12 +384,12 @@ export function schedulePhase(
   return 'live';
 }
 
-function endedDatetime(challenge: ScheduleChallenge, label: 'Ended' | 'Settled'): string | null {
+function endedDatetime(challenge: ScheduleChallenge, _label: 'Ended' | 'Settled'): string | null {
   const at = parseInstant(challenge.ends_at) ?? parseInstant(challenge.distributed_at);
   if (!at) {
-    return label;
+    return 'Ended';
   }
-  return `${label} ${format(at, 'MMM d')} · ${format(at, 'h:mm a')}`;
+  return `Ended ${formatShortDate(at)}`;
 }
 
 export function challengeScheduleState(
@@ -928,7 +948,7 @@ export function applyLobbyFilters<T extends LobbyFilterable>(
 }
 
 function prizeAmount(row: LobbyFilterable): number {
-  return Math.max(Number(row.prize_pool) || Number(row.host_budget) || 0, 0);
+  return displayChallengePot(row);
 }
 
 export function sortLobbyRows<T extends LobbyFilterable>(rows: T[], sort: LobbySort): T[] {
@@ -1123,5 +1143,5 @@ export function endedDatetimeLine(endsAt?: string | null, distributedAt?: string
   if (!at) {
     return 'Ended';
   }
-  return `Ended ${format(at, 'MMM d')} · ${format(at, 'h:mm a')}`;
+  return `Ended ${formatShortDate(at)}`;
 }

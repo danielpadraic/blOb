@@ -365,6 +365,8 @@ export interface Challenge {
   starts_at: string;
   ends_at: string | null;
   prize_pool: number;
+  /** Original pot from challenge_settlements after settle. Live cards ignore this. */
+  settled_prize_pool?: number | null;
   prize_structure: PrizeStructure | string | null;
   top_places_mode: TopPlacesMode | string | null;
   top_places_value: number | null;

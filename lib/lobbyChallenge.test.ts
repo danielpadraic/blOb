@@ -16,6 +16,7 @@ import {
   sortEndingSoonest,
   sortLobbyRows,
 } from '@/lib/lobbyChallenge';
+import { isHomeOfficialSlide } from '@/lib/officialSeries';
 
 describe('lobby tabs', () => {
   it('puts host+player on Active and host-only on Hosting', () => {
@@ -117,14 +118,14 @@ describe('challenge schedule copy', () => {
     );
     expect(state.phase).toBe('prestart');
     expect(state.datetime).toMatch(/^Starts /);
-    expect(state.gate).toBe('3/10 needed to begin');
+    expect(state.gate).toBe('3/10 needed');
     expect(state.countdown).toBeNull();
   });
 
-  it('uses 1 more person needed when one seat remains', () => {
+  it('uses 1 more needed when one seat remains', () => {
     expect(
       fillGateLabel({ min_participants: 8, participant_count: 7 }),
-    ).toBe('1 more person needed');
+    ).toBe('1 more needed');
   });
 
   it('shows live end countdown and hides start gate', () => {
@@ -153,7 +154,7 @@ describe('challenge schedule copy', () => {
       ends_at: '2026-08-28T15:00:00.000Z',
     });
     expect(state.phase).toBe('settled');
-    expect(state.datetime).toMatch(/^Settled /);
+    expect(state.datetime).toMatch(/^Ended /);
     expect(state.gate).toBeNull();
   });
 
@@ -238,5 +239,14 @@ describe('lobby filters', () => {
     expect(sortLobbyRows(filtered, 'title').map((row) => row.id)).toEqual(['a', 'b']);
     expect(sortLobbyRows(filtered, 'prize_desc').map((row) => row.id)).toEqual(['a', 'b']);
     expect(lobbyFilterChips('ended', filters).map((chip) => chip.id)).toEqual(chipsBefore);
+  });
+});
+
+describe('home Official rail', () => {
+  it('only lists upcoming and live Officials', () => {
+    expect(isHomeOfficialSlide({ is_official: true, status: 'live' })).toBe(true);
+    expect(isHomeOfficialSlide({ is_official: true, status: 'filling' })).toBe(true);
+    expect(isHomeOfficialSlide({ is_official: true, status: 'settled' })).toBe(false);
+    expect(isHomeOfficialSlide({ is_official: false, status: 'live' })).toBe(false);
   });
 });

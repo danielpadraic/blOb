@@ -2,6 +2,17 @@ export const OFFICIAL_WEEK_10_SLUG = 'week_10';
 
 export const OFFICIAL_JOINABLE_STATUSES = ['filling', 'arming'] as const;
 export const OFFICIAL_ACTIVE_STATUSES = ['filling', 'arming', 'live'] as const;
+export const HOME_OFFICIAL_STATUSES = ['filling', 'arming', 'live', 'open', 'upcoming', 'in_progress'] as const;
+
+export function isHomeOfficialSlide(challenge: {
+  is_official?: boolean | null;
+  status?: string | null;
+}): boolean {
+  if (!challenge.is_official) {
+    return false;
+  }
+  return (HOME_OFFICIAL_STATUSES as readonly string[]).includes(String(challenge.status ?? ''));
+}
 
 const ALREADY_STARTED = 'This challenge already started.';
 

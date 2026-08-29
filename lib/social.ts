@@ -6,7 +6,9 @@ import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
 import { filterClipsByAudience, type ClipLinkedPost } from '@/lib/clipAudience';
 import { fetchCorporateChallengeIds, fetchHiddenRailPostIds } from '@/lib/clipRail';
+import { isEndedPrizeStatus } from '@/lib/challengePot';
 import { isOfficialAccount, OFFICIAL_BOB_ID } from '@/lib/official';
+import { fetchSettledPrizePools } from '@/lib/settlement';
 import { WAVE_CLIP_MS, type WaveClipWindow } from '@/lib/waveClips';
 import type {
   Conversation,
@@ -49,7 +51,7 @@ export const CHALLENGE_FEED_COLUMNS =
   'id, title, status, is_official, buy_in_amount, prize_pool, currency, cover_image_url, created_by, visibility';
 const CHALLENGE_FEED_COLUMNS_SPONSOR = `${CHALLENGE_FEED_COLUMNS}, sponsor_name, sponsor_logo_url`;
 const CHALLENGE_FEED_COLUMNS_LANE = `${CHALLENGE_FEED_COLUMNS_SPONSOR}, challenge_lane`;
-const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at, ends_at, series_id, category, challenge_type, task, tasks, days_required, target_count, length_value`;
+const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at, ends_at, series_id, category, challenge_type, task, tasks, days_required, target_count, length_value, host_budget, min_participants`;
 
 export type FollowEdge = Follow & { profile: PublicProfile | null };
 export type FriendEdge = Friendship & { profile: PublicProfile | null };
@@ -128,6 +130,9 @@ export type FeedChallengePreview = {
   days_required?: number | null;
   target_count?: number | null;
   length_value?: number | null;
+  host_budget?: number | null;
+  min_participants?: number | null;
+  settled_prize_pool?: number | null;
 };
 
 export type FeedEventItem = FeedEvent & {
@@ -760,28 +765,43 @@ export async function fetchChallengePreviewsByIds(ids: string[]): Promise<FeedCh
     .select(CHALLENGE_FEED_COLUMNS_EMBED)
     .in('id', unique);
   if (!withEmbed.error) {
-    return (withEmbed.data ?? []) as FeedChallengePreview[];
+    return attachPreviewPots((withEmbed.data ?? []) as FeedChallengePreview[]);
   }
   const withLane = await supabase
     .from('challenges')
     .select(CHALLENGE_FEED_COLUMNS_LANE)
     .in('id', unique);
   if (!withLane.error) {
-    return (withLane.data ?? []) as FeedChallengePreview[];
+    return attachPreviewPots((withLane.data ?? []) as FeedChallengePreview[]);
   }
   const withSponsor = await supabase
     .from('challenges')
     .select(CHALLENGE_FEED_COLUMNS_SPONSOR)
     .in('id', unique);
   if (!withSponsor.error) {
-    return (withSponsor.data ?? []) as FeedChallengePreview[];
+    return attachPreviewPots((withSponsor.data ?? []) as FeedChallengePreview[]);
   }
   const { data, error } = await supabase
     .from('challenges')
     .select(CHALLENGE_FEED_COLUMNS)
     .in('id', unique);
   throwIfError(error);
-  return (data ?? []) as FeedChallengePreview[];
+  return attachPreviewPots((data ?? []) as FeedChallengePreview[]);
+}
+
+async function attachPreviewPots(rows: FeedChallengePreview[]): Promise<FeedChallengePreview[]> {
+  const ended = rows.filter((row) => isEndedPrizeStatus(row.status));
+  if (ended.length === 0) {
+    return rows;
+  }
+  const pots = await fetchSettledPrizePools(ended.map((row) => row.id));
+  if (pots.size === 0) {
+    return rows;
+  }
+  return rows.map((row) => {
+    const pot = pots.get(row.id);
+    return pot == null ? row : { ...row, settled_prize_pool: pot };
+  });
 }
 
 async function fetchMyChallengeIds(userId: string): Promise<Set<string>> {

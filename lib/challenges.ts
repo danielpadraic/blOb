@@ -57,7 +57,14 @@ import {
 } from '@/lib/challengeLoad';
 import { copy } from '@/lib/copy';
 import { parseOfficialDayWindows } from '@/lib/officialDays';
-import { OFFICIAL_WEEK_10_SLUG, pickFeaturedOfficialChallenge } from '@/lib/officialSeries';
+import {
+  HOME_OFFICIAL_STATUSES,
+  OFFICIAL_WEEK_10_SLUG,
+  isHomeOfficialSlide,
+  pickFeaturedOfficialChallenge,
+} from '@/lib/officialSeries';
+import { isEndedPrizeStatus } from '@/lib/challengePot';
+import { fetchSettledPrizePools } from '@/lib/settlement';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 
 const JOINABLE_NOT_STARTED_STATUSES = ['open', 'upcoming', 'starting'] as const;
@@ -605,6 +612,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
         ? String(row.ends_at)
         : null,
     prize_pool: Number(row.prize_pool ?? 0),
+    settled_prize_pool:
+      row.settled_prize_pool == null ? null : Math.max(Number(row.settled_prize_pool) || 0, 0),
     prize_structure: normalizePrizeStructure(row.prize_structure),
     top_places_mode: normalizeTopPlacesMode(row.top_places_mode),
     top_places_value:
@@ -829,7 +838,51 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
     seen.add(row.id);
     out.push(row);
   }
-  return out;
+  return attachSettledPots(out);
+}
+
+async function attachSettledPots(rows: Challenge[]): Promise<Challenge[]> {
+  const ended = rows.filter((row) => isEndedPrizeStatus(row.status));
+  if (ended.length === 0) {
+    return rows;
+  }
+  const pots = await fetchSettledPrizePools(ended.map((row) => row.id));
+  if (pots.size === 0) {
+    return rows;
+  }
+  return rows.map((row) => {
+    const pot = pots.get(row.id);
+    return pot == null ? row : { ...row, settled_prize_pool: pot };
+  });
+}
+
+export async function fetchHomeOfficialChallenges(): Promise<Challenge[]> {
+  try {
+    await supabase.rpc('tick_official_series');
+  } catch (error) {
+    console.log('[blob:home] official tick skipped', error);
+  }
+  const rows = (
+    await selectChallengeList(
+      (query) =>
+        query
+          .eq('is_official', true as unknown as string)
+          .in('status', [...HOME_OFFICIAL_STATUSES])
+          .order('starts_at', { ascending: true })
+          .limit(12),
+      'home-officials',
+    )
+  )
+    .map(normalizeChallenge)
+    .filter(isHomeOfficialSlide);
+  return [...rows].sort((a, b) => {
+    const aLive = a.status === 'live' || a.status === 'in_progress' ? 0 : 1;
+    const bLive = b.status === 'live' || b.status === 'in_progress' ? 0 : 1;
+    if (aLive !== bLive) {
+      return aLive - bLive;
+    }
+    return Date.parse(a.starts_at || '') - Date.parse(b.starts_at || '') || 0;
+  });
 }
 
 export async function fetchOfficialDiscoverChallenges(userId?: string): Promise<Challenge[]> {

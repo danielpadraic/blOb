@@ -20,6 +20,7 @@ import {
   fetchLobbyChallenges,
   fetchLobbyFriendCounts,
   fetchFeaturedOfficialChallenge,
+  fetchHomeOfficialChallenges,
   fetchOfficialDiscoverChallenges,
   insertUserChallenge,
   persistPrivacyMode,
@@ -167,6 +168,17 @@ export function useFeaturedOfficialChallenge() {
       }
       const [withCount] = await withParticipantCounts([row]);
       return withCount ?? null;
+    },
+  });
+}
+
+export function useHomeOfficialChallenges() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['home-officials', user?.id],
+    queryFn: async (): Promise<ChallengeWithStats[]> => {
+      await prepareLobby(user?.id);
+      return withParticipantCounts(await fetchHomeOfficialChallenges());
     },
   });
 }

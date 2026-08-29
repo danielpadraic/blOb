@@ -10,11 +10,13 @@ import {
   ChallengeTypeTip,
   useChallengeTypeTip,
 } from '@/components/challenge/ChallengeTypeIcon';
-import { ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
+import { ChallengeCardClock, ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
+import { useInviteHost } from '@/components/challenge/InviteHost';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
+import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
@@ -26,6 +28,7 @@ import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
 import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
+import { displayChallengePot } from '@/lib/challengePot';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { formatCash, formatCashCompact, formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
@@ -38,6 +41,7 @@ import { getErrorMessage } from '@/utils/errors';
 import { compactCountdown } from '@/utils/format';
 
 const BOB_WAVE = require('@/assets/login/blob-login.png');
+const BLOB_MARK = require('@/assets/mascot/blob-logo.png');
 
 export type InviteChallenge = {
   id: string;
@@ -56,6 +60,7 @@ export type InviteChallenge = {
   day_windows?: unknown;
   armed_at?: string | null;
   prize_pool?: number | null;
+  settled_prize_pool?: number | null;
   host_budget?: number | null;
   creator_contribution?: number | null;
   official_started_at?: string | null;
@@ -283,6 +288,7 @@ export function ChallengeInviteCard({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [joining, setJoining] = useState(false);
   const joinSheet = useJoinConfirm();
+  const shareHost = useInviteHost();
   const typeTip = useChallengeTypeTip();
 
   useEffect(() => {
@@ -367,6 +373,18 @@ export function ChallengeInviteCard({
 
   const hostLabel = official ? 'blOb' : host?.name?.trim() || 'Host';
 
+  function onShare() {
+    if (!shareHost) {
+      return;
+    }
+    shareHost.open({
+      challengeId: challenge.id,
+      challengeTitle: displayTitle,
+      allowSendToPeople: true,
+      defaultAudience: 'public',
+    });
+  }
+
   return (
       <Pressable
         accessibilityRole="button"
@@ -395,17 +413,21 @@ export function ChallengeInviteCard({
             <ChallengeTagRow tags={tags} compact />
           </View>
         </View>
-        <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: section === 'ended' || (!canJoin && !canCheckIn) ? 8 : 4, gap: 4 }}>
-          <AppText
-            className="text-[13px] font-semibold"
-            style={{ color: THEME.textPrimary }}
-            numberOfLines={1}>
-            {displayTitle}
-          </AppText>
+        <View style={{ paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6, gap: 4 }}>
+          <View className="flex-row items-start" style={{ gap: 8 }}>
+            <AppText
+              className="text-[13px] font-semibold"
+              style={[flexChildMin(), { flexGrow: 1, color: THEME.textPrimary }]}
+              numberOfLines={1}>
+              {displayTitle}
+            </AppText>
+            <ChallengeCardClock challenge={challenge} nowMs={nowMs} forceEnded={section === 'ended'} />
+          </View>
           <ChallengeScheduleMeta
             challenge={challenge}
             nowMs={nowMs}
             compact
+            hideClock
             forceEnded={section === 'ended'}
           />
           {resultLine ? (
@@ -414,27 +436,46 @@ export function ChallengeInviteCard({
             </AppText>
           ) : null}
           <View className="flex-row items-center" style={{ gap: 8, minHeight: 18 }}>
-            <AppText
-              className="text-[11px]"
-              style={[flexChildMin(), { flexGrow: 1, color: THEME.textMuted }]}
-              numberOfLines={1}>
-              {hostLabel}
-            </AppText>
+            {official ? (
+              <View className="flex-row items-center" style={[flexChildMin(), { flexGrow: 1, gap: 5 }]}>
+                <Image
+                  source={BLOB_MARK}
+                  style={{ width: 14, height: 14, backgroundColor: 'transparent' }}
+                  contentFit="contain"
+                  accessibilityLabel="blOb"
+                />
+                <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
+                  blOb
+                </AppText>
+              </View>
+            ) : (
+              <View className="flex-row items-center" style={[flexChildMin(), { flexGrow: 1, gap: 6 }]}>
+                {host?.avatarUrl ? <Avatar uri={host.avatarUrl} name={hostLabel} size={16} /> : null}
+                <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
+                  {hostLabel}
+                </AppText>
+              </View>
+            )}
             <View style={{ flexShrink: 0 }}>
               <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
             </View>
           </View>
         </View>
-        {section === 'ended' || (!canJoin && !canCheckIn) ? null : (
         <View
           className="flex-row items-center"
-          style={{ paddingHorizontal: 10, paddingBottom: 8, gap: 14, minHeight: 28 }}>
-          {canJoin ? (
-            <TextAction label="Join" loading={joining} onPress={() => void onJoinOrView()} />
-          ) : null}
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: THEME.border,
+            backgroundColor: THEME.surface2,
+            paddingHorizontal: 10,
+            minHeight: 30,
+            gap: 14,
+          }}>
+          <TextAction label="View" onPress={() => void openDetail()} />
+          {canJoin ? <TextAction label="Join" loading={joining} onPress={() => void onJoinOrView()} /> : null}
           {canCheckIn ? <TextAction label="Check In" onPress={onCheckIn} /> : null}
+          <TextAction label="Share" onPress={onShare} />
         </View>
-        )}
       </Pressable>
     );
 }
@@ -637,7 +678,7 @@ function LobbyMoneyMark({
   const type = compact ? 'text-[11px] font-extrabold' : 'text-[14px] font-extrabold';
   const icon = compact ? 12 : 15;
   if (lobbyCardShowsPrize(challenge)) {
-    const prize = Math.max(Number(challenge.prize_pool) || 0, 0);
+    const prize = displayChallengePot(challenge);
     if (isBucksChallenge(challenge)) {
       return (
         <AppText className={type} style={{ color }} numberOfLines={1}>
@@ -760,16 +801,20 @@ export function LobbyChallengeRow({
           numberOfLines={2}>
           {displayTitle}
         </AppText>
-        <View style={{ flexShrink: 0, paddingTop: 1 }}>
-          <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
-        </View>
+        <ChallengeCardClock challenge={challenge} nowMs={nowMs ?? tickMs} forceEnded={forceEnded} />
       </View>
-      <ChallengeScheduleMeta
-        challenge={challenge}
-        nowMs={nowMs ?? tickMs}
-        compact
-        forceEnded={forceEnded}
-      />
+      <View className="flex-row items-center" style={{ gap: 8 }}>
+        <View style={{ flexGrow: 1, minWidth: 0 }}>
+          <ChallengeScheduleMeta
+            challenge={challenge}
+            nowMs={nowMs ?? tickMs}
+            compact
+            hideClock
+            forceEnded={forceEnded}
+          />
+        </View>
+        <LobbyMoneyMark challenge={challenge} color={THEME.textPrimary} compact />
+      </View>
       {resultLine ? (
         <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }} numberOfLines={1}>
           {resultLine}

@@ -463,6 +463,30 @@ async function withPayoutProfiles(
   }));
 }
 
+export async function fetchSettledPrizePools(ids: string[]): Promise<Map<string, number>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const pots = new Map<string, number>();
+  if (unique.length === 0) {
+    return pots;
+  }
+  const { data, error } = await supabase
+    .from('challenge_settlements')
+    .select('challenge_id, prize_pool')
+    .in('challenge_id', unique);
+  if (error) {
+    console.log('[blob:settlement] pots skipped', error.message);
+    return pots;
+  }
+  for (const row of data ?? []) {
+    const id = String(row.challenge_id ?? '');
+    if (!id) {
+      continue;
+    }
+    pots.set(id, Math.max(Number(row.prize_pool) || 0, 0));
+  }
+  return pots;
+}
+
 export async function fetchChallengeSettlement(
   challengeId: string,
 ): Promise<ChallengeSettlementView | null> {

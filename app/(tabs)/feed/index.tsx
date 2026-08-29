@@ -12,7 +12,7 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
-import { useFeaturedOfficialChallenge } from '@/hooks/useChallenge';
+import { useHomeOfficialChallenges } from '@/hooks/useChallenge';
 import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/hooks/useFeed';
 import { rawFeedError } from '@/lib/feedError';
 import { useActiveStories } from '@/hooks/useSocial';
@@ -33,7 +33,7 @@ export default function FeedScreen() {
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
   const feed = useFeed();
   const stories = useActiveStories();
-  const featured = useFeaturedOfficialChallenge();
+  const officials = useHomeOfficialChallenges();
   const createPost = useCreatePost();
   const createComment = useCreateComment();
   const toggleReaction = useToggleReaction();
@@ -45,8 +45,8 @@ export default function FeedScreen() {
   const onRefresh = useCallback(() => {
     void feed.refetch();
     void stories.refetch();
-    void featured.refetch();
-  }, [featured, feed, stories]);
+    void officials.refetch();
+  }, [feed, officials, stories]);
 
   const onCompose = useCallback(
     (input: ComposeInput) => createPost.mutateAsync(input),
