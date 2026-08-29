@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
+import { WAVES_RAIL_HEIGHT } from '@/components/stories/StoryTray';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
-import { displayChallengePot } from '@/lib/challengePot';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { challengeTypeIconLabel, challengeTypeIconSource } from '@/lib/challengeTypeIcon';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { formatCash, isBucksChallenge } from '@/lib/currency';
-import { THEME, themeShadow } from '@/lib/theme';
+import { fillGatePair, officialStripStart } from '@/lib/lobbyChallenge';
+import { officialStripPrize } from '@/lib/officialSeries';
+import { THEME } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 
-const BOB = require('@/assets/login/blob-login.png');
-const COLORS = ['#1B5A50', '#123832', '#0E2421'] as const;
+const BLOB_MARK = require('@/assets/mascot/blob-logo.png');
 const ADVANCE_MS = 5000;
 
 export function OfficialHomeCarousel({ slides }: { slides: ChallengeWithStats[] }) {
@@ -53,48 +55,31 @@ export function OfficialHomeCarousel({ slides }: { slides: ChallengeWithStats[] 
   return (
     <View
       onLayout={(event) => setWidth(Math.round(event.nativeEvent.layout.width))}
-      style={{ marginBottom: 8, minHeight: 148 }}>
+      style={{ height: WAVES_RAIL_HEIGHT, maxHeight: WAVES_RAIL_HEIGHT, overflow: 'hidden' }}>
       {width > 0 ? (
-      <FlatList
-        ref={listRef}
-        data={slides}
-        horizontal
-        pagingEnabled
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        onMomentumScrollEnd={onScrollEnd}
-        renderItem={({ item }) => (
-          <OfficialBannerSlide
-            challenge={item}
-            width={width}
-            onPress={() => router.push(`/challenges/${item.id}`)}
-          />
-        )}
-      />
-      ) : (
-        <View style={{ height: 148 }} />
-      )}
-      {slides.length > 1 ? (
-        <View className="flex-row items-center justify-center" style={{ gap: 5, marginTop: 6 }}>
-          {slides.map((item, dot) => (
-            <View
-              key={item.id}
-              style={{
-                width: dot === index ? 14 : 6,
-                height: 6,
-                borderRadius: 999,
-                backgroundColor: dot === index ? THEME.accent : THEME.border,
-              }}
+        <FlatList
+          ref={listRef}
+          data={slides}
+          horizontal
+          pagingEnabled
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.id}
+          onMomentumScrollEnd={onScrollEnd}
+          renderItem={({ item }) => (
+            <OfficialStripSlide
+              challenge={item}
+              width={width}
+              onPress={() => router.push(`/challenges/${item.id}`)}
             />
-          ))}
-        </View>
+          )}
+        />
       ) : null}
     </View>
   );
 }
 
-function OfficialBannerSlide({
+function OfficialStripSlide({
   challenge,
   width,
   onPress,
@@ -104,8 +89,11 @@ function OfficialBannerSlide({
   onPress: () => void;
 }) {
   const title = challengeDisplayTitle(challenge);
-  const pot = displayChallengePot(challenge);
-  const cover = challenge.cover_image_url?.trim() ?? '';
+  const prize = officialStripPrize(challenge);
+  const entry = Math.max(Number(challenge.buy_in_amount) || 0, 0);
+  const gate = fillGatePair(challenge);
+  const start = officialStripStart(challenge);
+  const typeLabel = challengeTypeIconLabel(challenge.category);
 
   return (
     <Pressable
@@ -114,53 +102,73 @@ function OfficialBannerSlide({
       onPress={onPress}
       style={{
         width,
-        height: 148,
-        borderRadius: 20,
+        height: WAVES_RAIL_HEIGHT,
+        maxHeight: WAVES_RAIL_HEIGHT,
         overflow: 'hidden',
-        ...themeShadow('card'),
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        gap: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        backgroundColor: THEME.surface,
       }}>
-      <LinearGradient colors={[...COLORS]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }}>
-        {cover ? (
-          <Image
-            source={{ uri: cover }}
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0.28 }}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            accessibilityLabel={`${title} cover`}
-          />
-        ) : null}
-        <View pointerEvents="none" style={{ position: 'absolute', right: -8, bottom: -10, opacity: 0.92 }}>
-          <Image
-            source={BOB}
-            style={{ width: 132, height: 132, backgroundColor: 'transparent' }}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            recyclingKey="bob-home-official"
-          />
-        </View>
-        <View style={{ flex: 1, justifyContent: 'flex-end', padding: 14, paddingRight: 118 }}>
-          <AppText
-            className="text-[18px] font-extrabold leading-6"
-            style={{ color: '#FFFFFF' }}
-            numberOfLines={2}>
-            {title}
+      <Image
+        source={BLOB_MARK}
+        style={{ width: 16, height: 16, backgroundColor: 'transparent' }}
+        contentFit="contain"
+        accessibilityLabel="blOb"
+      />
+      <AppText
+        className="text-[12px] font-semibold"
+        style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, color: THEME.textPrimary, lineHeight: 15 }}
+        numberOfLines={2}>
+        {title}
+      </AppText>
+      <Image
+        source={challengeTypeIconSource(challenge.category)}
+        style={{ width: 16, height: 16, backgroundColor: 'transparent' }}
+        contentFit="contain"
+        accessibilityLabel={typeLabel}
+      />
+      {entry > 0 ? <StripMoney amount={entry} challenge={challenge} /> : null}
+      <StripMoney amount={prize} challenge={challenge} />
+      <AppText className="text-[11px]" style={{ color: THEME.textMuted, flexShrink: 0 }} numberOfLines={1}>
+        {start}
+      </AppText>
+      {gate ? (
+        <View className="flex-row items-center" style={{ gap: 3, flexShrink: 0 }}>
+          <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
+            {`${gate.count}/${gate.min}`}
           </AppText>
-          <View className="mt-2 flex-row items-center" style={{ gap: 6 }}>
-            {isBucksChallenge(challenge) ? (
-              <AppText className="text-[16px] font-extrabold" style={{ color: '#FFFFFF' }}>
-                {formatCash(pot)}
-              </AppText>
-            ) : (
-              <>
-                <CurrencyMark currency="coins" size={16} />
-                <AppText className="text-[16px] font-extrabold" style={{ color: '#FFFFFF' }}>
-                  {String(Math.round(pot))}
-                </AppText>
-              </>
-            )}
-          </View>
+          <Glyph name={GLYPH.people} color={THEME.textMuted} size={12} />
         </View>
-      </LinearGradient>
+      ) : null}
     </Pressable>
+  );
+}
+
+function StripMoney({
+  amount,
+  challenge,
+}: {
+  amount: number;
+  challenge: ChallengeWithStats;
+}) {
+  if (isBucksChallenge(challenge)) {
+    return (
+      <AppText className="text-[11px] font-semibold" style={{ color: THEME.textPrimary, flexShrink: 0 }} numberOfLines={1}>
+        {formatCash(amount)}
+      </AppText>
+    );
+  }
+  return (
+    <View className="flex-row items-center" style={{ gap: 3, flexShrink: 0 }}>
+      <CurrencyMark currency="coins" size={11} />
+      <AppText className="text-[11px] font-semibold" style={{ color: THEME.textPrimary }} numberOfLines={1}>
+        {String(Math.round(amount))}
+      </AppText>
+    </View>
   );
 }

@@ -272,6 +272,17 @@ export function formatStartsLine(startsAt?: string | null, nowMs = Date.now()): 
   return `Starts ${formatShortLocal(start, nowMs)}`;
 }
 
+export function officialStripStart(
+  challenge: { status?: string | null; starts_at?: string | null },
+  nowMs = Date.now(),
+): string {
+  const status = String(challenge.status ?? '');
+  if (status === 'live' || status === 'in_progress') {
+    return 'Live';
+  }
+  return formatStartsLine(challenge.starts_at, nowMs) ?? 'Starts soon';
+}
+
 export function formatShortLocal(at: Date, nowMs = Date.now()): string {
   const now = new Date(nowMs);
   if (isNextLocalMorning(at, now)) {
@@ -329,12 +340,21 @@ function fillNeededMin(challenge: ScheduleChallenge): number {
   return min;
 }
 
-export function fillGateLabel(challenge: ScheduleChallenge): string | null {
+export function fillGatePair(challenge: ScheduleChallenge): { count: number; min: number } | null {
   const count = Math.max(Number(challenge.participant_count) || 0, 0);
   const min = fillNeededMin(challenge);
-  if (min <= 0 || count >= min) {
+  if (min <= 0) {
     return null;
   }
+  return { count, min };
+}
+
+export function fillGateLabel(challenge: ScheduleChallenge): string | null {
+  const pair = fillGatePair(challenge);
+  if (!pair || pair.count >= pair.min) {
+    return null;
+  }
+  const { count, min } = pair;
   if (min - count === 1) {
     return '1 more needed';
   }

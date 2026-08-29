@@ -8,15 +8,17 @@ import {
   defaultFiltersForTab,
   defaultSortForTab,
   fillGateLabel,
+  fillGatePair,
   formatEndCountdown,
   formatStartsLine,
+  officialStripStart,
   isLobbyActiveParticipantStatus,
   lobbyFilterChips,
   lobbyTabForChallenge,
   sortEndingSoonest,
   sortLobbyRows,
 } from '@/lib/lobbyChallenge';
-import { isHomeOfficialSlide } from '@/lib/officialSeries';
+import { isHomeOfficialSlide, officialStripPrize } from '@/lib/officialSeries';
 
 describe('lobby tabs', () => {
   it('puts host+player on Active and host-only on Hosting', () => {
@@ -248,5 +250,27 @@ describe('home Official rail', () => {
     expect(isHomeOfficialSlide({ is_official: true, status: 'filling' })).toBe(true);
     expect(isHomeOfficialSlide({ is_official: true, status: 'settled' })).toBe(false);
     expect(isHomeOfficialSlide({ is_official: false, status: 'live' })).toBe(false);
+  });
+
+  it('uses Live or Starts {short} with no countdown copy', () => {
+    expect(officialStripStart({ status: 'live' })).toBe('Live');
+    const now = new Date(2026, 7, 29, 18, 0, 0).getTime();
+    const start = new Date(2026, 7, 30, 6, 0, 0);
+    expect(officialStripStart({ status: 'filling', starts_at: start.toISOString() }, now)).toBe(
+      'Starts Tomorrow 6:00 AM',
+    );
+  });
+
+  it('takes the higher of guaranteed prize and live pot', () => {
+    expect(officialStripPrize({ prize_pool: 8, host_budget: 10 })).toBe(10);
+    expect(officialStripPrize({ prize_pool: 40, host_budget: 10 })).toBe(40);
+  });
+
+  it('shows n/min without needed copy', () => {
+    expect(fillGatePair({ min_participants: 10, participant_count: 3 })).toEqual({
+      count: 3,
+      min: 10,
+    });
+    expect(fillGateLabel({ min_participants: 10, participant_count: 3 })).toBe('3/10 needed');
   });
 });

@@ -74,6 +74,18 @@ export function officialGuaranteeAmount(challenge: { host_budget?: number | null
   return Math.max(Number(challenge.host_budget) || 0, 0);
 }
 
+/** Home Official strip pot: guaranteed or the live pool / host budget, whichever is higher. */
+export function officialStripPrize(challenge: {
+  prize_pool?: number | null;
+  host_budget?: number | null;
+}): number {
+  return Math.max(
+    officialGuaranteeAmount(challenge),
+    Math.max(Number(challenge.prize_pool) || 0, 0),
+    Math.max(Number(challenge.host_budget) || 0, 0),
+  );
+}
+
 export function showsGuaranteedPrize(challenge: { host_budget?: number | null }): boolean {
   return officialGuaranteeAmount(challenge) > 0;
 }

@@ -16,6 +16,9 @@ import { previewFromStory } from '@/lib/wavePreview';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { THEME } from '@/lib/theme';
 
+/** Story circles. Official Home strip must not exceed this. */
+export const WAVES_RAIL_HEIGHT = 54;
+
 export function StoryTray() {
   const router = useRouter();
   const { user } = useAuth();

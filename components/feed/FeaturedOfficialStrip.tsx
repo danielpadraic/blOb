@@ -1,6 +1,5 @@
-import { View } from 'react-native';
-
 import { OfficialHomeCarousel } from '@/components/feed/OfficialHomeCarousel';
+import { WAVES_RAIL_HEIGHT } from '@/components/stories/StoryTray';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useHomeOfficialChallenges } from '@/hooks/useChallenge';
 
@@ -13,10 +12,10 @@ export function FeaturedOfficialStrip() {
   }
 
   return (
-    <TourAnchor id="tour-official">
-      <View>
-        <OfficialHomeCarousel slides={slides} />
-      </View>
+    <TourAnchor
+      id="tour-official"
+      style={{ height: WAVES_RAIL_HEIGHT, maxHeight: WAVES_RAIL_HEIGHT, overflow: 'hidden' }}>
+      <OfficialHomeCarousel slides={slides} />
     </TourAnchor>
   );
 }
