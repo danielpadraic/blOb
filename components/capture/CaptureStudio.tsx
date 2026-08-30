@@ -44,7 +44,7 @@ import {
   resolveMediaDurationMs,
   waveClipWindows,
 } from '@/lib/waveClips';
-import { waveHref, roundHref } from '@/lib/routes';
+import { publishedRowId, waveHref, roundHref } from '@/lib/routes';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
 import { attachClipPostId } from '@/lib/social';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
@@ -294,7 +294,11 @@ export function CaptureStudio({
           challenge_id: challengeId,
           duration_ms: draft.durationMs ?? null,
         });
-        publishedReelId = reel.id;
+        publishedReelId = publishedRowId(reel);
+        if (!publishedReelId) {
+          setError('Couldn’t open that clip');
+          return;
+        }
         const posted = await ensureClipFeedPost({
           createPost: (input) => createPost.mutateAsync(input),
           content: captionText,
@@ -305,7 +309,10 @@ export function CaptureStudio({
           type: 'round',
           durationMs: draft.durationMs ?? null,
         });
-        await attachClipPostId('reel', reel.id, posted.id);
+        const postedId = publishedRowId(posted);
+        if (postedId) {
+          await attachClipPostId('reel', publishedReelId, postedId);
+        }
         try {
           await createFeedEvent.mutateAsync({
             event_type: 'reel_posted',
@@ -343,7 +350,16 @@ export function CaptureStudio({
           challenge_id: challengeId,
           clips,
         });
+        publishedWaveId = publishedRowId(stories);
+        if (!publishedWaveId) {
+          setError('Couldn’t open that clip');
+          return;
+        }
         for (const story of stories) {
+          const storyId = publishedRowId(story);
+          if (!storyId) {
+            continue;
+          }
           const posted = await ensureClipFeedPost({
             createPost: (input) => createPost.mutateAsync(input),
             content: story.caption?.trim() || caption.trim(),
@@ -354,16 +370,18 @@ export function CaptureStudio({
             type: 'wave',
             durationMs: story.clip_duration_ms ?? draft.durationMs ?? null,
           });
-          await attachClipPostId('story', story.id, posted.id);
+          const postedId = publishedRowId(posted);
+          if (postedId) {
+            await attachClipPostId('story', storyId, postedId);
+          }
         }
-        publishedWaveId = stories[0]?.id ?? null;
-        const first = stories[0];
-        if (first) {
+        const first = stories.find((row) => publishedRowId(row) === publishedWaveId) ?? stories[0];
+        if (first && publishedWaveId) {
           try {
             await createFeedEvent.mutateAsync({
               event_type: 'story_posted',
               target_type: 'story',
-              target_id: first.id,
+              target_id: publishedWaveId,
               challenge_id: first.challenge_id,
               metadata: { media_type: first.media_type, clip_count: stories.length },
             });

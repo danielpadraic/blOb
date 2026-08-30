@@ -495,7 +495,7 @@ export function ClipPlayer({
     transform: [{ translateX: translateX.value }],
   }));
 
-  if (!clip) {
+  if (!clip?.id) {
     return null;
   }
 

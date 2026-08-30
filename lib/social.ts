@@ -10,6 +10,8 @@ import { isEndedPrizeStatus } from '@/lib/challengePot';
 import { isOfficialAccount, OFFICIAL_BOB_ID } from '@/lib/official';
 import { fetchSettledPrizePools } from '@/lib/settlement';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
+import { asLoggableList } from '@/lib/loggable';
+import { publishedRowId } from '@/lib/routes';
 import { WAVE_CLIP_MS, type WaveClipWindow } from '@/lib/waveClips';
 import type {
   Conversation,
@@ -382,6 +384,9 @@ export function groupStories(input: {
 }): StoryGroup[] {
   const buckets = new Map<string, Story[]>();
   for (const story of input.stories) {
+    if (!story?.id || !story.user_id) {
+      continue;
+    }
     if (input.circleIds && !input.circleIds.has(story.user_id)) {
       continue;
     }
@@ -1072,9 +1077,18 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
       .select((await resolveStoriesSelect()).select)
       .single();
     throwIfError(fallback.error);
+    if (!publishedRowId(fallback.data)) {
+      throw new Error('Couldn’t open that clip');
+    }
     return [fallback.data as Story];
   }
-  return ((data ?? []) as Story[]).sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0));
+  const created = asLoggableList((data ?? []) as Story[]).sort(
+    (a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0),
+  );
+  if (created.length === 0) {
+    throw new Error('Couldn’t open that clip');
+  }
+  return created;
 }
 
 function storyInsertRow(
@@ -1277,7 +1291,10 @@ export async function createReel(userId: string, input: CreateReelInput): Promis
     .select(REEL_COLUMNS)
     .single();
   throwIfError(error);
-  const reel = data as Reel;
+  const reel = (Array.isArray(data) ? data[0] : data) as Reel | null;
+  if (!reel || !publishedRowId(reel)) {
+    throw new Error('Couldn’t open that clip');
+  }
   const tags = [...new Set((input.tagged_user_ids ?? []).filter((id) => id && id !== userId))];
   if (tags.length > 0) {
     const { error: tagError } = await supabase.from('reel_tags').insert(

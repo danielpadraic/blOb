@@ -98,6 +98,24 @@ describe('clip rail', () => {
     expect(kept.map((row) => row.id)).toEqual(['pal']);
   });
 
+  it('does not read .id on missing Wave rows and waits for the route clip', () => {
+    const extra = story({ id: 'new', user_id: 'p1', created_at: '2026-01-05T00:00:00.000Z' });
+    const groups = [group('p1', [undefined as unknown as Story, extra], true)];
+    const waiting = flattenWaveStories({
+      groups: [group('p2', [story({ id: 'other', user_id: 'p2' })])],
+      startStoryId: 'new',
+    });
+    expect(waiting.stories).toEqual([]);
+    const solo = flattenWaveStories({
+      groups: [group('p2', [story({ id: 'other', user_id: 'p2' })])],
+      startStoryId: 'new',
+      extra,
+    });
+    expect(solo.stories.map((row) => row.id)).toEqual(['other', 'new']);
+    expect(solo.startIndex).toBe(1);
+    expect(flattenWaveStories({ groups, startStoryId: 'new' }).stories.map((row) => row.id)).toEqual(['new']);
+  });
+
   it('plays Rounds in rail order and starts on the tapped clip', () => {
     const play = buildRoundPlayList([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 'b');
     expect(play.items.map((row) => row.id)).toEqual(['a', 'b', 'c']);

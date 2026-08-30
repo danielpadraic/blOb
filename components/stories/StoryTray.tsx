@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useStoryGroups } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import { copy } from '@/lib/copy';
-import { waveHref } from '@/lib/routes';
+import { clipRouteId, waveHref } from '@/lib/routes';
 import { persistStoryThumbnail, type StoryGroup } from '@/lib/social';
 import { persistGeneratedPoster } from '@/lib/videoPoster';
 import { previewFromStory } from '@/lib/wavePreview';
@@ -30,8 +30,10 @@ export function StoryTray() {
     const latest = [...group.stories].sort(
       (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
     )[0];
-    if (!latest) {
-      startFreshWaveCapture(router);
+    if (!latest || !clipRouteId(latest.id)) {
+      if (!latest) {
+        startFreshWaveCapture(router);
+      }
       return;
     }
     router.push(waveHref(latest.id, { from: 'home' }));

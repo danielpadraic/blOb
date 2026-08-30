@@ -1,10 +1,10 @@
 import { Platform, View } from 'react-native';
 import { useEffect } from 'react';
-import { type ErrorBoundaryProps } from 'expo-router';
+import { router, usePathname, type ErrorBoundaryProps } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
-import { errorRetryHref } from '@/lib/routes';
+import { TABS_HREF, errorRetryHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
 
@@ -15,15 +15,24 @@ function webPathname(): string {
   return String(window.location?.pathname ?? '');
 }
 
-function reloadApp(retry: () => Promise<void>) {
+function reloadApp(retry: () => Promise<void>, pathname: string) {
   stopAllLiveMedia();
+  const current = pathname || webPathname();
+  const next = errorRetryHref(current);
+  if (next === '/feed' && (!current || current !== '/feed')) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
+      window.location.replace(next);
+      return;
+    }
+    router.replace(TABS_HREF);
+    return;
+  }
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-    const next = errorRetryHref(webPathname());
     if (next && typeof window.location.replace === 'function') {
       window.location.replace(next);
       return;
     }
-    if (typeof window.location.reload === 'function' && !webPathname().includes('/capture')) {
+    if (typeof window.location.reload === 'function' && !current.includes('/capture')) {
       window.location.reload();
       return;
     }
@@ -31,8 +40,9 @@ function reloadApp(retry: () => Promise<void>) {
   void retry();
 }
 
-/** Root error UI. Cream background — never a black full-screen. Retry never reopens Wave. */
+/** Root error UI. Cream background — never a black full-screen. Retry never reopens a bad Wave. */
 export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const pathname = usePathname();
   useEffect(() => {
     stopAllLiveMedia();
     reportAppError({
@@ -48,7 +58,7 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         title="Something went wrong"
         body="Try again in a moment."
         actionLabel="Retry"
-        onAction={() => reloadApp(retry)}
+        onAction={() => reloadApp(retry, pathname)}
       />
     </View>
   );

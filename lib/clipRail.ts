@@ -70,6 +70,9 @@ export function filterStoriesForRail(input: {
   viewerId?: string | null;
 }): Story[] {
   return input.stories.filter((story) => {
+    if (!story?.id) {
+      return false;
+    }
     if (
       story.post_id &&
       input.hiddenPostIds.has(story.post_id) &&
@@ -104,14 +107,16 @@ export function flattenWaveStories(input: {
   extra?: Story | null;
 }): { stories: Story[]; startIndex: number } {
   const startId = String(input.startStoryId ?? '').trim();
-  const stories = input.groups.flatMap((group) => group.stories);
+  const stories = (input.groups ?? [])
+    .flatMap((group) => group?.stories ?? [])
+    .filter((story): story is Story => Boolean(story?.id));
   const startIndex = stories.findIndex((story) => story.id === startId);
   if (startIndex >= 0) {
     return { stories, startIndex };
   }
   const extra = input.extra && extraMatchesStart(input.extra, startId) ? input.extra : null;
   if (!extra) {
-    return { stories, startIndex: 0 };
+    return { stories: [], startIndex: 0 };
   }
   if (stories.length === 0) {
     return { stories: [extra], startIndex: 0 };
@@ -124,7 +129,7 @@ export function flattenWaveStories(input: {
 }
 
 function extraMatchesStart(story: Story, startId: string): boolean {
-  return story.id === startId;
+  return Boolean(story?.id) && story.id === startId;
 }
 
 function insertIndexForAuthor(stories: Story[], extra: Story): number {
@@ -248,15 +253,15 @@ export function buildRoundPlayList<T extends { id: string }>(
   extra?: T | null,
 ): { items: T[]; startIndex: number } {
   const startId = String(startReelId ?? '').trim();
-  const items = [...rail];
-  if (extra && !items.some((row) => row.id === extra.id)) {
+  const items = rail.filter((row): row is T => Boolean(row?.id));
+  if (extra?.id && !items.some((row) => row.id === extra.id)) {
     items.unshift(extra);
   }
   const found = items.findIndex((row) => row.id === startId);
   if (found >= 0) {
     return { items, startIndex: found };
   }
-  return { items: extra ? [extra] : items, startIndex: 0 };
+  return { items: extra?.id ? [extra] : [], startIndex: 0 };
 }
 
 /** @deprecated Use buildRoundPlayList. */

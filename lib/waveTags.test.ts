@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkinSubmitHref, errorRetryHref } from '@/lib/routes';
+import { checkinSubmitHref, clipRouteId, errorRetryHref, publishedRowId, waveHref } from '@/lib/routes';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 
@@ -27,6 +27,25 @@ describe('checkinSubmitHref', () => {
     expect(errorRetryHref('/capture?mode=story')).toBe('/feed');
     expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1/submit');
     expect(errorRetryHref('/feed')).toBe('/feed');
+    expect(errorRetryHref('/wave/undefined')).toBe('/feed');
+    expect(errorRetryHref('/round/')).toBe('/feed');
+    expect(errorRetryHref('/wave/2ca49850-b978-45d8-a282-2b644913c538')).toBe(
+      '/wave/2ca49850-b978-45d8-a282-2b644913c538',
+    );
+  });
+});
+
+describe('clip route id', () => {
+  it('reads a uuid from the insert row, not the wrapper', () => {
+    const id = '2ca49850-b978-45d8-a282-2b644913c538';
+    expect(clipRouteId(id)).toBe(id);
+    expect(clipRouteId('undefined')).toBeNull();
+    expect(clipRouteId(undefined)).toBeNull();
+    expect(publishedRowId({ data: [{ id }] })).toBe(id);
+    expect(publishedRowId({ id })).toBe(id);
+    expect(publishedRowId([{ id }])).toBe(id);
+    expect(String(waveHref('undefined'))).toBe('/feed');
+    expect(String(waveHref(id))).toBe(`/wave/${id}`);
   });
 });
 

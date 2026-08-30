@@ -705,7 +705,9 @@ export function useStoryGroups(options?: { includeEmptyOwn?: boolean }) {
       }
     }
     for (const author of authorsQuery.data ?? []) {
-      map.set(author.id, author);
+      if (author?.id) {
+        map.set(author.id, author);
+      }
     }
     return map;
   }, [authorsQuery.data, friendsQuery.data, followingQuery.data, profile]);
@@ -853,12 +855,17 @@ export function useCreateStory() {
     },
     onSuccess: (stories) => {
       queryClient.setQueryData<Story[]>(socialKeys.stories(), (current) => {
-        const withoutOptimistic = (current ?? []).filter((row) => !row.id.startsWith('optimistic-'));
-        const ids = new Set(stories.map((row) => row.id));
-        return [...stories, ...withoutOptimistic.filter((row) => !ids.has(row.id))];
+        const withoutOptimistic = (current ?? []).filter(
+          (row) => row?.id && !row.id.startsWith('optimistic-'),
+        );
+        const live = stories.filter((row) => Boolean(row?.id));
+        const ids = new Set(live.map((row) => row.id));
+        return [...live, ...withoutOptimistic.filter((row) => !ids.has(row.id))];
       });
       for (const story of stories) {
-        queryClient.setQueryData(socialKeys.story(story.id), story);
+        if (story?.id) {
+          queryClient.setQueryData(socialKeys.story(story.id), story);
+        }
       }
     },
     onSettled: () => {

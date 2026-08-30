@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClipPlayer, type ClipPlayItem } from '@/components/clips/ClipPlayer';
 import { WatchSurface } from '@/components/clips/WatchSurface';
-import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -17,7 +16,7 @@ import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import { type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
-import { TABS_HREF } from '@/lib/routes';
+import { TABS_HREF, clipRouteId } from '@/lib/routes';
 
 export function WavePlayerScreen() {
   const router = useRouter();
@@ -28,7 +27,7 @@ export function WavePlayerScreen() {
     from?: string;
     commentId?: string;
   }>();
-  const storyId = Array.isArray(id) ? id[0] : id;
+  const storyId = clipRouteId(id);
   const fromSurface = Array.isArray(from) ? from[0] : from;
   const { user } = useAuth();
   const { profile } = useMyProfile();
@@ -36,7 +35,9 @@ export function WavePlayerScreen() {
   const storyQuery = useStory(storyId);
   const challengeIds = useMemo(() => {
     const ids = groups.flatMap((group) =>
-      group.stories.map((story) => story.challenge_id).filter((value): value is string => Boolean(value)),
+      (group?.stories ?? [])
+        .map((story) => story?.challenge_id)
+        .filter((value): value is string => Boolean(value)),
     );
     if (storyQuery.data?.challenge_id) {
       ids.push(storyQuery.data.challenge_id);
@@ -47,7 +48,10 @@ export function WavePlayerScreen() {
   const challenges = useMemo(() => {
     const map = new Map<string, FeedChallengePreview>();
     for (const challenge of challengeQuery.data ?? []) {
-      map.set(challenge.id, challenge);
+      const challengeId = challenge?.id;
+      if (challengeId) {
+        map.set(challengeId, challenge);
+      }
     }
     return map;
   }, [challengeQuery.data]);
@@ -56,10 +60,13 @@ export function WavePlayerScreen() {
     if (!storyId) {
       return { clips: [] as ClipPlayItem[], startIndex: 0 };
     }
-    const flat = flattenWaveStories({ groups, startStoryId: storyId, extra: storyQuery.data });
+    const extra = storyQuery.data?.id ? storyQuery.data : null;
+    const flat = flattenWaveStories({ groups, startStoryId: storyId, extra });
     return {
       startIndex: flat.startIndex,
-      clips: flat.stories.map((story) => {
+      clips: flat.stories
+        .filter((story) => Boolean(story?.id && story.media_url))
+        .map((story) => {
       const group = groups.find((row) => row.userId === story.user_id);
       const name = waveWatchName({
         isOwn: story.user_id === user?.id,
@@ -104,33 +111,31 @@ export function WavePlayerScreen() {
     router.replace(TABS_HREF);
   }
 
-  if (clips.length === 0 && (storyQuery.isLoading || (isLoading && !storyQuery.data))) {
+  if (!storyId) {
     return (
       <WatchSurface>
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={THEME.accentBright} />
+        <View className="flex-1 items-center justify-center px-8" style={{ paddingTop: insets.top }}>
+          <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
+            {copy('wave.gone')}
+          </AppText>
+          <Pressable
+            onPress={close}
+            className="mt-6 rounded-full px-4 py-2"
+            style={{ backgroundColor: THEME.accent, minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
+              Back
+            </AppText>
+          </Pressable>
         </View>
       </WatchSurface>
     );
   }
 
-  if (!storyId) {
+  if (clips.length === 0 && (storyQuery.isLoading || (isLoading && !storyQuery.data))) {
     return (
       <WatchSurface>
-        <View className="flex-1 items-center justify-center px-8" style={{ paddingTop: insets.top }}>
-          <BlobMascot size={180} variant="wave" motion="float" />
-          <AppText className="mt-4 text-center text-[16px] font-bold" style={{ color: '#fff' }}>
-            {copy('wave.empty')}
-          </AppText>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => startFreshWaveCapture(router)}
-            className="mt-6 rounded-full px-5 py-3"
-            style={{ backgroundColor: THEME.primary, minHeight: 44, justifyContent: 'center' }}>
-            <AppText className="text-[15px] font-bold" style={{ color: '#fff' }}>
-              {copy('wave.noun')}
-            </AppText>
-          </Pressable>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color={THEME.accentBright} />
         </View>
       </WatchSurface>
     );

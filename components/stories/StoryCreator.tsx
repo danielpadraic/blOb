@@ -14,7 +14,7 @@ import { useCreatePost } from '@/hooks/useFeed';
 import { useCreateFeedEvent, useCreateStory, useStoryChallengeOptions } from '@/hooks/useSocial';
 import { attachClipPostId } from '@/lib/social';
 import { copy } from '@/lib/copy';
-import { waveHref } from '@/lib/routes';
+import { publishedRowId, waveHref } from '@/lib/routes';
 import { THEME, themeShadow } from '@/lib/theme';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
 import { getErrorMessage } from '@/utils/errors';
@@ -129,7 +129,12 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
         challenge_id: challengeId,
       });
       const story = stories[0];
+      const storyId = publishedRowId(story) ?? publishedRowId(stories);
       setProgress(100);
+      if (!storyId) {
+        setError('Couldn’t open that clip');
+        return;
+      }
       if (story) {
         try {
           const posted = await createPost.mutateAsync({
@@ -139,7 +144,10 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
             source: 'feed',
             type: 'wave',
           });
-          await attachClipPostId('story', story.id, posted.id);
+          const postedId = publishedRowId(posted);
+          if (postedId) {
+            await attachClipPostId('story', storyId, postedId);
+          }
         } catch {
           // The Wave is live even if the feed card does not land.
         }
@@ -147,18 +155,16 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
           await createFeedEvent.mutateAsync({
             event_type: 'story_posted',
             target_type: 'story',
-            target_id: story.id,
+            target_id: storyId,
             challenge_id: story.challenge_id,
             metadata: { media_type: story.media_type },
           });
         } catch {
           // The Wave is live even if the activity card does not land.
         }
-        onPosted?.(story.id);
-        router.replace(waveHref(story.id, { from: 'home' }));
-        return;
       }
-      close();
+      onPosted?.(storyId);
+      router.replace(waveHref(storyId, { from: 'home' }));
     } catch (caught) {
       clearInterval(tick);
       setProgress(0);

@@ -16,7 +16,7 @@ import { personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import { ROUND_RECORD_MAX_MS } from '@/lib/waveClips';
 import { THEME } from '@/lib/theme';
-import { TABS_HREF } from '@/lib/routes';
+import { TABS_HREF, clipRouteId } from '@/lib/routes';
 
 export function RoundPlayerScreen() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export function RoundPlayerScreen() {
     sharePrompt?: string;
     commentId?: string;
   }>();
-  const reelId = Array.isArray(id) ? id[0] : id;
+  const reelId = clipRouteId(id);
   const fromSurface = Array.isArray(from) ? from[0] : from;
   const promptShare =
     sharePrompt === '1' || (Array.isArray(sharePrompt) && sharePrompt[0] === '1');
@@ -56,13 +56,16 @@ export function RoundPlayerScreen() {
   });
 
   const { clips, startIndex } = useMemo(() => {
-    if (!reel) {
+    const reelIdSafe = reel?.id;
+    if (!reel || !reelIdSafe) {
       return { clips: [] as ClipPlayItem[], startIndex: 0 };
     }
-    const play = buildRoundPlayList(railQuery.data ?? [], reel.id, reel);
+    const play = buildRoundPlayList(railQuery.data ?? [], reelIdSafe, reel);
     return {
       startIndex: play.startIndex,
-      clips: play.items.map((item) => ({
+      clips: play.items
+        .filter((item) => Boolean(item?.id && item.video_url))
+        .map((item) => ({
       id: item.id,
       kind: 'round' as const,
       mediaUrl: item.video_url,
@@ -85,7 +88,12 @@ export function RoundPlayerScreen() {
     };
   }, [postQuery.data, privacyQuery.data, railQuery.data, reel, user?.id]);
   const challenges = useMemo(
-    () => new Map((challengeQuery.data ?? []).map((challenge) => [challenge.id, challenge])),
+    () =>
+      new Map(
+        (challengeQuery.data ?? [])
+          .filter((challenge) => Boolean(challenge?.id))
+          .map((challenge) => [challenge.id, challenge]),
+      ),
     [challengeQuery.data],
   );
 
@@ -99,6 +107,26 @@ export function RoundPlayerScreen() {
       return;
     }
     router.replace(TABS_HREF);
+  }
+
+  if (!reelId) {
+    return (
+      <WatchSurface>
+        <View className="flex-1 items-center justify-center px-8" style={{ paddingTop: insets.top }}>
+          <AppText className="text-center text-[16px] font-bold" style={{ color: '#fff' }}>
+            {copy('round.gone')}
+          </AppText>
+          <Pressable
+            onPress={close}
+            className="mt-6 rounded-full px-4 py-2"
+            style={{ backgroundColor: THEME.accent, minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
+              Back
+            </AppText>
+          </Pressable>
+        </View>
+      </WatchSurface>
+    );
   }
 
   if (!reel && (reelQuery.isLoading || (railQuery.isLoading && !railQuery.data))) {

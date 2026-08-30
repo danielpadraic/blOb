@@ -5,6 +5,34 @@ import { THEME } from '@/lib/theme';
 /** Tab navigator home. `/` is `app/index.tsx` and must not redirect to itself. */
 export const TABS_HREF = '/feed';
 export const LOBBY_HREF = '/challenges';
+
+const CLIP_ROUTE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Wave / Round route param. Rejects `undefined`, empty, and non-uuid. */
+export function clipRouteId(value: unknown): string | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const id = String(raw ?? '').trim();
+  return CLIP_ROUTE_ID_RE.test(id) ? id : null;
+}
+
+/** Supabase insert id: `row.id`, `data.id`, or `data[0].id`. */
+export function publishedRowId(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return clipRouteId(value);
+  }
+  if (Array.isArray(value)) {
+    return publishedRowId(value[0]);
+  }
+  if (typeof value === 'object') {
+    const rec = value as { id?: unknown; data?: unknown };
+    return clipRouteId(rec.id) ?? publishedRowId(rec.data);
+  }
+  return null;
+}
 export const ADMIN_HREF = '/admin' as Href;
 export const ADMIN_ERRORS_HREF = '/admin/errors' as Href;
 export const ADMIN_REPORTS_HREF = '/admin/reports' as Href;
@@ -85,6 +113,10 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   if (path.includes('/capture')) {
     return '/feed';
   }
+  const watch = path.match(/^\/(wave|round|story|reel)\/([^/?#]*)/);
+  if (watch && !clipRouteId(watch[2])) {
+    return '/feed';
+  }
   const submit = path.match(/\/challenges\/([^/?#]+)\/submit/);
   if (submit?.[1]) {
     return `/challenges/${submit[1]}/submit`;
@@ -128,7 +160,10 @@ type ClipHrefExtra = {
 };
 
 function clipHref(base: 'wave' | 'round', id: string, extra?: ClipHrefExtra): Href {
-  const clipId = String(id ?? '').trim();
+  const clipId = clipRouteId(id);
+  if (!clipId) {
+    return TABS_HREF as Href;
+  }
   const qs = new URLSearchParams();
   if (extra?.comments || extra?.commentId) {
     qs.set('comments', '1');

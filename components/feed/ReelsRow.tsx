@@ -74,7 +74,10 @@ export function ReelsRow() {
   }, []);
 
   const reels = useReels(8, { enabled: railReady });
-  const liveReels = (reels.data ?? []).slice(0, 8).map((reel, index) => ({
+  const liveReels = (reels.data ?? [])
+    .filter((reel) => Boolean(reel?.id))
+    .slice(0, 8)
+    .map((reel, index) => ({
     id: reel.id,
     handle: reelHandle(reel.profile),
     title: reel.caption?.trim() || copy('round.fallback'),
