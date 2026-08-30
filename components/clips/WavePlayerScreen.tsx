@@ -22,7 +22,12 @@ import { TABS_HREF } from '@/lib/routes';
 export function WavePlayerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id, comments, from } = useLocalSearchParams<{ id: string; comments?: string; from?: string }>();
+  const { id, comments, from, commentId } = useLocalSearchParams<{
+    id: string;
+    comments?: string;
+    from?: string;
+    commentId?: string;
+  }>();
   const storyId = Array.isArray(id) ? id[0] : id;
   const fromSurface = Array.isArray(from) ? from[0] : from;
   const { user } = useAuth();
@@ -157,7 +162,11 @@ export function WavePlayerScreen() {
       clips={clips}
       startIndex={startIndex}
       autoAdvance
-      openComments={comments === '1' || (Array.isArray(comments) && comments[0] === '1')}
+      openComments={
+        comments === '1' ||
+        (Array.isArray(comments) && comments[0] === '1') ||
+        Boolean(commentId)
+      }
       challenges={challenges}
       viewedIds={viewedIds}
       onClose={close}

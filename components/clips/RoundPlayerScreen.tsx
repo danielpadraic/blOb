@@ -22,11 +22,12 @@ export function RoundPlayerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { id, comments, from, sharePrompt } = useLocalSearchParams<{
+  const { id, comments, from, sharePrompt, commentId } = useLocalSearchParams<{
     id: string;
     comments?: string;
     from?: string;
     sharePrompt?: string;
+    commentId?: string;
   }>();
   const reelId = Array.isArray(id) ? id[0] : id;
   const fromSurface = Array.isArray(from) ? from[0] : from;
@@ -136,7 +137,11 @@ export function RoundPlayerScreen() {
       clips={clips}
       startIndex={startIndex}
       autoAdvance={false}
-      openComments={comments === '1' || (Array.isArray(comments) && comments[0] === '1')}
+      openComments={
+        comments === '1' ||
+        (Array.isArray(comments) && comments[0] === '1') ||
+        Boolean(commentId)
+      }
       challenges={challenges}
       sharePrompt={promptShare}
       onClose={close}

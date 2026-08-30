@@ -74,3 +74,17 @@ export function shouldAdvanceAfterCommentsClose(input: {
 }): boolean {
   return input.kind === 'wave' && input.endedWhileOpen;
 }
+
+/** One reaction per user per comment: insert, replace type, or toggle off. */
+export function commentReactionWrite(
+  existingType: string | null | undefined,
+  nextType: string,
+): 'insert' | 'update' | 'delete' {
+  if (!existingType) {
+    return 'insert';
+  }
+  if (existingType === nextType) {
+    return 'delete';
+  }
+  return 'update';
+}

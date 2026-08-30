@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -102,6 +103,15 @@ export type ClipPlayItem = {
 const RAIL_HIT = 52;
 const RAIL_IDLE = 0.55;
 
+type ClipSheet = 'share' | 'shareRepost' | 'shareMessage' | 'shareFeed' | 'more' | 'caption' | 'delete' | null;
+
+const COMMENT_REPORT_REASONS = [
+  { value: 'spam', label: 'Spam' },
+  { value: 'harassment', label: 'Harassment' },
+  { value: 'inappropriate', label: 'Inappropriate' },
+  { value: 'other', label: 'Other' },
+] as const;
+
 type ClipPlayerProps = {
   clips: ClipPlayItem[];
   startIndex?: number;
@@ -136,7 +146,7 @@ export function ClipPlayer({
   const viewStory = useViewStory();
   const [index, setIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
-  const [sheet, setSheet] = useState<'share' | 'shareFeed' | 'more' | 'caption' | 'delete' | null>(null);
+  const [sheet, setSheet] = useState<ClipSheet>(null);
   const [commentsMode, setCommentsMode] = useState(openComments);
   const [promptShare, setPromptShare] = useState(sharePrompt);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -1120,28 +1130,59 @@ function ClipCommentsPane({
     type: clip.kind,
   });
   const report = useReportPost();
+  const [reportCommentId, setReportCommentId] = useState<string | null>(null);
   return (
+    <>
     <WaveRoundCommentsFeed
       comments={social.post?.comments ?? []}
       currentUserId={currentUserId}
       avatarUrl={avatarUrl}
       displayName={displayName}
       submitting={social.commenting}
+      audience={clip.audience ?? 'public'}
+      audienceUserIds={clip.audienceUserIds ?? []}
       onSend={(content, parentId, mentionedUserIds) =>
         social.onComment(content, parentId, mentionedUserIds)
       }
       onReact={(commentId, type) => void social.onReact(type, commentId)}
-      onReport={async () => {
-        const postId = social.post?.id ?? clip.postId;
-        if (!postId) {
-          return;
-        }
-        await report.mutateAsync({ postId, reason: 'comment' });
+      onReport={(commentId) => {
+        setReportCommentId(commentId);
       }}
       onClose={onClose}
       onScrollOffset={onScrollOffset}
       onCloseFromTop={onCloseFromTop}
     />
+    <ChromeOverlay visible={Boolean(reportCommentId)} onClose={() => setReportCommentId(null)} dim zIndex={50}>
+      <View
+        style={{
+          backgroundColor: THEME.surface,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+          paddingHorizontal: 16,
+          paddingTop: 14,
+          paddingBottom: 20,
+        }}>
+        <AppText className="text-[15px] font-extrabold text-charcoal">Report comment</AppText>
+        {COMMENT_REPORT_REASONS.map((row) => (
+          <MoreRow
+            key={row.value}
+            label={row.label}
+            onPress={() => {
+              const postId = social.post?.id ?? clip.postId;
+              if (!postId) {
+                setReportCommentId(null);
+                return;
+              }
+              void report
+                .mutateAsync({ postId, reason: row.value })
+                .then(() => setReportCommentId(null))
+                .catch((error) => Alert.alert('Couldn’t report that', getErrorMessage(error)));
+            }}
+          />
+        ))}
+      </View>
+    </ChromeOverlay>
+    </>
   );
 }
 
@@ -1166,10 +1207,10 @@ function ClipSheets({
   onCreateRound,
 }: {
   clip: ClipPlayItem;
-  sheet: 'share' | 'shareFeed' | 'more' | 'caption' | 'delete' | null;
+  sheet: ClipSheet;
   captionDraft: string;
   onCaptionDraft: (value: string) => void;
-  onOpenSheet: (next: 'share' | 'shareFeed' | 'more' | 'caption' | 'delete') => void;
+  onOpenSheet: (next: NonNullable<ClipSheet>) => void;
   onCloseSheet: () => void;
   onClosePlayer: () => void;
   onCreateWave: () => void;
@@ -1188,7 +1229,10 @@ function ClipSheets({
   const friends = useFriends();
   const share = useShareStory();
   const report = useReportPost();
+  const [dmNote, setDmNote] = useState('');
+  const [dmFriendId, setDmFriendId] = useState<string | null>(null);
   const url = clip.kind === 'round' ? roundShareUrl(clip.id) : storyShareUrl(clip.id);
+  const shareMax = Math.round(Dimensions.get('window').height * 0.5);
 
   return (
     <>
@@ -1201,9 +1245,40 @@ function ClipSheets({
             paddingHorizontal: 16,
             paddingTop: 14,
             paddingBottom: 20,
-            maxHeight: 440,
+            maxHeight: shareMax,
           }}>
           <AppText className="text-[15px] font-extrabold text-charcoal">Share</AppText>
+          <MoreRow label={copy('clip.repost')} onPress={() => onOpenSheet('shareRepost')} />
+          <MoreRow
+            label={copy('clip.copyLink')}
+            onPress={() => {
+              void Clipboard.setStringAsync(url);
+              onCloseSheet();
+            }}
+          />
+          <MoreRow
+            label={copy('clip.message')}
+            onPress={() => {
+              setDmFriendId(null);
+              setDmNote('');
+              onOpenSheet('shareMessage');
+            }}
+          />
+        </View>
+      </ChromeOverlay>
+
+      <ChromeOverlay visible={sheet === 'shareRepost'} onClose={onCloseSheet} dim zIndex={40}>
+        <View
+          style={{
+            backgroundColor: THEME.surface,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            paddingHorizontal: 16,
+            paddingTop: 14,
+            paddingBottom: 20,
+            maxHeight: shareMax,
+          }}>
+          <AppText className="text-[15px] font-extrabold text-charcoal">{copy('clip.repost')}</AppText>
           {canOfferShareToFeed(clip) ? (
             <MoreRow label={copy('clip.repostFeed')} onPress={() => onOpenSheet('shareFeed')} />
           ) : null}
@@ -1221,15 +1296,22 @@ function ClipSheets({
               onCreateRound();
             }}
           />
-          <MoreRow
-            label={copy('clip.copyLink')}
-            onPress={() => {
-              void Clipboard.setStringAsync(url);
-              onCloseSheet();
-            }}
-          />
-          <AppText className="mt-2 text-[13px] font-bold text-muted">{copy('clip.sendDm')}</AppText>
-          <ScrollView style={{ maxHeight: 200 }}>
+        </View>
+      </ChromeOverlay>
+
+      <ChromeOverlay visible={sheet === 'shareMessage'} onClose={onCloseSheet} dim zIndex={40}>
+        <View
+          style={{
+            backgroundColor: THEME.surface,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            paddingHorizontal: 16,
+            paddingTop: 14,
+            paddingBottom: 20,
+            maxHeight: shareMax,
+          }}>
+          <AppText className="text-[15px] font-extrabold text-charcoal">{copy('clip.message')}</AppText>
+          <ScrollView style={{ maxHeight: Math.max(120, shareMax - 180) }} keyboardShouldPersistTaps="handled">
             {(friends.data ?? []).length === 0 ? (
               <AppText className="mt-2 text-[13px] text-muted">Add friends first.</AppText>
             ) : (
@@ -1239,26 +1321,68 @@ function ClipSheets({
                   return null;
                 }
                 const name = personDisplayName(row.profile);
+                const selected = dmFriendId === id;
                 return (
                   <Pressable
                     key={id}
                     accessibilityRole="button"
-                    onPress={() =>
-                      share.mutate(
-                        { storyId: clip.id, friendId: id, url },
-                        {
-                          onSuccess: onCloseSheet,
-                          onError: (error) => Alert.alert('Couldn’t send that', getErrorMessage(error)),
-                        },
-                      )
-                    }
-                    style={{ minHeight: 44, justifyContent: 'center' }}>
-                    <AppText className="text-[15px] font-semibold text-charcoal">{name}</AppText>
+                    onPress={() => setDmFriendId(id)}
+                    style={{ minHeight: 40, justifyContent: 'center' }}>
+                    <AppText
+                      className="text-[15px] font-semibold"
+                      style={{ color: selected ? THEME.accent : THEME.ink }}>
+                      {name}
+                    </AppText>
                   </Pressable>
                 );
               })
             )}
           </ScrollView>
+          <TextInput
+            value={dmNote}
+            onChangeText={setDmNote}
+            placeholder={copy('clip.shareNote')}
+            placeholderTextColor={THEME.muted}
+            accessibilityLabel={copy('clip.shareNote')}
+            style={{
+              minHeight: 40,
+              marginTop: 8,
+              borderRadius: 14,
+              paddingHorizontal: 12,
+              color: THEME.ink,
+              backgroundColor: THEME.bg,
+              fontSize: 14,
+            }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copy('clip.commentSend')}
+            disabled={!dmFriendId || share.isPending}
+            onPress={() => {
+              if (!dmFriendId) {
+                return;
+              }
+              share.mutate(
+                { storyId: clip.id, friendId: dmFriendId, url, note: dmNote },
+                {
+                  onSuccess: onCloseSheet,
+                  onError: (error) => Alert.alert('Couldn’t send that', getErrorMessage(error)),
+                },
+              );
+            }}
+            style={{
+              minHeight: 44,
+              marginTop: 8,
+              borderRadius: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: THEME.primary,
+              opacity: dmFriendId && !share.isPending ? 1 : 0.4,
+            }}>
+            <AppText className="text-[15px] font-extrabold" style={{ color: '#fff' }}>
+              {copy('clip.commentSend')}
+            </AppText>
+          </Pressable>
         </View>
       </ChromeOverlay>
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   asClipReactionType,
   clipReactionEmoji,
+  commentReactionWrite,
   commentsDrawerHeight,
   DEFAULT_CLIP_REACTION,
   shouldAdvanceAfterCommentsClose,
@@ -27,6 +28,12 @@ describe('clip reactions', () => {
     expect(commentsDrawerHeight(700)).toBe(280);
     expect(commentsDrawerHeight(700, true)).toBe(336);
     expect(commentsDrawerHeight(0)).toBe(180);
+  });
+
+  it('writes one reaction per user per comment', () => {
+    expect(commentReactionWrite(null, 'love')).toBe('insert');
+    expect(commentReactionWrite('love', 'love')).toBe('delete');
+    expect(commentReactionWrite('love', 'fire')).toBe('update');
   });
 
   it('holds the current clip while comments or the keyboard are open', () => {

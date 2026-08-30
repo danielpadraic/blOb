@@ -41,7 +41,13 @@ import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
 import { fetchAuthorsSharingAcceptedFriend, fetchCirclePreviews } from '@/lib/circles';
 import { fetchFriends, type FriendEdge } from '@/lib/social';
-import { getErrorMessage, isMissingRelationError, isUnknownColumnError } from '@/utils/errors';
+import {
+  getErrorMessage,
+  isMentionAccessDenied,
+  isMissingRelationError,
+  isReactionConflict,
+  isUnknownColumnError,
+} from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
@@ -390,10 +396,10 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
       .select('post_id, mentioned_user_id')
       .in('post_id', postIds);
   }
-  const commentMentionRows =
-    commentIds.length > 0
-      ? await supabase.from('comment_mentions').select('comment_id, mentioned_user_id').in('comment_id', commentIds)
-      : { data: [] as { comment_id: string; mentioned_user_id: string }[], error: null };
+  const commentMentionRows = {
+    data: await fetchCommentMentions(commentIds),
+    error: null as { message?: string } | null,
+  };
   if (postMentionRows.error) {
     if (!isMissingRelationError(postMentionRows.error)) {
       console.log('[blob:feed] post_mentions skipped', postMentionRows.error.message);
@@ -1689,7 +1695,18 @@ export function useToggleReaction() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      const existing = findUserReaction(input.post, user.id, input.commentId);
+      let existing = findUserReaction(input.post, user.id, input.commentId);
+      if (input.commentId && (!existing || !isPersistedId(existing.id))) {
+        const fetched = await supabase
+          .from('reactions')
+          .select(REACTION_COLUMNS)
+          .eq('user_id', user.id)
+          .eq('comment_id', input.commentId)
+          .maybeSingle();
+        if (fetched.data) {
+          existing = fetched.data as Reaction;
+        }
+      }
 
       if (existing && isPersistedId(existing.id) && existing.reaction_type === input.type) {
         const { error } = await supabase.from('reactions').delete().eq('id', existing.id);
@@ -1731,6 +1748,30 @@ export function useToggleReaction() {
             })
             .select(REACTION_COLUMNS)
             .single();
+      if (inserted.error && isReactionConflict(inserted.error) && input.commentId) {
+        const again = await supabase
+          .from('reactions')
+          .select(REACTION_COLUMNS)
+          .eq('user_id', user.id)
+          .eq('comment_id', input.commentId)
+          .maybeSingle();
+        if (again.data) {
+          const row = again.data as Reaction;
+          if (row.reaction_type === input.type) {
+            return { action: 'added', reaction: row };
+          }
+          const updated = await supabase
+            .from('reactions')
+            .update({ reaction_type: input.type })
+            .eq('id', row.id)
+            .select(REACTION_COLUMNS)
+            .single();
+          if (!updated.error && updated.data) {
+            return { action: 'updated', reaction: updated.data as Reaction };
+          }
+        }
+        return { action: 'added', reaction: (again.data as Reaction) ?? existing! };
+      }
       if (inserted.error) {
         const text = inserted.error.message.toLowerCase();
         if (input.commentId && (text.includes('comment_id') || text.includes('null value'))) {
@@ -1760,11 +1801,13 @@ export function useToggleReaction() {
         replaceReactionId(post, optimisticId, result.reaction, input.commentId, user.id),
       );
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       for (const [key, data] of context?.previous ?? []) {
         queryClient.setQueryData(key, data);
       }
-      Alert.alert('Couldn’t save reaction');
+      if (!isReactionConflict(error)) {
+        Alert.alert('Couldn’t save reaction');
+      }
     },
   });
 
@@ -1991,6 +2034,25 @@ function isPersistedId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
+async function fetchCommentMentions(commentIds: string[]) {
+  if (commentIds.length === 0) {
+    return [] as { comment_id: string; mentioned_user_id: string }[];
+  }
+  const run = () =>
+    supabase.from('comment_mentions').select('comment_id, mentioned_user_id').in('comment_id', commentIds);
+  let result = await run();
+  if (result.error) {
+    result = await run();
+  }
+  if (result.error) {
+    if (!isMissingRelationError(result.error) && !isMentionAccessDenied(result.error)) {
+      console.log('[blob:feed] comment_mentions skipped', result.error.message);
+    }
+    return [];
+  }
+  return (result.data ?? []) as { comment_id: string; mentioned_user_id: string }[];
+}
+
 async function insertCommentMentions(
   commentId: string,
   authorId: string,
@@ -2011,8 +2073,9 @@ async function insertCommentMentions(
       ),
     );
   } catch (error) {
-    await supabase.from('comments').delete().eq('id', commentId).eq('author_id', authorId);
-    throw error;
+    if (!isMentionAccessDenied(error) && !isMissingRelationError(error)) {
+      console.log('[blob:feed] comment_mentions insert skipped', getErrorMessage(error));
+    }
   }
 }
 

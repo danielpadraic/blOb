@@ -264,6 +264,42 @@ export function isUnknownColumnError(error: unknown): boolean {
   );
 }
 
+/** Unique / 409 conflict (23505). Safe to treat as “row already there”. */
+export function isReactionConflict(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  const code = String(record?.code ?? '').toUpperCase();
+  const status = String(record?.status ?? record?.statusCode ?? '');
+  const raw = extractRawMessage(error).toLowerCase();
+  return (
+    code === '23505' ||
+    code === 'PGRST116' ||
+    status === '409' ||
+    raw.includes('23505') ||
+    raw.includes('duplicate key') ||
+    raw.includes('already exists') ||
+    (raw.includes('409') && raw.includes('conflict')) ||
+    (raw.includes('unique') && (raw.includes('reactions') || raw.includes('constraint')))
+  );
+}
+
+/** RLS / 403 — mention chips can hide instead of breaking the thread. */
+export function isMentionAccessDenied(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  const code = String(record?.code ?? '').toUpperCase();
+  const status = String(record?.status ?? record?.statusCode ?? '');
+  const raw = extractRawMessage(error).toLowerCase();
+  return (
+    code === '42501' ||
+    code === 'PGRST301' ||
+    status === '403' ||
+    raw.includes('42501') ||
+    raw.includes('permission denied') ||
+    raw.includes('row-level security') ||
+    raw.includes('403') ||
+    raw.includes('forbidden')
+  );
+}
+
 /** Missing table / schema-cache miss (PGRST205, 42P01, 404). Safe to treat as empty. */
 export function isMissingRelationError(error: unknown): boolean {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;

@@ -22,6 +22,7 @@ export const GLYPH = {
   likeOutline: { ios: 'heart', android: 'favorite_border', web: 'favorite_border' },
   fire: { ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' },
   reply: { ios: 'bubble.left.fill', android: 'chat_bubble', web: 'chat_bubble' },
+  replyArrow: { ios: 'arrowshape.turn.up.left', android: 'reply', web: 'reply' },
   share: { ios: 'square.and.arrow.up', android: 'share', web: 'share' },
   more: { ios: 'ellipsis', android: 'more_horiz', web: 'more_horiz' },
   check: { ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' },

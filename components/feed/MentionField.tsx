@@ -66,6 +66,7 @@ type MentionFieldProps = {
   onFocus?: () => void;
   onBlur?: () => void;
   accessibilityLabel?: string;
+  tone?: 'default' | 'frost';
 };
 
 export type MentionFieldHandle = {
@@ -90,6 +91,7 @@ function MentionFieldInner(
     onFocus,
     onBlur,
     accessibilityLabel,
+    tone = 'default',
   }: MentionFieldProps,
   ref: ForwardedRef<MentionFieldHandle>,
 ) {
@@ -231,6 +233,8 @@ function MentionFieldInner(
     }
   }
 
+  const frost = tone === 'frost';
+
   const dropdown = open ? (
     <View
       style={{
@@ -242,11 +246,11 @@ function MentionFieldInner(
         zIndex: 40,
         marginBottom: pickerPlacement === 'above' ? 4 : 0,
         marginTop: pickerPlacement === 'above' ? 0 : 4,
-        backgroundColor: THEME.surface,
+        backgroundColor: frost ? 'rgba(16,19,18,0.94)' : THEME.surface,
         borderWidth: 1,
-        borderColor: THEME.border,
+        borderColor: frost ? 'rgba(255,255,255,0.12)' : THEME.border,
         borderRadius: 14,
-        maxHeight: 220,
+        maxHeight: 180,
         overflow: 'hidden',
       }}>
       {candidates.isLoading && candidates.data.length === 0 ? (
@@ -301,7 +305,10 @@ function MentionFieldInner(
               </View>
             )}
             <View style={{ flex: 1, minWidth: 0 }}>
-              <AppText className="text-[14px] font-semibold text-charcoal" numberOfLines={1}>
+              <AppText
+                className={frost ? 'text-[13px] font-semibold' : 'text-[14px] font-semibold text-charcoal'}
+                style={frost ? { color: '#F5F5F5' } : undefined}
+                numberOfLines={1}>
                 {row.label}
               </AppText>
               {row.subtitle ? (
@@ -357,7 +364,7 @@ function MentionFieldInner(
           }
         }}
         placeholder={placeholder}
-        placeholderTextColor={THEME.textMuted}
+        placeholderTextColor={frost ? 'rgba(255,255,255,0.5)' : THEME.textMuted}
         autoFocus={autoFocus}
         multiline
         scrollEnabled={height >= MAX_HEIGHT - 2}
@@ -386,8 +393,8 @@ function MentionFieldInner(
           maxHeight: collapsed ? MIN_HEIGHT : MAX_HEIGHT,
           paddingVertical: 6,
           paddingHorizontal: 0,
-          color: THEME.textPrimary,
-          fontSize: FONT,
+          color: frost ? '#F5F5F5' : THEME.textPrimary,
+          fontSize: frost ? 14 : FONT,
           lineHeight: LINE,
           textAlignVertical: 'top',
           ...(Platform.OS === 'web'

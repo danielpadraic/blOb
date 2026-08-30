@@ -993,9 +993,13 @@ export function useShareStory() {
   const startChat = useGetOrCreateConversation();
   const send = useSendMessage();
   return useMutation({
-    mutationFn: async (input: { storyId: string; friendId: string; url: string }) => {
+    mutationFn: async (input: { storyId: string; friendId: string; url: string; note?: string }) => {
       const conversation = await startChat.mutateAsync(input.friendId);
-      await send.mutateAsync({ conversation_id: conversation.id, body: input.url });
+      const note = input.note?.trim();
+      await send.mutateAsync({
+        conversation_id: conversation.id,
+        body: note ? `${note}\n${input.url}` : input.url,
+      });
       await notifyStoryShared(input.storyId, input.friendId);
     },
   });
