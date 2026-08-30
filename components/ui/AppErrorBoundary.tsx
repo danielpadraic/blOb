@@ -3,23 +3,38 @@ import { useEffect } from 'react';
 import { type ErrorBoundaryProps } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { errorRetryHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
 
+function webPathname(): string {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  return String(window.location?.pathname ?? '');
+}
+
 function reloadApp(retry: () => Promise<void>) {
-  if (Platform.OS === 'web' && typeof globalThis !== 'undefined' && 'location' in globalThis) {
-    const loc = (globalThis as { location?: { reload?: () => void } }).location;
-    if (typeof loc?.reload === 'function') {
-      loc.reload();
+  stopAllLiveMedia();
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    const next = errorRetryHref(webPathname());
+    if (next && typeof window.location.replace === 'function') {
+      window.location.replace(next);
+      return;
+    }
+    if (typeof window.location.reload === 'function' && !webPathname().includes('/capture')) {
+      window.location.reload();
       return;
     }
   }
   void retry();
 }
 
-/** Root error UI. Cream background — never a black full-screen. Retry reloads the app. */
+/** Root error UI. Cream background — never a black full-screen. Retry never reopens Wave. */
 export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
+    stopAllLiveMedia();
     reportAppError({
       route: 'error_boundary',
       error,

@@ -1,5 +1,5 @@
-import { Stack, useLocalSearchParams, useRouter, type ErrorBoundaryProps } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { Stack, useIsFocused, useLocalSearchParams, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -82,7 +82,7 @@ import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
-import { challengeDetailHref } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
 import { localUriFromPickerAsset } from '@/utils/media';
@@ -155,6 +155,9 @@ function SubmitWorkoutInner() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+  const pathname = usePathname();
+  const navFocused = useIsFocused();
+  const checkinLogRef = useRef(false);
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
@@ -202,6 +205,51 @@ function SubmitWorkoutInner() {
   }, [challenge?.created_by, roster.data]);
 
   useEffect(() => {
+    if (!id || checkinLogRef.current) {
+      return;
+    }
+    if (challengeQuery.isLoading) {
+      return;
+    }
+    checkinLogRef.current = true;
+    const next = proofSteps.find(
+      (proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr',
+    );
+    const nextPhotoEmpty = Boolean(next) && !drafts[next?.id ?? '']?.uri;
+    const hasExistingFrames =
+      extras.length > 0 ||
+      proofSteps.some((proof) => {
+        const uri = drafts[proof.id]?.uri;
+        return Boolean(uri && !uri.startsWith('health:'));
+      });
+    console.log('[blob:checkin]', {
+      href: String(checkinSubmitHref(id)),
+      id,
+      focused: navFocused,
+      ask: null,
+      shouldAutoOpen: shouldAutoOpenCheckinCamera({
+        skippedAuto,
+        honorOnly,
+        hasExistingFrames,
+        nextPhotoEmpty,
+        preferHealth: false,
+      }),
+      nextPhotoId: next?.id ?? null,
+      pathname,
+    });
+  }, [
+    challengeQuery.isLoading,
+    drafts,
+    extras.length,
+    honorOnly,
+    id,
+    navFocused,
+    pathname,
+    proofSteps,
+    skippedAuto,
+  ]);
+
+  useEffect(() => {
     if (usesTotalCountCheckins(challenge) && checkinQuery.data?.phase === 'submitted') {
       return;
     }
@@ -217,8 +265,12 @@ function SubmitWorkoutInner() {
         if (!part) {
           continue;
         }
+        const localUri = current[proof.id]?.uri;
+        const remoteUrl = String(part.url ?? '').trim();
         next[proof.id] = {
-          uri: part.healthWorkoutId ? `health:${part.healthWorkoutId}` : part.url ?? current[proof.id]?.uri,
+          uri: part.healthWorkoutId
+            ? `health:${part.healthWorkoutId}`
+            : remoteUrl || localUri,
           mimeType: current[proof.id]?.mimeType,
           text: part.text ?? current[proof.id]?.text,
           fromLibrary: part.fromLibrary ?? current[proof.id]?.fromLibrary,

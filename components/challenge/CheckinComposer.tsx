@@ -101,8 +101,9 @@ export function CheckinComposer({
   const fieldRef = useRef<MentionFieldHandle>(null);
   const pagerRef = useRef<FlatList<ReviewPage>>(null);
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const pageWidth = Math.max(windowWidth, 1);
+  const heroHeight = Math.max(Math.round(windowHeight * (2 / 3)), 240);
   const [gifOpen, setGifOpen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const chromePad = tabBarLift(insets.bottom, 'sticky');
@@ -413,16 +414,17 @@ export function CheckinComposer({
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.key}
+            style={{ flex: 1, height: heroHeight }}
             getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
             onMomentumScrollEnd={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
               const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
               setPageIndex(Math.max(0, Math.min(next, pages.length - 1)));
             }}
             renderItem={({ item }) => (
-              <View style={{ width: pageWidth, height: '100%' }}>
+              <View style={{ width: pageWidth, height: heroHeight }}>
                 <Image
                   source={{ uri: item.uri }}
-                  style={{ width: '100%', height: '100%' }}
+                  style={{ width: pageWidth, height: heroHeight }}
                   contentFit="contain"
                   accessibilityLabel={item.label}
                 />

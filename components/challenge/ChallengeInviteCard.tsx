@@ -371,9 +371,7 @@ export function ChallengeInviteCard({
   }
 
   function onCheckIn() {
-    const href = checkinSubmitHref(challenge.id);
-    console.log('[blob:checkin]', { challengeId: challenge.id, href });
-    router.push(href);
+    router.push(checkinSubmitHref(challenge.id));
   }
 
   const hostLabel = host?.name?.trim() || 'Host';

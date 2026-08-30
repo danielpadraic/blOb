@@ -321,9 +321,7 @@ function TabLayoutInner() {
       if (!picked) {
         return;
       }
-      const href = checkinSubmitHref(picked);
-      console.log('[blob:checkin]', { challengeId: picked, href });
-      go(href);
+      go(checkinSubmitHref(picked));
       return;
     }
     if (id === 'create') {

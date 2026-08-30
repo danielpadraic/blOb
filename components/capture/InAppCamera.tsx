@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from 'react';
 import { AppState, BackHandler, Platform, Pressable, View } from 'react-native';
-import { useIsFocused } from 'expo-router';
+import { useIsFocused, usePathname } from 'expo-router';
 import { Camera, CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -95,7 +95,11 @@ export function InAppCamera({
   checkin = false,
 }: InAppCameraProps) {
   const insets = useSafeAreaInsets();
-  const focused = useIsFocused();
+  const navFocused = useIsFocused();
+  const pathname = usePathname();
+  const web = Platform.OS === 'web';
+  const pathLive = String(pathname ?? '').includes('/submit');
+  const focused = Boolean(navFocused || (checkin && web && pathLive));
   const cameraRef = useRef<CameraView>(null);
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
@@ -114,7 +118,6 @@ export function InAppCamera({
   const holdRef = useRef(false);
   const skipPressRef = useRef(false);
   const video = !checkin && capture === 'video';
-  const web = Platform.OS === 'web';
   const parentBlocked = blocked || webFallback;
   const readyPreview = !parentBlocked && ask === 'ready';
   const shutterEnabled = readyPreview && !busy;

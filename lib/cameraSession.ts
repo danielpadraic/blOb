@@ -172,6 +172,17 @@ export function takePrimedCameraStream(): MediaStream | null {
   return stream;
 }
 
+async function getUserMediaWatched(constraints: MediaStreamConstraints): Promise<MediaStream> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    const error = new Error('Camera isn’t on this device.');
+    error.name = 'NotFoundError';
+    throw error;
+  }
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  watchLiveMedia({ stream });
+  return stream;
+}
+
 export async function primeCameraFromGesture(
   kind: 'photo' | 'video' = 'video',
   facing: 'front' | 'back' = 'front',
@@ -181,11 +192,10 @@ export async function primeCameraFromGesture(
   }
   stopPrimedCameraStream();
   try {
-    primed = await navigator.mediaDevices.getUserMedia({
+    primed = await getUserMediaWatched({
       video: { facingMode: facing === 'front' ? 'user' : 'environment' },
       audio: kind === 'video',
     });
-    watchLiveMedia({ stream: primed });
     const held = primed;
     setTimeout(() => {
       if (primed === held) {
@@ -273,15 +283,9 @@ export async function openWebCameraStream(input: {
     stopMedia({ stream: input.existing });
     liveStreams.delete(input.existing);
   }
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-    const error = new Error('Camera isn’t on this device.');
-    error.name = 'NotFoundError';
-    throw error;
-  }
-  const stream = await navigator.mediaDevices.getUserMedia({
+  const stream = await getUserMediaWatched({
     video: { facingMode: input.facing === 'front' ? 'user' : 'environment' },
     audio: input.audio,
   });
-  watchLiveMedia({ stream });
   return stream;
 }

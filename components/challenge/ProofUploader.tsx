@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Alert, Platform, Pressable, View } from 'react-native';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
@@ -146,9 +146,13 @@ export function ProofUploader({
         quality: 0.8,
         videoMaxDuration: video ? 30 : undefined,
       });
-      const asset = result.canceled ? null : result.assets[0];
+      if (result.canceled) {
+        return;
+      }
+      const asset = result.assets[0];
       const uri = asset ? localUriFromPickerAsset(asset) : null;
       if (!uri) {
+        Alert.alert('Couldn’t attach that', 'Pick a photo from the gallery.');
         return;
       }
       stopAllLiveMedia();
@@ -156,6 +160,7 @@ export function ProofUploader({
       setOpen(false);
     } catch (error) {
       stopAllLiveMedia();
+      Alert.alert('Couldn’t attach that', 'Pick a photo from the gallery.');
       console.log('[blob:checkin] gallery', error);
     }
   }

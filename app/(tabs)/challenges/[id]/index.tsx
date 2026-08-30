@@ -1324,9 +1324,7 @@ export default function ChallengeDetailScreen() {
                   if (!id) {
                     return;
                   }
-                  const href = checkinSubmitHref(id);
-                  console.log('[blob:checkin]', { challengeId: id, href });
-                  router.push(href);
+                  router.push(checkinSubmitHref(id));
                 }}
               />
             )}

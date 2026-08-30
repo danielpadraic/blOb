@@ -79,6 +79,19 @@ export function checkinSubmitHref(id: string): Href {
   return `/challenges/${String(id ?? '').trim()}/submit` as Href;
 }
 
+/** Bob Retry after a crash. Never reload `/capture` (that reopens Wave). */
+export function errorRetryHref(pathname: string | null | undefined): string {
+  const path = String(pathname ?? '');
+  if (path.includes('/capture')) {
+    return '/feed';
+  }
+  const submit = path.match(/\/challenges\/([^/?#]+)\/submit/);
+  if (submit?.[1]) {
+    return `/challenges/${submit[1]}/submit`;
+  }
+  return path || '/feed';
+}
+
 export function inviteHref(token: string) {
   return {
     pathname: '/invite/[token]' as const,
