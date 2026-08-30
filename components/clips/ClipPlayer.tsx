@@ -48,6 +48,7 @@ import {
   asClipReactionType,
   clipReactionEmoji,
   commentsDrawerHeight,
+  commentsDrawerKeyboardLift,
   loadLastClipReaction,
   shouldAdvanceAfterCommentsClose,
   shouldHoldClipPlayback,
@@ -174,6 +175,7 @@ export function ClipPlayer({
   const atEndX = useSharedValue(false);
   const [videoWidth, setVideoWidth] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardPad, setKeyboardPad] = useState(0);
   const [roundPaused, setRoundPaused] = useState(false);
   const [pauseFlash, setPauseFlash] = useState<'play' | 'pause' | null>(null);
   const endedWhileOpen = useRef(false);
@@ -343,10 +345,19 @@ export function ClipPlayer({
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      return subscribeVisualViewport((occlusion) => setKeyboardVisible(occlusion > 80));
+      return subscribeVisualViewport((occlusion) => {
+        setKeyboardPad(occlusion);
+        setKeyboardVisible(occlusion > 80);
+      });
     }
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const show = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardVisible(true);
+      setKeyboardPad(event.endCoordinates?.height ?? 0);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+      setKeyboardPad(0);
+    });
     return () => {
       show.remove();
       hide.remove();
@@ -491,7 +502,18 @@ export function ClipPlayer({
 
   const origin = clip.challengeId ? challenges?.get(clip.challengeId) : undefined;
   const drawerH = commentsMode ? commentsDrawerHeight(watchHeight, keyboardVisible) : 0;
-  const railPad = commentsMode ? drawerH : bottomPad;
+  const layoutHeight =
+    Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.innerHeight
+      : Dimensions.get('window').height;
+  const drawerLift = commentsMode
+    ? commentsDrawerKeyboardLift({
+        watchHeight,
+        layoutHeight,
+        occlusion: keyboardPad,
+      })
+    : 0;
+  const railPad = commentsMode ? drawerH + drawerLift : bottomPad;
   const loopCurrent = kind === 'round' || holdPlayback;
   const nextAt =
     kind === 'wave' ? preloadStoryIndex(ranges, index) : index + 1 < clips.length ? index + 1 : null;
@@ -841,7 +863,7 @@ export function ClipPlayer({
                 style={{
                   position: 'absolute',
                   right: 0,
-                  bottom: 0,
+                  bottom: drawerLift,
                   left: 0,
                   height: drawerH,
                   borderTopLeftRadius: 20,
@@ -868,6 +890,7 @@ export function ClipPlayer({
                   currentUserId={user?.id}
                   avatarUrl={profile?.avatar_url}
                   displayName={profile?.display_name ?? profile?.username}
+                  keyboardInset={Math.max(0, keyboardPad - drawerLift)}
                   onClose={closeComments}
                   onScrollOffset={(offset) => {
                     commentsScrollY.current = offset;
@@ -1108,6 +1131,7 @@ function ClipCommentsPane({
   currentUserId,
   avatarUrl,
   displayName,
+  keyboardInset = 0,
   onClose,
   onScrollOffset,
   onCloseFromTop,
@@ -1116,6 +1140,7 @@ function ClipCommentsPane({
   currentUserId?: string;
   avatarUrl?: string | null;
   displayName?: string | null;
+  keyboardInset?: number;
   onClose?: () => void;
   onScrollOffset?: (offset: number) => void;
   onCloseFromTop?: () => void;
@@ -1141,6 +1166,7 @@ function ClipCommentsPane({
       submitting={social.commenting}
       audience={clip.audience ?? 'public'}
       audienceUserIds={clip.audienceUserIds ?? []}
+      keyboardInset={keyboardInset}
       onSend={(content, parentId, mentionedUserIds) =>
         social.onComment(content, parentId, mentionedUserIds)
       }

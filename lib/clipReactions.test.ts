@@ -5,6 +5,7 @@ import {
   clipReactionEmoji,
   commentReactionWrite,
   commentsDrawerHeight,
+  commentsDrawerKeyboardLift,
   DEFAULT_CLIP_REACTION,
   shouldAdvanceAfterCommentsClose,
   shouldHoldClipPlayback,
@@ -28,6 +29,12 @@ describe('clip reactions', () => {
     expect(commentsDrawerHeight(700)).toBe(280);
     expect(commentsDrawerHeight(700, true)).toBe(336);
     expect(commentsDrawerHeight(0)).toBe(180);
+  });
+
+  it('lifts the comments drawer only when the shell did not shrink with the keyboard', () => {
+    expect(commentsDrawerKeyboardLift({ watchHeight: 500, layoutHeight: 800, occlusion: 280 })).toBe(0);
+    expect(commentsDrawerKeyboardLift({ watchHeight: 800, layoutHeight: 800, occlusion: 280 })).toBe(280);
+    expect(commentsDrawerKeyboardLift({ watchHeight: 800, layoutHeight: 800, occlusion: 0 })).toBe(0);
   });
 
   it('writes one reaction per user per comment', () => {

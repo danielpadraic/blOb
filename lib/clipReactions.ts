@@ -59,6 +59,24 @@ export function commentsDrawerHeight(viewportHeight: number, keyboardVisible = f
   return Math.round(viewportHeight * (keyboardVisible ? 0.48 : 0.4));
 }
 
+/** Lift the drawer only when the watch shell did not already follow visualViewport. */
+export function commentsDrawerKeyboardLift(input: {
+  watchHeight: number;
+  layoutHeight: number;
+  occlusion: number;
+}): number {
+  const occlusion = Math.max(0, Number(input.occlusion) || 0);
+  if (occlusion <= 0) {
+    return 0;
+  }
+  const watchHeight = Number(input.watchHeight) || 0;
+  const layoutHeight = Number(input.layoutHeight) || 0;
+  if (layoutHeight > 0 && watchHeight < layoutHeight - 48) {
+    return 0;
+  }
+  return Math.round(occlusion);
+}
+
 /** @deprecated Use commentsDrawerHeight. Overlay no longer shrinks the video. */
 export function commentsBandHeight(viewportHeight: number): number {
   return commentsDrawerHeight(viewportHeight, false);

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   View,
@@ -14,7 +15,6 @@ import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
-import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { CLIP_REACTIONS, DEFAULT_CLIP_REACTION, clipReactionEmoji } from '@/lib/clipReactions';
 import { copy } from '@/lib/copy';
 import type { MentionChip, MentionDoc } from '@/lib/mentions';
@@ -27,7 +27,9 @@ import { userReaction } from '@/lib/reactions';
 
 const NAME = 'rgba(255,255,255,0.72)';
 const TIME = 'rgba(255,255,255,0.5)';
-const MUTED = 'rgba(255,255,255,0.62)';
+const BODY = 'rgba(245,245,245,0.96)';
+const ICON = 'rgba(245,245,245,0.9)';
+const FOOTER = 'footer';
 
 type ReplyTarget = {
   id: string;
@@ -43,6 +45,7 @@ type WaveRoundCommentsFeedProps = {
   submitting?: boolean;
   audience?: string;
   audienceUserIds?: string[];
+  keyboardInset?: number;
   onSend: (
     content: string,
     parentId?: string | null,
@@ -62,6 +65,7 @@ export function WaveRoundCommentsFeed({
   submitting,
   audience = 'public',
   audienceUserIds = [],
+  keyboardInset = 0,
   onSend,
   onReact,
   onReport,
@@ -71,10 +75,12 @@ export function WaveRoundCommentsFeed({
 }: WaveRoundCommentsFeedProps) {
   const [local, setLocal] = useState<CommentWithAuthor[]>([]);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
-  const [composerEpoch, setComposerEpoch] = useState(0);
+  const [docs, setDocs] = useState<Record<string, MentionDoc>>({});
+  const seededReply = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const scrollTop = useRef(0);
   const topSwipes = useRef(0);
+  const sentCount = useRef(0);
 
   const thread = [...comments];
   for (const row of local) {
@@ -91,20 +97,70 @@ export function WaveRoundCommentsFeed({
     }
   }
   const roots = nestComments(thread);
+  const slot = replyTo?.id ?? FOOTER;
 
   useEffect(() => {
+    if (thread.length <= sentCount.current) {
+      return undefined;
+    }
+    sentCount.current = thread.length;
     const handle = setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 80);
     return () => clearTimeout(handle);
   }, [thread.length]);
 
-  async function send(text: string, mentionedUserIds: string[], parentId: string | null) {
-    const body = text.trim();
+  useEffect(() => {
+    if (!replyTo || Platform.OS !== 'web' || typeof document === 'undefined') {
+      return undefined;
+    }
+    const handle = requestAnimationFrame(() => {
+      document.getElementById('blob-reply-composer')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => cancelAnimationFrame(handle);
+  }, [replyTo?.id]);
+
+  function setSlotDoc(id: string, doc: MentionDoc) {
+    setDocs((current) => (current[id] === doc ? current : { ...current, [id]: doc }));
+  }
+
+  function openReply(target: ReplyTarget) {
+    setReplyTo(target);
+    if (seededReply.current === target.id) {
+      return;
+    }
+    seededReply.current = target.id;
+    setDocs((current) => {
+      if ((current[target.id]?.text ?? '').trim()) {
+        return current;
+      }
+      const handle = target.mention?.username?.replace(/^@/, '');
+      if (!handle) {
+        return current;
+      }
+      return {
+        ...current,
+        [target.id]: {
+          text: `@${handle} `,
+          chips: target.mention ? [target.mention] : [],
+        },
+      };
+    });
+  }
+
+  async function send(id: string, parentId: string | null) {
+    const doc = docs[id] ?? { text: '', chips: [] };
+    const body = doc.text.trim();
     if (!body || submitting) {
       return;
     }
-    await onSend(body, parentId, mentionedUserIds);
+    const mentioned = [
+      ...new Set([
+        ...doc.chips.map((chip) => chip.userId),
+        ...(parentId && replyTo?.mention?.userId ? [replyTo.mention.userId] : []),
+      ]),
+    ];
+    await onSend(body, parentId, mentioned);
     const author = {
       display_name: displayName ?? 'You',
       username: displayName ?? 'you',
@@ -122,8 +178,9 @@ export function WaveRoundCommentsFeed({
         author,
       },
     ]);
+    setDocs((current) => ({ ...current, [id]: { text: '', chips: [] } }));
     setReplyTo(null);
-    setComposerEpoch((value) => value + 1);
+    seededReply.current = null;
   }
 
   function noteScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
@@ -148,15 +205,31 @@ export function WaveRoundCommentsFeed({
     }
   }
 
-  function tapDrawerChrome() {
-    if (replyTo) {
-      setReplyTo(null);
-    }
-  }
+  const composer = (
+    <FrostComposer
+      slot={slot}
+      doc={docs[slot] ?? { text: '', chips: [] }}
+      onDoc={(doc) => setSlotDoc(slot, doc)}
+      seedMention={slot !== FOOTER ? replyTo?.mention ?? null : null}
+      audience={audience}
+      audienceUserIds={audienceUserIds}
+      excludeIds={currentUserId ? [currentUserId] : []}
+      submitting={submitting}
+      keyboardInset={keyboardInset}
+      onCancel={replyTo ? () => setReplyTo(null) : undefined}
+      onSend={() => void send(slot, replyTo?.id ?? null)}
+    />
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-      <Pressable onPress={tapDrawerChrome} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 2, paddingBottom: 2 }}>
+      <Pressable
+        onPress={() => {
+          if (replyTo) {
+            setReplyTo(null);
+          }
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 2, paddingBottom: 2 }}>
         <AppText className="flex-1 text-[15px] font-extrabold" style={{ color: '#fff' }}>
           {copy('clip.comments')}
         </AppText>
@@ -182,14 +255,11 @@ export function WaveRoundCommentsFeed({
         scrollEventThrottle={16}
         onScroll={noteScroll}
         onScrollEndDrag={tryCloseFromTop}
-        onMomentumScrollEnd={tryCloseFromTop}
-        onScrollBeginDrag={tapDrawerChrome}>
+        onMomentumScrollEnd={tryCloseFromTop}>
         {roots.length === 0 ? (
-          <Pressable onPress={tapDrawerChrome} style={{ flexGrow: 1 }}>
-            <AppText className="mt-3 text-[13px]" style={{ color: MUTED }}>
-              {copy('clip.commentEmpty')}
-            </AppText>
-          </Pressable>
+          <AppText className="mt-3 text-[13px]" style={{ color: ICON }}>
+            {copy('clip.commentEmpty')}
+          </AppText>
         ) : (
           roots.map((comment) => (
             <FeedItem
@@ -198,28 +268,15 @@ export function WaveRoundCommentsFeed({
               nested={false}
               currentUserId={currentUserId}
               replyTo={replyTo}
-              audience={audience}
-              audienceUserIds={audienceUserIds}
-              submitting={submitting}
-              onReply={(target) => setReplyTo(target)}
-              onCancelReply={() => setReplyTo(null)}
-              onSend={send}
+              composer={replyTo?.id === comment.id ? composer : null}
+              onReply={openReply}
               onReact={onReact}
               onReport={onReport}
             />
           ))
         )}
       </ScrollView>
-      {!replyTo ? (
-        <FrostComposer
-          composerKey={`footer-${composerEpoch}`}
-          audience={audience}
-          audienceUserIds={audienceUserIds}
-          excludeIds={currentUserId ? [currentUserId] : []}
-          submitting={submitting}
-          onSend={(text, mentioned) => void send(text, mentioned, null)}
-        />
-      ) : null}
+      {!replyTo ? composer : null}
     </View>
   );
 }
@@ -229,12 +286,8 @@ function FeedItem({
   nested,
   currentUserId,
   replyTo,
-  audience,
-  audienceUserIds,
-  submitting,
+  composer,
   onReply,
-  onCancelReply,
-  onSend,
   onReact,
   onReport,
 }: {
@@ -242,12 +295,8 @@ function FeedItem({
   nested: boolean;
   currentUserId?: string;
   replyTo: ReplyTarget | null;
-  audience: string;
-  audienceUserIds: string[];
-  submitting?: boolean;
+  composer: ReactNode;
   onReply: (target: ReplyTarget) => void;
-  onCancelReply: () => void;
-  onSend: (text: string, mentionedUserIds: string[], parentId: string | null) => Promise<void>;
   onReact?: (commentId: string, type: ReactionType) => void;
   onReport?: (commentId: string) => Promise<unknown> | void;
 }) {
@@ -257,7 +306,6 @@ function FeedItem({
   const replies = comment.replies ?? [];
   const mine = userReaction(comment.reactions, currentUserId);
   const count = comment.reactions?.length ?? 0;
-  const composingHere = replyTo?.id === comment.id;
 
   return (
     <View
@@ -293,7 +341,8 @@ function FeedItem({
             <MentionText
               content={comment.content}
               mentions={comment.mentions}
-              className="text-[13px] leading-[18px] font-normal text-white"
+              color={BODY}
+              className="text-[13px] leading-[18px] font-normal"
             />
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30, marginTop: 2, gap: 4 }}>
@@ -334,7 +383,7 @@ function FeedItem({
                       accessibilityLabel="Close reactions"
                       onPress={() => setPickerOpen(false)}
                       style={{ minHeight: 28, alignItems: 'center', justifyContent: 'center' }}>
-                      <AppText className="text-[11px] font-bold" style={{ color: MUTED }}>
+                      <AppText className="text-[11px] font-bold" style={{ color: ICON }}>
                         ×
                       </AppText>
                     </Pressable>
@@ -347,14 +396,14 @@ function FeedItem({
                   onLongPress={() => setPickerOpen(true)}
                   delayLongPress={280}
                   style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center' }}>
-                  <AppText className="text-[16px]">
+                  <AppText className="text-[16px]" style={{ color: mine ? '#fff' : ICON }}>
                     {mine ? clipReactionEmoji(mine.reaction_type) : '♡'}
                   </AppText>
                 </Pressable>
               </View>
             ) : null}
             {count > 0 ? (
-              <AppText className="text-[11px]" style={{ color: MUTED, marginRight: 4 }}>
+              <AppText className="text-[11px]" style={{ color: ICON, marginRight: 4 }}>
                 {count}
               </AppText>
             ) : null}
@@ -371,9 +420,11 @@ function FeedItem({
                 })
               }
               style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 3 }}>
-              <Glyph name={GLYPH.replyArrow} color={MUTED} size={15} />
+              <AppText className="text-[16px]" style={{ color: ICON }}>
+                ↩
+              </AppText>
               {replies.length > 0 ? (
-                <AppText className="text-[11px]" style={{ color: MUTED }}>
+                <AppText className="text-[11px]" style={{ color: ICON }}>
                   {replies.length}
                 </AppText>
               ) : null}
@@ -388,29 +439,17 @@ function FeedItem({
                   );
                 }}
                 style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center' }}>
-                <Glyph name={GLYPH.flag} color={MUTED} size={14} />
+                <AppText className="text-[14px]" style={{ color: ICON }}>
+                  ⚑
+                </AppText>
               </Pressable>
             ) : null}
           </View>
         </View>
       </View>
-      {composingHere ? (
-        <View style={{ marginLeft: 30, marginTop: 4 }}>
-          <FrostComposer
-            composerKey={`reply-${comment.id}`}
-            initialMention={replyTo.mention}
-            audience={audience}
-            audienceUserIds={audienceUserIds}
-            excludeIds={currentUserId ? [currentUserId] : []}
-            submitting={submitting}
-            onCancel={onCancelReply}
-            onSend={(text, mentioned) => {
-              const ids = replyTo.mention?.userId
-                ? [...new Set([...mentioned, replyTo.mention.userId])]
-                : mentioned;
-              return send(text, ids, comment.id);
-            }}
-          />
+      {replyTo?.id === comment.id ? (
+        <View nativeID="blob-reply-composer" style={{ marginLeft: 30, marginTop: 4 }}>
+          {composer}
         </View>
       ) : null}
       {replies.map((reply) => (
@@ -420,12 +459,8 @@ function FeedItem({
           nested
           currentUserId={currentUserId}
           replyTo={replyTo}
-          audience={audience}
-          audienceUserIds={audienceUserIds}
-          submitting={submitting}
+          composer={replyTo?.id === reply.id ? composer : null}
           onReply={onReply}
-          onCancelReply={onCancelReply}
-          onSend={onSend}
           onReact={onReact}
           onReport={onReport}
         />
@@ -435,35 +470,40 @@ function FeedItem({
 }
 
 function FrostComposer({
-  composerKey,
-  initialMention,
+  slot,
+  doc,
+  onDoc,
+  seedMention,
   audience,
   audienceUserIds,
   excludeIds,
   submitting,
+  keyboardInset,
   onSend,
   onCancel,
 }: {
-  composerKey: string;
-  initialMention?: MentionChip | null;
+  slot: string;
+  doc: MentionDoc;
+  onDoc: (doc: MentionDoc) => void;
+  seedMention?: MentionChip | null;
   audience: string;
   audienceUserIds: string[];
   excludeIds: string[];
   submitting?: boolean;
-  onSend: (text: string, mentionedUserIds: string[]) => void | Promise<void>;
+  keyboardInset: number;
+  onSend: () => void;
   onCancel?: () => void;
 }) {
-  const [doc, setDoc] = useState<MentionDoc>({ text: '', chips: [] });
-
   return (
-    <View style={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, gap: 4 }}>
+    <View
+      style={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8 + Math.max(0, keyboardInset), gap: 4 }}>
       {onCancel ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Cancel reply"
           onPress={onCancel}
           style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
-          <AppText className="text-[11px]" style={{ color: MUTED }}>
+          <AppText className="text-[11px]" style={{ color: ICON }}>
             Cancel
           </AppText>
         </Pressable>
@@ -479,38 +519,26 @@ function FrostComposer({
             backgroundColor: 'rgba(255,255,255,0.08)',
           }}>
           <MentionField
-            key={composerKey}
             compact
-            autoFocus={Boolean(initialMention)}
+            autoFocus={slot !== FOOTER}
             pickerPlacement="above"
             tone="frost"
-            initialMention={initialMention}
+            initialText={doc.text}
+            initialMention={doc.text.trim() ? null : seedMention}
             audience={audience}
             audienceUserIds={audienceUserIds}
             excludeIds={excludeIds}
             placeholder={copy('clip.comment')}
             accessibilityLabel={copy('clip.comment')}
-            onChange={setDoc}
-            onSubmit={() => {
-              if (doc.text.trim() && !submitting) {
-                void onSend(
-                  doc.text,
-                  doc.chips.map((chip) => chip.userId),
-                );
-              }
-            }}
+            onChange={onDoc}
+            onSubmit={onSend}
           />
         </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={copy('clip.commentSend')}
           disabled={!doc.text.trim() || submitting}
-          onPress={() =>
-            void onSend(
-              doc.text,
-              doc.chips.map((chip) => chip.userId),
-            )
-          }
+          onPress={onSend}
           style={{
             minWidth: 48,
             minHeight: 40,

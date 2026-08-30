@@ -351,7 +351,7 @@ function MentionFieldInner(
       <TextInput
         ref={inputRef}
         value={text}
-        selection={forced ?? undefined}
+        {...(forced ? { selection: forced } : null)}
         onSelectionChange={onSelectionChange}
         onKeyPress={onKeyPress}
         onChangeText={(value) => {
@@ -405,7 +405,7 @@ function MentionFieldInner(
                 resize: 'none',
                 fieldSizing: collapsed ? 'fixed' : 'content',
                 outlineStyle: 'none',
-                caretColor: THEME.textPrimary,
+                caretColor: frost ? '#F5F5F5' : THEME.textPrimary,
               } as object)
             : {
                 height: collapsed ? MIN_HEIGHT : height,
