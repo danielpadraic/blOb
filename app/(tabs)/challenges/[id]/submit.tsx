@@ -1,4 +1,4 @@
-import { Stack, useIsFocused, useLocalSearchParams, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -31,7 +31,6 @@ import {
   shouldAutoOpenCheckinCamera,
   checkinAutoNotes,
   checkinSendWhyNot,
-  checkinStageLabel,
   checkinTaskLabel,
   checkinUploadStayCopy,
   classifyCheckinError,
@@ -751,7 +750,6 @@ function SubmitWorkoutInner() {
   ) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <Stack.Screen options={{ title: checkinStageLabel(phase) }} />
         <MascotState
           kind="error"
           title={
@@ -785,7 +783,6 @@ function SubmitWorkoutInner() {
   if (Boolean(participation.eliminated_at)) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <Stack.Screen options={{ title: 'Eliminated' }} />
         <MascotState
           kind="empty"
           title={copy('challenge.eliminated')}
@@ -800,7 +797,6 @@ function SubmitWorkoutInner() {
   if (!hasChallengeStarted(challenge)) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <Stack.Screen options={{ title: 'Not started' }} />
         <MascotState
           kind="empty"
           title={copy('challenge.notStarted')}
@@ -815,7 +811,6 @@ function SubmitWorkoutInner() {
   if (isClosedForLogs({ ...challenge, eliminated: Boolean(participation.eliminated_at) })) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <Stack.Screen options={{ title: 'Check-in closed' }} />
         <MascotState
           kind="empty"
           title={copy('challenge.logClosed')}
@@ -880,7 +875,6 @@ function SubmitWorkoutInner() {
   if (showHealthFirst && activeProof) {
     return (
       <Screen padded={false} edges={TAB_ROOT_EDGES}>
-        <Stack.Screen options={{ title: 'Check-in' }} />
         <HealthWorkoutPicker
           challengeTitle={challenge.title}
           challenge={challenge}
@@ -913,7 +907,6 @@ function SubmitWorkoutInner() {
   if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr' || activeProof.method === 'distance')) {
     return (
       <Screen padded={false} edges={TAB_ROOT_EDGES}>
-        <Stack.Screen options={{ headerShown: false }} />
         <ProofUploader
           type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}
           fill
@@ -966,7 +959,6 @@ function SubmitWorkoutInner() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding>
-      <Stack.Screen options={{ headerShown: false, title: 'Check-in' }} />
       <CheckinComposer
         proofs={composerProofs}
         drafts={drafts}

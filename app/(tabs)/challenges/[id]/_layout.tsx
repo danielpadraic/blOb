@@ -42,7 +42,7 @@ export default function ChallengeIdLayout() {
           name="submit"
           options={{
             headerShown: false,
-            title: 'Check in',
+            title: 'Check-in',
           }}
         />
         <Stack.Screen
