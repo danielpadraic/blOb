@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkinSubmitHref } from '@/lib/routes';
+import { checkinSubmitHref, errorRetryHref } from '@/lib/routes';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 
@@ -14,6 +14,19 @@ describe('checkinSubmitHref', () => {
   it('keeps a gallery file when Safari omits uri', () => {
     expect(localUriFromPickerAsset({ uri: 'file://shot.jpg' })).toBe('file://shot.jpg');
     expect(localUriFromPickerAsset({ uri: '', file: null })).toBeNull();
+    const original = URL.createObjectURL;
+    URL.createObjectURL = () => 'blob:gallery-file';
+    expect(localUriFromPickerAsset({ uri: '', file: new Blob(['x'], { type: 'image/jpeg' }) })).toBe(
+      'blob:gallery-file',
+    );
+    URL.createObjectURL = original;
+  });
+
+  it('retries Check In submit and never reloads Wave capture', () => {
+    expect(errorRetryHref('/capture')).toBe('/feed');
+    expect(errorRetryHref('/capture?mode=story')).toBe('/feed');
+    expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1/submit');
+    expect(errorRetryHref('/feed')).toBe('/feed');
   });
 });
 
