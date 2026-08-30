@@ -1,9 +1,13 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import {
+  CheckinRouteErrorBoundary,
+  CheckinSafeBoundary,
+} from '@/components/challenge/CheckinSafeBoundary';
 import { LocationProofRow } from '@/components/challenge/LocationProofRow';
 import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
@@ -77,10 +81,16 @@ import { distanceProofIsSessionLog, usesTotalCountCheckins } from '@/lib/challen
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { challengeDetailHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
+import { localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
+
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <CheckinRouteErrorBoundary {...props} />;
+}
 
 type SlotDraft = {
   uri?: string;
@@ -133,6 +143,15 @@ function slotPart(
 }
 
 export default function SubmitWorkoutScreen() {
+  const router = useRouter();
+  return (
+    <CheckinSafeBoundary onBack={() => router.back()}>
+      <SubmitWorkoutInner />
+    </CheckinSafeBoundary>
+  );
+}
+
+function SubmitWorkoutInner() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
@@ -156,6 +175,12 @@ export default function SubmitWorkoutScreen() {
   const [preferCamera, setPreferCamera] = useState(false);
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
+
+  useEffect(() => {
+    return () => {
+      stopAllLiveMedia();
+    };
+  }, []);
 
   const challenge = challengeQuery.data;
   const proofSteps = requiredChallengeProofs(challenge);
@@ -246,7 +271,7 @@ export default function SubmitWorkoutScreen() {
   );
 
   function reviewPhotoProof(preferred?: ChallengeProof | null): ChallengeProof | null {
-    if (preferred && drafts[preferred.id]?.uri && !drafts[preferred.id]?.uri?.startsWith('health:')) {
+    if (preferred) {
       return preferred;
     }
     const filled = [...proofSteps].reverse().find((proof) => {
@@ -339,18 +364,22 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
-  async function onCaptured(
+  function onCaptured(
     proof: ChallengeProof,
     uri: string,
     mimeType?: string | null,
     fromLibrary?: boolean,
   ) {
-    if (!fromLibrary) {
-      await saveCapturedProofLocally({ uri, fromLibrary: false });
+    if (!proof?.id || !uri.trim()) {
+      return;
     }
-    onMedia(proof.id, uri, mimeType, fromLibrary);
+    onMedia(proof.id, uri, mimeType, fromLibrary === true);
     setCaptureId(null);
     setSkippedAuto(true);
+    setPreferCamera(false);
+    if (!fromLibrary) {
+      void saveCapturedProofLocally({ uri, fromLibrary: false }).catch(() => undefined);
+    }
   }
 
   function onRetakeCurrent(proof?: ChallengeProof) {
@@ -383,11 +412,16 @@ export default function SubmitWorkoutScreen() {
         quality: 0.9,
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
-      if (result.canceled || !result.assets[0]?.uri) {
+      if (result.canceled || !result.assets[0]) {
         return;
       }
       const asset = result.assets[0];
-      await onCaptured(target, asset.uri, asset.mimeType ?? asset.file?.type, true);
+      const uri = localUriFromPickerAsset(asset);
+      if (!uri) {
+        Alert.alert('Couldn’t attach that', 'Pick a photo from the gallery.');
+        return;
+      }
+      onCaptured(target, uri, asset.mimeType ?? asset.file?.type, true);
     } catch (caught) {
       Alert.alert('Couldn’t attach that', getErrorMessage(caught));
     }
@@ -636,6 +670,20 @@ export default function SubmitWorkoutScreen() {
     }
   }
 
+  if (!id) {
+    return (
+      <Screen padded={false} edges={['left', 'right', 'bottom']}>
+        <MascotState
+          kind="error"
+          title={copy('challenge.joinFirst')}
+          body="Join this challenge before you check in."
+          actionLabel="Back"
+          onAction={() => router.back()}
+        />
+      </Screen>
+    );
+  }
+
   if (challengeQuery.isLoading || participationLoading || checkinQuery.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
@@ -832,7 +880,7 @@ export default function SubmitWorkoutScreen() {
             onAttach: (workout) => onAttachHealth(workout, activeProof),
           }}
           onPicked={(uri, mimeType, meta) => {
-            void onCaptured(activeProof, uri, mimeType, meta?.fromLibrary);
+            onCaptured(activeProof, uri, mimeType, meta?.fromLibrary);
           }}
           onCancel={() => {
             if (iosHealthReady && proofPrefersHealthAttach(activeProof, challenge)) {

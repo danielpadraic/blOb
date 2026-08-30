@@ -101,6 +101,26 @@ export function asGalleryMedia(input: {
   return null;
 }
 
+/** Safari gallery picks sometimes omit `uri` and only give `file`. */
+export function localUriFromPickerAsset(asset: {
+  uri?: string | null;
+  file?: Blob | File | null;
+}): string | null {
+  const uri = String(asset.uri ?? '').trim();
+  if (uri) {
+    return uri;
+  }
+  const file = asset.file;
+  if (file && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+    try {
+      return URL.createObjectURL(file);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export function isHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value.trim());

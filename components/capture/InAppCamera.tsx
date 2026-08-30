@@ -29,6 +29,7 @@ import {
   stopMedia,
   stopPrimedCameraStream,
   takePrimedCameraStream,
+  stopAllLiveMedia,
   watchLiveMedia,
   webCameraGrantedThisSession,
 } from '@/lib/cameraSession';
@@ -140,8 +141,15 @@ export function InAppCamera({
     if (recordingRef.current && !web) {
       cameraRef.current?.stopRecording();
     }
+    stopAllLiveMedia();
     setSessionOn(false);
   }
+
+  useEffect(() => {
+    return () => {
+      stopAllLiveMedia();
+    };
+  }, []);
 
   useEffect(() => {
     return registerNativeCameraStop(() => {
@@ -561,14 +569,20 @@ export function InAppCamera({
     }
   }
 
-  const liveHint = checkin ? undefined : video && recording ? copy('wave.shutterStop') : shutterHint;
-  const shutterLabel = liveHint
-    ? liveHint
-    : video
-      ? recording
-        ? 'Tap to stop'
-        : 'Start recording'
-      : 'Take photo';
+  const liveHint = checkin
+    ? askLine ?? 'Take photo'
+    : video && recording
+      ? copy('wave.shutterStop')
+      : shutterHint;
+  const shutterLabel = checkin
+    ? 'Take photo'
+    : liveHint
+      ? liveHint
+      : video
+        ? recording
+          ? 'Tap to stop'
+          : 'Start recording'
+        : 'Take photo';
   const showDenied = parentBlocked || ask === 'denied';
   const showRetry = !parentBlocked && ask === 'error';
   const showFrame = sessionOn && focused && !showDenied;

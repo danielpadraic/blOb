@@ -6,6 +6,7 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { asLoggableList } from '@/lib/loggable';
+import { checkinSubmitHref } from '@/lib/routes';
 import { copy } from '@/lib/copy';
 import { TAB_BAR_GUTTER, TAB_BAR_HEIGHT, THEME, themeShadow } from '@/lib/theme';
 
@@ -38,6 +39,8 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
     if (!picked) {
       return;
     }
+    const href = checkinSubmitHref(picked.id);
+    console.log('[blob:checkin]', { challengeId: picked.id, href });
     onAction('log', picked);
   }
 

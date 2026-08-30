@@ -74,12 +74,9 @@ export function challengeDetailHref(
   return (`/challenges/${challengeId}${query ? `?${query}` : ''}`) as Href;
 }
 
-/** Check In / Begin / Continue only. Never `/capture`, `/wave/*`, or Round. */
+/** Check In / Begin / Continue only. Literal path — object `{ pathname, params }` breaks Safari. Never `/capture`. */
 export function checkinSubmitHref(id: string): Href {
-  return {
-    pathname: '/challenges/[id]/submit' as const,
-    params: { id: String(id ?? '').trim() },
-  };
+  return `/challenges/${String(id ?? '').trim()}/submit` as Href;
 }
 
 export function inviteHref(token: string) {

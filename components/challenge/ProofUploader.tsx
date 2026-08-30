@@ -17,6 +17,7 @@ import {
   openAppSettings,
 } from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
+import { localUriFromPickerAsset } from '@/utils/media';
 import type { ProofType } from '@/lib/types';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { challengeAcceptsWorkoutProof } from '@/lib/health/acceptsWorkout';
@@ -138,17 +139,24 @@ export function ProofUploader({
       return;
     }
     setLibraryDenied(false);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: video ? ['videos'] : ['images'],
-      allowsEditing: false,
-      quality: 0.8,
-      videoMaxDuration: video ? 30 : undefined,
-      preferredAssetRepresentationMode:
-        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-    });
-    if (!result.canceled && result.assets[0]?.uri) {
-      onPicked(result.assets[0].uri, result.assets[0].mimeType, { fromLibrary: true });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: video ? ['videos'] : ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+        videoMaxDuration: video ? 30 : undefined,
+      });
+      const asset = result.canceled ? null : result.assets[0];
+      const uri = asset ? localUriFromPickerAsset(asset) : null;
+      if (!uri) {
+        return;
+      }
+      stopAllLiveMedia();
+      onPicked(uri, asset?.mimeType ?? asset?.file?.type, { fromLibrary: true });
       setOpen(false);
+    } catch (error) {
+      stopAllLiveMedia();
+      console.log('[blob:checkin] gallery', error);
     }
   }
 
@@ -181,6 +189,7 @@ export function ProofUploader({
           hrScreenshot={type === 'hr_monitor'}
           faceHint={faceHint}
           onCaptured={(media) => {
+            stopAllLiveMedia();
             onPicked(media.uri, media.mimeType, { fromLibrary: false });
             setOpen(false);
           }}
