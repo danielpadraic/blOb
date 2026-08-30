@@ -9,7 +9,7 @@ import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
-import { shouldShowHomeSplash } from '@/lib/homeFeed';
+import { HOME_FEED_SPLASH_MS, shouldShowHomeSplash } from '@/lib/homeFeed';
 import { FEED_COLUMN_MAX, TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
@@ -148,16 +148,18 @@ export function FeedList({
   const visiblePosts = useMemo(() => posts.filter((post) => !post.deleted_at), [posts]);
   const challengeFeed = composeSource === 'challenge' || composeSource === 'circle';
   const scrolledTo = useRef<string | null>(null);
-  const [waitedMs, setWaitedMs] = useState(0);
+  const [slowSplash, setSlowSplash] = useState(false);
 
   useEffect(() => {
-    if (!homeChrome || visiblePosts.length > 0 || !isLoading) {
-      setWaitedMs(0);
+    if (!homeChrome || visiblePosts.length > 0) {
+      setSlowSplash(false);
       return;
     }
-    const started = Date.now();
-    const timer = setInterval(() => setWaitedMs(Date.now() - started), 250);
-    return () => clearInterval(timer);
+    if (!isLoading) {
+      return;
+    }
+    const timer = setTimeout(() => setSlowSplash(true), HOME_FEED_SPLASH_MS);
+    return () => clearTimeout(timer);
   }, [homeChrome, isLoading, visiblePosts.length]);
 
   const showHomeSplash = Boolean(
@@ -166,7 +168,7 @@ export function FeedList({
         postCount: visiblePosts.length,
         isLoading,
         failed: Boolean(error),
-        waitedMs,
+        waitedMs: slowSplash ? HOME_FEED_SPLASH_MS : 0,
       }),
   );
 
@@ -373,23 +375,17 @@ export function FeedList({
           }, 160);
         }}
         ListHeaderComponent={listHeader}
-        ListEmptyComponent={() =>
-          homeChrome ? (
-            showHomeSplash ? (
-              <MascotState
-                kind={error ? 'error' : 'loading'}
-                title={copy('home.loadingSlow')}
-                actionLabel="Retry"
-                onAction={onRetry}
-              />
-            ) : isLoading ? (
-              <HomeFeedPlaceholders />
-            ) : error ? null : (
-              empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
-            )
-          ) : (
-            empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />
-          )
+        ListEmptyComponent={
+          <HomeListEmpty
+            homeChrome={homeChrome}
+            showHomeSplash={showHomeSplash}
+            isLoading={isLoading}
+            error={error}
+            empty={empty}
+            emptyTitle={emptyTitle}
+            emptyBody={emptyBody}
+            onRetry={onRetry}
+          />
         }
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -420,6 +416,46 @@ export function FeedList({
     </View>
   );
 }
+
+const HomeListEmpty = memo(function HomeListEmpty({
+  homeChrome,
+  showHomeSplash,
+  isLoading,
+  error,
+  empty,
+  emptyTitle,
+  emptyBody,
+  onRetry,
+}: {
+  homeChrome?: boolean;
+  showHomeSplash: boolean;
+  isLoading?: boolean;
+  error?: string | null;
+  empty?: ReactNode;
+  emptyTitle: string;
+  emptyBody: string;
+  onRetry?: () => void;
+}) {
+  if (homeChrome) {
+    if (showHomeSplash) {
+      return (
+        <MascotState
+          kind={error ? 'error' : 'loading'}
+          title={copy('home.loadingSlow')}
+          actionLabel="Retry"
+          onAction={onRetry}
+        />
+      );
+    }
+    if (isLoading) {
+      return <HomeFeedPlaceholders />;
+    }
+    if (error) {
+      return null;
+    }
+  }
+  return empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />;
+});
 
 function HomeFeedPlaceholders() {
   return (

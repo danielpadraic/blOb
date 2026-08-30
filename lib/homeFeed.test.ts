@@ -8,6 +8,7 @@ import {
   HOME_RAW_WINDOW,
   filterHomeFeedPosts,
   homeFeedCursorFrom,
+  homeFeedFirstPaintLoading,
   shouldShowHomeSplash,
   takeHomeVisiblePage,
   uniquePostsById,
@@ -42,6 +43,15 @@ function post(id: string, extra: Partial<HomeFeedPost> = {}): HomeFeedPost {
     ...extra,
   };
 }
+
+describe('home feed first paint', () => {
+  it('is loading only until the first query settles', () => {
+    expect(homeFeedFirstPaintLoading({ postCount: 0, isFetched: false })).toBe(true);
+    expect(homeFeedFirstPaintLoading({ postCount: 0, isFetched: true })).toBe(false);
+    expect(homeFeedFirstPaintLoading({ postCount: 2, isFetched: false })).toBe(false);
+    expect(homeFeedFirstPaintLoading({ postCount: 0, isFetched: false, failed: true })).toBe(false);
+  });
+});
 
 describe('home feed splash', () => {
   it('does not block first paint and only shows after a fail or a slow empty load', () => {

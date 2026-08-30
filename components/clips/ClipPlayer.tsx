@@ -173,7 +173,6 @@ export function ClipPlayer({
   const viewedIdsRef = useRef(viewedIds ?? new Set<string>());
   const atStartX = useSharedValue(false);
   const atEndX = useSharedValue(false);
-  const [videoWidth, setVideoWidth] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardPad, setKeyboardPad] = useState(0);
   const [roundPaused, setRoundPaused] = useState(false);
@@ -526,7 +525,6 @@ export function ClipPlayer({
       <View style={{ flex: 1 }}>
       <GestureDetector gesture={pan}>
           <Animated.View
-            onLayout={(event) => setVideoWidth(event.nativeEvent.layout.width)}
             style={[{ flex: 1, overflow: 'hidden', backgroundColor: '#101312' }, swipeStyle]}>
           {clip.mediaType === 'video' ? (
             <>
@@ -568,41 +566,65 @@ export function ClipPlayer({
               onPress={closeComments}
               style={{ position: 'absolute', top: 0, right: RAIL_HIT + 16, bottom: drawerH, left: 0 }}
             />
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={kind === 'wave' ? copy('wave.next') : 'Pause or play'}
-              delayLongPress={kind === 'wave' ? 180 : 10_000}
-              onLongPress={() => {
-                if (kind !== 'wave') {
-                  return;
-                }
-                holdingRef.current = true;
-                paused.current = true;
-              }}
-              onPressOut={() => {
-                holdingRef.current = false;
-                paused.current = pickerOpen || (kind === 'round' && roundPaused);
-              }}
-              onPress={(event) => {
-                const width = videoWidth || event.nativeEvent.locationX * 3;
-                const x = event.nativeEvent.locationX;
-                if (kind === 'wave') {
-                  if (x < width / 3) {
-                    goPrevClip();
-                    return;
-                  }
-                  if (x > (width * 2) / 3) {
-                    goNextClip();
-                    return;
-                  }
+          ) : kind === 'wave' ? (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy('wave.prev')}
+                delayLongPress={180}
+                onLongPress={() => {
+                  holdingRef.current = true;
+                  paused.current = true;
+                }}
+                onPressOut={() => {
+                  holdingRef.current = false;
+                  paused.current = pickerOpen;
+                }}
+                onPress={goPrevClip}
+                style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '33%' }}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="React"
+                delayLongPress={180}
+                onLongPress={() => {
+                  holdingRef.current = true;
+                  paused.current = true;
+                }}
+                onPressOut={() => {
+                  holdingRef.current = false;
+                  paused.current = pickerOpen;
+                }}
+                onPress={() => {
                   const now = Date.now();
                   if (now - lastTap.current < 280) {
                     applyReaction(lastReaction);
                   }
                   lastTap.current = now;
-                  return;
-                }
+                }}
+                style={{ position: 'absolute', top: 0, bottom: 0, left: '33%', width: '34%' }}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy('wave.next')}
+                delayLongPress={180}
+                onLongPress={() => {
+                  holdingRef.current = true;
+                  paused.current = true;
+                }}
+                onPressOut={() => {
+                  holdingRef.current = false;
+                  paused.current = pickerOpen;
+                }}
+                onPress={goNextClip}
+                style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '33%' }}
+              />
+            </>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Pause or play"
+              onPress={() => {
                 setRoundPaused((value) => {
                   const next = !value;
                   setPauseFlash(next ? 'pause' : 'play');
@@ -1642,6 +1664,8 @@ function NativeClipVideo({
   const startSec = Math.max(startMs, 0) / 1000;
   const endSec = startSec + Math.max(durationMs || WAVE_CLIP_MS, 400) / 1000;
   const endedRef = useRef(false);
+  const loopRef = useRef(loop);
+  loopRef.current = loop;
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = loop;
     instance.muted = muted;
@@ -1658,7 +1682,7 @@ function NativeClipVideo({
   }, [loop, player]);
 
   useEventListener(player, 'playToEnd', () => {
-    if (loop || endedRef.current) {
+    if (loopRef.current || endedRef.current) {
       return;
     }
     endedRef.current = true;
@@ -1688,7 +1712,7 @@ function NativeClipVideo({
       } else if (!player.playing) {
         player.play();
       }
-      if (!loop && !endedRef.current && t >= endSec - 0.05) {
+      if (!loopRef.current && !endedRef.current && t >= endSec - 0.05) {
         endedRef.current = true;
         player.pause();
         onEnded?.();
@@ -1702,7 +1726,7 @@ function NativeClipVideo({
         // Player already released.
       }
     };
-  }, [endSec, loop, onEnded, onProgress, pausedRef, player, startSec]);
+  }, [endSec, onEnded, onProgress, pausedRef, player, startSec]);
 
   return (
     <VideoView
@@ -1738,6 +1762,9 @@ function WebClipVideo({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const endedRef = useRef(false);
+  const loopRef = useRef(loop);
+  const seekKey = useRef('');
+  loopRef.current = loop;
   const [ready, setReady] = useState(false);
   const startSec = Math.max(startMs, 0) / 1000;
   const endSec = startSec + Math.max(durationMs || WAVE_CLIP_MS, 400) / 1000;
@@ -1805,11 +1832,23 @@ function WebClipVideo({
     if (!node) {
       return;
     }
-    applyWebVideoLock(node, poster);
-    endedRef.current = false;
     node.loop = loop;
     node.muted = muted;
-    node.currentTime = startSec;
+  }, [loop, muted]);
+
+  useEffect(() => {
+    const node = videoRef.current;
+    if (!node) {
+      return;
+    }
+    applyWebVideoLock(node, poster);
+    node.loop = loopRef.current;
+    const token = `${uri}:${startSec}`;
+    if (seekKey.current !== token) {
+      seekKey.current = token;
+      endedRef.current = false;
+      node.currentTime = startSec;
+    }
     const play = () => {
       if (pausedRef.current) {
         node.pause();
@@ -1828,7 +1867,7 @@ function WebClipVideo({
     const onTime = () => {
       const span = Math.max(endSec - startSec, 0.4);
       onProgress(Math.max(0, Math.min(1, (node.currentTime - startSec) / span)));
-      if (!loop && !endedRef.current && node.currentTime >= endSec - 0.05) {
+      if (!loopRef.current && !endedRef.current && node.currentTime >= endSec - 0.05) {
         endedRef.current = true;
         node.pause();
         onEnded?.();
@@ -1839,7 +1878,7 @@ function WebClipVideo({
       play();
     };
     const onEndedNative = () => {
-      if (loop || endedRef.current) {
+      if (loopRef.current || endedRef.current) {
         return;
       }
       endedRef.current = true;
@@ -1866,7 +1905,7 @@ function WebClipVideo({
       node.removeEventListener('ended', onEndedNative);
       node.pause();
     };
-  }, [endSec, loop, muted, onEnded, onProgress, pausedRef, poster, startSec, uri]);
+  }, [endSec, onEnded, onProgress, pausedRef, poster, startSec, uri]);
 
   return (
     <View style={{ width: '100%', height: '100%', backgroundColor: '#101312' }}>

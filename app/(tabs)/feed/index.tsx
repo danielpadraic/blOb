@@ -17,6 +17,7 @@ import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/h
 import { socialKeys } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
+import { homeFeedFirstPaintLoading } from '@/lib/homeFeed';
 import { THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
@@ -64,7 +65,11 @@ export default function FeedScreen() {
     <Screen padded={false} edges={TAB_ROOT_EDGES} className="px-4">
       <FeedList
         posts={posts}
-        isLoading={Boolean(feed.isLoading && posts.length === 0)}
+        isLoading={homeFeedFirstPaintLoading({
+          postCount: posts.length,
+          isFetched: feed.isFetched,
+          failed: Boolean(feed.error),
+        })}
         isRefreshing={refreshing}
         isFetchingNextPage={feed.isFetchingNextPage}
         onEndReached={() => {

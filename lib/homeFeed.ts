@@ -80,6 +80,14 @@ export type HomeFeedAllowContext = {
   fofAuthors: Set<string>;
 };
 
+export function homeFeedFirstPaintLoading(input: {
+  postCount: number;
+  isFetched?: boolean;
+  failed?: boolean;
+}): boolean {
+  return input.postCount === 0 && !input.isFetched && !input.failed;
+}
+
 export function shouldShowHomeSplash(input: {
   postCount: number;
   isLoading?: boolean;
