@@ -33,7 +33,7 @@ import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
-import { BODY_METRICS_HREF, LOBBY_HREF } from '@/lib/routes';
+import { BODY_METRICS_HREF, checkinSubmitHref, LOBBY_HREF } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -1321,7 +1321,9 @@ export default function ChallengeDetailScreen() {
                 size="md"
                 variant="primary"
                 onPress={() => {
-                  router.push(`/challenges/${id}/submit`);
+                  if (id) {
+                    router.push(checkinSubmitHref(id));
+                  }
                 }}
               />
             )}

@@ -9,6 +9,7 @@ import { fetchCorporateChallengeIds, fetchHiddenRailPostIds } from '@/lib/clipRa
 import { isEndedPrizeStatus } from '@/lib/challengePot';
 import { isOfficialAccount, OFFICIAL_BOB_ID } from '@/lib/official';
 import { fetchSettledPrizePools } from '@/lib/settlement';
+import { isActiveWaveTagStatus } from '@/lib/waveTags';
 import { WAVE_CLIP_MS, type WaveClipWindow } from '@/lib/waveClips';
 import type {
   Conversation,
@@ -1004,20 +1005,24 @@ export async function fetchStoryChallengeOptions(
   userId: string,
 ): Promise<{ id: string; title: string }[]> {
   const [hosted, joined] = await Promise.all([
-    supabase.from('challenges').select('id, title').eq('created_by', userId).limit(20),
+    supabase.from('challenges').select('id, title, status').eq('created_by', userId).limit(40),
     supabase.from('challenge_participants').select('challenge_id').eq('user_id', userId),
   ]);
   const joinedIds = [...new Set((joined.data ?? []).map((row) => row.challenge_id))];
   const joinedRows =
     joinedIds.length > 0
-      ? await supabase.from('challenges').select('id, title').in('id', joinedIds)
+      ? await supabase.from('challenges').select('id, title, status').in('id', joinedIds)
       : { data: [], error: null };
   const byId = new Map<string, { id: string; title: string }>();
   for (const row of [...(hosted.data ?? []), ...(joinedRows.data ?? [])] as {
     id: string;
     title: string;
+    status?: string | null;
   }[]) {
-    byId.set(row.id, row);
+    if (!isActiveWaveTagStatus(row.status)) {
+      continue;
+    }
+    byId.set(row.id, { id: row.id, title: row.title });
   }
   return [...byId.values()];
 }

@@ -27,7 +27,7 @@ import { fetchChallengeById } from '@/lib/challenges';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
-import { BODY_METRICS_HREF, challengeDetailHref } from '@/lib/routes';
+import { BODY_METRICS_HREF, challengeDetailHref, checkinSubmitHref } from '@/lib/routes';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { copy } from '@/lib/copy';
@@ -371,7 +371,7 @@ export function ChallengeInviteCard({
   }
 
   function onCheckIn() {
-    router.push(`/challenges/${challenge.id}/submit`);
+    router.push(checkinSubmitHref(challenge.id));
   }
 
   const hostLabel = host?.name?.trim() || 'Host';

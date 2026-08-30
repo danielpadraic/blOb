@@ -32,7 +32,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
-import { CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
+import { checkinSubmitHref, CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
 import { stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
@@ -321,7 +321,7 @@ function TabLayoutInner() {
       if (!picked) {
         return;
       }
-      go(`/challenges/${picked}/submit`);
+      go(checkinSubmitHref(picked));
       return;
     }
     if (id === 'create') {

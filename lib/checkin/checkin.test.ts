@@ -14,6 +14,7 @@ import {
 import {
   boardProgressLabel,
   canSendCheckin,
+  shouldAutoOpenCheckinCamera,
   checkinAutoNotes,
   checkinBeginCaption,
   checkinSendWhyNot,
@@ -176,6 +177,24 @@ describe('official weekly proofs', () => {
     ).toBe(true);
     expect(canSendCheckin(false, false, 'none', false)).toBe(false);
     expect(canSendCheckin(false, true, 'none', false)).toBe(true);
+    expect(
+      shouldAutoOpenCheckinCamera({
+        skippedAuto: false,
+        honorOnly: false,
+        hasExistingFrames: false,
+        nextPhotoEmpty: true,
+        preferHealth: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoOpenCheckinCamera({
+        skippedAuto: false,
+        honorOnly: false,
+        hasExistingFrames: true,
+        nextPhotoEmpty: true,
+        preferHealth: false,
+      }),
+    ).toBe(false);
   });
 
   it('counts a Health attach as the heart-rate slot', () => {

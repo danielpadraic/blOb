@@ -736,18 +736,14 @@ export function InAppCamera({
           </AppText>
         ) : null}
         <View className="flex-row items-center justify-between">
-          {checkin ? (
-            <View style={{ width: 48 }} />
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open gallery"
-              onPress={onOpenGallery}
-              className="h-12 w-12 items-center justify-center rounded-2xl"
-              style={{ backgroundColor: 'rgba(16,19,18,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }}>
-              <Glyph name={GLYPH.album} color="#fff" size={22} />
-            </Pressable>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open gallery"
+            onPress={onOpenGallery}
+            className="h-12 w-12 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: 'rgba(16,19,18,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }}>
+            <Glyph name={GLYPH.album} color="#fff" size={22} />
+          </Pressable>
 
           <View style={{ width: 82, height: 82, alignItems: 'center', justifyContent: 'center' }}>
             {video ? <RecordingRing recording={recording} maxDuration={maxDuration} /> : null}

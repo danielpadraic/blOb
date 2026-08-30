@@ -68,3 +68,20 @@ export function canSendCheckin(
 ): boolean {
   return (honorOnly || hasRequiredAttached) && !busy;
 }
+
+/** First empty start selfie only. Later visits keep the composer preview + gallery. */
+export function shouldAutoOpenCheckinCamera(input: {
+  skippedAuto: boolean;
+  honorOnly: boolean;
+  hasExistingFrames: boolean;
+  nextPhotoEmpty: boolean;
+  preferHealth: boolean;
+}): boolean {
+  return (
+    !input.skippedAuto &&
+    !input.honorOnly &&
+    !input.hasExistingFrames &&
+    input.nextPhotoEmpty &&
+    !input.preferHealth
+  );
+}

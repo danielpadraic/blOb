@@ -6,6 +6,7 @@ import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
+import { checkinTaskLabel } from '@/lib/checkin';
 import { loggableStatusLine } from '@/lib/loggable';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
@@ -16,6 +17,7 @@ export type LoggableChallenge = Pick<
   Challenge,
   | 'id'
   | 'title'
+  | 'task'
   | 'is_official'
   | 'status'
   | 'starts_at'
@@ -30,6 +32,8 @@ export type LoggableChallenge = Pick<
 > & {
   checkinPhase?: CheckinPhase;
   ctaTitle?: string;
+  tasks?: unknown[] | null;
+  taskLabel?: string;
   daysCompleted?: number;
   statusLine?: string;
 };
@@ -45,6 +49,8 @@ const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at, days
 const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at, days_completed';
 
 const CHALLENGE_SELECTS = [
+  'id, title, task, tasks, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
+  'id, title, task, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes',
@@ -117,6 +123,7 @@ export function useLoggableChallenges() {
             daysCompleted: completed,
             checkinPhase: phase,
             ctaTitle: checkinCtaTitle(phase),
+            taskLabel: checkinTaskLabel(challenge),
             statusLine: loggableStatusLine({
               ends_at: challenge.ends_at,
               days_required: challenge.days_required,

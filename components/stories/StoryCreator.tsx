@@ -248,12 +248,14 @@ export function StoryCreator({ onClose, onPosted }: StoryCreatorProps) {
                       onPress={() => setChallengeId(active ? null : challenge.id)}
                       className="rounded-full px-3 py-2"
                       style={{
+                        flexShrink: 0,
                         backgroundColor: active ? THEME.accentSoft : THEME.surface,
                         borderWidth: 1,
                         borderColor: active ? THEME.accent : THEME.border,
                       }}>
                       <AppText
                         className="text-[13px] font-semibold"
+                        numberOfLines={1}
                         style={{ color: active ? THEME.accent : THEME.textPrimary }}>
                         {challenge.title}
                       </AppText>

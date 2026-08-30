@@ -497,6 +497,9 @@ export function CheckinComposer({
                 }
               }}
             />
+            {nextProof ? (
+              <OverlayChip label="Add more proof" onPress={() => onAddProof(nextProof)} />
+            ) : null}
           </View>
         ) : null}
       </View>

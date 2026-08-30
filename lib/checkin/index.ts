@@ -43,6 +43,7 @@ export {
   checkinStageHint,
   checkinSendWhyNot,
   canSendCheckin,
+  shouldAutoOpenCheckinCamera,
   checkinStageIndex,
   checkinStageLabel,
   type CheckinStageId,

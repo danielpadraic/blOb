@@ -24,6 +24,7 @@ import type { HealthWorkout } from '@/services/health/types';
 import {
   CHECKIN_BOB,
   canSendCheckin,
+  shouldAutoOpenCheckinCamera,
   checkinAutoNotes,
   checkinSendWhyNot,
   checkinStageLabel,
@@ -754,13 +755,19 @@ export default function SubmitWorkoutScreen() {
   const nextPhoto = missing.find(
     (proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr',
   );
-  const shouldAutoOpen =
-    !skippedAuto &&
-    !honorOnly &&
-    Boolean(nextPhoto) &&
-    !drafts[nextPhoto?.id ?? '']?.uri &&
-    !serverHasProof(nextPhoto?.id ?? '') &&
-    !shouldAutoHealth;
+  const hasExistingFrames =
+    extras.length > 0 ||
+    proofSteps.some((proof) => {
+      const uri = drafts[proof.id]?.uri;
+      return Boolean((uri && !uri.startsWith('health:')) || serverHasProof(proof.id));
+    });
+  const shouldAutoOpen = shouldAutoOpenCheckinCamera({
+    skippedAuto,
+    honorOnly,
+    hasExistingFrames,
+    nextPhotoEmpty: Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? ''),
+    preferHealth: shouldAutoHealth,
+  });
   const activeCaptureId =
     captureId ?? (shouldAutoHealth ? firstHealth?.id ?? null : shouldAutoOpen ? nextPhoto?.id ?? null : null);
   const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;

@@ -79,6 +79,11 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
                 <AppText className="text-[14px] font-semibold text-charcoal" numberOfLines={1}>
                   {challenge.title}
                 </AppText>
+                {challenge.taskLabel ? (
+                  <AppText className="text-[12px] text-muted" numberOfLines={1}>
+                    {challenge.taskLabel}
+                  </AppText>
+                ) : null}
               </Pressable>
             ))}
           </View>
@@ -110,6 +115,10 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
                 disabled={loggables.length === 0}
                 onPress={() => {
                   if (loggables.length === 0) {
+                    return;
+                  }
+                  if (loggables.length === 1) {
+                    pickLog(loggables[0]);
                     return;
                   }
                   setStep((current) => (current === 'log' ? 'root' : 'log'));
