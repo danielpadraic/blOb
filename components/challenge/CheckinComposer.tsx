@@ -27,6 +27,7 @@ import {
 } from '@/lib/mediaPermissions';
 import type { MentionDoc } from '@/lib/mentions';
 import { saveCapturedProofLocally } from '@/lib/checkin/saveProofLocal';
+import { SaveCaptureHint } from '@/components/capture/SaveCaptureHint';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { asGalleryMedia } from '@/utils/media';
@@ -615,6 +616,22 @@ export function CheckinComposer({
         <AppText className="px-4 pt-2 text-[12px] leading-4 text-muted" numberOfLines={1}>
           Still needed: {stillNeeded}
         </AppText>
+      ) : null}
+
+      {current &&
+      !current.uri.startsWith('health:') &&
+      (current.kind === 'extra'
+        ? current.extra.kind !== 'gif' && !current.extra.remoteUrl
+        : !drafts[current.proof.id]?.fromLibrary) ? (
+        <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
+          <SaveCaptureHint
+            uri={current.uri}
+            blob={current.kind === 'extra' ? current.extra.blob : undefined}
+            mimeType={current.kind === 'extra' ? current.extra.mimeType : drafts[current.proof.id]?.mimeType}
+            mediaType={current.kind === 'extra' && current.extra.kind === 'video' ? 'video' : 'image'}
+            fromLibrary={current.kind === 'proof' ? drafts[current.proof.id]?.fromLibrary : false}
+          />
+        </View>
       ) : null}
 
       {accessory ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{accessory}</View> : null}

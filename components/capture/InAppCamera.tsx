@@ -46,6 +46,7 @@ import { clipShutterReleaseStopsRecording } from '@/lib/clipShutter';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
 import { applyWebVideoLock } from '@/lib/webVideo';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
+import { saveOwnCapture } from '@/lib/saveCapture';
 
 type InAppCameraProps = {
   capture: CaptureMedia;
@@ -146,6 +147,18 @@ export function InAppCamera({
     }
     stopAllLiveMedia();
     setSessionOn(false);
+  }
+
+  function finishCapture(media: CapturedMedia) {
+    onCaptured(media);
+    killSession();
+    void saveOwnCapture({
+      uri: media.uri,
+      blob: media.blob,
+      mimeType: media.mimeType,
+      mediaType: media.mediaType,
+      fromLibrary: false,
+    });
   }
 
   useEffect(() => {
@@ -395,13 +408,12 @@ export function InAppCamera({
         if (!blob) {
           return;
         }
-        onCaptured({
+        finishCapture({
           uri: URL.createObjectURL(blob),
           mediaType: 'image',
           mimeType: 'image/jpeg',
           blob,
         });
-        killSession();
         return;
       }
       let photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
@@ -410,13 +422,12 @@ export function InAppCamera({
         photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
       }
       if (photo?.uri) {
-        onCaptured({
+        finishCapture({
           uri: photo.uri,
           mediaType: 'image',
           mimeType: 'image/jpeg',
           blob: null,
         });
-        killSession();
       }
     } catch (error) {
       logCameraError(error, 'takePhoto');
@@ -461,7 +472,7 @@ export function InAppCamera({
         holdRef.current = false;
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/webm' });
         if (blob.size > 0) {
-          onCaptured({
+          finishCapture({
             uri: URL.createObjectURL(blob),
             mediaType: 'video',
             mimeType: blob.type || 'video/webm',
@@ -503,14 +514,13 @@ export function InAppCamera({
         void capHaptic();
       }
       if (clip?.uri) {
-        onCaptured({
+        finishCapture({
           uri: clip.uri,
           mediaType: 'video',
           mimeType: 'video/mp4',
           blob: null,
           durationMs: Date.now() - startedAt,
         });
-        killSession();
       }
     } catch (error) {
       logCameraError(error, 'recordAsync');

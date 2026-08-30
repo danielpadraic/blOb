@@ -6,6 +6,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useRouter } from 'expo-router';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
+import { SaveCaptureHint } from '@/components/capture/SaveCaptureHint';
 import { takeClipAttach } from '@/lib/clipAttach';
 import { rememberLastCapture } from '@/lib/lastCapture';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
@@ -81,6 +82,7 @@ export function CaptureStudio({
 
   const [step, setStep] = useState<'camera' | 'preview'>('camera');
   const [draft, setDraft] = useState<CapturedMedia | null>(null);
+  const [fromCamera, setFromCamera] = useState(false);
   const [caption, setCaption] = useState('');
   const [clipCaptions, setClipCaptions] = useState<string[]>([]);
   const [audience, setAudience] = useState<PostAudience>(
@@ -112,6 +114,7 @@ export function CaptureStudio({
     setProgress(0);
     setError(null);
     rememberLastCapture(null);
+    setFromCamera(false);
   }
 
   function acceptDraft(next: CapturedMedia) {
@@ -134,6 +137,7 @@ export function CaptureStudio({
       mimeType: attached.mimeType,
       durationMs: attached.durationMs,
     });
+    setFromCamera(false);
     setCaption(attached.caption ?? '');
     setStep('preview');
   }, [mode]);
@@ -228,6 +232,7 @@ export function CaptureStudio({
       });
     }
     const durationMs = isVideo ? await resolveMediaDurationMs(asset.uri, asset.duration) : null;
+    setFromCamera(false);
     acceptDraft({
       uri: asset.uri,
       mediaType: isVideo ? 'video' : 'image',
@@ -424,6 +429,7 @@ export function CaptureStudio({
                 blob: next.blob,
               });
             }
+            setFromCamera(true);
             acceptDraft(next);
           }}
           onOpenGallery={() => void openLibrary()}
@@ -489,6 +495,7 @@ export function CaptureStudio({
             onPress={() => {
               rememberLastCapture(null);
               setDraft(null);
+              setFromCamera(false);
               setCaption('');
               setClipCaptions([]);
               setStep('camera');
@@ -500,6 +507,14 @@ export function CaptureStudio({
             </AppText>
           </Pressable>
         </Card>
+      ) : null}
+      {draft && fromCamera ? (
+        <SaveCaptureHint
+          uri={draft.uri}
+          blob={draft.blob}
+          mimeType={draft.mimeType}
+          mediaType={draft.mediaType}
+        />
       ) : null}
 
       {multiClip ? (

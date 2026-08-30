@@ -147,10 +147,12 @@ describe('official weekly proofs', () => {
   it('does not copy gallery or Health files onto the camera roll', async () => {
     expect(await saveCapturedProofLocally({ uri: 'file://pre.jpg', fromLibrary: true })).toEqual({
       saved: false,
+      uri: 'file://pre.jpg',
       reason: 'library',
     });
     expect(await saveCapturedProofLocally({ uri: 'health:hw-1', fromLibrary: false })).toEqual({
       saved: false,
+      uri: 'health:hw-1',
       reason: 'health',
     });
     expect(await saveCapturedProofLocally({ uri: '', fromLibrary: false })).toEqual({

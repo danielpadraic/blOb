@@ -550,6 +550,8 @@ const STRINGS = {
   'clip.shareNote': 'Add a note',
   'clip.copyLink': 'Copy link',
   'clip.captionRequired': 'Add a caption to publish.',
+  'capture.saveDenied': 'Couldn’t save to Photos.',
+  'capture.saveWeb': 'Save to Photos',
   'official.badge': 'Official.',
   'official.infinity': '∞',
   'official.friends': 'Friends',
