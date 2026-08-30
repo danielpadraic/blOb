@@ -10,6 +10,7 @@ import {
   ChallengeTypeTip,
   useChallengeTypeTip,
 } from '@/components/challenge/ChallengeTypeIcon';
+import { LobbyListCardView } from '@/components/challenge/LobbyListCardView';
 import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
 import { ChallengeCardClock, ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { useInviteHost } from '@/components/challenge/InviteHost';
@@ -95,11 +96,13 @@ export type InviteHost = {
 export type InviteVisualTheme = 'movement' | 'ranked' | 'habits' | 'creative' | 'official';
 export type InviteSection = 'official' | 'active' | 'friends' | 'hosting' | 'ended';
 
-type ChallengeInviteCardProps = {
+export type ChallengeInviteCardProps = {
   challenge: InviteChallenge;
   theme?: 'official' | 'user';
   context?: 'lobby' | 'feed';
   section?: InviteSection;
+  /** `lobby-list` is Challenges tab cards only. Feed embeds and Home carousel stay `invite`. */
+  surface?: 'invite' | 'lobby-list';
   joined?: boolean;
   hosting?: boolean;
   eliminated?: boolean;
@@ -266,6 +269,7 @@ export function ChallengeInviteCard({
   theme,
   context = 'lobby',
   section,
+  surface = 'invite',
   joined: joinedProp,
   hosting = false,
   eliminated = false,
@@ -386,6 +390,31 @@ export function ChallengeInviteCard({
       allowSendToPeople: true,
       defaultAudience: 'public',
     });
+  }
+
+  if (surface === 'lobby-list') {
+    return (
+      <LobbyListCardView
+        challenge={challenge}
+        official={official}
+        displayTitle={displayTitle}
+        cardLabel={cardLabel}
+        tags={tags}
+        coverUri={asHttpUrl(challenge.cover_image_url)}
+        nowMs={nowMs}
+        forceEnded={section === 'ended'}
+        resultLine={resultLine}
+        host={host}
+        canJoin={canJoin}
+        canCheckIn={canCheckIn}
+        joining={joining}
+        status={status}
+        onOpenDetail={() => void openDetail()}
+        onJoin={() => void onJoinOrView()}
+        onCheckIn={onCheckIn}
+        onShare={onShare}
+      />
+    );
   }
 
   return (

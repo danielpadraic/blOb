@@ -19,6 +19,7 @@ import {
   lobbyTabForChallenge,
   lobbyTabsForChallenge,
   sortEndingSoonest,
+  lobbyListPrimaryAction,
   sortLobbyRows,
   splitLobbyClockLine,
 } from '@/lib/lobbyChallenge';
@@ -380,6 +381,23 @@ describe('lobby filters', () => {
     expect(effectiveLobbyFilters('official', saved, rows, { nowMs: now })).toEqual(
       defaultFiltersForTab('official'),
     );
+  });
+});
+
+describe('lobby list primary action', () => {
+  it('prefers Check In only when the viewer can log now', () => {
+    expect(lobbyListPrimaryAction({ canCheckIn: true, canJoin: true, status: 'Live' })).toEqual({
+      kind: 'checkin',
+      label: 'Check In',
+    });
+    expect(lobbyListPrimaryAction({ canCheckIn: false, canJoin: true, status: 'Open' })).toEqual({
+      kind: 'join',
+      label: 'Join',
+    });
+    expect(lobbyListPrimaryAction({ canCheckIn: false, canJoin: false, status: 'Ended' })).toEqual({
+      kind: 'disabled',
+      label: 'Ended',
+    });
   });
 });
 

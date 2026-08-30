@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -27,10 +27,25 @@ type ChallengeTagProps = {
   label: string;
   size?: number;
   active?: boolean;
+  chip?: boolean;
+  tone?: 'light' | 'dark';
   onPress: () => void;
 };
 
-export function ChallengeTag({ kind, label, size = ICON, active, onPress }: ChallengeTagProps) {
+function tagChipFill(tone: 'light' | 'dark'): string {
+  return tone === 'dark' ? 'rgba(16, 19, 18, 0.46)' : THEME.surface;
+}
+
+export function ChallengeTag({
+  kind,
+  label,
+  size = ICON,
+  active,
+  chip = false,
+  tone = 'light',
+  onPress,
+}: ChallengeTagProps) {
+  const glyph = chip ? Math.round(size * 0.72) : size;
   return (
     <Pressable
       accessibilityRole="button"
@@ -44,13 +59,14 @@ export function ChallengeTag({ kind, label, size = ICON, active, onPress }: Chal
       style={{
         width: size,
         height: size,
-        backgroundColor: 'transparent',
+        borderRadius: chip ? 8 : 0,
+        backgroundColor: chip ? tagChipFill(tone) : 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
       <Image
         source={TAG_ICONS[kind]}
-        style={{ width: size, height: size, backgroundColor: 'transparent' }}
+        style={{ width: glyph, height: glyph, backgroundColor: 'transparent' }}
         contentFit="contain"
         recyclingKey={kind}
       />
@@ -60,12 +76,16 @@ export function ChallengeTag({ kind, label, size = ICON, active, onPress }: Chal
 
 export function ChallengeTagRow({
   tags,
-  tone: _tone = 'light',
+  tone = 'light',
   compact = false,
+  chip = false,
+  trailing,
 }: {
   tags: ChallengeTagSpec[];
   tone?: 'light' | 'dark';
   compact?: boolean;
+  chip?: boolean;
+  trailing?: ReactNode;
 }) {
   const [tip, setTip] = useState<string | null>(null);
   const size = compact ? COMPACT : ICON;
@@ -78,23 +98,26 @@ export function ChallengeTagRow({
     return () => clearTimeout(handle);
   }, [tip]);
 
-  if (tags.length === 0) {
+  if (tags.length === 0 && !trailing) {
     return null;
   }
 
   return (
     <View style={{ position: 'relative', zIndex: 6 }}>
-      <View className="flex-row flex-wrap items-center" style={{ gap: 8 }}>
+      <View className="flex-row flex-wrap items-center" style={{ gap: chip ? 5 : 8 }}>
         {tags.map((tag) => (
           <ChallengeTag
             key={tag.kind}
             kind={tag.kind}
             label={tag.label}
             size={size}
+            chip={chip}
+            tone={tone}
             active={tip === tag.label}
             onPress={() => setTip(tag.label)}
           />
         ))}
+        {trailing}
       </View>
       {tip ? (
         <View

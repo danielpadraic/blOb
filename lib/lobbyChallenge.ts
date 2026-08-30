@@ -519,6 +519,20 @@ function endedCardClock(challenge: ScheduleChallenge, nowMs: number): LobbyCardC
   return withClockLines(at ? `Ended ${formatShortLocal(at, nowMs)}` : 'Ended', false);
 }
 
+export function lobbyListPrimaryAction(input: {
+  canCheckIn: boolean;
+  canJoin: boolean;
+  status: string;
+}): { kind: 'checkin' | 'join' | 'disabled'; label: string } {
+  if (input.canCheckIn) {
+    return { kind: 'checkin', label: 'Check In' };
+  }
+  if (input.canJoin) {
+    return { kind: 'join', label: 'Join' };
+  }
+  return { kind: 'disabled', label: input.status };
+}
+
 export function scheduleNeedsTick(challenge: ScheduleChallenge, nowMs = Date.now()): boolean {
   const state = challengeScheduleState(challenge, nowMs);
   if (state.phase === 'prestart') {
