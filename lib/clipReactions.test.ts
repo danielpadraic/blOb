@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   asClipReactionType,
   clipReactionEmoji,
-  commentsBandHeight,
+  commentsDrawerHeight,
   DEFAULT_CLIP_REACTION,
+  shouldAdvanceAfterCommentsClose,
+  shouldHoldClipPlayback,
 } from '@/lib/clipReactions';
 
 describe('clip reactions', () => {
@@ -21,8 +23,17 @@ describe('clip reactions', () => {
     expect(asClipReactionType('praise')).toBe('praise');
   });
 
-  it('sizes the comments video band at ~42%', () => {
-    expect(commentsBandHeight(700)).toBe(294);
-    expect(commentsBandHeight(0)).toBe(280);
+  it('sizes the frosted comments drawer at ~40%, ~48% with the keyboard', () => {
+    expect(commentsDrawerHeight(700)).toBe(280);
+    expect(commentsDrawerHeight(700, true)).toBe(336);
+    expect(commentsDrawerHeight(0)).toBe(180);
+  });
+
+  it('holds the current clip while comments or the keyboard are open', () => {
+    expect(shouldHoldClipPlayback({ commentsOpen: true, keyboardVisible: false })).toBe(true);
+    expect(shouldHoldClipPlayback({ commentsOpen: false, keyboardVisible: true })).toBe(true);
+    expect(shouldHoldClipPlayback({ commentsOpen: false, keyboardVisible: false })).toBe(false);
+    expect(shouldAdvanceAfterCommentsClose({ kind: 'wave', endedWhileOpen: true })).toBe(true);
+    expect(shouldAdvanceAfterCommentsClose({ kind: 'round', endedWhileOpen: true })).toBe(false);
   });
 });

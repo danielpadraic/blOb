@@ -1,33 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
+  TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 
-import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { MentionText } from '@/components/feed/MentionText';
-import { ReactionBar } from '@/components/feed/ReactionBar';
 import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { copy } from '@/lib/copy';
-import type { MentionChip, MentionDoc } from '@/lib/mentions';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, PublicProfile, ReactionType } from '@/lib/types';
 import { nestComments } from '@/utils/comments';
 import { getErrorMessage } from '@/utils/errors';
 import { formatFeedTime } from '@/utils/format';
-
-type ReplyHandler = (
-  content: string,
-  parentId?: string | null,
-  mentionedUserIds?: string[],
-) => Promise<unknown> | void;
 
 type WaveRoundCommentsFeedProps = {
   comments: CommentWithAuthor[];
@@ -42,20 +34,29 @@ type WaveRoundCommentsFeedProps = {
   ) => Promise<unknown> | void;
   onReact?: (commentId: string, type: ReactionType) => void;
   onReport?: (commentId: string) => Promise<unknown> | void;
+  onClose?: () => void;
+  onScrollOffset?: (offset: number) => void;
+  onCloseFromTop?: () => void;
 };
 
 export function WaveRoundCommentsFeed({
   comments,
   currentUserId,
-  avatarUrl,
   displayName,
   submitting,
   onSend,
   onReact,
   onReport,
+  onClose,
+  onScrollOffset,
+  onCloseFromTop,
 }: WaveRoundCommentsFeedProps) {
   const [local, setLocal] = useState<CommentWithAuthor[]>([]);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
+  const scrollTop = useRef(0);
+  const topSwipes = useRef(0);
 
   const thread = [...comments];
   for (const row of local) {
@@ -79,20 +80,17 @@ export function WaveRoundCommentsFeed({
     return () => clearTimeout(handle);
   }, [thread.length]);
 
-  async function send(
-    parentId?: string | null,
-    textOverride?: string,
-    mentionedUserIds?: string[],
-  ) {
-    const text = (textOverride ?? '').trim();
+  async function send() {
+    const text = draft.trim();
     if (!text || submitting) {
       return;
     }
-    await onSend(text, parentId, mentionedUserIds);
+    const parentId = replyTo?.id ?? null;
+    await onSend(text, parentId, []);
     const author = {
       display_name: displayName ?? 'You',
       username: displayName ?? 'you',
-      avatar_url: avatarUrl ?? null,
+      avatar_url: null,
     } as PublicProfile;
     setLocal((current) => [
       ...current,
@@ -100,27 +98,74 @@ export function WaveRoundCommentsFeed({
         id: `local-comment-${Date.now()}`,
         post_id: comments[0]?.post_id ?? '',
         author_id: currentUserId ?? 'me',
-        parent_id: parentId ?? null,
+        parent_id: parentId,
         content: text,
         created_at: new Date().toISOString(),
         author,
       },
     ]);
+    setDraft('');
+    setReplyTo(null);
   }
 
-  const body = (
-    <View style={{ flex: 1, backgroundColor: THEME.surface }}>
-      <View className="px-4 pt-3 pb-1">
-        <AppText className="text-[15px] font-extrabold text-charcoal">{copy('clip.comments')}</AppText>
+  function noteScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const y = event.nativeEvent.contentOffset.y;
+    scrollTop.current = y;
+    onScrollOffset?.(y);
+    if (y > 4) {
+      topSwipes.current = 0;
+    }
+  }
+
+  function tryCloseFromTop(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const y = event.nativeEvent.contentOffset.y;
+    const vy = event.nativeEvent.velocity?.y ?? 0;
+    if (y > 2) {
+      return;
+    }
+    topSwipes.current += 1;
+    if (topSwipes.current >= 2 || vy > 0.55) {
+      topSwipes.current = 0;
+      onCloseFromTop?.();
+    }
+  }
+
+  const ink = '#fff';
+  const muted = 'rgba(255,255,255,0.62)';
+
+  return (
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+      <View className="flex-row items-center px-4 pt-1 pb-1">
+        <AppText className="flex-1 text-[15px] font-extrabold" style={{ color: ink }}>
+          {copy('clip.comments')}
+        </AppText>
+        {onClose ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close comments"
+            onPress={onClose}
+            hitSlop={8}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <AppText className="text-[22px] font-bold" style={{ color: ink }}>
+              ×
+            </AppText>
+          </Pressable>
+        ) : null}
       </View>
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, flexGrow: 1 }}>
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, flexGrow: 1 }}
+        scrollEventThrottle={16}
+        onScroll={noteScroll}
+        onScrollEndDrag={tryCloseFromTop}
+        onMomentumScrollEnd={tryCloseFromTop}>
         {roots.length === 0 ? (
-          <AppText className="mt-3 text-[14px] text-muted">{copy('clip.commentEmpty')}</AppText>
+          <AppText className="mt-3 text-[14px]" style={{ color: muted }}>
+            {copy('clip.commentEmpty')}
+          </AppText>
         ) : (
           roots.map((comment) => (
             <FeedItem
@@ -128,35 +173,67 @@ export function WaveRoundCommentsFeed({
               comment={comment}
               nested={false}
               currentUserId={currentUserId}
-              submitting={submitting}
-              onReply={(content, parentId, mentionedUserIds) =>
-                send(parentId, content, mentionedUserIds)
-              }
+              ink={ink}
+              muted={muted}
+              onReply={(id, name) => setReplyTo({ id, name })}
               onReact={onReact}
               onReport={onReport}
             />
           ))
         )}
       </ScrollView>
-      <SimpleComposer
-        submitting={submitting}
-        avatarUrl={avatarUrl}
-        displayName={displayName}
-        onSend={async (content, mentionedUserIds) => {
-          await send(null, content, mentionedUserIds);
-        }}
-      />
+      {replyTo ? (
+        <Pressable
+          onPress={() => setReplyTo(null)}
+          style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
+          <AppText className="text-[12px]" style={{ color: muted }}>
+            Replying to {replyTo.name} · tap to cancel
+          </AppText>
+        </Pressable>
+      ) : null}
+      <View
+        className="flex-row items-end px-3 py-2"
+        style={{ gap: 8, backgroundColor: 'transparent' }}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={copy('clip.comment')}
+          placeholderTextColor={muted}
+          multiline
+          accessibilityLabel={copy('clip.comment')}
+          style={{
+            flex: 1,
+            minHeight: 44,
+            maxHeight: 96,
+            borderRadius: 16,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            color: ink,
+            fontSize: 15,
+            backgroundColor: 'rgba(255,255,255,0.08)',
+          }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy('clip.commentSend')}
+          disabled={!draft.trim() || submitting}
+          onPress={() => void send()}
+          style={{
+            minWidth: 48,
+            minHeight: 44,
+            paddingHorizontal: 14,
+            borderRadius: 16,
+            backgroundColor: THEME.accent,
+            opacity: draft.trim() && !submitting ? 1 : 0.4,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          <AppText className="text-[14px] font-extrabold" style={{ color: '#fff' }}>
+            {copy('clip.commentSend')}
+          </AppText>
+        </Pressable>
+      </View>
     </View>
-  );
-
-  if (Platform.OS === 'web') {
-    return body;
-  }
-
-  return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      {body}
-    </KeyboardAvoidingView>
   );
 }
 
@@ -164,7 +241,8 @@ function FeedItem({
   comment,
   nested,
   currentUserId,
-  submitting,
+  ink,
+  muted,
   onReply,
   onReact,
   onReport,
@@ -172,14 +250,13 @@ function FeedItem({
   comment: CommentWithAuthor;
   nested: boolean;
   currentUserId?: string;
-  submitting?: boolean;
-  onReply: ReplyHandler;
+  ink: string;
+  muted: string;
+  onReply: (id: string, name: string) => void;
   onReact?: (commentId: string, type: ReactionType) => void;
   onReport?: (commentId: string) => Promise<unknown> | void;
 }) {
-  const [replyOpen, setReplyOpen] = useState(false);
   const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
-  const handle = comment.author?.username ?? 'blob';
   const replies = comment.replies ?? [];
 
   return (
@@ -190,7 +267,7 @@ function FeedItem({
           ? {
               marginLeft: 12,
               borderLeftWidth: 2,
-              borderLeftColor: THEME.accentSoft,
+              borderLeftColor: 'rgba(255,255,255,0.22)',
               paddingLeft: 8,
             }
           : undefined
@@ -202,22 +279,41 @@ function FeedItem({
         <View className="min-w-0 flex-1">
           <ProfileLink username={comment.author?.username} userId={comment.author_id}>
             <View className="flex-row items-center" style={{ gap: 4, minWidth: 0 }}>
-              <AppText className="text-[12px] font-semibold text-charcoal" numberOfLines={1}>
+              <AppText className="text-[12px] font-semibold" style={{ color: ink }} numberOfLines={1}>
                 {name}
               </AppText>
               <OfficialMark profile={comment.author} compact />
             </View>
           </ProfileLink>
-          <MentionText content={comment.content} mentions={comment.mentions} className="text-[13px] leading-[18px] text-ink" />
-          <AppText className="mt-0.5 text-[11px] text-muted">{formatFeedTime(comment.created_at)}</AppText>
-          <View className="mt-0.5 flex-row items-center" style={{ gap: 8 }}>
-            <ReactionBar
-              compact
-              reactions={comment.reactions}
-              currentUserId={currentUserId}
-              onReact={(type) => onReact?.(comment.id, type)}
-              onReply={() => setReplyOpen((open) => !open)}
-            />
+          <MentionText
+            content={comment.content}
+            mentions={comment.mentions}
+            className="text-[13px] leading-[18px] text-white"
+          />
+          <AppText className="mt-0.5 text-[11px]" style={{ color: muted }}>
+            {formatFeedTime(comment.created_at)}
+          </AppText>
+          <View className="mt-0.5 flex-row items-center" style={{ gap: 12 }}>
+            {onReact ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Love comment"
+                onPress={() => onReact(comment.id, 'love')}
+                style={{ minHeight: 32, justifyContent: 'center' }}>
+                <AppText className="text-[12px] font-semibold" style={{ color: muted }}>
+                  ♡
+                </AppText>
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Reply to ${name}`}
+              onPress={() => onReply(comment.id, name)}
+              style={{ minHeight: 32, justifyContent: 'center' }}>
+              <AppText className="text-[12px] font-semibold" style={{ color: muted }}>
+                Reply
+              </AppText>
+            </Pressable>
             {onReport ? (
               <Pressable
                 accessibilityRole="button"
@@ -228,127 +324,27 @@ function FeedItem({
                   );
                 }}
                 style={{ minHeight: 32, justifyContent: 'center' }}>
-                <AppText className="text-[11px] font-semibold text-muted">Report</AppText>
+                <AppText className="text-[11px] font-semibold" style={{ color: muted }}>
+                  Report
+                </AppText>
               </Pressable>
             ) : null}
           </View>
         </View>
       </View>
-      {replyOpen ? (
-        <View style={{ marginLeft: nested ? 0 : 28 }}>
-          <SimpleComposer
-            submitting={submitting}
-            placeholder={`Reply to ${name}`}
-            initialMention={{
-              userId: comment.author_id,
-              username: handle,
-              label: name,
-            }}
-            onSend={async (content, mentionedUserIds) => {
-              await onReply(content, comment.id, mentionedUserIds);
-              setReplyOpen(false);
-            }}
-          />
-        </View>
-      ) : null}
       {replies.map((reply) => (
         <FeedItem
           key={reply.id}
           comment={reply}
           nested
           currentUserId={currentUserId}
-          submitting={submitting}
+          ink={ink}
+          muted={muted}
           onReply={onReply}
           onReact={onReact}
           onReport={onReport}
         />
       ))}
-    </View>
-  );
-}
-
-function SimpleComposer({
-  onSend,
-  submitting,
-  avatarUrl,
-  displayName,
-  placeholder,
-  initialMention,
-}: {
-  onSend: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
-  submitting?: boolean;
-  avatarUrl?: string | null;
-  displayName?: string | null;
-  placeholder?: string;
-  initialMention?: MentionChip | null;
-}) {
-  const fieldRef = useRef<MentionFieldHandle>(null);
-  const docRef = useRef<MentionDoc>({ text: '', chips: [] });
-  const [fieldKey, setFieldKey] = useState(0);
-  const [hasText, setHasText] = useState(Boolean(initialMention));
-  const canSend = hasText && !submitting;
-
-  async function send() {
-    const doc = fieldRef.current?.getDoc() ?? docRef.current;
-    const text = doc.text.trim();
-    if (!text || submitting) {
-      return;
-    }
-    await onSend(
-      text,
-      doc.chips.map((chip) => chip.userId),
-    );
-    docRef.current = { text: '', chips: [] };
-    setHasText(false);
-    setFieldKey((key) => key + 1);
-  }
-
-  return (
-    <View
-      className="flex-row items-end px-3 py-2"
-      style={{
-        gap: 8,
-        borderTopWidth: 1,
-        borderTopColor: THEME.border,
-        backgroundColor: THEME.surface,
-      }}>
-      {avatarUrl !== undefined ? <Avatar uri={avatarUrl} name={displayName} size={32} /> : null}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <MentionField
-          key={fieldKey}
-          ref={fieldRef}
-          compact
-          pickerPlacement="above"
-          placeholder={placeholder ?? copy('clip.comment')}
-          initialMention={initialMention}
-          audience="public"
-          audienceUserIds={[]}
-          accessibilityLabel={placeholder ?? copy('clip.comment')}
-          onChange={(doc) => {
-            docRef.current = doc;
-            setHasText(doc.text.trim().length > 0);
-          }}
-        />
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={copy('clip.commentSend')}
-        disabled={!canSend}
-        onPress={() => void send()}
-        style={{
-          minWidth: 48,
-          minHeight: 48,
-          paddingHorizontal: 14,
-          borderRadius: 16,
-          backgroundColor: THEME.accent,
-          opacity: canSend ? 1 : 0.4,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-        <AppText className="text-[14px] font-extrabold" style={{ color: '#fff' }}>
-          {copy('clip.commentSend')}
-        </AppText>
-      </Pressable>
     </View>
   );
 }

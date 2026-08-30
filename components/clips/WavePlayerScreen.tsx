@@ -161,6 +161,7 @@ export function WavePlayerScreen() {
       challenges={challenges}
       viewedIds={viewedIds}
       onClose={close}
+      onAddWave={() => startFreshWaveCapture(router)}
     />
   );
 }

@@ -40,6 +40,7 @@ export const GLYPH = {
   leaf: { ios: 'leaf.fill', android: 'eco', web: 'eco' },
   plus: { ios: 'plus', android: 'add', web: 'add' },
   play: { ios: 'play.circle.fill', android: 'play_circle', web: 'play_circle' },
+  pause: { ios: 'pause.circle.fill', android: 'pause_circle', web: 'pause_circle' },
   attach: { ios: 'paperclip', android: 'attach_file', web: 'attach_file' },
   link: { ios: 'link', android: 'link', web: 'link' },
   clock: { ios: 'clock.fill', android: 'schedule', web: 'schedule' },

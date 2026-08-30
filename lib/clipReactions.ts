@@ -51,10 +51,26 @@ export async function saveLastClipReaction(type: ReactionType): Promise<void> {
   }
 }
 
-/** Video band while Comments mode is open. */
-export function commentsBandHeight(viewportHeight: number): number {
+/** Frosted comments overlay — ~40% of the video, ~48% with the keyboard. */
+export function commentsDrawerHeight(viewportHeight: number, keyboardVisible = false): number {
   if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) {
-    return 280;
+    return keyboardVisible ? 220 : 180;
   }
-  return Math.round(viewportHeight * 0.42);
+  return Math.round(viewportHeight * (keyboardVisible ? 0.48 : 0.4));
+}
+
+/** @deprecated Use commentsDrawerHeight. Overlay no longer shrinks the video. */
+export function commentsBandHeight(viewportHeight: number): number {
+  return commentsDrawerHeight(viewportHeight, false);
+}
+
+export function shouldHoldClipPlayback(input: { commentsOpen: boolean; keyboardVisible: boolean }): boolean {
+  return input.commentsOpen || input.keyboardVisible;
+}
+
+export function shouldAdvanceAfterCommentsClose(input: {
+  kind: 'wave' | 'round';
+  endedWhileOpen: boolean;
+}): boolean {
+  return input.kind === 'wave' && input.endedWhileOpen;
 }

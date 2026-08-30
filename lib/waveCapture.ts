@@ -1,3 +1,4 @@
+import { rememberCameraFacing } from '@/components/capture/cameraFacing';
 import { primeCameraFromGesture } from '@/lib/cameraSession';
 import { rememberClipAttach } from '@/lib/clipAttach';
 import { rememberLastCapture } from '@/lib/lastCapture';
@@ -11,6 +12,7 @@ type WaveCaptureRouter = {
 export function startFreshWaveCapture(router: WaveCaptureRouter) {
   rememberLastCapture(null);
   rememberClipAttach(null);
+  rememberCameraFacing('front', 'social');
   void primeCameraFromGesture('video');
   router.push(STORY_CREATE_HREF);
 }

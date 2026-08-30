@@ -5,6 +5,7 @@ import {
   Alert,
   Animated as RNAnimated,
   Dimensions,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -45,8 +46,10 @@ import {
   DEFAULT_CLIP_REACTION,
   asClipReactionType,
   clipReactionEmoji,
-  commentsBandHeight,
+  commentsDrawerHeight,
   loadLastClipReaction,
+  shouldAdvanceAfterCommentsClose,
+  shouldHoldClipPlayback,
   saveLastClipReaction,
   type ClipReactionType,
 } from '@/lib/clipReactions';
@@ -54,6 +57,7 @@ import {
   authorRanges,
   nextAuthorEntryIndex,
   nextStoryIndex,
+  preloadStoryIndex,
   prevAuthorEntryIndex,
   prevStoryIndex,
   rangeAt,
@@ -65,7 +69,9 @@ import { canOfferShareToFeed } from '@/lib/roundShare';
 import { userReaction } from '@/lib/reactions';
 import { personDisplayName, type FeedChallengePreview } from '@/lib/social';
 import { THEME } from '@/lib/theme';
+import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
+import { subscribeVisualViewport } from '@/lib/visualViewport';
 import { applyWebVideoLock, preventWebVideoFullscreen, WEB_VIDEO_LOCK } from '@/lib/webVideo';
 import { roundShareUrl, storyShareUrl } from '@/lib/waveShare';
 import { getErrorMessage } from '@/utils/errors';
@@ -105,6 +111,7 @@ type ClipPlayerProps = {
   sharePrompt?: boolean;
   viewedIds?: Set<string>;
   onClose: () => void;
+  onAddWave?: () => void;
 };
 
 export function ClipPlayer({
@@ -116,6 +123,7 @@ export function ClipPlayer({
   sharePrompt = false,
   viewedIds,
   onClose,
+  onAddWave,
 }: ClipPlayerProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -155,6 +163,12 @@ export function ClipPlayer({
   const atStartX = useSharedValue(false);
   const atEndX = useSharedValue(false);
   const [videoWidth, setVideoWidth] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [roundPaused, setRoundPaused] = useState(false);
+  const [pauseFlash, setPauseFlash] = useState<'play' | 'pause' | null>(null);
+  const endedWhileOpen = useRef(false);
+  const commentsScrollY = useRef(0);
+  const keyboardRef = useRef(false);
 
   clipsRef.current = clips;
   indexRef.current = index;
@@ -162,14 +176,24 @@ export function ClipPlayer({
   commentsRef.current = commentsMode;
   captionOpenRef.current = captionOpen;
   viewedIdsRef.current = viewedIds ?? new Set<string>();
-  paused.current = pickerOpen || holdingRef.current;
+  keyboardRef.current = keyboardVisible;
 
   useEffect(() => {
     void loadLastClipReaction().then(setLastReaction);
   }, []);
 
+  useEffect(() => {
+    if (!pauseFlash) {
+      return undefined;
+    }
+    const id = setTimeout(() => setPauseFlash(null), 700);
+    return () => clearTimeout(id);
+  }, [pauseFlash]);
+
   const clip = clips[index];
   const kind = clip?.kind ?? clips[0]?.kind ?? 'wave';
+  const holdPlayback = shouldHoldClipPlayback({ commentsOpen: commentsMode, keyboardVisible });
+  paused.current = pickerOpen || (kind === 'wave' && holdingRef.current) || (kind === 'round' && roundPaused);
   const ranges = useMemo(() => authorRanges(clips), [clips]);
   const authorRange = rangeAt(ranges, index);
   const storyProgressIndex = authorRange ? index - authorRange.start : 0;
@@ -262,13 +286,23 @@ export function ClipPlayer({
     persistReact.current(type);
   }, []);
 
+  function closeComments() {
+    setCommentsMode(false);
+    if (shouldAdvanceAfterCommentsClose({ kind, endedWhileOpen: endedWhileOpen.current })) {
+      endedWhileOpen.current = false;
+      setTimeout(() => goNextClip(), 300);
+      return;
+    }
+    endedWhileOpen.current = false;
+  }
+
   function requestClose() {
     if (captionOpenRef.current) {
       setCaptionOpen(false);
       return;
     }
     if (commentsRef.current) {
-      setCommentsMode(false);
+      closeComments();
       return;
     }
     stopAllLiveMedia();
@@ -280,6 +314,34 @@ export function ClipPlayer({
     setPickerOpen(false);
     setCommentsMode(true);
   }
+
+  const handleEnded = useCallback(() => {
+    if (commentsRef.current || keyboardRef.current) {
+      endedWhileOpen.current = true;
+      return;
+    }
+    if (kind === 'wave' && autoAdvance) {
+      goNextClip();
+    }
+  }, [autoAdvance, goNextClip, kind]);
+
+  useEffect(() => {
+    if (holdPlayback && progress >= 0.97) {
+      endedWhileOpen.current = true;
+    }
+  }, [holdPlayback, progress]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return subscribeVisualViewport((occlusion) => setKeyboardVisible(occlusion > 80));
+    }
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const keepId = clips[indexRef.current]?.id ?? clips[startIndex]?.id;
@@ -298,10 +360,14 @@ export function ClipPlayer({
     setCaptionDraft(clip?.caption ?? '');
     setCaptionOpen(false);
     setCaptionOverflow(false);
+    setRoundPaused(false);
+    setPauseFlash(null);
+    endedWhileOpen.current = false;
+    commentsScrollY.current = 0;
   }, [clip?.id, index, openComments, startIndex]);
 
   useEffect(() => {
-    if (!clip || clip.mediaType !== 'image' || !autoAdvance || commentsMode) {
+    if (!clip || clip.mediaType !== 'image' || !autoAdvance || holdPlayback || kind !== 'wave') {
       return undefined;
     }
     let acc = 0;
@@ -319,7 +385,7 @@ export function ClipPlayer({
       }
     }, 80);
     return () => clearInterval(id);
-  }, [autoAdvance, clip?.durationMs, clip?.id, clip?.mediaType, commentsMode, goNextClip]);
+  }, [autoAdvance, clip?.durationMs, clip?.id, clip?.mediaType, goNextClip, holdPlayback, kind]);
 
   useEffect(() => {
     if (!clip || clip.isOwn || clip.kind !== 'wave') {
@@ -376,6 +442,10 @@ export function ClipPlayer({
           translateX.value = withTiming(0);
           return;
         }
+        if (commentsRef.current) {
+          translateX.value = withTiming(0);
+          return;
+        }
         if (event.translationX > 80 && !atStartX.value) {
           runOnJS(goSwipeRight)();
         } else if (event.translationX < -80 && !atEndX.value) {
@@ -391,8 +461,8 @@ export function ClipPlayer({
       Gesture.Pan()
         .activeOffsetY(24)
         .onEnd((event) => {
-          if (event.translationY > 70) {
-            runOnJS(setCommentsMode)(false);
+          if (event.translationY > 56) {
+            runOnJS(closeComments)();
           }
         }),
     [],
@@ -410,8 +480,12 @@ export function ClipPlayer({
   }
 
   const origin = clip.challengeId ? challenges?.get(clip.challengeId) : undefined;
-  const bandH = commentsMode ? commentsBandHeight(watchHeight) : undefined;
-  const railPad = commentsMode ? 8 : bottomPad;
+  const drawerH = commentsMode ? commentsDrawerHeight(watchHeight, keyboardVisible) : 0;
+  const railPad = commentsMode ? drawerH : bottomPad;
+  const loopCurrent = kind === 'round' || holdPlayback;
+  const nextAt =
+    kind === 'wave' ? preloadStoryIndex(ranges, index) : index + 1 < clips.length ? index + 1 : null;
+  const nextClip = nextAt != null ? clips[nextAt] : null;
 
   return (
     <WatchSurface>
@@ -421,7 +495,7 @@ export function ClipPlayer({
       <GestureDetector gesture={pan}>
           <Animated.View
             onLayout={(event) => setVideoWidth(event.nativeEvent.layout.width)}
-            style={[{ height: bandH, flex: bandH ? undefined : 1, overflow: 'hidden', backgroundColor: '#101312' }, swipeStyle]}>
+            style={[{ flex: 1, overflow: 'hidden', backgroundColor: '#101312' }, swipeStyle]}>
           {clip.mediaType === 'video' ? (
             <>
               {clip.coverUrl ? (
@@ -437,12 +511,15 @@ export function ClipPlayer({
                 poster={clip.coverUrl}
                 startMs={clip.startMs ?? 0}
                 durationMs={clip.durationMs}
-                loop={!autoAdvance}
+                loop={loopCurrent}
                 muted={muted}
                 pausedRef={paused}
-                onEnded={autoAdvance ? goNextClip : undefined}
+                onEnded={handleEnded}
                 onProgress={setProgress}
               />
+              {nextClip?.mediaType === 'video' ? (
+                <PreloadClip key={`preload-${nextClip.id}`} uri={nextClip.mediaUrl} startMs={nextClip.startMs ?? 0} />
+              ) : null}
             </>
           ) : (
             <Image
@@ -452,23 +529,33 @@ export function ClipPlayer({
             />
           )}
 
-          {!commentsMode ? (
+          {commentsMode ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={kind === 'wave' ? copy('wave.next') : 'Hold to pause'}
-              delayLongPress={180}
+              accessibilityLabel="Close comments"
+              onPress={closeComments}
+              style={{ position: 'absolute', top: 0, right: RAIL_HIT + 16, bottom: drawerH, left: 0 }}
+            />
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={kind === 'wave' ? copy('wave.next') : 'Pause or play'}
+              delayLongPress={kind === 'wave' ? 180 : 10_000}
               onLongPress={() => {
+                if (kind !== 'wave') {
+                  return;
+                }
                 holdingRef.current = true;
                 paused.current = true;
               }}
               onPressOut={() => {
                 holdingRef.current = false;
-                paused.current = pickerOpen;
+                paused.current = pickerOpen || (kind === 'round' && roundPaused);
               }}
               onPress={(event) => {
                 const width = videoWidth || event.nativeEvent.locationX * 3;
                 const x = event.nativeEvent.locationX;
-                if (kind === 'wave' && !commentsRef.current) {
+                if (kind === 'wave') {
                   if (x < width / 3) {
                     goPrevClip();
                     return;
@@ -477,18 +564,24 @@ export function ClipPlayer({
                     goNextClip();
                     return;
                   }
+                  const now = Date.now();
+                  if (now - lastTap.current < 280) {
+                    applyReaction(lastReaction);
+                  }
+                  lastTap.current = now;
+                  return;
                 }
-                const now = Date.now();
-                if (now - lastTap.current < 280) {
-                  applyReaction(lastReaction);
-                }
-                lastTap.current = now;
+                setRoundPaused((value) => {
+                  const next = !value;
+                  setPauseFlash(next ? 'pause' : 'play');
+                  return next;
+                });
               }}
               style={{ position: 'absolute', top: 0, right: RAIL_HIT + 16, bottom: 0, left: 0 }}
             />
-          ) : null}
+          )}
 
-          {kind === 'wave' && !commentsMode ? (
+          {kind === 'wave' ? (
             <View
               pointerEvents="none"
               style={{
@@ -645,6 +738,47 @@ export function ClipPlayer({
             </Pressable>
           ) : null}
 
+          {pauseFlash ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Glyph name={pauseFlash === 'pause' ? GLYPH.pause : GLYPH.play} color="#fff" size={72} />
+            </View>
+          ) : null}
+
+          {clip.isOwn && kind === 'wave' ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={copy('wave.add')}
+              onPress={() => (onAddWave ? onAddWave() : startFreshWaveCapture(router))}
+              style={{
+                position: 'absolute',
+                left: 16,
+                bottom: railPad + RAIL_HIT + 20,
+                minHeight: 44,
+                paddingHorizontal: 14,
+                borderRadius: 22,
+                backgroundColor: 'rgba(16,19,18,0.55)',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                zIndex: 5,
+              }}>
+              <Glyph name={GLYPH.camera} color="#fff" size={18} />
+              <AppText className="text-[14px] font-bold" style={{ color: '#fff' }}>
+                {copy('wave.add')}
+              </AppText>
+            </Pressable>
+          ) : null}
+
           {kind === 'round' && !commentsMode ? (
           <View
             pointerEvents="none"
@@ -691,30 +825,50 @@ export function ClipPlayer({
               </AppText>
             </Pressable>
           ) : null}
-          </Animated.View>
-      </GestureDetector>
           {commentsMode ? (
-            <View style={{ flex: 1, minHeight: 0, backgroundColor: THEME.surface }}>
-              <GestureDetector gesture={commentsPan}>
-                <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
+            <GestureDetector gesture={commentsPan}>
+              <View
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  height: drawerH,
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  overflow: 'hidden',
+                  backgroundColor: 'rgba(16,19,18,0.58)',
+                  ...(Platform.OS === 'web'
+                    ? { backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }
+                    : null),
+                  zIndex: 6,
+                }}>
+                <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 2 }}>
                   <View
                     style={{
                       width: 36,
                       height: 4,
                       borderRadius: 2,
-                      backgroundColor: THEME.border,
+                      backgroundColor: 'rgba(255,255,255,0.45)',
                     }}
                   />
                 </View>
-              </GestureDetector>
-              <ClipCommentsPane
-                clip={clip}
-                currentUserId={user?.id}
-                avatarUrl={profile?.avatar_url}
-                displayName={profile?.display_name ?? profile?.username}
-              />
-            </View>
+                <ClipCommentsPane
+                  clip={clip}
+                  currentUserId={user?.id}
+                  avatarUrl={profile?.avatar_url}
+                  displayName={profile?.display_name ?? profile?.username}
+                  onClose={closeComments}
+                  onScrollOffset={(offset) => {
+                    commentsScrollY.current = offset;
+                  }}
+                  onCloseFromTop={closeComments}
+                />
+              </View>
+            </GestureDetector>
           ) : null}
+          </Animated.View>
+      </GestureDetector>
       </View>
 
       <ClipSheets
@@ -821,6 +975,7 @@ function ClipSocialRail({
         alignItems: 'flex-end',
         gap: 6,
         opacity: lit,
+        zIndex: 8,
       }}>
       <View style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
         {pickerOpen ? (
@@ -943,11 +1098,17 @@ function ClipCommentsPane({
   currentUserId,
   avatarUrl,
   displayName,
+  onClose,
+  onScrollOffset,
+  onCloseFromTop,
 }: {
   clip: ClipPlayItem;
   currentUserId?: string;
   avatarUrl?: string | null;
   displayName?: string | null;
+  onClose?: () => void;
+  onScrollOffset?: (offset: number) => void;
+  onCloseFromTop?: () => void;
 }) {
   const social = useClipSocial({
     kind: clip.kind === 'round' ? 'reel' : 'story',
@@ -977,8 +1138,20 @@ function ClipCommentsPane({
         }
         await report.mutateAsync({ postId, reason: 'comment' });
       }}
+      onClose={onClose}
+      onScrollOffset={onScrollOffset}
+      onCloseFromTop={onCloseFromTop}
     />
   );
+}
+
+function PreloadClip({ uri, startMs }: { uri: string; startMs: number }) {
+  useVideoPlayer(uri, (instance) => {
+    instance.muted = true;
+    instance.currentTime = Math.max(startMs, 0) / 1000;
+    instance.pause();
+  });
+  return null;
 }
 
 function ClipSheets({
@@ -1329,6 +1502,10 @@ function NativeClipVideo({
   useEffect(() => {
     player.muted = muted;
   }, [muted, player]);
+
+  useEffect(() => {
+    player.loop = loop;
+  }, [loop, player]);
 
   useEventListener(player, 'playToEnd', () => {
     if (loop || endedRef.current) {
