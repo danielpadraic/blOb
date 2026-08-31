@@ -89,6 +89,7 @@ describe('official weekly proofs', () => {
   it('maps MISSING_PROOFS to a missing-proof failure, not a successful post', () => {
     expect(classifyCheckinError(new Error('MISSING_PROOFS'))).toBe('missing');
     expect(classifyCheckinError(new Error('Add every required proof to submit.'))).toBe('missing');
+    expect(classifyCheckinError(new Error('PROOF_ALREADY_COUNTS:Official Weekly'))).toBe('reused');
   });
 
   it('enables Send once a required proof is attached; extras do not count', () => {
@@ -334,6 +335,8 @@ describe('check-in composer save', () => {
           url: 'https://example.com/one.jpg',
           urls: ['https://example.com/one.jpg'],
           fromLibrary: false,
+          contentHash: 'object:one.jpg',
+          caption: null,
         },
       }),
     );
@@ -376,6 +379,8 @@ describe('check-in composer save', () => {
           url: '',
           healthWorkoutId: 'hw-1',
           health,
+          contentHash: 'health:hw-1',
+          caption: null,
         },
       }),
     );

@@ -7,9 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
-import { challengeDetailHref } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
-import { ledgerReceiptLabel } from '@/lib/funding';
+import { asWalletReceiptRow, walletReceiptHref, type WalletReceiptRow } from '@/lib/walletReceipt';
 import { formatDate } from '@/utils/format';
 
 type LedgerRow = {
@@ -29,7 +28,7 @@ export function WalletHistory() {
   const query = useQuery({
     queryKey: ['wallet-ledger', user?.id],
     enabled: Boolean(user?.id),
-    queryFn: async (): Promise<LedgerRow[]> => {
+    queryFn: async (): Promise<WalletReceiptRow[]> => {
       const { data, error } = await supabase
         .from('wallet_ledger')
         .select('id, challenge_id, currency, amount, entry_type, reason, created_at')
@@ -39,7 +38,36 @@ export function WalletHistory() {
       if (error) {
         throw error;
       }
-      return (data ?? []) as LedgerRow[];
+      const rows = (data ?? []) as LedgerRow[];
+      const challengeIds = [...new Set(rows.map((row) => row.challenge_id).filter(Boolean))] as string[];
+      const titles = new Map<string, { title: string | null; task: string | null }>();
+      const places = new Map<string, number>();
+      if (challengeIds.length > 0) {
+        const [named, payouts] = await Promise.all([
+          supabase.from('challenges').select('id, title, task').in('id', challengeIds),
+          supabase
+            .from('challenge_payouts')
+            .select('challenge_id, place, amount')
+            .eq('user_id', user!.id)
+            .in('challenge_id', challengeIds),
+        ]);
+        for (const row of named.data ?? []) {
+          titles.set(row.id, { title: row.title ?? null, task: row.task ?? null });
+        }
+        for (const row of payouts.data ?? []) {
+          if (row.challenge_id && Number(row.place) > 0) {
+            places.set(row.challenge_id, Number(row.place));
+          }
+        }
+      }
+      return rows.map((row) =>
+        asWalletReceiptRow({
+          ...row,
+          title: row.challenge_id ? titles.get(row.challenge_id)?.title : null,
+          task: row.challenge_id ? titles.get(row.challenge_id)?.task : null,
+          place: row.challenge_id ? places.get(row.challenge_id) ?? null : null,
+        }),
+      );
     },
   });
 
@@ -53,37 +81,38 @@ export function WalletHistory() {
         Receipts
       </AppText>
       <View className="mt-2 gap-2">
-        {query.data.map((row) => (
-          <Pressable
-            key={row.id}
-            disabled={!row.challenge_id}
-            onPress={() => {
-              if (!row.challenge_id) {
-                return;
-              }
-              wallet.closeWallet();
-              setTimeout(() => {
-                router.push(challengeDetailHref(row.challenge_id, 'lobby', null, { tab: 'board', receipt: true }));
-              }, 60);
-            }}
-            style={{ minHeight: 44 }}>
-            <Card className="flex-row items-center gap-3 py-3">
-              <View className="flex-1">
-                <AppText className="text-[14px] font-bold text-charcoal">
-                  {ledgerReceiptLabel(row.entry_type)}
-                </AppText>
-                <AppText className="text-[12px] text-muted">{formatDate(row.created_at, 'MMM d')}</AppText>
-              </View>
-              <StakeAmount
-                amount={row.amount}
-                currency={row.currency}
-                size={14}
-                zeroAsNumber
-                textClassName="text-[14px] font-bold text-charcoal"
-              />
-            </Card>
-          </Pressable>
-        ))}
+        {query.data.map((row) => {
+          const href = walletReceiptHref(row.challengeId);
+          return (
+            <Pressable
+              key={row.id}
+              disabled={!href}
+              onPress={() => {
+                if (!href) {
+                  return;
+                }
+                wallet.closeWallet();
+                setTimeout(() => {
+                  router.push(href);
+                }, 60);
+              }}
+              style={{ minHeight: 44 }}>
+              <Card className="flex-row items-center gap-3 py-3">
+                <View className="flex-1">
+                  <AppText className="text-[14px] font-bold text-charcoal">{row.headline}</AppText>
+                  <AppText className="text-[12px] text-muted">{formatDate(row.createdAt, 'MMM d')}</AppText>
+                </View>
+                <StakeAmount
+                  amount={row.amount}
+                  currency={row.currency}
+                  size={14}
+                  zeroAsNumber
+                  textClassName="text-[14px] font-bold text-charcoal"
+                />
+              </Card>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );

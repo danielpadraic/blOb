@@ -163,6 +163,11 @@ export function getCheckinSubmitMessage(error: unknown): string {
   if (raw.includes('already_logged_today') || raw.includes('already checked in') || raw.includes('already submitted')) {
     return 'Already checked in today. Come back tomorrow.';
   }
+  if (raw.includes('proof_already_counts') || raw.includes('already counts on')) {
+    const match = extractRawMessage(error).match(/PROOF_ALREADY_COUNTS[:\s]+(.+)/i);
+    const title = match?.[1]?.replace(/\.+$/g, '').trim() || 'another challenge';
+    return `That proof already counts on ${title}.`;
+  }
   if (raw.includes('missing_proofs') || raw.includes('required proof')) {
     return 'Add every required proof to submit.';
   }
@@ -571,6 +576,16 @@ function humanize(raw: string): string {
 
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
+  }
+  if (message.includes('proof_already_counts') || message.includes('already counts on')) {
+    const match = raw.match(/PROOF_ALREADY_COUNTS[:\s]+(.+)/i);
+    const title = match?.[1]?.replace(/\.+$/g, '').trim();
+    if (title) {
+      return `That proof already counts on ${title}.`;
+    }
+    if (message.includes('already counts on')) {
+      return raw.trim();
+    }
   }
   if (
     message.includes('can’t message this person') ||

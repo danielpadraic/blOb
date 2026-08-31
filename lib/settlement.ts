@@ -42,6 +42,7 @@ export {
   settlePayoutConfirmCopy,
   settlementRpcForPayout,
 } from '@/lib/settlement/payout';
+export { rankedShares, resultWhyCopy } from '@/lib/settlement/rankedShares';
 export {
   FORFEIT_RECEIPT,
   formatSettlementAmount,
@@ -52,6 +53,12 @@ export {
 } from '@/lib/settlement/receipts';
 import { settlementErrorCopy } from '@/lib/settlement/errors';
 export { classifySettlementError, settlementErrorCopy } from '@/lib/settlement/errors';
+export {
+  nonWinnerSettledNotifyCopy,
+  splitSettledNotifyCopy,
+  walletAmountLabel,
+  winnerSettledNotifyCopy,
+} from '@/lib/settlement/notify';
 export { trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
 
 const JOINABLE_STATUSES: ChallengeStatus[] = [
@@ -696,6 +703,29 @@ export async function trySettleIfEnded(challengeId: string): Promise<ChallengeSe
 const SYNC_STATUSES_MIN_INTERVAL_MS = 15_000;
 let lastStatusSyncAt = 0;
 let statusSyncInFlight: Promise<void> | null = null;
+let statusSyncMissing = false;
+let statusSyncMissingLogged = false;
+
+function isMissingStatusSyncRpc(error: { message?: string; code?: string; status?: number } | null): boolean {
+  if (!error) {
+    return false;
+  }
+  const code = String(error.code ?? '');
+  const status = Number(error.status ?? 0);
+  const message = String(error.message ?? '').toLowerCase();
+  return (
+    status === 404 ||
+    status === 405 ||
+    code === '404' ||
+    code === '405' ||
+    code === 'PGRST202' ||
+    message.includes('404') ||
+    message.includes('405') ||
+    message.includes('could not find the function') ||
+    message.includes('does not exist') ||
+    message.includes('schema cache')
+  );
+}
 
 export async function syncChallengeStatuses(): Promise<void> {
   const now = Date.now();
@@ -707,9 +737,17 @@ export async function syncChallengeStatuses(): Promise<void> {
   }
   lastStatusSyncAt = now;
   statusSyncInFlight = (async () => {
-    const { error } = await supabase.rpc('sync_challenge_statuses');
-    if (error) {
-      console.log('[blob:status] sync skipped', error.message);
+    if (!statusSyncMissing) {
+      const { error } = await supabase.rpc('sync_challenge_statuses');
+      if (error && isMissingStatusSyncRpc(error)) {
+        statusSyncMissing = true;
+        if (!statusSyncMissingLogged) {
+          statusSyncMissingLogged = true;
+          console.log('[blob:challenge]', 'sync_challenge_statuses missing', error.message);
+        }
+      } else if (error) {
+        console.log('[blob:status] sync skipped', error.message);
+      }
     }
     try {
       await tickSettlementsWithClient(supabase);

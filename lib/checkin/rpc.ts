@@ -10,6 +10,7 @@ import type { CheckinHealthProof } from '../health/checkinHealthProof';
 import { asCheckinStatus, type ChallengeCheckin } from '../challengeCheckin';
 import { normalizePeriodKey } from '../checkinPeriod';
 import { clampProofCaption } from '../checkinShare';
+import { hashCheckinProof } from './hashProof';
 import { mapCheckinRpcError } from './errors';
 
 export type CheckinRpcClient = {
@@ -140,6 +141,12 @@ async function proofPartFor(
       );
     }
     const meters = input.health?.distanceMeters ?? parseSessionDistanceText(input.text);
+    const contentHash = await hashCheckinProof({
+      uri,
+      blob: input.blob,
+      url,
+      healthWorkoutId,
+    });
     return {
       id: proof.id,
       part: partWithCaption(
@@ -150,6 +157,7 @@ async function proofPartFor(
           healthWorkoutId,
           health: input.health ?? null,
           distanceMeters: meters,
+          contentHash: contentHash || null,
         },
         input.caption,
       ),
@@ -159,10 +167,17 @@ async function proofPartFor(
   const uri = input.uri?.trim() ?? '';
   if (uri.startsWith('health:')) {
     const healthWorkoutId = uri.slice('health:'.length);
+    const contentHash = await hashCheckinProof({ healthWorkoutId });
     return {
       id: proof.id,
       part: partWithCaption(
-        { method: proof.method, url: '', healthWorkoutId, health: input.health ?? null },
+        {
+          method: proof.method,
+          url: '',
+          healthWorkoutId,
+          health: input.health ?? null,
+          contentHash: contentHash || null,
+        },
         input.caption,
       ),
       healthWorkoutId,
@@ -184,6 +199,11 @@ async function proofPartFor(
         }),
       );
   const urlOnly = uniqueProofUrls([url]);
+  const contentHash = await hashCheckinProof({
+    uri,
+    blob: input.blob,
+    url: urlOnly[0] ?? url,
+  });
   return {
     id: proof.id,
     part: partWithCaption(
@@ -192,6 +212,7 @@ async function proofPartFor(
         url: urlOnly[0] ?? url,
         urls: urlOnly,
         fromLibrary: input.fromLibrary === true,
+        contentHash: contentHash || null,
       },
       input.caption,
     ),

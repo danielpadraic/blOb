@@ -36,7 +36,9 @@ function isRankedPrize(challenge: EvenSplitPayoutInput): boolean {
 }
 
 function isPointsBoard(challenge: EvenSplitPayoutInput): boolean {
-  return asKey(challenge.challenge_type) === 'points' || asKey(challenge.format) === 'points';
+  const type = asKey(challenge.challenge_type);
+  const format = asKey(challenge.format);
+  return type === 'points' || type === 'cumulative' || format === 'points' || format === 'cumulative';
 }
 
 /** Remaining (or everyone who hit the Cumulative target) split. Not WTA / top places / LMS. */
@@ -55,10 +57,13 @@ export function isEvenSplitPayout(challenge: EvenSplitPayoutInput | null | undef
 export function settlementRpcForPayout(
   challenge: EvenSplitPayoutInput | null | undefined,
 ): SettlementPayoutRpc {
-  if (isPointsBoard(challenge) && isRankedPrize(challenge)) {
+  if (isLmsPayout(challenge ?? {})) {
+    return 'distribute_challenge';
+  }
+  if (isPointsBoard(challenge) || isRankedPrize(challenge) || isEvenSplitPayout(challenge)) {
     return 'settle_ended_challenge';
   }
-  return isEvenSplitPayout(challenge) ? 'settle_ended_challenge' : 'distribute_challenge';
+  return 'distribute_challenge';
 }
 
 export function settlePayoutConfirmCopy(
@@ -73,7 +78,7 @@ export function settlePayoutConfirmCopy(
     return prizeStructureSummary(challenge);
   }
   if (!isEvenSplitPayout(challenge)) {
-    return 'First place takes the prize.';
+    return 'Last standing takes the prize.';
   }
   return 'Everyone still in splits the prize.';
 }

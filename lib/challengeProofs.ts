@@ -56,6 +56,8 @@ export type ChallengeProofPart = {
   submitted_at?: string | null;
   /** User caption on this proof’s media. ≤180. Not posts.content. */
   caption?: string | null;
+  /** SHA-256 of file bytes, or object:/health: fingerprint when bytes are unavailable. */
+  contentHash?: string | null;
 };
 
 /** Extra photos on top of required proofs. Extras are optional and never unlock Send. */
@@ -823,6 +825,12 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
       accuracy_m: Number(row.accuracy_m ?? row.accuracyM) > 0 ? Math.round(Number(row.accuracy_m ?? row.accuracyM)) : null,
       submitted_at: typeof row.submitted_at === 'string' ? row.submitted_at : typeof row.submittedAt === 'string' ? row.submittedAt : null,
       caption: typeof row.caption === 'string' ? row.caption.replace(/\r\n/g, '\n').slice(0, 180) : null,
+      contentHash:
+        typeof row.contentHash === 'string'
+          ? row.contentHash
+          : typeof row.content_hash === 'string'
+            ? row.content_hash
+            : null,
     };
   }
   return parts;

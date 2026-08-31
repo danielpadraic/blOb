@@ -8,6 +8,7 @@ export {
   pointsRank,
   pointsStandings,
   rankBoardRows,
+  yourStandingLine,
   type BoardBucket,
   type BoardParticipant,
   type BoardPayout,

@@ -12,7 +12,7 @@ import { incrementDaysCompleted } from '@/lib/checkin/progress';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
 import { parseProofParts, proofImageUrls } from '@/lib/challengeProofs';
 import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/localNudges';
-import { usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesComparablePointsScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { heroRingActive } from '@/lib/challengeStart';
 import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
@@ -354,6 +354,8 @@ export function useSubmitCheckin(challengeId: string | undefined) {
         } else {
           writeCheckinCache(queryClient, challengeId, user.id, row);
         }
+        const bumpPoints =
+          usesPointsBoard(cachedChallenge) && !usesComparablePointsScoring(cachedChallenge);
         queryClient.setQueryData<ChallengeParticipantLike[]>(
           ['challenge-participants', challengeId],
           (current) =>
@@ -362,6 +364,9 @@ export function useSubmitCheckin(challengeId: string | undefined) {
                 ? {
                     ...item,
                     days_completed: incrementDaysCompleted(Number(item.days_completed) || 0, false),
+                    points: bumpPoints
+                      ? incrementDaysCompleted(Number(item.points) || 0, false)
+                      : item.points,
                   }
                 : item,
             ),
@@ -373,6 +378,9 @@ export function useSubmitCheckin(challengeId: string | undefined) {
               ? {
                   ...current,
                   days_completed: incrementDaysCompleted(Number(current.days_completed) || 0, false),
+                  points: bumpPoints
+                    ? incrementDaysCompleted(Number(current.points) || 0, false)
+                    : current.points,
                 }
               : current,
         );
@@ -401,6 +409,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
 type ChallengeParticipantLike = {
   user_id: string;
   days_completed?: number | null;
+  points?: number | null;
 };
 
 export function parseCheckinParts(value: unknown) {

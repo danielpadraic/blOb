@@ -19,7 +19,7 @@ import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { usesCumulativeScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
-import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialGuaranteeAmount, officialStartNeededLabel, armingCountdownLabel } from '@/lib/officialSeries';
+import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialFormingStartLine, officialGuaranteeAmount, armingCountdownLabel } from '@/lib/officialSeries';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 import { compactCountsFromStats } from '@/lib/board';
@@ -100,7 +100,7 @@ function startStripCopy(
     const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
     const needed = officialContestantsNeeded({ guarantee, pot, buyIn });
     if (needed > 0) {
-      const text = officialStartNeededLabel(needed);
+      const text = officialFormingStartLine(challenge);
       return text ? { kicker: 'Start', text } : null;
     }
     if (challenge.status === 'arming') {

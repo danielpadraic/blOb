@@ -14,6 +14,12 @@ import { formatCash } from '@/lib/currency';
 import { headerCoinsForTour } from '@/lib/homeTour';
 import { isOfficialAccount } from '@/lib/official';
 import { countUpValues } from '@/lib/topup';
+import {
+  headerCountUpPlan,
+  headerLastShown,
+  markHeaderCountUpDone,
+  type HeaderCountCurrency,
+} from '@/lib/walletCountUp';
 import { THEME } from '@/lib/theme';
 import { formatCoins } from '@/utils/format';
 
@@ -26,102 +32,50 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
   const official = isOfficialAccount(profile);
   const coins = headerCoinsForTour(profile);
   const bucks = Number(profile?.bucks ?? 0);
-  const lastShownCoins = Number(profile?.last_shown_coin_balance ?? coins);
-  const lastShownBucks = Number(profile?.last_shown_bucks_balance ?? bucks);
+  const lastShownCoins = headerLastShown(profile?.last_shown_coin_balance, coins);
+  const lastShownBucks = headerLastShown(profile?.last_shown_bucks_balance, bucks);
   const [displayCoins, setDisplayCoins] = useState(coins);
   const [displayBucks, setDisplayBucks] = useState(bucks);
   const animatingCoins = useRef(false);
   const animatingBucks = useRef(false);
-  const shownCoins = useRef<number | null>(null);
-  const shownBucks = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!profile || official) {
-      return;
-    }
-    if (tourLocked || !profile.tutorial_completed_at) {
+    if (!profile || official || tourLocked || !profile.tutorial_completed_at) {
       setDisplayCoins(coins);
-      shownCoins.current = coins;
+      markHeaderCountUpDone(profile?.id, 'coins', coins);
       return;
     }
-    if (coins <= lastShownCoins) {
-      setDisplayCoins(coins);
-      shownCoins.current = coins;
-      if (coins < lastShownCoins) {
-        void markCoinsShown();
-      }
-      return;
-    }
-    if (!animatingCoins.current) {
-      setDisplayCoins(lastShownCoins);
-    }
+    playCount('coins', lastShownCoins, coins, setDisplayCoins, animatingCoins, markCoinsShown);
   }, [coins, lastShownCoins, official, profile?.id, profile?.tutorial_completed_at, tourLocked]);
 
   useEffect(() => {
     if (!profile || official) {
-      return;
-    }
-    if (shownBucks.current === bucks || bucks <= lastShownBucks) {
       setDisplayBucks(bucks);
-      shownBucks.current = bucks;
-      if (bucks < lastShownBucks) {
-        void markBucksShown();
-      }
+      markHeaderCountUpDone(profile?.id, 'bucks', bucks);
       return;
     }
-    if (!animatingBucks.current) {
-      void runCount(
-        lastShownBucks,
-        bucks,
-        setDisplayBucks,
-        animatingBucks,
-        shownBucks,
-        markBucksShown,
-      );
-    }
+    playCount('bucks', lastShownBucks, bucks, setDisplayBucks, animatingBucks, markBucksShown);
   }, [bucks, lastShownBucks, official, profile?.id]);
 
   useEffect(() => {
-    function countCoinsIfRose() {
-      if (official || tourLocked || !profile?.tutorial_completed_at) {
+    function onForeground() {
+      if (official || !profile?.id) {
         return;
       }
-      if (coins > lastShownCoins && !animatingCoins.current) {
-        void runCount(
-          lastShownCoins,
-          coins,
-          setDisplayCoins,
-          animatingCoins,
-          shownCoins,
-          markCoinsShown,
-        );
+      if (!tourLocked && profile.tutorial_completed_at) {
+        playCount('coins', lastShownCoins, coins, setDisplayCoins, animatingCoins, markCoinsShown);
       }
+      playCount('bucks', lastShownBucks, bucks, setDisplayBucks, animatingBucks, markBucksShown);
     }
-
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') {
-        return;
-      }
-      countCoinsIfRose();
-      if (official) {
-        return;
-      }
-      if (bucks > lastShownBucks && !animatingBucks.current) {
-        void runCount(
-          lastShownBucks,
-          bucks,
-          setDisplayBucks,
-          animatingBucks,
-          shownBucks,
-          markBucksShown,
-        );
+      if (state === 'active') {
+        onForeground();
       }
     });
     function onDocumentVisible() {
-      if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
-        return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        onForeground();
       }
-      countCoinsIfRose();
     }
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', onDocumentVisible);
@@ -138,6 +92,7 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
     lastShownBucks,
     lastShownCoins,
     official,
+    profile?.id,
     profile?.tutorial_completed_at,
     tourLocked,
   ]);
@@ -152,6 +107,33 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
     void queryClient.invalidateQueries({ queryKey: ['profile'] });
   }
 
+  function playCount(
+    currency: HeaderCountCurrency,
+    lastShown: number,
+    current: number,
+    setValue: (value: number) => void,
+    animating: { current: boolean },
+    markShown: () => Promise<void>,
+  ) {
+    const plan = headerCountUpPlan({
+      userId: profile?.id,
+      currency,
+      lastShown,
+      current,
+    });
+    if (plan === 'snap') {
+      setValue(current);
+      return;
+    }
+    if (animating.current) {
+      return;
+    }
+    void runCount(lastShown, current, setValue, animating, () => {
+      markHeaderCountUpDone(profile?.id, currency, current);
+      return markShown();
+    });
+  }
+
   if (!profile || !wallet) {
     return null;
   }
@@ -161,7 +143,7 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
       accessibilityRole="button"
       accessibilityLabel="Open wallet"
       disabled={tourLocked}
-      onPress={tourLocked ? undefined : wallet.openWallet}
+      onPress={tourLocked ? undefined : () => wallet.openWallet({ scrollToLatest: true })}
       className="flex-row items-center"
       style={{
         backgroundColor: THEME.surface,
@@ -219,7 +201,6 @@ async function runCount(
   to: number,
   setValue: (value: number) => void,
   animating: { current: boolean },
-  shownAt: { current: number | null },
   markShown: () => Promise<void>,
 ) {
   animating.current = true;
@@ -229,7 +210,6 @@ async function runCount(
   }
   setValue(to);
   animating.current = false;
-  shownAt.current = to;
   await markShown();
 }
 

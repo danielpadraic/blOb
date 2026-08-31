@@ -23,6 +23,16 @@ export {
   type RemainingParticipant,
 } from './shares';
 export {
+  ILLEGAL_CONSISTENCY_TOP_PLACES_COPY,
+  ILLEGAL_POINTS_EVEN_SPLIT_COPY,
+  rankedEligible,
+  rankedShares,
+  resultWhyCopy,
+  scaledWeights,
+  type RankedBoardRow,
+  type RankedShare,
+} from './rankedShares';
+export {
   FORFEIT_RECEIPT,
   VOID_BOTH_RECEIPT,
   VOID_BUYIN_RECEIPT,
@@ -45,9 +55,13 @@ export {
 export {
   forfeitNotifyCopy,
   lobbyResultCopy,
+  nonWinnerSettledNotifyCopy,
   payoutReceivedCopy,
   settledCongratulateCopy,
+  splitSettledNotifyCopy,
   voidNotifyCopy,
+  walletAmountLabel,
+  winnerSettledNotifyCopy,
 } from './notify';
 export {
   getChallengeSettlementWithClient,

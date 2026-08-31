@@ -147,6 +147,12 @@ describe('challenge load helpers', () => {
     const seeded = client.getQueryData(['challenge', 'abc']) as { title?: string; prize_pool?: number };
     expect(seeded.title).toBe('Workout Group #2');
     expect(seeded.prize_pool).toBe(20);
+    expect(seedChallengeDetailQuery({ id: 'def', title: 'Challenge', task: 'Daily Prayer', prize_pool: 5 }, client)).toBe(
+      'def',
+    );
+    const named = client.getQueryData(['challenge', 'def']) as { title?: string; prize_pool?: number };
+    expect(named.title).toBe('Daily Prayer');
+    expect(named.prize_pool).toBe(5);
   });
 
   it('paints feed preview for the same id and never last-good from another challenge', () => {

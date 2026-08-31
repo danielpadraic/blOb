@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -24,7 +25,19 @@ const EARN_WAYS = [
 export function WalletSheet() {
   const router = useRouter();
   const { profile } = useMyProfile();
-  const { sheetOpen, closeWallet, openSend, openTopUp } = useWallet();
+  const { sheetOpen, scrollToLatest, closeWallet, openSend, openTopUp } = useWallet();
+  const scrollRef = useRef<ScrollView>(null);
+  const receiptsY = useRef(0);
+
+  useEffect(() => {
+    if (!sheetOpen || !scrollToLatest) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(receiptsY.current - 8, 0), animated: true });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [scrollToLatest, sheetOpen]);
 
   if (!profile || !sheetOpen) {
     return null;
@@ -50,9 +63,14 @@ export function WalletSheet() {
             <AppText className="mt-3 text-lg font-bold text-charcoal">Wallet</AppText>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
             <WalletBalances profile={profile} />
-            <WalletHistory />
+            <View
+              onLayout={(event) => {
+                receiptsY.current = event.nativeEvent.layout.y;
+              }}>
+              <WalletHistory />
+            </View>
 
             <AppText className="mt-5 text-[13px] leading-5 text-muted">
               {copy('money.realUsd')}

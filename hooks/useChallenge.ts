@@ -49,7 +49,6 @@ import {
   fetchChallengeSettlement,
   markChallengeJudging,
   settleChallenge,
-  syncChallengeStatuses,
 } from '@/lib/settlement';
 import {
   buildRulesStructured,
@@ -295,11 +294,6 @@ export function useChallenge(id: string | undefined) {
     },
     queryFn: async (): Promise<ChallengeWithStats> => {
       console.log('[blob:detail] load', id);
-      try {
-        await syncChallengeStatuses();
-      } catch (error) {
-        console.log('[blob:detail] status sync skipped', error);
-      }
       const snapshot = appQueryClient.getQueryData<ChallengeWithStats>(['challenge', id]);
       const usable = snapshot?.id === id && challengeSnapshotHasIdentity(snapshot) ? snapshot : undefined;
       const row = await loadChallengeDetail(id!, usable);

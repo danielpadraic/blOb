@@ -19,6 +19,7 @@ import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
+import { ChallengeResultCard } from '@/components/challenge/ChallengeResultCard';
 import { HostPrizeTopUp } from '@/components/challenge/HostPrizeTopUp';
 import { FieldNoteLabel, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
@@ -31,7 +32,6 @@ import { HealthProofCaption } from '@/components/challenge/HealthProofCaption';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { SettleConfirmModal } from '@/components/challenge/SettleConfirmModal';
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
-import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
@@ -130,6 +130,7 @@ import { challengeGoalLabel, challengeDurationDays, pointsGoalTarget } from '@/l
 import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
+import { buildBoard, yourStandingLine } from '@/lib/board';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { reportAppError, extractPostgrestCode } from '@/lib/appErrors';
 import { challengeLoadKind, firstRouteParam } from '@/lib/challengeLoad';
@@ -273,6 +274,15 @@ export default function ChallengeDetailScreen() {
         : 'overview',
   );
 
+  useEffect(() => {
+    const next: ChallengePageTab = highlightPostId
+      ? 'feed'
+      : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
+        ? tabParam
+        : 'overview';
+    setPageTab(next);
+  }, [highlightPostId, id, tabParam]);
+
   const hostProfile = hostQuery.data;
   const heroHost =
     hostProfile && typeof hostProfile === 'object' && hostProfile.id
@@ -346,6 +356,28 @@ export default function ChallengeDetailScreen() {
     }
     return countLiveCompetitors(roster.data);
   }, [challenge?.participant_count, isJoined, roster.data]);
+  const standingLine = useMemo(() => {
+    if (!challenge || !user?.id || !isJoined) {
+      return null;
+    }
+    const view = buildBoard({
+      status: challenge.status,
+      participants: (roster.data ?? []).map((row) => ({
+        user_id: row.user_id,
+        days_completed: row.days_completed,
+        points: row.points,
+        status: row.status,
+        eliminated_at: row.eliminated_at,
+      })),
+      viewerId: user.id,
+      joined: true,
+    });
+    return yourStandingLine(
+      view.people,
+      user.id,
+      usesPointsBoard(challenge) ? 'points' : 'days',
+    );
+  }, [challenge, isJoined, roster.data, user?.id]);
   const durationDays = challengeDurationDays(challenge);
   const loggedToday =
     periodCheckin.data?.phase === 'submitted' || isSubmittedCheckin(periodCheckin.data);
@@ -458,6 +490,21 @@ export default function ChallengeDetailScreen() {
   const feedSectionY = useRef(0);
   const feedTitlesH = useRef(0);
   const scrolledToPost = useRef<string | null>(null);
+  const scrolledSettledId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!id || challenge?.status !== 'settled') {
+      if (id !== scrolledSettledId.current) {
+        scrolledSettledId.current = null;
+      }
+      return;
+    }
+    if (scrolledSettledId.current === id) {
+      return;
+    }
+    scrolledSettledId.current = id;
+    scrollNodeTo(scrollRef.current, { y: 0, animated: false });
+  }, [challenge?.status, id]);
 
   useEffect(() => {
     if (highlightPostId && pageTab === 'feed') {
@@ -673,7 +720,11 @@ export default function ChallengeDetailScreen() {
     }
     setActionError(null);
     settle.mutate(id, {
-      onSuccess: () => setSettleOpen(false),
+      onSuccess: () => {
+        setSettleOpen(false);
+        setPageTab('overview');
+        scrollNodeTo(scrollRef.current, { y: 0, animated: false });
+      },
       onError: (error) => {
         setActionError(settlementErrorCopy(error));
       },
@@ -931,32 +982,6 @@ export default function ChallengeDetailScreen() {
           </Card>
         ) : null}
 
-        {receipt ? (
-          <View className="mt-4">
-            {isJoined &&
-            Number(receipt.payouts.find((row) => row.user_id === user?.id)?.amount) > 0 ? (
-              <MascotState
-                kind="success"
-                compact
-                title="You got paid."
-                body="The receipt is yours to keep."
-              />
-            ) : null}
-            <SettlementSummary
-              settlement={receipt}
-              userId={user?.id}
-              joined={isJoined}
-              daysCompleted={daysCompleted}
-              targetCount={target}
-              currency={challenge.currency}
-              official={challenge.is_official}
-              entryFeePaid={participation?.buy_in_paid ?? challenge.buy_in_amount}
-              hostContribution={challenge.creator_contribution}
-              prizePool={challenge.prize_pool}
-            />
-          </View>
-        ) : null}
-
         {showOfficialTools ? (
           <View className="mt-4">
             <Button
@@ -970,11 +995,12 @@ export default function ChallengeDetailScreen() {
         {challenge.is_official ? (
           <>
             <ChallengeDetailsCard challenge={challenge} missesUsed={periodMisses.data ?? 0} />
-            {isOfficialJoinable(challenge) ? null : (
+            {Boolean(receipt) ? null : (
               <View className="mt-4">
                 <OfficialMoneyBoard
                   challenge={challenge}
                   finished={finishers}
+                  standing={challenge.status === 'live' ? standingLine : null}
                   onInvite={openInvite}
                 />
               </View>
@@ -1164,7 +1190,11 @@ export default function ChallengeDetailScreen() {
         </Card>
         )}
 
-        {wasCancelled || challenge.is_official ? null : (
+        {wasCancelled ? null : receipt ? (
+        <View className="mt-4">
+          <ChallengeResultCard challenge={challenge} settlement={receipt} userId={user?.id} />
+        </View>
+        ) : challenge.is_official ? null : (
         <Card className="mt-4">
           <FieldNoteLabel
             note="pot"
@@ -1178,6 +1208,9 @@ export default function ChallengeDetailScreen() {
           ) : (
             <View className="mt-2">
               <ChallengePrizeLine challenge={challenge} />
+              {challenge.status === 'live' && standingLine ? (
+                <AppText className="mt-2 text-sm leading-5 text-muted">{standingLine}</AppText>
+              ) : null}
             </View>
           )}
           {isHost ? (

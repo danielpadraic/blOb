@@ -27,6 +27,8 @@ describe('challengeDisplayTitle', () => {
 
   it('returns empty when nothing real exists — never a fake Challenge name', () => {
     expect(challengeDisplayTitle({ title: 'Untitled challenge' })).toBe('');
+    expect(challengeDisplayTitle({ title: 'Challenge' })).toBe('');
+    expect(challengeDisplayTitle({ title: 'Challenge', task: 'Daily Prayer' })).toBe('Daily Prayer');
     expect(challengeDisplayTitle(null)).toBe('');
   });
 });

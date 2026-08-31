@@ -50,7 +50,10 @@ export function pointsStandings(people: BoardPerson[]): BoardPerson[] {
   return people
     .filter((row) => row.bucket !== 'dropped')
     .slice()
-    .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        boardScoreOf(b, 'points') - boardScoreOf(a, 'points') || a.name.localeCompare(b.name),
+    );
 }
 
 export function pointsRank(people: BoardPerson[], viewerId?: string | null): number | null {
@@ -64,7 +67,7 @@ export function pointsRank(people: BoardPerson[], viewerId?: string | null): num
 export function pointsLeader(people: BoardPerson[]): BoardPerson | null {
   const ranked = pointsStandings(people);
   const first = ranked[0];
-  if (!first || first.points <= 0) {
+  if (!first || boardScoreOf(first, 'points') <= 0) {
     return null;
   }
   return first;
@@ -141,15 +144,12 @@ export function buildBoard(input: {
     .filter((row) => !neverOnBoard(row))
     .map((row) => {
       const live = !isDropped(row) && isLiveCompetitor(row);
-      const paid = paidByUser.has(row.user_id);
       let bucket: BoardBucket;
       if (settled) {
-        if (forfeited) {
+        if (forfeited || !live) {
           bucket = 'dropped';
-        } else if (paid || winnerIds.has(row.user_id)) {
-          bucket = 'remaining';
         } else {
-          bucket = 'dropped';
+          bucket = 'remaining';
         }
       } else if (!live) {
         bucket = 'dropped';
@@ -166,7 +166,7 @@ export function buildBoard(input: {
         bucket,
         days: Number(row.days_completed) || 0,
         points: Math.max(Number(row.points) || 0, 0),
-        payout: paid ? paidByUser.get(row.user_id) ?? 0 : null,
+        payout: paidByUser.has(row.user_id) ? paidByUser.get(row.user_id) ?? 0 : null,
         you: Boolean(viewerId && row.user_id === viewerId),
         eliminatedAt: row.eliminated_at ?? null,
       } satisfies BoardPerson;
@@ -207,7 +207,26 @@ export function buildBoard(input: {
 }
 
 export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days'): number {
-  return mode === 'points' ? person.points : person.days;
+  if (mode === 'points') {
+    return person.points > 0 ? person.points : person.days;
+  }
+  return person.days;
+}
+
+export function yourStandingLine(
+  people: BoardPerson[],
+  viewerId?: string | null,
+  mode: 'points' | 'days' = 'days',
+): string | null {
+  if (!viewerId) {
+    return null;
+  }
+  const ranked = rankBoardRows(people, mode);
+  const you = ranked.find((row) => row.userId === viewerId && row.rank != null);
+  if (!you?.rank) {
+    return null;
+  }
+  return `Your standing · ${you.rank}`;
 }
 
 export function boardScoreLabel(

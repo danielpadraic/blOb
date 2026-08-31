@@ -7,6 +7,7 @@ export type SettlementFailKind =
   | 'offline'
   | 'not_ended'
   | 'not_even_split'
+  | 'illegal_pair'
   | 'cooldown'
   | 'generic';
 
@@ -19,12 +20,18 @@ export const SETTLEMENT_ERROR_COPY: Record<SettlementFailKind, string> = {
   offline: 'You’re offline. Settlement will finish when you’re back.',
   not_ended: 'This challenge is still going.',
   not_even_split: 'This prize is ranked, not an even split. Host Settle pays first place or top places.',
+  illegal_pair: 'This prize setup can’t be paid that way. Pick a payout that matches the format.',
   cooldown: 'Payout unlocks 1 hour after the challenge ends.',
   generic: 'Couldn’t settle this challenge. Try again.',
 };
 
 const SETTLEMENT_RPC_COPY: Record<string, string> = {
   NOT_EVEN_SPLIT: SETTLEMENT_ERROR_COPY.not_even_split,
+  POINTS_NO_EVEN_SPLIT:
+    'Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.',
+  CONSISTENCY_NO_TOP_PLACES:
+    'Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.',
+  ILLEGAL_PAYOUT_PAIR: SETTLEMENT_ERROR_COPY.illegal_pair,
   ALREADY_SETTLED: SETTLEMENT_ERROR_COPY.already_settled,
   ALREADY_DISTRIBUTED: SETTLEMENT_ERROR_COPY.already_settled,
   CHALLENGE_NOT_ENDED: SETTLEMENT_ERROR_COPY.not_ended,
@@ -68,6 +75,15 @@ export function classifySettlementError(error: unknown): SettlementFailKind {
   const raw = extractRaw(error).toLowerCase();
   if (raw.includes('not_even_split') || raw.includes('not an even split')) {
     return 'not_even_split';
+  }
+  if (
+    raw.includes('points_no_even_split') ||
+    raw.includes('consistency_no_top_places') ||
+    raw.includes('illegal_payout_pair') ||
+    raw.includes('can’t use even split remaining') ||
+    raw.includes('can’t use top #')
+  ) {
+    return 'illegal_pair';
   }
   if (raw.includes('cooldown_active') || raw.includes('too_early_distribute') || raw.includes('unlocks 1 hour')) {
     return 'cooldown';

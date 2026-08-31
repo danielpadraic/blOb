@@ -22,6 +22,7 @@ export type CheckinPostLike = {
   media_urls?: string[] | null;
   kind?: string | null;
   type?: string | null;
+  hidden_from_home?: boolean | null;
 };
 
 export function looksLikeProofMedia(urls?: string[] | null): boolean {

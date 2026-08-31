@@ -1,4 +1,4 @@
-import { voidReceiptCopy, type SettlementVoidKind } from '@/lib/settlement/receipts';
+import { formatSettlementAmount, voidReceiptCopy, type SettlementVoidKind } from '@/lib/settlement/receipts';
 
 export type SettlementNotifyInput = {
   displayName: string;
@@ -30,6 +30,32 @@ export function voidNotifyCopy(
 export function payoutReceivedCopy(amountLabel: string, title: string): string {
   const label = title.trim() || 'this challenge';
   return `You received ${amountLabel} from @${label}.`;
+}
+
+/** Winner push / in-app. Cash stays `$`, never the word Bucks. */
+export function winnerSettledNotifyCopy(title: string, amountLabel: string): string {
+  const label = title.trim() || 'this challenge';
+  return `${label} settled. ${amountLabel} is in your wallet.`;
+}
+
+export function splitSettledNotifyCopy(title: string, otherCount: number): string {
+  const label = title.trim() || 'this challenge';
+  const n = Math.max(Math.floor(otherCount), 1);
+  return `${label} settled. You split it with ${n}.`;
+}
+
+export function nonWinnerSettledNotifyCopy(title: string, winnerName: string): string {
+  const label = title.trim() || 'this challenge';
+  const name = winnerName.trim() || 'Someone';
+  return `${label} settled. ${name} took it.`;
+}
+
+export function walletAmountLabel(amount: number, currency?: string | null): string {
+  if (String(currency ?? 'coins') === 'bucks') {
+    return formatSettlementAmount(amount, 'bucks');
+  }
+  const coins = Math.round(Number(amount ?? 0));
+  return `${coins} ${coins === 1 ? 'coin' : 'coins'}`;
 }
 
 export function lobbyResultCopy(input: {

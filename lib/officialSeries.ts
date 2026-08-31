@@ -96,3 +96,47 @@ export function officialStartNeededLabel(needed: number): string | null {
   return `${needed} more contestants needed`;
 }
 
+type OfficialStartRow = {
+  id?: string | null;
+  is_official?: boolean | null;
+  series_id?: string | null;
+  status?: string | null;
+  min_participants?: number | null;
+  participant_count?: number | null;
+  host_budget?: number | null;
+  prize_pool?: number | null;
+  buy_in_amount?: number | null;
+};
+
+/** Paid-join target for THIS challenge_id only. Never last-open snapshot. */
+export function officialStartJoinTarget(challenge: OfficialStartRow | null | undefined): number {
+  if (!challenge?.id || !isOfficialSeriesChallenge(challenge)) {
+    return 0;
+  }
+  const joined = Math.max(Math.floor(Number(challenge.participant_count) || 0), 0);
+  const min = Math.max(Math.floor(Number(challenge.min_participants) || 0), 0);
+  const extra = officialContestantsNeeded({
+    guarantee: officialGuaranteeAmount(challenge),
+    pot: Number(challenge.prize_pool) || 0,
+    buyIn: Number(challenge.buy_in_amount) || 0,
+  });
+  return Math.max(min, extra > 0 ? joined + extra : 0);
+}
+
+export function officialRemainingToStart(challenge: OfficialStartRow | null | undefined): number {
+  const target = officialStartJoinTarget(challenge);
+  const joined = Math.max(Math.floor(Number(challenge?.participant_count) || 0), 0);
+  return Math.max(target - joined, 0);
+}
+
+export function officialFormingStartLine(challenge: OfficialStartRow | null | undefined): string | null {
+  if (!challenge?.id || !isOfficialJoinable(challenge) || String(challenge.status) === 'arming') {
+    return null;
+  }
+  const n = officialStartJoinTarget(challenge);
+  if (n <= 0) {
+    return null;
+  }
+  return `Starts at midnight Chicago when ${n} have joined.`;
+}
+

@@ -1,4 +1,4 @@
-const PLACEHOLDER_TITLES = new Set(['untitled challenge', 'unknown challenge']);
+const PLACEHOLDER_TITLES = new Set(['untitled challenge', 'unknown challenge', 'challenge']);
 
 export function isPlaceholderChallengeTitle(value: string | null | undefined): boolean {
   return PLACEHOLDER_TITLES.has(String(value ?? '').trim().toLowerCase());

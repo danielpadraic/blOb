@@ -1,3 +1,5 @@
+import { parseProofAlreadyCountsError } from '@/lib/proofUniqueness';
+
 export type CheckinFailKind =
   | 'offline'
   | 'permission'
@@ -6,6 +8,7 @@ export type CheckinFailKind =
   | 'not_live'
   | 'not_joined'
   | 'missing'
+  | 'reused'
   | 'generic';
 
 export function isLikelyOffline(): boolean {
@@ -75,6 +78,9 @@ export function classifyCheckinError(error: unknown): CheckinFailKind {
   if (raw.includes('not_participant') || raw.includes('join this challenge')) {
     return 'not_joined';
   }
+  if (parseProofAlreadyCountsError(error) || raw.includes('proof_already_counts')) {
+    return 'reused';
+  }
   if (raw.includes('missing_proofs') || raw.includes('required proof')) {
     return 'missing';
   }
@@ -99,6 +105,10 @@ export function mapCheckinRpcError(
   }
   if (upper.includes('LOCATION_NEED_PHONE')) {
     return 'Open the blOb app on your phone to check in at the pinned place.';
+  }
+  const reused = parseProofAlreadyCountsError(blob);
+  if (reused) {
+    return reused;
   }
   if (upper.includes('MISSING_PROOFS')) {
     return 'Add every required proof to submit.';

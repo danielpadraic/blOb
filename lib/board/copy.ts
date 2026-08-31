@@ -58,15 +58,15 @@ export function boardSettledCopy(view: Pick<BoardView, 'forfeited' | 'youPaid' |
   }
   if (view.youPaid) {
     return {
-      title: 'You got paid.',
-      body: 'The receipt is yours to keep.',
-      showBob: true,
+      title: 'Settled',
+      body: 'The prize is paid.',
+      showBob: false,
     };
   }
   if (view.spectator) {
     return {
       title: 'Settled',
-      body: `${view.remainingCount} remaining finishers split the prize.`,
+      body: 'The prize is paid.',
       showBob: false,
     };
   }
@@ -77,9 +77,15 @@ export function boardSettledCopy(view: Pick<BoardView, 'forfeited' | 'youPaid' |
   };
 }
 
-export function boardRowTag(person: { bucket: string; you?: boolean }, settled: boolean): string {
+export function boardRowTag(
+  person: { bucket: string; you?: boolean; payout?: number | null },
+  settled: boolean,
+): string {
   if (settled) {
-    return person.bucket === 'dropped' ? 'Out' : 'Paid';
+    if (person.bucket === 'dropped') {
+      return 'Out';
+    }
+    return Number(person.payout) > 0 ? 'Paid' : 'In';
   }
   if (person.bucket === 'caught_up') {
     return 'Caught up';

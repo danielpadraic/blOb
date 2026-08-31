@@ -12,7 +12,9 @@ import { copy } from '@/lib/copy';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
+  officialFormingStartLine,
   officialGuaranteeAmount,
+  officialRemainingToStart,
   showsGuaranteedPrize,
 } from '@/lib/officialSeries';
 import { THEME } from '@/lib/theme';
@@ -27,10 +29,12 @@ export function officialGuarantee(
 export function OfficialMoneyBoard({
   challenge,
   finished = 0,
+  standing = null,
   onInvite,
 }: {
   challenge: ChallengeWithStats;
   finished?: number;
+  standing?: string | null;
   onInvite?: () => void;
 }) {
   const filling = isOfficialJoinable(challenge);
@@ -48,10 +52,11 @@ export function OfficialMoneyBoard({
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const joined = Math.max(Number(challenge.participant_count) || 0, 0);
+  const remaining = officialRemainingToStart(challenge);
   const startLine =
     challenge.status === 'arming'
       ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))
-      : null;
+      : officialFormingStartLine(challenge);
 
   return (
     <View
@@ -82,6 +87,9 @@ export function OfficialMoneyBoard({
               <Stat label={copy('board.guarantee')} value={<BuckUsdAmount amount={guarantee} size={16} />} />
             ) : null}
             <Stat label={copy('board.pot')} value={cashPrizeLabel(pot)} note={prizeFieldNote(challenge)} />
+            {remaining > 0 ? (
+              <Stat label="To start" value={String(remaining)} />
+            ) : null}
           </View>
           {startLine ? (
             <View className="flex-row items-start" style={{ gap: 6 }}>
@@ -109,6 +117,9 @@ export function OfficialMoneyBoard({
           ) : null}
         </View>
       )}
+      {!filling && standing ? (
+        <AppText className="text-[12px] leading-5 text-muted">{standing}</AppText>
+      ) : null}
     </View>
   );
 }

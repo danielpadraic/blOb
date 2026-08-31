@@ -467,6 +467,11 @@ function SubmitWorkoutInner() {
       });
     } catch (caught) {
       const kind = classifyCheckinError(caught);
+      if (kind === 'reused') {
+        setFailKind(null);
+        setError(getErrorMessage(caught));
+        throw caught;
+      }
       setFailKind(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : kind === 'generic' ? 'upload' : null);
       setError(getErrorMessage(caught));
       throw caught;
@@ -631,7 +636,7 @@ function SubmitWorkoutInner() {
           caption: caption.text,
           name: personDisplayName(profile),
           task: checkinTaskLabel(challenge),
-          challengeTitle: challenge?.title ?? '',
+          challengeTitle: challengeDisplayTitle(challenge),
         }),
         attachedHealth(),
       );
@@ -793,6 +798,11 @@ function SubmitWorkoutInner() {
       router.replace(challengeDetailHref(id, 'lobby', postId, { tab: 'feed' }));
     } catch (caught) {
       const kind = classifyCheckinError(caught);
+      if (kind === 'reused') {
+        setFailKind(null);
+        setError(getCheckinSubmitMessage(caught));
+        return;
+      }
       if (kind === 'missing') {
         explainSendBlocked();
         return;

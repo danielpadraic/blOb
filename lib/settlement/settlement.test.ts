@@ -5,6 +5,7 @@ import {
   assertsNoBucksWord,
   classifySettlementError,
   evenSplitShares,
+  ILLEGAL_POINTS_EVEN_SPLIT_COPY,
   forfeitNotifyCopy,
   formatSettlementAmount,
   nobodyFinishedRuleCopy,
@@ -13,7 +14,11 @@ import {
   lifecycleLabel,
   lifecyclePhase,
   lobbyResultCopy,
+  nonWinnerSettledNotifyCopy,
   payoutReceivedCopy,
+  rankedShares,
+  resultWhyCopy,
+  splitSettledNotifyCopy,
   payoutSlices,
   receiptHeadline,
   remainingEligible,
@@ -29,6 +34,8 @@ import {
   settlementRequiredDays,
   settlementRpcForPayout,
   shouldAutoSettle,
+  walletAmountLabel,
+  winnerSettledNotifyCopy,
 } from '@/lib/settlement/index';
 
 describe('lifecycle', () => {
@@ -53,6 +60,20 @@ describe('lifecycle', () => {
     ).toBe(true);
     expect(isEvenSplitAutoSettle({ challenge_type: 'lms' })).toBe(false);
     expect(isEvenSplitAutoSettle({ is_unlimited: true })).toBe(false);
+    expect(
+      shouldAutoSettle({
+        status: 'ended',
+        ends_at: '2020-01-01T00:00:00.000Z',
+        challenge_type: 'points',
+        prize_structure: 'winner_take_all',
+      }),
+    ).toBe(true);
+    expect(
+      isEvenSplitAutoSettle({
+        prize_structure: 'winner_take_all',
+        payout_mode: 'winner_take_all',
+      }),
+    ).toBe(true);
   });
 
   it('routes host Settle to the payout RPC the host picked', () => {
@@ -70,8 +91,16 @@ describe('lifecycle', () => {
       }),
     ).toBe('settle_ended_challenge');
     expect(isEvenSplitPayout({ prize_structure: 'winner_take_all' })).toBe(false);
-    expect(settlementRpcForPayout({ prize_structure: 'winner_take_all' })).toBe('distribute_challenge');
-    expect(settlementRpcForPayout({ prize_structure: 'top_places' })).toBe('distribute_challenge');
+    expect(settlementRpcForPayout({ prize_structure: 'winner_take_all' })).toBe('settle_ended_challenge');
+    expect(
+      settlementRpcForPayout({
+        challenge_type: 'points',
+        prize_structure: 'top_places',
+      }),
+    ).toBe('settle_ended_challenge');
+    expect(settlementRpcForPayout({ challenge_type: 'lms', is_unlimited: true })).toBe(
+      'distribute_challenge',
+    );
     expect(
       settlementRpcForPayout({
         challenge_type: 'points',
@@ -98,7 +127,7 @@ describe('lifecycle', () => {
       'Everyone still in splits the prize.',
     );
     expect(settlePayoutConfirmCopy({ prize_structure: 'winner_take_all' })).toBe(
-      'First place takes the prize.',
+      'Last standing takes the prize.',
     );
     expect(
       settlePayoutConfirmCopy({
@@ -224,6 +253,204 @@ describe('copy', () => {
     expect(assertsNoBucksWord(line)).toBe(true);
     expect(assertsNoBucksWord(FORFEIT_RECEIPT)).toBe(true);
     expect(assertsNoBucksWord(formatSettlementAmount(5, 'bucks'))).toBe(true);
+    expect(winnerSettledNotifyCopy('Daily Prayer', walletAmountLabel(25, 'coins'))).toBe(
+      'Daily Prayer settled. 25 coins is in your wallet.',
+    );
+    expect(winnerSettledNotifyCopy('Daily Prayer', walletAmountLabel(10, 'bucks'))).toBe(
+      'Daily Prayer settled. $10.00 is in your wallet.',
+    );
+    expect(nonWinnerSettledNotifyCopy('Daily Prayer', 'Sam')).toBe('Daily Prayer settled. Sam took it.');
+    expect(splitSettledNotifyCopy('Daily Prayer', 2)).toBe('Daily Prayer settled. You split it with 2.');
+    expect(assertsNoBucksWord(winnerSettledNotifyCopy('Daily Prayer', walletAmountLabel(10, 'bucks')))).toBe(
+      true,
+    );
+  });
+});
+
+describe('ranked shares', () => {
+  const board = [
+    { user_id: 'a', score: 5, status: 'joined' },
+    { user_id: 'b', score: 3, status: 'joined' },
+    { user_id: 'c', score: 1, status: 'joined' },
+    { user_id: 'd', score: 9, status: 'eliminated' },
+  ];
+
+  it('pays winner take all to the highest score', () => {
+    const paid = rankedShares({
+      pool: 100,
+      family: 'points',
+      challenge_type: 'points',
+      prize_structure: 'winner_take_all',
+      payout_mode: 'winner_take_all',
+      rows: board,
+    });
+    expect(paid).toEqual([
+      { user_id: 'a', amount: 100, place: 1, score: 5, reason: 'distribute_win' },
+    ]);
+    expect(resultWhyCopy({ family: 'points', prize_structure: 'winner_take_all' })).toBe(
+      'Highest points. Tie split.',
+    );
+  });
+
+  it('splits a first-place tie among tied firsts only', () => {
+    const paid = rankedShares({
+      pool: 100,
+      family: 'points',
+      challenge_type: 'points',
+      prize_structure: 'winner_take_all',
+      payout_mode: 'winner_take_all',
+      rows: [
+        { user_id: 'a', score: 4, status: 'joined' },
+        { user_id: 'b', score: 4, status: 'joined' },
+        { user_id: 'c', score: 2, status: 'joined' },
+      ],
+    });
+    expect(paid.map((row) => row.user_id).sort()).toEqual(['a', 'b']);
+    expect(paid.every((row) => row.amount === 50)).toBe(true);
+    expect(paid.every((row) => row.place === 1)).toBe(true);
+  });
+
+  it('even-splits top 3 and lets a tie straddle the cut', () => {
+    const paid = rankedShares({
+      pool: 90,
+      family: 'points',
+      challenge_type: 'points',
+      prize_structure: 'top_places',
+      payout_mode: 'top_places',
+      top_places_mode: 'count',
+      top_places_value: 3,
+      top_places_distribution: 'even',
+      rows: [
+        { user_id: 'a', score: 10, status: 'joined' },
+        { user_id: 'b', score: 8, status: 'joined' },
+        { user_id: 'c', score: 6, status: 'joined' },
+        { user_id: 'd', score: 6, status: 'joined' },
+        { user_id: 'e', score: 1, status: 'joined' },
+      ],
+    });
+    expect(paid.map((row) => row.user_id).sort()).toEqual(['a', 'b', 'c', 'd']);
+    expect(paid.reduce((sum, row) => sum + row.amount, 0)).toBe(90);
+  });
+
+  it('takes top 25 percent, at least one if anyone scored', () => {
+    const paid = rankedShares({
+      pool: 40,
+      family: 'points',
+      challenge_type: 'points',
+      prize_structure: 'top_places',
+      payout_mode: 'top_places',
+      top_places_mode: 'percent',
+      top_places_value: 25,
+      top_places_distribution: 'even',
+      rows: [
+        { user_id: 'a', score: 8, status: 'joined' },
+        { user_id: 'b', score: 4, status: 'joined' },
+        { user_id: 'c', score: 2, status: 'joined' },
+        { user_id: 'd', score: 1, status: 'joined' },
+      ],
+    });
+    expect(paid).toHaveLength(1);
+    expect(paid[0]?.user_id).toBe('a');
+    expect(paid[0]?.amount).toBe(40);
+  });
+
+  it('scales three places with N, N-1, … 1 weights', () => {
+    const paid = rankedShares({
+      pool: 60,
+      family: 'points',
+      challenge_type: 'points',
+      prize_structure: 'top_places',
+      payout_mode: 'top_places',
+      top_places_mode: 'count',
+      top_places_value: 3,
+      top_places_distribution: 'scaled',
+      rows: [
+        { user_id: 'a', score: 9, status: 'joined' },
+        { user_id: 'b', score: 6, status: 'joined' },
+        { user_id: 'c', score: 3, status: 'joined' },
+      ],
+    });
+    expect(paid.map((row) => row.amount)).toEqual([30, 20, 10]);
+    expect(paid.reduce((sum, row) => sum + row.amount, 0)).toBe(60);
+  });
+
+  it('gives leftover coins to the highest place first', () => {
+    const paid = rankedShares({
+      pool: 10,
+      family: 'points',
+      challenge_type: 'points',
+      prize_structure: 'winner_take_all',
+      payout_mode: 'winner_take_all',
+      rows: [
+        { user_id: 'a', score: 2, status: 'joined' },
+        { user_id: 'b', score: 2, status: 'joined' },
+        { user_id: 'c', score: 2, status: 'joined' },
+      ],
+    });
+    expect(paid.map((row) => row.amount).sort((a, b) => b - a)).toEqual([4, 3, 3]);
+    expect(paid.reduce((sum, row) => sum + row.amount, 0)).toBe(10);
+  });
+
+  it('forfeits when nobody is eligible', () => {
+    expect(
+      rankedShares({
+        pool: 50,
+        family: 'points',
+        challenge_type: 'points',
+        prize_structure: 'winner_take_all',
+        payout_mode: 'winner_take_all',
+        rows: [
+          { user_id: 'a', score: 4, status: 'eliminated' },
+          { user_id: 'b', score: 0, status: 'withdrawn' },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects an illegal points even-split pair', () => {
+    expect(() =>
+      rankedShares({
+        pool: 50,
+        family: 'points',
+        challenge_type: 'points',
+        prize_structure: 'equal_split',
+        payout_mode: 'even_split_remaining',
+        rows: [{ user_id: 'a', score: 2, status: 'joined' }],
+      }),
+    ).toThrow(ILLEGAL_POINTS_EVEN_SPLIT_COPY);
+  });
+
+  it('keeps consistency even-split and last-standing on their own rules', () => {
+    const remaining = remainingEligible(
+      [
+        { user_id: 'a', days_completed: 7, status: 'joined' },
+        { user_id: 'b', days_completed: 7, status: 'joined' },
+        { user_id: 'c', days_completed: 2, status: 'joined' },
+      ],
+      7,
+    );
+    expect(remaining.map((row) => row.user_id)).toEqual(['a', 'b']);
+    expect(evenSplitShares(40, remaining.length)).toEqual([20, 20]);
+    const last = rankedShares({
+      pool: 40,
+      family: 'consistency',
+      challenge_type: 'consistency',
+      prize_structure: 'winner_take_all',
+      payout_mode: 'winner_take_all',
+      rows: [
+        { user_id: 'a', score: 7, status: 'joined' },
+        { user_id: 'b', score: 4, status: 'eliminated' },
+      ],
+    });
+    expect(last).toEqual([
+      { user_id: 'a', amount: 40, place: 1, score: 7, reason: 'distribute_win' },
+    ]);
+    expect(resultWhyCopy({ family: 'consistency', prize_structure: 'equal_split' })).toBe(
+      'Everyone still in split.',
+    );
+    expect(resultWhyCopy({ family: 'consistency', prize_structure: 'winner_take_all' })).toBe(
+      'Last standing.',
+    );
   });
 });
 

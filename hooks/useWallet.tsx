@@ -11,11 +11,16 @@ export type BadgeUnlock = NewBadge & {
   definition?: BadgeDefinition;
 };
 
+export type OpenWalletOptions = {
+  scrollToLatest?: boolean;
+};
+
 type WalletContextValue = {
   sheetOpen: boolean;
   sendOpen: boolean;
   topUp: TopUpRequest | null;
-  openWallet: () => void;
+  scrollToLatest: boolean;
+  openWallet: (options?: OpenWalletOptions) => void;
   closeWallet: () => void;
   openSend: () => void;
   closeSend: () => void;
@@ -34,6 +39,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { profile } = useMyProfile();
   const catalog = useBadgeCatalog();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [scrollToLatest, setScrollToLatest] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [topUp, setTopUp] = useState<TopUpRequest | null>(null);
   const [sentToast, setSentToast] = useState<string | null>(null);
@@ -58,10 +64,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => setBadgeUnlockListener(null);
   }, [byKey]);
 
-  const openWallet = useCallback(() => {
+  const openWallet = useCallback((options?: OpenWalletOptions) => {
     if (profile) {
       setSendOpen(false);
       setTopUp(null);
+      setScrollToLatest(Boolean(options?.scrollToLatest));
       setSheetOpen(true);
     }
   }, [profile]);
@@ -80,6 +87,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const closeAll = useCallback(() => {
     setSheetOpen(false);
+    setScrollToLatest(false);
     setSendOpen(false);
     setTopUp(null);
   }, []);
@@ -101,8 +109,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       sheetOpen,
       sendOpen,
       topUp,
+      scrollToLatest,
       openWallet,
-      closeWallet: () => setSheetOpen(false),
+      closeWallet: () => {
+        setSheetOpen(false);
+        setScrollToLatest(false);
+      },
       openSend,
       closeSend: () => setSendOpen(false),
       openTopUp,
@@ -113,7 +125,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       unlocks: queue,
       dismissUnlock: () => setQueue((current) => current.slice(1)),
     }),
-    [closeAll, openSend, openTopUp, openWallet, queue, sendOpen, sentToast, showSentToast, sheetOpen, topUp],
+    [closeAll, openSend, openTopUp, openWallet, queue, scrollToLatest, sendOpen, sentToast, showSentToast, sheetOpen, topUp],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

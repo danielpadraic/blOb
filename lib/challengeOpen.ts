@@ -64,11 +64,15 @@ export function challengeHasDurationHint(row: {
   days_required?: number | null;
   target_count?: number | null;
   length_value?: number | null;
+  duration_days?: number | null;
   starts_at?: string | null;
   ends_at?: string | null;
 } | null | undefined): boolean {
   if (!row) {
     return false;
+  }
+  if (Number(row.duration_days) > 0) {
+    return true;
   }
   if (Number(row.length_value) > 0) {
     return true;
@@ -192,8 +196,12 @@ export function seedChallengeDetailQuery(
     return id;
   }
   try {
+    const named = challengeDisplayTitle(snapshot);
+    const normalized = normalizeChallenge(snapshot as Record<string, unknown>);
     client.setQueryData(['challenge', id], {
-      ...normalizeChallenge(snapshot as Record<string, unknown>),
+      ...normalized,
+      title: named || normalized.title,
+      task: String(snapshot.task ?? '').trim() || named || normalized.task,
       participant_count: Number(
         (snapshot as { participant_count?: number }).participant_count ?? 0,
       ),

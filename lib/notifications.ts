@@ -392,7 +392,7 @@ export function notificationHref(item: AppNotification): Href | null {
   if (item.type === 'payout_received') {
     const payoutChallengeId = notificationChallengeId(data);
     if (payoutChallengeId) {
-      return challengeDetailHref(payoutChallengeId, 'lobby', null, { tab: 'board', receipt: true });
+      return challengeDetailHref(payoutChallengeId, 'lobby', null, { tab: 'overview' });
     }
     return '/profile';
   }

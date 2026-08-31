@@ -65,7 +65,7 @@ describe('settled board', () => {
     expect(view.youPaid).toBe(true);
     expect(view.yourPayout).toBe(10);
     const copy = boardSettledCopy(view);
-    expect(copy.showBob).toBe(true);
+    expect(copy.showBob).toBe(false);
     expect(assertsNoBucksWord(copy.body)).toBe(true);
   });
 
