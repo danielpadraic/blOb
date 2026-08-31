@@ -20,7 +20,7 @@ import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '
 import { reportAppError } from '@/lib/appErrors';
 import { rawFeedError } from '@/lib/feedError';
 import {
-  dropCachedCircleId;
+  dropCachedCircleId,
   isMissingCircleIdColumn,
   resolvePostsSchema,
   selectWithoutCircleId,
