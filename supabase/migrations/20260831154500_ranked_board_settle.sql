@@ -93,12 +93,12 @@ language sql
 immutable
 as $$
   select case
-    when coalesce(p_challenge.is_unlimited, false)
-      or lower(coalesce(p_challenge.end_mode, '')) = 'indefinite_lms'
-      or lower(coalesce(p_challenge.format, '')) = 'lms'
-      or lower(coalesce(p_challenge.challenge_type, '')) = 'lms'
+    when coalesce((p_challenge).is_unlimited, false)
+      or lower(coalesce((p_challenge).end_mode, '')) = 'indefinite_lms'
+      or lower(coalesce((p_challenge).format, '')) = 'lms'
+      or lower(coalesce((p_challenge).challenge_type, '')) = 'lms'
       then 'consistency'
-    when lower(coalesce(nullif(btrim(p_challenge.format), ''), nullif(btrim(p_challenge.challenge_type), ''), ''))
+    when lower(coalesce(nullif(btrim((p_challenge).format), ''), nullif(btrim((p_challenge).challenge_type), ''), ''))
       in ('points', 'cumulative')
       then 'points'
     else 'consistency'
@@ -112,10 +112,10 @@ immutable
 as $$
   select case
     when public.settlement_format_family(p_challenge) = 'consistency'
-      and lower(coalesce(p_challenge.prize_structure, '')) = 'top_places'
+      and lower(coalesce((p_challenge).prize_structure, '')) = 'top_places'
       then true
     when public.settlement_format_family(p_challenge) = 'points'
-      and lower(coalesce(p_challenge.payout_mode, '')) = 'even_split_remaining'
+      and lower(coalesce((p_challenge).payout_mode, '')) = 'even_split_remaining'
       then true
     else false
   end;

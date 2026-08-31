@@ -10,11 +10,11 @@ immutable
 set search_path = public
 as $$
   select case
-    when lower(coalesce(ch.frequency, '')) in ('monthly', 'month') then 'monthly'
-    when lower(coalesce(ch.series_id, '')) like '%month%' then 'monthly'
-    when lower(coalesce(ch.length_unit, '')) like 'month%' then 'monthly'
-    when coalesce(ch.duration_days, 0) >= 28
-      and lower(coalesce(ch.frequency, '')) not in ('daily', 'weekly', 'week')
+    when lower(coalesce((ch).frequency, '')) in ('monthly', 'month') then 'monthly'
+    when lower(coalesce((ch).series_id, '')) like '%month%' then 'monthly'
+    when lower(coalesce((ch).length_unit, '')) like 'month%' then 'monthly'
+    when coalesce((ch).duration_days, 0) >= 28
+      and lower(coalesce((ch).frequency, '')) not in ('daily', 'weekly', 'week')
       then 'monthly'
     else 'weekly'
   end;
@@ -51,14 +51,14 @@ stable
 set search_path = public
 as $$
   select case
-    when coalesce(jsonb_typeof(ch.proofs), '') = 'array'
-      and jsonb_array_length(coalesce(ch.proofs, '[]'::jsonb)) > 0 then
+    when coalesce(jsonb_typeof((ch).proofs), '') = 'array'
+      and jsonb_array_length(coalesce((ch).proofs, '[]'::jsonb)) > 0 then
       not exists (
         select 1
-        from jsonb_array_elements(ch.proofs) e
+        from jsonb_array_elements((ch).proofs) e
         where lower(coalesce(e->>'method', '')) not in ('honor', '')
       )
-    else lower(coalesce(ch.proof_type, 'honor')) = 'honor'
+    else lower(coalesce((ch).proof_type, 'honor')) = 'honor'
   end;
 $$;
 
