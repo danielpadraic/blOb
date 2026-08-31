@@ -76,6 +76,7 @@ type CheckinComposerProps = {
   onCaptionChange: (doc: MentionDoc) => void;
   onSend: () => void;
   accessory?: ReactNode;
+  dueLine?: ReactNode;
 };
 
 export function CheckinComposer({
@@ -98,6 +99,7 @@ export function CheckinComposer({
   onCaptionChange,
   onSend,
   accessory,
+  dueLine,
 }: CheckinComposerProps) {
   const fieldRef = useRef<MentionFieldHandle>(null);
   const pagerRef = useRef<FlatList<ReviewPage>>(null);
@@ -634,6 +636,7 @@ export function CheckinComposer({
         </View>
       ) : null}
 
+      {dueLine ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{dueLine}</View> : null}
       {accessory ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{accessory}</View> : null}
 
       <View

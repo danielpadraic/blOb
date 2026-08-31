@@ -4,6 +4,7 @@ import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
 import {
   CheckinRouteErrorBoundary,
   CheckinSafeBoundary,
@@ -985,6 +986,13 @@ function SubmitWorkoutInner() {
         onExtrasChange={handleExtrasChange}
         onCaptionChange={setCaption}
         onSend={() => void onSubmit()}
+        dueLine={
+          <PeriodCheckinDue
+            challenge={challenge}
+            submitted={rawPhase === 'submitted' && !totalCount}
+            compact
+          />
+        }
         accessory={
           locationProofs.length || textProofs.length || distanceProofs.length || error ? (
             <>

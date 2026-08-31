@@ -342,7 +342,7 @@ const STRINGS = {
   'create.start': 'Start',
   'create.duration': 'Duration',
   'create.days': 'Days',
-  'create.taskLabel': 'Task',
+  'create.taskLabel': 'Task A',
   'create.taskPlaceholder': 'Run 1 mile',
   'create.frequency': 'Frequency',
   'create.allowedMisses': 'Allowed misses',
@@ -355,6 +355,7 @@ const STRINGS = {
   'create.addProof': 'Add proof',
   'create.proofPreset': 'Before · After · heart rate',
   'create.proofsHelper': "Say the action. 'Photo' is not enough.",
+  'create.proofsBelong': 'Proofs belong to this task.',
   'create.proofFallback': 'Post a photo of the work.',
   'create.proofPhoto': 'Photo',
   'create.proofVideo': 'Video',
@@ -403,7 +404,7 @@ const STRINGS = {
   'create.needDuration': 'Duration has to be at least 1 day.',
   'create.needTask': 'Add a task.',
   'create.needExtraTask': 'Name each extra task, or remove it.',
-  'create.addTask': 'Add another task',
+  'create.addTask': 'Add task',
   'create.addTaskHint': 'Another action people can check in for.',
   'create.addConstraint': 'Add a constraint',
   'create.taskOnce': 'Once',
@@ -635,6 +636,8 @@ const STRINGS = {
   'checkin.alreadyBob': 'Already counted today. Come back for the next window.',
   'checkin.notLiveBob': 'This challenge isn’t taking check-ins right now.',
   'checkin.submitBanner': 'You started. Submit before 11:59 p.m. Central.',
+  'detail.checkinDue': 'Check-in due',
+  'detail.caughtUp': 'Caught Up',
 } as const;
 
 export type CopyKey = keyof typeof STRINGS;

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
+import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { ProfileLink } from '@/components/profile/ProfileLink';
@@ -35,6 +36,7 @@ type ChallengeBoardProps = {
   showReceipt?: boolean;
   onOpenReceipt?: () => void;
   error?: string | null;
+  missesUsed?: number;
 };
 
 export function ChallengeBoard({
@@ -48,6 +50,7 @@ export function ChallengeBoard({
   showReceipt = false,
   onOpenReceipt,
   error,
+  missesUsed = 0,
 }: ChallengeBoardProps) {
   const [receiptOpen, setReceiptOpen] = useState(showReceipt);
   const view = useMemo(
@@ -144,6 +147,7 @@ export function ChallengeBoard({
         {' · '}
         {copy('board.dropped')} {view.droppedCount}
       </AppText>
+      <MissBudgetLines challenge={challenge} used={missesUsed} />
 
       {view.settled ? (
         <View className="gap-2">

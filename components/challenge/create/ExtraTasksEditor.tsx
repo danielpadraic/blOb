@@ -17,6 +17,7 @@ import {
   type DistanceUnit,
 } from '@/lib/distance';
 import { THEME } from '@/lib/theme';
+import { taskLetterLabel } from '@/lib/taskLabels';
 import { emptyExtraCreateTask, type ExtraCreateTask } from '@/utils/validators';
 
 export function HeartRateMinutesRow({
@@ -77,11 +78,13 @@ export function ExtraTasksEditor({
   onChange,
   onTitleFocus,
   hint,
+  startLetterIndex = 1,
 }: {
   tasks: ExtraCreateTask[];
   onChange: (next: ExtraCreateTask[]) => void;
   onTitleFocus?: () => void;
   hint?: string;
+  startLetterIndex?: number;
 }) {
   function patch(index: number, partial: Partial<ExtraCreateTask>) {
     onChange(tasks.map((item, itemIndex) => (itemIndex === index ? { ...item, ...partial } : item)));
@@ -89,6 +92,21 @@ export function ExtraTasksEditor({
 
   return (
     <View className="gap-3">
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => onChange([...tasks, emptyExtraCreateTask()])}
+        className="items-center self-start rounded-full px-3"
+        style={{
+          minHeight: 44,
+          borderWidth: 1,
+          borderColor: THEME.border,
+          backgroundColor: THEME.surface,
+          justifyContent: 'center',
+        }}>
+        <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+          {copy('create.addTask')}
+        </AppText>
+      </Pressable>
       {tasks.map((task, index) => (
         <View
           key={task.id}
@@ -100,10 +118,13 @@ export function ExtraTasksEditor({
             borderColor: THEME.border,
             padding: 12,
           }}>
+          <AppText className="text-sm font-semibold text-charcoal">
+            {taskLetterLabel(startLetterIndex + index)}
+          </AppText>
           <View className="flex-row items-center gap-2">
             <View className="flex-1">
               <Input
-                placeholder={index === 0 ? 'Workout B' : copy('create.extraTaskPlaceholder')}
+                placeholder={taskLetterLabel(startLetterIndex + index)}
                 value={task.title}
                 onChangeText={(title) => patch(index, { title })}
                 onFocus={onTitleFocus}
@@ -160,23 +181,9 @@ export function ExtraTasksEditor({
               Uses the same place pin as this challenge.
             </AppText>
           ) : null}
+          <AppText className="text-[12px] leading-5 text-muted">{copy('create.proofsBelong')}</AppText>
         </View>
       ))}
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => onChange([...tasks, emptyExtraCreateTask()])}
-        className="items-center self-start rounded-full px-3"
-        style={{
-          minHeight: 36,
-          borderWidth: 1,
-          borderColor: THEME.border,
-          backgroundColor: THEME.surface,
-          justifyContent: 'center',
-        }}>
-        <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
-          {copy('create.addTask')}
-        </AppText>
-      </Pressable>
       {hint ? (
         <AppText className="text-xs leading-5 text-muted">{hint}</AppText>
       ) : null}

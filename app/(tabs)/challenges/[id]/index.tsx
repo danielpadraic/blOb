@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedList } from '@/components/feed/FeedList';
 import { ChallengeDetailsCard } from '@/components/challenge/ChallengeDetailsCard';
+import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
+import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
 import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
@@ -60,6 +62,9 @@ import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { useChallengeBoardRealtime } from '@/hooks/useChallengeBoardRealtime';
 import { isChallengeRealtimeId } from '@/lib/challengeBoardRealtime';
 import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
+import { useViewerPeriodMisses } from '@/hooks/usePeriodMisses';
+import { currentRequiredPeriodWindow } from '@/lib/checkinPeriod';
+import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
 import {
@@ -238,6 +243,10 @@ export default function ChallengeDetailScreen() {
     }));
   }, [boardProfiles.data, roster.data]);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
+  const periodMisses = useViewerPeriodMisses(
+    id,
+    Boolean(challengeQuery.data && challengeShowsMissBudget(challengeQuery.data)),
+  );
   useChallengeBoardRealtime(isChallengeRealtimeId(id) ? id : undefined);
   const submittedCheckins = useSubmittedCheckinCount(id, challengeQuery.data);
   const completions = usePeriodCompletions(id, challengeQuery.data);
@@ -433,14 +442,17 @@ export default function ChallengeDetailScreen() {
   const officialLiveClock = Boolean(
     challenge && isOfficialSeriesChallenge(challenge) && challenge.status === 'live',
   );
+  const periodDueClock = Boolean(
+    challenge && currentRequiredPeriodWindow(challenge, new Date(nowMs)),
+  );
 
   useEffect(() => {
-    if (!judgingHold && !waitingToStart && !officialLiveClock) {
+    if (!judgingHold && !waitingToStart && !officialLiveClock && !periodDueClock) {
       return;
     }
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [judgingHold, waitingToStart, officialLiveClock]);
+  }, [judgingHold, officialLiveClock, periodDueClock, waitingToStart]);
 
   const scrollRef = useRef<ScrollView>(null);
   const feedSectionY = useRef(0);
@@ -795,7 +807,7 @@ export default function ChallengeDetailScreen() {
     (stickyJoin || stickyCheckin);
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
   const stickyBlock = showStickyCta
-    ? JOIN_CTA_HEIGHT + (!checkinLocked && watch.visible ? 44 : 12)
+    ? JOIN_CTA_HEIGHT + (!checkinLocked && watch.visible ? 44 : 12) + (periodDueClock ? 40 : 0)
     : 0;
 
   return (
@@ -864,6 +876,15 @@ export default function ChallengeDetailScreen() {
         </View>
         {startLine ? (
           <AppText className="mt-2 text-[13px] leading-5 text-muted">{startLine}</AppText>
+        ) : null}
+        {pageTab === 'overview' ? (
+          <View className="mt-3">
+            <PeriodCheckinDue
+              challenge={challenge}
+              submitted={loggedToday}
+              nowMs={nowMs}
+            />
+          </View>
         ) : null}
         {challenge.description?.trim() ? (
           <AppText className="mt-3 text-[15px] leading-6" style={{ color: THEME.textPrimary }}>
@@ -948,7 +969,7 @@ export default function ChallengeDetailScreen() {
 
         {challenge.is_official ? (
           <>
-            <ChallengeDetailsCard challenge={challenge} />
+            <ChallengeDetailsCard challenge={challenge} missesUsed={periodMisses.data ?? 0} />
             {isOfficialJoinable(challenge) ? null : (
               <View className="mt-4">
                 <OfficialMoneyBoard
@@ -1102,6 +1123,11 @@ export default function ChallengeDetailScreen() {
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Rules
           </AppText>
+          {challengeShowsMissBudget(challenge) ? (
+            <View className="mt-2">
+              <MissBudgetLines challenge={challenge} used={periodMisses.data ?? 0} />
+            </View>
+          ) : null}
           {isPoints ? null : ruleCopy.primary ? (
             <AppText className="mt-2 leading-6 text-ink">{ruleCopy.primary}</AppText>
           ) : null}
@@ -1232,6 +1258,7 @@ export default function ChallengeDetailScreen() {
               settlement={receipt}
               showReceipt={receiptParam === '1'}
               error={roster.error instanceof Error ? roster.error.message : null}
+              missesUsed={periodMisses.data ?? 0}
             />
           </View>
         ) : null}
@@ -1333,6 +1360,13 @@ export default function ChallengeDetailScreen() {
           <Button title="Checking today’s check-in" size="md" loading disabled />
         ) : (
           <View className="gap-2">
+            <PeriodCheckinDue
+              challenge={challenge}
+              submitted={checkinLocked}
+              nowMs={nowMs}
+              compact
+              align="center"
+            />
             {checkinLocked ? (
               <View
                 accessibilityRole="button"

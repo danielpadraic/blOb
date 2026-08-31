@@ -2216,7 +2216,7 @@ function GoalSlide({
           render={({ field: { onChange, onBlur, value, ref } }) => (
             <Input
               ref={ref}
-              label="Task"
+              label={copy('create.taskLabel')}
               placeholder="Run 1 mile"
               value={value ?? ''}
               onChangeText={onChange}

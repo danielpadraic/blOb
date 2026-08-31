@@ -23,6 +23,7 @@ import { milesToMeters } from '@/lib/distance';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import type { ChallengeFrequency, ProofType } from '@/lib/types';
+import { taskLetterLabel } from '@/lib/taskLabels';
 import type { CreateChallengeValues } from '@/utils/validators';
 
 const PERIODS: { value: ChallengeFrequency; label: string }[] = [
@@ -207,7 +208,7 @@ export function RulesSlide({
               {values.tasks.map((task, index) => (
                 <Card key={task.id} className="gap-3">
                   <View className="flex-row items-center justify-between">
-                    <AppText className="text-sm font-semibold text-charcoal">Task {index + 1}</AppText>
+                    <AppText className="text-sm font-semibold text-charcoal">{taskLetterLabel(index)}</AppText>
                     {values.tasks.length > 1 ? (
                       <Pressable
                         onPress={() => onRemoveTask(index)}

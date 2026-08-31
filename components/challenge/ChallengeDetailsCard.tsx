@@ -1,13 +1,22 @@
+import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import { officialDetailsParagraphs } from '@/copy/officialBob';
+import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { THEME } from '@/lib/theme';
 import type { Challenge } from '@/lib/types';
 
-export function ChallengeDetailsCard({ challenge }: { challenge: Challenge }) {
+export function ChallengeDetailsCard({
+  challenge,
+  missesUsed = 0,
+}: {
+  challenge: Challenge;
+  missesUsed?: number;
+}) {
   const line = { color: THEME.textPrimary };
   const paragraphs = officialDetailsParagraphs(challenge);
-  if (paragraphs.length === 0) {
+  const showMisses = challengeShowsMissBudget(challenge);
+  if (paragraphs.length === 0 && !showMisses) {
     return null;
   }
   return (
@@ -20,6 +29,7 @@ export function ChallengeDetailsCard({ challenge }: { challenge: Challenge }) {
           {paragraph}
         </AppText>
       ))}
+      {showMisses ? <MissBudgetLines challenge={challenge} used={missesUsed} /> : null}
     </Card>
   );
 }

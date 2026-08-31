@@ -9,7 +9,21 @@ export type MissDutyChallenge = {
   target_count?: number | null;
   days_required?: number | null;
   length_value?: number | null;
+  is_unlimited?: boolean | null;
+  end_mode?: string | null;
+  misses_allowed?: number | null;
 };
+
+function asKey(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+export function challengeIsUnlimitedMiss(challenge?: MissDutyChallenge | null): boolean {
+  if (!challenge) {
+    return false;
+  }
+  return Boolean(challenge.is_unlimited) || asKey(challenge.end_mode) === 'indefinite_lms';
+}
 
 /**
  * True only when this challenge required a check-in on a specific calendar
@@ -46,4 +60,27 @@ export function challengeHasDailyCheckinDuty(
     return false;
   }
   return type === '' || type === 'consistency' || format === 'consistency';
+}
+
+/** Miss cap only when this format records required-period misses. */
+export function challengeShowsMissBudget(challenge?: MissDutyChallenge | null): boolean {
+  return Boolean(challenge) && challengeHasDailyCheckinDuty(challenge) && !challengeIsUnlimitedMiss(challenge);
+}
+
+export function missesAllowedCap(challenge?: MissDutyChallenge | null): number | null {
+  if (!challengeShowsMissBudget(challenge)) {
+    return null;
+  }
+  return Math.max(Math.trunc(Number(challenge?.misses_allowed) || 0), 0);
+}
+
+export function missesAllowedCopy(allowed: number): string {
+  if (allowed <= 0) {
+    return 'Misses allowed: 0 — miss a required check-in and you are out.';
+  }
+  return `Misses allowed: ${allowed}`;
+}
+
+export function missesUsedCopy(used: number): string {
+  return `Misses used: ${Math.max(Math.trunc(used) || 0, 0)}`;
 }
