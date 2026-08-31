@@ -15,6 +15,11 @@ export type ChallengeLoadSnapshot = {
   buy_in_amount?: number | null;
   days_required?: number | null;
   target_count?: number | null;
+  length_value?: number | null;
+  challenge_type?: string | null;
+  format?: string | null;
+  cumulative_target?: number | null;
+  distance_meters_required?: number | null;
   starts_at?: string | null;
   ends_at?: string | null;
   visibility?: string | null;

@@ -198,7 +198,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         />
       )}
       {error ? (
-        <AppText className="text-xs text-coral-dark">{error}</AppText>
+        <AppText className="text-xs text-coral-dark" numberOfLines={1}>
+          {error}
+        </AppText>
       ) : hint ? (
         <AppText className="text-xs text-muted">{hint}</AppText>
       ) : null}

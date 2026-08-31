@@ -12,12 +12,17 @@ function storedCumulativeMeters(challenge?: {
 /** Saved race target in meters. Title is last resort when the column is missing or 0. */
 export function cumulativeTargetMeters(challenge?: {
   cumulative_target?: number | null;
+  distance_meters_required?: number | null;
   title?: string | null;
   task?: string | null;
 } | null): number {
   const stored = storedCumulativeMeters(challenge);
   if (stored > 0) {
     return stored;
+  }
+  const required = Math.max(Number(challenge?.distance_meters_required) || 0, 0);
+  if (required > 0) {
+    return required;
   }
   return (
     parseDistanceText(challenge?.title ?? '') ??

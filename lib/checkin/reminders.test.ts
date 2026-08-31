@@ -39,6 +39,7 @@ describe('check-in risk reminders', () => {
 
   it('opens Overview, never submit', () => {
     expect(checkinRiskHref('c1')).toBe('/challenges/c1');
+    expect(checkinRiskHref('c1')).not.toMatch(/submit|capture|camera/);
     expect(isCheckinNudgeType('challenge_checkin_reminder')).toBe(true);
     expect(isCheckinNudgeType('health_checkout')).toBe(true);
   });

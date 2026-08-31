@@ -89,6 +89,8 @@ export function privacyModeLabel(mode: PrivacyMode): string {
   return 'Public';
 }
 
+export const LOCKED_AFTER_JOIN_FIELDS = ['privacy_mode'] as const;
+
 export function canChangePrivacyMode(input: {
   current: PrivacyMode;
   next: PrivacyMode;
@@ -101,6 +103,23 @@ export function canChangePrivacyMode(input: {
     return { ok: true };
   }
   return { ok: false, message: PRIVACY_MODE_LOCKED_MESSAGE };
+}
+
+/** After someone joins, reject the tap and keep the saved value. One-line error. */
+export function rejectLockedAfterJoinField(input: {
+  field: (typeof LOCKED_AFTER_JOIN_FIELDS)[number];
+  participantCount: number;
+  current: unknown;
+  next: unknown;
+}): { ok: true } | { ok: false; message: string } {
+  if (input.field === 'privacy_mode') {
+    return canChangePrivacyMode({
+      current: asPrivacyMode(input.current),
+      next: asPrivacyMode(input.next),
+      participantCount: input.participantCount,
+    });
+  }
+  return { ok: true };
 }
 
 export function applyPrivacyModeSelection(

@@ -138,6 +138,9 @@ export type FeedChallengePreview = {
   days_required?: number | null;
   target_count?: number | null;
   length_value?: number | null;
+  format?: string | null;
+  cumulative_target?: number | null;
+  distance_meters_required?: number | null;
   host_budget?: number | null;
   min_participants?: number | null;
   settled_prize_pool?: number | null;

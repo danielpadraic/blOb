@@ -513,7 +513,7 @@ export function SimpleCreateForm() {
         preset: draft.start_preset,
         starts_at: draft.starts_at,
         duration_days: draft.duration_preset === 'custom' ? draft.duration_days : draft.duration_preset,
-        timezone: resolveChallengeTimezone(),
+        timezone: resolveChallengeTimezone(profile?.timezone),
       });
       const toPublish = { ...draft, starts_at: schedule.starts_at };
       if (toPublish.start_preset === 'custom') {
@@ -601,7 +601,9 @@ export function SimpleCreateForm() {
       style={{ flex: 1 }}
       contentContainerStyle={{
         paddingHorizontal: 16,
-        paddingBottom: createScrollBottomPad(Boolean(tour?.createActive), footerH),
+        paddingBottom:
+          createScrollBottomPad(Boolean(tour?.createActive), footerH) +
+          (view === 'review' && keyboardOpen ? 16 : 0),
         flexGrow: 1,
       }}
       keyboardShouldPersistTaps="handled"
@@ -624,7 +626,11 @@ export function SimpleCreateForm() {
         {view === 'review' ? (
           <>
             <CreateReviewPreview values={simpleDraftToCreateValues(draft)} onEdit={onEditFromReview} />
-            {error ? <AppText className="text-sm text-coral-dark">{error}</AppText> : null}
+            {error ? (
+              <AppText className="text-sm text-coral-dark" numberOfLines={1}>
+                {error}
+              </AppText>
+            ) : null}
             {!editId && needed > 0 ? (
               <View className="gap-1">
                 {cash ? (
@@ -903,8 +909,6 @@ export function SimpleCreateForm() {
           placeholder={copy('create.titlePlaceholder')}
           value={draft.title}
           onChangeText={(title) => patch({ title })}
-          grow
-          growMaxLines={2}
           maxLength={80}
         />
         </View>
@@ -947,7 +951,13 @@ export function SimpleCreateForm() {
               label="Tomorrow morning"
               selected={draft.start_preset === 'tomorrow'}
               onPress={() =>
-                patch({ start_preset: 'tomorrow' as StartPreset, starts_at: tomorrowMorning().toISOString() })
+                patch({
+                  start_preset: 'tomorrow' as StartPreset,
+                  starts_at: tomorrowMorning(
+                    new Date(),
+                    resolveChallengeTimezone(profile?.timezone),
+                  ).toISOString(),
+                })
               }
             />
             <Chip
@@ -1316,9 +1326,13 @@ export function SimpleCreateForm() {
         ) : null}
 
         {error ? (
-          <AppText className="text-sm text-coral-dark">{error}</AppText>
+          <AppText className="text-sm text-coral-dark" numberOfLines={1}>
+            {error}
+          </AppText>
         ) : costHint ? (
-          <AppText className="text-sm text-coral-dark">{costHint}</AppText>
+          <AppText className="text-sm text-coral-dark" numberOfLines={1}>
+            {costHint}
+          </AppText>
         ) : null}
 
         <TourAnchor id="create-simple-advanced">

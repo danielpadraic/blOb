@@ -566,7 +566,9 @@ export function FieldLabel({
       <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
       {children}
       {error ? (
-        <AppText className="text-xs text-coral-dark">{error}</AppText>
+        <AppText className="text-xs text-coral-dark" numberOfLines={1}>
+          {error}
+        </AppText>
       ) : hint ? (
         <AppText className="text-xs leading-5 text-muted">{hint}</AppText>
       ) : null}

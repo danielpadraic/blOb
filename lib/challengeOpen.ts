@@ -34,13 +34,57 @@ export function isHollowChallengeSeed(
   if (!row?.id) {
     return true;
   }
-  if (challengeSnapshotHasIdentity(row)) {
-    return false;
+  return !challengeSnapshotHasIdentity(row);
+}
+
+/** Last good for THIS id only — never copy another challenge’s title or prize. */
+export function fillChallengeFromLastGood<T extends { id?: string | null }>(
+  live: T | null | undefined,
+  seed: T | null | undefined,
+): T | undefined {
+  const liveId = firstRouteParam(live?.id);
+  const seedId = firstRouteParam(seed?.id);
+  if (!liveId || !live) {
+    return seedId && seed && seedId === liveId ? seed : undefined;
   }
-  if (String(row.cover_image_url ?? '').trim()) {
-    return false;
+  if (!seed || seedId !== liveId) {
+    return live;
   }
-  return Number(row.prize_pool ?? 0) <= 0;
+  const liveRow = live as T & {
+    title?: string | null;
+    task?: string | null;
+    prize_pool?: number | null;
+    cumulative_target?: number | null;
+    distance_meters_required?: number | null;
+    target_count?: number | null;
+    length_value?: number | null;
+    days_required?: number | null;
+    format?: string | null;
+    challenge_type?: string | null;
+    cover_image_url?: string | null;
+  };
+  const seedRow = seed as typeof liveRow;
+  const named = challengeDisplayTitle(liveRow) || challengeDisplayTitle(seedRow);
+  return {
+    ...seedRow,
+    ...liveRow,
+    id: liveId,
+    title: named || liveRow.title || seedRow.title,
+    task: String(liveRow.task ?? '').trim() || seedRow.task,
+    prize_pool: Number(liveRow.prize_pool) > 0 ? liveRow.prize_pool : seedRow.prize_pool,
+    cumulative_target:
+      Number(liveRow.cumulative_target) > 0 ? liveRow.cumulative_target : seedRow.cumulative_target,
+    distance_meters_required:
+      Number(liveRow.distance_meters_required) > 0
+        ? liveRow.distance_meters_required
+        : seedRow.distance_meters_required,
+    target_count: Number(liveRow.target_count) > 0 ? liveRow.target_count : seedRow.target_count,
+    length_value: Number(liveRow.length_value) > 0 ? liveRow.length_value : seedRow.length_value,
+    days_required: Number(liveRow.days_required) > 0 ? liveRow.days_required : seedRow.days_required,
+    format: liveRow.format || seedRow.format,
+    challenge_type: liveRow.challenge_type || seedRow.challenge_type,
+    cover_image_url: String(liveRow.cover_image_url ?? '').trim() || seedRow.cover_image_url,
+  };
 }
 
 export function rememberLastGoodChallenge(row: ChallengeWithStats | null | undefined): void {
@@ -67,6 +111,10 @@ export function challengeHasDurationHint(row: {
   duration_days?: number | null;
   starts_at?: string | null;
   ends_at?: string | null;
+  cumulative_target?: number | null;
+  distance_meters_required?: number | null;
+  challenge_type?: string | null;
+  format?: string | null;
 } | null | undefined): boolean {
   if (!row) {
     return false;
@@ -83,21 +131,30 @@ export function challengeHasDurationHint(row: {
   if (Number(row.target_count) > 0) {
     return true;
   }
+  if (Number(row.cumulative_target) > 0) {
+    return true;
+  }
+  if (Number(row.distance_meters_required) > 0) {
+    return true;
+  }
+  const type = String(row.challenge_type ?? '').toLowerCase();
+  const format = String(row.format ?? '').toLowerCase();
+  if (type === 'cumulative' || format === 'cumulative' || type === 'points') {
+    return true;
+  }
   return Boolean(row.starts_at && row.ends_at);
 }
 
 export function challengeFromFeedPreview(preview: FeedChallengePreview): ChallengeHeroRow {
-  const hasDuration = challengeHasDurationHint(preview);
   const normalized = normalizeChallenge({
     ...preview,
-    days_required: hasDuration ? preview.days_required : 0,
-    target_count: hasDuration ? preview.target_count : 0,
-    length_value: hasDuration ? preview.length_value : null,
+    cumulative_target: preview.cumulative_target,
+    distance_meters_required: preview.distance_meters_required,
+    format: preview.format,
+    challenge_type: preview.challenge_type,
   } as Record<string, unknown>);
   return {
     ...normalized,
-    days_required: hasDuration ? normalized.days_required : 0,
-    target_count: hasDuration ? normalized.target_count : 0,
     participant_count: 0,
     preview_hero: true,
   };
@@ -140,6 +197,11 @@ export function seedChallengeFeedPreview(
     tasks: row.tasks ?? null,
     days_required: row.days_required ?? null,
     target_count: row.target_count ?? null,
+    length_value: row.length_value ?? null,
+    challenge_type: typeof row.challenge_type === 'string' ? row.challenge_type : null,
+    format: typeof row.format === 'string' ? row.format : null,
+    cumulative_target: row.cumulative_target ?? null,
+    distance_meters_required: row.distance_meters_required ?? null,
   } satisfies FeedChallengePreview);
 }
 
@@ -153,17 +215,17 @@ export function resolveChallengeHero(input: {
     return undefined;
   }
   const queryRow = input.queryData?.id === id ? input.queryData : undefined;
-  if (queryRow && !isHollowChallengeSeed(queryRow)) {
-    return queryRow;
-  }
   const lastGood = peekLastGoodChallenge(id);
-  if (lastGood) {
-    return lastGood;
+  if (queryRow && !isHollowChallengeSeed(queryRow)) {
+    return fillChallengeFromLastGood(queryRow, lastGood) ?? queryRow;
+  }
+  if (lastGood?.id === id) {
+    return fillChallengeFromLastGood(queryRow, lastGood) ?? lastGood;
   }
   if (input.preview?.id === id && challengeSnapshotHasIdentity(input.preview)) {
     return challengeFromFeedPreview(input.preview);
   }
-  return undefined;
+  return queryRow?.id === id ? queryRow : undefined;
 }
 
 export async function loadChallengeDetail(

@@ -30,6 +30,7 @@ type GoalChallenge = Pick<
   | 'format'
   | 'cumulative_target'
   | 'cumulative_window'
+  | 'distance_meters_required'
   | 'title'
   | 'task'
   | 'tasks'
@@ -135,13 +136,15 @@ export function challengeGoalLabel(
   },
 ): string {
   if (usesCumulativeScoring(challenge)) {
-    return (
-      challengeCumulativeProgress(
-        challenge,
-        extras?.distanceMetersCompleted ?? 0,
-        extras?.unit ?? athleteDistanceUnit(),
-      ) ?? 'Cumulative'
+    const label = challengeCumulativeProgress(
+      challenge,
+      extras?.distanceMetersCompleted ?? 0,
+      extras?.unit ?? athleteDistanceUnit(),
     );
+    if (label && !/\/\s*0(?:\.0+)?\s*(?:mi|km)\b/i.test(label)) {
+      return label;
+    }
+    return label && Number(challenge.cumulative_target) > 0 ? label : 'Distance';
   }
   if (usesPointsBoard(challenge)) {
     if (challenge.challenge_type === 'points' && challenge.scoring_method !== 'comparable_points') {

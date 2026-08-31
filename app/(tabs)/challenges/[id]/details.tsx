@@ -231,8 +231,6 @@ export default function OfficialDetailsScreen() {
           placeholder={copy('create.titlePlaceholder')}
           value={draft.title}
           onChangeText={(title) => patch({ title })}
-          grow
-          growMaxLines={2}
           maxLength={80}
         />
         <Input
@@ -262,6 +260,7 @@ export default function OfficialDetailsScreen() {
           value={draft.rules}
           onChangeText={(rules) => patch({ rules })}
           grow
+          growMaxLines={descriptionGrowMaxLines(Dimensions.get('window').height)}
           maxLength={8000}
         />
 

@@ -93,7 +93,7 @@ export function ChallengeHeroCard({
           <AppText
             className="mt-2 text-[24px] font-extrabold leading-7"
             style={{ color: titleColor }}
-            numberOfLines={2}>
+            numberOfLines={1}>
             {challengeDisplayTitle(challenge)}
           </AppText>
         </View>

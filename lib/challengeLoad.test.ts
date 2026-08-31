@@ -10,6 +10,7 @@ import {
 } from '@/lib/challengeLoad';
 import {
   challengeFromFeedPreview,
+  fillChallengeFromLastGood,
   openChallengeLobby,
   peekLastGoodChallenge,
   rememberLastGoodChallenge,
@@ -153,6 +154,48 @@ describe('challenge load helpers', () => {
     const named = client.getQueryData(['challenge', 'def']) as { title?: string; prize_pool?: number };
     expect(named.title).toBe('Daily Prayer');
     expect(named.prize_pool).toBe(5);
+  });
+
+  it('seeds last-good title and prize for that id only', () => {
+    rememberLastGoodChallenge({
+      id: 'seed-a',
+      title: 'Workout Group #2',
+      prize_pool: 20,
+      participant_count: 2,
+    } as never);
+    rememberLastGoodChallenge({
+      id: 'seed-b',
+      title: '128 miler',
+      prize_pool: 50,
+      cumulative_target: 206000,
+      participant_count: 1,
+    } as never);
+    const hollowA = resolveChallengeHero({
+      id: 'seed-a',
+      queryData: { id: 'seed-a', title: 'Challenge', prize_pool: 0, participant_count: 2 } as never,
+    });
+    expect(hollowA?.id).toBe('seed-a');
+    expect(hollowA?.title).toBe('Workout Group #2');
+    expect(hollowA?.prize_pool).toBe(20);
+    const other = fillChallengeFromLastGood(
+      { id: 'seed-b', title: 'Challenge', prize_pool: 0 } as never,
+      peekLastGoodChallenge('seed-a') as never,
+    );
+    expect(other?.title).toBe('Challenge');
+    expect(other?.prize_pool).toBe(0);
+    const mergedB = resolveChallengeHero({
+      id: 'seed-b',
+      queryData: {
+        id: 'seed-b',
+        title: 'Challenge',
+        prize_pool: 0,
+        cumulative_target: 0,
+        participant_count: 1,
+      } as never,
+    });
+    expect(mergedB?.title).toBe('128 miler');
+    expect(mergedB?.prize_pool).toBe(50);
+    expect(mergedB?.cumulative_target).toBe(206000);
   });
 
   it('paints feed preview for the same id and never last-good from another challenge', () => {

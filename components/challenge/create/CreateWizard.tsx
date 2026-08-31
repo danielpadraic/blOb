@@ -1664,7 +1664,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
           contentContainerStyle={{
-            paddingBottom: createScrollBottomPad(Boolean(tour?.createActive), footerH),
+            paddingBottom:
+              createScrollBottomPad(Boolean(tour?.createActive), footerH) +
+              (step === STEP_REVIEW && keyboardHeight > 0 ? 16 : 0),
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
@@ -2173,8 +2175,6 @@ function GoalSlide({
             onBlur={onBlur}
             onFocus={onTitleFocus}
             error={errors.title?.message}
-            grow
-            growMaxLines={2}
             maxLength={80}
           />
         )}

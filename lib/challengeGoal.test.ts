@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { milesToMeters } from '@/lib/distance';
 import { challengeDurationDays, challengeGoalLabel, storedDurationDays } from '@/lib/challengeGoal';
 
 describe('stored duration', () => {
@@ -52,6 +53,36 @@ describe('stored duration', () => {
         { pointsCompleted: 12 },
       ),
     ).toBe('12 / 50 points');
+  });
+
+  it('prints the saved distance target, never 0 / 0', () => {
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'cumulative',
+          format: 'cumulative',
+          cumulative_target: milesToMeters(128),
+          title: '128 miler',
+        },
+        { distanceMetersCompleted: 0, unit: 'mi' },
+      ),
+    ).toBe('0 mi / 128 mi');
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'cumulative',
+          format: 'cumulative',
+          title: '128 miles',
+        },
+        { distanceMetersCompleted: 0, unit: 'mi' },
+      ),
+    ).toBe('0 mi / 128 mi');
+    expect(
+      challengeGoalLabel(
+        { challenge_type: 'cumulative', format: 'cumulative' },
+        { distanceMetersCompleted: 0, unit: 'mi' },
+      ),
+    ).toBe('Distance');
   });
 
   it('does not invent 6 when nothing is saved', () => {

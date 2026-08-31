@@ -69,8 +69,6 @@ export function PrivacyModePicker({
     select('public', next);
   }
 
-  const lockedMessage = joinedLock ? copy('create.privacyLocked') : null;
-
   const selector = (
     <View style={{ opacity: joinedLock ? 0.55 : 1 }}>
       {isPrivateLane ? (
@@ -111,11 +109,6 @@ export function PrivacyModePicker({
         locked={joinedLock}
         onPress={() => select('private_corporate')}
       />
-      {lockedMessage ? (
-        <AppText className="text-sm leading-5" style={{ color: THEME.textMuted }}>
-          {lockedMessage}
-        </AppText>
-      ) : null}
     </View>
   );
 }
