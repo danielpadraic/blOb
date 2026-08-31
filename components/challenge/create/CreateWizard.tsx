@@ -97,6 +97,7 @@ import {
 } from '@/lib/createWizardFlow';
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 import { applyLaneToFormValues, normalizeUserChallengeLane, type UserChallengeLane } from '@/lib/challengeLane';
+import { descriptionGrowMaxLines } from '@/lib/composerField';
 import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
 import {
   defaultPayoutPairForFamily,
@@ -1585,7 +1586,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       pointerEvents={tour?.createActive && !liveChallengeId ? 'none' : 'auto'}
       style={{
         backgroundColor: embedded ? THEME.background : undefined,
-        marginBottom: Platform.OS === 'web' ? keyboardHeight : 0,
+        marginBottom: keyboardHeight,
       }}>
         {liveChallengeId ? (
           <View className="flex-1 items-center justify-center px-6">
@@ -1709,6 +1710,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               visibility={values.visibility}
               privacyMode={asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane)}
               challengeLane={values.challenge_lane}
+              participantCount={isEditing ? editing.data?.participant_count ?? 0 : 0}
               extraTasks={values.extra_tasks ?? []}
               coverUrl={values.cover_image_url}
               isPoints={isPoints}
@@ -2104,6 +2106,7 @@ function GoalSlide({
   visibility,
   privacyMode,
   challengeLane,
+  participantCount = 0,
   extraTasks,
   coverUrl,
   isPoints,
@@ -2119,6 +2122,7 @@ function GoalSlide({
   visibility: CreateChallengeValues['visibility'];
   privacyMode: PrivacyMode;
   challengeLane: CreateChallengeValues['challenge_lane'];
+  participantCount?: number;
   extraTasks: CreateChallengeValues['extra_tasks'];
   coverUrl?: string | null;
   isPoints: boolean;
@@ -2191,6 +2195,8 @@ function GoalSlide({
             onFocus={onDescriptionFocus}
             error={errors.description?.message}
             grow
+            growMaxLines={descriptionGrowMaxLines(Dimensions.get('window').height)}
+            maxLength={2000}
           />
         )}
       />
@@ -2236,6 +2242,7 @@ function GoalSlide({
           privacyMode={privacyMode}
           visibility={visibility}
           challengeLane={normalizeUserChallengeLane(challengeLane)}
+          participantCount={participantCount}
           error={errors.visibility?.message ?? errors.privacy_mode?.message ?? privacyLockMessage ?? undefined}
           onChange={(next) => {
             setPrivacyLockMessage(null);

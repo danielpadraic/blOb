@@ -56,6 +56,7 @@ import { getErrorMessage } from '@/utils/errors';
 import { displayUrl, mediaKind } from '@/utils/media';
 import { directedWallHost } from '@/lib/profileWall';
 import { formatFeedTime } from '@/utils/format';
+import { authorLabel, safeUserId } from '@/lib/safeIds';
 
 const BODY_COLLAPSE_LINES = 4;
 const BODY_COLLAPSE_CHARS = 160;
@@ -97,8 +98,9 @@ function PostCardInner({
   const moreRef = useRef<View>(null);
   const updateAudience = useUpdatePostAudience();
 
-  const name = post.author?.display_name ?? post.author?.username ?? 'blob';
-  const handle = post.author?.username ?? 'blob';
+  const uid = safeUserId(post.author, post.author_id, (post as { user_id?: string | null }).user_id);
+  const name = authorLabel(post.author);
+  const handle = post.author?.username?.trim() || uid;
   const comments = post.comments ?? [];
   const audience = asPostAudience(post.audience);
   const content = post.content?.trim() ?? '';
@@ -173,16 +175,20 @@ function PostCardInner({
         overflow: 'visible',
       }}>
       <View className="flex-row items-center" style={{ gap: homeFeed ? 6 : 10 }}>
-        <ProfileLink username={post.author?.username} userId={post.author_id}>
+        {uid ? (
+          <ProfileLink username={post.author?.username} userId={uid}>
+            <Avatar uri={post.author?.avatar_url} name={name} size={homeFeed ? 32 : 42} />
+          </ProfileLink>
+        ) : (
           <Avatar uri={post.author?.avatar_url} name={name} size={homeFeed ? 32 : 42} />
-        </ProfileLink>
+        )}
         <View className="flex-1 justify-center" style={flexChildMin()}>
           <View
             className="flex-row items-center"
             style={[{ gap: homeFeed ? 4 : 6, flexWrap: wallHost ? 'wrap' : homeFeed ? 'nowrap' : 'wrap' }, flexChildMin()]}>
             <ProfileLink
               username={post.author?.username}
-              userId={post.author_id}
+              userId={uid}
               style={[flexChildMin(), { maxWidth: '100%' }]}>
               <AppText
                 className="font-semibold text-charcoal"
@@ -416,11 +422,11 @@ function PostCardInner({
           <ChallengeShareCard
             challengeId={post.challenge_id}
             author={
-              post.author
+              uid
                 ? {
-                    id: post.author.id,
+                    id: uid,
                     name,
-                    avatarUrl: post.author.avatar_url,
+                    avatarUrl: post.author?.avatar_url,
                   }
                 : null
             }
@@ -506,10 +512,10 @@ function PostCardInner({
                 expanded={composerExpanded}
                 onExpandedChange={setComposerExpanded}
                 replyTo={
-                  post.author
+                  uid
                     ? {
-                        userId: post.author_id,
-                        username: handle,
+                        userId: uid,
+                        username: handle || 'someone',
                         label: name,
                       }
                     : null
@@ -815,7 +821,7 @@ function ChallengeShareCard({
     });
   if (card?.id === challengeId) {
     const host =
-      author && card.created_by && author.id === card.created_by
+      author && card.created_by && safeUserId(author) === card.created_by
         ? { name: author.name, avatarUrl: author.avatarUrl }
         : null;
     return (
@@ -842,7 +848,7 @@ function isHomeOfficialAuthor(
   if (!author) {
     return false;
   }
-  if (author.is_official || author.id === OFFICIAL_BOB_ID) {
+  if (author.is_official || safeUserId(author) === OFFICIAL_BOB_ID) {
     return true;
   }
   return String(author.username ?? '').trim().toLowerCase() === 'blob';

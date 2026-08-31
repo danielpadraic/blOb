@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Dimensions, Pressable, View } from 'react-native';
 
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
@@ -10,6 +9,7 @@ import { LocationPlacePicker } from '@/components/challenge/LocationPlacePicker'
 import { Button } from '@/components/ui/Button';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
+import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallenge, useUpdateOfficialChallengeDetails } from '@/hooks/useChallenge';
@@ -31,6 +31,7 @@ import {
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
 import { persistChallengePlaces } from '@/lib/locationPlaces';
+import { descriptionGrowMaxLines } from '@/lib/composerField';
 import { copy } from '@/lib/copy';
 import { canEditOfficialDetails } from '@/lib/officialScoring';
 import { supabase } from '@/lib/supabase';
@@ -100,7 +101,6 @@ export default function OfficialDetailsScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const challengeQuery = useChallenge(id);
@@ -208,13 +208,20 @@ export default function OfficialDetailsScreen() {
     );
   }
 
+  const descriptionLines = descriptionGrowMaxLines(Dimensions.get('window').height);
+
   return (
-    <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24, gap: 16 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+    <KeyboardFormShell
+      padded
+      footer={
+        <View className="gap-2">
+          {formError ? (
+            <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
+          ) : null}
+          <Button title={copy('create.save')} loading={save.isPending} onPress={onSave} />
+        </View>
+      }>
+        <View style={{ gap: 16, paddingTop: 12 }}>
         <AppText className="text-[13px] leading-5 text-muted">
           Title, photo, rules, and proofs. Scoring and privacy stay as they are.
         </AppText>
@@ -234,7 +241,8 @@ export default function OfficialDetailsScreen() {
           value={draft.description}
           onChangeText={(description) => patch({ description })}
           grow
-          maxLength={500}
+          growMaxLines={descriptionLines}
+          maxLength={2000}
         />
         <ChallengePhotoField
           uri={draft.cover_image_url}
@@ -359,21 +367,7 @@ export default function OfficialDetailsScreen() {
           ) : null}
           <AppText className="text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
         </View>
-      </ScrollView>
-
-      <View
-        className="gap-2 px-4 pt-2"
-        style={{
-          borderTopWidth: 1,
-          borderTopColor: THEME.border,
-          paddingBottom: Math.max(insets.bottom, 12),
-          backgroundColor: THEME.background,
-        }}>
-        {formError ? (
-          <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
-        ) : null}
-        <Button title={copy('create.save')} loading={save.isPending} onPress={onSave} />
-      </View>
-    </View>
+        </View>
+    </KeyboardFormShell>
   );
 }

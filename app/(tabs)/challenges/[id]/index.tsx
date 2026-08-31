@@ -865,6 +865,11 @@ export default function ChallengeDetailScreen() {
         {startLine ? (
           <AppText className="mt-2 text-[13px] leading-5 text-muted">{startLine}</AppText>
         ) : null}
+        {challenge.description?.trim() ? (
+          <AppText className="mt-3 text-[15px] leading-6" style={{ color: THEME.textPrimary }}>
+            {challenge.description.trim()}
+          </AppText>
+        ) : null}
 
         {isJoined &&
         !loggedToday &&

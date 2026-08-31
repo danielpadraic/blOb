@@ -165,7 +165,7 @@ export function personDisplayName(profile?: Pick<PublicProfile, 'display_name' |
   if (!profile) {
     return 'Someone';
   }
-  return profile.display_name?.trim() || profile.username;
+  return profile.display_name?.trim() || profile.username?.trim() || 'Someone';
 }
 
 export function conversationTitle(
@@ -457,7 +457,7 @@ export async function fetchPublicProfilesByIds(ids: string[]): Promise<PublicPro
     .select(PUBLIC_PROFILE_COLUMNS)
     .in('id', unique);
   throwIfError(error);
-  return ((data ?? []) as PublicProfile[]).map(asPublicProfile);
+  return ((data ?? []) as PublicProfile[]).filter((row) => Boolean(row?.id)).map(asPublicProfile);
 }
 
 export async function followUser(followerId: string, followingId: string): Promise<Follow> {

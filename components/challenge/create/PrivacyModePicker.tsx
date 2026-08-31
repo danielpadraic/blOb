@@ -41,6 +41,7 @@ export function PrivacyModePicker({
 }) {
   const isPrivateLane = challengeLane === 'private';
   const corporate = privacyMode === 'private_corporate';
+  const joinedLock = participantCount >= 1;
 
   function select(next: PrivacyMode, nextVisibility?: Visibility) {
     const gate = canChangePrivacyMode({
@@ -68,31 +69,32 @@ export function PrivacyModePicker({
     select('public', next);
   }
 
-  const lockedMessage =
-    participantCount >= 1 && privacyMode !== 'public'
-      ? copy('create.privacyLocked')
-      : null;
+  const lockedMessage = joinedLock ? copy('create.privacyLocked') : null;
 
-  const selector = isPrivateLane ? (
-    <View className="gap-2">
-      <PrivateChoiceCard
-        selected={!corporate}
-        title={copy('create.private')}
-        body={copy('create.privateHelp')}
-        onPress={() => select('private')}
-      />
+  const selector = (
+    <View style={{ opacity: joinedLock ? 0.55 : 1 }}>
+      {isPrivateLane ? (
+        <View className="gap-2">
+          <PrivateChoiceCard
+            selected={!corporate}
+            title={copy('create.private')}
+            body={copy('create.privateHelp')}
+            onPress={() => select('private')}
+          />
+        </View>
+      ) : (
+        <SegmentedControl
+          accessibilityLabel={copy('create.visibility')}
+          value={corporate ? null : visibility === 'private' ? 'invite' : visibility}
+          options={[
+            { value: 'public', label: copy('create.public') },
+            { value: 'friends', label: copy('create.friends') },
+            { value: 'invite', label: copy('create.invite') },
+          ]}
+          onChange={selectVisibility}
+        />
+      )}
     </View>
-  ) : (
-    <SegmentedControl
-      accessibilityLabel={copy('create.visibility')}
-      value={corporate ? null : visibility === 'private' ? 'invite' : visibility}
-      options={[
-        { value: 'public', label: copy('create.public') },
-        { value: 'friends', label: copy('create.friends') },
-        { value: 'invite', label: copy('create.invite') },
-      ]}
-      onChange={selectVisibility}
-    />
   );
 
   return (
@@ -104,7 +106,11 @@ export function PrivacyModePicker({
       ) : (
         selector
       )}
-      <PrivateCorporateCard selected={corporate} onPress={() => select('private_corporate')} />
+      <PrivateCorporateCard
+        selected={corporate}
+        locked={joinedLock}
+        onPress={() => select('private_corporate')}
+      />
       {lockedMessage ? (
         <AppText className="text-sm leading-5" style={{ color: THEME.textMuted }}>
           {lockedMessage}
@@ -145,16 +151,18 @@ function PrivateChoiceCard({
 
 function PrivateCorporateCard({
   selected,
+  locked = false,
   onPress,
 }: {
   selected: boolean;
+  locked?: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled: locked }}
       accessibilityLabel={PRIVATE_CORPORATE_LABEL}
       className="rounded-blob border px-4 py-3"
       style={{
@@ -162,6 +170,7 @@ function PrivateCorporateCard({
         borderColor: selected ? THEME.primary : THEME.textPrimary,
         borderWidth: selected ? 2 : 1.75,
         borderRadius: THEME.radius,
+        opacity: locked && !selected ? 0.55 : 1,
       }}>
       <View className="flex-row items-center" style={{ gap: 8 }}>
         <Glyph name={GLYPH.lock} color={THEME.primary} size={16} />

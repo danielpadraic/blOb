@@ -32,6 +32,7 @@ export const supabase = createClient<Database>(
       detectSessionInUrl: false,
       // PKCE returns ?code= so Expo Router / native deep links keep the payload.
       // Implicit hash tokens are dropped on blob://auth/callback.
+      // Follow-up: pkce_code_verifier_not_found on auth/deep-link — do not fix in this PR.
       flowType: 'pkce',
     },
     realtime: getRealtimeTransport(),

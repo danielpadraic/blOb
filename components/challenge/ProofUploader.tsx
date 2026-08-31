@@ -186,6 +186,7 @@ export function ProofUploader({
         <InAppCamera
           capture="photo"
           checkin
+          facingKind="checkin"
           maxDuration={15}
           blocked={blocked}
           blockedReason={blockedReason}

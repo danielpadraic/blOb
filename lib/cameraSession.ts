@@ -270,21 +270,39 @@ export function installMediaLifecycle() {
   }
 }
 
+async function pickCameraDeviceId(facing: 'front' | 'back'): Promise<string | null> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+    return null;
+  }
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter((device) => device.kind === 'videoinput');
+    const match = cams.find((device) => {
+      const label = (device.label || '').toLowerCase();
+      return facing === 'front'
+        ? label.includes('front') || label.includes('user') || label.includes('face')
+        : label.includes('back') || label.includes('rear') || label.includes('environment');
+    });
+    return match?.deviceId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function openWebCameraStream(input: {
   facing: 'front' | 'back';
   audio: boolean;
   existing?: MediaStream | null;
 }): Promise<MediaStream> {
-  if (input.existing && input.existing.getVideoTracks().some((track) => track.readyState === 'live')) {
-    watchLiveMedia({ stream: input.existing });
-    return input.existing;
-  }
   if (input.existing) {
     stopMedia({ stream: input.existing });
     liveStreams.delete(input.existing);
   }
+  const deviceId = await pickCameraDeviceId(input.facing);
   const stream = await getUserMediaWatched({
-    video: { facingMode: input.facing === 'front' ? 'user' : 'environment' },
+    video: deviceId
+      ? { deviceId: { exact: deviceId } }
+      : { facingMode: input.facing === 'front' ? 'user' : 'environment' },
     audio: input.audio,
   });
   return stream;

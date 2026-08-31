@@ -108,7 +108,9 @@ import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { CIRCLE_PIN_CAP } from '@/lib/circles';
 import { copy } from '@/lib/copy';
-import { circleDetailHref, LOBBY_HREF, TABS_HREF } from '@/lib/routes';
+import { descriptionGrowMaxLines } from '@/lib/composerField';
+import { PRIVACY_MODE_LOCKED_MESSAGE } from '@/lib/privacyMode';
+import { circleDetailHref, LOBBY_HREF, publishedRowId, TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { getCreateChallengeMessage } from '@/utils/errors';
 
@@ -499,7 +501,12 @@ export function SimpleCreateForm() {
           challengeId: editId,
           values: simpleDraftToCreateValues(draft),
         });
-        router.replace(`/challenges/${challenge.id}`);
+        const nextId = publishedRowId(challenge);
+        if (!nextId) {
+          setError('Couldn’t open that challenge.');
+          return;
+        }
+        router.replace(`/challenges/${nextId}`);
         return;
       }
       const schedule = resolveStartForPublish({
@@ -549,9 +556,21 @@ export function SimpleCreateForm() {
         });
         return;
       }
-      router.replace(`/challenges/${challenge.id}`);
+      const publishedId = publishedRowId(challenge);
+      if (!publishedId) {
+        setError('Couldn’t open that challenge.');
+        return;
+      }
+      router.replace(`/challenges/${publishedId}`);
     } catch (err) {
-      setError(getCreateChallengeMessage(err));
+      const message = getCreateChallengeMessage(err);
+      setError(message);
+      if (editId && (message.includes('joins') || message === PRIVACY_MODE_LOCKED_MESSAGE)) {
+        const saved = editing.data;
+        if (saved?.privacy_mode === 'public' || saved?.privacy_mode === 'private' || saved?.privacy_mode === 'private_corporate') {
+          patch({ privacy_mode: saved.privacy_mode });
+        }
+      }
     }
   }
 
@@ -570,9 +589,9 @@ export function SimpleCreateForm() {
       style={{
         flex: 1,
         backgroundColor: THEME.background,
-        marginBottom: Platform.OS === 'web' ? keyboardOverlap : 0,
+        marginBottom: keyboardOverlap,
       }}>
-    <Screen scroll={false} padded={false} edges={TAB_ROOT_EDGES}>
+    <Screen scroll={false} padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
     <ScrollView
       ref={(node) => {
         scrollRef.current = node;
@@ -897,7 +916,8 @@ export function SimpleCreateForm() {
           value={draft.description}
           onChangeText={(description) => patch({ description })}
           grow
-          maxLength={120}
+          growMaxLines={descriptionGrowMaxLines(Dimensions.get('window').height)}
+          maxLength={2000}
         />
 
         <ChallengePhotoField

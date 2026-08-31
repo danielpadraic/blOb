@@ -12,12 +12,6 @@ export const PRIVATE_CORPORATE_HELPER =
 export const PRIVACY_MODE_LOCKED_MESSAGE =
   'Privacy is locked. After someone joins, you cannot turn off or downgrade this setting.';
 
-const PRIVACY_RANK: Record<PrivacyMode, number> = {
-  public: 0,
-  private: 1,
-  private_corporate: 2,
-};
-
 export function isPrivacyMode(value: unknown): value is PrivacyMode {
   return value === 'public' || value === 'private' || value === 'private_corporate';
 }
@@ -106,10 +100,7 @@ export function canChangePrivacyMode(input: {
   if (input.participantCount < 1) {
     return { ok: true };
   }
-  if (PRIVACY_RANK[input.next] < PRIVACY_RANK[input.current]) {
-    return { ok: false, message: PRIVACY_MODE_LOCKED_MESSAGE };
-  }
-  return { ok: true };
+  return { ok: false, message: PRIVACY_MODE_LOCKED_MESSAGE };
 }
 
 export function applyPrivacyModeSelection(

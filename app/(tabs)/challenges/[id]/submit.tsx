@@ -60,6 +60,7 @@ import {
   type DistanceUnit,
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
+import { safeUserId } from '@/lib/safeIds';
 import { personDisplayName } from '@/lib/social';
 import {
   ensureLibraryPermission,
@@ -161,6 +162,7 @@ function SubmitWorkoutInner() {
   const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
+  const uid = safeUserId(user);
   const { profile } = useMyProfile();
   const distanceUnit = athleteDistanceUnit(profile?.weight_unit);
   const sessionDistance = distanceProofIsSessionLog(challengeQuery.data);
@@ -601,7 +603,7 @@ function SubmitWorkoutInner() {
       const uploadedExtras: CheckinExtra[] = [];
       const extraUrls: string[] = [];
       const failedExtras: string[] = [];
-      if (user?.id) {
+      if (uid) {
         for (const [index, extra] of extras.entries()) {
           if (extra.remoteUrl) {
             extraUrls.push(extra.remoteUrl);
@@ -616,7 +618,7 @@ function SubmitWorkoutInner() {
           try {
             const remoteUrl = await uploadPostAttachment({
               uri: extra.uri,
-              userId: user.id,
+              userId: uid,
               fileStem: `checkin-extra-${Date.now()}-${index}`,
               mimeType: extra.mimeType ?? extra.blob?.type,
               blob: extra.blob,
@@ -659,12 +661,12 @@ function SubmitWorkoutInner() {
           const mentionIds = [
             ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
           ];
-          if (postId && mentionIds.length > 0 && user?.id) {
+          if (postId && mentionIds.length > 0 && uid) {
             await supabase.from('post_mentions').insert(
               mentionIds.map((mentioned_user_id) => ({
                 post_id: postId,
                 mentioned_user_id,
-                author_id: user.id,
+                author_id: uid,
               })),
             );
           }
@@ -700,7 +702,7 @@ function SubmitWorkoutInner() {
       proof ??
       proofSteps.find((item) => item.method === 'distance' || item.method === 'hr') ??
       proofSteps.find((item) => item.method === 'photo' || item.method === 'video');
-    if (!target || !user?.id) {
+    if (!target || !uid) {
       return;
     }
     try {
@@ -709,7 +711,7 @@ function SubmitWorkoutInner() {
         ? await provider.enrichHeartRate(workout)
         : workout;
       const snapshot = toCheckinHealthProof(enriched);
-      const healthWorkoutId = await upsertHealthWorkout(user.id, enriched);
+      const healthWorkoutId = await upsertHealthWorkout(uid, enriched);
       const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
       setDrafts((current) => ({ ...current, [target.id]: { ...current[target.id], ...draft } }));
       setCaptureId(null);

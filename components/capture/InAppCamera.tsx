@@ -95,6 +95,7 @@ export function InAppCamera({
   shutterHint,
   checkin = false,
 }: InAppCameraProps) {
+  const resolvedFacingKind: CameraFacingKind = checkin ? 'checkin' : facingKind;
   const insets = useSafeAreaInsets();
   const navFocused = useIsFocused();
   const pathname = usePathname();
@@ -108,7 +109,8 @@ export function InAppCamera({
   const [sessionOn, setSessionOn] = useState(true);
   const focusedRef = useRef(focused);
   const chunksRef = useRef<Blob[]>([]);
-  const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing(facingKind));
+  const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing(resolvedFacingKind));
+  const [switchToast, setSwitchToast] = useState<string | null>(null);
   const [capture, setCapture] = useState<CaptureMedia>(checkin ? 'photo' : captureProp);
   const [, setReady] = useState(false);
   const [ask, setAsk] = useState<CameraAsk>('prompt');
@@ -150,7 +152,11 @@ export function InAppCamera({
   }
 
   function finishCapture(media: CapturedMedia) {
-    onCaptured(media);
+    try {
+      onCaptured(media);
+    } catch (error) {
+      logCameraError(error, 'onCaptured');
+    }
     killSession();
     void saveOwnCapture({
       uri: media.uri,
@@ -159,6 +165,12 @@ export function InAppCamera({
       mediaType: media.mediaType,
       fromLibrary: false,
     });
+  }
+
+  function stayOnRear(message = 'Couldn’t switch camera') {
+    setSwitchToast(message);
+    rememberCameraFacing('back', resolvedFacingKind);
+    setFacing('back');
   }
 
   useEffect(() => {
@@ -240,6 +252,13 @@ export function InAppCamera({
           return;
         }
         try {
+          stopMedia({
+            stream: webStreamRef.current,
+            video: webVideoRef.current,
+            recorder: recorderRef.current,
+          });
+          webStreamRef.current = null;
+          recorderRef.current = null;
           const primed = video ? takePrimedCameraStream() : null;
           if (!video) {
             stopPrimedCameraStream();
@@ -264,9 +283,14 @@ export function InAppCamera({
           }
           setReady(true);
           setAsk('ready');
+          setSwitchToast(null);
         } catch (error) {
           logCameraError(error, 'web stream');
           if (cancelled) {
+            return;
+          }
+          if (facing === 'front') {
+            stayOnRear();
             return;
           }
           setAsk(resolveCameraAsk({ queried, errorKind: cameraErrorKind(error) }));
@@ -606,13 +630,14 @@ export function InAppCamera({
         <WebCameraPreview attach={attachWebVideo} />
       ) : showFrame && ask === 'ready' ? (
         <NativeCameraPreview
+          key={facing}
           cameraRef={cameraRef}
           facing={facing}
           video={video}
           onReady={onCameraReady}
           onUnavailable={onUnavailable}
-          onDenied={onCameraDenied}
-          onMissing={onCameraMissing}
+          onDenied={facing === 'front' ? () => stayOnRear() : onCameraDenied}
+          onMissing={facing === 'front' ? () => stayOnRear() : onCameraMissing}
         />
       ) : (
         <View className="flex-1" style={{ backgroundColor: THEME.primary }} />
@@ -757,7 +782,11 @@ export function InAppCamera({
             </Pressable>
           </View>
         ) : null}
-        {liveHint ? (
+        {switchToast ? (
+          <AppText className="mb-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
+            {switchToast}
+          </AppText>
+        ) : liveHint ? (
           <AppText className="mb-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
             {liveHint}
           </AppText>
@@ -801,13 +830,18 @@ export function InAppCamera({
             accessibilityRole="button"
             accessibilityLabel="Flip camera"
             disabled={showDenied}
-            onPress={() =>
-              setFacing((current) => {
-                const next = current === 'back' ? 'front' : 'back';
-                rememberCameraFacing(next, facingKind);
-                return next;
-              })
-            }
+            onPress={() => {
+              const next = facing === 'back' ? 'front' : 'back';
+              stopMedia({
+                stream: webStreamRef.current,
+                video: webVideoRef.current,
+                recorder: recorderRef.current,
+              });
+              webStreamRef.current = null;
+              recorderRef.current = null;
+              rememberCameraFacing(next, resolvedFacingKind);
+              setFacing(next);
+            }}
             className="h-12 w-12 items-center justify-center rounded-2xl"
             style={{
               backgroundColor: 'rgba(16,19,18,0.72)',
@@ -915,6 +949,7 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
 
   return (
     <CameraView
+      key={facing}
       ref={cameraRef}
       style={{ flex: 1 }}
       facing={facing}
