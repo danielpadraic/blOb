@@ -36,6 +36,7 @@ const SETTLEMENT_RPC_COPY: Record<string, string> = {
   ALREADY_DISTRIBUTED: SETTLEMENT_ERROR_COPY.already_settled,
   CHALLENGE_NOT_ENDED: SETTLEMENT_ERROR_COPY.not_ended,
   COOLDOWN_ACTIVE: SETTLEMENT_ERROR_COPY.cooldown,
+  SETTLE_REVIEW_WINDOW: 'Payout waits 2 hours after the challenge ends.',
   TOO_EARLY_DISTRIBUTE: SETTLEMENT_ERROR_COPY.cooldown,
   LMS_NOT_FINISHED: 'Last person standing is not down to one person yet.',
   NO_WINNER: 'There is no winner to pay.',
@@ -85,7 +86,13 @@ export function classifySettlementError(error: unknown): SettlementFailKind {
   ) {
     return 'illegal_pair';
   }
-  if (raw.includes('cooldown_active') || raw.includes('too_early_distribute') || raw.includes('unlocks 1 hour')) {
+  if (
+    raw.includes('cooldown_active') ||
+    raw.includes('too_early_distribute') ||
+    raw.includes('settle_review_window') ||
+    raw.includes('unlocks 1 hour') ||
+    raw.includes('waits 2 hours')
+  ) {
     return 'cooldown';
   }
   if (raw.includes('already_settled') || raw.includes('already settled') || raw.includes('already paid') || raw.includes('already_distributed')) {

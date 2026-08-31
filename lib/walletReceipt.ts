@@ -43,8 +43,11 @@ export function walletReceiptHeadline(input: {
     return `${name} · ${place === 1 ? '1st' : place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`}`;
   }
   const kind = ledgerReceiptLabel(input.entryType);
-  if (kind === 'Prize' || kind === 'Wallet') {
-    return name;
+  if (kind === 'Prize') {
+    return `${name} · Prize`;
+  }
+  if (kind === 'Wallet') {
+    return `${name} · Prize`;
   }
   return `${kind} · ${name}`;
 }

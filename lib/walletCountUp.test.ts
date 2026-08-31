@@ -63,5 +63,8 @@ describe('wallet settlement receipt', () => {
     expect(walletReceiptHeadline({ entryType: 'distribute_win', title: 'Official Weekly', place: 1 })).toBe(
       'Official Weekly · 1st',
     );
+    expect(walletReceiptHeadline({ entryType: 'distribute_win', title: 'Workout Group #2' })).toBe(
+      'Workout Group #2 · Prize',
+    );
   });
 });

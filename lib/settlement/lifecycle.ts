@@ -1,4 +1,5 @@
 import { isEvenSplitPayout, type EvenSplitPayoutInput } from './payout';
+import { isSettlementClockEnded, isSettlementReviewReady } from './reviewWindow';
 
 function asKey(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
@@ -97,17 +98,24 @@ export function isEvenSplitAutoSettle(challenge: {
   return isEvenSplitPayout(challenge) || isRankedAutoSettle(challenge);
 }
 
-export function shouldAutoSettle(challenge: {
+type SettleClockChallenge = {
   status?: string | null;
   distributed_at?: string | null;
+  starts_at?: string | null;
   ends_at?: string | null;
+  days_required?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+  duration_days?: number | null;
   is_unlimited?: boolean | null;
   end_mode?: string | null;
   challenge_type?: string | null;
   prize_structure?: string | null;
   payout_mode?: string | null;
   format?: string | null;
-} | null | undefined, now = new Date()): boolean {
+};
+
+function settleJobOpen(challenge: SettleClockChallenge | null | undefined): boolean {
   if (!challenge || !isEvenSplitAutoSettle(challenge)) {
     return false;
   }
@@ -117,13 +125,15 @@ export function shouldAutoSettle(challenge: {
   if (challenge.status === 'cancelled' || challenge.status === 'cancelled_underfilled') {
     return false;
   }
-  const phase = lifecyclePhase(challenge.status);
-  if (phase === 'settling') {
-    return true;
-  }
-  if (!challenge.ends_at) {
-    return false;
-  }
-  const end = new Date(challenge.ends_at);
-  return !Number.isNaN(end.getTime()) && now.getTime() >= end.getTime();
+  return true;
+}
+
+/** Tick so status can flip to Ended. Does not mean pay yet. */
+export function shouldTickSettlements(challenge: SettleClockChallenge | null | undefined, now = new Date()): boolean {
+  return settleJobOpen(challenge) && isSettlementClockEnded(challenge, now);
+}
+
+/** Pay only after the real end plus the 2-hour review window. */
+export function shouldAutoSettle(challenge: SettleClockChallenge | null | undefined, now = new Date()): boolean {
+  return settleJobOpen(challenge) && isSettlementReviewReady(challenge, now);
 }

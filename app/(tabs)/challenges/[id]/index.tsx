@@ -20,6 +20,7 @@ import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCar
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
 import { ChallengeResultCard } from '@/components/challenge/ChallengeResultCard';
+import { PaidReceiptOverlay } from '@/components/challenge/PaidReceiptOverlay';
 import { HostPrizeTopUp } from '@/components/challenge/HostPrizeTopUp';
 import { FieldNoteLabel, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
@@ -35,7 +36,7 @@ import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecy
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
-import { BODY_METRICS_HREF, checkinSubmitHref, LOBBY_HREF } from '@/lib/routes';
+import { BODY_METRICS_HREF, challengeDetailHref, checkinSubmitHref, LOBBY_HREF } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -109,10 +110,13 @@ import {
   payoutCountdownLabel,
   settlementErrorCopy,
   settlementVoidKind,
-  shouldAutoSettle,
+  shouldTickSettlements,
+  settlementReviewReadyAt,
   startsInLabel,
   trySettleIfEnded,
   voidReceiptCopy,
+  overviewMoneyPhase,
+  WRAPPING_UP_PROOFS_COPY,
 } from '@/lib/settlement';
 import {
   isOfficialJoinable,
@@ -270,9 +274,10 @@ export default function ChallengeDetailScreen() {
     highlightPostId ? 'feed' : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
       ? tabParam
       : receiptParam === '1'
-        ? 'board'
+        ? 'overview'
         : 'overview',
   );
+  const [receiptOpen, setReceiptOpen] = useState(receiptParam === '1');
 
   useEffect(() => {
     const next: ChallengePageTab = highlightPostId
@@ -551,24 +556,33 @@ export default function ChallengeDetailScreen() {
     !challengeQuery.isLoading;
 
   useEffect(() => {
-    if (!id || !challenge || !shouldAutoSettle(challenge)) {
+    if (!id || !challenge || !shouldTickSettlements(challenge)) {
       return;
     }
     let cancelled = false;
-    void trySettleIfEnded(id)
-      .then((view) => {
-        if (cancelled || !view) {
-          return;
-        }
-        void settlementQuery.refetch();
-        void challengeQuery.refetch();
-        void refetchProfile();
-      })
-      .catch(() => undefined);
+    function runTick() {
+      void trySettleIfEnded(id)
+        .then((view) => {
+          if (cancelled || !view) {
+            return;
+          }
+          void settlementQuery.refetch();
+          void challengeQuery.refetch();
+          void refetchProfile();
+        })
+        .catch(() => undefined);
+    }
+    runTick();
+    const readyAt = settlementReviewReadyAt(challenge);
+    const waitMs = readyAt ? readyAt.getTime() - Date.now() : 0;
+    const later = waitMs > 0 ? setTimeout(runTick, waitMs + 250) : null;
     return () => {
       cancelled = true;
+      if (later) {
+        clearTimeout(later);
+      }
     };
-  }, [id, challenge?.status, challenge?.ends_at, challenge?.distributed_at]);
+  }, [id, challenge?.status, challenge?.ends_at, challenge?.starts_at, challenge?.distributed_at]);
 
   const goalLogKey = useRef<string | null>(null);
   useEffect(() => {
@@ -606,6 +620,27 @@ export default function ChallengeDetailScreen() {
     }
     router.replace(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
   }
+
+  const closePaidReceipt = useCallback(() => {
+    setReceiptOpen(false);
+    setPageTab('overview');
+    if (id && receiptParam === '1') {
+      router.replace(
+        challengeDetailHref(id, returnTo === 'feed' ? 'feed' : 'lobby', null, { tab: 'overview' }),
+      );
+    }
+  }, [id, receiptParam, returnTo, router]);
+
+  useEffect(() => {
+    if (receiptParam !== '1') {
+      return;
+    }
+    if (overviewMoneyPhase(challenge, new Date()) !== 'settled') {
+      return;
+    }
+    setReceiptOpen(true);
+    setPageTab('overview');
+  }, [challenge, receiptParam, settlementQuery.data]);
 
   const stillLoading =
     waitingForId ||
@@ -826,7 +861,8 @@ export default function ChallengeDetailScreen() {
           distanceMetersCompleted: participation?.distance_meters_total ?? 0,
           pointsCompleted: participation?.points ?? 0,
         });
-  const prizeEnded = challenge.status === 'settled' || challenge.status === 'ended';
+  const moneyPhase = overviewMoneyPhase(challenge, new Date(nowMs));
+  const prizeEnded = moneyPhase === 'settled' || moneyPhase === 'ended';
   const prizeVoidKind = settlement
     ? settlementVoidKind({
         winnerCount: settlement.settlement.winner_count,
@@ -973,11 +1009,11 @@ export default function ChallengeDetailScreen() {
           </Pressable>
         ) : null}
 
-        {challenge.status === 'settling' && !receipt ? (
+        {moneyPhase === 'ended' && !receipt ? (
           <Card className="mt-4">
-            <AppText className="font-semibold text-charcoal">Settling</AppText>
+            <AppText className="font-semibold text-charcoal">Ended</AppText>
             <AppText className="mt-1 text-sm leading-5 text-muted">
-              Splitting the prize among remaining competitors. This updates on its own.
+              {WRAPPING_UP_PROOFS_COPY}
             </AppText>
           </Card>
         ) : null}
@@ -995,7 +1031,7 @@ export default function ChallengeDetailScreen() {
         {challenge.is_official ? (
           <>
             <ChallengeDetailsCard challenge={challenge} missesUsed={periodMisses.data ?? 0} />
-            {Boolean(receipt) ? null : (
+            {Boolean(receipt) || moneyPhase === 'ended' ? null : (
               <View className="mt-4">
                 <OfficialMoneyBoard
                   challenge={challenge}
@@ -1190,11 +1226,11 @@ export default function ChallengeDetailScreen() {
         </Card>
         )}
 
-        {wasCancelled ? null : receipt ? (
+        {wasCancelled ? null : moneyPhase === 'settled' && receipt ? (
         <View className="mt-4">
           <ChallengeResultCard challenge={challenge} settlement={receipt} userId={user?.id} />
         </View>
-        ) : challenge.is_official ? null : (
+        ) : moneyPhase === 'ended' ? null : challenge.is_official ? null : (
         <Card className="mt-4">
           <FieldNoteLabel
             note="pot"
@@ -1288,8 +1324,16 @@ export default function ChallengeDetailScreen() {
               completedUserIds={completions.data ?? new Set()}
               joined={isJoined}
               viewerId={user?.id}
-              settlement={receipt}
-              showReceipt={receiptParam === '1'}
+              settlement={moneyPhase === 'settled' ? receipt : null}
+              showReceipt={false}
+              onOpenReceipt={
+                moneyPhase === 'settled' && receipt
+                  ? () => {
+                      setReceiptOpen(true);
+                      setPageTab('overview');
+                    }
+                  : undefined
+              }
               error={roster.error instanceof Error ? roster.error.message : null}
               missesUsed={periodMisses.data ?? 0}
             />
@@ -1462,6 +1506,17 @@ export default function ChallengeDetailScreen() {
           </View>
         )}
       </View>
+      ) : null}
+
+      {receipt && moneyPhase === 'settled' ? (
+        <PaidReceiptOverlay
+          visible={receiptOpen}
+          challenge={challenge}
+          settlement={receipt}
+          userId={user?.id}
+          joined={isJoined}
+          onClose={closePaidReceipt}
+        />
       ) : null}
 
       <SettleConfirmModal

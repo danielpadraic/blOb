@@ -23,6 +23,7 @@ import {
   type SettlementVoidKind,
 } from '@/lib/settlement/receipts';
 import { isEvenSplitAutoSettle } from '@/lib/settlement/lifecycle';
+import { isSettlementClockEnded } from '@/lib/settlement/reviewWindow';
 import { settlementRpcForPayout, type EvenSplitPayoutInput } from '@/lib/settlement/payout';
 import {
   getChallengeSettlementWithClient,
@@ -36,7 +37,16 @@ export {
   lifecycleLabel,
   lifecyclePhase,
   shouldAutoSettle,
+  shouldTickSettlements,
 } from '@/lib/settlement/lifecycle';
+export {
+  WRAPPING_UP_PROOFS_COPY,
+  isSettlementReviewReady,
+  overviewMoneyPhase,
+  settlementEffectiveEndsAt,
+  settlementReviewReadyAt,
+  settlementSavedDurationDays,
+} from '@/lib/settlement/reviewWindow';
 export {
   isEvenSplitPayout,
   settlePayoutConfirmCopy,
@@ -172,7 +182,12 @@ export function startsInLabel(
 
 export function isClosedForLogs(challenge: {
   status?: string | null;
+  starts_at?: string | null;
   ends_at?: string | null;
+  days_required?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+  duration_days?: number | null;
   is_unlimited?: boolean | null;
   eliminated?: boolean | null;
 }): boolean {
@@ -185,10 +200,7 @@ export function isClosedForLogs(challenge: {
   if (challenge.is_unlimited) {
     return false;
   }
-  if (challenge.ends_at && new Date() >= new Date(challenge.ends_at)) {
-    return true;
-  }
-  return false;
+  return isSettlementClockEnded(challenge);
 }
 
 export function isHostOfChallenge(
@@ -201,19 +213,20 @@ export function isHostOfChallenge(
 export function hasChallengeEnded(
   challenge: {
     ends_at?: string | null;
+    starts_at?: string | null;
+    days_required?: number | null;
+    length_value?: number | null;
+    length_unit?: string | null;
+    duration_days?: number | null;
     is_unlimited?: boolean | null;
     status?: string | null;
   },
   now = new Date(),
 ): boolean {
-  if (challenge.is_unlimited || !challenge.ends_at) {
+  if (challenge.is_unlimited) {
     return false;
   }
-  const end = new Date(challenge.ends_at);
-  if (Number.isNaN(end.getTime())) {
-    return false;
-  }
-  return now.getTime() >= end.getTime();
+  return isSettlementClockEnded(challenge, now);
 }
 
 export function canMarkJudging(

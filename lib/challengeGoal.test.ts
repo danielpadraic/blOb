@@ -16,6 +16,19 @@ describe('stored duration', () => {
     expect(challengeGoalLabel(row, { daysCompleted: 0 })).toBe('0 of 30 days');
   });
 
+  it('keeps duration_days=30 even when ends_at is a 6-day window', () => {
+    expect(
+      challengeDurationDays({
+        duration_days: 30,
+        days_required: 30,
+        length_value: 30,
+        length_unit: 'days',
+        starts_at: '2026-08-01T09:00:00.000Z',
+        ends_at: '2026-08-07T09:00:00.000Z',
+      }),
+    ).toBe(30);
+  });
+
   it('still finds 30 when length_value was not selected', () => {
     expect(
       challengeDurationDays({

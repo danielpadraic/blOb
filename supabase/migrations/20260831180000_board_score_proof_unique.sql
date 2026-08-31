@@ -13,7 +13,15 @@ as $$
     when lower(coalesce((ch).frequency, '')) in ('monthly', 'month') then 'monthly'
     when lower(coalesce((ch).series_id, '')) like '%month%' then 'monthly'
     when lower(coalesce((ch).length_unit, '')) like 'month%' then 'monthly'
-    when coalesce((ch).duration_days, 0) >= 28
+    -- challenges has days_required / length_value / length_unit — not duration_days.
+    when greatest(
+      coalesce((ch).days_required, 0),
+      case
+        when lower(coalesce((ch).length_unit, '')) like 'week%'
+          then coalesce((ch).length_value, 0) * 7
+        else coalesce((ch).length_value, 0)
+      end
+    ) >= 28
       and lower(coalesce((ch).frequency, '')) not in ('daily', 'weekly', 'week')
       then 'monthly'
     else 'weekly'
@@ -195,7 +203,7 @@ begin
     );
   else
     v_span := greatest(
-      coalesce(ch.duration_days, ch.days_required, ch.target_count, 1),
+      coalesce(ch.days_required, ch.length_value, ch.target_count, 1),
       1
     );
     v_allow := greatest(coalesce(ch.misses_allowed, 0), 0);

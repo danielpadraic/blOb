@@ -34,6 +34,11 @@ import {
   settlementRequiredDays,
   settlementRpcForPayout,
   shouldAutoSettle,
+  shouldTickSettlements,
+  isSettlementReviewReady,
+  overviewMoneyPhase,
+  settlementSavedDurationDays,
+  WRAPPING_UP_PROOFS_COPY,
   walletAmountLabel,
   winnerSettledNotifyCopy,
 } from '@/lib/settlement/index';
@@ -48,6 +53,67 @@ describe('lifecycle', () => {
     expect(lifecyclePhase('judging')).toBe('settling');
     expect(lifecyclePhase('settled')).toBe('settled');
     expect(lifecycleLabel('distributing')).toBe('Settling');
+  });
+
+  it('does not settle when ends_at is still in the future', () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const row = {
+      status: 'live' as const,
+      ends_at: future,
+      prize_structure: 'equal_split',
+    };
+    expect(isSettlementReviewReady(row)).toBe(false);
+    expect(shouldAutoSettle(row)).toBe(false);
+    expect(overviewMoneyPhase(row)).toBe('live');
+  });
+
+  it('can settle when ends_at was 3 hours ago', () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const row = {
+      status: 'ended' as const,
+      ends_at: threeHoursAgo,
+      prize_structure: 'equal_split',
+    };
+    expect(isSettlementReviewReady(row)).toBe(true);
+    expect(shouldAutoSettle(row)).toBe(true);
+    expect(overviewMoneyPhase(row)).toBe('ended');
+  });
+
+  it('waits the review window and does not pay on last check-in', () => {
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const row = {
+      status: 'ended' as const,
+      ends_at: hourAgo,
+      prize_structure: 'equal_split',
+    };
+    expect(shouldTickSettlements(row)).toBe(true);
+    expect(shouldAutoSettle(row)).toBe(false);
+    expect(overviewMoneyPhase(row)).toBe('ended');
+    expect(WRAPPING_UP_PROOFS_COPY).toBe('Wrapping up proofs.');
+    expect(overviewMoneyPhase({ status: 'settled', ends_at: hourAgo })).toBe('settled');
+  });
+
+  it('keeps duration_days=30 when ends_at is a 6-day stamp', () => {
+    expect(
+      settlementSavedDurationDays({
+        duration_days: 30,
+        days_required: 30,
+        length_value: 30,
+        length_unit: 'days',
+      }),
+    ).toBe(30);
+    const shortEnd = {
+      status: 'live' as const,
+      prize_structure: 'equal_split',
+      duration_days: 30,
+      days_required: 30,
+      length_value: 30,
+      length_unit: 'days',
+      starts_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      ends_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    };
+    expect(shouldAutoSettle(shortEnd)).toBe(false);
+    expect(overviewMoneyPhase(shortEnd)).toBe('live');
   });
 
   it('auto-settles even-split after the clock, never LMS', () => {
@@ -471,6 +537,9 @@ describe('errors', () => {
     );
     expect(settlementErrorCopy(new Error('COOLDOWN_ACTIVE'))).toBe(
       'Payout unlocks 1 hour after the challenge ends.',
+    );
+    expect(settlementErrorCopy(new Error('SETTLE_REVIEW_WINDOW'))).toBe(
+      'Payout waits 2 hours after the challenge ends.',
     );
     expect(settlementErrorCopy(new Error('Only the host can close or pay out.'))).toBe(
       'Only the host can close or pay out.',
