@@ -19,7 +19,7 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useChallengeParticipants, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
-import { useMyProfile } from '@/hooks/useProfile';
+import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
@@ -62,7 +62,18 @@ import {
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
 import { safeUserId } from '@/lib/safeIds';
-import { personDisplayName } from '@/lib/social';
+import { createStory, personDisplayName } from '@/lib/social';
+import {
+  canWaveProof,
+  clampProofCaption,
+  mediaCaptionsForUrls,
+  prefsFromProfile,
+  readLocalSharePrefs,
+  writeLocalSharePrefs,
+  type CheckinSharePrefs,
+} from '@/lib/checkinShare';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { mediaDurationMs, resolveMediaDurationMs, WAVE_CLIP_MS } from '@/lib/waveClips';
 import {
   ensureLibraryPermission,
   openAppSettings,
@@ -78,7 +89,11 @@ import {
 } from '@/lib/health/attachProof';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
-import { distanceProofIsSessionLog, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import {
+  distanceProofIsSessionLog,
+  isCorporateChallenge,
+  usesTotalCountCheckins,
+} from '@/lib/challengeExperience';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
@@ -100,6 +115,8 @@ type SlotDraft = {
   fromLibrary?: boolean;
   health?: CheckinHealthProof | null;
   inFence?: boolean;
+  durationMs?: number | null;
+  caption?: string | null;
 };
 
 function slotPart(
@@ -165,6 +182,7 @@ function SubmitWorkoutInner() {
   const { user } = useAuth();
   const uid = safeUserId(user);
   const { profile } = useMyProfile();
+  const updateProfile = useUpdateProfile();
   const distanceUnit = athleteDistanceUnit(profile?.weight_unit);
   const sessionDistance = distanceProofIsSessionLog(challengeQuery.data);
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
@@ -180,6 +198,11 @@ function SubmitWorkoutInner() {
   const [preferCamera, setPreferCamera] = useState(false);
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
+  const [proofCaptions, setProofCaptions] = useState<Record<string, string>>({});
+  const [sharePrefs, setSharePrefs] = useState<CheckinSharePrefs>({ home: false, wave: false });
+  const lobbyLocked = isCorporateChallenge(challengeQuery.data);
+  const shareHome = lobbyLocked ? false : sharePrefs.home;
+  const shareWave = lobbyLocked ? false : sharePrefs.wave;
 
   useEffect(() => {
     return () => {
@@ -205,6 +228,25 @@ function SubmitWorkoutInner() {
     }
     return [...ids];
   }, [challenge?.created_by, roster.data]);
+
+  useEffect(() => {
+    if (!uid) {
+      return;
+    }
+    if (profile && (profile.checkin_share_home != null || profile.checkin_share_wave != null)) {
+      setSharePrefs(prefsFromProfile(profile));
+      return;
+    }
+    let live = true;
+    void readLocalSharePrefs(uid).then((local) => {
+      if (live && local) {
+        setSharePrefs(local);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [uid, profile?.checkin_share_home, profile?.checkin_share_wave]);
 
   useEffect(() => {
     if (!id || checkinLogRef.current) {
@@ -278,7 +320,19 @@ function SubmitWorkoutInner() {
           fromLibrary: part.fromLibrary ?? current[proof.id]?.fromLibrary,
           health: part.health ?? current[proof.id]?.health ?? null,
           inFence: part.in_fence ?? current[proof.id]?.inFence,
+          durationMs: current[proof.id]?.durationMs,
+          caption: part.caption ?? current[proof.id]?.caption,
         };
+      }
+      return next;
+    });
+    setProofCaptions((current) => {
+      const next = { ...current };
+      for (const proof of steps) {
+        const saved = clampProofCaption(parts[proof.id]?.caption ?? '');
+        if (saved && !next[proof.id]?.trim()) {
+          next[proof.id] = saved;
+        }
       }
       return next;
     });
@@ -405,6 +459,7 @@ function SubmitWorkoutInner() {
         text: draft?.text,
         fromLibrary: draft?.fromLibrary,
         health: draft?.health ?? null,
+        caption: clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? ''),
         notes,
         extraMedia: uniqueProofUrls(
           extras.map((item) => item.remoteUrl ?? (item.kind === 'gif' ? item.uri : null)),
@@ -586,10 +641,13 @@ function SubmitWorkoutInner() {
           continue;
         }
         const draft = drafts[proof.id];
+        const nextCaption = clampProofCaption(proofCaptions[proof.id] ?? '');
+        const savedCaption = clampProofCaption(savedParts[proof.id]?.caption ?? '');
         if (
           partSatisfies(proof, savedParts[proof.id], { sessionDistance }) &&
           partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance }) &&
-          !proofSlotNeedsRewrite(draft?.uri, savedParts[proof.id]?.url)
+          !proofSlotNeedsRewrite(draft?.uri, savedParts[proof.id]?.url) &&
+          nextCaption === savedCaption
         ) {
           continue;
         }
@@ -654,11 +712,12 @@ function SubmitWorkoutInner() {
         try {
           const post = await supabase
             .from('posts')
-            .select('id')
+            .select('id, media_urls')
             .eq('checkin_id', checkinId)
             .is('deleted_at', null)
             .maybeSingle();
           postId = (post.data as { id?: string } | null)?.id;
+          const mediaUrls = (post.data as { media_urls?: string[] } | null)?.media_urls ?? [];
           const mentionIds = [
             ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
           ];
@@ -671,8 +730,62 @@ function SubmitWorkoutInner() {
               })),
             );
           }
+          if (postId) {
+            const captions = mediaCaptionsForUrls(mediaUrls, proofSteps, savedParts, proofCaptions);
+            await supabase
+              .from('posts')
+              .update({
+                hidden_from_home: !shareHome,
+                media_captions: captions,
+              })
+              .eq('id', postId);
+          }
         } catch {
-          // Caption already saved; mention notify is best-effort.
+          // Social line already saved; Home hide / mentions are best-effort.
+        }
+      }
+      if (shareWave && uid) {
+        for (const proof of proofSteps) {
+          const part = savedParts[proof.id];
+          const draft = drafts[proof.id];
+          const url = String(part?.url ?? '').trim();
+          if (!url) {
+            continue;
+          }
+          const durationMs =
+            draft?.durationMs ?? (await resolveMediaDurationMs(draft?.uri ?? url, draft?.durationMs));
+          if (!canWaveProof({ method: proof.method, uri: url, durationMs })) {
+            continue;
+          }
+          if (proof.method === 'video') {
+            const ms = mediaDurationMs(durationMs);
+            if (ms != null && ms > WAVE_CLIP_MS) {
+              continue;
+            }
+          }
+          try {
+            await createStory(uid, {
+              media_url: url,
+              media_type: proof.method === 'video' ? 'video' : 'image',
+              caption: clampProofCaption(proofCaptions[proof.id] ?? part?.caption ?? ''),
+              challenge_id: id,
+            });
+          } catch {
+            // Wave is extra; lobby check-in already landed.
+          }
+        }
+        void queryClient.invalidateQueries({ queryKey: ['stories'] });
+      }
+      if (!lobbyLocked && uid) {
+        const nextPrefs = { home: shareHome, wave: shareWave };
+        await writeLocalSharePrefs(uid, nextPrefs);
+        try {
+          await updateProfile.mutateAsync({
+            checkin_share_home: nextPrefs.home,
+            checkin_share_wave: nextPrefs.wave,
+          });
+        } catch {
+          // Local row still remembers the last Share to choice.
         }
       }
       await successHaptic();
@@ -985,6 +1098,25 @@ function SubmitWorkoutInner() {
         onRemoveProof={(proof) => void onRemoveProof(proof)}
         onExtrasChange={handleExtrasChange}
         onCaptionChange={setCaption}
+        proofCaptions={proofCaptions}
+        onProofCaptionChange={(proofId, text) =>
+          setProofCaptions((current) => ({ ...current, [proofId]: text }))
+        }
+        lobbyName={challengeDisplayTitle(challenge)}
+        lobbyLocked={lobbyLocked}
+        shareHome={shareHome}
+        shareWave={shareWave}
+        onShareHomeChange={(home) => setSharePrefs((current) => ({ ...current, home }))}
+        onShareWaveChange={(wave) => setSharePrefs((current) => ({ ...current, wave }))}
+        waveSkipHint={
+          shareWave &&
+          proofSteps.some((proof) => {
+            const ms = mediaDurationMs(drafts[proof.id]?.durationMs);
+            return proof.method === 'video' && ms != null && ms > WAVE_CLIP_MS;
+          })
+            ? copy('checkin.waveSkipLong')
+            : null
+        }
         onSend={() => void onSubmit()}
         dueLine={
           <PeriodCheckinDue

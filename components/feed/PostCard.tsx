@@ -462,6 +462,7 @@ function PostCardInner({
           <ProofMedia
             postId={post.id}
             urls={post.media_urls ?? []}
+            captions={post.media_captions}
             hidden={post.hidden_media_urls}
             isOwner={mine}
             proof={checkin}
@@ -958,6 +959,7 @@ function RoundShareEmbed({
 function ProofMedia({
   postId,
   urls,
+  captions,
   hidden,
   isOwner,
   proof,
@@ -965,6 +967,7 @@ function ProofMedia({
 }: {
   postId: string;
   urls: string[];
+  captions?: Array<string | null> | null;
   hidden?: string[] | null;
   isOwner?: boolean;
   proof?: boolean;
@@ -982,10 +985,21 @@ function ProofMedia({
     return null;
   }
   const labels = proof || visuals.length === 3 ? PROOF_LABELS.slice(0, visuals.length) : undefined;
+  const alignedCaptions = visuals.map((url) => {
+    const at = urls.findIndex((item) => item === url);
+    const text = at >= 0 ? captions?.[at] : null;
+    return text?.trim() ? text : null;
+  });
 
   return (
     <View style={{ gap: 6 }}>
-      <PostMediaCarousel postId={postId} urls={visuals} labels={labels} pauseCycle={pauseCycle} />
+      <PostMediaCarousel
+        postId={postId}
+        urls={visuals}
+        labels={labels}
+        captions={alignedCaptions}
+        pauseCycle={pauseCycle}
+      />
       {others.map((url) => (
         <MediaChip key={url} url={url} />
       ))}

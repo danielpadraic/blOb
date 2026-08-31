@@ -22,6 +22,7 @@ export type PostsSchema = {
   hasHiddenFromRail: boolean;
   hasParentId: boolean;
   hasCircleId: boolean;
+  hasMediaCaptions: boolean;
 };
 
 const CORE_SCHEMA: PostsSchema = {
@@ -39,6 +40,7 @@ const CORE_SCHEMA: PostsSchema = {
   hasHiddenFromRail: false,
   hasParentId: false,
   hasCircleId: false,
+  hasMediaCaptions: false,
 };
 
 let cached: Promise<PostsSchema> | null = null;
@@ -60,6 +62,7 @@ function schemaFromSelect(select: string): PostsSchema {
     hasHiddenFromRail: select.includes('hidden_from_rail'),
     hasParentId: select.includes('parent_id'),
     hasCircleId: select.includes('circle_id'),
+    hasMediaCaptions: select.includes('media_captions'),
   };
 }
 
@@ -154,7 +157,10 @@ async function loadPostsSchema(): Promise<PostsSchema> {
   working = parent.ok ? withParent : working;
   const withCircle = `${working}, circle_id`;
   const circle = await trySelect(withCircle);
-  return schemaFromSelect(circle.ok ? withCircle : working);
+  working = circle.ok ? withCircle : working;
+  const withCaptions = `${working}, media_captions`;
+  const captions = await trySelect(withCaptions);
+  return schemaFromSelect(captions.ok ? withCaptions : working);
 }
 
 /** No RPC. Probe with limit 0, then cache the working select list. */

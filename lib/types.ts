@@ -312,6 +312,8 @@ export interface Profile {
   profile_visibility?: 'public' | 'friends' | string | null;
   default_post_audience?: 'public' | 'friends' | string | null;
   mute_mentions?: boolean;
+  checkin_share_home?: boolean;
+  checkin_share_wave?: boolean;
   tos_accepted_at?: string | null;
   privacy_accepted_at?: string | null;
   skill_attestation_at?: string | null;
@@ -582,6 +584,8 @@ export interface Post {
   circle_id?: string | null;
   content: string | null;
   media_urls: string[];
+  /** Per-media captions aligned with media_urls. Check-in proof captions. */
+  media_captions?: Array<string | null> | null;
   audience?: PostAudience;
   audience_user_ids?: string[];
   moderation_status?: 'visible' | 'under_review' | 'removed' | string | null;
@@ -874,6 +878,8 @@ export type ProfileUpdate = Partial<
     | 'profile_visibility'
     | 'default_post_audience'
     | 'mute_mentions'
+    | 'checkin_share_home'
+    | 'checkin_share_wave'
   >
 >;
 

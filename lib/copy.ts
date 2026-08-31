@@ -636,6 +636,12 @@ const STRINGS = {
   'checkin.alreadyBob': 'Already counted today. Come back for the next window.',
   'checkin.notLiveBob': 'This challenge isn’t taking check-ins right now.',
   'checkin.submitBanner': 'You started. Submit before 11:59 p.m. Central.',
+  'checkin.post': 'Post',
+  'checkin.shareTo': 'Share to',
+  'checkin.shareLobby': 'Lobby',
+  'checkin.shareHome': 'Home',
+  'checkin.shareWave': 'Wave',
+  'checkin.waveSkipLong': 'That video is over 30 seconds, so it stayed on the lobby check-in.',
   'detail.checkinDue': 'Check-in due',
   'detail.caughtUp': 'Caught Up',
 } as const;

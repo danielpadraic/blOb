@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
+import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import {
@@ -140,11 +141,13 @@ export function PostMediaCarousel({
   postId,
   urls,
   labels,
+  captions,
   pauseCycle = false,
 }: {
   postId: string;
   urls: string[];
   labels?: string[];
+  captions?: Array<string | null | undefined>;
   pauseCycle?: boolean;
 }) {
   const lightbox = useMediaLightboxOptional();
@@ -181,7 +184,7 @@ export function PostMediaCarousel({
 
   const lightboxItems: LightboxItem[] = urls.map((uri, itemIndex) => ({
     uri,
-    label: labels?.[itemIndex],
+    label: captions?.[itemIndex] || labels?.[itemIndex],
   }));
 
   const settleAt = useCallback(
@@ -326,6 +329,7 @@ export function PostMediaCarousel({
           width={pageWidth}
           height={frameH}
           active
+          caption={captions?.[0]}
           onOpen={lightbox ? () => openAt(0) : undefined}
           onPlayingChange={setVideoPlaying}
         />
@@ -351,6 +355,7 @@ export function PostMediaCarousel({
                     width={pageWidth}
                     height={frameH}
                     active={itemIndex === index}
+                    caption={captions?.[itemIndex]}
                     onOpen={lightbox && isStillPostMedia(uri) ? () => openAt(itemIndex) : undefined}
                     onPlayingChange={itemIndex === index ? setVideoPlaying : undefined}
                   />
@@ -387,6 +392,7 @@ function MediaSlide({
   width,
   height,
   active,
+  caption,
   onOpen,
   onPlayingChange,
 }: {
@@ -394,6 +400,7 @@ function MediaSlide({
   width: number;
   height: number;
   active: boolean;
+  caption?: string | null;
   onOpen?: () => void;
   onPlayingChange?: (playing: boolean) => void;
 }) {
@@ -447,6 +454,24 @@ function MediaSlide({
       }}
       style={[frameStyle, WEB_FEED_TOUCH]}>
       {body}
+      {caption?.trim() ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: 12,
+          }}>
+          <AppText
+            className="text-[15px] leading-5"
+            style={{ color: '#fff' }}
+            numberOfLines={2}
+            ellipsizeMode="tail">
+            {caption}
+          </AppText>
+        </View>
+      ) : null}
     </View>
   );
 }

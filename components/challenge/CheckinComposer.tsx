@@ -14,11 +14,19 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CheckinShareTo } from '@/components/challenge/CheckinShareTo';
 import { GifPicker } from '@/components/feed/GifPicker';
 import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { Input } from '@/components/ui/Input';
 import { CHECKIN_PHOTO_CAP, proofDisplayName, type ChallengeProof } from '@/lib/challengeProofs';
+import {
+  CHECKIN_PROOF_CAPTION_MAX,
+  clampProofCaption,
+  proofCaptionCounter,
+} from '@/lib/checkinShare';
+import { copy } from '@/lib/copy';
 import {
   ensureCameraPermission,
   ensureLibraryPermission,
@@ -74,6 +82,15 @@ type CheckinComposerProps = {
   onRemoveProof: (proof: ChallengeProof) => void;
   onExtrasChange: (extras: CheckinExtra[]) => void;
   onCaptionChange: (doc: MentionDoc) => void;
+  proofCaptions?: Record<string, string>;
+  onProofCaptionChange?: (proofId: string, caption: string) => void;
+  lobbyName?: string;
+  lobbyLocked?: boolean;
+  shareHome?: boolean;
+  shareWave?: boolean;
+  onShareHomeChange?: (value: boolean) => void;
+  onShareWaveChange?: (value: boolean) => void;
+  waveSkipHint?: string | null;
   onSend: () => void;
   accessory?: ReactNode;
   dueLine?: ReactNode;
@@ -97,6 +114,15 @@ export function CheckinComposer({
   onRemoveProof: _onRemoveProof,
   onExtrasChange,
   onCaptionChange,
+  proofCaptions = {},
+  onProofCaptionChange,
+  lobbyName,
+  lobbyLocked,
+  shareHome = false,
+  shareWave = false,
+  onShareHomeChange,
+  onShareWaveChange,
+  waveSkipHint,
   onSend,
   accessory,
   dueLine,
@@ -431,6 +457,24 @@ export function CheckinComposer({
                   contentFit="contain"
                   accessibilityLabel={item.label}
                 />
+                {item.kind === 'proof' && proofCaptions[item.proof.id]?.trim() ? (
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 16,
+                      right: 16,
+                      bottom: 64,
+                    }}>
+                    <AppText
+                      className="text-[15px] leading-5"
+                      style={{ color: '#fff' }}
+                      numberOfLines={2}
+                      ellipsizeMode="tail">
+                      {proofCaptions[item.proof.id]}
+                    </AppText>
+                  </View>
+                ) : null}
               </View>
             )}
           />
@@ -440,7 +484,7 @@ export function CheckinComposer({
             style={{ backgroundColor: accessory ? THEME.background : THEME.primary }}>
             {accessory ? null : (
               <AppText className="text-center text-[15px]" style={{ color: 'rgba(255,255,255,0.72)' }}>
-                Honor check-in. Caption is optional.
+                Honor check-in. Post is optional.
               </AppText>
             )}
           </View>
@@ -639,6 +683,38 @@ export function CheckinComposer({
       {dueLine ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{dueLine}</View> : null}
       {accessory ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{accessory}</View> : null}
 
+      {proofs.some((proof) => {
+        const uri = drafts[proof.id]?.uri;
+        return Boolean(uri && !uri.startsWith('health:'));
+      }) ? (
+        <View style={{ paddingHorizontal: 12, paddingTop: 4 }}>
+          {proofs.map((proof) => {
+            const uri = drafts[proof.id]?.uri;
+            if (!uri || uri.startsWith('health:')) {
+              return null;
+            }
+            const value = proofCaptions[proof.id] ?? '';
+            const counter = proofCaptionCounter(value);
+            return (
+              <View key={proof.id} style={{ paddingTop: 8 }}>
+                <Input
+                  grow
+                  growMaxLines={3}
+                  maxLength={CHECKIN_PROOF_CAPTION_MAX}
+                  placeholder={proofDisplayName(proof)}
+                  value={value}
+                  onChangeText={(text) =>
+                    onProofCaptionChange?.(proof.id, clampProofCaption(text))
+                  }
+                  hint={counter ?? undefined}
+                  accessibilityLabel={proofDisplayName(proof)}
+                />
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
       <View
         style={{
           paddingHorizontal: 12,
@@ -663,13 +739,13 @@ export function CheckinComposer({
               ref={fieldRef}
               compact
               initialText={initialCaption}
-              placeholder="Say something."
+              placeholder={copy('checkin.post')}
               audience="specific"
               audienceUserIds={audienceUserIds}
               pickerPlacement="above"
               onChange={onDocChange}
               onSubmit={sendPress}
-              accessibilityLabel="Say something"
+              accessibilityLabel={copy('checkin.post')}
             />
           </View>
           <Pressable
@@ -693,6 +769,16 @@ export function CheckinComposer({
             />
           </Pressable>
         </View>
+
+        <CheckinShareTo
+          lobbyName={lobbyName?.trim() || copy('checkin.shareLobby')}
+          lobbyLocked={lobbyLocked}
+          shareHome={shareHome}
+          shareWave={shareWave}
+          onShareHomeChange={onShareHomeChange ?? (() => undefined)}
+          onShareWaveChange={onShareWaveChange ?? (() => undefined)}
+          waveSkipHint={waveSkipHint}
+        />
 
         <View className="mt-1 flex-row items-center" style={{ minHeight: 44, gap: 2 }}>
           <ComposerIcon

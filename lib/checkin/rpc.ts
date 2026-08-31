@@ -9,6 +9,7 @@ import { parseSessionDistanceText } from '../distance';
 import type { CheckinHealthProof } from '../health/checkinHealthProof';
 import { asCheckinStatus, type ChallengeCheckin } from '../challengeCheckin';
 import { normalizePeriodKey } from '../checkinPeriod';
+import { clampProofCaption } from '../checkinShare';
 import { mapCheckinRpcError } from './errors';
 
 export type CheckinRpcClient = {
@@ -42,7 +43,13 @@ export type SaveCheckinProofInput = {
   urls?: string[] | null;
   clearProof?: boolean;
   health?: CheckinHealthProof | null;
+  caption?: string | null;
 };
+
+function partWithCaption(part: ChallengeProofPart, caption?: string | null): ChallengeProofPart {
+  const text = clampProofCaption((caption ?? '').trim());
+  return { ...part, caption: text || null };
+}
 
 function isRemoteMediaUrl(uri: string): boolean {
   return /^https?:\/\//i.test(uri);
@@ -105,12 +112,12 @@ async function proofPartFor(
     return null;
   }
   if (proof.method === 'honor') {
-    return { id: proof.id, part: { method: 'honor' }, healthWorkoutId: null };
+    return { id: proof.id, part: partWithCaption({ method: 'honor' }, input.caption), healthWorkoutId: null };
   }
   if (proof.method === 'checkin') {
     return {
       id: proof.id,
-      part: { method: 'checkin', text: (input.text ?? '').trim() || null },
+      part: partWithCaption({ method: 'checkin', text: (input.text ?? '').trim() || null }, input.caption),
       healthWorkoutId: null,
     };
   }
@@ -135,14 +142,17 @@ async function proofPartFor(
     const meters = input.health?.distanceMeters ?? parseSessionDistanceText(input.text);
     return {
       id: proof.id,
-      part: {
-        method: 'distance',
-        text: (input.text ?? '').trim() || null,
-        url,
-        healthWorkoutId,
-        health: input.health ?? null,
-        distanceMeters: meters,
-      },
+      part: partWithCaption(
+        {
+          method: 'distance',
+          text: (input.text ?? '').trim() || null,
+          url,
+          healthWorkoutId,
+          health: input.health ?? null,
+          distanceMeters: meters,
+        },
+        input.caption,
+      ),
       healthWorkoutId,
     };
   }
@@ -151,7 +161,10 @@ async function proofPartFor(
     const healthWorkoutId = uri.slice('health:'.length);
     return {
       id: proof.id,
-      part: { method: proof.method, url: '', healthWorkoutId, health: input.health ?? null },
+      part: partWithCaption(
+        { method: proof.method, url: '', healthWorkoutId, health: input.health ?? null },
+        input.caption,
+      ),
       healthWorkoutId,
     };
   }
@@ -173,12 +186,15 @@ async function proofPartFor(
   const urlOnly = uniqueProofUrls([url]);
   return {
     id: proof.id,
-    part: {
-      method: proof.method,
-      url: urlOnly[0] ?? url,
-      urls: urlOnly,
-      fromLibrary: input.fromLibrary === true,
-    },
+    part: partWithCaption(
+      {
+        method: proof.method,
+        url: urlOnly[0] ?? url,
+        urls: urlOnly,
+        fromLibrary: input.fromLibrary === true,
+      },
+      input.caption,
+    ),
     healthWorkoutId: null,
   };
 }

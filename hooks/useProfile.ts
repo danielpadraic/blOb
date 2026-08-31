@@ -215,12 +215,20 @@ function omitOptionalPreferences<
     mute_mentions?: unknown;
     timezone?: unknown;
     default_post_audience?: unknown;
+    checkin_share_home?: unknown;
+    checkin_share_wave?: unknown;
   },
 >(
   row: T,
 ): Omit<
   T,
-  'motivation_tone' | 'encouragement_tone' | 'mute_mentions' | 'timezone' | 'default_post_audience'
+  | 'motivation_tone'
+  | 'encouragement_tone'
+  | 'mute_mentions'
+  | 'timezone'
+  | 'default_post_audience'
+  | 'checkin_share_home'
+  | 'checkin_share_wave'
 > {
   const {
     motivation_tone: _tone,
@@ -228,6 +236,8 @@ function omitOptionalPreferences<
     mute_mentions: _mute,
     timezone: _tz,
     default_post_audience: _audience,
+    checkin_share_home: _shareHome,
+    checkin_share_wave: _shareWave,
     ...rest
   } = row;
   return rest;
