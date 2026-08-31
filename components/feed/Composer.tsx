@@ -80,7 +80,7 @@ export function Composer({
   hideAudience,
   quote,
   wallHost,
-  tall: _tall,
+  tall = false,
   draftKey,
   idleUntilFocus = false,
   onSubmit,
@@ -337,8 +337,9 @@ export function Composer({
         paddingHorizontal: idleUntilFocus ? 10 : 12,
         paddingVertical: idleUntilFocus ? 8 : 10,
         borderRadius: 20,
+        overflow: 'visible',
       }}>
-      <View className="flex-row items-end" style={{ gap: 8 }}>
+      <View className="flex-row items-end" style={{ gap: 8, overflow: 'visible' }}>
         <Avatar
           uri={profile?.avatar_url}
           name={profile?.display_name ?? profile?.username ?? user?.email}
@@ -357,8 +358,9 @@ export function Composer({
             paddingVertical: 4,
             minHeight: 40,
             alignItems: 'flex-end',
+            overflow: 'visible',
           }}>
-          <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end' }}>
+          <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end', overflow: 'visible' }}>
             {wallHost ? (
               <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.accent }}>
                 {copy('wall.onHost', asCopyTone(profile?.motivation_tone), { name: wallHostLabel({ display_name: wallHost.name, username: wallHost.username }) })}
@@ -371,7 +373,7 @@ export function Composer({
               autoFocus={autoFocus}
               initialText={docRef.current.text}
               compact
-              collapsed={!expanded}
+              collapsed={!expanded && !hasText}
               audience={audience}
               audienceUserIds={audienceUserIds}
               onChange={onDocChange}
@@ -379,7 +381,7 @@ export function Composer({
                 cancelCollapse();
                 setExpanded(true);
               }}
-              onBlur={scheduleCollapse}
+              onBlur={tall ? undefined : scheduleCollapse}
               onSubmit={() => void handleSubmit()}
               accessibilityLabel="Write a post"
             />

@@ -42,6 +42,7 @@ import {
   COMPOSER_MIN_HEIGHT,
   composerFieldHeight,
 } from '@/lib/composerField';
+import { useKeyboardForm } from '@/components/ui/KeyboardFormShell';
 import { THEME } from '@/lib/theme';
 import type { PostAudience } from '@/lib/postAudience';
 
@@ -96,6 +97,8 @@ function MentionFieldInner(
   ref: ForwardedRef<MentionFieldHandle>,
 ) {
   const inputRef = useRef<TextInput>(null);
+  const boxRef = useRef<View>(null);
+  const form = useKeyboardForm();
   const seeded = useRef(false);
   const textRef = useRef(initialText ?? '');
   const chipsRef = useRef<MentionChip[]>([]);
@@ -192,8 +195,9 @@ function MentionFieldInner(
   }, [query]);
 
   useEffect(() => {
-    const next = composerFieldHeight({ collapsed, text });
-    setHeight((current) => (current === next ? current : next));
+    applyHeight(text);
+    // Recalc when chrome collapses so a draft stays visible line-by-line.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapsed, text]);
 
   function pick(chip: MentionChip) {
@@ -234,6 +238,16 @@ function MentionFieldInner(
   }
 
   const frost = tone === 'frost';
+  const heightLocked = Boolean(collapsed && !text.trim());
+
+  function applyHeight(nextText: string, contentHeight?: number) {
+    const next = composerFieldHeight({
+      collapsed: heightLocked,
+      text: nextText,
+      contentHeight,
+    });
+    setHeight((current) => (current === next ? current : next));
+  }
 
   const dropdown = open ? (
     <View
@@ -324,7 +338,7 @@ function MentionFieldInner(
   ) : null;
 
   return (
-    <View style={{ position: 'relative', zIndex: open ? 20 : 0 }}>
+    <View ref={boxRef} collapsable={false} style={{ position: 'relative', zIndex: open ? 20 : 0 }}>
       {open ? (
         <Pressable
           accessibilityRole="button"
@@ -358,16 +372,13 @@ function MentionFieldInner(
           const next = applyTokenAwareTextChange(text, value, selection, chips, punctReadyIds);
           setSuppressed(false);
           commit(next.text, next.selection, next.chips, next.forced, next.punctReadyIds);
-          const nextHeight = composerFieldHeight({ collapsed, text: next.text });
-          if (nextHeight !== height) {
-            setHeight(nextHeight);
-          }
+          applyHeight(next.text);
         }}
         placeholder={placeholder}
         placeholderTextColor={frost ? 'rgba(255,255,255,0.5)' : THEME.textMuted}
         autoFocus={autoFocus}
         multiline
-        scrollEnabled={height >= MAX_HEIGHT - 2}
+        scrollEnabled={!heightLocked && height >= MAX_HEIGHT - 2}
         blurOnSubmit={false}
         autoComplete="off"
         textContentType="none"
@@ -376,21 +387,23 @@ function MentionFieldInner(
         autoCapitalize="sentences"
         keyboardType="default"
         accessibilityLabel={accessibilityLabel ?? 'Write a post'}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onContentSizeChange={(event) => {
-          const next = composerFieldHeight({
-            collapsed,
-            text,
-            contentHeight: event.nativeEvent.contentSize.height,
-          });
-          if (next !== height) {
-            setHeight(next);
+        onFocus={() => {
+          form?.setFieldFocused?.(true);
+          if (boxRef.current) {
+            form?.scrollFieldIntoView(boxRef.current);
           }
+          onFocus?.();
+        }}
+        onBlur={() => {
+          form?.setFieldFocused?.(false);
+          onBlur?.();
+        }}
+        onContentSizeChange={(event) => {
+          applyHeight(text, event.nativeEvent.contentSize.height);
         }}
         style={{
           minHeight: MIN_HEIGHT,
-          maxHeight: collapsed ? MIN_HEIGHT : MAX_HEIGHT,
+          maxHeight: heightLocked ? MIN_HEIGHT : MAX_HEIGHT,
           paddingVertical: 6,
           paddingHorizontal: 0,
           color: frost ? '#F5F5F5' : THEME.textPrimary,
@@ -399,16 +412,16 @@ function MentionFieldInner(
           textAlignVertical: 'top',
           ...(Platform.OS === 'web'
             ? ({
-                minHeight: collapsed ? MIN_HEIGHT : height,
+                minHeight: heightLocked ? MIN_HEIGHT : height,
                 height: undefined,
                 overflowY: 'auto',
                 resize: 'none',
-                fieldSizing: collapsed ? 'fixed' : 'content',
+                fieldSizing: heightLocked ? 'fixed' : 'content',
                 outlineStyle: 'none',
                 caretColor: frost ? '#F5F5F5' : THEME.textPrimary,
               } as object)
             : {
-                height: collapsed ? MIN_HEIGHT : height,
+                height: heightLocked ? MIN_HEIGHT : height,
                 cursorColor: THEME.textPrimary,
               }),
         }}
