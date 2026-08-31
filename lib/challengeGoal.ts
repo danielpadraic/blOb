@@ -30,7 +30,34 @@ type GoalChallenge = Pick<
   | 'format'
   | 'cumulative_target'
   | 'cumulative_window'
+  | 'title'
+  | 'task'
+  | 'tasks'
 >;
+
+export function pointsGoalTarget(challenge: {
+  target_count?: number | null;
+  tasks?: Array<{ points?: number | null }> | null;
+  title?: string | null;
+}): number {
+  const saved = Math.floor(Number(challenge.target_count) || 0);
+  if (saved > 0) {
+    return saved;
+  }
+  const fromTasks = (challenge.tasks ?? []).reduce(
+    (sum, task) => sum + Math.max(Number(task.points) || 0, 0),
+    0,
+  );
+  if (fromTasks > 0) {
+    return fromTasks;
+  }
+  const title = String(challenge.title ?? '');
+  const labeled = title.match(/(\d+(?:\.\d+)?)\s*(?:pts|points?)\b/i);
+  if (labeled) {
+    return Math.max(Math.floor(Number(labeled[1]) || 0), 0);
+  }
+  return 0;
+}
 
 /** Host-saved calendar length. Prefer length_value / days_required — never invent 6. */
 export function storedDurationDays(challenge: {
@@ -99,7 +126,13 @@ export function challengeDurationDays(
 
 export function challengeGoalLabel(
   challenge: GoalChallenge,
-  extras?: { daysCompleted?: number; taskCount?: number; distanceMetersCompleted?: number; unit?: DistanceUnit },
+  extras?: {
+    daysCompleted?: number;
+    taskCount?: number;
+    distanceMetersCompleted?: number;
+    pointsCompleted?: number;
+    unit?: DistanceUnit;
+  },
 ): string {
   if (usesCumulativeScoring(challenge)) {
     return (
@@ -112,8 +145,12 @@ export function challengeGoalLabel(
   }
   if (usesPointsBoard(challenge)) {
     if (challenge.challenge_type === 'points' && challenge.scoring_method !== 'comparable_points') {
-      const target = Math.max(Math.floor(Number(challenge.target_count) || 1), 1);
-      return `Reach ${target} points`;
+      const target = pointsGoalTarget(challenge);
+      const done = Math.max(Number(extras?.pointsCompleted) || 0, 0);
+      if (target > 0) {
+        return `${done} / ${target} points`;
+      }
+      return 'Score Points';
     }
     return 'Score Points';
   }

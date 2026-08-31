@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { isCumulativeDraft } from '@/lib/challengeTemplates';
-import { cumulativeEligible, cumulativeProgressCopy } from '@/lib/cumulative';
+import { challengeGoalLabel } from '@/lib/challengeGoal';
+import {
+  cumulativeEligible,
+  cumulativeProgressCopy,
+  cumulativeTargetMeters,
+} from '@/lib/cumulative';
 import { milesToMeters } from '@/lib/distance';
 import { defaultSimpleDraft, simpleDraftToCreateValues } from '@/lib/simpleChallenge';
 
@@ -27,6 +32,44 @@ describe('Cumulative scoring', () => {
     expect(Number(values.cumulative_target)).toBe(milesToMeters(100));
     expect(values.cumulative_window).toBe('challenge');
     expect(values.challenge_proofs?.some((proof) => proof.method === 'distance')).toBe(true);
+  });
+
+  it('reads the saved meter target, then the title if that column is 0', () => {
+    expect(
+      cumulativeTargetMeters({
+        cumulative_target: milesToMeters(128),
+        title: 'Run 128 Miles by January 1',
+      }),
+    ).toBe(milesToMeters(128));
+    expect(
+      cumulativeTargetMeters({
+        cumulative_target: 0,
+        title: 'Run 128 Miles by January 1',
+      }),
+    ).toBe(milesToMeters(128));
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'cumulative',
+          format: 'cumulative',
+          cumulative_target: milesToMeters(128),
+          title: 'Run 128 Miles by January 1',
+        },
+        { distanceMetersCompleted: 0, unit: 'mi' },
+      ),
+    ).toBe('0 mi / 128 mi');
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'consistency',
+          format: 'consistency',
+          title: 'Run 1 mile every morning',
+          days_required: 7,
+          length_value: 7,
+        },
+        { daysCompleted: 0 },
+      ),
+    ).toBe('0 of 7 days');
   });
 
   it('treats 40 + 60 miles as eligible at 100 / 100', () => {

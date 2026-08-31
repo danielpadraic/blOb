@@ -26,6 +26,21 @@ describe('stored duration', () => {
     ).toBe(30);
   });
 
+  it('prints personal points as logged / target', () => {
+    expect(
+      challengeGoalLabel(
+        { challenge_type: 'points', target_count: 50, title: 'First to 50' },
+        { pointsCompleted: 0 },
+      ),
+    ).toBe('0 / 50 points');
+    expect(
+      challengeGoalLabel(
+        { challenge_type: 'points', target_count: 50, title: 'First to 50' },
+        { pointsCompleted: 12 },
+      ),
+    ).toBe('12 / 50 points');
+  });
+
   it('does not invent 6 when nothing is saved', () => {
     expect(storedDurationDays({ days_required: 0, length_value: null })).toBeNull();
     expect(challengeDurationDays({ days_required: 0, length_value: null })).toBe(1);

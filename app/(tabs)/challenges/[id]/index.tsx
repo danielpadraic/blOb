@@ -67,6 +67,7 @@ import {
   requiresOfficialBodyMetrics,
   usesComparablePointsScoring,
   usesConsistencyExperience,
+  usesCumulativeScoring,
   usesPointsBoard,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
@@ -118,7 +119,9 @@ import { canOpenOfficialTools } from '@/lib/officialScoring';
 import { heroRingDays } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
-import { challengeGoalLabel, challengeDurationDays } from '@/lib/challengeGoal';
+import { athleteDistanceUnit } from '@/lib/distance';
+import { cumulativeTargetMeters, rawCumulativeTargetMeters } from '@/lib/cumulative';
+import { challengeGoalLabel, challengeDurationDays, pointsGoalTarget } from '@/lib/challengeGoal';
 import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
@@ -508,6 +511,35 @@ export default function ChallengeDetailScreen() {
     };
   }, [id, challenge?.status, challenge?.ends_at, challenge?.distributed_at]);
 
+  const goalLogKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!challenge) {
+      return;
+    }
+    const cumulative = usesCumulativeScoring(challenge);
+    const classicPoints =
+      isPointsChallenge(challenge) && challenge.scoring_method !== 'comparable_points';
+    if (!cumulative && !classicPoints) {
+      return;
+    }
+    const raw = cumulative
+      ? rawCumulativeTargetMeters(challenge)
+      : Math.max(Number(challenge.target_count) || 0, 0);
+    if (raw > 0) {
+      return;
+    }
+    if (goalLogKey.current === challenge.id) {
+      return;
+    }
+    goalLogKey.current = challenge.id;
+    const unit = cumulative ? athleteDistanceUnit() : 'points';
+    const logged = cumulative
+      ? Math.max(Number(participation?.distance_meters_total) || 0, 0)
+      : Math.max(Number(participation?.points) || 0, 0);
+    const target = cumulative ? cumulativeTargetMeters(challenge) : pointsGoalTarget(challenge);
+    console.log('[blob:goal]', { challengeId: challenge.id, logged, target, unit });
+  }, [challenge, participation]);
+
   function goBackFromDetail() {
     if (router.canGoBack()) {
       router.back();
@@ -729,6 +761,7 @@ export default function ChallengeDetailScreen() {
           daysCompleted,
           taskCount: Math.max(tasks.length, 1),
           distanceMetersCompleted: participation?.distance_meters_total ?? 0,
+          pointsCompleted: participation?.points ?? 0,
         });
   const prizeEnded = challenge.status === 'settled' || challenge.status === 'ended';
   const prizeVoidKind = settlement

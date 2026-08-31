@@ -1,12 +1,35 @@
-import { athleteDistanceUnit, formatDistance, type DistanceUnit } from '@/lib/distance';
+import { athleteDistanceUnit, formatDistance, parseDistanceText, type DistanceUnit } from '@/lib/distance';
 import { usesCumulativeScoring } from '@/lib/challengeExperience';
 
 export type CumulativeWindow = 'challenge' | 'week' | 'day';
 
-export function cumulativeTargetMeters(challenge?: {
+function storedCumulativeMeters(challenge?: {
   cumulative_target?: number | null;
 } | null): number {
   return Math.max(Number(challenge?.cumulative_target) || 0, 0);
+}
+
+/** Saved race target in meters. Title is last resort when the column is missing or 0. */
+export function cumulativeTargetMeters(challenge?: {
+  cumulative_target?: number | null;
+  title?: string | null;
+  task?: string | null;
+} | null): number {
+  const stored = storedCumulativeMeters(challenge);
+  if (stored > 0) {
+    return stored;
+  }
+  return (
+    parseDistanceText(challenge?.title ?? '') ??
+    parseDistanceText(challenge?.task ?? '') ??
+    0
+  );
+}
+
+export function rawCumulativeTargetMeters(challenge?: {
+  cumulative_target?: number | null;
+} | null): number {
+  return storedCumulativeMeters(challenge);
 }
 
 export function cumulativeProgressCopy(
@@ -35,6 +58,8 @@ export function challengeCumulativeProgress(
     challenge_type?: string | null;
     format?: string | null;
     cumulative_target?: number | null;
+    title?: string | null;
+    task?: string | null;
   } | null,
   doneMeters = 0,
   unit: DistanceUnit = athleteDistanceUnit(),
