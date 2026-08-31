@@ -17,7 +17,24 @@ type WebkitVideo = HTMLVideoElement & {
   webkitDisplayingFullscreen?: boolean;
 };
 
+const WEB_VIDEO_HIDE_CONTROLS_CSS =
+  'video::-webkit-media-controls,video::-webkit-media-controls-enclosure,video::-webkit-media-controls-start-playback-button,video::-webkit-media-controls-panel{display:none!important;-webkit-appearance:none!important}';
+
+let webkitControlsHidden = false;
+
+export function hideWebkitVideoControls(): void {
+  if (webkitControlsHidden || typeof document === 'undefined') {
+    return;
+  }
+  webkitControlsHidden = true;
+  const style = document.createElement('style');
+  style.setAttribute('data-blob-video-lock', '1');
+  style.textContent = WEB_VIDEO_HIDE_CONTROLS_CSS;
+  document.head.appendChild(style);
+}
+
 export function applyWebVideoLock(node: HTMLVideoElement | null, poster?: string | null): void {
+  hideWebkitVideoControls();
   if (!node) {
     return;
   }

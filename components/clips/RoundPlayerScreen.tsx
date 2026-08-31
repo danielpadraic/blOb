@@ -161,7 +161,7 @@ export function RoundPlayerScreen() {
 
   return (
     <ClipPlayer
-      key={reel.id}
+      key={reelId}
       clips={clips}
       startIndex={startIndex}
       autoAdvance={false}

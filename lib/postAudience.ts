@@ -22,7 +22,7 @@ export function asPostAudience(value: unknown): PostAudience {
   if (value === 'public' || value === 'friends' || value === 'specific' || value === 'only_me') {
     return value;
   }
-  return 'public';
+  return DEFAULT_POST_AUDIENCE;
 }
 
 export function asDefaultPostAudience(value: unknown): DefaultPostAudience {

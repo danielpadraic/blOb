@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { WEB_VIDEO_CONTROLS_LIST, WEB_VIDEO_LOCK } from '@/lib/webVideo';
+import { hideWebkitVideoControls, WEB_VIDEO_CONTROLS_LIST, WEB_VIDEO_LOCK } from '@/lib/webVideo';
 
 describe('web video lock', () => {
   it('keeps playsInline and never enables Safari native controls', () => {
@@ -11,5 +11,6 @@ describe('web video lock', () => {
     expect(WEB_VIDEO_LOCK.disableRemotePlayback).toBe(true);
     expect(WEB_VIDEO_LOCK.controlsList).toBe(WEB_VIDEO_CONTROLS_LIST);
     expect(WEB_VIDEO_LOCK['x-webkit-airplay']).toBe('deny');
+    expect(typeof hideWebkitVideoControls).toBe('function');
   });
 });

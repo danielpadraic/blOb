@@ -156,7 +156,7 @@ export function ClipPlayer({
   const [captionDraft, setCaptionDraft] = useState('');
   const [captionOpen, setCaptionOpen] = useState(false);
   const [captionOverflow, setCaptionOverflow] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(Platform.OS === 'web');
   const [railHot, setRailHot] = useState(false);
   const paused = useRef(false);
   const sheetRef = useRef(sheet);
@@ -513,7 +513,7 @@ export function ClipPlayer({
       })
     : 0;
   const railPad = commentsMode ? drawerH + drawerLift : bottomPad;
-  const loopCurrent = kind === 'round' || holdPlayback;
+  const loopFile = kind === 'round';
   const nextAt =
     kind === 'wave' ? preloadStoryIndex(ranges, index) : index + 1 < clips.length ? index + 1 : null;
   const nextClip = nextAt != null ? clips[nextAt] : null;
@@ -541,7 +541,7 @@ export function ClipPlayer({
                 poster={clip.coverUrl}
                 startMs={clip.startMs ?? 0}
                 durationMs={clip.durationMs}
-                loop={loopCurrent}
+                loop={loopFile}
                 muted={muted}
                 pausedRef={paused}
                 onEnded={handleEnded}
@@ -651,7 +651,7 @@ export function ClipPlayer({
               }}>
               {Array.from({ length: storyCount }).map((_, storyAt) => (
                 <View
-                  key={`${clip.authorId}-${storyAt}`}
+                  key={`${clip.authorId ?? clip.id}-${storyAt}`}
                   style={{
                     flex: 1,
                     height: 2,
@@ -1665,7 +1665,9 @@ function NativeClipVideo({
   const endSec = startSec + Math.max(durationMs || WAVE_CLIP_MS, 400) / 1000;
   const endedRef = useRef(false);
   const loopRef = useRef(loop);
+  const onEndedRef = useRef(onEnded);
   loopRef.current = loop;
+  onEndedRef.current = onEnded;
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = loop;
     instance.muted = muted;
@@ -1686,7 +1688,7 @@ function NativeClipVideo({
       return;
     }
     endedRef.current = true;
-    onEnded?.();
+    onEndedRef.current?.();
   });
 
   useEffect(() => {
@@ -1715,7 +1717,7 @@ function NativeClipVideo({
       if (!loopRef.current && !endedRef.current && t >= endSec - 0.05) {
         endedRef.current = true;
         player.pause();
-        onEnded?.();
+        onEndedRef.current?.();
       }
     }, 120);
     return () => {
@@ -1726,7 +1728,7 @@ function NativeClipVideo({
         // Player already released.
       }
     };
-  }, [endSec, onEnded, onProgress, pausedRef, player, startSec]);
+  }, [endSec, onProgress, pausedRef, player, startSec]);
 
   return (
     <VideoView
@@ -1763,8 +1765,10 @@ function WebClipVideo({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const endedRef = useRef(false);
   const loopRef = useRef(loop);
+  const onEndedRef = useRef(onEnded);
   const seekKey = useRef('');
   loopRef.current = loop;
+  onEndedRef.current = onEnded;
   const [ready, setReady] = useState(false);
   const startSec = Math.max(startMs, 0) / 1000;
   const endSec = startSec + Math.max(durationMs || WAVE_CLIP_MS, 400) / 1000;
@@ -1870,7 +1874,7 @@ function WebClipVideo({
       if (!loopRef.current && !endedRef.current && node.currentTime >= endSec - 0.05) {
         endedRef.current = true;
         node.pause();
-        onEnded?.();
+        onEndedRef.current?.();
       }
     };
     const onReady = () => {
@@ -1882,7 +1886,7 @@ function WebClipVideo({
         return;
       }
       endedRef.current = true;
-      onEnded?.();
+      onEndedRef.current?.();
     };
     node.addEventListener('loadeddata', onReady);
     node.addEventListener('playing', onReady);
@@ -1905,7 +1909,7 @@ function WebClipVideo({
       node.removeEventListener('ended', onEndedNative);
       node.pause();
     };
-  }, [endSec, onEnded, onProgress, pausedRef, poster, startSec, uri]);
+  }, [endSec, onProgress, pausedRef, poster, startSec, uri]);
 
   return (
     <View style={{ width: '100%', height: '100%', backgroundColor: '#101312' }}>

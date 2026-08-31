@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useCreateComment, useCreatePost, usePost, useToggleReaction } from '@/hooks/useFeed';
 import { attachClipPostId } from '@/lib/social';
 import { isClipSocialPost, type ClipKind } from '@/lib/clipPost';
+import { publishedRowId } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 
@@ -69,9 +70,14 @@ export function useClipSocial(input: ClipSocialInput) {
       source: 'feed',
       type: input.type ?? (input.kind === 'reel' ? 'round' : 'wave'),
     });
-    await attachClipPostId(input.kind, input.clipId, created.id);
-    setLinkedId(created.id);
-    return asMeta(created as PostWithMeta);
+    const postedId = publishedRowId(created);
+    const clipId = publishedRowId(input.clipId);
+    if (!postedId || !clipId) {
+      return null;
+    }
+    await attachClipPostId(input.kind, clipId, postedId);
+    setLinkedId(postedId);
+    return asMeta({ ...(created as PostWithMeta), id: postedId });
   }
 
   return {

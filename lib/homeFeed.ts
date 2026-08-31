@@ -137,6 +137,16 @@ export function takeHomeVisiblePage<T extends { id: string }>(
   return out;
 }
 
+/** Home SQL keeps legacy null type. Wave / Round / wave_share stay on the player. */
+export function homeQueryKeepsType(type?: string | null): boolean {
+  if (type == null || type === '') {
+    return true;
+  }
+  return !isHomeExcludedClipType(type);
+}
+
+export const HOME_QUERY_TYPE_OR = 'type.is.null,type.not.in.(wave,round,wave_share)';
+
 export function homeFeedCursorFrom(posts: { id: string; created_at: string }[]): HomeFeedCursor | null {
   const last = posts[posts.length - 1];
   if (!last?.created_at || !last.id) {

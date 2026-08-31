@@ -67,6 +67,7 @@ import {
   canWaveProof,
   clampProofCaption,
   mediaCaptionsForUrls,
+  applyCheckinShareLock,
   prefsFromProfile,
   readLocalSharePrefs,
   writeLocalSharePrefs,
@@ -201,8 +202,9 @@ function SubmitWorkoutInner() {
   const [proofCaptions, setProofCaptions] = useState<Record<string, string>>({});
   const [sharePrefs, setSharePrefs] = useState<CheckinSharePrefs>({ home: false, wave: false });
   const lobbyLocked = isCorporateChallenge(challengeQuery.data);
-  const shareHome = lobbyLocked ? false : sharePrefs.home;
-  const shareWave = lobbyLocked ? false : sharePrefs.wave;
+  const lockedShare = applyCheckinShareLock(sharePrefs, lobbyLocked);
+  const shareHome = lockedShare.home;
+  const shareWave = lockedShare.wave;
 
   useEffect(() => {
     return () => {

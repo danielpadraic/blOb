@@ -317,7 +317,7 @@ export function CaptureStudio({
           await createFeedEvent.mutateAsync({
             event_type: 'reel_posted',
             target_type: 'reel',
-            target_id: reel.id,
+            target_id: publishedReelId,
             challenge_id: reel.challenge_id,
             visibility: feedVisibilityForAudience(audience),
             metadata: {
@@ -342,7 +342,7 @@ export function CaptureStudio({
           ...clip,
           caption: multiClip ? clipCaptions[index]?.trim() || null : caption.trim() || null,
         }));
-        const stories = await createStory.mutateAsync({
+        const created = await createStory.mutateAsync({
           media_url: mediaUrl,
           media_type: draft.mediaType,
           thumbnail_url: posterUrl,
@@ -350,6 +350,7 @@ export function CaptureStudio({
           challenge_id: challengeId,
           clips,
         });
+        const stories = Array.isArray(created) ? created : created ? [created] : [];
         publishedWaveId = publishedRowId(stories);
         if (!publishedWaveId) {
           setError('Couldn’t open that clip');

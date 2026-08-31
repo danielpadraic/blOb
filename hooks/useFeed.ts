@@ -20,7 +20,7 @@ import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '
 import { reportAppError } from '@/lib/appErrors';
 import { rawFeedError } from '@/lib/feedError';
 import {
-  dropCachedCircleId,
+  dropCachedCircleId;
   isMissingCircleIdColumn,
   resolvePostsSchema,
   selectWithoutCircleId,
@@ -53,6 +53,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import {
   HOME_FIRST_PAINT_WINDOWS,
   HOME_PAGE_SIZE,
+  HOME_QUERY_TYPE_OR,
   HOME_RAW_WINDOW,
   circleFofCandidateIds,
   filterHomeFeedPosts,
@@ -201,6 +202,25 @@ function isMissingDeletedAt(error: { message?: string }): boolean {
   );
 }
 
+const HOME_TYPE_SCOPES = new Set<FeedScope['kind']>([
+  'authors',
+  'ids',
+  'circleIds',
+  'circleDiscover',
+  'wallHosts',
+]);
+
+function excludeHomeClipTypes<T extends { or: (filter: string) => T }>(
+  query: T,
+  select: string,
+  scopeKind: FeedScope['kind'],
+): T {
+  if (!HOME_TYPE_SCOPES.has(scopeKind) || !/(^|,\s*)type(,|$)/.test(select)) {
+    return query;
+  }
+  return query.or(HOME_QUERY_TYPE_OR);
+}
+
 function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean, page?: PostPage) {
   const limit = page?.limit ?? 50;
   let query = supabase.from('posts').select(select).order('created_at', { ascending: false }).limit(limit);
@@ -214,6 +234,8 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean, p
   // Challenge detail still scopes by challenge_id + source.
   const hasSource = /(^|,\s*)source(,|$)/.test(select);
   const hasCircleId = /(^|,\s*)circle_id(,|$)/.test(select);
+  const withHomeTypes = <T extends { or: (filter: string) => T }>(next: T) =>
+    excludeHomeClipTypes(next, select, scope.kind);
   if (scope.kind === 'challenge') {
     query = query.eq('challenge_id', scope.challengeId);
     if (hasSource) {
@@ -225,16 +247,16 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean, p
     return hasCircleId ? query.eq('circle_id', scope.circleId) : query.limit(0);
   }
   if (scope.kind === 'circleIds') {
-    return hasCircleId ? query.in('circle_id', scope.circleIds) : query.limit(0);
+    return hasCircleId ? withHomeTypes(query.in('circle_id', scope.circleIds)) : query.limit(0);
   }
   if (scope.kind === 'circleDiscover') {
-    return hasCircleId ? query.not('circle_id', 'is', null) : query.limit(0);
+    return hasCircleId ? withHomeTypes(query.not('circle_id', 'is', null)) : query.limit(0);
   }
   if (scope.kind === 'ids') {
-    return query.in('challenge_id', scope.challengeIds);
+    return withHomeTypes(query.in('challenge_id', scope.challengeIds));
   }
   if (scope.kind === 'authors') {
-    return query.in('author_id', scope.authorIds);
+    return withHomeTypes(query.in('author_id', scope.authorIds));
   }
   if (scope.kind === 'wall') {
     return query.or(
@@ -242,7 +264,7 @@ function fetchPostRows(select: string, scope: FeedScope, hideDeleted: boolean, p
     );
   }
   if (scope.kind === 'wallHosts') {
-    return query.in('wall_host_id', scope.hostIds).is('wall_removed_at', null);
+    return withHomeTypes(query.in('wall_host_id', scope.hostIds).is('wall_removed_at', null));
   }
   if (hasSource) {
     return query.in('source', ['feed', 'share']);

@@ -133,7 +133,7 @@ export function StoryViewer({
   }, [story?.id]);
 
   useEffect(() => {
-    if (!story || group?.isOwn) {
+    if (!story?.id || group?.isOwn) {
       return;
     }
     if (marked.current.has(story.id)) {
@@ -178,7 +178,7 @@ export function StoryViewer({
     transform: [{ translateY: translateY.value }],
   }));
 
-  if (!group || !story) {
+  if (!group || !story?.id) {
     return null;
   }
 

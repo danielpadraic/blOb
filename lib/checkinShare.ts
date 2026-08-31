@@ -37,6 +37,20 @@ export function prefsFromProfile(profile?: {
   };
 }
 
+/** Corporate: no Home, no Wave share from check-in. */
+export function applyCheckinShareLock(
+  prefs: CheckinSharePrefs,
+  corporate: boolean,
+): CheckinSharePrefs {
+  if (corporate) {
+    return { home: false, wave: false };
+  }
+  return {
+    home: prefs.home === true,
+    wave: prefs.wave === true,
+  };
+}
+
 export async function readLocalSharePrefs(userId: string): Promise<CheckinSharePrefs | null> {
   try {
     const raw = await authStorage.getItem(prefsKey(userId));
