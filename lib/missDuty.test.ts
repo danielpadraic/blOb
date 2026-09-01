@@ -98,10 +98,22 @@ describe('miss budget copy', () => {
   });
 
   it('uses the locked 0-cap sentence', () => {
-    expect(missesAllowedCopy(0)).toBe(
-      'Misses allowed: 0 — miss a required check-in and you are out.',
-    );
+    expect(missesAllowedCopy(0)).toBe('miss a required check-in and you are out.');
     expect(missesAllowedCopy(3)).toBe('Misses allowed: 3');
+    expect(missesAllowedCopy(6)).toBe('Misses allowed: 6');
+    expect(missesAllowedCopy(6)).not.toMatch(/you(?:'|’)re out/i);
     expect(missesUsedCopy(1)).toBe('Misses used: 1');
+  });
+
+  it('reads Allowed misses aliases when misses_allowed is absent', () => {
+    const daily = {
+      challenge_type: 'consistency',
+      format: 'consistency',
+      frequency: 'daily',
+    };
+    expect(missesAllowedCap({ ...daily, allowed_misses: 6 })).toBe(6);
+    expect(missesAllowedCap({ ...daily, max_misses: 6 })).toBe(6);
+    expect(missesAllowedCap({ ...daily, consistency: { misses: 6 } })).toBe(6);
+    expect(missesAllowedCap({ ...daily, misses_allowed: 6, allowed_misses: 0 })).toBe(6);
   });
 });

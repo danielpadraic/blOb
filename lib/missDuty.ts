@@ -12,6 +12,9 @@ export type MissDutyChallenge = {
   is_unlimited?: boolean | null;
   end_mode?: string | null;
   misses_allowed?: number | null;
+  allowed_misses?: number | null;
+  max_misses?: number | null;
+  consistency?: { misses?: number | null } | null;
 };
 
 function asKey(value: unknown): string {
@@ -71,12 +74,17 @@ export function missesAllowedCap(challenge?: MissDutyChallenge | null): number |
   if (!challengeShowsMissBudget(challenge)) {
     return null;
   }
-  return Math.max(Math.trunc(Number(challenge?.misses_allowed) || 0), 0);
+  const raw =
+    challenge?.misses_allowed ??
+    challenge?.allowed_misses ??
+    challenge?.max_misses ??
+    challenge?.consistency?.misses;
+  return Math.max(Math.trunc(Number(raw) || 0), 0);
 }
 
 export function missesAllowedCopy(allowed: number): string {
   if (allowed <= 0) {
-    return 'Misses allowed: 0 — miss a required check-in and you are out.';
+    return 'miss a required check-in and you are out.';
   }
   return `Misses allowed: ${allowed}`;
 }
