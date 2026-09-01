@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyCheckinShareLock,
   canWaveProof,
+  checkinHidesHomeShare,
   clampProofCaption,
+  defaultCheckinSharePrefs,
   mediaCaptionsForUrls,
+  pickCheckinWaveSource,
   prefsFromProfile,
   proofCaptionCounter,
   proofCaptionHelper,
@@ -50,12 +54,52 @@ describe('check-in proof captions', () => {
 });
 
 describe('check-in share prefs', () => {
-  it('defaults Home and Wave off when unset', () => {
-    expect(prefsFromProfile(null)).toEqual({ home: false, wave: false });
-    expect(prefsFromProfile({})).toEqual({ home: false, wave: false });
+  it('defaults Home on and Waves off when unset', () => {
+    expect(defaultCheckinSharePrefs()).toEqual({ home: true, wave: false });
+    expect(prefsFromProfile(null)).toEqual({ home: true, wave: false });
+    expect(prefsFromProfile({})).toEqual({ home: true, wave: false });
     expect(prefsFromProfile({ checkin_share_home: true, checkin_share_wave: false })).toEqual({
       home: true,
       wave: false,
+    });
+    expect(prefsFromProfile({ checkin_share_home: false, checkin_share_wave: true })).toEqual({
+      home: false,
+      wave: true,
+    });
+  });
+
+  it('forces Home off for private and corporate, and leaves Waves as the toggle', () => {
+    expect(checkinHidesHomeShare({ privacy_mode: 'private_corporate' })).toBe(true);
+    expect(checkinHidesHomeShare({ privacy_mode: 'private' })).toBe(true);
+    expect(checkinHidesHomeShare({ privacy_mode: 'public' })).toBe(false);
+    expect(applyCheckinShareLock({ home: true, wave: true }, true)).toEqual({
+      home: false,
+      wave: true,
+    });
+    expect(applyCheckinShareLock({ home: true, wave: false }, false)).toEqual({
+      home: true,
+      wave: false,
+    });
+  });
+
+  it('picks the first selfie or short clip, not every proof', () => {
+    const wave = pickCheckinWaveSource({
+      proofs: [
+        { id: 'honor', name: 'Honor', method: 'honor' },
+        { id: 'pre', name: 'Selfie', method: 'photo' },
+        { id: 'after', name: 'After', method: 'photo' },
+      ],
+      parts: {
+        pre: { method: 'photo', url: 'https://cdn/pre.jpg', caption: 'Ready' },
+        after: { method: 'photo', url: 'https://cdn/after.jpg', caption: 'Done' },
+      },
+      captions: {},
+    });
+    expect(wave).toEqual({
+      url: 'https://cdn/pre.jpg',
+      mediaType: 'image',
+      caption: 'Ready',
+      durationMs: undefined,
     });
   });
 

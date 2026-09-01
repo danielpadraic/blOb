@@ -1,6 +1,8 @@
 import type { ChallengeProof, ChallengeProofPart } from '@/lib/challengeProofs';
 import { mediaUrlKey, proofDisplayName, uniqueProofUrls } from '@/lib/challengeProofs';
+import { isPrivateChallenge } from '@/lib/challengeDiscoverability';
 import { copy } from '@/lib/copy';
+import { isPrivateCorporate } from '@/lib/privacyMode';
 import { authStorage } from '@/lib/utils/secureStore';
 import { mediaDurationMs, WAVE_CLIP_MS } from '@/lib/waveClips';
 
@@ -28,24 +30,40 @@ export function proofCaptionCounter(value: string): string | null {
   return `${n}/${CHECKIN_PROOF_CAPTION_MAX}`;
 }
 
+export function defaultCheckinSharePrefs(): CheckinSharePrefs {
+  return { home: true, wave: false };
+}
+
 export function prefsFromProfile(profile?: {
   checkin_share_home?: boolean | null;
   checkin_share_wave?: boolean | null;
 } | null): CheckinSharePrefs {
   return {
-    home: profile?.checkin_share_home === true,
+    home: profile?.checkin_share_home !== false,
     wave: profile?.checkin_share_wave === true,
   };
 }
 
-/** Corporate: no Home. Check-in never shares to Wave. */
+/** Private / corporate: no Home announce. Waves stay a user toggle. */
+export function checkinHidesHomeShare(challenge?: {
+  privacy_mode?: string | null;
+  visibility?: string | null;
+  challenge_lane?: string | null;
+} | null): boolean {
+  const mode = String(challenge?.privacy_mode ?? '').toLowerCase();
+  if (mode === 'private' || mode === 'private_corporate') {
+    return true;
+  }
+  return isPrivateCorporate(challenge) || isPrivateChallenge(challenge ?? {});
+}
+
 export function applyCheckinShareLock(
   prefs: CheckinSharePrefs,
-  corporate: boolean,
+  hideHome: boolean,
 ): CheckinSharePrefs {
   return {
-    home: corporate ? false : prefs.home === true,
-    wave: false,
+    home: hideHome ? false : prefs.home !== false,
+    wave: prefs.wave === true,
   };
 }
 
@@ -89,7 +107,7 @@ export async function readLocalSharePrefs(userId: string): Promise<CheckinShareP
     }
     const parsed = JSON.parse(raw) as { home?: unknown; wave?: unknown };
     return {
-      home: parsed.home === true,
+      home: parsed.home !== false,
       wave: parsed.wave === true,
     };
   } catch {
@@ -123,6 +141,53 @@ export function canWaveProof(input: {
     return ms <= WAVE_CLIP_MS;
   }
   return method === 'photo' || method === 'hr' || method === 'distance';
+}
+
+export type CheckinWaveSource = {
+  url: string;
+  mediaType: 'image' | 'video';
+  caption: string;
+  durationMs?: number | null;
+};
+
+/** First selfie or short clip on this check-in. One Wave, not every proof. */
+export function pickCheckinWaveSource(input: {
+  proofs: ChallengeProof[];
+  parts: Record<string, ChallengeProofPart | undefined>;
+  drafts?: Record<string, { durationMs?: number | null } | undefined>;
+  captions?: Record<string, string>;
+  extras?: Array<{ remoteUrl?: string | null; uri?: string | null; kind?: string | null }>;
+}): CheckinWaveSource | null {
+  for (const proof of input.proofs) {
+    const part = input.parts[proof.id];
+    const url = String(part?.url ?? '').trim();
+    const durationMs = input.drafts?.[proof.id]?.durationMs;
+    if (!canWaveProof({ method: proof.method, uri: url, durationMs })) {
+      continue;
+    }
+    return {
+      url,
+      mediaType: proof.method === 'video' ? 'video' : 'image',
+      caption: clampProofCaption(input.captions?.[proof.id] ?? part?.caption ?? ''),
+      durationMs,
+    };
+  }
+  for (const extra of input.extras ?? []) {
+    const url = String(extra.remoteUrl ?? extra.uri ?? '').trim();
+    const kind = String(extra.kind ?? '').toLowerCase();
+    if (!url || kind === 'gif' || url.startsWith('health:')) {
+      continue;
+    }
+    if (kind !== 'photo' && kind !== 'video' && kind !== 'image') {
+      continue;
+    }
+    return {
+      url,
+      mediaType: kind === 'video' ? 'video' : 'image',
+      caption: '',
+    };
+  }
+  return null;
 }
 
 export function mediaCaptionsForUrls(

@@ -97,6 +97,8 @@ type CheckinComposerProps = {
   lobbyLocked?: boolean;
   shareHome?: boolean;
   onShareHomeChange?: (value: boolean) => void;
+  shareWave?: boolean;
+  onShareWaveChange?: (value: boolean) => void;
   onSend: () => void;
   accessory?: ReactNode;
   dueLine?: ReactNode;
@@ -122,10 +124,12 @@ export function CheckinComposer({
   onCaptionChange,
   proofCaptions = {},
   onProofCaptionChange,
-  lobbyName,
+  lobbyName: _lobbyName,
   lobbyLocked,
-  shareHome = false,
+  shareHome = true,
   onShareHomeChange,
+  shareWave = false,
+  onShareWaveChange,
   onSend,
   accessory,
   dueLine,
@@ -804,10 +808,11 @@ export function CheckinComposer({
       ) : null}
 
       <CheckinShareTo
-        lobbyName={lobbyName?.trim() || copy('checkin.shareLobby')}
-        lobbyLocked={lobbyLocked}
+        hideHome={lobbyLocked}
         shareHome={shareHome}
         onShareHomeChange={onShareHomeChange ?? (() => undefined)}
+        shareWave={shareWave}
+        onShareWaveChange={onShareWaveChange ?? (() => undefined)}
       />
 
       <View className="mt-1 flex-row items-center" style={{ minHeight: 44, gap: 2, paddingHorizontal: 8 }}>

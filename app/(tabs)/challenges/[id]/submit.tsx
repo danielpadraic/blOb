@@ -22,7 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
-import { seedChallengeLivePost } from '@/hooks/useFeed';
+import { seedChallengeLivePost, useCreatePost } from '@/hooks/useFeed';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
@@ -67,19 +67,21 @@ import {
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
 import { safeUserId, sessionAuthor } from '@/lib/safeIds';
-import { createStory, personDisplayName } from '@/lib/social';
+import { attachClipPostId, createStory, personDisplayName } from '@/lib/social';
 import {
-  canWaveProof,
-  clampProofCaption,
-  mediaCaptionsForUrls,
   applyCheckinShareLock,
+  checkinHidesHomeShare,
+  clampProofCaption,
+  defaultCheckinSharePrefs,
+  mediaCaptionsForUrls,
+  pickCheckinWaveSource,
   prefsFromProfile,
   readLocalSharePrefs,
   writeLocalSharePrefs,
   type CheckinSharePrefs,
 } from '@/lib/checkinShare';
+import { asDefaultPostAudience } from '@/lib/postAudience';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
-import { mediaDurationMs, resolveMediaDurationMs, WAVE_CLIP_MS } from '@/lib/waveClips';
 import {
   ensureLibraryPermission,
   openAppSettings,
@@ -97,7 +99,6 @@ import { upsertHealthWorkout } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
 import {
   distanceProofIsSessionLog,
-  isCorporateChallenge,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
@@ -105,7 +106,7 @@ import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { parseDoneIds } from '@/lib/multiCheckin';
-import { challengeDetailHref, checkinSubmitHref, multiCheckinHref } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref, multiCheckinHref, publishedRowId } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
@@ -196,7 +197,9 @@ function SubmitWorkoutInner() {
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
   const saveProof = useSaveCheckinProof(id);
   const submitCheckin = useSubmitCheckin(id);
+  const createPost = useCreatePost();
   const queryClient = useQueryClient();
+  const wavePublishedRef = useRef(false);
 
   const [drafts, setDrafts] = useState<Record<string, SlotDraft>>({});
   const [error, setError] = useState<string | null>(null);
@@ -207,11 +210,11 @@ function SubmitWorkoutInner() {
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
   const [proofCaptions, setProofCaptions] = useState<Record<string, string>>({});
-  const [sharePrefs, setSharePrefs] = useState<CheckinSharePrefs>({ home: false, wave: false });
-  const lobbyLocked = isCorporateChallenge(challengeQuery.data);
+  const [sharePrefs, setSharePrefs] = useState<CheckinSharePrefs>(defaultCheckinSharePrefs);
+  const lobbyLocked = checkinHidesHomeShare(challengeQuery.data);
   const lockedShare = applyCheckinShareLock(sharePrefs, lobbyLocked);
   const shareHome = lockedShare.home;
-  const shareWave = false;
+  const shareWave = lockedShare.wave;
 
   useEffect(() => {
     return () => {
@@ -775,47 +778,61 @@ function SubmitWorkoutInner() {
           // Social line already saved; Home hide / mentions are best-effort.
         }
       }
-      if (shareWave && uid) {
-        for (const proof of proofSteps) {
-          const part = savedParts[proof.id];
-          const draft = drafts[proof.id];
-          const url = String(part?.url ?? '').trim();
-          if (!url) {
-            continue;
-          }
-          const durationMs =
-            draft?.durationMs ?? (await resolveMediaDurationMs(draft?.uri ?? url, draft?.durationMs));
-          if (!canWaveProof({ method: proof.method, uri: url, durationMs })) {
-            continue;
-          }
-          if (proof.method === 'video') {
-            const ms = mediaDurationMs(durationMs);
-            if (ms != null && ms > WAVE_CLIP_MS) {
-              continue;
-            }
-          }
+      if (shareWave && uid && !wavePublishedRef.current) {
+        const wave = pickCheckinWaveSource({
+          proofs: proofSteps,
+          parts: savedParts,
+          drafts,
+          captions: proofCaptions,
+          extras: uploadedExtras,
+        });
+        if (wave) {
           try {
-            await createStory(uid, {
-              media_url: url,
-              media_type: proof.method === 'video' ? 'video' : 'image',
-              caption: clampProofCaption(proofCaptions[proof.id] ?? part?.caption ?? ''),
+            const stories = await createStory(uid, {
+              media_url: wave.url,
+              media_type: wave.mediaType,
+              caption: wave.caption,
               challenge_id: id,
             });
+            const storyId = publishedRowId(stories);
+            const audience = asDefaultPostAudience(profile?.default_post_audience);
+            if (storyId) {
+              try {
+                const posted = await createPost.mutateAsync({
+                  content: wave.caption,
+                  mediaUrls: [wave.url],
+                  audience,
+                  source: 'feed',
+                  type: 'wave',
+                  durationMs: wave.durationMs,
+                });
+                const postedId = publishedRowId(posted);
+                if (postedId) {
+                  await attachClipPostId('story', storyId, postedId);
+                }
+              } catch {
+                // Story is live; Friends is the missing-audience default.
+              }
+            }
+            wavePublishedRef.current = true;
           } catch {
             // Wave is extra; lobby check-in already landed.
           }
         }
         void queryClient.invalidateQueries({ queryKey: ['stories'] });
       }
-      if (!lobbyLocked && uid) {
-        const nextPrefs = { home: shareHome, wave: sharePrefs.wave };
+      if (uid) {
+        const nextPrefs = { home: shareHome, wave: shareWave };
         await writeLocalSharePrefs(uid, nextPrefs);
-        try {
-          await updateProfile.mutateAsync({
-            checkin_share_home: nextPrefs.home,
-          });
-        } catch {
-          // Local row still remembers the last Share to Home choice.
+        if (!lobbyLocked) {
+          try {
+            await updateProfile.mutateAsync({
+              checkin_share_home: nextPrefs.home,
+              checkin_share_wave: nextPrefs.wave,
+            });
+          } catch {
+            // Local row still remembers the last Home / Waves choice.
+          }
         }
       }
       await successHaptic();
@@ -1174,6 +1191,8 @@ function SubmitWorkoutInner() {
         lobbyLocked={lobbyLocked}
         shareHome={shareHome}
         onShareHomeChange={(home) => setSharePrefs((current) => ({ ...current, home }))}
+        shareWave={shareWave}
+        onShareWaveChange={(wave) => setSharePrefs((current) => ({ ...current, wave }))}
         onSend={() => void onSubmit()}
         dueLine={
           <PeriodCheckinDue

@@ -80,12 +80,12 @@ describe('social audit', () => {
     expect(visible.map((row) => row.id)).toEqual(['ok']);
   });
 
-  it('skips corporate Home / Wave share and corporate challenge cards', () => {
+  it('skips corporate Home share and corporate challenge cards', () => {
     expect(applyCheckinShareLock({ home: true, wave: true }, true)).toEqual({
       home: false,
-      wave: false,
+      wave: true,
     });
-    expect(applyCheckinShareLock({ home: true, wave: true }, false)).toEqual({
+    expect(applyCheckinShareLock({ home: true, wave: false }, false)).toEqual({
       home: true,
       wave: false,
     });
