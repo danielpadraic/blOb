@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { withSatelliteTimeout } from '@/lib/homeFeed';
 import { fetchHomePulsePills, HOME_PULSE_KEY, type PulsePill } from '@/lib/homePulse';
 
 export function homePulseQueryKey(userId?: string) {
@@ -18,7 +17,9 @@ export function useHomePulse() {
     staleTime: 15_000,
     queryFn: async (): Promise<PulsePill[]> => {
       try {
-        return await withSatelliteTimeout(fetchHomePulsePills(user!.id), []);
+        // Do not share Home’s 2.5s satellite cutoff — a slow lobby read
+        // must hide Pulse, not drop the two live pills or empty the feed.
+        return await fetchHomePulsePills(user!.id);
       } catch {
         return [];
       }

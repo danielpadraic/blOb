@@ -48,11 +48,20 @@ export default function FeedScreen() {
     void queryClient.invalidateQueries({ queryKey: [HOME_PULSE_KEY] });
   }, [feed, queryClient]);
 
+  const stickyAbove = useMemo(
+    () => (
+      <View style={{ marginBottom: 6, gap: 8 }}>
+        <StoryTray />
+        <FeaturedOfficialStrip />
+        <PulseRail />
+      </View>
+    ),
+    [],
+  );
+
   const headerExtra = useMemo(
     () => (
       <View style={{ gap: 8 }}>
-        <FeaturedOfficialStrip />
-        <PulseRail />
         <ReelsRow />
       </View>
     ),
@@ -99,11 +108,7 @@ export default function FeedScreen() {
         homeChrome
         draftKey="home"
         composing={createPost.isPending}
-        stickyAbove={
-          <View style={{ marginBottom: 6 }}>
-            <StoryTray />
-          </View>
-        }
+        stickyAbove={stickyAbove}
         headerTop={
           showFeedBanner ? (
             <View className="flex-row items-center" style={{ marginBottom: 8, gap: 10, minHeight: 44 }}>
