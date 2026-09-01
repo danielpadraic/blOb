@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { checkinTaskLabel } from '@/lib/checkin';
+import { remainingProofLabelsOf } from '@/lib/multiCheckin';
 import { loggableStatusLine } from '@/lib/loggable';
 import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
@@ -29,11 +30,15 @@ export type LoggableChallenge = Pick<
   | 'timezone'
   | 'days_required'
   | 'day_windows'
+  | 'proofs'
+  | 'proof_type'
+  | 'proof_requirements'
 > & {
   checkinPhase?: CheckinPhase;
   ctaTitle?: string;
   tasks?: unknown[] | null;
   taskLabel?: string;
+  remainingProofLabels?: string[];
   daysCompleted?: number;
   statusLine?: string;
 };
@@ -49,6 +54,7 @@ const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at, days
 const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at, days_completed';
 
 const CHALLENGE_SELECTS = [
+  'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, task, tasks, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, task, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
@@ -118,12 +124,18 @@ export function useLoggableChallenges() {
         .map((challenge) => {
           const phase = phaseForPeriod(challenge, checkinRows);
           const completed = daysCompleted.get(challenge.id) ?? 0;
+          const taskLabel = checkinTaskLabel(challenge);
           return {
             ...challenge,
             daysCompleted: completed,
             checkinPhase: phase,
             ctaTitle: checkinCtaTitle(phase),
-            taskLabel: checkinTaskLabel(challenge),
+            taskLabel,
+            remainingProofLabels: remainingProofLabelsOf(
+              { ...challenge, taskLabel },
+              partsForPeriod(challenge, checkinRows),
+              phase,
+            ),
             statusLine: loggableStatusLine({
               ends_at: challenge.ends_at,
               days_required: challenge.days_required,
@@ -145,26 +157,41 @@ export function useLoggableChallenge() {
   };
 }
 
+type CheckinPeriodState = { phase: CheckinPhase; parts: unknown };
+
 function submittedThisPeriod(
   challenge: LoggableChallenge,
-  checkinRows: Map<string, CheckinPhase>,
+  checkinRows: Map<string, CheckinPeriodState>,
 ): boolean {
   return checkinPeriodKeyCandidates(challenge).some(
-    (key) => checkinRows.get(`${challenge.id}:${key}`) === 'submitted',
+    (key) => checkinRows.get(`${challenge.id}:${key}`)?.phase === 'submitted',
   );
 }
 
 function phaseForPeriod(
   challenge: LoggableChallenge,
-  checkinRows: Map<string, CheckinPhase>,
+  checkinRows: Map<string, CheckinPeriodState>,
 ): CheckinPhase {
   for (const key of checkinPeriodKeyCandidates(challenge)) {
-    const phase = checkinRows.get(`${challenge.id}:${key}`);
+    const phase = checkinRows.get(`${challenge.id}:${key}`)?.phase;
     if (phase) {
       return phase;
     }
   }
   return 'none';
+}
+
+function partsForPeriod(
+  challenge: LoggableChallenge,
+  checkinRows: Map<string, CheckinPeriodState>,
+): unknown {
+  for (const key of checkinPeriodKeyCandidates(challenge)) {
+    const row = checkinRows.get(`${challenge.id}:${key}`);
+    if (row) {
+      return row.parts;
+    }
+  }
+  return null;
 }
 
 async function fetchActiveParticipations(userId: string): Promise<ParticipationRow[]> {
@@ -223,16 +250,23 @@ async function fetchChallenges(ids: string[]): Promise<LoggableChallenge[]> {
 async function fetchCheckinPhases(
   userId: string,
   challengeIds: string[],
-): Promise<Map<string, CheckinPhase>> {
-  const phases = new Map<string, CheckinPhase>();
+): Promise<Map<string, CheckinPeriodState>> {
+  const phases = new Map<string, CheckinPeriodState>();
   if (challengeIds.length === 0) {
     return phases;
   }
-  const result = await supabase
+  const withParts = await supabase
     .from('challenge_checkins')
-    .select('challenge_id, period_key, status, submitted_at')
+    .select('challenge_id, period_key, status, submitted_at, proof_parts')
     .eq('user_id', userId)
     .in('challenge_id', challengeIds);
+  const result = withParts.error
+    ? await supabase
+        .from('challenge_checkins')
+        .select('challenge_id, period_key, status, submitted_at')
+        .eq('user_id', userId)
+        .in('challenge_id', challengeIds)
+    : withParts;
   if (result.error) {
     const text = result.error.message.toLowerCase();
     if (
@@ -245,7 +279,13 @@ async function fetchCheckinPhases(
     }
     throw new Error(getErrorMessage(result.error));
   }
-  for (const row of result.data ?? []) {
+  for (const row of (result.data ?? []) as {
+    challenge_id: string;
+    period_key: string;
+    status?: string | null;
+    submitted_at?: string | null;
+    proof_parts?: unknown;
+  }[]) {
     const status = row.status;
     const phase: CheckinPhase =
       row.submitted_at || status === 'submitted'
@@ -253,7 +293,10 @@ async function fetchCheckinPhases(
         : status === 'ready' || status === 'in_progress'
           ? status
           : 'in_progress';
-    phases.set(`${String(row.challenge_id)}:${normalizePeriodKey(row.period_key)}`, phase);
+    phases.set(`${String(row.challenge_id)}:${normalizePeriodKey(row.period_key)}`, {
+      phase,
+      parts: row.proof_parts ?? null,
+    });
   }
   return phases;
 }

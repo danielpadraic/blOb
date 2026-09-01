@@ -4,7 +4,7 @@ import type { AppStateStatus } from 'react-native';
 export const MIN_BACKGROUND_MS = 2500;
 
 const KEEP_ROUTE =
-  /\/(onboarding|capture|submit|create|compose|details|auth|reset-password|forgot-password)/i;
+  /\/(onboarding|capture|submit|checkin|create|compose|details|auth|reset-password|forgot-password)/i;
 
 const EXPLICIT_LAUNCH =
   /(?:^|[/?#]|:\/\/)(?:challenges\/[^/?#]+|invite\/|feed\/p\/|story\/|reel\/)/i;

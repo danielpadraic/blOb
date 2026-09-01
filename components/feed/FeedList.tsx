@@ -10,6 +10,8 @@ import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { HOME_FEED_SPLASH_MS, shouldShowHomeSplash } from '@/lib/homeFeed';
+// Slice 2: Home check-in stack (`stackHomeCheckinPosts` in lib/multiCheckin.ts) is not wired.
+// Keep separate Home cards this pass. Lobby feeds stay one post each.
 import { FEED_COLUMN_MAX, TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 

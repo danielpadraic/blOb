@@ -642,6 +642,12 @@ const STRINGS = {
   'checkin.shareHome': 'Home',
   'checkin.shareWave': 'Wave',
   'checkin.waveSkipLong': 'That video is over 30 seconds, so it stayed on the lobby check-in.',
+  'checkin.multiTitle': 'Multi Check-In',
+  'checkin.multiDone': 'Done',
+  'checkin.multiNext': 'Next',
+  'checkin.multiEmpty': 'Empty',
+  'checkin.multiStarted': 'Started',
+  'checkin.multiComplete': 'Complete',
   'detail.checkinDue': 'Check-in due',
   'detail.caughtUp': 'Caught Up',
 } as const;

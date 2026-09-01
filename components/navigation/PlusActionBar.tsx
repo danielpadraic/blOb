@@ -21,7 +21,7 @@ type PlusActionBarProps = {
 export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActionBarProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const [step, setStep] = useState<'root' | 'post' | 'log'>('root');
+  const [step, setStep] = useState<'root' | 'post'>('root');
   const loggables = asLoggableList(loggable);
   const only = loggables.length === 1 ? loggables[0] : null;
   const tabClear = TAB_BAR_HEIGHT + Math.max(insets.bottom, TAB_BAR_GUTTER) + 6;
@@ -51,43 +51,6 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
           paddingBottom: tabClear,
           paddingHorizontal: 12,
         }}>
-        {step === 'log' ? (
-          <View
-            style={{
-              width: barWidth,
-              marginBottom: 8,
-              backgroundColor: THEME.surface,
-              borderRadius: 18,
-              borderWidth: 1,
-              borderColor: THEME.border,
-              overflow: 'hidden',
-              ...themeShadow('card'),
-            }}>
-            {loggables.map((challenge, index) => (
-              <Pressable
-                key={challenge.id}
-                accessibilityRole="button"
-                accessibilityLabel={challenge.title}
-                onPress={() => pickLog(challenge)}
-                style={{
-                  minHeight: 44,
-                  paddingHorizontal: 14,
-                  justifyContent: 'center',
-                  borderTopWidth: index === 0 ? 0 : 1,
-                  borderTopColor: THEME.border,
-                }}>
-                <AppText className="text-[14px] font-semibold text-charcoal" numberOfLines={1}>
-                  {challenge.title}
-                </AppText>
-                {challenge.taskLabel ? (
-                  <AppText className="text-[12px] text-muted" numberOfLines={1}>
-                    {challenge.taskLabel}
-                  </AppText>
-                ) : null}
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
         <View
           style={{
             width: barWidth,
@@ -121,7 +84,7 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
                     pickLog(loggables[0]);
                     return;
                   }
-                  setStep((current) => (current === 'log' ? 'root' : 'log'));
+                  onAction('log');
                 }}
               />
               <BarDivider />

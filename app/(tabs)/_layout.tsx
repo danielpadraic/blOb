@@ -32,7 +32,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
-import { checkinSubmitHref, CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF } from '@/lib/routes';
+import { checkinSubmitHref, CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF, MULTI_CHECKIN_HREF } from '@/lib/routes';
 import { stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
@@ -317,11 +317,19 @@ function TabLayoutInner() {
 
   function onAction(id: QuickActionId | LogoMenuAction, challenge?: LoggableChallenge) {
     if (id === 'log') {
-      const picked = challenge?.id;
-      if (!picked) {
+      if (challenge?.id) {
+        go(checkinSubmitHref(challenge.id));
         return;
       }
-      go(checkinSubmitHref(picked));
+      const list = loggable.data ?? [];
+      if (list.length >= 2) {
+        go(MULTI_CHECKIN_HREF);
+        return;
+      }
+      if (list.length === 1 && list[0]?.id) {
+        go(checkinSubmitHref(list[0].id));
+        return;
+      }
       return;
     }
     if (id === 'create') {
@@ -423,6 +431,7 @@ function TabLayoutInner() {
           <Tabs.Screen name="notifications" options={{ href: null, title: 'Alerts' }} />
           <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
           <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />
+          <Tabs.Screen name="checkin" options={{ href: null, title: 'Multi Check-In' }} />
           <Tabs.Screen
             name="profile"
             options={{

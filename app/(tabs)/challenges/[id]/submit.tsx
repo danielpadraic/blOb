@@ -99,7 +99,8 @@ import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
-import { challengeDetailHref, checkinSubmitHref } from '@/lib/routes';
+import { parseDoneIds } from '@/lib/multiCheckin';
+import { challengeDetailHref, checkinSubmitHref, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
 import { localUriFromPickerAsset } from '@/utils/media';
@@ -171,7 +172,7 @@ export default function SubmitWorkoutScreen() {
 }
 
 function SubmitWorkoutInner() {
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; done?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const pathname = usePathname();
@@ -797,6 +798,12 @@ function SubmitWorkoutInner() {
       }
       await successHaptic();
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      const from = Array.isArray(params.from) ? params.from[0] : params.from;
+      if (from === 'multi') {
+        void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
+        router.replace(multiCheckinHref([...parseDoneIds(params.done), id]));
+        return;
+      }
       router.replace(challengeDetailHref(id, 'lobby', postId, { tab: 'feed' }));
     } catch (caught) {
       const kind = classifyCheckinError(caught);

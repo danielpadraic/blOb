@@ -28,6 +28,7 @@ const TAB_CHROME_ROOTS = new Set([
   'profile',
   'messages',
   'capture',
+  'checkin',
   'circles',
 ]);
 
@@ -42,7 +43,7 @@ export function isMainTabRoute(segments: string[]): boolean {
     return false;
   }
   const [root, nested] = parts;
-  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages' || root === 'capture' || root === 'circles') {
+  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages' || root === 'capture' || root === 'checkin' || root === 'circles') {
     return false;
   }
   return !nested || nested === 'index';

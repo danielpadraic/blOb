@@ -102,9 +102,32 @@ export function challengeDetailHref(
   return (`/challenges/${challengeId}${query ? `?${query}` : ''}`) as Href;
 }
 
+export const MULTI_CHECKIN_HREF = '/checkin' as Href;
+
+/** Hub after a Send from Multi Check-In. Literal path — Safari. */
+export function multiCheckinHref(doneIds?: string[] | string | null): Href {
+  const ids = (Array.isArray(doneIds) ? doneIds : doneIds ? [doneIds] : [])
+    .map((id) => String(id ?? '').trim())
+    .filter(Boolean);
+  if (ids.length === 0) {
+    return MULTI_CHECKIN_HREF;
+  }
+  return `/checkin?done=${ids.join(',')}` as Href;
+}
+
 /** Check In / Begin / Continue only. Literal path — object `{ pathname, params }` breaks Safari. Never `/capture`. */
-export function checkinSubmitHref(id: string): Href {
-  return `/challenges/${String(id ?? '').trim()}/submit` as Href;
+export function checkinSubmitHref(
+  id: string,
+  extra?: { from?: 'multi'; done?: string[] | string | null },
+): Href {
+  const path = `/challenges/${String(id ?? '').trim()}/submit`;
+  if (extra?.from !== 'multi') {
+    return path as Href;
+  }
+  const done = (Array.isArray(extra.done) ? extra.done : extra.done ? [extra.done] : [])
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  return done.length > 0 ? (`${path}?from=multi&done=${done.join(',')}` as Href) : (`${path}?from=multi` as Href);
 }
 
 /** Bob Retry after a crash. Never reload `/capture` (that reopens Wave). */

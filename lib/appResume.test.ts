@@ -40,6 +40,7 @@ describe('shouldReturnHomeOnResume', () => {
     expect(shouldReturnHomeOnResume({ ...base, pathname: '/challenges/abc/submit' })).toBe(false);
     expect(shouldReturnHomeOnResume({ ...base, pathname: '/challenges/abc/details' })).toBe(false);
     expect(shouldReturnHomeOnResume({ ...base, pathname: '/capture' })).toBe(false);
+    expect(shouldReturnHomeOnResume({ ...base, pathname: '/checkin' })).toBe(false);
   });
 
   it('does not bounce Home onto itself', () => {
