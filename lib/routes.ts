@@ -144,6 +144,10 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   if (submit?.[1]) {
     return `/challenges/${submit[1]}/submit`;
   }
+  const live = path.match(/\/challenges\/([^/?#]+)/);
+  if (live?.[1]) {
+    return `/challenges/${live[1]}?tab=feed`;
+  }
   return path || '/feed';
 }
 

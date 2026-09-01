@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/AppText';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
+import { resolveLiveAuthor } from '@/lib/safeIds';
 import type { PostWithMeta } from '@/lib/types';
 import { formatFeedTime } from '@/utils/format';
 
@@ -58,10 +59,10 @@ export function ChallengeFeedPreview({
   return (
     <View className="gap-3">
       {posts.map((post) => {
-        const name = post.author?.display_name ?? post.author?.username ?? 'blob';
+        const { name, username, authorId } = resolveLiveAuthor(post);
         return (
           <Card key={post.id} className="gap-2">
-            <ProfileLink username={post.author?.username} userId={post.author_id}>
+            <ProfileLink username={username} userId={authorId}>
               <AppText className="font-semibold text-charcoal">{name}</AppText>
             </ProfileLink>
             <AppText className="text-xs text-muted">{formatFeedTime(post.created_at)}</AppText>

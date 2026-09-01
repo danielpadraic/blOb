@@ -204,7 +204,7 @@ function PostCardInner({
             </ProfileLink>
             {officialOnHome ? <OfficialMark profile={post.author} compact /> : null}
             {wallHost ? (
-              <ProfileLink username={wallHost.username} userId={wallHost.id} style={{ flexShrink: 1, minWidth: 0 }}>
+              <ProfileLink username={wallHost.username} userId={safeUserId(wallHost)} style={{ flexShrink: 1, minWidth: 0 }}>
                 <View className="flex-row items-center" style={{ gap: 4, minWidth: 0 }}>
                   <AppText
                     style={{ fontSize: homeFeed ? 13 : 16, lineHeight: homeFeed ? 16 : 20, color: THEME.textMuted, flexShrink: 0 }}>

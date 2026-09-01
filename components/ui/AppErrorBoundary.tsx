@@ -19,23 +19,25 @@ function reloadApp(retry: () => Promise<void>, pathname: string) {
   stopAllLiveMedia();
   const current = pathname || webPathname();
   const next = errorRetryHref(current);
-  if (next === '/feed' && (!current || current !== '/feed')) {
+  if (!next || next.includes('/capture')) {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
-      window.location.replace(next);
+      window.location.replace('/feed');
       return;
     }
     router.replace(TABS_HREF);
     return;
   }
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-    if (next && typeof window.location.replace === 'function') {
+  if (next !== current) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
       window.location.replace(next);
       return;
     }
-    if (typeof window.location.reload === 'function' && !current.includes('/capture')) {
-      window.location.reload();
-      return;
-    }
+    router.replace(next as never);
+    return;
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+    window.location.reload();
+    return;
   }
   void retry();
 }

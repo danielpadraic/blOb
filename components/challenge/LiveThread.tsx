@@ -23,7 +23,7 @@ import {
   type LiveThreadRow,
 } from '@/lib/liveThread';
 import type { MentionChip } from '@/lib/mentions';
-import { authorLabel } from '@/lib/safeIds';
+import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
 import { tabBarLift, THEME } from '@/lib/theme';
 import type { CommentWithAuthor, ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -77,7 +77,10 @@ export function LiveThread({
   const listRef = useRef<FlatList<LiveThreadRow>>(null);
   const highlightedOnce = useRef<string | null>(null);
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
-  const rows = useMemo(() => buildLiveThreadRows(posts), [posts]);
+  const rows = useMemo(
+    () => buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id))),
+    [posts],
+  );
   const lastId = rows.at(-1)?.id;
 
   const pinToLiveEdge = useCallback((animated: boolean) => {
@@ -153,15 +156,21 @@ export function LiveThread({
     ({ item }: { item: LiveThreadRow }) => {
       if (item.kind === 'comment') {
         const display = commentAsLivePost(item.comment, item.parent);
+        const parentAuthor = resolveLiveAuthor(item.parent);
+        const commentAuthor = resolveLiveAuthor({
+          id: item.comment.id,
+          author: item.comment.author,
+          author_id: item.comment.author_id,
+        });
         return (
           <View style={{ paddingHorizontal: 16, overflow: 'visible' }}>
             <LiveBubble
               post={display}
               currentUserId={currentUserId}
               quote={{
-                name: authorLabel(item.parent.author),
+                name: parentAuthor.name,
                 text: liveQuotePreview(item.parent) || liveChatText(item.parent.content, item.parent.media_urls),
-                avatarUrl: item.parent.author?.avatar_url,
+                avatarUrl: parentAuthor.avatarUrl,
               }}
               reactions={item.comment.reactions}
               onReact={(type) => onReact(item.parent, type, item.comment.id)}
@@ -170,9 +179,9 @@ export function LiveThread({
                   ? () =>
                       startReply({
                         postId: item.parent.id,
-                        name: authorLabel(item.comment.author),
+                        name: commentAuthor.name,
                         preview: liveChatText(item.comment.content) || 'Message',
-                        avatarUrl: item.comment.author?.avatar_url,
+                        avatarUrl: commentAuthor.avatarUrl,
                         mention: mentionFromAuthor(item.comment.author, item.comment.author_id),
                       })
                   : undefined
@@ -183,12 +192,14 @@ export function LiveThread({
       }
 
       const parent = findLiveParent(posts, item.post.parent_id);
+      const parentAuthor = parent ? resolveLiveAuthor(parent) : null;
+      const postAuthor = resolveLiveAuthor(item.post);
       const quote =
         parent && !isLiveCheckinPost(item.post)
           ? {
-              name: authorLabel(parent.author),
+              name: parentAuthor?.name ?? 'Someone',
               text: liveQuotePreview(parent),
-              avatarUrl: parent.author?.avatar_url,
+              avatarUrl: parentAuthor?.avatarUrl,
             }
           : null;
       return (
@@ -204,9 +215,9 @@ export function LiveThread({
                 ? () =>
                     startReply({
                       postId: item.post.id,
-                      name: authorLabel(item.post.author),
+                      name: postAuthor.name,
                       preview: liveQuotePreview(item.post) || 'Message',
-                      avatarUrl: item.post.author?.avatar_url,
+                      avatarUrl: postAuthor.avatarUrl,
                       mention: mentionFromAuthor(item.post.author, item.post.author_id),
                     })
                 : undefined
@@ -393,23 +404,25 @@ const LiveChip = memo(function LiveChip({
 
 function mentionFromAuthor(
   author: PostWithMeta['author'],
-  authorId: string,
+  authorId?: string | null,
 ): MentionChip | null {
+  const userId = safeUserId(author, authorId);
   const username = author?.username?.trim();
-  if (!username && !authorId) {
+  if (!username && !userId) {
     return null;
   }
   return {
-    userId: authorId,
-    username: username || authorId,
+    userId: userId ?? username ?? '',
+    username: username || userId || 'someone',
     label: authorLabel(author),
   };
 }
 
 function commentAsLivePost(comment: CommentWithAuthor, parent: PostWithMeta): PostWithMeta {
+  const authorId = safeUserId(comment.author, comment.author_id) ?? comment.author_id ?? '';
   return {
     id: comment.id,
-    author_id: comment.author_id,
+    author_id: authorId,
     author: comment.author,
     challenge_id: parent.challenge_id,
     content: comment.content,

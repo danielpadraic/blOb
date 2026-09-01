@@ -239,7 +239,11 @@ export default function ChallengeDetailScreen() {
     queryFn: () => fetchPublicProfilesByIds((roster.data ?? []).map((row) => row.user_id)),
   });
   const boardRoster = useMemo(() => {
-    const map = new Map((boardProfiles.data ?? []).map((profile) => [profile.id, profile]));
+    const map = new Map(
+      (boardProfiles.data ?? [])
+        .filter((profile) => Boolean(profile?.id))
+        .map((profile) => [profile.id, profile]),
+    );
     return (roster.data ?? []).map((row) => ({
       ...row,
       profile: map.get(row.user_id) ?? row.profile,

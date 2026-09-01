@@ -1,10 +1,11 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
-import { type ErrorBoundaryProps } from 'expo-router';
+import { router, usePathname, type ErrorBoundaryProps, type Href } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { errorRetryHref } from '@/lib/routes';
 
 function CheckinFail({ onBack }: { onBack: () => void }) {
   return (
@@ -56,6 +57,7 @@ export class CheckinSafeBoundary extends Component<Props, State> {
 
 /** Expo Router route boundary for submit — not the tab “Something went wrong” Bob. */
 export function CheckinRouteErrorBoundary({ retry }: ErrorBoundaryProps) {
+  const pathname = usePathname();
   useEffect(() => {
     stopAllLiveMedia();
   }, []);
@@ -63,6 +65,15 @@ export function CheckinRouteErrorBoundary({ retry }: ErrorBoundaryProps) {
     <CheckinFail
       onBack={() => {
         stopAllLiveMedia();
+        const next = errorRetryHref(pathname);
+        if (!next || next.includes('/capture')) {
+          router.replace('/feed' as Href);
+          return;
+        }
+        if (next !== pathname) {
+          router.replace(next as Href);
+          return;
+        }
         void retry();
       }}
     />

@@ -576,20 +576,29 @@ async function fetchComments(postIds: string[]) {
 async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
   const ids = new Set<string>();
   for (const post of posts) {
-    if (!post.author) {
-      ids.add(post.author_id);
+    const authorId = String(post.author_id ?? '').trim();
+    if (!post.author && authorId) {
+      ids.add(authorId);
     }
     if (post.wall_host_id && !post.wall_host) {
       ids.add(post.wall_host_id);
     }
     for (const comment of post.comments ?? []) {
-      if (!comment.author) {
-        ids.add(comment.author_id);
+      const commentAuthorId = String(comment.author_id ?? '').trim();
+      if (!comment.author && commentAuthorId) {
+        ids.add(commentAuthorId);
       }
     }
   }
   if (ids.size === 0) {
-    return posts;
+    return posts.map((post) => ({
+      ...post,
+      author: post.author ?? stubAuthor(post.author_id),
+      comments: (post.comments ?? []).map((comment) => ({
+        ...comment,
+        author: comment.author ?? stubAuthor(comment.author_id),
+      })),
+    }));
   }
 
   const { data, error } = await supabase
@@ -597,18 +606,30 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
     .select('id, username, display_name, avatar_url, is_official')
     .in('id', [...ids]);
   if (error || !data) {
-    return posts;
+    return posts.map((post) => ({
+      ...post,
+      author: post.author ?? stubAuthor(post.author_id),
+      comments: (post.comments ?? []).map((comment) => ({
+        ...comment,
+        author: comment.author ?? stubAuthor(comment.author_id),
+      })),
+    }));
   }
 
-  const byId = new Map(data.map((row) => [row.id, asPublicProfile(row)]));
+  const byId = new Map(
+    (data ?? [])
+      .filter((row) => row?.id)
+      .map((row) => [row.id, asPublicProfile(row)])
+      .filter((entry): entry is [string, PublicProfile] => Boolean(entry[1])),
+  );
   return posts.map((post) => ({
     ...post,
-    author: post.author ?? byId.get(post.author_id),
+    author: post.author ?? byId.get(post.author_id) ?? stubAuthor(post.author_id),
     wall_host: post.wall_host
       ?? (post.wall_host_id ? byId.get(post.wall_host_id) ?? post.wall_host ?? null : post.wall_host),
     comments: (post.comments ?? []).map((comment) => ({
       ...comment,
-      author: comment.author ?? byId.get(comment.author_id),
+      author: comment.author ?? byId.get(comment.author_id) ?? stubAuthor(comment.author_id),
     })),
   }));
 }
@@ -1447,21 +1468,30 @@ export function usePost(postId?: string | null) {
   });
 }
 
+function stubAuthor(authorId?: string | null): PublicProfile | undefined {
+  const id = String(authorId ?? '').trim();
+  if (!id) {
+    return undefined;
+  }
+  return asPublicProfile({ id });
+}
+
 function asPublicProfile(
   profile: {
-    id: string;
+    id?: string | null;
     username?: string | null;
     display_name?: string | null;
     avatar_url?: string | null;
     is_official?: boolean | null;
   } | null,
 ): PublicProfile | undefined {
-  if (!profile) {
+  const id = String(profile?.id ?? '').trim();
+  if (!profile || !id) {
     return undefined;
   }
   return {
-    id: profile.id,
-    username: profile.username ?? 'blob',
+    id,
+    username: profile.username?.trim() || 'blob',
     display_name: profile.display_name ?? null,
     avatar_url: profile.avatar_url ?? null,
     bio: null,
@@ -1476,6 +1506,22 @@ function asPublicProfile(
     weight_unit: null,
     typical_weekly_workout_frequency: null,
   };
+}
+
+/** Optimistic check-in row so Live can render before the join lands. */
+export function seedChallengeLivePost(
+  queryClient: QueryClient,
+  challengeId: string,
+  userId: string | undefined,
+  post: PostWithMeta,
+) {
+  const id = String(challengeId ?? '').trim();
+  if (!id || !post?.id) {
+    return;
+  }
+  queryClient.setQueryData(feedListKey(id, userId), (current) =>
+    prependFeedCache(current ?? [], post),
+  );
 }
 
 export function useCreatePost(challengeId?: string | null) {
@@ -1598,7 +1644,7 @@ export function useCreatePost(challengeId?: string | null) {
             available: true,
           })),
           created_at: new Date().toISOString(),
-          author: asPublicProfile(profile ?? { id: user.id }),
+          author: asPublicProfile({ ...(profile ?? {}), id: profile?.id ?? user.id }),
           comments: [],
           reactions: [],
         };
@@ -1614,7 +1660,7 @@ export function useCreatePost(challengeId?: string | null) {
       }
       const posted = asFeedPost(
         createdPost,
-        asPublicProfile(profile ?? { id: user.id }),
+        asPublicProfile({ ...(profile ?? {}), id: profile?.id ?? user.id }),
         input.mentionedUserIds,
       );
       if (isHomeExcludedClipType(posted.type ?? input.type)) {
@@ -2157,7 +2203,7 @@ export function useCreateComment(challengeId?: string | null) {
           parent_id: input.parentId ?? null,
           content: input.content,
           created_at: new Date().toISOString(),
-          author: asPublicProfile(profile ?? { id: user.id }),
+          author: asPublicProfile({ ...(profile ?? {}), id: profile?.id ?? user.id }),
           reactions: [],
         };
         patchFeedPosts(queryClient, input.postId, (post) => ({

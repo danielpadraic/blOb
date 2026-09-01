@@ -26,6 +26,8 @@ describe('checkinSubmitHref', () => {
     expect(errorRetryHref('/capture')).toBe('/feed');
     expect(errorRetryHref('/capture?mode=story')).toBe('/feed');
     expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1/submit');
+    expect(errorRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
+    expect(errorRetryHref('/challenges/abc-1?postId=p1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/feed')).toBe('/feed');
     expect(errorRetryHref('/wave/undefined')).toBe('/feed');
     expect(errorRetryHref('/round/')).toBe('/feed');

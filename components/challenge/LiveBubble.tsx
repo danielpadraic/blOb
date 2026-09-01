@@ -18,7 +18,7 @@ import {
   liveQuoteLine,
 } from '@/lib/liveThread';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
-import { authorLabel, safeUserId } from '@/lib/safeIds';
+import { resolveLiveAuthor } from '@/lib/safeIds';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, mediaKind } from '@/utils/media';
@@ -49,9 +49,11 @@ export const LiveBubble = memo(function LiveBubble({
   onReply,
 }: LiveBubbleProps) {
   const lightbox = useMediaLightboxOptional();
-  const uid = safeUserId(post.author, post.author_id, (post as { user_id?: string | null }).user_id);
-  const name = authorLabel(post.author);
-  const mine = Boolean(currentUserId && currentUserId === post.author_id);
+  const { authorId: uid, name } = resolveLiveAuthor({
+    ...post,
+    user_id: (post as { user_id?: string | null }).user_id,
+  });
+  const mine = Boolean(currentUserId && uid && currentUserId === uid);
   const checkin = isLiveCheckinPost(post);
   const visuals = liveVisualUrls(post, mine);
   const time = formatLiveClock(post.created_at);

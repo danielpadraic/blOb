@@ -22,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
+import { seedChallengeLivePost } from '@/hooks/useFeed';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
@@ -61,7 +62,7 @@ import {
   type DistanceUnit,
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
-import { safeUserId } from '@/lib/safeIds';
+import { safeUserId, sessionAuthor } from '@/lib/safeIds';
 import { createStory, personDisplayName } from '@/lib/social';
 import {
   canWaveProof,
@@ -102,6 +103,7 @@ import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { parseDoneIds } from '@/lib/multiCheckin';
 import { challengeDetailHref, checkinSubmitHref, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
+import type { PostWithMeta } from '@/lib/types';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
@@ -747,6 +749,23 @@ function SubmitWorkoutInner() {
                 media_captions: captions,
               })
               .eq('id', postId);
+            const author = sessionAuthor(profile, uid);
+            if (author) {
+              seedChallengeLivePost(queryClient, id, uid, {
+                id: postId,
+                author_id: author.id,
+                author,
+                challenge_id: id,
+                content: caption.text || null,
+                media_urls: mediaUrls,
+                source: 'checkin',
+                checkin_id: checkinId,
+                checkin_stage: readyNow ? 'complete' : 'started',
+                created_at: new Date().toISOString(),
+                comments: [],
+                reactions: [],
+              } as PostWithMeta);
+            }
           }
         } catch {
           // Social line already saved; Home hide / mentions are best-effort.
