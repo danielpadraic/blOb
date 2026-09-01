@@ -85,7 +85,7 @@ describe('social audit', () => {
       home: false,
       wave: false,
     });
-    expect(applyCheckinShareLock({ home: true, wave: false }, false)).toEqual({
+    expect(applyCheckinShareLock({ home: true, wave: true }, false)).toEqual({
       home: true,
       wave: false,
     });

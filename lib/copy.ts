@@ -637,6 +637,7 @@ const STRINGS = {
   'checkin.notLiveBob': 'This challenge isn’t taking check-ins right now.',
   'checkin.submitBanner': 'You started. Submit before 11:59 p.m. Central.',
   'checkin.post': 'Post',
+  'checkin.describeWorkout': 'Describe your workout',
   'checkin.shareTo': 'Share to',
   'checkin.shareLobby': 'Lobby',
   'checkin.shareHome': 'Home',

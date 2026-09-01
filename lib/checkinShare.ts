@@ -1,5 +1,6 @@
 import type { ChallengeProof, ChallengeProofPart } from '@/lib/challengeProofs';
-import { mediaUrlKey, uniqueProofUrls } from '@/lib/challengeProofs';
+import { mediaUrlKey, proofDisplayName, uniqueProofUrls } from '@/lib/challengeProofs';
+import { copy } from '@/lib/copy';
 import { authStorage } from '@/lib/utils/secureStore';
 import { mediaDurationMs, WAVE_CLIP_MS } from '@/lib/waveClips';
 
@@ -37,18 +38,47 @@ export function prefsFromProfile(profile?: {
   };
 }
 
-/** Corporate: no Home, no Wave share from check-in. */
+/** Corporate: no Home. Check-in never shares to Wave. */
 export function applyCheckinShareLock(
   prefs: CheckinSharePrefs,
   corporate: boolean,
 ): CheckinSharePrefs {
-  if (corporate) {
-    return { home: false, wave: false };
-  }
   return {
-    home: prefs.home === true,
-    wave: prefs.wave === true,
+    home: corporate ? false : prefs.home === true,
+    wave: false,
   };
+}
+
+export function isHeartRateProofSlot(proof: {
+  id?: string;
+  method?: string | null;
+  name?: string | null;
+}): boolean {
+  if (proof.method === 'hr') {
+    return true;
+  }
+  const lower = String(proof.name ?? '').toLowerCase();
+  return (
+    proof.id === 'hr' ||
+    lower.includes('elevated heart') ||
+    lower.includes('heart rate') ||
+    lower.includes('heart-rate')
+  );
+}
+
+export function proofCaptionPlaceholder(proof: ChallengeProof): string {
+  if (isHeartRateProofSlot(proof)) {
+    return copy('checkin.describeWorkout');
+  }
+  return proofDisplayName(proof);
+}
+
+export function proofCaptionHelper(proof: ChallengeProof): string | null {
+  if (!isHeartRateProofSlot(proof)) {
+    return null;
+  }
+  const instruction = proofDisplayName(proof).trim();
+  return instruction && instruction !== copy('checkin.describeWorkout') ? instruction : null;
 }
 
 export async function readLocalSharePrefs(userId: string): Promise<CheckinSharePrefs | null> {

@@ -8,10 +8,7 @@ type CheckinShareToProps = {
   lobbyName: string;
   lobbyLocked?: boolean;
   shareHome: boolean;
-  shareWave: boolean;
   onShareHomeChange: (value: boolean) => void;
-  onShareWaveChange: (value: boolean) => void;
-  waveSkipHint?: string | null;
 };
 
 function ShareRow({
@@ -63,36 +60,21 @@ export function CheckinShareTo({
   lobbyName,
   lobbyLocked,
   shareHome,
-  shareWave,
   onShareHomeChange,
-  onShareWaveChange,
-  waveSkipHint,
 }: CheckinShareToProps) {
   return (
-    <View style={{ paddingTop: 8 }}>
+    <View style={{ paddingTop: 8, paddingHorizontal: 12 }}>
       <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
         {copy('checkin.shareTo')}
       </AppText>
       <ShareRow label={copy('checkin.shareLobby')} value detail={lobbyName} locked />
       {lobbyLocked ? null : (
-        <>
-          <ShareRow
-            label={copy('checkin.shareHome')}
-            value={shareHome}
-            onChange={onShareHomeChange}
-          />
-          <ShareRow
-            label={copy('checkin.shareWave')}
-            value={shareWave}
-            onChange={onShareWaveChange}
-          />
-        </>
+        <ShareRow
+          label={copy('checkin.shareHome')}
+          value={shareHome}
+          onChange={onShareHomeChange}
+        />
       )}
-      {waveSkipHint ? (
-        <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
-          {waveSkipHint}
-        </AppText>
-      ) : null}
     </View>
   );
 }

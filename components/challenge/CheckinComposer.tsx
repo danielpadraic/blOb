@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -15,16 +16,24 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CheckinShareTo } from '@/components/challenge/CheckinShareTo';
+import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { GifPicker } from '@/components/feed/GifPicker';
 import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { Input } from '@/components/ui/Input';
+import {
+  KeyboardField,
+  KeyboardFormContext,
+  useKeyboardOverlap,
+} from '@/components/ui/KeyboardFormShell';
 import { CHECKIN_PHOTO_CAP, proofDisplayName, type ChallengeProof } from '@/lib/challengeProofs';
 import {
   CHECKIN_PROOF_CAPTION_MAX,
   clampProofCaption,
   proofCaptionCounter,
+  proofCaptionHelper,
+  proofCaptionPlaceholder,
 } from '@/lib/checkinShare';
 import { copy } from '@/lib/copy';
 import {
@@ -87,10 +96,7 @@ type CheckinComposerProps = {
   lobbyName?: string;
   lobbyLocked?: boolean;
   shareHome?: boolean;
-  shareWave?: boolean;
   onShareHomeChange?: (value: boolean) => void;
-  onShareWaveChange?: (value: boolean) => void;
-  waveSkipHint?: string | null;
   onSend: () => void;
   accessory?: ReactNode;
   dueLine?: ReactNode;
@@ -119,23 +125,61 @@ export function CheckinComposer({
   lobbyName,
   lobbyLocked,
   shareHome = false,
-  shareWave = false,
   onShareHomeChange,
-  onShareWaveChange,
-  waveSkipHint,
   onSend,
   accessory,
   dueLine,
 }: CheckinComposerProps) {
   const fieldRef = useRef<MentionFieldHandle>(null);
   const pagerRef = useRef<FlatList<ReviewPage>>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const lastFieldNode = useRef<View | null>(null);
+  const overlapRef = useRef(0);
   const insets = useSafeAreaInsets();
+  const keyboardOverlap = useKeyboardOverlap();
+  overlapRef.current = keyboardOverlap;
+  const keyboardOpen = keyboardOverlap > 0;
+  const [footerH, setFooterH] = useState(64);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const pageWidth = Math.max(windowWidth, 1);
-  const heroHeight = Math.max(Math.round(windowHeight * (2 / 3)), 240);
+  const heroHeight = Math.max(Math.min(Math.round(windowHeight * 0.42), 360), 220);
   const [gifOpen, setGifOpen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const chromePad = tabBarLift(insets.bottom, 'sticky');
+  const scrollFieldIntoView = useCallback((node: View) => {
+    lastFieldNode.current = node;
+    const run = () => {
+      node.measureInWindow((_x, y, _w, h) => {
+        const windowH = windowHeight;
+        const reserved = footerH + overlapRef.current + 24;
+        const visibleBottom = windowH - reserved;
+        const fieldBottom = y + h;
+        let delta = 0;
+        if (fieldBottom > visibleBottom) {
+          delta = fieldBottom - visibleBottom;
+        } else if (y < 24 && overlapRef.current <= 0) {
+          delta = y - 24;
+        }
+        if (delta !== 0) {
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, scrollY.current + delta),
+            animated: true,
+          });
+        }
+      });
+    };
+    requestAnimationFrame(() => {
+      setTimeout(run, Platform.OS === 'android' ? 80 : 40);
+    });
+  }, [footerH, windowHeight]);
+
+  useEffect(() => {
+    if (keyboardOverlap <= 0 || !lastFieldNode.current) {
+      return;
+    }
+    scrollFieldIntoView(lastFieldNode.current);
+  }, [keyboardOverlap, scrollFieldIntoView]);
 
   const onDocChange = useCallback(
     (doc: MentionDoc) => {
@@ -432,18 +476,69 @@ export function CheckinComposer({
     onSend();
   }
 
+  const formApi = {
+    scrollToTop: () => scrollRef.current?.scrollTo({ y: 0, animated: true }),
+    scrollFieldIntoView,
+  };
+
   return (
-    <View className="flex-1" style={{ backgroundColor: THEME.background }}>
-      <View className="flex-1" style={{ minHeight: 0, backgroundColor: THEME.primary }}>
+    <KeyboardFormContext.Provider value={formApi}>
+    <KeyboardAvoidingView
+      className="flex-1"
+      style={{
+        flex: 1,
+        backgroundColor: THEME.background,
+        marginBottom: Platform.OS === 'web' ? keyboardOverlap : 0,
+      }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+        onPress={onClose}
+        hitSlop={8}
+        style={{
+          position: 'absolute',
+          top: Math.max(insets.top, 8) + 4,
+          left: 12,
+          zIndex: 4,
+          minWidth: 44,
+          minHeight: 44,
+          borderRadius: 22,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(16,19,18,0.45)',
+        }}>
+        <AppText className="text-[22px] font-semibold" style={{ color: '#fff' }}>
+          ×
+        </AppText>
+      </Pressable>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1, backgroundColor: THEME.background }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: footerH + 16,
+        }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
+        onScroll={(event) => {
+          scrollY.current = event.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}>
+      <View style={{ height: heroHeight, backgroundColor: THEME.primary }}>
         {pages.length > 0 ? (
           <FlatList
             ref={pagerRef}
             data={pages}
             horizontal
             pagingEnabled
+            nestedScrollEnabled
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.key}
-            style={{ flex: 1, height: heroHeight }}
+            style={{ height: heroHeight }}
             getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
             onMomentumScrollEnd={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
               const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
@@ -480,8 +575,11 @@ export function CheckinComposer({
           />
         ) : (
           <View
-            className="flex-1 items-center justify-center px-8"
-            style={{ backgroundColor: accessory ? THEME.background : THEME.primary }}>
+            className="items-center justify-center px-8"
+            style={{
+              height: heroHeight,
+              backgroundColor: accessory ? THEME.background : THEME.primary,
+            }}>
             {accessory ? null : (
               <AppText className="text-center text-[15px]" style={{ color: 'rgba(255,255,255,0.72)' }}>
                 Honor check-in. Post is optional.
@@ -489,27 +587,6 @@ export function CheckinComposer({
             )}
           </View>
         )}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          onPress={onClose}
-          hitSlop={8}
-          style={{
-            position: 'absolute',
-            top: Math.max(insets.top, 8) + 4,
-            left: 12,
-            minWidth: 44,
-            minHeight: 44,
-            borderRadius: 22,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(16,19,18,0.45)',
-          }}>
-          <AppText className="text-[22px] font-semibold" style={{ color: '#fff' }}>
-            ×
-          </AppText>
-        </Pressable>
 
         {current ? (
           <View
@@ -695,118 +772,72 @@ export function CheckinComposer({
             }
             const value = proofCaptions[proof.id] ?? '';
             const counter = proofCaptionCounter(value);
+            const placeholder = proofCaptionPlaceholder(proof);
+            const helper = proofCaptionHelper(proof);
             return (
-              <View key={proof.id} style={{ paddingTop: 8 }}>
-                <Input
-                  grow
-                  growMaxLines={3}
-                  maxLength={CHECKIN_PROOF_CAPTION_MAX}
-                  placeholder={proofDisplayName(proof)}
-                  value={value}
-                  onChangeText={(text) =>
-                    onProofCaptionChange?.(proof.id, clampProofCaption(text))
-                  }
-                  hint={counter ?? undefined}
-                  accessibilityLabel={proofDisplayName(proof)}
-                />
-              </View>
+              <KeyboardField key={proof.id}>
+                <View style={{ paddingTop: 8 }}>
+                  {helper ? (
+                    <AppText
+                      className="mb-1 text-[12px] leading-4"
+                      style={{ color: THEME.textMuted }}>
+                      {helper}
+                    </AppText>
+                  ) : null}
+                  <Input
+                    grow
+                    growMaxLines={3}
+                    maxLength={CHECKIN_PROOF_CAPTION_MAX}
+                    placeholder={placeholder}
+                    value={value}
+                    onChangeText={(text) =>
+                      onProofCaptionChange?.(proof.id, clampProofCaption(text))
+                    }
+                    hint={counter ?? undefined}
+                    accessibilityLabel={placeholder}
+                  />
+                </View>
+              </KeyboardField>
             );
           })}
         </View>
       ) : null}
 
-      <View
-        style={{
-          paddingHorizontal: 12,
-          paddingTop: 8,
-          paddingBottom: chromePad,
-          backgroundColor: THEME.background,
-        }}>
-        <View
-          className="flex-row items-end"
-          style={{
-            backgroundColor: THEME.background,
-            borderWidth: 1,
-            borderColor: THEME.border,
-            borderRadius: 18,
-            paddingLeft: 12,
-            paddingRight: 4,
-            paddingVertical: 4,
-            minHeight: 40,
-          }}>
-          <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end' }}>
-            <MentionField
-              ref={fieldRef}
-              compact
-              initialText={initialCaption}
-              placeholder={copy('checkin.post')}
-              audience="specific"
-              audienceUserIds={audienceUserIds}
-              pickerPlacement="above"
-              onChange={onDocChange}
-              onSubmit={sendPress}
-              accessibilityLabel={copy('checkin.post')}
-            />
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Send"
-            accessibilityHint={!canSend && !busy && !allReady && blockedHint ? `Still needed: ${blockedHint}` : undefined}
-            accessibilityState={{ busy: Boolean(busy), disabled: Boolean(busy) }}
-            disabled={Boolean(busy)}
-            onPress={sendPress}
-            className="items-center justify-center"
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              backgroundColor: canSend && !busy ? THEME.primary : THEME.border,
-            }}>
-            <Glyph
-              name={GLYPH.send}
-              color={canSend && !busy ? THEME.primaryForeground : THEME.textMuted}
-              size={18}
-            />
-          </Pressable>
-        </View>
+      <CheckinShareTo
+        lobbyName={lobbyName?.trim() || copy('checkin.shareLobby')}
+        lobbyLocked={lobbyLocked}
+        shareHome={shareHome}
+        onShareHomeChange={onShareHomeChange ?? (() => undefined)}
+      />
 
-        <CheckinShareTo
-          lobbyName={lobbyName?.trim() || copy('checkin.shareLobby')}
-          lobbyLocked={lobbyLocked}
-          shareHome={shareHome}
-          shareWave={shareWave}
-          onShareHomeChange={onShareHomeChange ?? (() => undefined)}
-          onShareWaveChange={onShareWaveChange ?? (() => undefined)}
-          waveSkipHint={waveSkipHint}
+      <View className="mt-1 flex-row items-center" style={{ minHeight: 44, gap: 2, paddingHorizontal: 8 }}>
+        <ComposerIcon
+          glyph={GLYPH.camera}
+          label="Camera"
+          dimmed={!canAddPhoto}
+          onPress={extraPhotoSheet}
         />
+        <ComposerIcon
+          glyph={GLYPH.album}
+          label="Gallery"
+          dimmed={!canAddPhoto}
+          onPress={() => void pickGallery('photo')}
+        />
+        <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+        <ComposerIcon
+          mark="+"
+          label="Add proof"
+          dimmed={!nextProof || Boolean(busy)}
+          onPress={() => {
+            if (nextProof) {
+              onAddProof(nextProof);
+            }
+          }}
+        />
+      </View>
 
-        <View className="mt-1 flex-row items-center" style={{ minHeight: 44, gap: 2 }}>
-          <ComposerIcon
-            glyph={GLYPH.camera}
-            label="Camera"
-            dimmed={!canAddPhoto}
-            onPress={extraPhotoSheet}
-          />
-          <ComposerIcon
-            glyph={GLYPH.album}
-            label="Gallery"
-            dimmed={!canAddPhoto}
-            onPress={() => void pickGallery('photo')}
-          />
-          <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
-          <ComposerIcon
-            mark="+"
-            label="Add proof"
-            dimmed={!nextProof || Boolean(busy)}
-            onPress={() => {
-              if (nextProof) {
-                onAddProof(nextProof);
-              }
-            }}
-          />
-        </View>
-
-        {gifOpen ? (
+      {gifOpen ? (
+        <View style={{ paddingHorizontal: 12 }}>
           <GifPicker
             visible
             onClose={() => setGifOpen(false)}
@@ -815,9 +846,71 @@ export function CheckinComposer({
               setGifOpen(false);
             }}
           />
-        ) : null}
+        </View>
+      ) : null}
+      </ScrollView>
+      <View
+        onLayout={(event) => setFooterH(Math.max(64, event.nativeEvent.layout.height))}
+        style={{
+          paddingHorizontal: 12,
+          paddingTop: 8,
+          paddingBottom: createStickyFooterPad(keyboardOpen, chromePad),
+          backgroundColor: THEME.background,
+          borderTopWidth: 1,
+          borderTopColor: THEME.border,
+        }}>
+        <KeyboardField>
+          <View
+            className="flex-row items-end"
+            style={{
+              backgroundColor: THEME.background,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              borderRadius: 18,
+              paddingLeft: 12,
+              paddingRight: 4,
+              paddingVertical: 4,
+              minHeight: 40,
+            }}>
+            <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end' }}>
+              <MentionField
+                ref={fieldRef}
+                compact
+                initialText={initialCaption}
+                placeholder={copy('checkin.post')}
+                audience="specific"
+                audienceUserIds={audienceUserIds}
+                pickerPlacement="above"
+                onChange={onDocChange}
+                onSubmit={sendPress}
+                accessibilityLabel={copy('checkin.post')}
+              />
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send"
+              accessibilityHint={!canSend && !busy && !allReady && blockedHint ? `Still needed: ${blockedHint}` : undefined}
+              accessibilityState={{ busy: Boolean(busy), disabled: Boolean(busy) }}
+              disabled={Boolean(busy)}
+              onPress={sendPress}
+              className="items-center justify-center"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                backgroundColor: canSend && !busy ? THEME.primary : THEME.border,
+              }}>
+              <Glyph
+                name={GLYPH.send}
+                color={canSend && !busy ? THEME.primaryForeground : THEME.textMuted}
+                size={18}
+              />
+            </Pressable>
+          </View>
+        </KeyboardField>
       </View>
-    </View>
+    </KeyboardAvoidingView>
+    </KeyboardFormContext.Provider>
   );
 }
 

@@ -6,6 +6,8 @@ import {
   mediaCaptionsForUrls,
   prefsFromProfile,
   proofCaptionCounter,
+  proofCaptionHelper,
+  proofCaptionPlaceholder,
 } from '@/lib/checkinShare';
 
 describe('check-in proof captions', () => {
@@ -30,6 +32,20 @@ describe('check-in proof captions', () => {
       {},
     );
     expect(captions).toEqual(['Lacing up', 'Done']);
+  });
+
+  it('uses Describe your workout for the HR slot, not the long instruction', () => {
+    const hr = {
+      id: 'hr',
+      name: 'Share proof of at least 30 minutes of elevated heart rate.',
+      method: 'hr' as const,
+      minutes: 30,
+    };
+    expect(proofCaptionPlaceholder(hr)).toBe('Describe your workout');
+    expect(proofCaptionHelper(hr)).toBe('Share proof of at least 30 minutes of elevated heart rate.');
+    expect(
+      proofCaptionPlaceholder({ id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' }),
+    ).toBe('Post a pre-workout selfie.');
   });
 });
 

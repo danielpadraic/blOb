@@ -205,7 +205,7 @@ function SubmitWorkoutInner() {
   const lobbyLocked = isCorporateChallenge(challengeQuery.data);
   const lockedShare = applyCheckinShareLock(sharePrefs, lobbyLocked);
   const shareHome = lockedShare.home;
-  const shareWave = lockedShare.wave;
+  const shareWave = false;
 
   useEffect(() => {
     return () => {
@@ -785,15 +785,14 @@ function SubmitWorkoutInner() {
         void queryClient.invalidateQueries({ queryKey: ['stories'] });
       }
       if (!lobbyLocked && uid) {
-        const nextPrefs = { home: shareHome, wave: shareWave };
+        const nextPrefs = { home: shareHome, wave: sharePrefs.wave };
         await writeLocalSharePrefs(uid, nextPrefs);
         try {
           await updateProfile.mutateAsync({
             checkin_share_home: nextPrefs.home,
-            checkin_share_wave: nextPrefs.wave,
           });
         } catch {
-          // Local row still remembers the last Share to choice.
+          // Local row still remembers the last Share to Home choice.
         }
       }
       await successHaptic();
@@ -1093,7 +1092,7 @@ function SubmitWorkoutInner() {
   const stillNeeded = allReady ? undefined : checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)));
 
   return (
-    <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding>
+    <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
       <CheckinComposer
         proofs={composerProofs}
         drafts={drafts}
@@ -1124,18 +1123,7 @@ function SubmitWorkoutInner() {
         lobbyName={challengeDisplayTitle(challenge)}
         lobbyLocked={lobbyLocked}
         shareHome={shareHome}
-        shareWave={shareWave}
         onShareHomeChange={(home) => setSharePrefs((current) => ({ ...current, home }))}
-        onShareWaveChange={(wave) => setSharePrefs((current) => ({ ...current, wave }))}
-        waveSkipHint={
-          shareWave &&
-          proofSteps.some((proof) => {
-            const ms = mediaDurationMs(drafts[proof.id]?.durationMs);
-            return proof.method === 'video' && ms != null && ms > WAVE_CLIP_MS;
-          })
-            ? copy('checkin.waveSkipLong')
-            : null
-        }
         onSend={() => void onSubmit()}
         dueLine={
           <PeriodCheckinDue
