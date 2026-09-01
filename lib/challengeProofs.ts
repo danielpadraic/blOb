@@ -545,6 +545,128 @@ export function beginCameraProof(proofs: ChallengeProof[]): ChallengeProof | nul
   );
 }
 
+export function isGuidedCameraProof(proof: Pick<ChallengeProof, 'method'>): boolean {
+  return proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr';
+}
+
+export function nextEmptyRequiredProof(
+  proofs: ChallengeProof[],
+  isFilled: (proof: ChallengeProof) => boolean,
+): ChallengeProof | null {
+  return proofs.find((proof) => !isFilled(proof)) ?? null;
+}
+
+function isHeartRateNamed(proof: Pick<ChallengeProof, 'method' | 'name'>): boolean {
+  if (proof.method === 'hr') {
+    return true;
+  }
+  const lower = proof.name.trim().toLowerCase();
+  return /\bhr\b/.test(lower) || lower.includes('heart rate') || lower.includes('heart-rate');
+}
+
+export function guidedCheckinTitle(proof: ChallengeProof): string {
+  if (isHeartRateNamed(proof)) {
+    const minutes = proofHeartRateMinutes(proof);
+    return `Upload Proof of ${minutes}-Min of Elevated Heart Rate`;
+  }
+  if (proof.method === 'photo' || proof.method === 'video') {
+    if (isPreWorkoutProof(proof)) {
+      return 'Take a Pre-Workout Selfie';
+    }
+    if (isPostWorkoutProof(proof)) {
+      return 'Take a Post-Workout Selfie';
+    }
+  }
+  return guidedImperativeFromLabel(proof);
+}
+
+function isGenericGuidedLabel(name: string): boolean {
+  const normalized = name.trim().toLowerCase().replace(/\.+$/, '');
+  return !normalized || SHORT_PROOF_LABELS.has(normalized);
+}
+
+function guidedImperativeFromLabel(proof: ChallengeProof): string {
+  const raw = proof.name.trim().replace(/\.+$/, '');
+  const lower = raw.toLowerCase();
+  if (/^(take|log|upload|share|post|write|confirm|attach)\b/.test(lower)) {
+    return raw;
+  }
+  if (proof.method === 'honor') {
+    return raw && !isGenericGuidedLabel(raw) ? raw : 'Confirm on your honor';
+  }
+  if (proof.method === 'checkin') {
+    return raw && !isGenericGuidedLabel(raw) ? `Log ${raw}` : "Log today's note";
+  }
+  if (proof.method === 'distance') {
+    return raw && !isGenericGuidedLabel(raw) ? `Log ${raw}` : "Log today's distance";
+  }
+  if (proof.method === 'location') {
+    return raw && !isGenericGuidedLabel(raw) ? raw : 'Check in here';
+  }
+  if (proof.method === 'video') {
+    return raw && !isGenericGuidedLabel(raw) ? `Take ${raw}` : "Take today's video";
+  }
+  if (/^pages?$/i.test(raw)) {
+    return "Log today's pages";
+  }
+  if (/^minutes?$/i.test(raw)) {
+    return "Log today's minutes";
+  }
+  if (raw && !isGenericGuidedLabel(raw)) {
+    if (/\b(pages?|minutes?|hours?)\b/i.test(raw)) {
+      return `Log ${raw}`;
+    }
+    return `Take ${raw}`;
+  }
+  return "Take today's photo";
+}
+
+export function guidedCheckinNextSlot(proof: ChallengeProof): string {
+  if (isHeartRateNamed(proof)) {
+    const minutes = proofHeartRateMinutes(proof);
+    return `Proof of ${minutes}-Min of Elevated Heart Rate`;
+  }
+  if (proof.method === 'photo' || proof.method === 'video') {
+    if (isPreWorkoutProof(proof)) {
+      return 'a Pre-Workout Selfie';
+    }
+    if (isPostWorkoutProof(proof)) {
+      return 'a Post-Workout Selfie';
+    }
+  }
+  const title = guidedCheckinTitle(proof);
+  const stripped = title.replace(/^(Take a |Take |Log |Upload |Share |Post |Write |Confirm |Attach )/i, '').trim();
+  return stripped || title;
+}
+
+export type GuidedCheckinPrompt = {
+  current: ChallengeProof;
+  next: ChallengeProof | null;
+  title: string;
+  helper: string | null;
+};
+
+/** Camera title + helper for the next empty required slot (or a focused retake). */
+export function guidedCheckinPrompt(
+  proofs: ChallengeProof[],
+  isFilled: (proof: ChallengeProof) => boolean,
+  current?: ChallengeProof | null,
+): GuidedCheckinPrompt | null {
+  const focus = current ?? nextEmptyRequiredProof(proofs, isFilled);
+  if (!focus) {
+    return null;
+  }
+  const index = proofs.findIndex((proof) => proof.id === focus.id);
+  const next =
+    proofs.slice(index >= 0 ? index + 1 : 0).find((proof) => proof.id !== focus.id && !isFilled(proof)) ?? null;
+  return {
+    current: focus,
+    next,
+    title: guidedCheckinTitle(focus),
+    helper: next ? `Then you'll add ${guidedCheckinNextSlot(next)}.` : null,
+  };
+}
+
 export function proofsAreHonorOnly(proofs: ChallengeProof[]): boolean {
   return proofs.length > 0 && proofs.every((proof) => proof.method === 'honor');
 }

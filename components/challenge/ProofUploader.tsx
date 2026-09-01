@@ -65,6 +65,8 @@ type ProofUploaderProps = {
   onPicked: (uri: string, mimeType?: string | null, meta?: { fromLibrary?: boolean }) => void;
   onCancel?: () => void;
   onRequestOpen?: () => void;
+  title?: string | null;
+  instruction?: string | null;
 };
 
 export function ProofUploader({
@@ -78,6 +80,8 @@ export function ProofUploader({
   onPicked,
   onCancel,
   onRequestOpen,
+  title = null,
+  instruction = null,
 }: ProofUploaderProps) {
   const meta = proofMeta(type);
   const capture = captureKindForProof(type);
@@ -194,6 +198,8 @@ export function ProofUploader({
           chromeInset={fill}
           hrScreenshot={type === 'hr_monitor'}
           faceHint={faceHint}
+          title={title}
+          instruction={instruction}
           onCaptured={(media) => {
             stopAllLiveMedia();
             onPicked(media.uri, media.mimeType, { fromLibrary: false });

@@ -71,6 +71,9 @@ type InAppCameraProps = {
   shutterHint?: string;
   /** Check-in stills: Close / shutter / Flip only. No Wave recorder chrome. */
   checkin?: boolean;
+  /** Guided check-in: next empty required slot. */
+  title?: string | null;
+  instruction?: string | null;
 };
 
 export function InAppCamera({
@@ -94,6 +97,8 @@ export function InAppCamera({
   clipTickSec: _clipTickSec,
   shutterHint,
   checkin = false,
+  title = null,
+  instruction = null,
 }: InAppCameraProps) {
   const resolvedFacingKind: CameraFacingKind = checkin ? 'checkin' : facingKind;
   const insets = useSafeAreaInsets();
@@ -606,8 +611,12 @@ export function InAppCamera({
     }
   }
 
+  const guidedTitle = title?.trim() || null;
+  const guidedHelper = instruction?.trim() || null;
   const liveHint = checkin
-    ? askLine ?? 'Take photo'
+    ? guidedTitle
+      ? null
+      : askLine ?? 'Take photo'
     : video && recording
       ? copy('wave.shutterStop')
       : shutterHint;
@@ -642,14 +651,33 @@ export function InAppCamera({
       ) : (
         <View className="flex-1" style={{ backgroundColor: THEME.primary }} />
       )}
-      {askLine ? (
+      {guidedTitle || askLine ? (
         <View
           pointerEvents="box-none"
           className="absolute left-6 right-6 items-center"
-          style={{ top: Math.max(insets.top, 12) + 56, zIndex: 3 }}>
-          <AppText className="text-center text-[15px] font-semibold" style={{ color: '#fff' }}>
-            {askLine}
-          </AppText>
+          style={{ top: Math.max(insets.top, 12) + 52, zIndex: 3 }}>
+          {guidedTitle ? (
+            <AppText
+              accessibilityRole="header"
+              className="text-center text-[17px] font-extrabold"
+              style={{ color: THEME.primaryForeground }}>
+              {guidedTitle}
+            </AppText>
+          ) : null}
+          {guidedTitle && guidedHelper ? (
+            <AppText
+              className="mt-1 text-center text-[13px] font-semibold"
+              style={{ color: 'rgba(255,255,255,0.82)' }}>
+              {guidedHelper}
+            </AppText>
+          ) : null}
+          {askLine && (!guidedTitle || showDenied || showRetry) ? (
+            <AppText
+              className={guidedTitle ? 'mt-3 text-center text-[15px] font-semibold' : 'text-center text-[15px] font-semibold'}
+              style={{ color: '#fff' }}>
+              {askLine}
+            </AppText>
+          ) : null}
           {showDenied ? (
             <Pressable
               accessibilityRole="button"
@@ -699,7 +727,7 @@ export function InAppCamera({
           </AppText>
         </Pressable>
         <View style={{ minWidth: 64 }} />
-        {!checkin && (onUseWorkout || onStartWatch) ? (
+        {onUseWorkout || onStartWatch ? (
           <View className="items-end" style={{ gap: 8, maxWidth: 168 }}>
             {onUseWorkout ? (
               <Pressable

@@ -20,7 +20,7 @@ function FacePile({ faces }: { faces: PulseFace[] }) {
     <View style={{ flexDirection: 'row', flexShrink: 0, width: FACE + (faces.length - 1) * 11 }}>
       {faces.map((face, index) => (
         <View
-          key={face.id}
+          key={face.id || `face-${index}`}
           style={{
             marginLeft: index === 0 ? 0 : -7,
             zIndex: faces.length - index,

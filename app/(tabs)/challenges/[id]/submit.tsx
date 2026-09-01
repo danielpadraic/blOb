@@ -44,7 +44,10 @@ import {
   beginCameraProof,
   captureTypeForMethod,
   extraProofImageUrls,
+  guidedCheckinPrompt,
+  isGuidedCameraProof,
   legacyTypeForProof,
+  nextEmptyRequiredProof,
   partSatisfies,
   proofDisplayName,
   proofSlotNeedsRewrite,
@@ -261,10 +264,8 @@ function SubmitWorkoutInner() {
       return;
     }
     checkinLogRef.current = true;
-    const next = proofSteps.find(
-      (proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr',
-    );
-    const nextPhotoEmpty = Boolean(next) && !drafts[next?.id ?? '']?.uri;
+    const next = nextEmptyRequiredProof(proofSteps, (proof) => Boolean(drafts[proof.id]?.uri));
+    const nextPhotoEmpty = Boolean(next && isGuidedCameraProof(next) && !drafts[next.id]?.uri);
     const hasExistingFrames =
       extras.length > 0 ||
       proofSteps.some((proof) => {
@@ -822,6 +823,18 @@ function SubmitWorkoutInner() {
         router.replace(multiCheckinHref([...parseDoneIds(params.done), id]));
         return;
       }
+      if (!readyNow) {
+        const nextCam = proofSteps.find(
+          (proof) =>
+            isGuidedCameraProof(proof) &&
+            !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
+        );
+        setSkippedAuto(!nextCam);
+        setPreferCamera(Boolean(nextCam));
+        setCaptureId(nextCam?.id ?? null);
+        void checkinQuery.refetch();
+        return;
+      }
       router.replace(challengeDetailHref(id, 'lobby', postId, { tab: 'feed' }));
     } catch (caught) {
       const kind = classifyCheckinError(caught);
@@ -1000,9 +1013,10 @@ function SubmitWorkoutInner() {
     Boolean(firstHealth) &&
     !drafts[firstHealth?.id ?? '']?.uri &&
     !serverHasProof(firstHealth?.id ?? '');
-  const nextPhoto = missing.find(
-    (proof) => proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr',
-  );
+  const slotFilled = (proof: ChallengeProof) =>
+    partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }) ||
+    serverHasProof(proof.id);
+  const nextPhoto = missing.find(isGuidedCameraProof) ?? null;
   const hasExistingFrames =
     extras.length > 0 ||
     proofSteps.some((proof) => {
@@ -1016,13 +1030,24 @@ function SubmitWorkoutInner() {
     nextPhotoEmpty: Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? ''),
     preferHealth: shouldAutoHealth,
   });
+  const shouldOpenGuided =
+    !skippedAuto && !honorOnly && Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? '');
   const activeCaptureId =
-    captureId ?? (shouldAutoHealth ? firstHealth?.id ?? null : shouldAutoOpen ? nextPhoto?.id ?? null : null);
+    captureId ??
+    (shouldOpenGuided
+      ? nextPhoto?.id ?? null
+      : shouldAutoHealth
+        ? firstHealth?.id ?? null
+        : shouldAutoOpen
+          ? nextPhoto?.id ?? null
+          : null);
   const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;
+  const guided = guidedCheckinPrompt(proofSteps, slotFilled, activeProof);
   const showHealthFirst =
     Boolean(activeProof) &&
     iosHealthReady &&
     !preferCamera &&
+    !shouldOpenGuided &&
     proofPrefersHealthAttach(activeProof, challenge);
 
   if (showHealthFirst && activeProof) {
@@ -1061,10 +1086,13 @@ function SubmitWorkoutInner() {
     return (
       <Screen padded={false} edges={TAB_ROOT_EDGES}>
         <ProofUploader
+          key={activeProof.id}
           type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}
           fill
           autoOpen
           locked={busy}
+          title={guided?.title}
+          instruction={guided?.helper}
           health={{
             challengeId: id ?? challenge.id,
             challengeTitle: challenge.title,

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   defaultSentenceForMethod,
+  guidedCheckinPrompt,
+  guidedCheckinTitle,
+  legacyTypeForProof,
   methodLabel,
+  nextEmptyRequiredProof,
   partSatisfies,
   proofSlotNeedsRewrite,
   proofTypeFromMethod,
@@ -125,6 +129,45 @@ describe('Note proof method', () => {
     expect(
       partSatisfies({ id: 'n', name: 'Note', method: 'checkin' }, { method: 'checkin', url: 'https://x.test/n' }),
     ).toBe(false);
+  });
+});
+
+describe('guided check-in prompts', () => {
+  const workout = [
+    { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' as const },
+    { id: 'post', name: 'Post a post-workout selfie.', method: 'photo' as const },
+    { id: 'hr', name: 'Share proof of at least 30 minutes of elevated heart rate.', method: 'hr' as const, minutes: 30 },
+  ];
+
+  it('titles the next empty workout slot and names the one after', () => {
+    const empty = guidedCheckinPrompt(workout, () => false);
+    expect(empty?.title).toBe('Take a Pre-Workout Selfie');
+    expect(empty?.helper).toBe("Then you'll add a Post-Workout Selfie.");
+    const afterPre = guidedCheckinPrompt(workout, (proof) => proof.id === 'pre');
+    expect(afterPre?.title).toBe('Take a Post-Workout Selfie');
+    expect(afterPre?.helper).toBe("Then you'll add Proof of 30-Min of Elevated Heart Rate.");
+    const afterPost = guidedCheckinPrompt(workout, (proof) => proof.id === 'pre' || proof.id === 'post');
+    expect(afterPost?.title).toBe('Upload Proof of 30-Min of Elevated Heart Rate');
+    expect(afterPost?.helper).toBeNull();
+    expect(nextEmptyRequiredProof(workout, (proof) => proof.id === 'pre')?.id).toBe('post');
+  });
+
+  it('does not put workout copy on honor, prayer, pages, or mileage', () => {
+    expect(guidedCheckinTitle({ id: 'honor', name: 'Confirm on your honor that you did the work.', method: 'honor' })).toBe(
+      'Confirm on your honor that you did the work',
+    );
+    expect(guidedCheckinTitle({ id: 'prayer', name: 'Morning prayer', method: 'photo' })).toBe('Take Morning prayer');
+    expect(guidedCheckinTitle({ id: 'pages', name: "Log today's pages", method: 'photo' })).toBe("Log today's pages");
+    expect(guidedCheckinTitle({ id: 'pages2', name: 'pages', method: 'photo' })).toBe("Log today's pages");
+    expect(guidedCheckinTitle({ id: 'miles', name: 'Run 3 miles', method: 'distance' })).toBe('Log Run 3 miles');
+    expect(guidedCheckinPrompt([{ id: 'honor', name: 'Honor', method: 'honor' }], () => true)).toBeNull();
+  });
+
+  it('does not relabel a checkout / post slot as pre-workout', () => {
+    const post = { id: 'post', name: 'Check-out selfie', method: 'photo' as const };
+    expect(guidedCheckinTitle(post)).toBe('Take a Post-Workout Selfie');
+    expect(legacyTypeForProof(post)).toBe('post_selfie');
+    expect(legacyTypeForProof({ id: 'pre', name: 'Pre-workout selfie', method: 'photo' })).toBe('pre_selfie');
   });
 });
 

@@ -71,10 +71,10 @@ describe('buildPulsePills', () => {
     const pills = buildPulsePills({
       challenges: [{ id: 'c1', status: 'live', title: 'Crew' }],
       posts: [
-        { challenge_id: 'c1', author_id: 'a1', created_at: '2026-09-01T19:00:00.000Z', content: 'now' },
-        { challenge_id: 'c1', author_id: 'a1', created_at: '2026-09-01T18:30:00.000Z', content: 'again' },
+        { challenge_id: 'c1', author: { id: 'a1' }, created_at: '2026-09-01T19:00:00.000Z', content: 'now' },
+        { challenge_id: 'c1', author: undefined, author_id: 'a1', created_at: '2026-09-01T18:30:00.000Z', content: 'again' },
         { challenge_id: 'c1', author_id: 'a2', created_at: '2026-09-01T18:00:00.000Z', content: 'hi' },
-        { challenge_id: 'c1', author_id: 'a3', created_at: '2026-09-01T17:00:00.000Z', content: 'yo' },
+        { challenge_id: 'c1', author: { id: undefined }, author_id: 'a3', created_at: '2026-09-01T17:00:00.000Z', content: 'yo' },
         { challenge_id: 'c1', author_id: 'a4', created_at: '2026-09-01T16:00:00.000Z', content: 'old' },
       ],
       profiles: [
@@ -84,6 +84,15 @@ describe('buildPulsePills', () => {
     });
     expect(pills[0].faces.map((face) => face.id)).toEqual(['a1', 'a2', 'a3']);
     expect(pills[0].faces[0]).toMatchObject({ name: 'Ada', avatarUrl: 'https://cdn.example.com/a1.jpg' });
+  });
+
+  it('does not throw when author is missing', () => {
+    expect(() =>
+      buildPulsePills({
+        challenges: [{ id: 'c1', status: 'live', title: 'Crew' }],
+        posts: [{ challenge_id: 'c1', author: undefined, author_id: undefined, content: 'starting now' }],
+      }),
+    ).not.toThrow();
   });
 });
 

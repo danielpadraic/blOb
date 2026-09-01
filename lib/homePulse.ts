@@ -28,10 +28,15 @@ export type PulseLobbyPost = {
   kind?: string | null;
   checkin_id?: string | null;
   checkin_stage?: string | null;
+  author?: { id?: string | null } | null;
   author_id?: string | null;
   created_at?: string | null;
   deleted_at?: string | null;
 };
+
+function pulseAuthorId(post?: PulseLobbyPost | null): string {
+  return String(post?.author?.id ?? post?.author_id ?? '').trim();
+}
 
 export type PulsePill = {
   id: string;
@@ -97,7 +102,7 @@ export function collectPulseFaces(
     if (String(post.challenge_id ?? '') !== challengeId || post.deleted_at) {
       continue;
     }
-    const authorId = String(post.author_id ?? '').trim();
+    const authorId = pulseAuthorId(post);
     if (!authorId || seen.has(authorId)) {
       continue;
     }
@@ -155,7 +160,8 @@ async function fetchPulseLobbyPosts(challengeIds: string[]): Promise<PulseLobbyP
   if (ids.length === 0) {
     return [];
   }
-  const { data, error } = await supabase
+  const limit = Math.min(Math.max(ids.length * 8, 24), 120);
+  const full = await supabase
     .from('posts')
     .select(
       'id, challenge_id, content, media_urls, source, type, checkin_id, checkin_stage, author_id, created_at, deleted_at',
@@ -164,11 +170,21 @@ async function fetchPulseLobbyPosts(challengeIds: string[]): Promise<PulseLobbyP
     .in('source', ['challenge', 'checkin'])
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
-    .limit(Math.min(Math.max(ids.length * 8, 24), 120));
-  if (error) {
-    throw error;
+    .limit(limit);
+  if (!full.error) {
+    return (full.data ?? []) as PulseLobbyPost[];
   }
-  return (data ?? []) as PulseLobbyPost[];
+  // Isolate like stories.sequence_id: a missing column must not empty Home.
+  const slim = await supabase
+    .from('posts')
+    .select('id, challenge_id, content, author_id, created_at')
+    .in('challenge_id', ids)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (slim.error) {
+    throw slim.error;
+  }
+  return (slim.data ?? []) as PulseLobbyPost[];
 }
 
 /** Joined ∪ hosted live/upcoming + last Live line the viewer can already see. */
@@ -176,7 +192,12 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
   if (!userId) {
     return [];
   }
-  const challenges = selectPulseChallenges(await fetchActiveChallenges(userId));
+  let challenges: PulseChallengeLike[] = [];
+  try {
+    challenges = selectPulseChallenges(await fetchActiveChallenges(userId));
+  } catch {
+    return [];
+  }
   if (challenges.length === 0) {
     return [];
   }
@@ -192,7 +213,7 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
   const facesPerChallenge = new Map<string, number>();
   for (const post of posts) {
     const challengeId = String(post.challenge_id ?? '');
-    const authorId = String(post.author_id ?? '').trim();
+    const authorId = pulseAuthorId(post);
     if (!allowed.has(challengeId) || !authorId || seenAuthors.has(`${challengeId}:${authorId}`)) {
       continue;
     }
