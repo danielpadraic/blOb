@@ -649,6 +649,8 @@ const STRINGS = {
   'checkin.multiEmpty': 'Empty',
   'checkin.multiStarted': 'Started',
   'checkin.multiComplete': 'Complete',
+  'live.placeholder': 'Message the lobby…',
+  'live.send': 'Send',
   'detail.checkinDue': 'Check-in due',
   'detail.caughtUp': 'Caught Up',
 } as const;

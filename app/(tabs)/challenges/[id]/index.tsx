@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FeedList } from '@/components/feed/FeedList';
+import { LiveThread } from '@/components/challenge/LiveThread';
 import { ChallengeDetailsCard } from '@/components/challenge/ChallengeDetailsCard';
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
@@ -69,7 +69,6 @@ import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
 import {
-  isCorporateChallenge,
   requiresOfficialBodyMetrics,
   usesComparablePointsScoring,
   usesConsistencyExperience,
@@ -492,9 +491,6 @@ export default function ChallengeDetailScreen() {
   }, [judgingHold, officialLiveClock, periodDueClock, waitingToStart]);
 
   const scrollRef = useRef<ScrollView>(null);
-  const feedSectionY = useRef(0);
-  const feedTitlesH = useRef(0);
-  const scrolledToPost = useRef<string | null>(null);
   const scrolledSettledId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -899,7 +895,7 @@ export default function ChallengeDetailScreen() {
 
   return (
     <ChallengeNotesProvider>
-    <Screen padded={false} edges={['left', 'right']}>
+    <Screen padded={false} edges={['left', 'right']} keyboardAvoiding={pageTab !== 'feed'}>
       <Stack.Screen
         options={{
           title: '',
@@ -915,6 +911,35 @@ export default function ChallengeDetailScreen() {
       <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
         <ChallengePageTabs value={pageTab} onChange={setPageTab} />
       </View>
+      {pageTab === 'feed' ? (
+        <LiveThread
+          posts={feed.data ?? []}
+          isLoading={feed.isLoading}
+          isRefreshing={refreshing}
+          error={feed.error instanceof Error ? feed.error.message : null}
+          highlightPostId={highlightPostId}
+          currentUserId={user?.id}
+          emptyTitle="Quiet in this challenge"
+          emptyBody={
+            isJoined
+              ? participation?.eliminated_at
+                ? 'You’re out, but you can still watch the check-ins.'
+                : copy('checkin.emptyBob')
+              : 'Join the challenge to post in Live.'
+          }
+          canCompose={isJoined && !participation?.eliminated_at}
+          composing={createPost.isPending}
+          commenting={createComment.isPending}
+          footerReserve={stickyJoin ? stickyBlock : 0}
+          onRefresh={() => void onRefresh()}
+          onRetry={() => void feed.refetch()}
+          onCompose={(input) => createPost.mutateAsync(input)}
+          onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
+          onComment={(post, content, parentId, mentionedUserIds) =>
+            createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
+          }
+        />
+      ) : (
       <ScrollView
         ref={scrollRef}
         className="flex-1"
@@ -1340,69 +1365,10 @@ export default function ChallengeDetailScreen() {
           </View>
         ) : null}
 
-        {pageTab === 'feed' ? (
-          <View
-            className="mt-4"
-            onLayout={(event) => {
-              feedSectionY.current = event.nativeEvent.layout.y;
-            }}>
-            <View
-              onLayout={(event) => {
-                feedTitlesH.current = event.nativeEvent.layout.height;
-              }}>
-              <AppText className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                Lobby Feed
-              </AppText>
-              <AppText className="mt-1 mb-3 text-xl font-bold text-charcoal">
-                {isCorporateChallenge(challenge)
-                  ? 'Posts stay inside this challenge'
-                  : 'Posts from this challenge'}
-              </AppText>
-            </View>
-            <FeedList
-              embedded
-              posts={feed.data ?? []}
-              isLoading={feed.isLoading}
-              error={feed.error instanceof Error ? feed.error.message : null}
-              highlightPostId={highlightPostId}
-              onHighlightedLayout={(y) => {
-                if (!highlightPostId || scrolledToPost.current === highlightPostId) {
-                  return;
-                }
-                scrolledToPost.current = highlightPostId;
-                scrollNodeTo(scrollRef.current, {
-                  y: Math.max(0, feedSectionY.current + feedTitlesH.current + y - 12),
-                  animated: true,
-                });
-              }}
-              currentUserId={user?.id}
-              emptyTitle="Quiet in this challenge"
-              emptyBody={
-                isJoined
-                  ? participation?.eliminated_at
-                    ? 'You’re out, but you can still watch the check-ins.'
-                    : copy('checkin.emptyBob')
-                  : 'Join the challenge to post in this feed.'
-              }
-              composerPlaceholder="How’s the work going?"
-              draftKey={id ? `challenge:${id}` : 'challenge'}
-              hideAudience
-              composeSource="challenge"
-              canCompose={isJoined && !participation?.eliminated_at}
-              composing={createPost.isPending}
-              commenting={createComment.isPending}
-              onRetry={() => void feed.refetch()}
-              onCompose={(input) => createPost.mutateAsync(input)}
-              onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-              onComment={(post, content, parentId, mentionedUserIds) =>
-                createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
-              }
-            />
-          </View>
-        ) : null}
       </ScrollView>
+      )}
 
-      {showStickyCta ? (
+      {showStickyCta && (pageTab !== 'feed' || stickyJoin) ? (
       <View
         pointerEvents="box-none"
         style={{

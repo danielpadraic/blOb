@@ -3,7 +3,7 @@ import { SharedTabs } from '@/components/ui/SharedTabs';
 export const CHALLENGE_PAGE_TABS = [
   { value: 'overview', label: 'Overview' },
   { value: 'board', label: 'Board' },
-  { value: 'feed', label: 'Lobby Feed' },
+  { value: 'feed', label: 'Live' },
 ] as const;
 
 export type ChallengePageTab = (typeof CHALLENGE_PAGE_TABS)[number]['value'];

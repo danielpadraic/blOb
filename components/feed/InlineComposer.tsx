@@ -42,6 +42,9 @@ type InlineComposerProps = {
   replyTo?: MentionChip | null;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
+  /** Keep the camera / gallery / GIF row open. Used by Live. */
+  pinned?: boolean;
+  autoFocus?: boolean;
   onSubmit: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
 };
 
@@ -54,6 +57,8 @@ export function InlineComposer({
   replyTo,
   expanded: expandedProp,
   onExpandedChange,
+  pinned,
+  autoFocus = true,
   onSubmit,
 }: InlineComposerProps) {
   const { user } = useAuth();
@@ -68,7 +73,7 @@ export function InlineComposer({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [gifOpen, setGifOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const expanded = expandedProp ?? internalExpanded;
+  const expanded = pinned ? true : (expandedProp ?? internalExpanded);
   const busy = Boolean(submitting || uploading);
   const canSend = hasText || attachments.length > 0;
 
@@ -87,6 +92,9 @@ export function InlineComposer({
   }
 
   function scheduleCollapse() {
+    if (pinned) {
+      return;
+    }
     cancelCollapse();
     blurTimer.current = setTimeout(() => {
       blurTimer.current = null;
@@ -271,7 +279,7 @@ export function InlineComposer({
         compact
         collapsed={!expanded}
         pickerPlacement="above"
-        autoFocus
+        autoFocus={autoFocus}
         placeholder={placeholder}
         initialMention={replyTo}
         audience={audience}
