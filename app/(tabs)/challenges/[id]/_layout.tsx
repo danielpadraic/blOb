@@ -43,6 +43,7 @@ export default function ChallengeIdLayout() {
           options={{
             headerShown: false,
             title: 'Check-in',
+            orientation: 'all',
           }}
         />
         <Stack.Screen

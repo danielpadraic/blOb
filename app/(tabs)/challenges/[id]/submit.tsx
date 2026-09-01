@@ -26,6 +26,7 @@ import { seedChallengeLivePost } from '@/hooks/useFeed';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
+import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
 import type { HealthWorkout } from '@/services/health/types';
 import {
   CHECKIN_BOB,
@@ -541,7 +542,9 @@ function SubmitWorkoutInner() {
         Alert.alert('Couldn’t attach that', 'Pick a photo from the gallery.');
         return;
       }
-      onCaptured(target, uri, asset.mimeType ?? asset.file?.type, true);
+      const mime = asset.mimeType ?? asset.file?.type;
+      const next = await normalizeCheckinStill({ uri, mimeType: mime });
+      onCaptured(target, next.uri, next.mimeType ?? mime, true);
     } catch (caught) {
       Alert.alert('Couldn’t attach that', getErrorMessage(caught));
     }

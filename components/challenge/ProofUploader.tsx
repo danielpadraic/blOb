@@ -17,6 +17,7 @@ import {
   openAppSettings,
 } from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
+import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
 import { localUriFromPickerAsset } from '@/utils/media';
 import type { ProofType } from '@/lib/types';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
@@ -160,7 +161,12 @@ export function ProofUploader({
         return;
       }
       stopAllLiveMedia();
-      onPicked(uri, asset?.mimeType ?? asset?.file?.type, { fromLibrary: true });
+      const mime = asset?.mimeType ?? asset?.file?.type;
+      const next =
+        video
+          ? { uri, mimeType: mime }
+          : await normalizeCheckinStill({ uri, mimeType: mime });
+      onPicked(next.uri, next.mimeType ?? mime, { fromLibrary: true });
       setOpen(false);
     } catch (error) {
       stopAllLiveMedia();

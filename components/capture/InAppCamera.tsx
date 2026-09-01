@@ -7,7 +7,7 @@ import {
   useState,
   type RefObject,
 } from 'react';
-import { AppState, BackHandler, Platform, Pressable, View } from 'react-native';
+import { AppState, BackHandler, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { useIsFocused, usePathname } from 'expo-router';
 import { Camera, CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import Svg, { Circle } from 'react-native-svg';
@@ -44,6 +44,13 @@ import {
 } from '@/lib/mediaPermissions';
 import { clipShutterReleaseStopsRecording } from '@/lib/clipShutter';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
+import {
+  checkinDeviceOrientation,
+  checkinPreviewRotateDeg,
+  checkinWebSnapRotateDegrees,
+  normalizeCheckinStill,
+  readWebOrientationSnapshot,
+} from '@/lib/checkinPhotoOrientation';
 import { applyWebVideoLock } from '@/lib/webVideo';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
 import { saveOwnCapture } from '@/lib/saveCapture';
@@ -102,6 +109,9 @@ export function InAppCamera({
 }: InAppCameraProps) {
   const resolvedFacingKind: CameraFacingKind = checkin ? 'checkin' : facingKind;
   const insets = useSafeAreaInsets();
+  const windowSize = useWindowDimensions();
+  const [previewBox, setPreviewBox] = useState({ width: windowSize.width, height: windowSize.height });
+  const [webOrient, setWebOrient] = useState(readWebOrientationSnapshot);
   const navFocused = useIsFocused();
   const pathname = usePathname();
   const web = Platform.OS === 'web';
@@ -131,6 +141,19 @@ export function InAppCamera({
   const shutterEnabled = readyPreview && !busy;
   const shutterOpaque = recording || readyPreview;
   const bottomPad = chromeInset ? TAB_BAR_PEEK : Math.max(insets.bottom, 16) + 8;
+  const previewRotateDeg = checkin
+    ? checkinPreviewRotateDeg({
+        device: checkinDeviceOrientation({
+          screenType: webOrient.screenType,
+          screenAngle: webOrient.screenAngle,
+          windowWidth: windowSize.width,
+          windowHeight: windowSize.height,
+        }),
+        layoutWidth: previewBox.width || windowSize.width,
+        layoutHeight: previewBox.height || windowSize.height,
+        screenAngle: webOrient.screenAngle,
+      })
+    : 0;
   const askLine =
     parentBlocked
       ? deniedTitle ?? blockedReason ?? (webFallback ? 'Camera isn’t available here.' : 'Turn on camera in Settings.')
@@ -139,6 +162,24 @@ export function InAppCamera({
   useEffect(() => {
     setCapture(checkin ? 'photo' : captureProp);
   }, [captureProp, checkin]);
+
+  useEffect(() => {
+    if (!checkin || !web || typeof window === 'undefined') {
+      return;
+    }
+    const sync = () => setWebOrient(readWebOrientationSnapshot());
+    sync();
+    const screen = window.screen as Screen & { orientation?: { unlock?: () => Promise<void>; addEventListener?: (name: string, fn: () => void) => void; removeEventListener?: (name: string, fn: () => void) => void } };
+    void screen.orientation?.unlock?.().catch(() => undefined);
+    window.addEventListener('resize', sync);
+    window.addEventListener('orientationchange', sync);
+    screen.orientation?.addEventListener?.('change', sync);
+    return () => {
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('orientationchange', sync);
+      screen.orientation?.removeEventListener?.('change', sync);
+    };
+  }, [checkin, web]);
 
   function killSession() {
     stopMedia({
@@ -437,11 +478,22 @@ export function InAppCamera({
         if (!blob) {
           return;
         }
+        const snapped = { uri: URL.createObjectURL(blob), mimeType: 'image/jpeg', blob };
+        const next = checkin
+          ? await normalizeCheckinStill({
+              ...snapped,
+              previewRotateDeg: checkinWebSnapRotateDegrees({
+                pixelWidth: node.videoWidth,
+                pixelHeight: node.videoHeight,
+                previewRotateDeg,
+              }),
+            })
+          : snapped;
         finishCapture({
-          uri: URL.createObjectURL(blob),
+          uri: next.uri,
           mediaType: 'image',
-          mimeType: 'image/jpeg',
-          blob,
+          mimeType: next.mimeType ?? 'image/jpeg',
+          blob: next.blob ?? null,
         });
         return;
       }
@@ -451,11 +503,13 @@ export function InAppCamera({
         photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
       }
       if (photo?.uri) {
+        const snapped = { uri: photo.uri, mimeType: 'image/jpeg' as const, blob: null };
+        const next = checkin ? await normalizeCheckinStill(snapped) : snapped;
         finishCapture({
-          uri: photo.uri,
+          uri: next.uri,
           mediaType: 'image',
-          mimeType: 'image/jpeg',
-          blob: null,
+          mimeType: next.mimeType ?? 'image/jpeg',
+          blob: next.blob ?? null,
         });
       }
     } catch (error) {
@@ -634,15 +688,25 @@ export function InAppCamera({
   const showFrame = sessionOn && focused && !showDenied;
 
   return (
-    <View className="flex-1 overflow-hidden" style={{ backgroundColor: THEME.primary }}>
+    <View
+      className="flex-1 overflow-hidden"
+      style={{ backgroundColor: THEME.primary }}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setPreviewBox((prev) =>
+          prev.width === width && prev.height === height ? prev : { width, height },
+        );
+      }}>
       {showFrame && web ? (
-        <WebCameraPreview attach={attachWebVideo} />
+        <WebCameraPreview attach={attachWebVideo} rotateDeg={previewRotateDeg} box={previewBox} />
       ) : showFrame && ask === 'ready' ? (
         <NativeCameraPreview
           key={facing}
           cameraRef={cameraRef}
           facing={facing}
           video={video}
+          rotateDeg={previewRotateDeg}
+          box={previewBox}
           onReady={onCameraReady}
           onUnavailable={onUnavailable}
           onDenied={facing === 'front' ? () => stayOnRear() : onCameraDenied}
@@ -905,11 +969,16 @@ function useRecordingElapsed(recording: boolean, maxDuration: number) {
 
 const WebCameraPreview = memo(function WebCameraPreview({
   attach,
+  rotateDeg = 0,
+  box,
 }: {
   attach: (node: HTMLVideoElement | null) => void;
+  rotateDeg?: number;
+  box?: { width: number; height: number };
 }) {
+  const rotate = rotateDeg !== 0 && !!box?.width && !!box?.height;
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, overflow: 'hidden' }}>
       {createElement('video', {
         ref: (node: HTMLVideoElement | null) => {
           applyWebVideoLock(node);
@@ -921,7 +990,16 @@ const WebCameraPreview = memo(function WebCameraPreview({
         controls: false,
         disablePictureInPicture: true,
         'webkit-playsinline': 'true',
-        style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#101312' },
+        style: {
+          position: 'absolute',
+          width: rotate && box ? box.height : '100%',
+          height: rotate && box ? box.width : '100%',
+          left: rotate && box ? (box.width - box.height) / 2 : 0,
+          top: rotate && box ? (box.height - box.width) / 2 : 0,
+          objectFit: 'cover',
+          backgroundColor: '#101312',
+          transform: rotate ? `rotate(${rotateDeg}deg)` : undefined,
+        },
       })}
     </View>
   );
@@ -931,6 +1009,8 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   cameraRef,
   facing,
   video,
+  rotateDeg = 0,
+  box,
   onReady,
   onUnavailable,
   onDenied,
@@ -939,6 +1019,8 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   cameraRef: RefObject<CameraView | null>;
   facing: CameraType;
   video: boolean;
+  rotateDeg?: number;
+  box?: { width: number; height: number };
   onReady: () => void;
   onUnavailable?: () => void;
   onDenied: () => void;
@@ -975,19 +1057,40 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
     onDeniedRef.current();
   }, []);
 
+  const rotate = rotateDeg !== 0 && !!box?.width && !!box?.height;
   return (
-    <CameraView
-      key={facing}
-      ref={cameraRef}
-      style={{ flex: 1 }}
-      facing={facing}
-      mode={video ? 'video' : 'picture'}
-      mute={false}
-      onCameraReady={handleReady}
-      onMountError={handleMountError}
-    />
+    <View style={{ flex: 1, overflow: 'hidden' }}>
+      <CameraView
+        key={facing}
+        ref={cameraRef}
+        style={
+          rotate && box
+            ? {
+                position: 'absolute',
+                width: box.height,
+                height: box.width,
+                left: (box.width - box.height) / 2,
+                top: (box.height - box.width) / 2,
+                transform: [{ rotate: `${rotateDeg}deg` }],
+              }
+            : { flex: 1 }
+        }
+        facing={facing}
+        mode={video ? 'video' : 'picture'}
+        mute={false}
+        onCameraReady={handleReady}
+        onMountError={handleMountError}
+      />
+    </View>
   );
-}, (prev, next) => prev.facing === next.facing && prev.video === next.video && prev.cameraRef === next.cameraRef);
+}, (prev, next) =>
+  prev.facing === next.facing &&
+  prev.video === next.video &&
+  prev.cameraRef === next.cameraRef &&
+  prev.rotateDeg === next.rotateDeg &&
+  prev.box?.width === next.box?.width &&
+  prev.box?.height === next.box?.height,
+);
 
 function RecordingRing({ recording, maxDuration }: { recording: boolean; maxDuration: number }) {
   const elapsed = useRecordingElapsed(recording, maxDuration);
