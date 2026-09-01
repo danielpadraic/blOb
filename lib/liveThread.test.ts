@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyLiveReaction,
+  buildLiveThreadRows,
   formatLiveClock,
+  liveChatText,
   liveCheckinLabel,
+  liveQuotePreview,
+  liveReactionCounts,
   liveComposeFromInline,
   sortLivePosts,
+  toggleLiveReactionList,
 } from '@/lib/liveThread';
 
 describe('sortLivePosts', () => {
@@ -45,5 +51,92 @@ describe('liveComposeFromInline', () => {
     );
     expect(split.text).toBe('Almost there');
     expect(split.mediaUrls).toEqual(['https://cdn.example.com/object/public/post-media/u/1.jpg']);
+  });
+});
+
+describe('liveQuotePreview', () => {
+  it('uses the check-in label or the chat line', () => {
+    expect(liveQuotePreview({ source: 'checkin', checkin_stage: 'complete', content: 'x' })).toBe(
+      'Check-in Complete',
+    );
+    expect(liveChatText('Good job!\nhttps://cdn.example.com/a.jpg', ['https://cdn.example.com/a.jpg'])).toBe(
+      'Good job!',
+    );
+    expect(liveQuotePreview({ content: 'Good job!', media_urls: [] })).toBe('Good job!');
+  });
+});
+
+describe('toggleLiveReactionList', () => {
+  it('lets one person keep fire and thumbs on the same row', () => {
+    const afterFire = toggleLiveReactionList([], 'u1', 'fire', 'p1', null);
+    const afterBoth = toggleLiveReactionList(afterFire, 'u1', 'like', 'p1', null);
+    expect(afterBoth.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
+    expect(toggleLiveReactionList(afterBoth, 'u1', 'fire', 'p1', null).map((row) => row.reaction_type)).toEqual([
+      'like',
+    ]);
+  });
+});
+
+describe('liveReactionCounts', () => {
+  it('counts each type and marks mine without collapsing to heart', () => {
+    const counts = liveReactionCounts(
+      [
+        { id: '1', user_id: 'me', post_id: 'p', reaction_type: 'fire', created_at: '2026-09-01T12:00:00.000Z' },
+        { id: '2', user_id: 'me', post_id: 'p', reaction_type: 'like', created_at: '2026-09-01T12:00:01.000Z' },
+        { id: '3', user_id: 'you', post_id: 'p', reaction_type: 'fire', created_at: '2026-09-01T12:00:02.000Z' },
+      ],
+      'me',
+    );
+    expect(counts).toEqual([
+      { type: 'like', count: 1, mine: true },
+      { type: 'fire', count: 2, mine: true },
+    ]);
+  });
+});
+
+describe('buildLiveThreadRows', () => {
+  it('keeps existing comments as later chat rows, not a nested card', () => {
+    const rows = buildLiveThreadRows([
+      {
+        id: 'p1',
+        author_id: 'a',
+        challenge_id: 'c',
+        content: 'Started',
+        media_urls: [],
+        created_at: '2026-09-01T12:00:00.000Z',
+        comments: [
+          {
+            id: 'n1',
+            post_id: 'p1',
+            author_id: 'b',
+            content: 'Good job!',
+            created_at: '2026-09-01T12:01:00.000Z',
+          },
+        ],
+      },
+    ]);
+    expect(rows.map((row) => row.id)).toEqual(['p1', 'comment:n1']);
+    expect(rows[1]?.kind).toBe('comment');
+  });
+});
+
+describe('applyLiveReaction', () => {
+  it('toggles a type on the post without replacing another type', () => {
+    const post = applyLiveReaction(
+      {
+        id: 'p1',
+        author_id: 'a',
+        challenge_id: 'c',
+        content: 'Hi',
+        media_urls: [],
+        created_at: '2026-09-01T12:00:00.000Z',
+        reactions: [
+          { id: 'r1', user_id: 'me', post_id: 'p1', reaction_type: 'fire', created_at: '2026-09-01T12:00:00.000Z' },
+        ],
+      },
+      'me',
+      'like',
+    );
+    expect(post.reactions?.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
   });
 });

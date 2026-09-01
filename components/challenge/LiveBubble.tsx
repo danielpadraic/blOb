@@ -1,55 +1,56 @@
-import { memo, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { memo } from 'react';
+import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
-import { CommentThread } from '@/components/feed/CommentThread';
-import { InlineComposer } from '@/components/feed/InlineComposer';
+import { LiveReactions } from '@/components/challenge/LiveReactions';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
 import { MentionText } from '@/components/feed/MentionText';
-import { ReactionBar } from '@/components/feed/ReactionBar';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { checkinExtraCaption } from '@/lib/checkinPost';
-import { formatLiveClock, isLiveCheckinPost, liveCheckinLabel } from '@/lib/liveThread';
-import { asPostAudience } from '@/lib/postAudience';
+import {
+  formatLiveClock,
+  isLiveCheckinPost,
+  liveChatText,
+  liveCheckinLabel,
+} from '@/lib/liveThread';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { authorLabel, safeUserId } from '@/lib/safeIds';
 import { THEME } from '@/lib/theme';
-import type { PostWithMeta, ReactionType } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
+import type { PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, mediaKind } from '@/utils/media';
+
+export type LiveQuote = {
+  name: string;
+  text: string;
+};
 
 type LiveBubbleProps = {
   post: PostWithMeta;
   currentUserId?: string;
   highlighted?: boolean;
-  commenting?: boolean;
-  onReact: (type: ReactionType, commentId?: string | null) => void;
-  onComment?: (
-    content: string,
-    parentId?: string | null,
-    mentionedUserIds?: string[],
-  ) => Promise<unknown> | void;
+  quote?: LiveQuote | null;
+  reactions?: Reaction[];
+  onReact: (type: ReactionType) => void;
+  onReply?: () => void;
 };
 
 export const LiveBubble = memo(function LiveBubble({
   post,
   currentUserId,
   highlighted,
-  commenting,
+  quote,
+  reactions,
   onReact,
-  onComment,
+  onReply,
 }: LiveBubbleProps) {
-  const [showReplies, setShowReplies] = useState(false);
   const lightbox = useMediaLightboxOptional();
   const uid = safeUserId(post.author, post.author_id, (post as { user_id?: string | null }).user_id);
   const name = authorLabel(post.author);
   const mine = Boolean(currentUserId && currentUserId === post.author_id);
   const checkin = isLiveCheckinPost(post);
-  const comments = post.comments ?? [];
-  const audience = asPostAudience(post.audience);
   const visuals = liveVisualUrls(post, mine);
   const time = formatLiveClock(post.created_at);
   const caption = checkin
@@ -59,6 +60,7 @@ export const LiveBubble = memo(function LiveBubble({
     uri,
     label: mediaKind(uri) === 'video' ? 'Video' : 'Photo',
   }));
+  const alignEnd = mine && !checkin;
 
   function openProof(index = 0) {
     if (!lightbox || items.length === 0) {
@@ -70,29 +72,31 @@ export const LiveBubble = memo(function LiveBubble({
   return (
     <View
       style={{
-        alignItems: mine && !checkin ? 'flex-end' : 'flex-start',
+        alignItems: alignEnd ? 'flex-end' : 'flex-start',
         maxWidth: '100%',
         borderRadius: 16,
         borderWidth: highlighted ? 1.5 : 0,
         borderColor: highlighted ? THEME.accent : 'transparent',
         padding: highlighted ? 4 : 0,
+        overflow: 'visible',
       }}>
       <View
         className="flex-row items-end"
         style={{
           gap: 8,
           maxWidth: checkin ? '100%' : '86%',
-          alignSelf: mine && !checkin ? 'flex-end' : 'flex-start',
+          alignSelf: alignEnd ? 'flex-end' : 'flex-start',
         }}>
-        {mine && !checkin ? null : (
+        {alignEnd ? null : (
           <ProfileLink username={post.author?.username} userId={uid}>
             <Avatar uri={post.author?.avatar_url} name={name} size={28} />
           </ProfileLink>
         )}
-        <View style={{ flexShrink: 1, minWidth: 0, alignItems: mine && !checkin ? 'flex-end' : 'flex-start' }}>
+        <View style={{ flexShrink: 1, minWidth: 0, alignItems: alignEnd ? 'flex-end' : 'flex-start' }}>
           <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
             {name}
           </AppText>
+          {quote && !checkin ? <LiveQuoteChip quote={quote} /> : null}
           {checkin ? (
             <View
               className="flex-row items-center"
@@ -207,55 +211,39 @@ export const LiveBubble = memo(function LiveBubble({
               {time}
             </AppText>
           ) : null}
-          <View style={{ marginTop: 2, alignSelf: mine && !checkin ? 'flex-end' : 'flex-start' }}>
-            <ReactionBar
-              compact
-              reactions={post.reactions}
+          <View style={{ marginTop: 2, alignSelf: alignEnd ? 'flex-end' : 'flex-start' }}>
+            <LiveReactions
+              reactions={reactions ?? post.reactions}
               currentUserId={currentUserId}
-              commentCount={comments.length}
-              onReact={(type) => onReact(type)}
-              onReply={
-                onComment
-                  ? () => setShowReplies((open) => !open)
-                  : undefined
-              }
+              onReact={onReact}
+              onReply={onReply}
             />
           </View>
         </View>
       </View>
-
-      {showReplies && onComment ? (
-        <View style={{ marginTop: 8, width: '100%', paddingLeft: mine && !checkin ? 0 : 36 }}>
-          <InlineComposer
-            placeholder="Write a reply…"
-            submitting={commenting}
-            audience={audience}
-            audienceUserIds={post.audience_user_ids ?? []}
-            autoFocus
-            onSubmit={async (text, mentionedUserIds) => {
-              try {
-                await onComment(text, null, mentionedUserIds);
-              } catch (error) {
-                Alert.alert('Couldn’t post that reply', getErrorMessage(error));
-              }
-            }}
-          />
-          {comments.length > 0 ? (
-            <CommentThread
-              comments={comments}
-              currentUserId={currentUserId}
-              composing={commenting}
-              audience={audience}
-              audienceUserIds={post.audience_user_ids ?? []}
-              onReply={onComment}
-              onReact={(commentId, type) => onReact(type, commentId)}
-            />
-          ) : null}
-        </View>
-      ) : null}
     </View>
   );
 });
+
+function LiveQuoteChip({ quote }: { quote: LiveQuote }) {
+  return (
+    <View
+      style={{
+        maxWidth: '100%',
+        marginBottom: 4,
+        paddingLeft: 8,
+        borderLeftWidth: 2,
+        borderLeftColor: THEME.accent,
+      }}>
+      <AppText className="text-[11px] font-semibold" style={{ color: THEME.textMuted }} numberOfLines={1}>
+        {quote.name}
+      </AppText>
+      <AppText className="text-[12px]" style={{ color: THEME.textMuted }} numberOfLines={2}>
+        {quote.text}
+      </AppText>
+    </View>
+  );
+}
 
 const absoluteFill = {
   position: 'absolute' as const,
@@ -275,17 +263,4 @@ function liveVisualUrls(post: PostWithMeta, isOwner: boolean): string[] {
     return fromFields;
   }
   return commentMediaUrls(post.content ?? '');
-}
-
-function liveChatText(content?: string | null, mediaUrls?: string[] | null): string {
-  const text = (content ?? '').trim();
-  if (!text) {
-    return '';
-  }
-  const skip = new Set([...(mediaUrls ?? []), ...commentMediaUrls(text)]);
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !skip.has(line))
-    .join('\n');
 }

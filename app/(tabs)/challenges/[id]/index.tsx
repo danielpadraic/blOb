@@ -52,11 +52,10 @@ import {
   useSettleChallenge,
 } from '@/hooks/useChallenge';
 import {
-  useCreateComment,
   useCreatePost,
   useFeed,
-  useToggleReaction,
 } from '@/hooks/useFeed';
+import { useToggleLiveReaction } from '@/hooks/useLiveReaction';
 import { useMyProfile, useProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
@@ -261,8 +260,7 @@ export default function ChallengeDetailScreen() {
   const settlementQuery = useChallengeSettlement(id);
   const feed = useFeed(id);
   const createPost = useCreatePost(id);
-  const createComment = useCreateComment(id);
-  const toggleReaction = useToggleReaction();
+  const toggleLiveReaction = useToggleLiveReaction();
 
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
@@ -929,15 +927,11 @@ export default function ChallengeDetailScreen() {
           }
           canCompose={isJoined && !participation?.eliminated_at}
           composing={createPost.isPending}
-          commenting={createComment.isPending}
           footerReserve={stickyJoin ? stickyBlock : 0}
           onRefresh={() => void onRefresh()}
           onRetry={() => void feed.refetch()}
           onCompose={(input) => createPost.mutateAsync(input)}
-          onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-          onComment={(post, content, parentId, mentionedUserIds) =>
-            createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
-          }
+          onReact={(post, type, commentId) => toggleLiveReaction.mutate({ post, type, commentId })}
         />
       ) : (
       <ScrollView
