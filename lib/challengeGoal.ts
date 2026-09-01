@@ -42,13 +42,15 @@ export function pointsGoalTarget(challenge: {
   title?: string | null;
 }): number {
   const saved = Math.floor(Number(challenge.target_count) || 0);
+  const tasks = challenge.tasks ?? [];
+  const fromTasks = tasks.reduce((sum, task) => sum + Math.max(Number(task.points) || 0, 0), 0);
+  // target_count of 1 on a 10-pt Prayer task is the task count, not the points goal.
+  if (saved > 0 && fromTasks > 0 && saved <= tasks.length) {
+    return fromTasks;
+  }
   if (saved > 0) {
     return saved;
   }
-  const fromTasks = (challenge.tasks ?? []).reduce(
-    (sum, task) => sum + Math.max(Number(task.points) || 0, 0),
-    0,
-  );
   if (fromTasks > 0) {
     return fromTasks;
   }

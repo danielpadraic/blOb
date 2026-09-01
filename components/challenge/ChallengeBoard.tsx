@@ -12,6 +12,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import {
+  boardCompletersCount,
   boardEmptyCopy,
   boardRowTag,
   boardScoreLabel,
@@ -19,7 +20,7 @@ import {
   buildBoard,
   rankBoardRows,
 } from '@/lib/board';
-import { usesPointsBoard } from '@/lib/challengeExperience';
+import { usesCumulativeScoring, usesPointsBoard } from '@/lib/challengeExperience';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
@@ -65,6 +66,7 @@ export function ChallengeBoard({
           status: row.status,
           eliminated_at: row.eliminated_at,
           joined_at: row.joined_at,
+          completed_at: row.completed_at,
           display_name: row.profile?.display_name,
           username: row.profile?.username,
           avatar_url: row.profile?.avatar_url,
@@ -95,10 +97,21 @@ export function ChallengeBoard({
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;
   const pointsBoard = usesPointsBoard(challenge);
+  const cumulativeBoard = usesCumulativeScoring(challenge);
   const requiredDays = challengeTargetCount(challenge);
+  const completersCount = boardCompletersCount(view.people);
+  const headerLine = pointsBoard
+    ? `${copy('board.in')} ${view.remainingCount} · ${copy('board.completers')} ${completersCount}${
+        view.droppedCount > 0 ? ` · ${copy('board.dropped')} ${view.droppedCount}` : ''
+      }`
+    : `${copy('board.remaining')} ${view.remainingCount} · ${copy('board.caughtUp')} ${view.caughtUpCount} · ${copy('board.dropped')} ${view.droppedCount}`;
   const rows = useMemo(
-    () => rankBoardRows(view.people, pointsBoard ? 'points' : 'days'),
-    [pointsBoard, view.people],
+    () =>
+      rankBoardRows(
+        view.people,
+        cumulativeBoard ? 'finish' : pointsBoard ? 'points' : 'days',
+      ),
+    [cumulativeBoard, pointsBoard, view.people],
   );
 
   function toggleReceipt() {
@@ -118,11 +131,7 @@ export function ChallengeBoard({
         style={{ minHeight: 44 }}>
         <View style={{ gap: 6 }}>
           <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
-            {copy('board.remaining')} {view.remainingCount}
-            {' · '}
-            {copy('board.caughtUp')} {view.caughtUpCount}
-            {' · '}
-            {copy('board.dropped')} {view.droppedCount}
+            {headerLine}
           </AppText>
         </View>
       </Pressable>
@@ -141,11 +150,7 @@ export function ChallengeBoard({
       </View>
 
       <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
-        {copy('board.remaining')} {view.remainingCount}
-        {' · '}
-        {copy('board.caughtUp')} {view.caughtUpCount}
-        {' · '}
-        {copy('board.dropped')} {view.droppedCount}
+        {headerLine}
       </AppText>
       <MissBudgetLines challenge={challenge} used={missesUsed} />
 

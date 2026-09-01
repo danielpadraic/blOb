@@ -1,7 +1,9 @@
 export { BOARD_INFO, assertsNoBucksWord, boardEmptyCopy, boardRowTag, boardSettledCopy } from './copy';
 export {
+  boardCompletersCount,
   boardDisplayName,
   boardScoreLabel,
+  boardScoreOf,
   buildBoard,
   compactCountsFromStats,
   pointsLeader,

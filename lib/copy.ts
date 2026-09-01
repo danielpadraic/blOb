@@ -421,6 +421,7 @@ const STRINGS = {
   'board.remaining': 'Remaining',
   'board.caughtUp': 'Caught Up',
   'board.in': 'In',
+  'board.completers': 'Completers',
   'board.checkedIn': 'Checked in',
   'board.out': 'Out',
   'board.donePeriod': 'done this period',

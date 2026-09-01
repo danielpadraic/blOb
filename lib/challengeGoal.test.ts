@@ -40,6 +40,21 @@ describe('stored duration', () => {
     ).toBe(30);
   });
 
+  it('uses the task-point sum when target_count is the task count', () => {
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'points',
+          format: 'points',
+          target_count: 1,
+          tasks: [{ points: 10 }],
+          title: 'Prayer Challenge',
+        },
+        { pointsCompleted: 20 },
+      ),
+    ).toBe('20 / 10 points');
+  });
+
   it('prints personal points as logged / target', () => {
     expect(
       challengeGoalLabel(

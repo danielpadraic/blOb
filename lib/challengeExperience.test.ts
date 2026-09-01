@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   distanceProofIsSessionLog,
   usesAdvancedCreateEdit,
+  usesPointsBoard,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
 
@@ -29,6 +30,13 @@ describe('usesAdvancedCreateEdit', () => {
         tasks: [],
       }),
     ).toBe(false);
+  });
+});
+
+describe('usesPointsBoard', () => {
+  it('treats format points as a points board', () => {
+    expect(usesPointsBoard({ format: 'points', challenge_type: 'points' })).toBe(true);
+    expect(usesPointsBoard({ challenge_type: 'consistency' })).toBe(false);
   });
 });
 

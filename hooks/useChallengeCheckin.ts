@@ -9,6 +9,7 @@ import {
   type CheckinPhase,
 } from '@/lib/challengeCheckin';
 import { incrementDaysCompleted } from '@/lib/checkin/progress';
+import { checkinPointValue } from '@/lib/challengePoints';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
 import { parseProofParts, proofImageUrls } from '@/lib/challengeProofs';
 import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/localNudges';
@@ -356,6 +357,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
         }
         const bumpPoints =
           usesPointsBoard(cachedChallenge) && !usesComparablePointsScoring(cachedChallenge);
+        const award = bumpPoints ? checkinPointValue(cachedChallenge) : 0;
         queryClient.setQueryData<ChallengeParticipantLike[]>(
           ['challenge-participants', challengeId],
           (current) =>
@@ -364,9 +366,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
                 ? {
                     ...item,
                     days_completed: incrementDaysCompleted(Number(item.days_completed) || 0, false),
-                    points: bumpPoints
-                      ? incrementDaysCompleted(Number(item.points) || 0, false)
-                      : item.points,
+                    points: bumpPoints ? (Number(item.points) || 0) + award : item.points,
                   }
                 : item,
             ),
@@ -378,9 +378,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
               ? {
                   ...current,
                   days_completed: incrementDaysCompleted(Number(current.days_completed) || 0, false),
-                  points: bumpPoints
-                    ? incrementDaysCompleted(Number(current.points) || 0, false)
-                    : current.points,
+                  points: bumpPoints ? (Number(current.points) || 0) + award : current.points,
                 }
               : current,
         );

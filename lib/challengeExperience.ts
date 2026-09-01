@@ -113,7 +113,11 @@ export function usesConsistencyExperience(challenge?: ExperienceChallenge | null
 
 /** Ranked scoreboard — Comparable Points or classic task points. */
 export function usesPointsBoard(challenge?: ExperienceChallenge | null): boolean {
-  return usesComparablePointsScoring(challenge) || challenge?.challenge_type === 'points';
+  return (
+    usesComparablePointsScoring(challenge) ||
+    challenge?.challenge_type === 'points' ||
+    challenge?.format === 'points'
+  );
 }
 
 export function usesCumulativeScoring(challenge?: ExperienceChallenge | null): boolean {

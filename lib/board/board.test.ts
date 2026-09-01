@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertsNoBucksWord,
+  boardCompletersCount,
   boardEmptyCopy,
   boardScoreLabel,
+  boardScoreOf,
   boardSettledCopy,
   buildBoard,
   pointsLeader,
   pointsRank,
   rankBoardRows,
 } from '@/lib/board';
+import { checkinPointValue } from '@/lib/challengePoints';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { FORFEIT_RECEIPT } from '@/lib/settlement/receipts';
 
@@ -158,12 +161,31 @@ describe('ranked board', () => {
   });
 });
 
+describe('points board score', () => {
+  it('shows task points, not check-in count', () => {
+    const view = buildBoard({
+      status: 'live',
+      participants: [
+        { user_id: 'd', days_completed: 2, points: 20, status: 'joined', display_name: 'Daniel' },
+        { user_id: 's', days_completed: 0, points: 0, status: 'joined', display_name: 'Sam' },
+      ],
+    });
+    const rows = rankBoardRows(view.people, 'points');
+    expect(boardScoreLabel(rows[0]!, { pointsBoard: true, requiredDays: 7 })).toBe('20');
+    expect(boardScoreLabel(rows[1]!, { pointsBoard: true, requiredDays: 7 })).toBe('0');
+    expect(boardScoreOf(rows[0]!, 'points')).toBe(20);
+    expect(boardScoreOf(rows[1]!, 'points')).toBe(0);
+    expect(checkinPointValue({ tasks: [{ title: 'Pray', points: 10, once: false }] })).toBe(10);
+    expect(boardCompletersCount(view.people)).toBe(0);
+  });
+});
+
 describe('points goal', () => {
   it('labels comparable-points Score Points and task-points Reach N', () => {
     expect(challengeGoalLabel({ scoring_method: 'comparable_points', challenge_type: 'points' })).toBe(
       'Score Points',
     );
-    expect(challengeGoalLabel({ challenge_type: 'points', target_count: 12 })).toBe('Reach 12 points');
+    expect(challengeGoalLabel({ challenge_type: 'points', target_count: 12 })).toBe('0 / 12 points');
   });
 
   it('labels total-count fitness as N of T Check-Ins', () => {

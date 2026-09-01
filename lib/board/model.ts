@@ -18,6 +18,7 @@ export type BoardParticipant = {
   status?: string | null;
   eliminated_at?: string | null;
   joined_at?: string | null;
+  completed_at?: string | null;
   display_name?: string | null;
   username?: string | null;
   avatar_url?: string | null;
@@ -39,6 +40,7 @@ export type BoardPerson = {
   payout: number | null;
   you: boolean;
   eliminatedAt: string | null;
+  completedAt: string | null;
 };
 
 export type BoardRankedRow = BoardPerson & {
@@ -169,6 +171,7 @@ export function buildBoard(input: {
         payout: paidByUser.has(row.user_id) ? paidByUser.get(row.user_id) ?? 0 : null,
         you: Boolean(viewerId && row.user_id === viewerId),
         eliminatedAt: row.eliminated_at ?? null,
+        completedAt: row.completed_at ?? null,
       } satisfies BoardPerson;
     })
     .sort((a, b) => {
@@ -206,9 +209,12 @@ export function buildBoard(input: {
   };
 }
 
-export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days'): number {
+export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days' | 'finish'): number {
+  if (mode === 'finish') {
+    return person.completedAt ? Date.parse(person.completedAt) : Number.POSITIVE_INFINITY;
+  }
   if (mode === 'points') {
-    return person.points > 0 ? person.points : person.days;
+    return person.points;
   }
   return person.days;
 }
@@ -216,7 +222,7 @@ export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days'): numb
 export function yourStandingLine(
   people: BoardPerson[],
   viewerId?: string | null,
-  mode: 'points' | 'days' = 'days',
+  mode: 'points' | 'days' | 'finish' = 'days',
 ): string | null {
   if (!viewerId) {
     return null;
@@ -227,6 +233,10 @@ export function yourStandingLine(
     return null;
   }
   return `Your standing · ${you.rank}`;
+}
+
+export function boardCompletersCount(people: BoardPerson[]): number {
+  return people.filter((row) => row.completedAt && row.bucket !== 'dropped').length;
 }
 
 export function boardScoreLabel(
@@ -241,14 +251,16 @@ export function boardScoreLabel(
 
 export function rankBoardRows(
   people: BoardPerson[],
-  mode: 'points' | 'days',
+  mode: 'points' | 'days' | 'finish',
 ): BoardRankedRow[] {
   const inPlay = people.filter((row) => row.bucket !== 'dropped');
   const out = people.filter((row) => row.bucket === 'dropped');
-  inPlay.sort(
-    (a, b) =>
-      boardScoreOf(b, mode) - boardScoreOf(a, mode) || a.name.localeCompare(b.name),
-  );
+  inPlay.sort((a, b) => {
+    if (mode === 'finish') {
+      return boardScoreOf(a, mode) - boardScoreOf(b, mode) || a.name.localeCompare(b.name);
+    }
+    return boardScoreOf(b, mode) - boardScoreOf(a, mode) || a.name.localeCompare(b.name);
+  });
   out.sort((a, b) => {
     const aAt = a.eliminatedAt ? Date.parse(a.eliminatedAt) : 0;
     const bAt = b.eliminatedAt ? Date.parse(b.eliminatedAt) : 0;
