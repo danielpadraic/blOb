@@ -15,6 +15,7 @@ import {
   isLiveCheckinPost,
   liveChatText,
   liveCheckinLabel,
+  liveQuoteLine,
 } from '@/lib/liveThread';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { authorLabel, safeUserId } from '@/lib/safeIds';
@@ -25,6 +26,7 @@ import { commentMediaUrls, mediaKind } from '@/utils/media';
 export type LiveQuote = {
   name: string;
   text: string;
+  avatarUrl?: string | null;
 };
 
 type LiveBubbleProps = {
@@ -93,10 +95,12 @@ export const LiveBubble = memo(function LiveBubble({
           </ProfileLink>
         )}
         <View style={{ flexShrink: 1, minWidth: 0, alignItems: alignEnd ? 'flex-end' : 'flex-start' }}>
-          <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
-            {name}
-          </AppText>
-          {quote && !checkin ? <LiveQuoteChip quote={quote} /> : null}
+          {alignEnd ? null : (
+            <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
+              {name}
+            </AppText>
+          )}
+          {quote && !checkin ? <LiveQuoteChip quote={quote} mine={alignEnd} /> : null}
           {checkin ? (
             <View
               className="flex-row items-center"
@@ -225,21 +229,27 @@ export const LiveBubble = memo(function LiveBubble({
   );
 });
 
-function LiveQuoteChip({ quote }: { quote: LiveQuote }) {
+function LiveQuoteChip({ quote, mine }: { quote: LiveQuote; mine?: boolean }) {
+  const line = liveQuoteLine(quote.name, quote.text);
+  if (!line) {
+    return null;
+  }
   return (
     <View
       style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
         maxWidth: '100%',
         marginBottom: 4,
-        paddingLeft: 8,
-        borderLeftWidth: 2,
-        borderLeftColor: THEME.accent,
+        alignSelf: mine ? 'flex-end' : 'flex-start',
       }}>
-      <AppText className="text-[11px] font-semibold" style={{ color: THEME.textMuted }} numberOfLines={1}>
-        {quote.name}
-      </AppText>
-      <AppText className="text-[12px]" style={{ color: THEME.textMuted }} numberOfLines={2}>
-        {quote.text}
+      {quote.avatarUrl ? <Avatar uri={quote.avatarUrl} name={quote.name} size={16} /> : null}
+      <AppText
+        className="text-[12px]"
+        style={{ color: THEME.textMuted, flexShrink: 1 }}
+        numberOfLines={1}>
+        {line}
       </AppText>
     </View>
   );

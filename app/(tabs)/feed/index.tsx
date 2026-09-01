@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -6,6 +6,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedList } from '@/components/feed/FeedList';
 import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
+import { PulseRail } from '@/components/feed/PulseRail';
 import { ReelsRow } from '@/components/feed/ReelsRow';
 import { StoryTray } from '@/components/feed/StoryTray';
 import { Screen } from '@/components/ui/Screen';
@@ -18,6 +19,7 @@ import { socialKeys } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import { homeFeedFirstPaintLoading } from '@/lib/homeFeed';
+import { HOME_PULSE_KEY } from '@/lib/homePulse';
 import { THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
@@ -43,7 +45,19 @@ export default function FeedScreen() {
   const onRefresh = useCallback(() => {
     void feed.refetch();
     void queryClient.invalidateQueries({ queryKey: socialKeys.stories() });
+    void queryClient.invalidateQueries({ queryKey: [HOME_PULSE_KEY] });
   }, [feed, queryClient]);
+
+  const headerExtra = useMemo(
+    () => (
+      <View style={{ gap: 8 }}>
+        <FeaturedOfficialStrip />
+        <PulseRail />
+        <ReelsRow />
+      </View>
+    ),
+    [],
+  );
 
   const onCompose = useCallback(
     (input: ComposeInput) => createPost.mutateAsync(input),
@@ -108,12 +122,7 @@ export default function FeedScreen() {
             </View>
           ) : undefined
         }
-        headerExtra={
-          <View style={{ gap: 8 }}>
-            <FeaturedOfficialStrip />
-            <ReelsRow />
-          </View>
-        }
+        headerExtra={headerExtra}
         empty={<FeedEmptyState compact />}
         onRefresh={onRefresh}
         onRetry={() => void feed.refetch()}

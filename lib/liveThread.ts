@@ -84,6 +84,16 @@ export function liveQuotePreview(post: CheckinPostLike & { content?: string | nu
   return (post.media_urls ?? []).some(Boolean) ? 'Photo' : '';
 }
 
+/** One line for a reply quote or composer preview. Never a stacked card. */
+export function liveQuoteLine(name?: string | null, snippet?: string | null): string {
+  const who = String(name ?? '').replace(/\s+/g, ' ').trim();
+  const what = String(snippet ?? '').replace(/\s+/g, ' ').trim();
+  if (who && what) {
+    return `${who} · ${what}`;
+  }
+  return who || what;
+}
+
 export function findLiveParent(
   posts: PostWithMeta[],
   parentId?: string | null,

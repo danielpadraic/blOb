@@ -8,6 +8,7 @@ import { InlineComposer } from '@/components/feed/InlineComposer';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { AppText } from '@/components/ui/AppText';
+import { Avatar } from '@/components/ui/Avatar';
 import { copy } from '@/lib/copy';
 import {
   LIVE_CHIP_DONE,
@@ -17,6 +18,7 @@ import {
   liveChatText,
   isLiveCheckinPost,
   liveComposeFromInline,
+  liveQuoteLine,
   liveQuotePreview,
   type LiveThreadRow,
 } from '@/lib/liveThread';
@@ -30,6 +32,7 @@ type LiveReplyTarget = {
   postId: string;
   name: string;
   preview: string;
+  avatarUrl?: string | null;
   mention?: MentionChip | null;
 };
 
@@ -158,6 +161,7 @@ export function LiveThread({
               quote={{
                 name: authorLabel(item.parent.author),
                 text: liveQuotePreview(item.parent) || liveChatText(item.parent.content, item.parent.media_urls),
+                avatarUrl: item.parent.author?.avatar_url,
               }}
               reactions={item.comment.reactions}
               onReact={(type) => onReact(item.parent, type, item.comment.id)}
@@ -168,6 +172,7 @@ export function LiveThread({
                         postId: item.parent.id,
                         name: authorLabel(item.comment.author),
                         preview: liveChatText(item.comment.content) || 'Message',
+                        avatarUrl: item.comment.author?.avatar_url,
                         mention: mentionFromAuthor(item.comment.author, item.comment.author_id),
                       })
                   : undefined
@@ -183,6 +188,7 @@ export function LiveThread({
           ? {
               name: authorLabel(parent.author),
               text: liveQuotePreview(parent),
+              avatarUrl: parent.author?.avatar_url,
             }
           : null;
       return (
@@ -200,6 +206,7 @@ export function LiveThread({
                       postId: item.post.id,
                       name: authorLabel(item.post.author),
                       preview: liveQuotePreview(item.post) || 'Message',
+                      avatarUrl: item.post.author?.avatar_url,
                       mention: mentionFromAuthor(item.post.author, item.post.author_id),
                     })
                 : undefined
@@ -213,7 +220,7 @@ export function LiveThread({
 
   const composerPad = createStickyFooterPad(
     keyboardOpen,
-    tabBarLift(insets.bottom, 'sticky') + 8 + Math.max(footerReserve, 0),
+    tabBarLift(insets.bottom, 'sticky') + Math.max(footerReserve, 0),
   );
 
   return (
@@ -258,7 +265,7 @@ export function LiveThread({
             justifyContent: 'flex-end',
             gap: 12,
             paddingTop: 12,
-            paddingBottom: 12,
+            paddingBottom: 8,
             overflow: 'visible',
           }}
           ListEmptyComponent={
@@ -287,11 +294,35 @@ export function LiveThread({
             borderTopWidth: 1,
             borderTopColor: THEME.border,
             backgroundColor: THEME.background,
-            paddingHorizontal: 12,
-            paddingTop: 8,
+            paddingHorizontal: 10,
+            paddingTop: 4,
             paddingBottom: composerPad,
           }}>
-          <View className="mb-2 flex-row" style={{ gap: 8 }}>
+          {replyTo ? (
+            <View
+              className="flex-row items-center"
+              style={{ gap: 8, minHeight: 28, marginBottom: 2 }}>
+              {replyTo.avatarUrl ? (
+                <Avatar uri={replyTo.avatarUrl} name={replyTo.name} size={16} />
+              ) : null}
+              <AppText
+                className="text-[12px]"
+                style={{ flex: 1, minWidth: 0, color: THEME.textMuted }}
+                numberOfLines={1}>
+                {liveQuoteLine(replyTo.name, replyTo.preview)}
+              </AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel reply"
+                onPress={() => setReplyTo(null)}
+                style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
+                <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
+                  ×
+                </AppText>
+              </Pressable>
+            </View>
+          ) : null}
+          <View className="flex-row items-end" style={{ gap: 4 }}>
             <LiveChip
               label={LIVE_CHIP_STARTING}
               disabled={Boolean(composing)}
@@ -302,55 +333,27 @@ export function LiveThread({
               disabled={Boolean(composing)}
               onPress={() => void submitChip(LIVE_CHIP_DONE)}
             />
-          </View>
-          {replyTo ? (
-            <View
-              className="mb-2 flex-row items-center"
-              style={{
-                gap: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 8,
-                borderRadius: 12,
-                backgroundColor: THEME.surface,
-                borderWidth: 1,
-                borderColor: THEME.border,
-              }}>
-              <View style={{ flex: 1, minWidth: 0, borderLeftWidth: 2, borderLeftColor: THEME.accent, paddingLeft: 8 }}>
-                <AppText className="text-[11px] font-semibold" style={{ color: THEME.accent }} numberOfLines={1}>
-                  {replyTo.name}
-                </AppText>
-                <AppText className="text-[12px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
-                  {replyTo.preview}
-                </AppText>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cancel reply"
-                onPress={() => setReplyTo(null)}
-                style={{ minHeight: 32, minWidth: 32, alignItems: 'center', justifyContent: 'center' }}>
-                <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
-                  ×
-                </AppText>
-              </Pressable>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <InlineComposer
+                key={replyTo?.postId ?? 'live'}
+                pinned
+                bar
+                autoFocus={Boolean(replyTo)}
+                placeholder={copy('live.placeholder')}
+                submitLabel={copy('live.send')}
+                submitting={composing}
+                audience="public"
+                replyTo={replyTo?.mention}
+                onSubmit={async (content, mentionedUserIds) => {
+                  try {
+                    await submitLine(content, mentionedUserIds, replyTo?.postId);
+                  } catch (error) {
+                    Alert.alert('Couldn’t post that', getErrorMessage(error));
+                  }
+                }}
+              />
             </View>
-          ) : null}
-          <InlineComposer
-            key={replyTo?.postId ?? 'live'}
-            pinned
-            autoFocus={Boolean(replyTo)}
-            placeholder={copy('live.placeholder')}
-            submitLabel={copy('live.send')}
-            submitting={composing}
-            audience="public"
-            replyTo={replyTo?.mention}
-            onSubmit={async (content, mentionedUserIds) => {
-              try {
-                await submitLine(content, mentionedUserIds, replyTo?.postId);
-              } catch (error) {
-                Alert.alert('Couldn’t post that', getErrorMessage(error));
-              }
-            }}
-          />
+          </View>
         </View>
       ) : (
         <View style={{ height: composerPad }} />
@@ -375,15 +378,13 @@ const LiveChip = memo(function LiveChip({
       disabled={disabled}
       onPress={onPress}
       style={{
-        minHeight: 32,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        backgroundColor: THEME.accentSoft,
+        minHeight: 28,
+        paddingHorizontal: 4,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: disabled ? 0.45 : 1,
       }}>
-      <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+      <AppText className="text-[11px] font-semibold" style={{ color: THEME.accent }}>
         {label}
       </AppText>
     </Pressable>

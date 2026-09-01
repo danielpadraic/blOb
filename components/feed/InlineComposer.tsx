@@ -44,6 +44,8 @@ type InlineComposerProps = {
   onExpandedChange?: (expanded: boolean) => void;
   /** Keep the camera / gallery / GIF row open. Used by Live. */
   pinned?: boolean;
+  /** Live: one thin bar — cam, field, Send. Home comments stay stacked. */
+  bar?: boolean;
   autoFocus?: boolean;
   onSubmit: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
 };
@@ -58,6 +60,7 @@ export function InlineComposer({
   expanded: expandedProp,
   onExpandedChange,
   pinned,
+  bar = false,
   autoFocus = true,
   onSubmit,
 }: InlineComposerProps) {
@@ -73,9 +76,11 @@ export function InlineComposer({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [gifOpen, setGifOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const expanded = pinned ? true : (expandedProp ?? internalExpanded);
+  const [fieldFocused, setFieldFocused] = useState(autoFocus);
+  const expanded = bar ? true : pinned ? true : (expandedProp ?? internalExpanded);
   const busy = Boolean(submitting || uploading);
   const canSend = hasText || attachments.length > 0;
+  const fieldCollapsed = bar ? !fieldFocused && !hasText && attachments.length === 0 : !expanded;
 
   function setExpanded(next: boolean) {
     onExpandedChange?.(next);
@@ -271,35 +276,128 @@ export function InlineComposer({
     }
   }
 
-  return (
-    <View style={{ gap: 6, overflow: 'visible' }}>
-      <MentionField
-        key={fieldKey}
-        ref={fieldRef}
-        compact
-        collapsed={!expanded}
-        pickerPlacement="above"
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        initialMention={replyTo}
-        audience={audience}
-        audienceUserIds={audienceUserIds}
-        onChange={onDocChange}
-        onSubmit={() => void submit()}
-        onFocus={() => {
+  const field = (
+    <MentionField
+      key={fieldKey}
+      ref={fieldRef}
+      compact
+      collapsed={fieldCollapsed}
+      maxLines={bar ? 4 : undefined}
+      pickerPlacement="above"
+      autoFocus={autoFocus}
+      placeholder={placeholder}
+      initialMention={replyTo}
+      audience={audience}
+      audienceUserIds={audienceUserIds}
+      onChange={onDocChange}
+      onSubmit={() => void submit()}
+      onFocus={() => {
+        cancelCollapse();
+        setFieldFocused(true);
+        setExpanded(true);
+      }}
+      onBlur={() => {
+        setFieldFocused(false);
+        scheduleCollapse();
+      }}
+      accessibilityLabel={placeholder}
+    />
+  );
+
+  const sendButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={submitLabel}
+      disabled={!canSend || busy}
+      onPress={() => void submit()}
+      onPressIn={() => {
+        holdFocus.current = true;
+        cancelCollapse();
+      }}
+      {...keepFocusProps()}
+      style={{
+        minHeight: bar ? 32 : 36,
+        paddingHorizontal: bar ? 10 : 14,
+        borderRadius: 999,
+        backgroundColor: THEME.primary,
+        opacity: !canSend || busy ? 0.38 : 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <AppText
+        className={bar ? 'text-[13px] font-semibold' : 'text-[14px] font-semibold'}
+        style={{ color: THEME.primaryForeground }}>
+        {submitLabel}
+      </AppText>
+    </Pressable>
+  );
+
+  const attachIcons = (
+    <>
+      {bar ? null : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mention someone"
+          hitSlop={8}
+          onPress={() => fieldRef.current?.insertAt()}
+          onPressIn={() => {
+            holdFocus.current = true;
+            cancelCollapse();
+          }}
+          {...keepFocusProps()}
+          style={{ minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center' }}>
+          <AppText className="text-[16px] font-extrabold" style={{ color: THEME.accent }}>
+            @
+          </AppText>
+        </Pressable>
+      )}
+      <ReplyIcon
+        glyph={GLYPH.camera}
+        label="Camera"
+        compact={bar}
+        onPress={() => void pickCamera()}
+        onPressIn={() => {
+          holdFocus.current = true;
+          cancelCollapse();
+        }}
+      />
+      {bar ? null : (
+        <ReplyIcon
+          glyph={GLYPH.album}
+          label="Gallery"
+          onPress={() => void pickGallery()}
+          onPressIn={() => {
+            holdFocus.current = true;
+            cancelCollapse();
+          }}
+        />
+      )}
+      <ReplyIcon
+        mark="GIF"
+        label="GIF"
+        compact={bar}
+        onPress={() => {
           cancelCollapse();
           setExpanded(true);
+          setGifOpen((open) => !open);
         }}
-        onBlur={scheduleCollapse}
-        accessibilityLabel={placeholder}
+        onPressIn={() => {
+          holdFocus.current = true;
+          cancelCollapse();
+        }}
       />
+    </>
+  );
+
+  return (
+    <View style={{ gap: bar ? 4 : 6, overflow: 'visible' }}>
       {attachments.length > 0 ? (
         <View className="flex-row flex-wrap gap-1.5">
           {attachments.map((attachment) => (
             <AttachmentChip
               key={attachment.id}
               attachment={attachment}
-              compact={!expanded}
+              compact
               onRemove={() =>
                 setAttachments((current) => current.filter((item) => item.id !== attachment.id))
               }
@@ -307,80 +405,38 @@ export function InlineComposer({
           ))}
         </View>
       ) : null}
-      {expanded ? (
-        <View className="flex-row items-center" style={{ gap: 2, minHeight: 36 }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Mention someone"
-            hitSlop={8}
-            onPress={() => fieldRef.current?.insertAt()}
-            onPressIn={() => {
-              holdFocus.current = true;
-              cancelCollapse();
-            }}
-            {...keepFocusProps()}
-            style={{ minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center' }}>
-            <AppText className="text-[16px] font-extrabold" style={{ color: THEME.accent }}>
-              @
-            </AppText>
-          </Pressable>
-          <ReplyIcon
-            glyph={GLYPH.camera}
-            label="Camera"
-            onPress={() => void pickCamera()}
-            onPressIn={() => {
-              holdFocus.current = true;
-              cancelCollapse();
-            }}
-          />
-          <ReplyIcon
-            glyph={GLYPH.album}
-            label="Gallery"
-            onPress={() => void pickGallery()}
-            onPressIn={() => {
-              holdFocus.current = true;
-              cancelCollapse();
-            }}
-          />
-          <ReplyIcon
-            mark="GIF"
-            label="GIF"
-            onPress={() => {
-              cancelCollapse();
-              setExpanded(true);
-              setGifOpen((open) => !open);
-            }}
-            onPressIn={() => {
-              holdFocus.current = true;
-              cancelCollapse();
-            }}
-          />
-          <View className="flex-1" />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={submitLabel}
-            disabled={!canSend || busy}
-            onPress={() => void submit()}
-            onPressIn={() => {
-              holdFocus.current = true;
-              cancelCollapse();
-            }}
-            {...keepFocusProps()}
+      {bar ? (
+        <View className="flex-row items-end" style={{ gap: 4, minHeight: 38 }}>
+          {attachIcons}
+          <View
+            className="min-w-0 flex-1"
             style={{
               minHeight: 36,
-              paddingHorizontal: 14,
-              borderRadius: 999,
-              backgroundColor: THEME.primary,
-              opacity: !canSend || busy ? 0.38 : 1,
-              alignItems: 'center',
+              maxHeight: 116,
+              paddingHorizontal: 10,
+              paddingVertical: 2,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              backgroundColor: THEME.surface,
               justifyContent: 'center',
             }}>
-            <AppText className="text-[14px] font-semibold" style={{ color: THEME.primaryForeground }}>
-              {submitLabel}
-            </AppText>
-          </Pressable>
+            {field}
+          </View>
+          {sendButton}
         </View>
-      ) : null}
+      ) : (
+        <>
+          {field}
+          {expanded ? (
+            <View className="flex-row items-center" style={{ gap: 2, minHeight: 36 }}>
+              {attachIcons}
+              <View className="flex-1" />
+              {sendButton}
+            </View>
+          ) : null}
+        </>
+      )}
       {expanded && gifOpen ? (
         <GifPicker
           visible
@@ -411,15 +467,18 @@ function ReplyIcon({
   glyph,
   mark,
   label,
+  compact,
   onPress,
   onPressIn,
 }: {
   glyph?: (typeof GLYPH)[keyof typeof GLYPH];
   mark?: string;
   label: string;
+  compact?: boolean;
   onPress: () => void;
   onPressIn?: () => void;
 }) {
+  const box = compact ? 32 : 36;
   return (
     <Pressable
       accessibilityRole="button"
@@ -428,7 +487,7 @@ function ReplyIcon({
       onPressIn={onPressIn}
       hitSlop={4}
       {...keepFocusProps()}
-      style={{ minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center' }}>
+      style={{ minHeight: box, minWidth: box, alignItems: 'center', justifyContent: 'center' }}>
       {mark ? (
         <AppText className="text-[11px] font-extrabold" style={{ color: THEME.textMuted }}>
           {mark}

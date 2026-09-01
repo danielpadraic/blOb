@@ -38,7 +38,7 @@ import {
 } from '@/lib/mentions';
 import {
   COMPOSER_LINE_HEIGHT,
-  COMPOSER_MAX_HEIGHT,
+  COMPOSER_MAX_LINES,
   COMPOSER_MIN_HEIGHT,
   composerFieldHeight,
 } from '@/lib/composerField';
@@ -49,13 +49,14 @@ import type { PostAudience } from '@/lib/postAudience';
 const FONT = 15;
 const LINE = COMPOSER_LINE_HEIGHT;
 const MIN_HEIGHT = COMPOSER_MIN_HEIGHT;
-const MAX_HEIGHT = COMPOSER_MAX_HEIGHT;
 
 type MentionFieldProps = {
   placeholder?: string;
   autoFocus?: boolean;
   compact?: boolean;
   collapsed?: boolean;
+  /** Grow this many lines then scroll inside the field. Default is the shared Home lock. */
+  maxLines?: number;
   pickerPlacement?: 'above' | 'below';
   initialText?: string;
   initialMention?: MentionChip | null;
@@ -82,6 +83,7 @@ function MentionFieldInner(
     autoFocus,
     compact,
     collapsed,
+    maxLines: maxLinesProp,
     pickerPlacement = 'below',
     initialText,
     initialMention,
@@ -239,12 +241,15 @@ function MentionFieldInner(
 
   const frost = tone === 'frost';
   const heightLocked = Boolean(collapsed && !text.trim());
+  const maxLines = maxLinesProp ?? COMPOSER_MAX_LINES;
+  const maxHeight = LINE * maxLines + Math.max(0, MIN_HEIGHT - LINE);
 
   function applyHeight(nextText: string, contentHeight?: number) {
     const next = composerFieldHeight({
       collapsed: heightLocked,
       text: nextText,
       contentHeight,
+      maxLines,
     });
     setHeight((current) => (current === next ? current : next));
   }
@@ -378,7 +383,7 @@ function MentionFieldInner(
         placeholderTextColor={frost ? 'rgba(255,255,255,0.5)' : THEME.textMuted}
         autoFocus={autoFocus}
         multiline
-        scrollEnabled={!heightLocked && height >= MAX_HEIGHT - 2}
+        scrollEnabled={!heightLocked && height >= maxHeight - 2}
         blurOnSubmit={false}
         autoComplete="off"
         textContentType="none"
@@ -403,7 +408,7 @@ function MentionFieldInner(
         }}
         style={{
           minHeight: MIN_HEIGHT,
-          maxHeight: heightLocked ? MIN_HEIGHT : MAX_HEIGHT,
+          maxHeight: heightLocked ? MIN_HEIGHT : maxHeight,
           paddingVertical: 6,
           paddingHorizontal: 0,
           color: frost ? '#F5F5F5' : THEME.textPrimary,

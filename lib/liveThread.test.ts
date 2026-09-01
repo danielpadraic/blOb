@@ -6,6 +6,7 @@ import {
   formatLiveClock,
   liveChatText,
   liveCheckinLabel,
+  liveQuoteLine,
   liveQuotePreview,
   liveReactionCounts,
   liveComposeFromInline,
@@ -63,6 +64,15 @@ describe('liveQuotePreview', () => {
       'Good job!',
     );
     expect(liveQuotePreview({ content: 'Good job!', media_urls: [] })).toBe('Good job!');
+  });
+});
+
+describe('liveQuoteLine', () => {
+  it('joins name and snippet on one line', () => {
+    expect(liveQuoteLine('Courtney', 'Check-in Complete')).toBe('Courtney · Check-in Complete');
+    expect(liveQuoteLine('Courtney', 'starting now')).toBe('Courtney · starting now');
+    expect(liveQuoteLine('Courtney', '')).toBe('Courtney');
+    expect(liveQuoteLine('', 'Photo')).toBe('Photo');
   });
 });
 

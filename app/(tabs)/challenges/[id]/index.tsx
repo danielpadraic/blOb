@@ -888,7 +888,9 @@ export default function ChallengeDetailScreen() {
     (stickyJoin || stickyCheckin);
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
   const stickyBlock = showStickyCta
-    ? JOIN_CTA_HEIGHT + (!checkinLocked && watch.visible ? 44 : 12) + (periodDueClock ? 40 : 0)
+    ? JOIN_CTA_HEIGHT +
+      (!checkinLocked && watch.visible ? 44 : 12) +
+      (!checkinLocked && periodDueClock ? 40 : 0)
     : 0;
 
   return (
@@ -983,13 +985,9 @@ export default function ChallengeDetailScreen() {
         {startLine ? (
           <AppText className="mt-2 text-[13px] leading-5 text-muted">{startLine}</AppText>
         ) : null}
-        {pageTab === 'overview' ? (
+        {pageTab === 'overview' && !loggedToday ? (
           <View className="mt-3">
-            <PeriodCheckinDue
-              challenge={challenge}
-              submitted={loggedToday}
-              nowMs={nowMs}
-            />
+            <PeriodCheckinDue challenge={challenge} submitted={false} nowMs={nowMs} />
           </View>
         ) : null}
         {challenge.description?.trim() ? (
@@ -1372,6 +1370,8 @@ export default function ChallengeDetailScreen() {
           bottom: 0,
           zIndex: 20,
           paddingHorizontal: 16,
+          paddingTop: 8,
+          backgroundColor: THEME.background,
         }}>
         {stickyJoin ? (
           <View className="gap-1.5">
@@ -1397,13 +1397,15 @@ export default function ChallengeDetailScreen() {
           <Button title="Checking today’s check-in" size="md" loading disabled />
         ) : (
           <View className="gap-2">
-            <PeriodCheckinDue
-              challenge={challenge}
-              submitted={checkinLocked}
-              nowMs={nowMs}
-              compact
-              align="center"
-            />
+            {checkinLocked ? null : (
+              <PeriodCheckinDue
+                challenge={challenge}
+                submitted={false}
+                nowMs={nowMs}
+                compact
+                align="center"
+              />
+            )}
             {checkinLocked ? (
               <View
                 accessibilityRole="button"

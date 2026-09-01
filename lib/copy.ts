@@ -651,6 +651,8 @@ const STRINGS = {
   'checkin.multiComplete': 'Complete',
   'live.placeholder': 'Message the lobby…',
   'live.send': 'Send',
+  'pulse.noChatter': 'No chatter yet',
+  'pulse.rail': 'Pulse',
   'detail.checkinDue': 'Check-in due',
   'detail.caughtUp': 'Caught Up',
 } as const;
