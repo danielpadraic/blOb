@@ -735,6 +735,7 @@ export interface Callout {
   challenge_id?: string | null;
   format?: CalloutFormat | string | null;
   proofs?: ChallengeProof[] | null;
+  expires_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1858,6 +1859,10 @@ export type Database = {
       submit_callout_result: {
         Args: { p_callout_id: string; p_winner_id: string };
         Returns: Callout;
+      };
+      expire_pending_callouts: {
+        Args: Record<string, never>;
+        Returns: number;
       };
       cancel_callout: {
         Args: { p_callout_id: string };

@@ -22,7 +22,8 @@ import {
 } from '@/lib/callouts';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
 import { reportBadgeActivity } from '@/lib/badgeActivity';
-import type { Callout, PublicProfile, WalletCurrency } from '@/lib/types';
+import type { ChallengeProof } from '@/lib/challengeProofs';
+import type { Callout, CalloutFormat, PublicProfile, WalletCurrency } from '@/lib/types';
 
 function invalidateCallouts(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ['callouts'] });
@@ -162,6 +163,8 @@ export function useCreateCallout() {
       currency: WalletCurrency;
       winCondition: string;
       deadline: string;
+      proofs?: ChallengeProof[];
+      format?: CalloutFormat;
     }) => createCallout(input),
     onSuccess: () => invalidateCallouts(queryClient),
   });

@@ -15,6 +15,7 @@ import { LiveThread } from '@/components/challenge/LiveThread';
 import { ChallengeDetailsCard } from '@/components/challenge/ChallengeDetailsCard';
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { CalloutHonorCard } from '@/components/challenge/CalloutHonorCard';
+import { CalloutRematchButton } from '@/components/challenge/CalloutRematchButton';
 import { CalloutLiveWatchChip, CalloutWatchers } from '@/components/challenge/CalloutWatchers';
 import { HostRoundPromptChip } from '@/components/challenge/HostRoundPromptChip';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
@@ -1075,6 +1076,11 @@ export default function ChallengeDetailScreen() {
         ) : null}
         {pageTab === 'overview' && challenge?.is_callout && !isCalloutObserver ? (
           <CalloutHonorCard challengeId={challenge.id} />
+        ) : null}
+        {pageTab === 'overview' && calloutQuery.data?.status === 'settled' && isCalloutFighterViewer ? (
+          <View className="mt-3">
+            <CalloutRematchButton callout={calloutQuery.data} me={user?.id} />
+          </View>
         ) : null}
         {pageTab === 'overview' && calloutQuery.data && isCalloutFighterViewer ? (
           <CalloutWatchers callout={calloutQuery.data} me={user?.id} isFighter />

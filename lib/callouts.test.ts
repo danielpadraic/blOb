@@ -27,6 +27,12 @@ import {
   isCalloutChallengeObserver,
   isCalloutRosterLive,
   isCalloutRosterSeat,
+  CALLOUT_EXPIRED_COPY,
+  CALLOUT_PENDING_CAP_COPY,
+  calloutCreateBlocked,
+  calloutRematchHref,
+  isCalloutInviteExpired,
+  outgoingPendingCallouts,
   pendingHomeCallouts,
   selectCalloutObserverIds,
   selectCalloutOpponentIds,
@@ -100,6 +106,67 @@ describe('pendingHomeCallouts', () => {
     ] as Callout[];
     expect(pendingHomeCallouts(rows, 'me').map((row) => row.id)).toEqual(['a']);
     expect(pendingHomeCallouts(rows, 'watcher').map((row) => row.id)).toEqual([]);
+  });
+
+  it('drops expired pending pins and never expires an active hold', () => {
+    const now = Date.parse('2026-09-04T12:00:00.000Z');
+    const rows = [
+      {
+        id: 'old',
+        status: 'pending',
+        held: false,
+        challenger_id: 'me',
+        opponent_id: 'them',
+        expires_at: '2026-09-04T11:00:00.000Z',
+      },
+      {
+        id: 'live',
+        status: 'pending',
+        held: false,
+        challenger_id: 'them',
+        opponent_id: 'me',
+        expires_at: '2026-09-05T12:00:00.000Z',
+      },
+      {
+        id: 'held',
+        status: 'active',
+        held: true,
+        challenger_id: 'me',
+        opponent_id: 'them',
+        expires_at: '2026-09-01T12:00:00.000Z',
+      },
+    ] as Callout[];
+    expect(pendingHomeCallouts(rows, 'me', now).map((row) => row.id)).toEqual(['live']);
+    expect(isCalloutInviteExpired(rows[2], now)).toBe(false);
+    expect(CALLOUT_EXPIRED_COPY).toBe('Callout expired.');
+  });
+});
+
+describe('outgoing pending cap', () => {
+  it('blocks a fourth outgoing pending and leaves incoming uncapped', () => {
+    const now = Date.parse('2026-09-04T12:00:00.000Z');
+    const outgoing = [1, 2, 3].map((n) => ({
+      id: `out-${n}`,
+      status: 'pending' as const,
+      held: false,
+      challenger_id: 'me',
+      opponent_id: `them-${n}`,
+      expires_at: '2026-09-05T12:00:00.000Z',
+    }));
+    const incoming = [1, 2, 3, 4].map((n) => ({
+      id: `in-${n}`,
+      status: 'pending' as const,
+      held: false,
+      challenger_id: `friend-${n}`,
+      opponent_id: 'me',
+      expires_at: '2026-09-05T12:00:00.000Z',
+    }));
+    const rows = [...outgoing, ...incoming] as Callout[];
+    expect(outgoingPendingCallouts(rows, 'me', now)).toHaveLength(3);
+    expect(calloutCreateBlocked(rows, 'me', now)).toBe(true);
+    expect(pendingHomeCallouts(rows, 'me', now)).toHaveLength(7);
+    expect(CALLOUT_PENDING_CAP_COPY).toBe('Finish or cancel one Callout first.');
+    expect(calloutRematchHref('co-1')).toBe('/challenges/callout/create?rematch=co-1');
   });
 });
 

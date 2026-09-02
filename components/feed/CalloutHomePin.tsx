@@ -12,7 +12,12 @@ import {
   useDeclineCallout,
   usePendingHomeCallouts,
 } from '@/hooks/useCallouts';
-import { calloutActiveChallengeHref, calloutTitle, calloutVsLine } from '@/lib/callouts';
+import {
+  calloutActiveChallengeHref,
+  calloutTitle,
+  calloutVsLine,
+  isCalloutInviteExpired,
+} from '@/lib/callouts';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Callout, PublicProfile } from '@/lib/types';
 
@@ -87,6 +92,7 @@ function CalloutPinRow({
   const other = isOpponent ? challenger : opponent;
   const title = calloutTitle(callout.win_condition);
   const vsLine = calloutVsLine(profileName(other));
+  const livePending = callout.status === 'pending' && !isCalloutInviteExpired(callout);
 
   return (
     <Pressable
@@ -130,14 +136,14 @@ function CalloutPinRow({
           {vsLine || (isOpponent ? profileName(challenger) : profileName(opponent))}
         </AppText>
       </View>
-      {isOpponent ? (
+      {livePending && isOpponent ? (
         <View style={{ flexDirection: 'row', gap: 6 }}>
           <PinButton label="Decline" muted disabled={busy} onPress={onDecline} />
           <PinButton label="Accept" disabled={busy} onPress={onAccept} />
         </View>
-      ) : (
+      ) : livePending ? (
         <PinButton label="Cancel" muted disabled={busy} onPress={onCancel} />
-      )}
+      ) : null}
     </Pressable>
   );
 }

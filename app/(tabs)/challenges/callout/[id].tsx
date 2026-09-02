@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { CalloutRematchButton } from '@/components/challenge/CalloutRematchButton';
 import { CalloutWatchers } from '@/components/challenge/CalloutWatchers';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -324,6 +325,9 @@ export default function CalloutDetailScreen() {
             {callout.winner_id === me ? 'You won' : `${pickName(callout.winner_id, challenger, opponent)} won`}
           </AppText>
           <AppText className="mt-1 text-muted">{pot} released.</AppText>
+          <View className="mt-3">
+            <CalloutRematchButton callout={callout} me={me} />
+          </View>
         </Card>
       ) : null}
 

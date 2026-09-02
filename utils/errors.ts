@@ -712,6 +712,9 @@ function humanize(raw: string): string {
   if (message.includes('pick someone else to watch')) {
     return 'Pick someone else to watch.';
   }
+  if (message.includes('finish or cancel one callout first')) {
+    return 'Finish or cancel one Callout first.';
+  }
   if (message.includes('pending call-out with them') || message.includes('pending callout with them')) {
     return 'You already have a pending Callout with them.';
   }

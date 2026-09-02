@@ -15,19 +15,25 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import {
   profileName,
+  useCallout,
   useCalloutOpponents,
+  useCalloutProfiles,
   useCreateCallout,
   useMyCallouts,
 } from '@/hooks/useCallouts';
+import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
   CALLOUT_FORMATS,
+  CALLOUT_PENDING_CAP_COPY,
   CALLOUT_TASK_PLACEHOLDER,
   CALLOUT_TITLE_PREFIX,
+  calloutCreateBlocked,
   calloutFormatOf,
   calloutProofsForCreate,
   calloutRulesLine,
   calloutStatusLabel,
+  calloutTask,
   calloutTaskOk,
   calloutTitle,
   deadlineFromPreset,
@@ -56,11 +62,15 @@ const DEADLINES: { id: CalloutDeadlinePreset; label: string }[] = [
 
 export default function CreateCalloutScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ username?: string }>();
+  const params = useLocalSearchParams<{ username?: string; rematch?: string }>();
   const handle = Array.isArray(params.username) ? params.username[0] : params.username;
+  const rematchId = Array.isArray(params.rematch) ? params.rematch[0] : params.rematch;
+  const { user } = useAuth();
   const { profile } = useMyProfile();
   const create = useCreateCallout();
   const mine = useMyCallouts();
+  const rematch = useCallout(rematchId);
+  const rematchPeople = useCalloutProfiles(rematch.data ?? null);
   const opponents = useCalloutOpponents();
 
   const [currency, setCurrency] = useState<WalletCurrency>('coins');
@@ -74,6 +84,7 @@ export default function CreateCalloutScreen() {
   const [distanceUnit, setDistanceUnit] = useState(athleteDistanceUnit());
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [rematchReady, setRematchReady] = useState(false);
 
   const people = opponents.data ?? [];
   const visiblePeople = useMemo(() => filterCalloutPeople(people, query), [people, query]);
@@ -87,6 +98,29 @@ export default function CreateCalloutScreen() {
   const allChecked = acks.every((item) => checked[item.id]);
   const title = calloutTitle(task);
   const winOk = calloutTaskOk(task);
+  const capBlocked = calloutCreateBlocked(mine.data, user?.id);
+
+  useEffect(() => {
+    const row = rematch.data;
+    if (!row || rematchReady) {
+      return;
+    }
+    const otherId = user?.id === row.challenger_id ? row.opponent_id : row.challenger_id;
+    const other = (rematchPeople.data ?? []).find((person) => person.id === otherId) ?? null;
+    setTask(calloutTask(row.win_condition));
+    setAmountDraft(String(row.stake_amount));
+    setCurrency(row.currency === 'bucks' ? 'bucks' : 'coins');
+    setFormat(calloutFormatOf(row.format));
+    setProofs(calloutProofsForCreate(row.proofs));
+    if (other) {
+      setOpponent(other);
+      setRematchReady(true);
+      return;
+    }
+    if (rematchPeople.isFetched) {
+      setRematchReady(true);
+    }
+  }, [rematch.data, rematchPeople.data, rematchPeople.isFetched, rematchReady, user?.id]);
 
   useEffect(() => {
     if (!handle || opponent) {
@@ -101,7 +135,7 @@ export default function CreateCalloutScreen() {
   }, [handle, opponent, people]);
 
   async function submit() {
-    if (!opponent || amountIssue || !winOk || !allChecked || create.isPending) {
+    if (!opponent || amountIssue || !winOk || !allChecked || capBlocked || create.isPending) {
       return;
     }
     setError(null);
@@ -367,7 +401,9 @@ export default function CreateCalloutScreen() {
         </View>
       ) : null}
 
-      {error ? (
+      {capBlocked ? (
+        <AppText className="mt-4 text-sm leading-5 text-coral-dark">{CALLOUT_PENDING_CAP_COPY}</AppText>
+      ) : error ? (
         <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
       ) : null}
 
@@ -376,7 +412,7 @@ export default function CreateCalloutScreen() {
           title="Send Callout"
           size="lg"
           loading={create.isPending}
-          disabled={!opponent || Boolean(amountIssue) || !winOk || !allChecked}
+          disabled={!opponent || Boolean(amountIssue) || !winOk || !allChecked || capBlocked}
           onPress={() => void submit()}
         />
         <Button title="Cancel" variant="ghost" onPress={() => router.back()} />

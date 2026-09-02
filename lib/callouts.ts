@@ -19,12 +19,16 @@ import type { Callout, CalloutFormat, CalloutObserver, CalloutStatus, PublicProf
 import { getErrorMessage } from '@/utils/errors';
 
 const CALLOUT_COLUMNS =
-  'id, challenger_id, opponent_id, currency, stake_amount, win_condition, deadline, status, held, challenger_pick, opponent_pick, winner_id, challenger_cancel_at, opponent_cancel_at, challenge_id, proofs, format, created_at, updated_at';
+  'id, challenger_id, opponent_id, currency, stake_amount, win_condition, deadline, status, held, challenger_pick, opponent_pick, winner_id, challenger_cancel_at, opponent_cancel_at, challenge_id, proofs, format, expires_at, created_at, updated_at';
 
 export const CALLOUT_TITLE_PREFIX = 'Callout:';
 export const CALLOUT_TASK_PLACEHOLDER = '30-min skill';
 export const CALLOUT_WATCHING_LINE = 'Watching — no entry, no prize.';
 export const CALLOUT_CHEER_PLACEHOLDER = 'Cheer them on…';
+export const CALLOUT_PENDING_OUT_CAP = 3;
+export const CALLOUT_PENDING_CAP_COPY = 'Finish or cancel one Callout first.';
+export const CALLOUT_EXPIRED_COPY = 'Callout expired.';
+export const CALLOUT_PENDING_TTL_MS = 72 * 60 * 60 * 1000;
 
 export type CalloutDeadlinePreset = '24h' | '3d' | '7d';
 
@@ -119,6 +123,7 @@ export function asCallout(row: Callout & { title?: string | null }): Callout {
     challenge_id: row.challenge_id ?? null,
     format: calloutFormatOf(row.format),
     proofs: calloutProofsForCreate(parseChallengeProofs((row as { proofs?: unknown }).proofs)),
+    expires_at: row.expires_at ?? null,
     status: (status === 'resolved' ? 'settled' : status) as CalloutStatus,
     challenger_pick: row.challenger_pick ?? null,
     opponent_pick: row.opponent_pick ?? null,
@@ -364,12 +369,65 @@ export function isCalloutFighter(
   return Boolean(userId && (userId === callout.challenger_id || userId === callout.opponent_id));
 }
 
+export function calloutInviteExpiresAt(
+  row?: Pick<Callout, 'expires_at' | 'created_at'> | null,
+): number {
+  const explicit = Date.parse(String(row?.expires_at ?? ''));
+  if (Number.isFinite(explicit)) {
+    return explicit;
+  }
+  const created = Date.parse(String(row?.created_at ?? ''));
+  return Number.isFinite(created) ? created + CALLOUT_PENDING_TTL_MS : Number.NaN;
+}
+
+/** Pending invite clock only. Active or held rows never expire here. */
+export function isCalloutInviteExpired(
+  row?: Pick<Callout, 'status' | 'held' | 'expires_at' | 'created_at'> | null,
+  nowMs = Date.now(),
+): boolean {
+  if (!row || row.status !== 'pending' || row.held) {
+    return false;
+  }
+  const at = calloutInviteExpiresAt(row);
+  return Number.isFinite(at) && at <= nowMs;
+}
+
+export function outgoingPendingCallouts(
+  rows: Callout[] | null | undefined,
+  viewerId?: string | null,
+  nowMs = Date.now(),
+): Callout[] {
+  if (!viewerId) {
+    return [];
+  }
+  return (rows ?? []).filter(
+    (row) =>
+      row.status === 'pending' &&
+      row.challenger_id === viewerId &&
+      !isCalloutInviteExpired(row, nowMs),
+  );
+}
+
+export function calloutCreateBlocked(
+  rows: Callout[] | null | undefined,
+  viewerId?: string | null,
+  nowMs = Date.now(),
+): boolean {
+  return outgoingPendingCallouts(rows, viewerId, nowMs).length >= CALLOUT_PENDING_OUT_CAP;
+}
+
+export function calloutRematchHref(calloutId?: string | null): string {
+  const id = String(calloutId ?? '').trim();
+  return id ? `/challenges/callout/create?rematch=${encodeURIComponent(id)}` : '/challenges/callout/create';
+}
+
 export function pendingHomeCallouts(
   rows: Callout[] | null | undefined,
   viewerId?: string | null,
+  nowMs = Date.now(),
 ): Callout[] {
   return (rows ?? []).filter((row) => {
-    if (row.status !== 'pending') {
+    if (row.status !== 'pending' || isCalloutInviteExpired(row, nowMs)) {
       return false;
     }
     if (!viewerId) {
@@ -442,7 +500,16 @@ export function calloutAlertTitle(title: string | null | undefined, stored?: str
   return calloutTitle(stored || title || '');
 }
 
+export async function expirePendingCallouts(): Promise<void> {
+  try {
+    await supabase.rpc('expire_pending_callouts');
+  } catch {
+    // Pin / create still filter expired locally.
+  }
+}
+
 export async function fetchMyCallouts(): Promise<Callout[]> {
+  await expirePendingCallouts();
   const { data, error } = await supabase
     .from('callouts')
     .select(CALLOUT_COLUMNS)
@@ -455,6 +522,7 @@ export async function fetchMyCallouts(): Promise<Callout[]> {
 }
 
 export async function fetchCallout(id: string): Promise<Callout> {
+  await expirePendingCallouts();
   const { data, error } = await supabase
     .from('callouts')
     .select(CALLOUT_COLUMNS)
