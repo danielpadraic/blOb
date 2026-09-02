@@ -102,11 +102,55 @@ describe('buildPulsePills', () => {
     });
     expect(pills[0]).toMatchObject({
       id: 'watch-1',
+      title: 'Callout: sit-ups',
       snippet: 'Watching',
       watching: true,
       isCallout: true,
     });
     expect(pills[0].snippet.toLowerCase()).not.toMatch(/check in|bet|odds|wager/);
+  });
+
+  it('uses fighter faces and vs / watching on Callout pills, never pot language', () => {
+    const pills = buildPulsePills({
+      challenges: [{ id: 'co-1', status: 'live', title: 'sit-ups', is_callout: true }],
+      posts: [
+        {
+          challenge_id: 'co-1',
+          author_id: 'chat',
+          content: 'pot odds?',
+          created_at: '2026-09-01T19:00:00.000Z',
+        },
+      ],
+      profiles: [{ id: 'chat', display_name: 'Chatty', username: 'chat', avatar_url: null }],
+      viewerId: 'me',
+      calloutParties: [
+        {
+          challengeId: 'co-1',
+          calloutId: 'c',
+          challengerId: 'me',
+          opponentId: 'them',
+          challenger: {
+            id: 'me',
+            username: 'me',
+            display_name: 'Me',
+            avatar_url: null,
+            bio: null,
+          },
+          opponent: {
+            id: 'them',
+            username: 'lee',
+            display_name: 'Lee',
+            avatar_url: null,
+            bio: null,
+          },
+          watchingCount: 3,
+        },
+      ],
+    });
+    expect(pills[0].title).toBe('Callout: sit-ups');
+    expect(pills[0].faces.map((face) => face.id)).toEqual(['me', 'them']);
+    expect(pills[0].snippet).toBe('vs Lee · 3 watching');
+    expect(pills[0].snippet.toLowerCase()).not.toMatch(/odds|pot|bet|wager/);
   });
 });
 
