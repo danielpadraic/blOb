@@ -25,7 +25,8 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
   // stance_score 1 = top (Excel), 5 = bottom (Leveling up).
   const ratio = (score - 1) / 4;
   const thumbTop = ratio * (TRACK_H - THUMB);
-  const fillH = thumbTop + THUMB / 2;
+  // Teal grows from the bottom (Leveling up) up to the thumb; grey sits above it toward Excel.
+  const fillFromBottom = Math.min(Math.max(TRACK_H - (thumbTop + THUMB / 2), 0), TRACK_H);
 
   function applyY(y: number) {
     const track = height.value || TRACK_H;
@@ -75,8 +76,11 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
             }}>
             <View
               style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
                 width: TRACK_W,
-                height: Math.min(Math.max(fillH, 0), TRACK_H),
+                height: fillFromBottom,
                 backgroundColor: THEME.accent,
                 borderRadius: 999,
               }}
