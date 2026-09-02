@@ -1,28 +1,44 @@
 import { View } from 'react-native';
 
-import { QtyPairSlider } from '@/components/interests/QtyPairSlider';
+import { PeriodRow, QtyPairSlider, QtySlider } from '@/components/interests/QtyPairSlider';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
-import type { InterestChipDef } from '@/lib/interestsCatalog';
+import {
+  isDietChip,
+  isPlayCard,
+  showsGoalQty,
+  showsHighestLevel,
+  type InterestChipDef,
+  type InterestRoomSlug,
+} from '@/lib/interestsCatalog';
 import {
   ACADEMICS_FOCUSES,
   ACADEMICS_FOCUS_LABELS,
   ACADEMICS_LEVELS,
   ACADEMICS_LEVEL_LABELS,
+  DIET_GOALS,
+  DIET_GOAL_LABELS,
+  DIET_STYLES,
+  DIET_STYLE_LABELS,
   FASTING_PRACTICES,
   FASTING_PRACTICE_LABELS,
-  INDOOR_OUTDOOR,
-  INDOOR_LABELS,
   RATING_LABELS,
+  SPORTS_LEVELS,
+  SPORTS_LEVEL_LABELS,
+  currentVolumeLabel,
+  goalVolumeLabel,
   isQtyKind,
   isRatingKind,
   qtyUnitLabel,
-  setQtyUnknown,
+  setGoalQtyPeriod,
   setQtyPeriod,
+  setQtyUnknown,
   setQtyValue,
   setRatingUnknown,
   setRatingValue,
+  toggleDietGoal,
+  toggleDietStyle,
   type ChipFollowUp,
 } from '@/lib/interestsFollowup';
 import { copy } from '@/lib/copy';
@@ -31,6 +47,7 @@ type ChipFollowUpCardProps = {
   chip: InterestChipDef;
   followUp: ChipFollowUp;
   onChange: (next: ChipFollowUp) => void;
+  room: InterestRoomSlug;
   units?: 'imperial' | 'metric';
 };
 
@@ -38,17 +55,20 @@ export function ChipFollowUpCard({
   chip,
   followUp,
   onChange,
+  room,
   units = 'imperial',
 }: ChipFollowUpCardProps) {
   const ratingKind = isRatingKind(chip.ratingKind) ? chip.ratingKind : null;
   const qtyKind = isQtyKind(chip.qtyKind) ? chip.qtyKind : null;
   const showAcademics = chip.slug === 'academics';
   const showFasting = chip.slug === 'fasting';
+  const showDiet = isDietChip(chip.slug);
   const showRank = ratingKind === 'mmr';
   const showGrade = ratingKind === 'grade';
   const showNumericRating = Boolean(ratingKind) && !showRank && !showGrade;
-  const showIndoor = chip.allowsIndoorOutdoor;
-  const showQty = Boolean(qtyKind) && !showFasting;
+  const play = isPlayCard(room);
+  const showPlay = Boolean(qtyKind) && play && !showFasting;
+  const showVolume = Boolean(qtyKind) && !play && !showFasting && !showDiet && showsGoalQty(room, chip);
   const qtyOptional = Boolean(chip.isOther);
 
   return (
@@ -102,42 +122,108 @@ export function ChipFollowUpCard({
         </View>
       ) : null}
 
-      {showQty && qtyKind ? (
+      {showVolume && qtyKind ? (
         <QtyPairSlider
           kind={qtyKind}
           current={followUp.currentQty}
           goal={followUp.goalQty}
-          unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
-          period={followUp.qtyPeriod}
-          onPeriod={(next) => onChange(setQtyPeriod(followUp, next))}
+          currentLabel={currentVolumeLabel(chip)}
+          goalLabel={goalVolumeLabel(chip)}
+          currentPeriod={followUp.qtyPeriod}
+          goalPeriod={followUp.goalQtyPeriod}
+          onCurrentPeriod={(next) => onChange(setQtyPeriod(followUp, next))}
+          onGoalPeriod={(next) => onChange(setGoalQtyPeriod(followUp, next))}
           onCurrent={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
           onGoal={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
+          unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
         />
       ) : null}
 
-      {qtyOptional && showQty ? (
-        <AppText className="text-[12px] text-muted">Optional.</AppText>
+      {showPlay && qtyKind ? (
+        <View className="gap-2">
+          <QtySlider
+            label={copy('interests.currentlyPlay')}
+            kind={qtyKind}
+            value={followUp.currentQty}
+            onChange={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
+            unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
+          />
+          <PeriodRow
+            period={followUp.qtyPeriod}
+            onPeriod={(next) => onChange(setQtyPeriod(followUp, next))}
+          />
+        </View>
       ) : null}
 
-      {showIndoor ? (
+      {showsHighestLevel(room) ? (
         <View className="gap-1">
-          <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.place')}</AppText>
+          <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.highestLevel')}</AppText>
           <ChipRow>
-            {INDOOR_OUTDOOR.map((value) => (
+            {SPORTS_LEVELS.map((value) => (
               <Chip
                 key={value}
-                label={INDOOR_LABELS[value]}
-                selected={followUp.indoorOutdoor === value}
+                label={SPORTS_LEVEL_LABELS[value]}
+                selected={followUp.highestLevel === value}
                 onPress={() =>
                   onChange({
                     ...followUp,
-                    indoorOutdoor: followUp.indoorOutdoor === value ? null : value,
+                    highestLevel: followUp.highestLevel === value ? null : value,
                   })
                 }
               />
             ))}
           </ChipRow>
         </View>
+      ) : null}
+
+      {showDiet ? (
+        <>
+          <View className="gap-1">
+            <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.nutritionGoals')}</AppText>
+            <ChipRow>
+              {DIET_GOALS.map((value) => (
+                <Chip
+                  key={value}
+                  label={DIET_GOAL_LABELS[value]}
+                  selected={followUp.dietGoals.includes(value)}
+                  onPress={() => onChange(toggleDietGoal(followUp, value))}
+                />
+              ))}
+            </ChipRow>
+          </View>
+          {followUp.dietGoals.includes('other') ? (
+            <Input
+              label={copy('interests.other')}
+              value={followUp.otherGoalText}
+              onChangeText={(otherGoalText) => onChange({ ...followUp, otherGoalText })}
+            />
+          ) : null}
+          <View className="gap-1">
+            <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.currentDiet')}</AppText>
+            <ChipRow>
+              {DIET_STYLES.map((value) => (
+                <Chip
+                  key={value}
+                  label={DIET_STYLE_LABELS[value]}
+                  selected={followUp.dietStyles.includes(value)}
+                  onPress={() => onChange(toggleDietStyle(followUp, value))}
+                />
+              ))}
+            </ChipRow>
+          </View>
+          {followUp.dietStyles.includes('other') ? (
+            <Input
+              label={copy('interests.other')}
+              value={followUp.otherDietText}
+              onChangeText={(otherDietText) => onChange({ ...followUp, otherDietText })}
+            />
+          ) : null}
+          <AppText className="text-[12px] text-muted">{copy('interests.dietNote')}</AppText>
+        </>
+      ) : null}
+
+      {qtyOptional && (showVolume || showPlay) ? (
+        <AppText className="text-[12px] text-muted">Optional.</AppText>
       ) : null}
 
       {showAcademics ? (
@@ -210,14 +296,22 @@ export function ChipFollowUpCard({
           </View>
           <AppText className="text-[12px] text-muted">{copy('interests.fastingNote')}</AppText>
           {followUp.qtyUnknown ? null : (
-            <QtyPairSlider
-              kind={qtyKind}
-              current={followUp.currentQty}
-              goal={followUp.goalQty}
-              unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
-              onCurrent={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
-              onGoal={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
-            />
+            <View className="gap-3">
+              <QtySlider
+                label="Current · hours"
+                kind={qtyKind}
+                value={followUp.currentQty}
+                onChange={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
+              />
+              <QtySlider
+                label="Goal · hours"
+                kind={qtyKind}
+                value={followUp.goalQty}
+                onChange={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
+                previewValue={followUp.currentQty}
+                emptyOk
+              />
+            </View>
           )}
           <Chip
             label={copy('interests.unknown')}

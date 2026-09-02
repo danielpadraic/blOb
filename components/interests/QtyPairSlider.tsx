@@ -4,14 +4,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/AppText';
-import {
-  clampQty,
-  QTY_BANDS,
-  QTY_PERIODS,
-  QTY_PERIOD_LABELS,
-  type QtyKind,
-} from '@/lib/interestsFollowup';
-import type { QtyPeriod } from '@/lib/interestsCatalog';
+import { clampQty, QTY_BANDS, QTY_PERIOD_LABELS, type QtyKind } from '@/lib/interestsFollowup';
+import { QTY_PERIODS, type QtyPeriod } from '@/lib/interestsCatalog';
 import { THEME } from '@/lib/theme';
 
 type QtySliderProps = {
@@ -19,25 +13,31 @@ type QtySliderProps = {
   kind: QtyKind;
   value: number | null;
   onChange: (next: number) => void;
+  /** When value is null, park the thumb here instead of at 0. */
+  previewValue?: number | null;
+  emptyOk?: boolean;
+  unitLabel?: string;
 };
 
-export function QtySlider({ label, kind, value, onChange }: QtySliderProps) {
+export function QtySlider({ label, kind, value, onChange, previewValue, emptyOk, unitLabel }: QtySliderProps) {
   const band = QTY_BANDS[kind];
   const width = useSharedValue(1);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const numeric = value == null ? band.min : clampQty(kind, value);
+  const parked = value == null ? (previewValue == null ? band.min : clampQty(kind, previewValue)) : clampQty(kind, value);
+  const numeric = value == null ? parked : clampQty(kind, value);
   const ratio = band.max === band.min ? 0 : (numeric - band.min) / (band.max - band.min);
   const leftOnFill = ratio > 0.12;
   const rightOnFill = ratio > 0.88;
   const [focused, setFocused] = useState(false);
-  const [draft, setDraft] = useState(formatQty(kind, numeric));
+  const showEmpty = Boolean(emptyOk && value == null && !focused);
+  const [draft, setDraft] = useState(showEmpty ? '' : formatQty(kind, numeric));
 
   useEffect(() => {
     if (!focused) {
-      setDraft(formatQty(kind, numeric));
+      setDraft(value == null && emptyOk ? '' : formatQty(kind, numeric));
     }
-  }, [focused, kind, numeric]);
+  }, [emptyOk, focused, kind, numeric, value]);
 
   function applyX(x: number) {
     const track = width.value || 1;
@@ -59,9 +59,16 @@ export function QtySlider({ label, kind, value, onChange }: QtySliderProps) {
   );
 
   function commit() {
+    if (!draft.trim()) {
+      if (emptyOk) {
+        return;
+      }
+      setDraft(formatQty(kind, numeric));
+      return;
+    }
     const parsed = Number(draft.replace(/[^0-9.]/g, ''));
     if (!Number.isFinite(parsed)) {
-      setDraft(formatQty(kind, numeric));
+      setDraft(value == null && emptyOk ? '' : formatQty(kind, numeric));
       return;
     }
     onChange(clampQty(kind, parsed));
@@ -117,11 +124,11 @@ export function QtySlider({ label, kind, value, onChange }: QtySliderProps) {
       </GestureDetector>
       <TextInput
         accessibilityLabel={label}
-        value={focused ? draft : formatQty(kind, numeric)}
+        value={focused ? draft : value == null && emptyOk ? '' : formatQty(kind, numeric)}
         onChangeText={setDraft}
         onFocus={() => {
           setFocused(true);
-          setDraft(formatQty(kind, numeric));
+          setDraft(value == null && emptyOk ? '' : formatQty(kind, numeric));
         }}
         onBlur={() => {
           commit();
@@ -132,6 +139,7 @@ export function QtySlider({ label, kind, value, onChange }: QtySliderProps) {
         inputMode={band.step < 1 ? 'decimal' : 'numeric'}
         selectTextOnFocus
         textAlign="center"
+        placeholder={emptyOk ? '' : undefined}
         style={{
           alignSelf: 'center',
           minWidth: 72,
@@ -147,6 +155,100 @@ export function QtySlider({ label, kind, value, onChange }: QtySliderProps) {
           ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
         }}
       />
+      {unitLabel ? (
+        <AppText className="text-center text-[12px] text-muted">{unitLabel}</AppText>
+      ) : null}
+    </View>
+  );
+}
+
+export function PeriodRow({
+  period,
+  onPeriod,
+}: {
+  period: QtyPeriod | null;
+  onPeriod: (next: QtyPeriod) => void;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'nowrap',
+        gap: 4,
+        width: '100%',
+      }}>
+      {QTY_PERIODS.map((value) => {
+        const on = period === value;
+        return (
+          <Pressable
+            key={value}
+            onPress={() => onPeriod(value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={QTY_PERIOD_LABELS[value]}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 32,
+              paddingHorizontal: 2,
+              borderRadius: 999,
+              borderWidth: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: on ? THEME.accent : THEME.surface,
+              borderColor: on ? THEME.accent : THEME.border,
+            }}>
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: '700',
+                lineHeight: 14,
+                color: on ? THEME.accentForeground : THEME.textPrimary,
+              }}>
+              {QTY_PERIOD_LABELS[value]}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+type QtyBlockProps = {
+  label: string;
+  kind: QtyKind;
+  value: number | null;
+  onChange: (next: number) => void;
+  period: QtyPeriod | null;
+  onPeriod: (next: QtyPeriod) => void;
+  previewValue?: number | null;
+  emptyOk?: boolean;
+  unitLabel?: string;
+};
+
+export function QtyBlock({
+  label,
+  kind,
+  value,
+  onChange,
+  period,
+  onPeriod,
+  previewValue,
+  emptyOk,
+  unitLabel,
+}: QtyBlockProps) {
+  return (
+    <View className="gap-2">
+      <QtySlider
+        label={label}
+        kind={kind}
+        value={value}
+        onChange={onChange}
+        previewValue={previewValue}
+        emptyOk={emptyOk}
+        unitLabel={unitLabel}
+      />
+      <PeriodRow period={period} onPeriod={onPeriod} />
     </View>
   );
 }
@@ -157,9 +259,14 @@ type QtyPairSliderProps = {
   goal: number | null;
   onCurrent: (next: number) => void;
   onGoal: (next: number) => void;
+  currentLabel: string;
+  goalLabel?: string;
+  currentPeriod: QtyPeriod | null;
+  goalPeriod?: QtyPeriod | null;
+  onCurrentPeriod: (next: QtyPeriod) => void;
+  onGoalPeriod?: (next: QtyPeriod) => void;
+  hideGoal?: boolean;
   unitLabel?: string;
-  period?: QtyPeriod | null;
-  onPeriod?: (next: QtyPeriod) => void;
 };
 
 export function QtyPairSlider({
@@ -168,58 +275,39 @@ export function QtyPairSlider({
   goal,
   onCurrent,
   onGoal,
+  currentLabel,
+  goalLabel,
+  currentPeriod,
+  goalPeriod,
+  onCurrentPeriod,
+  onGoalPeriod,
+  hideGoal,
   unitLabel,
-  period,
-  onPeriod,
 }: QtyPairSliderProps) {
-  const unit = unitLabel ?? QTY_BANDS[kind].unitLabel;
   return (
-    <View className="gap-3">
-      <QtySlider label={`Current · ${unit}`} kind={kind} value={current} onChange={onCurrent} />
-      <QtySlider label={`Goal · ${unit}`} kind={kind} value={goal} onChange={onGoal} />
-      {onPeriod ? (
-        <View
-          style={{
-            flexDirection: 'row',
-            flexWrap: 'nowrap',
-            gap: 4,
-            width: '100%',
-          }}>
-          {QTY_PERIODS.map((value) => {
-            const on = period === value;
-            return (
-              <Pressable
-                key={value}
-                onPress={() => onPeriod(value)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  minHeight: 28,
-                  paddingHorizontal: 2,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: on ? THEME.accent : THEME.surface,
-                  borderColor: on ? THEME.accent : THEME.border,
-                }}>
-                <AppText
-                  numberOfLines={1}
-                  style={{
-                    fontSize: 10,
-                    fontWeight: '700',
-                    lineHeight: 12,
-                    color: on ? THEME.accentForeground : THEME.textPrimary,
-                  }}>
-                  {QTY_PERIOD_LABELS[value]}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
+    <View className="gap-4">
+      <QtyBlock
+        label={currentLabel}
+        kind={kind}
+        value={current}
+        onChange={onCurrent}
+        period={currentPeriod}
+        onPeriod={onCurrentPeriod}
+        unitLabel={unitLabel}
+      />
+      {hideGoal || !goalLabel || !onGoalPeriod ? null : (
+        <QtyBlock
+          label={goalLabel}
+          kind={kind}
+          value={goal}
+          onChange={onGoal}
+          period={goalPeriod ?? currentPeriod}
+          onPeriod={onGoalPeriod}
+          previewValue={current}
+          emptyOk
+          unitLabel={unitLabel}
+        />
+      )}
     </View>
   );
 }

@@ -27,6 +27,9 @@ describe('interests catalog', () => {
     expect(INTEREST_ROOM_SLUGS).toHaveLength(6);
     const personal = roomDef('personal_development').chips.map((chip) => chip.slug);
     expect(personal).toEqual(expect.arrayContaining(['academics', 'fasting', 'work']));
+    const health = roomDef('health_fitness').chips.map((chip) => chip.slug);
+    expect(health).toEqual(expect.arrayContaining(['diet_nutrition', 'mobility', 'yoga', 'running']));
+    expect(health).not.toContain('yoga_mobility');
     const esports = roomDef('esports').chips.map((chip) => chip.label);
     expect(esports).toEqual(
       expect.arrayContaining([

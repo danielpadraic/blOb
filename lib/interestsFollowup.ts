@@ -1,5 +1,15 @@
 import type { ChipStance } from '@/lib/interests';
-import type { InterestChipDef, QtyPeriod } from '@/lib/interestsCatalog';
+import {
+  QTY_PERIODS,
+  QTY_PERIOD_LABELS,
+  isDietChip,
+  isPlayCard,
+  showsGoalQty,
+  showsHighestLevel,
+  type InterestChipDef,
+  type InterestRoomSlug,
+  type QtyPeriod,
+} from '@/lib/interestsCatalog';
 
 export const RATING_KINDS = ['dupr', 'utr', 'ntrp', 'handicap', 'mmr', 'grade', 'other'] as const;
 export type RatingKind = (typeof RATING_KINDS)[number];
@@ -10,6 +20,7 @@ export const QTY_KINDS = [
   'miles_outing',
   'sessions_week',
   'fasting_hours',
+  'laps',
 ] as const;
 export type QtyKind = (typeof QTY_KINDS)[number];
 
@@ -42,6 +53,29 @@ export type AcademicsFocus = (typeof ACADEMICS_FOCUSES)[number];
 
 export const FASTING_PRACTICES = ['none', 'time_restricted', 'longer_fasts'] as const;
 export type FastingPractice = (typeof FASTING_PRACTICES)[number];
+
+export const SPORTS_LEVELS = ['recreational', 'high_school', 'college', 'professional'] as const;
+export type SportsLevel = (typeof SPORTS_LEVELS)[number];
+
+export const DIET_GOALS = [
+  'weight_loss',
+  'body_recomp',
+  'building_muscle',
+  'maintenance',
+  'other',
+] as const;
+export type DietGoal = (typeof DIET_GOALS)[number];
+
+export const DIET_STYLES = [
+  'balanced',
+  'low_carb',
+  'high_protein',
+  'low_fat',
+  'high_fat',
+  'caloric_deficit',
+  'other',
+] as const;
+export type DietStyle = (typeof DIET_STYLES)[number];
 
 export type QtyBand = {
   kind: QtyKind;
@@ -99,17 +133,18 @@ export const QTY_BANDS: Record<QtyKind, QtyBand> = {
     maxLabel: '24',
     unitLabel: 'hours',
   },
+  laps: {
+    kind: 'laps',
+    min: 0,
+    max: 100,
+    step: 1,
+    minLabel: '0',
+    maxLabel: '100+',
+    unitLabel: 'laps',
+  },
 };
 
-export const QTY_PERIODS = ['session', 'day', 'week', 'month', 'year'] as const;
-
-export const QTY_PERIOD_LABELS: Record<QtyPeriod, string> = {
-  session: 'Per session',
-  day: 'Per day',
-  week: 'Per week',
-  month: 'Per month',
-  year: 'Per year',
-};
+export { QTY_PERIODS, QTY_PERIOD_LABELS };
 
 export type ChipFollowUp = {
   stanceScore: number;
@@ -119,6 +154,7 @@ export type ChipFollowUp = {
   goalQty: number | null;
   qtyUnknown: boolean;
   qtyPeriod: QtyPeriod | null;
+  goalQtyPeriod: QtyPeriod | null;
   indoorOutdoor: IndoorOutdoor | null;
   preferredProof: PreferredProof | null;
   preferredProofs: PreferredProof[];
@@ -128,6 +164,11 @@ export type ChipFollowUp = {
   academicsFocus: AcademicsFocus | null;
   academicsFocusOther: string;
   fastingPractice: FastingPractice | null;
+  highestLevel: SportsLevel | null;
+  dietGoals: DietGoal[];
+  dietStyles: DietStyle[];
+  otherGoalText: string;
+  otherDietText: string;
 };
 
 export function emptyFollowUp(period: QtyPeriod = 'week'): ChipFollowUp {
@@ -139,6 +180,7 @@ export function emptyFollowUp(period: QtyPeriod = 'week'): ChipFollowUp {
     goalQty: null,
     qtyUnknown: false,
     qtyPeriod: period,
+    goalQtyPeriod: period,
     indoorOutdoor: null,
     preferredProof: null,
     preferredProofs: [],
@@ -148,11 +190,23 @@ export function emptyFollowUp(period: QtyPeriod = 'week'): ChipFollowUp {
     academicsFocus: null,
     academicsFocusOther: '',
     fastingPractice: null,
+    highestLevel: null,
+    dietGoals: [],
+    dietStyles: [],
+    otherGoalText: '',
+    otherDietText: '',
   };
 }
 
 export function isQtyPeriod(value: string | null | undefined): value is QtyPeriod {
   return Boolean(value && (QTY_PERIODS as readonly string[]).includes(value));
+}
+
+export function coerceQtyPeriod(value: string | null | undefined): QtyPeriod {
+  if (value === 'session') {
+    return 'week';
+  }
+  return isQtyPeriod(value) ? value : 'week';
 }
 
 export function isRatingKind(value: string | null | undefined): value is RatingKind {
@@ -161,6 +215,18 @@ export function isRatingKind(value: string | null | undefined): value is RatingK
 
 export function isPreferredProof(value: string | null | undefined): value is PreferredProof {
   return Boolean(value && (PROOF_PREFS as readonly string[]).includes(value));
+}
+
+export function isSportsLevel(value: string | null | undefined): value is SportsLevel {
+  return Boolean(value && (SPORTS_LEVELS as readonly string[]).includes(value));
+}
+
+export function isDietGoal(value: string | null | undefined): value is DietGoal {
+  return Boolean(value && (DIET_GOALS as readonly string[]).includes(value));
+}
+
+export function isDietStyle(value: string | null | undefined): value is DietStyle {
+  return Boolean(value && (DIET_STYLES as readonly string[]).includes(value));
 }
 
 export function allProofsSelected(proofs: PreferredProof[]): boolean {
@@ -186,27 +252,77 @@ export function toggleAllProofs(current: ChipFollowUp): ChipFollowUp {
   return { ...current, preferredProofs: [...PROOF_PREFS], preferredProof: PROOF_PREFS[0] };
 }
 
+export function toggleDietGoal(current: ChipFollowUp, value: DietGoal): ChipFollowUp {
+  const has = current.dietGoals.includes(value);
+  const dietGoals = has ? current.dietGoals.filter((item) => item !== value) : [...current.dietGoals, value];
+  return {
+    ...current,
+    dietGoals,
+    otherGoalText: dietGoals.includes('other') ? current.otherGoalText : '',
+  };
+}
+
+export function toggleDietStyle(current: ChipFollowUp, value: DietStyle): ChipFollowUp {
+  const has = current.dietStyles.includes(value);
+  const dietStyles = has ? current.dietStyles.filter((item) => item !== value) : [...current.dietStyles, value];
+  return {
+    ...current,
+    dietStyles,
+    otherDietText: dietStyles.includes('other') ? current.otherDietText : '',
+  };
+}
+
 export function qtyUnitLabel(
   kind: QtyKind,
   chipSlug: string,
   units: 'imperial' | 'metric',
 ): string {
+  if (kind === 'laps' || chipSlug === 'swimming') {
+    return 'laps';
+  }
+  if (kind === 'sessions_week' || chipSlug === 'rowing') {
+    return 'sessions';
+  }
   if (kind === 'miles_outing') {
-    if (chipSlug === 'swimming') {
-      return units === 'metric' ? 'meters' : 'yards';
-    }
-    if (chipSlug === 'rowing') {
-      return 'meters';
-    }
     return units === 'metric' ? 'km' : 'mi';
   }
   return QTY_BANDS[kind].unitLabel;
 }
 
+const VOLUME_CURRENT: Record<string, string> = {
+  running: 'I currently run',
+  walking: 'I currently walk',
+  cycling: 'I currently ride',
+  lifting: 'I currently lift',
+  hiit: 'I currently train HIIT',
+  yoga: 'I currently practice yoga',
+  mobility: 'I currently do mobility',
+  hyrox: 'I currently train Hyrox',
+  pilates: 'I currently practice Pilates',
+  rowing: 'I currently row',
+  swimming: 'I currently swim',
+  other: 'I currently do this',
+};
+
+const VOLUME_GOAL: Record<string, string> = {
+  running: 'My goal is to run',
+  walking: 'My goal is to walk',
+  cycling: 'My goal is to ride',
+  lifting: 'My goal is to lift',
+  hiit: 'My goal is to train HIIT',
+  yoga: 'My goal is to practice yoga',
+  mobility: 'My goal is to do mobility',
+  hyrox: 'My goal is to train Hyrox',
+  pilates: 'My goal is to practice Pilates',
+  rowing: 'My goal is to row',
+  swimming: 'My goal is to swim',
+  other: 'My goal is to do this',
+};
+
 const QTY_VERB: Record<string, string> = {
   running: 'run',
   walking: 'walk',
-  cycling: 'cycle',
+  cycling: 'ride',
   lifting: 'lift',
   swimming: 'swim',
   rowing: 'row',
@@ -214,6 +330,14 @@ const QTY_VERB: Record<string, string> = {
   hiking: 'hike',
   writing: 'write',
 };
+
+export function currentVolumeLabel(chip: InterestChipDef): string {
+  return VOLUME_CURRENT[chip.slug] ?? (QTY_VERB[chip.slug] ? `I currently ${QTY_VERB[chip.slug]}` : 'I currently do this');
+}
+
+export function goalVolumeLabel(chip: InterestChipDef): string {
+  return VOLUME_GOAL[chip.slug] ?? (QTY_VERB[chip.slug] ? `My goal is to ${QTY_VERB[chip.slug]}` : 'My goal is to do this');
+}
 
 export function qtyRequiredLine(chip: InterestChipDef): string {
   const verb = QTY_VERB[chip.slug];
@@ -226,11 +350,13 @@ export function qtyRequiredLine(chip: InterestChipDef): string {
 export function activityCardBlocked(input: {
   chip: InterestChipDef;
   followUp: ChipFollowUp;
+  room?: InterestRoomSlug;
   occupation?: string;
   employer?: string;
   otherText?: string;
 }): string | null {
   const { chip, followUp } = input;
+  const room = input.room;
   if (chip.isWork && (!String(input.occupation ?? '').trim() || !String(input.employer ?? '').trim())) {
     return 'Add occupation and employer for Work.';
   }
@@ -244,6 +370,21 @@ export function activityCardBlocked(input: {
     if (followUp.academicsFocus === 'other' && !followUp.academicsFocusOther.trim()) {
       return 'Add a short note for Other.';
     }
+  }
+  if (isDietChip(chip.slug)) {
+    if (followUp.dietGoals.length === 0) {
+      return 'Add your nutrition goals.';
+    }
+    if (followUp.dietGoals.includes('other') && !followUp.otherGoalText.trim()) {
+      return 'Add a short note for Other.';
+    }
+    if (followUp.dietStyles.length === 0) {
+      return 'Add your current diet.';
+    }
+    if (followUp.dietStyles.includes('other') && !followUp.otherDietText.trim()) {
+      return 'Add a short note for Other.';
+    }
+    return null;
   }
   if (chip.slug === 'fasting') {
     if (!followUp.fastingPractice) {
@@ -266,17 +407,18 @@ export function activityCardBlocked(input: {
     }
   }
   const qtyKind = isQtyKind(chip.qtyKind) ? chip.qtyKind : null;
+  const play = room ? isPlayCard(room) : false;
   const qtyRequired = Boolean(qtyKind) && !chip.isOther && chip.slug !== 'fasting';
   if (qtyRequired && qtyKind) {
-    if (followUp.currentQty == null || followUp.goalQty == null) {
-      return qtyRequiredLine(chip);
+    if (followUp.currentQty == null || !followUp.qtyPeriod) {
+      return play ? 'Add how often you play.' : qtyRequiredLine(chip);
     }
-    if (!followUp.qtyPeriod) {
+    if (room && showsGoalQty(room, chip) && followUp.goalQty != null && !followUp.goalQtyPeriod) {
       return qtyRequiredLine(chip);
     }
   }
-  if (chip.allowsIndoorOutdoor && !followUp.indoorOutdoor) {
-    return 'Pick Indoor, Outdoor, or Both.';
+  if (room && showsHighestLevel(room) && !followUp.highestLevel) {
+    return 'Add the highest level you’ve played.';
   }
   return null;
 }
@@ -326,11 +468,19 @@ export function setQtyValue(
   field: 'currentQty' | 'goalQty',
   value: number,
 ): ChipFollowUp {
-  return { ...current, qtyUnknown: false, [field]: clampQty(kind, value) };
+  const next = { ...current, qtyUnknown: false, [field]: clampQty(kind, value) };
+  if (field === 'currentQty' && current.goalQty == null) {
+    return { ...next, goalQty: clampQty(kind, value) };
+  }
+  return next;
 }
 
 export function setQtyPeriod(current: ChipFollowUp, period: QtyPeriod): ChipFollowUp {
   return { ...current, qtyPeriod: period };
+}
+
+export function setGoalQtyPeriod(current: ChipFollowUp, period: QtyPeriod): ChipFollowUp {
+  return { ...current, goalQtyPeriod: period };
 }
 
 export function pruneFollowUps(
@@ -376,6 +526,11 @@ export type FollowUpExtras = {
   academics_focus_other?: string;
   fasting_practice?: FastingPractice;
   fasting_hours_unknown?: boolean;
+  highest_level?: SportsLevel;
+  goals?: DietGoal[];
+  diet?: DietStyle[];
+  other_goal_text?: string;
+  other_diet_text?: string;
 };
 
 export function extrasFromFollowUp(input: {
@@ -383,9 +538,10 @@ export function extrasFromFollowUp(input: {
   slug: string;
   ratingKind: string | null;
   qtyKind: string | null;
+  room?: InterestRoomSlug;
 }): FollowUpExtras {
   const extras: FollowUpExtras = {};
-  const { followUp, slug, ratingKind, qtyKind } = input;
+  const { followUp, slug, ratingKind, qtyKind, room } = input;
   if (ratingKind === 'mmr' && followUp.mmrLabel.trim()) {
     extras.mmr_label = followUp.mmrLabel.trim();
   }
@@ -411,6 +567,19 @@ export function extrasFromFollowUp(input: {
       extras.fasting_hours_unknown = true;
     }
   }
+  if (room && showsHighestLevel(room) && followUp.highestLevel) {
+    extras.highest_level = followUp.highestLevel;
+  }
+  if (isDietChip(slug)) {
+    extras.goals = followUp.dietGoals;
+    extras.diet = followUp.dietStyles;
+    if (followUp.dietGoals.includes('other') && followUp.otherGoalText.trim()) {
+      extras.other_goal_text = followUp.otherGoalText.trim();
+    }
+    if (followUp.dietStyles.includes('other') && followUp.otherDietText.trim()) {
+      extras.other_diet_text = followUp.otherDietText.trim();
+    }
+  }
   return extras;
 }
 
@@ -423,6 +592,7 @@ export function followUpFromRow(row: {
   current_qty?: number | string | null;
   goal_qty?: number | string | null;
   qty_period?: string | null;
+  goal_qty_period?: string | null;
   indoor_outdoor?: string | null;
   preferred_proof?: string | null;
   preferred_proofs?: string[] | null;
@@ -459,6 +629,8 @@ export function followUpFromRow(row: {
           : row.level_up
             ? 4
             : 3;
+  const dietGoals = Array.isArray(extras.goals) ? extras.goals.filter(isDietGoal) : [];
+  const dietStyles = Array.isArray(extras.diet) ? extras.diet.filter(isDietStyle) : [];
   return {
     stanceScore,
     ratingValue: Number.isFinite(ratingValue) ? ratingValue : null,
@@ -466,7 +638,8 @@ export function followUpFromRow(row: {
     currentQty: Number.isFinite(currentQty) ? currentQty : null,
     goalQty: Number.isFinite(goalQty) ? goalQty : null,
     qtyUnknown: Boolean(extras.fasting_hours_unknown),
-    qtyPeriod: isQtyPeriod(row.qty_period) ? row.qty_period : 'week',
+    qtyPeriod: coerceQtyPeriod(row.qty_period),
+    goalQtyPeriod: coerceQtyPeriod(row.goal_qty_period ?? row.qty_period),
     indoorOutdoor: indoor,
     preferredProof: preferredProofs[0] ?? null,
     preferredProofs,
@@ -476,6 +649,11 @@ export function followUpFromRow(row: {
     academicsFocus: focus,
     academicsFocusOther: String(extras.academics_focus_other ?? ''),
     fastingPractice: practice,
+    highestLevel: isSportsLevel(extras.highest_level) ? extras.highest_level : null,
+    dietGoals,
+    dietStyles,
+    otherGoalText: String(extras.other_goal_text ?? ''),
+    otherDietText: String(extras.other_diet_text ?? ''),
   };
 }
 
@@ -485,6 +663,7 @@ export function savePayload(input: {
   ratingKind: string | null;
   qtyKind: string | null;
   allowsIndoorOutdoor: boolean;
+  room?: InterestRoomSlug;
 }): {
   stance_score: number;
   rating_value: number | null;
@@ -492,6 +671,7 @@ export function savePayload(input: {
   current_qty: number | null;
   goal_qty: number | null;
   qty_period: QtyPeriod | null;
+  goal_qty_period: QtyPeriod | null;
   indoor_outdoor: IndoorOutdoor | null;
   preferred_proof: PreferredProof | null;
   preferred_proofs: PreferredProof[];
@@ -501,14 +681,35 @@ export function savePayload(input: {
   const ratingUnknown = Boolean(input.ratingKind) && input.followUp.ratingUnknown;
   const proofs = input.followUp.preferredProofs.filter(isPreferredProof);
   const score = Math.min(5, Math.max(1, Math.round(input.followUp.stanceScore || 3)));
+  const hasQty = Boolean(input.qtyKind) && !input.followUp.qtyUnknown;
+  const storeGoal =
+    hasQty &&
+    input.qtyKind !== 'fasting_hours' &&
+    (!input.room ||
+      showsGoalQty(input.room, {
+        slug: input.slug,
+        label: input.slug,
+        allowsIndoorOutdoor: false,
+        ratingKind: null,
+        qtyKind: isQtyKind(input.qtyKind) ? input.qtyKind : null,
+      }));
+  const currentQty = hasQty ? input.followUp.currentQty : null;
+  const goalQty = !hasQty
+    ? null
+    : input.qtyKind === 'fasting_hours'
+      ? input.followUp.goalQty
+      : storeGoal
+        ? (input.followUp.goalQty ?? input.followUp.currentQty)
+        : null;
   return {
     stance_score: score,
     rating_value: ratingUnknown || !input.ratingKind ? null : input.followUp.ratingValue,
     rating_unknown: ratingUnknown,
-    current_qty: input.qtyKind && !input.followUp.qtyUnknown ? input.followUp.currentQty : null,
-    goal_qty: input.qtyKind && !input.followUp.qtyUnknown ? input.followUp.goalQty : null,
+    current_qty: currentQty,
+    goal_qty: goalQty,
     qty_period: input.qtyKind ? input.followUp.qtyPeriod : null,
-    indoor_outdoor: input.allowsIndoorOutdoor ? input.followUp.indoorOutdoor : null,
+    goal_qty_period: storeGoal ? (input.followUp.goalQtyPeriod ?? input.followUp.qtyPeriod) : null,
+    indoor_outdoor: null,
     preferred_proof: proofs[0] ?? null,
     preferred_proofs: proofs,
     extras,
@@ -562,4 +763,29 @@ export const INDOOR_LABELS: Record<IndoorOutdoor, string> = {
   indoor: 'Indoor',
   outdoor: 'Outdoor',
   both: 'Both',
+};
+
+export const SPORTS_LEVEL_LABELS: Record<SportsLevel, string> = {
+  recreational: 'Recreational',
+  high_school: 'High school',
+  college: 'College',
+  professional: 'Professional',
+};
+
+export const DIET_GOAL_LABELS: Record<DietGoal, string> = {
+  weight_loss: 'Weight loss',
+  body_recomp: 'Body recomposition',
+  building_muscle: 'Building muscle',
+  maintenance: 'Maintenance',
+  other: 'Other',
+};
+
+export const DIET_STYLE_LABELS: Record<DietStyle, string> = {
+  balanced: 'Balanced',
+  low_carb: 'Low carb',
+  high_protein: 'High protein',
+  low_fat: 'Low fat',
+  high_fat: 'High fat',
+  caloric_deficit: 'Caloric deficit',
+  other: 'Other',
 };

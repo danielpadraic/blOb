@@ -4,7 +4,7 @@ import { ChipFollowUpCard } from '@/components/interests/ChipFollowUp';
 import { StanceSlider } from '@/components/interests/StanceSlider';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
-import type { InterestChipDef } from '@/lib/interestsCatalog';
+import type { InterestChipDef, InterestRoomSlug } from '@/lib/interestsCatalog';
 import { clampStanceScore } from '@/lib/interests';
 import type { ChipFollowUp } from '@/lib/interestsFollowup';
 import { copy } from '@/lib/copy';
@@ -12,6 +12,7 @@ import { THEME, themeShadow } from '@/lib/theme';
 
 type ActivityCardProps = {
   chip: InterestChipDef;
+  room: InterestRoomSlug;
   followUp: ChipFollowUp;
   onChange: (next: ChipFollowUp) => void;
   occupation: string;
@@ -26,6 +27,7 @@ type ActivityCardProps = {
 
 export function ActivityCard({
   chip,
+  room,
   followUp,
   onChange,
   occupation,
@@ -56,7 +58,7 @@ export function ActivityCard({
         }}>
         <AppText
           className="text-center text-[34px] font-extrabold"
-          numberOfLines={1}
+          numberOfLines={2}
           style={{ color: THEME.textPrimary, lineHeight: 40 }}>
           {chip.label}
         </AppText>
@@ -64,7 +66,7 @@ export function ActivityCard({
           value={followUp.stanceScore}
           onChange={(next) => onChange({ ...followUp, stanceScore: clampStanceScore(next) })}
         />
-        <ChipFollowUpCard chip={chip} followUp={followUp} onChange={onChange} units={units} />
+        <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} units={units} />
         {chip.isWork ? (
           <View className="gap-3">
             <Input

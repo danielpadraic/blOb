@@ -38,6 +38,7 @@ export type ProfileInterestChipRow = {
   current_qty: number | string | null;
   goal_qty: number | string | null;
   qty_period: string | null;
+  goal_qty_period: string | null;
   indoor_outdoor: string | null;
   preferred_proof: string | null;
   preferred_proofs: string[] | null;
@@ -49,7 +50,7 @@ export type ProfileInterestChipRow = {
 };
 
 const CHIP_COLUMNS =
-  'chip_id, excel, level_up, stance_score, rating_value, rating_unknown, current_qty, goal_qty, qty_period, indoor_outdoor, preferred_proof, preferred_proofs, extras, is_public, pinned, pin_rank';
+  'chip_id, excel, level_up, stance_score, rating_value, rating_unknown, current_qty, goal_qty, qty_period, goal_qty_period, indoor_outdoor, preferred_proof, preferred_proofs, extras, is_public, pinned, pin_rank';
 
 export const interestsKeys = {
   catalog: ['interest-catalog'] as const,
@@ -188,8 +189,9 @@ export function useSaveInterestRoom() {
           followUp,
           slug: row.chip.slug,
           ratingKind: row.chip.rating_kind ?? local?.ratingKind ?? null,
-          qtyKind: row.chip.qty_kind ?? local?.qtyKind ?? null,
-          allowsIndoorOutdoor: local?.allowsIndoorOutdoor ?? row.chip.allows_indoor_outdoor,
+          qtyKind: local?.qtyKind ?? row.chip.qty_kind ?? null,
+          allowsIndoorOutdoor: false,
+          room: input.room,
         });
         return {
           user_id: userId,
@@ -202,6 +204,7 @@ export function useSaveInterestRoom() {
           current_qty: fields.current_qty,
           goal_qty: fields.goal_qty,
           qty_period: fields.qty_period,
+          goal_qty_period: fields.goal_qty_period,
           indoor_outdoor: fields.indoor_outdoor,
           extras: fields.extras,
           is_public: prior?.is_public ?? false,

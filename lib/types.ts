@@ -1599,6 +1599,7 @@ export type Database = {
         current_qty: number | null;
         goal_qty: number | null;
         qty_period: string | null;
+        goal_qty_period: string | null;
         indoor_outdoor: string | null;
         preferred_proof: string | null;
         preferred_proofs: string[];

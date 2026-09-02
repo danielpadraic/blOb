@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityCard } from '@/components/interests/ActivityCard';
 import { ActivityCardPager, type ActivityCardPagerHandle } from '@/components/interests/ActivityCardPager';
 import { BackdropSlot } from '@/components/interests/BackdropSlot';
+import { RoomSlide } from '@/components/interests/RoomSlide';
 import { useReduceMotion } from '@/components/interests/useReduceMotion';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { Chip, ChipRow } from '@/components/ui/Chip';
@@ -35,7 +36,6 @@ import {
   INTEREST_PROMPT,
   INTEREST_ROOM_SLUGS,
   NONE_CHIP_SLUG,
-  ROOM_REQUEST,
   chipDef,
   defaultQtyPeriod,
   nextRoomSlug,
@@ -76,7 +76,10 @@ export function InterestsWizard({
   const [formError, setFormError] = useState<string | null>(null);
   const [hydratedRoom, setHydratedRoom] = useState<string | null>(null);
   const [sliding, setSliding] = useState(false);
+  const [roomDir, setRoomDir] = useState<1 | -1>(1);
+  const [bobCheck, setBobCheck] = useState(false);
   const pagerRef = useRef<ActivityCardPagerHandle>(null);
+  const bobTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useReduceMotion();
   const units = preferredUnitSystem(profile);
 
@@ -88,10 +91,10 @@ export function InterestsWizard({
           const local = step === 'prompt' ? null : chipDef(step, row.slug);
           return {
             slug: row.slug,
-            label: row.label,
-            allowsIndoorOutdoor: local?.allowsIndoorOutdoor ?? row.allows_indoor_outdoor,
+            label: local?.label ?? row.label,
+            allowsIndoorOutdoor: false,
             ratingKind: isRatingKind(row.rating_kind) ? row.rating_kind : (local?.ratingKind ?? null),
-            qtyKind: isQtyKind(row.qty_kind) ? row.qty_kind : (local?.qtyKind ?? null),
+            qtyKind: local?.qtyKind ?? (isQtyKind(row.qty_kind) ? row.qty_kind : null),
             defaultPeriod: local?.defaultPeriod,
             isWork: row.slug === 'work',
             isOther: row.slug === 'other',
@@ -102,6 +105,22 @@ export function InterestsWizard({
   const selectedChips = chips.filter((chip) => stances[chip.slug]);
   const cardChip = cardIndex != null ? selectedChips[cardIndex] : null;
   const onCard = Boolean(cardChip && step !== 'prompt');
+
+  useEffect(() => {
+    return () => {
+      if (bobTimer.current) {
+        clearTimeout(bobTimer.current);
+      }
+    };
+  }, []);
+
+  function flashBobCheck() {
+    setBobCheck(true);
+    if (bobTimer.current) {
+      clearTimeout(bobTimer.current);
+    }
+    bobTimer.current = setTimeout(() => setBobCheck(false), 800);
+  }
 
   useEffect(() => {
     if (step === 'prompt' || !mine.data || hydratedRoom === step) {
@@ -170,6 +189,8 @@ export function InterestsWizard({
     const next = nextRoomSlug(from);
     setCardIndex(null);
     if (next) {
+      setRoomDir(1);
+      flashBobCheck();
       setHydratedRoom(null);
       setStep(next);
       return;
@@ -180,6 +201,8 @@ export function InterestsWizard({
   async function onContinue() {
     if (step === 'prompt') {
       await markPrompted();
+      setRoomDir(1);
+      flashBobCheck();
       setStep(INTEREST_ROOM_SLUGS[0]);
       return;
     }
@@ -236,6 +259,7 @@ export function InterestsWizard({
     const blocked = activityCardBlocked({
       chip: cardChip,
       followUp,
+      room: step,
       occupation,
       employer,
       otherText,
@@ -260,9 +284,18 @@ export function InterestsWizard({
       });
       if (last) {
         setSliding(true);
-        await pagerRef.current?.exit('left');
+        setRoomDir(1);
+        flashBobCheck();
+        setHydratedRoom(null);
+        const next = nextRoomSlug(step);
+        setCardIndex(null);
+        if (next) {
+          setStep(next);
+          setSliding(false);
+          return;
+        }
         setSliding(false);
-        await goNext(step);
+        leave();
         return;
       }
       setCardIndex((current) => (current == null ? 0 : current + 1));
@@ -295,127 +328,143 @@ export function InterestsWizard({
   return (
     <BackdropSlot roomSlug={step === 'prompt' ? 'health_fitness' : step} playing={!onCard}>
       <View style={{ flex: 1, minHeight: 0 }}>
-        {onCard && cardChip ? (
-          <View style={{ flex: 1, minHeight: 0 }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                gap: 8,
-                paddingHorizontal: 16,
-                paddingTop: 8,
-                paddingBottom: 8,
-              }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-                onPress={() => void onCardBack()}
-                style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}>
-                <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
-                  Back
-                </AppText>
-              </Pressable>
-              <View style={{ flex: 1, minWidth: 0, paddingTop: 10, gap: 8 }}>
-                <AppText
-                  className="text-[13px] font-semibold"
-                  numberOfLines={1}
-                  style={{ color: THEME.accentBright }}>
-                  {cardChip.label} · {(cardIndex ?? 0) + 1} of {selectedChips.length}
-                </AppText>
-                <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {selectedChips.map((chip, index) => (
-                    <View
-                      key={chip.slug}
-                      style={{
-                        flex: 1,
-                        height: 3,
-                        borderRadius: 999,
-                        backgroundColor: index <= (cardIndex ?? 0) ? THEME.accent : THEME.border,
-                      }}
-                    />
-                  ))}
+        <RoomSlide roomKey={String(step)} direction={roomDir} reduceMotion={reduceMotion}>
+          {onCard && cardChip && step !== 'prompt' ? (
+            <View style={{ flex: 1, minHeight: 0 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  paddingHorizontal: 16,
+                  paddingTop: 8,
+                  paddingBottom: 8,
+                }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                  onPress={() => void onCardBack()}
+                  style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}>
+                  <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
+                    Back
+                  </AppText>
+                </Pressable>
+                <View style={{ flex: 1, minWidth: 0, paddingTop: 10, gap: 8 }}>
+                  <AppText
+                    className="text-[13px] font-semibold"
+                    numberOfLines={1}
+                    style={{ color: THEME.accentBright }}>
+                    {cardChip.label} · {(cardIndex ?? 0) + 1} of {selectedChips.length}
+                  </AppText>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {selectedChips.map((chip, index) => (
+                      <View
+                        key={chip.slug}
+                        style={{
+                          flex: 1,
+                          height: 3,
+                          borderRadius: 999,
+                          backgroundColor: index <= (cardIndex ?? 0) ? THEME.accent : THEME.border,
+                        }}
+                      />
+                    ))}
+                  </View>
                 </View>
               </View>
+              <ActivityCardPager ref={pagerRef} index={cardIndex ?? 0} reduceMotion={reduceMotion}>
+                {selectedChips.map((chip, index) => (
+                  <ActivityCard
+                    key={chip.slug}
+                    chip={chip}
+                    room={step}
+                    followUp={followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))}
+                    onChange={(next) => {
+                      setFollowUps((current) => ({ ...current, [chip.slug]: next }));
+                      setStances((current) => ({ ...current, [chip.slug]: stanceMarks(next.stanceScore) }));
+                      setFormError(null);
+                    }}
+                    occupation={occupation}
+                    employer={employer}
+                    otherText={otherText}
+                    onOccupation={setOccupation}
+                    onEmployer={setEmployer}
+                    onOtherText={setOtherText}
+                    error={index === cardIndex ? formError : null}
+                    units={units}
+                  />
+                ))}
+              </ActivityCardPager>
             </View>
-            <ActivityCardPager ref={pagerRef} index={cardIndex ?? 0} reduceMotion={reduceMotion}>
-              {selectedChips.map((chip, index) => (
-                <ActivityCard
-                  key={chip.slug}
-                  chip={chip}
-                  followUp={followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))}
-                  onChange={(next) => {
-                    setFollowUps((current) => ({ ...current, [chip.slug]: next }));
-                    setStances((current) => ({ ...current, [chip.slug]: stanceMarks(next.stanceScore) }));
-                    setFormError(null);
-                  }}
-                  occupation={occupation}
-                  employer={employer}
-                  otherText={otherText}
-                  onOccupation={setOccupation}
-                  onEmployer={setEmployer}
-                  onOtherText={setOtherText}
-                  error={index === cardIndex ? formError : null}
-                  units={units}
-                />
-              ))}
-            </ActivityCardPager>
-          </View>
-        ) : (
-          <ScrollView
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingTop: 48,
-              paddingBottom: 24,
-              gap: 12,
-            }}
-            keyboardShouldPersistTaps="handled">
-            <AppText className="text-[12px] font-semibold" style={{ color: THEME.accentBright }}>
-              {step === 'prompt'
-                ? copy('interests.promptKicker', tone)
-                : `${roomIndex} / ${INTEREST_ROOM_SLUGS.length}`}
-            </AppText>
-            <AppText
-              className="text-[26px] font-extrabold"
-              style={{ color: THEME.primaryForeground, lineHeight: 32 }}>
-              {title}
-            </AppText>
-            {step !== 'prompt' ? (
-              <AppText className="text-[16px] font-semibold leading-5" style={{ color: THEME.primaryForeground }}>
-                {copy('interests.roomRequest', tone)}
+          ) : (
+            <ScrollView
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingTop: 48,
+                paddingBottom: 24,
+                gap: 12,
+              }}
+              keyboardShouldPersistTaps="handled">
+              <AppText className="text-[12px] font-semibold" style={{ color: THEME.accentBright }}>
+                {step === 'prompt'
+                  ? copy('interests.promptKicker', tone)
+                  : `${roomIndex} / ${INTEREST_ROOM_SLUGS.length}`}
               </AppText>
-            ) : null}
-            <AppText className="text-[15px] leading-5" style={{ color: THEME.accentBright }}>
-              {sub}
-            </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <AppText
+                  className="text-[26px] font-extrabold"
+                  style={{ color: THEME.primaryForeground, lineHeight: 32, flexShrink: 1 }}>
+                  {title}
+                </AppText>
+                {bobCheck && step !== 'prompt' ? (
+                  <AppText
+                    className="text-[22px] font-extrabold"
+                    style={{ color: THEME.accentBright }}>
+                    ✓
+                  </AppText>
+                ) : null}
+              </View>
+              {step !== 'prompt' ? (
+                <AppText className="text-[16px] font-semibold leading-5" style={{ color: THEME.primaryForeground }}>
+                  {copy('interests.roomRequest', tone)}
+                </AppText>
+              ) : null}
+              <AppText className="text-[15px] leading-5" style={{ color: THEME.accentBright }}>
+                {sub}
+              </AppText>
 
-            {step !== 'prompt' ? (
-              <ChipRow>
-                {chips.map((chip) => (
-                  <View key={chip.slug} style={{ width: '31%', maxWidth: '31%' }}>
+              {step !== 'prompt' ? (
+                <ChipRow>
+                  {chips.map((chip) => (
+                    <View key={chip.slug} style={{ width: '31%', maxWidth: '31%' }}>
+                      <Chip
+                        label={chip.label}
+                        selected={Boolean(stances[chip.slug])}
+                        onPress={() => onChipPress(chip.slug)}
+                        lines={2}
+                        minHeight={44}
+                      />
+                    </View>
+                  ))}
+                  <View style={{ width: '31%', maxWidth: '31%' }}>
                     <Chip
-                      label={chip.label}
-                      selected={Boolean(stances[chip.slug])}
-                      onPress={() => onChipPress(chip.slug)}
+                      label={copy('interests.none', tone)}
+                      selected={noneOfThese}
+                      onPress={() => onChipPress(NONE_CHIP_SLUG)}
+                      lines={2}
+                      minHeight={44}
                     />
                   </View>
-                ))}
-                <View style={{ width: '31%', maxWidth: '31%' }}>
-                  <Chip
-                    label={copy('interests.none', tone)}
-                    selected={noneOfThese}
-                    onPress={() => onChipPress(NONE_CHIP_SLUG)}
-                  />
-                </View>
-              </ChipRow>
-            ) : null}
+                </ChipRow>
+              ) : null}
 
-            {formError ? (
-              <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
-                {formError}
-              </AppText>
-            ) : null}
-          </ScrollView>
-        )}
+              {formError ? (
+                <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
+                  {formError}
+                </AppText>
+              ) : null}
+            </ScrollView>
+          )}
+        </RoomSlide>
 
         <View
           className="gap-2 px-4 pt-2"

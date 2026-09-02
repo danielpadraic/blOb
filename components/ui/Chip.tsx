@@ -9,6 +9,7 @@ type ChipProps = {
   selected?: boolean;
   onPress?: () => void;
   minHeight?: number;
+  lines?: number;
   excel?: boolean;
   levelUp?: boolean;
   onToggleExcel?: () => void;
@@ -20,6 +21,7 @@ export function Chip({
   selected,
   onPress,
   minHeight = 36,
+  lines = 1,
   excel,
   levelUp,
   onToggleExcel,
@@ -27,6 +29,7 @@ export function Chip({
 }: ChipProps) {
   const dual = Boolean(onToggleExcel || onToggleLevelUp);
   const fillSelected = selected && !dual;
+  const lineCount = Math.max(1, lines);
   return (
     <View
       className="items-center justify-center rounded-full px-3"
@@ -37,7 +40,7 @@ export function Chip({
         minHeight: dual && selected ? 58 : minHeight,
         width: dual ? '100%' : undefined,
         flexShrink: 0,
-        paddingVertical: dual && selected ? 8 : 0,
+        paddingVertical: dual && selected ? 8 : lineCount > 1 ? 6 : 0,
       }}>
       <Pressable
         onPress={onPress}
@@ -48,7 +51,7 @@ export function Chip({
         style={dual ? { width: '100%' } : undefined}>
         <AppText
           className="text-center text-sm font-semibold capitalize"
-          numberOfLines={1}
+          numberOfLines={lineCount}
           style={{
             color: fillSelected ? THEME.accentForeground : THEME.textPrimary,
             includeFontPadding: false,
