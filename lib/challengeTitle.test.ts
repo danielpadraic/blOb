@@ -31,4 +31,14 @@ describe('challengeDisplayTitle', () => {
     expect(challengeDisplayTitle({ title: 'Challenge', task: 'Daily Prayer' })).toBe('Daily Prayer');
     expect(challengeDisplayTitle(null)).toBe('');
   });
+
+  it('always prefixes Callout: for callout rows and leaves peer titles alone', () => {
+    expect(challengeDisplayTitle({ title: 'sit-ups', is_callout: true })).toBe('Callout: sit-ups');
+    expect(
+      challengeDisplayTitle({ title: 'Callout: sit-ups', win_condition: 'sit-ups', is_callout: true }),
+    ).toBe('Callout: sit-ups');
+    expect(challengeDisplayTitle({ title: '30-Day Consistency', is_callout: false })).toBe(
+      '30-Day Consistency',
+    );
+  });
 });

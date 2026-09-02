@@ -39,7 +39,7 @@ import type { ComposeInput, QuoteSnapshot } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { asGalleryMedia, localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
-import { posterUriFor } from '@/lib/videoPoster';
+import { posterUriFor, uploadPosterFromVideo, withStoredVideoPoster } from '@/lib/videoPoster';
 import { uploadProgressPercent } from '@/lib/uploadProgress';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -363,7 +363,18 @@ export function Composer({
           if (!attachment.remoteUrl) {
             throw new Error(copy('error.uploadRetry'));
           }
-          mediaUrls.push(attachment.remoteUrl);
+          let remoteUrl = attachment.remoteUrl;
+          if (attachment.kind === 'video') {
+            const posterUrl = await uploadPosterFromVideo({
+              videoUri: attachment.uri,
+              userId: user.id,
+              fileStem: `posts/${Date.now()}-poster`,
+            }).catch(() => null);
+            if (posterUrl) {
+              remoteUrl = withStoredVideoPoster(remoteUrl, posterUrl);
+            }
+          }
+          mediaUrls.push(remoteUrl);
         }
       }
       if (wallHost?.id) {

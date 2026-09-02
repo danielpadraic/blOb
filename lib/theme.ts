@@ -4,6 +4,8 @@ export const THEME = {
   background: '#F7F7F5',
   surface: '#FFFFFF',
   surface2: '#F2F5F3',
+  /** Feed shimmer silhouette — same swatch as surface2, not a new color. */
+  shimmer: '#F2F5F3',
   primary: '#101312',
   primaryForeground: '#FFFFFF',
   secondaryDark: '#151716',
@@ -16,7 +18,9 @@ export const THEME = {
   gold: '#D7A62F',
   /** Callout family — gold, not Official dark and not peer mint. */
   callout: '#D7A62F',
-  calloutSoft: '#F2F5F3',
+  calloutSoft: '#F6EFD4',
+  /** Warm wash from the gold token. Lobby / Pulse / Overview only. */
+  calloutWash: 'rgba(215, 166, 47, 0.18)',
   textPrimary: '#151716',
   textSecondary: '#151716',
   textMuted: '#7F8581',
@@ -119,5 +123,6 @@ export const COLORS = {
   circleSoft: THEME.circleSoft,
   callout: THEME.callout,
   calloutSoft: THEME.calloutSoft,
+  calloutWash: THEME.calloutWash,
   danger: THEME.danger,
 } as const;

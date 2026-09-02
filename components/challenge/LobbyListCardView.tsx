@@ -30,7 +30,15 @@ import {
   lobbyListPrimaryAction,
   type ScheduleChallenge,
 } from '@/lib/lobbyChallenge';
+import {
+  calloutCardChrome,
+  calloutPartySubtitle,
+  calloutPersonName,
+  calloutWatchingCountLabel,
+  type CalloutCardParty,
+} from '@/lib/callouts';
 import { THEME, themeShadow } from '@/lib/theme';
+import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 
 const BOB_WAVE = require('@/assets/login/blob-login.png');
 
@@ -70,6 +78,8 @@ type LobbyListCardViewProps = {
   forceEnded?: boolean;
   resultLine?: string | null;
   host?: LobbyListCardHost | null;
+  calloutParty?: CalloutCardParty | null;
+  viewerId?: string | null;
   canJoin: boolean;
   canCheckIn: boolean;
   joining: boolean;
@@ -100,6 +110,8 @@ export function LobbyListCardView({
   forceEnded = false,
   resultLine,
   host,
+  calloutParty,
+  viewerId,
   canJoin,
   canCheckIn,
   joining,
@@ -112,18 +124,25 @@ export function LobbyListCardView({
   const typeTip = useChallengeTypeTip();
   const hasCover = Boolean(coverUri);
   const callout = Boolean(challenge.is_callout);
+  const chrome = calloutCardChrome(callout);
   const darkHero = official || hasCover;
   const ink = official ? THEME.primaryForeground : THEME.textPrimary;
   const muted = official ? 'rgba(255,255,255,0.72)' : THEME.textMuted;
-  const body = official ? THEME.primary : THEME.surface;
-  const hairline = official ? 'rgba(255,255,255,0.10)' : THEME.border;
+  const body = official ? THEME.primary : callout ? THEME.calloutSoft : THEME.surface;
+  const hairline = official ? 'rgba(255,255,255,0.10)' : callout ? THEME.callout : THEME.border;
+  const vsLine = calloutPartySubtitle(calloutParty, viewerId);
+  const watchingLine = calloutWatchingCountLabel(calloutParty?.watchingCount ?? 0);
   const clock = lobbyCardClock(challenge, nowMs, forceEnded);
   const schedule = forceEnded
     ? { chip: null as string | null, gate: null as string | null }
     : challengeScheduleState(challenge, nowMs);
   const primary = lobbyListPrimaryAction({ canCheckIn, canJoin, status });
   const hostLabel = host?.name?.trim() || (official ? 'Bob' : 'Host');
-  const wash = official ? THEME.primary : callout ? THEME.callout : challengeTypeIconTint(challenge.category);
+  const wash = official
+    ? THEME.primary
+    : callout
+      ? THEME.callout
+      : challengeTypeIconTint(challenge.category);
 
   function runPrimary() {
     if (primary.kind === 'checkin') {
@@ -144,13 +163,22 @@ export function LobbyListCardView({
         borderRadius: CARD_RADIUS,
         backgroundColor: body,
         borderWidth: 1,
-        borderColor: official ? 'rgba(255,255,255,0.08)' : callout ? THEME.callout : THEME.border,
+        borderColor: official
+          ? 'rgba(255,255,255,0.08)'
+          : chrome?.borderColor ?? THEME.border,
         overflow: 'hidden',
         ...themeShadow('card'),
       }}>
-      <View style={{ height: HERO_H, overflow: 'hidden', backgroundColor: wash }}>
+      <View
+        style={{
+          height: HERO_H,
+          overflow: 'hidden',
+          backgroundColor: callout ? THEME.calloutWash : wash,
+        }}>
         {official ? (
           <OfficialHeroArt coverUri={coverUri} title={displayTitle} />
+        ) : callout ? (
+          <CalloutHeroArt />
         ) : hasCover ? (
           <View style={{ flex: 1 }} pointerEvents="none">
             <Image
@@ -205,11 +233,13 @@ export function LobbyListCardView({
                 chip
                 tone={darkHero ? 'dark' : 'light'}
                 trailing={
-                  <TypeChip
-                    category={challenge.category}
-                    tone={darkHero ? 'dark' : 'light'}
-                    onPress={typeTip.show}
-                  />
+                  callout ? undefined : (
+                    <TypeChip
+                      category={challenge.category}
+                      tone={darkHero ? 'dark' : 'light'}
+                      onPress={typeTip.show}
+                    />
+                  )
                 }
               />
             </View>
@@ -302,6 +332,40 @@ export function LobbyListCardView({
 
         {official ? (
           <MoneyColumns challenge={challenge} official split />
+        ) : callout ? (
+          <View className="flex-row items-center" style={{ gap: 8, minHeight: 28 }}>
+            <CalloutFacePair
+              left={{
+                name: calloutPersonName(calloutParty?.challenger),
+                avatarUrl: calloutParty?.challenger?.avatar_url,
+              }}
+              right={{
+                name: calloutPersonName(calloutParty?.opponent),
+                avatarUrl: calloutParty?.opponent?.avatar_url,
+              }}
+              size={28}
+            />
+            <View className="min-w-0 flex-1">
+              {vsLine ? (
+                <AppText className="text-[13px] font-extrabold" style={{ color: ink }} numberOfLines={1}>
+                  {vsLine}
+                </AppText>
+              ) : null}
+              {watchingLine ? (
+                <AppText className="text-[11px]" style={{ color: muted }} numberOfLines={1}>
+                  {watchingLine}
+                </AppText>
+              ) : null}
+            </View>
+            <EntryFeeAmount
+              amount={challenge.buy_in_amount}
+              currency={challenge.currency}
+              textClassName="text-[14px] font-extrabold"
+              color={ink}
+              size={14}
+              labeled
+            />
+          </View>
         ) : (
           <View className="flex-row items-center" style={{ gap: 8, minHeight: 28 }}>
             {host ? (
@@ -333,7 +397,11 @@ export function LobbyListCardView({
         style={{
           borderTopWidth: 1,
           borderTopColor: hairline,
-          backgroundColor: official ? 'rgba(255,255,255,0.04)' : THEME.surface2,
+          backgroundColor: official
+            ? 'rgba(255,255,255,0.04)'
+            : callout
+              ? THEME.calloutSoft
+              : THEME.surface2,
           paddingHorizontal: 10,
           paddingVertical: 8,
           minHeight: 44,
@@ -352,6 +420,43 @@ export function LobbyListCardView({
         <TextAction label="Share" official={official} onPress={onShare} />
       </View>
     </Pressable>
+  );
+}
+
+function CalloutHeroArt() {
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
+      <LinearGradient
+        colors={[THEME.calloutWash, THEME.calloutSoft]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          right: -24,
+          top: -20,
+          width: 140,
+          height: 140,
+          borderRadius: 70,
+          backgroundColor: THEME.calloutWash,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: -18,
+          bottom: -28,
+          width: 96,
+          height: 96,
+          borderRadius: 48,
+          borderWidth: 1,
+          borderColor: THEME.callout,
+          opacity: 0.35,
+        }}
+      />
+    </View>
   );
 }
 

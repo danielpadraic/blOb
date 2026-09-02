@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   AccessibilityInfo,
+  ActivityIndicator,
   Animated,
   Image as RnImage,
   PanResponder,
@@ -30,7 +31,9 @@ import {
   canAutoplayHomeVideo,
   homeInlineVideoMuted,
   homeVideoPreload,
+  logHomeVideoIfGrey,
 } from '@/lib/homeFeedVideo';
+import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import {
   POST_MEDIA_CYCLE_MS,
   canAutoCyclePager,
@@ -510,7 +513,7 @@ function MediaSlide({
     width,
     height,
     overflow: 'hidden' as const,
-    backgroundColor: LETTERBOX,
+    backgroundColor: kind === 'video' ? THEME.surface2 : LETTERBOX,
     borderRadius: 14,
   };
   const body =
@@ -605,7 +608,14 @@ function PostVideo({
   onPlayingChange?: (playing: boolean) => void;
 }) {
   const [playing, setPlaying] = useState(false);
+  const [frameReady, setFrameReady] = useState(false);
   const poster = useVideoPoster(uri);
+  const src = videoPlaybackSrc(uri);
+
+  useEffect(() => {
+    setFrameReady(false);
+  }, [src]);
+  const hasSrc = Boolean(src);
   const slot = useContext(VideoSlotContext);
   const reduceMotion = useReduceMotion();
   const canPlay = homeInline
@@ -613,6 +623,7 @@ function PostVideo({
         inView: inView && !lightboxOpen,
         active,
         poster,
+        hasSrc,
         reduceMotion,
       })
     : false;
@@ -629,6 +640,18 @@ function PostVideo({
     homeVideoPreload({ inView: false, primed: slot?.primedId === postId }) === 'metadata' &&
     slot?.primedId === postId &&
     !canPlay;
+
+  useEffect(() => {
+    if (!homeInline) {
+      return;
+    }
+    logHomeVideoIfGrey({
+      postId,
+      hasPoster: Boolean(poster),
+      hasSrc,
+      inView,
+    });
+  }, [hasSrc, homeInline, inView, postId, poster]);
 
   useEffect(() => {
     if (!homeInline) {
@@ -665,9 +688,10 @@ function PostVideo({
   }, [homeInline, onPlayingChange, playing, postId, slot?.playingId]);
 
   if (homeInline) {
-    const live = Boolean(canPlay && isSlot);
+    const live = Boolean(canPlay && isSlot && hasSrc);
+    const showSpinner = (inView && !hasSrc) || (!poster && !frameReady);
     return (
-      <View style={{ width: '100%', height: '100%', backgroundColor: LETTERBOX, overflow: 'hidden' }}>
+      <View style={{ width: '100%', height: '100%', backgroundColor: THEME.surface2, overflow: 'hidden' }}>
         {poster ? (
           <Image
             source={{ uri: poster }}
@@ -676,8 +700,25 @@ function PostVideo({
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
           />
         ) : null}
-        {primed ? <PrimeFeedVideo uri={uri} /> : null}
-        {live ? <HomeFeedVideo uri={uri} poster={poster} muted={muted} /> : null}
+        {primed ? <PrimeFeedVideo uri={src} /> : null}
+        {live ? (
+          <HomeFeedVideo uri={src} poster={poster} muted={muted} onReady={() => setFrameReady(true)} />
+        ) : null}
+        {showSpinner ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <ActivityIndicator color={THEME.accent} />
+          </View>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={onOpen ? 'Open video' : muted ? 'Unmute video' : 'Mute video'}
@@ -790,25 +831,29 @@ function HomeFeedVideo({
   uri,
   poster,
   muted,
+  onReady,
 }: {
   uri: string;
   poster: string | null;
   muted: boolean;
+  onReady?: () => void;
 }) {
   if (Platform.OS === 'web') {
-    return <WebHomeFeedVideo uri={uri} poster={poster} muted={muted} />;
+    return <WebHomeFeedVideo uri={uri} poster={poster} muted={muted} onReady={onReady} />;
   }
-  return <NativeHomeFeedVideo uri={uri} muted={muted} />;
+  return <NativeHomeFeedVideo uri={uri} muted={muted} onReady={onReady} />;
 }
 
 function WebHomeFeedVideo({
   uri,
   poster,
   muted,
+  onReady,
 }: {
   uri: string;
   poster: string | null;
   muted: boolean;
+  onReady?: () => void;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
 
@@ -821,19 +866,24 @@ function WebHomeFeedVideo({
     node.muted = muted;
     node.defaultMuted = muted;
     node.loop = true;
-    node.preload = 'metadata';
+    node.preload = 'auto';
+    const markReady = () => onReady?.();
     const play = () => {
       void node.play().catch(() => undefined);
     };
+    node.addEventListener('loadeddata', markReady);
+    node.addEventListener('playing', markReady);
     node.addEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
     node.addEventListener('webkitendfullscreen', preventWebVideoFullscreen);
     play();
     return () => {
+      node.removeEventListener('loadeddata', markReady);
+      node.removeEventListener('playing', markReady);
       node.removeEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
       node.removeEventListener('webkitendfullscreen', preventWebVideoFullscreen);
       node.pause();
     };
-  }, [muted, poster, uri]);
+  }, [muted, onReady, poster, uri]);
 
   return createElement('video', {
     ref,
@@ -842,18 +892,26 @@ function WebHomeFeedVideo({
     muted,
     playsInline: true,
     loop: true,
-    preload: 'metadata',
+    preload: 'auto',
     controls: false,
     style: {
       width: '100%',
       height: '100%',
       objectFit: 'contain',
-      backgroundColor: LETTERBOX,
+      backgroundColor: 'transparent',
     },
   });
 }
 
-function NativeHomeFeedVideo({ uri, muted }: { uri: string; muted: boolean }) {
+function NativeHomeFeedVideo({
+  uri,
+  muted,
+  onReady,
+}: {
+  uri: string;
+  muted: boolean;
+  onReady?: () => void;
+}) {
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = true;
     instance.muted = muted;
@@ -865,10 +923,21 @@ function NativeHomeFeedVideo({ uri, muted }: { uri: string; muted: boolean }) {
   }, [muted, player]);
 
   useEffect(() => {
+    const timer = setTimeout(() => onReady?.(), 240);
+    const sub =
+      typeof player.addListener === 'function'
+        ? player.addListener('statusChange', (status: { status?: string; playing?: boolean }) => {
+            if (status.status === 'readyToPlay' || status.playing) {
+              onReady?.();
+            }
+          })
+        : null;
     return () => {
+      clearTimeout(timer);
+      sub?.remove?.();
       player.pause();
     };
-  }, [player]);
+  }, [onReady, player]);
 
   return (
     <VideoView

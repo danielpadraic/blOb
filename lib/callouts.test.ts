@@ -7,6 +7,10 @@ import {
   calloutActiveChallengeHref,
   calloutAlertTitle,
   calloutCardBorder,
+  calloutCardChrome,
+  calloutCardMetaLine,
+  calloutPartySubtitle,
+  calloutVsLine,
   calloutFormatOf,
   calloutHonorNeeded,
   calloutObserverInviteHref,
@@ -138,6 +142,44 @@ describe('calloutActiveChallengeHref', () => {
     expect(isCalloutChallenge({ is_callout: false })).toBe(false);
     expect(calloutCardBorder(true)).toBe(THEME.callout);
     expect(calloutCardBorder(false)).toBeUndefined();
+    expect(calloutCardChrome(false)).toBeNull();
+    expect(calloutCardChrome(true)).toEqual({
+      borderColor: THEME.callout,
+      backgroundColor: THEME.calloutSoft,
+      wash: THEME.calloutWash,
+    });
+    expect(calloutVsLine('Lee')).toBe('vs Lee');
+    expect(calloutVsLine('vs Lee')).toBe('vs Lee');
+    expect(calloutVsLine('')).toBe('');
+    expect(
+      calloutPartySubtitle(
+        {
+          challengeId: 'ch',
+          calloutId: 'co',
+          challengerId: 'me',
+          opponentId: 'them',
+          challenger: person('me', 'me', 'Me'),
+          opponent: person('them', 'lee', 'Lee'),
+          watchingCount: 2,
+        },
+        'me',
+      ),
+    ).toBe('vs Lee');
+    expect(
+      calloutCardMetaLine(
+        {
+          challengeId: 'ch',
+          calloutId: 'co',
+          challengerId: 'me',
+          opponentId: 'them',
+          challenger: person('me', 'me', 'Me'),
+          opponent: person('them', 'lee', 'Lee'),
+          watchingCount: 2,
+        },
+        'me',
+      ),
+    ).toBe('vs Lee · 2 watching');
+    expect(calloutCardMetaLine(null).toLowerCase()).not.toMatch(/odds|pot|bet|wager/);
   });
 });
 

@@ -97,6 +97,7 @@ export default function FeedScreen() {
         posts={posts}
         isLoading={homeFeedFirstPaintLoading({
           postCount: posts.length,
+          isPending: feed.isLoading,
           isFetched: feed.isFetched,
           failed: Boolean(feed.error),
         })}
@@ -117,7 +118,7 @@ export default function FeedScreen() {
         composing={createPost.isPending}
         stickyAbove={stickyAbove}
         headerTop={
-          showFeedBanner ? (
+          showFeedBanner && posts.length > 0 ? (
             <View className="flex-row items-center" style={{ marginBottom: 8, gap: 10, minHeight: 44 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>

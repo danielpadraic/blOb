@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 
 import { cachedPosterUri, posterUriFor } from '@/lib/videoPoster';
+import { storedVideoPoster } from '@/lib/videoPosterUrl';
 
 export function useVideoPoster(
   videoUrl: string | null | undefined,
   stored?: string | null,
 ): string | null {
-  const ready = stored?.trim() || cachedPosterUri(videoUrl);
+  const ready = stored?.trim() || storedVideoPoster(videoUrl) || cachedPosterUri(videoUrl);
   const [uri, setUri] = useState<string | null>(ready);
 
   useEffect(() => {
-    const known = stored?.trim() || cachedPosterUri(videoUrl);
+    const known = stored?.trim() || storedVideoPoster(videoUrl) || cachedPosterUri(videoUrl);
     if (known) {
       setUri(known);
       return;

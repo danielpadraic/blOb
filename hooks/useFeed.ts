@@ -1075,7 +1075,8 @@ async function fetchHomeFeedPage(input: {
     const filtered = filterHomeFeedPosts(preview, allow);
     const visible = takeHomeVisiblePage(filtered, input.seenIds);
     if (visible.length >= HOME_PAGE_SIZE || !hasMore) {
-      const page = await hydrateAuthors(visible);
+      // First 15 cards paint with author_id; names fill after first paint.
+      const page = first ? visible : await hydrateAuthors(visible);
       return {
         posts: page,
         cursor: homeFeedCursorFrom(page) ?? cursor,
@@ -1118,7 +1119,7 @@ async function fetchHomeFeedPage(input: {
   };
   const filtered = filterHomeFeedPosts(preview, allow);
   const visible = takeHomeVisiblePage(filtered, input.seenIds);
-  const page = await hydrateAuthors(visible);
+  const page = first ? visible : await hydrateAuthors(visible);
   return {
     posts: page,
     cursor: homeFeedCursorFrom(page) ?? homeFeedCursorFrom(scanned),
@@ -1295,7 +1296,9 @@ export function useFeed(challengeId?: string | null) {
       return;
     }
     const pending = homePosts.filter(
-      (post) => !Array.isArray(post.comments) && !hydratedSocial.current.has(post.id),
+      (post) =>
+        !hydratedSocial.current.has(post.id) &&
+        (!Array.isArray(post.comments) || !post.author),
     );
     if (pending.length === 0) {
       return;

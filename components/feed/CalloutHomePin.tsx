@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Avatar } from '@/components/ui/Avatar';
+import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -12,7 +12,7 @@ import {
   useDeclineCallout,
   usePendingHomeCallouts,
 } from '@/hooks/useCallouts';
-import { calloutActiveChallengeHref, calloutTitle } from '@/lib/callouts';
+import { calloutActiveChallengeHref, calloutTitle, calloutVsLine } from '@/lib/callouts';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Callout, PublicProfile } from '@/lib/types';
 
@@ -84,8 +84,9 @@ function CalloutPinRow({
   onCancel: () => void;
 }) {
   const isOpponent = me === callout.opponent_id;
-  const face = isOpponent ? challenger : opponent;
+  const other = isOpponent ? challenger : opponent;
   const title = calloutTitle(callout.win_condition);
+  const vsLine = calloutVsLine(profileName(other));
 
   return (
     <Pressable
@@ -116,13 +117,17 @@ function CalloutPinRow({
           backgroundColor: THEME.callout,
         }}
       />
-      <Avatar uri={face?.avatar_url} name={profileName(face)} size={36} />
+      <CalloutFacePair
+        left={{ name: profileName(challenger), avatarUrl: challenger?.avatar_url }}
+        right={{ name: profileName(opponent), avatarUrl: opponent?.avatar_url }}
+        size={32}
+      />
       <View className="min-w-0 flex-1" style={{ paddingHorizontal: 10 }}>
         <AppText className="text-[15px] font-extrabold text-charcoal" numberOfLines={1}>
           {title}
         </AppText>
         <AppText className="text-[12px] text-muted" numberOfLines={1}>
-          {isOpponent ? profileName(challenger) : `Waiting on ${profileName(opponent)}`}
+          {vsLine || (isOpponent ? profileName(challenger) : profileName(opponent))}
         </AppText>
       </View>
       {isOpponent ? (

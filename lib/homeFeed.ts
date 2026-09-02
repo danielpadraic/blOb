@@ -80,28 +80,54 @@ export type HomeFeedAllowContext = {
   fofAuthors: Set<string>;
 };
 
+export type HomeFeedEmptyPhase = 'shimmer' | 'error' | 'empty' | 'ready';
+
 export function homeFeedFirstPaintLoading(input: {
   postCount: number;
   isFetched?: boolean;
+  isPending?: boolean;
   failed?: boolean;
 }): boolean {
-  return input.postCount === 0 && !input.isFetched && !input.failed;
+  if (input.postCount > 0 || input.failed) {
+    return false;
+  }
+  if (input.isPending != null) {
+    return input.isPending;
+  }
+  return !input.isFetched;
 }
 
+/** Bob + stretch copy is the failed-posts empty, never first paint. */
+export function homeFeedEmptyPhase(input: {
+  postCount: number;
+  isLoading?: boolean;
+  isFetched?: boolean;
+  failed?: boolean;
+}): HomeFeedEmptyPhase {
+  if (input.postCount > 0) {
+    return 'ready';
+  }
+  if (input.failed) {
+    return 'error';
+  }
+  if (input.isLoading || input.isFetched === false) {
+    return 'shimmer';
+  }
+  return 'empty';
+}
+
+/** @deprecated Bob is not a loading splash. Kept for callers that still import it. */
 export function shouldShowHomeSplash(input: {
   postCount: number;
   isLoading?: boolean;
   failed?: boolean;
   waitedMs?: number;
 }): boolean {
-  if (input.postCount > 0) {
-    return false;
-  }
-  // Failed fetch uses the compact banner. Bob only on a slow empty first load.
-  if (input.failed) {
-    return false;
-  }
-  return Boolean(input.isLoading) && (input.waitedMs ?? 0) >= HOME_FEED_SPLASH_MS;
+  return homeFeedEmptyPhase({
+    postCount: input.postCount,
+    isLoading: input.isLoading,
+    failed: input.failed,
+  }) === 'error';
 }
 
 export function uniquePostsById<T extends { id: string }>(posts: T[]): T[] {

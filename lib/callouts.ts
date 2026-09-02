@@ -116,9 +116,117 @@ export function isCalloutChallenge(row?: { is_callout?: boolean | null } | null)
   return Boolean(row?.is_callout);
 }
 
-/** Gold token on lobby / Home cards. Full Callout chrome is a later slice. */
+/** Gold edge for Callout cards. Official stays dark; peer stays the default line. */
 export function calloutCardBorder(isCallout?: boolean | null): string | undefined {
   return isCallout ? THEME.callout : undefined;
+}
+
+export function calloutCardChrome(isCallout?: boolean | null): {
+  borderColor: string;
+  backgroundColor: string;
+  wash: string;
+} | null {
+  if (!isCallout) {
+    return null;
+  }
+  return {
+    borderColor: THEME.callout,
+    backgroundColor: THEME.calloutSoft,
+    wash: THEME.calloutWash,
+  };
+}
+
+export function calloutVsLine(name?: string | null): string {
+  const trimmed = String(name ?? '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  return trimmed.toLowerCase().startsWith('vs ') ? trimmed : `vs ${trimmed}`;
+}
+
+export function calloutPersonName(
+  profile?: Pick<PublicProfile, 'display_name' | 'username'> | null,
+): string {
+  if (!profile) {
+    return '';
+  }
+  return profile.display_name?.trim() || profile.username || '';
+}
+
+export type CalloutCardParty = {
+  challengeId: string;
+  calloutId: string;
+  challengerId: string;
+  opponentId: string;
+  challenger: PublicProfile | null;
+  opponent: PublicProfile | null;
+  watchingCount: number;
+};
+
+export function calloutPartySubtitle(
+  party?: CalloutCardParty | null,
+  viewerId?: string | null,
+): string {
+  if (!party) {
+    return '';
+  }
+  const other =
+    viewerId && viewerId === party.challengerId
+      ? party.opponent
+      : viewerId && viewerId === party.opponentId
+        ? party.challenger
+        : party.opponent;
+  return calloutVsLine(calloutPersonName(other));
+}
+
+export async function fetchCalloutCardParties(
+  challengeIds: string[],
+): Promise<Map<string, CalloutCardParty>> {
+  const ids = [...new Set(challengeIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
+  const out = new Map<string, CalloutCardParty>();
+  if (ids.length === 0) {
+    return out;
+  }
+  const { data, error } = await supabase
+    .from('callouts')
+    .select('id, challenge_id, challenger_id, opponent_id')
+    .in('challenge_id', ids);
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  const rows = (data ?? []).filter((row) => row.challenge_id);
+  if (rows.length === 0) {
+    return out;
+  }
+  const peopleIds = [
+    ...new Set(rows.flatMap((row) => [row.challenger_id, row.opponent_id]).filter(Boolean)),
+  ];
+  const calloutIds = rows.map((row) => row.id);
+  const [people, observers] = await Promise.all([
+    fetchCalloutProfiles(peopleIds),
+    supabase.from('callout_observers').select('callout_id').in('callout_id', calloutIds),
+  ]);
+  if (observers.error) {
+    throw new Error(getErrorMessage(observers.error));
+  }
+  const byId = new Map(people.map((row) => [row.id, row]));
+  const watchCount = new Map<string, number>();
+  for (const row of observers.data ?? []) {
+    watchCount.set(row.callout_id, (watchCount.get(row.callout_id) ?? 0) + 1);
+  }
+  for (const row of rows) {
+    const challengeId = String(row.challenge_id);
+    out.set(challengeId, {
+      challengeId,
+      calloutId: row.id,
+      challengerId: row.challenger_id,
+      opponentId: row.opponent_id,
+      challenger: byId.get(row.challenger_id) ?? null,
+      opponent: byId.get(row.opponent_id) ?? null,
+      watchingCount: watchCount.get(row.id) ?? 0,
+    });
+  }
+  return out;
 }
 
 /** After accept, fighters open Overview; watchers open Live. Pending stays on the Callout screen. */
@@ -155,6 +263,41 @@ export function calloutWatchingCountLabel(count: number): string {
     return '';
   }
   return n === 1 ? '1 watching' : `${n} watching`;
+}
+
+/** vs {name} plus watching count. Never pot or odds. */
+export function calloutCardMetaLine(
+  party?: CalloutCardParty | null,
+  viewerId?: string | null,
+): string {
+  const vs = calloutPartySubtitle(party, viewerId);
+  const watching = calloutWatchingCountLabel(party?.watchingCount ?? 0);
+  if (vs && watching) {
+    return `${vs} · ${watching}`;
+  }
+  return vs || watching;
+}
+
+export function calloutPartyFaces(party?: CalloutCardParty | null): {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+}[] {
+  if (!party) {
+    return [];
+  }
+  return [
+    {
+      id: party.challengerId,
+      name: calloutPersonName(party.challenger),
+      avatarUrl: party.challenger?.avatar_url,
+    },
+    {
+      id: party.opponentId,
+      name: calloutPersonName(party.opponent),
+      avatarUrl: party.opponent?.avatar_url,
+    },
+  ].filter((face) => Boolean(face.id));
 }
 
 /** Watcher invite opens Live when the challenge exists, else the Callout screen. */

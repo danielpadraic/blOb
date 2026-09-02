@@ -23,6 +23,51 @@ import type { Callout, PublicProfile } from '@/lib/types';
 
 const FACE = 28;
 
+export function CalloutFacePair({
+  left,
+  right,
+  size = 28,
+}: {
+  left?: { name: string; avatarUrl?: string | null } | null;
+  right?: { name: string; avatarUrl?: string | null } | null;
+  size?: number;
+}) {
+  const faces = [left, right].filter((face): face is { name: string; avatarUrl?: string | null } =>
+    Boolean(face?.name || face?.avatarUrl),
+  );
+  if (faces.length === 0) {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: THEME.calloutSoft,
+          borderWidth: 1,
+          borderColor: THEME.callout,
+        }}
+      />
+    );
+  }
+  return (
+    <View style={{ flexDirection: 'row', width: size + (faces.length - 1) * Math.round(size * 0.55) }}>
+      {faces.map((face, index) => (
+        <View
+          key={`${face.name}-${index}`}
+          style={{
+            marginLeft: index === 0 ? 0 : -Math.round(size * 0.4),
+            zIndex: faces.length - index,
+            borderWidth: 1.5,
+            borderColor: THEME.calloutSoft,
+            borderRadius: size / 2,
+          }}>
+          <Avatar uri={face.avatarUrl} name={face.name} size={size} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function CalloutLiveWatchChip({
   watching,
   count,

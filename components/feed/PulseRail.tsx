@@ -49,7 +49,7 @@ function PulseChip({ pill }: { pill: PulsePill }) {
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderRadius: THEME.radius,
-        backgroundColor: THEME.surface,
+        backgroundColor: pill.isCallout ? THEME.calloutSoft : THEME.surface,
         borderWidth: 1,
         borderColor: pill.isCallout ? THEME.callout : THEME.border,
         ...themeShadow('card'),

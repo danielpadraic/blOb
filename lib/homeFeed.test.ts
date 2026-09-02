@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  HOME_FEED_SPLASH_MS,
   HOME_PAGE_MAX,
   HOME_PAGE_MIN,
   HOME_PAGE_SIZE,
   HOME_RAW_WINDOW,
   filterHomeFeedPosts,
   homeFeedCursorFrom,
+  homeFeedEmptyPhase,
   homeFeedFirstPaintLoading,
   shouldShowHomeSplash,
   takeHomeVisiblePage,
@@ -50,21 +50,22 @@ describe('home feed first paint', () => {
     expect(homeFeedFirstPaintLoading({ postCount: 0, isFetched: true })).toBe(false);
     expect(homeFeedFirstPaintLoading({ postCount: 2, isFetched: false })).toBe(false);
     expect(homeFeedFirstPaintLoading({ postCount: 0, isFetched: false, failed: true })).toBe(false);
+    expect(homeFeedFirstPaintLoading({ postCount: 0, isPending: true })).toBe(true);
+    expect(homeFeedFirstPaintLoading({ postCount: 0, isPending: false, isFetched: false })).toBe(
+      false,
+    );
   });
 });
 
-describe('home feed splash', () => {
-  it('does not block first paint and only shows after a fail or a slow empty load', () => {
-    expect(shouldShowHomeSplash({ postCount: 0, isLoading: true, waitedMs: 0 })).toBe(false);
-    expect(shouldShowHomeSplash({ postCount: 0, isLoading: true, waitedMs: 2500 })).toBe(false);
-    expect(
-      shouldShowHomeSplash({ postCount: 0, isLoading: true, waitedMs: HOME_FEED_SPLASH_MS }),
-    ).toBe(true);
-    expect(shouldShowHomeSplash({ postCount: 0, failed: true, waitedMs: 0 })).toBe(false);
-    expect(shouldShowHomeSplash({ postCount: 3, isLoading: true, failed: true, waitedMs: 4000 })).toBe(
-      false,
-    );
-    expect(shouldShowHomeSplash({ postCount: 0, isLoading: false, waitedMs: 4000 })).toBe(false);
+describe('home feed empty phase', () => {
+  it('shimmers while posts are pending and uses Bob only after a failed query', () => {
+    expect(homeFeedEmptyPhase({ postCount: 0, isLoading: true })).toBe('shimmer');
+    expect(homeFeedEmptyPhase({ postCount: 0, isFetched: false })).toBe('shimmer');
+    expect(homeFeedEmptyPhase({ postCount: 0, isLoading: false, failed: true })).toBe('error');
+    expect(shouldShowHomeSplash({ postCount: 0, failed: true })).toBe(true);
+    expect(shouldShowHomeSplash({ postCount: 0, isLoading: true, waitedMs: 4000 })).toBe(false);
+    expect(homeFeedEmptyPhase({ postCount: 0, isLoading: false, isFetched: true })).toBe('empty');
+    expect(homeFeedEmptyPhase({ postCount: 3, isLoading: true, failed: true })).toBe('ready');
   });
 });
 

@@ -7,16 +7,17 @@ import {
   canAutoplayHomeVideo,
   homeInlineVideoMuted,
   homeVideoPreload,
+  logHomeVideoIfGrey,
 } from '@/lib/homeFeedVideo';
 
 describe('home feed video', () => {
-  it('requires half the card in view and a poster before muted autoplay', () => {
+  it('attaches muted autoplay once half the card is in view', () => {
     expect(HOME_VIDEO_VISIBLE_RATIO).toBe(0.5);
+    expect(canAutoplayHomeVideo({ inView: true, active: true })).toBe(true);
     expect(
       canAutoplayHomeVideo({ inView: true, active: true, poster: 'https://cdn.test/still.jpg' }),
     ).toBe(true);
-    expect(canAutoplayHomeVideo({ inView: true, active: true, metadataReady: true })).toBe(true);
-    expect(canAutoplayHomeVideo({ inView: true, active: true })).toBe(false);
+    expect(canAutoplayHomeVideo({ inView: true, active: true, hasSrc: false })).toBe(false);
     expect(
       canAutoplayHomeVideo({
         inView: false,
@@ -64,11 +65,28 @@ describe('home feed video', () => {
       'feed/global',
       'home-official-strip',
       'stories',
-      'composer',
     ]);
     expect(HOME_DEFERRED_QUERIES).toContain('home-pulse');
     expect(HOME_DEFERRED_QUERIES).toContain('reels');
     expect(HOME_FIRST_PAINT_QUERIES).not.toContain('home-pulse');
     expect(HOME_FIRST_PAINT_QUERIES).not.toContain('reels');
+  });
+
+  it('logs a missing poster once per card', () => {
+    const logs: unknown[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => {
+      logs.push(args);
+    };
+    try {
+      logHomeVideoIfGrey({ postId: 'grey-card-1', hasPoster: true, hasSrc: true, inView: true });
+      logHomeVideoIfGrey({ postId: 'grey-card-1', hasPoster: false, hasSrc: true, inView: true });
+      logHomeVideoIfGrey({ postId: 'grey-card-1', hasPoster: false, hasSrc: true, inView: true });
+    } finally {
+      console.log = original;
+    }
+    expect(logs).toEqual([
+      ['[blob:home-video]', { postId: 'grey-card-1', hasPoster: false, hasSrc: true, inView: true }],
+    ]);
   });
 });

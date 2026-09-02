@@ -1,5 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, View, type ViewToken } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  View,
+  type ViewToken,
+} from 'react-native';
 
 import { CheckinStackCard } from '@/components/feed/CheckinStackCard';
 import { Composer } from '@/components/feed/Composer';
@@ -10,7 +19,7 @@ import { useTourOptional } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
-import { HOME_FEED_SPLASH_MS, shouldShowHomeSplash } from '@/lib/homeFeed';
+import { homeFeedEmptyPhase } from '@/lib/homeFeed';
 import { isHomeCheckinStack, stackHomeCheckinPosts, type HomeCheckinStack } from '@/lib/multiCheckin';
 import { FEED_COLUMN_MAX, TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
@@ -205,29 +214,13 @@ export function FeedList({
   }, [homeChrome, visiblePosts]);
   const challengeFeed = composeSource === 'challenge' || composeSource === 'circle';
   const scrolledTo = useRef<string | null>(null);
-  const [slowSplash, setSlowSplash] = useState(false);
-
-  useEffect(() => {
-    if (!homeChrome || visiblePosts.length > 0) {
-      setSlowSplash(false);
-      return;
-    }
-    if (!isLoading) {
-      return;
-    }
-    const timer = setTimeout(() => setSlowSplash(true), HOME_FEED_SPLASH_MS);
-    return () => clearTimeout(timer);
-  }, [homeChrome, isLoading, visiblePosts.length]);
-
-  const showHomeSplash = Boolean(
-    homeChrome &&
-      shouldShowHomeSplash({
+  const emptyPhase = homeChrome
+    ? homeFeedEmptyPhase({
         postCount: visiblePosts.length,
         isLoading,
         failed: Boolean(error),
-        waitedMs: slowSplash ? HOME_FEED_SPLASH_MS : 0,
-      }),
-  );
+      })
+    : null;
 
   useEffect(() => {
     if (!highlightPostId || scrolledTo.current === highlightPostId) {
@@ -451,7 +444,7 @@ export function FeedList({
         ListEmptyComponent={
           <HomeListEmpty
             homeChrome={homeChrome}
-            showHomeSplash={showHomeSplash}
+            emptyPhase={emptyPhase}
             isLoading={isLoading}
             error={error}
             empty={empty}
@@ -492,7 +485,7 @@ export function FeedList({
 
 const HomeListEmpty = memo(function HomeListEmpty({
   homeChrome,
-  showHomeSplash,
+  emptyPhase,
   isLoading,
   error,
   empty,
@@ -501,7 +494,7 @@ const HomeListEmpty = memo(function HomeListEmpty({
   onRetry,
 }: {
   homeChrome?: boolean;
-  showHomeSplash: boolean;
+  emptyPhase: ReturnType<typeof homeFeedEmptyPhase> | null;
   isLoading?: boolean;
   error?: string | null;
   empty?: ReactNode;
@@ -510,41 +503,74 @@ const HomeListEmpty = memo(function HomeListEmpty({
   onRetry?: () => void;
 }) {
   if (homeChrome) {
-    if (showHomeSplash) {
+    if (emptyPhase === 'shimmer' || (isLoading && emptyPhase !== 'error')) {
+      return <HomeFeedShimmer />;
+    }
+    if (emptyPhase === 'error' || error) {
       return (
         <MascotState
-          kind={error ? 'error' : 'loading'}
+          kind="error"
           title={copy('home.loadingSlow')}
           actionLabel="Retry"
           onAction={onRetry}
         />
       );
     }
-    if (isLoading) {
-      return <HomeFeedPlaceholders />;
-    }
-    if (error) {
-      return null;
-    }
   }
   return empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} />;
 });
 
-function HomeFeedPlaceholders() {
+function HomeFeedShimmer() {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.55, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
   return (
-    <View className="mt-2" style={{ gap: 10 }}>
+    <Animated.View className="mt-2" style={{ gap: 10, opacity: pulse }}>
       {[0, 1, 2].map((key) => (
         <View
           key={key}
           style={{
-            height: 132,
             borderRadius: THEME.radius,
             backgroundColor: THEME.surface,
             borderWidth: 1,
             borderColor: THEME.border,
-          }}
-        />
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            gap: 10,
+          }}>
+          <View className="flex-row items-center" style={{ gap: 8 }}>
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: THEME.shimmer,
+              }}
+            />
+            <View style={{ flex: 1, gap: 6 }}>
+              <View style={{ height: 10, width: '42%', borderRadius: 6, backgroundColor: THEME.shimmer }} />
+              <View style={{ height: 8, width: '28%', borderRadius: 6, backgroundColor: THEME.shimmer }} />
+            </View>
+          </View>
+          <View
+            style={{
+              height: 168,
+              borderRadius: 14,
+              backgroundColor: THEME.shimmer,
+            }}
+          />
+        </View>
       ))}
-    </View>
+    </Animated.View>
   );
 }

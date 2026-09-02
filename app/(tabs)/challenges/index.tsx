@@ -60,6 +60,8 @@ import {
   type LobbySort,
   type LobbyTab,
 } from '@/lib/lobbyChallenge';
+import { useCalloutCardParties } from '@/hooks/useCallouts';
+import type { CalloutCardParty } from '@/lib/callouts';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
 import { AppText } from '@/components/ui/AppText';
@@ -397,6 +399,15 @@ export default function ChallengesScreen() {
 
   const tabRows =
     tab === 'official' ? official : tab === 'active' ? active : tab === 'hosting' ? hosting : ended;
+  const calloutIds = useMemo(
+    () =>
+      [...tabRows, ...friends]
+        .filter((row) => row.is_callout)
+        .map((row) => row.id)
+        .filter(Boolean),
+    [friends, tabRows],
+  );
+  const calloutParties = useCalloutCardParties(calloutIds);
   const ticking = [...tabRows, ...friends].some((row) => scheduleNeedsTick(row, nowMs));
 
   useEffect(() => {
@@ -726,6 +737,7 @@ export default function ChallengesScreen() {
                       host={
                         (challenge.created_by && hostById.get(challenge.created_by)) || null
                       }
+                      calloutParty={calloutParties.data?.get(challenge.id) ?? null}
                       onPress={openChallenge}
                     />
                   ))}
@@ -746,6 +758,7 @@ export default function ChallengesScreen() {
                       ? selfHost
                       : (challenge.created_by && hostById.get(challenge.created_by)) || null
                   }
+                  calloutParty={calloutParties.data?.get(challenge.id) ?? null}
                   onPress={openChallenge}
                 />
               ))}
@@ -796,6 +809,7 @@ function LobbyListCard({
   progress,
   checkedInToday,
   host,
+  calloutParty,
   onPress,
 }: {
   challenge: ChallengeWithStats;
@@ -806,6 +820,7 @@ function LobbyListCard({
   progress?: { days: number; status: string; eliminated?: boolean; result?: string | null; place?: number | null };
   checkedInToday?: boolean;
   host?: InviteHost | null;
+  calloutParty?: CalloutCardParty | null;
   onPress: (id: string, snapshot?: ChallengeWithStats) => void;
 }) {
   const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
@@ -826,6 +841,8 @@ function LobbyListCard({
         nowMs={nowMs}
         resultLine={resultLine}
         forceEnded={section === 'ended'}
+        calloutParty={calloutParty}
+        viewerId={currentUserId}
         onPress={open}
       />
     );
@@ -840,6 +857,7 @@ function LobbyListCard({
       hosting={hosting}
       eliminated={Boolean(progress?.eliminated)}
       host={host}
+      calloutParty={calloutParty}
       resultLine={resultLine}
       checkedInToday={checkedInToday}
       onPress={open}

@@ -1,7 +1,13 @@
 import { isLiveOrUpcoming } from '@/lib/challengeDiscoverability';
 import { fetchActiveChallenges } from '@/lib/challenges';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
-import { fetchWatchedCalloutChallenges } from '@/lib/callouts';
+import {
+  calloutCardMetaLine,
+  calloutPartyFaces,
+  fetchCalloutCardParties,
+  fetchWatchedCalloutChallenges,
+  type CalloutCardParty,
+} from '@/lib/callouts';
 import { copy } from '@/lib/copy';
 import { liveQuotePreview } from '@/lib/liveThread';
 import { challengeDetailHref } from '@/lib/routes';
@@ -129,6 +135,8 @@ export function buildPulsePills(input: {
   challenges: PulseChallengeLike[];
   posts: PulseLobbyPost[];
   profiles?: PulseProfile[];
+  calloutParties?: Map<string, CalloutCardParty> | CalloutCardParty[];
+  viewerId?: string | null;
 }): PulsePill[] {
   const challenges = selectPulseChallenges(input.challenges);
   const newestFirst = [...input.posts]
@@ -146,16 +154,30 @@ export function buildPulsePills(input: {
     }
   }
   const profiles = new Map((input.profiles ?? []).filter((row) => row?.id).map((row) => [row.id, row]));
+  const parties =
+    input.calloutParties instanceof Map
+      ? input.calloutParties
+      : new Map((input.calloutParties ?? []).map((row) => [row.challengeId, row]));
   const pills = challenges.map((row) => {
     const id = String(row.id);
     const latest = latestByChallenge.get(id) ?? null;
+    const isCallout = Boolean(row.is_callout);
+    const party = isCallout ? parties.get(id) ?? null : null;
+    const fighterFaces = calloutPartyFaces(party);
+    const calloutLine = isCallout ? calloutCardMetaLine(party, input.viewerId) : '';
     return {
       id,
       title: challengeDisplayTitle(row) || 'Challenge',
-      snippet: latest ? pulseSnippet(latest) : row.watching ? 'Watching' : pulseSnippet(null),
-      faces: collectPulseFaces(newestFirst, id, profiles),
+      snippet: isCallout
+        ? calloutLine || (row.watching ? 'Watching' : pulseSnippet(latest))
+        : latest
+          ? pulseSnippet(latest)
+          : row.watching
+            ? 'Watching'
+            : pulseSnippet(null),
+      faces: isCallout && fighterFaces.length > 0 ? fighterFaces : collectPulseFaces(newestFirst, id, profiles),
       lastAt: latest?.created_at ?? null,
-      isCallout: Boolean(row.is_callout),
+      isCallout,
       watching: Boolean(row.watching),
     };
   });
@@ -256,5 +278,13 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
   } catch {
     profiles = [];
   }
-  return buildPulsePills({ challenges, posts, profiles });
+  let calloutParties = new Map<string, CalloutCardParty>();
+  try {
+    calloutParties = await fetchCalloutCardParties(
+      challenges.filter((row) => row.is_callout).map((row) => String(row.id ?? '').trim()).filter(Boolean),
+    );
+  } catch {
+    calloutParties = new Map();
+  }
+  return buildPulsePills({ challenges, posts, profiles, calloutParties, viewerId: userId });
 }

@@ -27,9 +27,18 @@ import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { fetchChallengeById } from '@/lib/challenges';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import {
+  calloutCardChrome,
+  calloutPartySubtitle,
+  calloutPersonName,
+  calloutWatchingCountLabel,
+  type CalloutCardParty,
+} from '@/lib/callouts';
+import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
 import { BODY_METRICS_HREF, challengeDetailHref, checkinSubmitHref } from '@/lib/routes';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
+import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { copy } from '@/lib/copy';
 import { isOfficialChallenge } from '@/lib/official';
@@ -108,6 +117,7 @@ export type ChallengeInviteCardProps = {
   hosting?: boolean;
   eliminated?: boolean;
   host?: InviteHost | null;
+  calloutParty?: CalloutCardParty | null;
   showStateTags?: boolean;
   resultLine?: string | null;
   checkedInToday?: boolean;
@@ -275,6 +285,7 @@ export function ChallengeInviteCard({
   hosting = false,
   eliminated = false,
   host,
+  calloutParty,
   resultLine,
   checkedInToday,
   onPress: _onPress,
@@ -339,6 +350,9 @@ export function ChallengeInviteCard({
     !checkedIn;
   const tags = challengeCardTags({ challenge, hosting, joined });
   const displayTitle = challengeDisplayTitle(challenge);
+  const chrome = calloutCardChrome(challenge.is_callout);
+  const vsLine = calloutPartySubtitle(calloutParty, user?.id);
+  const watchingLine = calloutWatchingCountLabel(calloutParty?.watchingCount ?? 0);
   const cardLabel = `${displayTitle}. ${status}. ${canCheckIn ? 'View or check-in' : canJoin ? 'Join' : 'View'}`;
 
   async function openDetail() {
@@ -406,6 +420,8 @@ export function ChallengeInviteCard({
         forceEnded={section === 'ended'}
         resultLine={resultLine}
         host={host}
+        calloutParty={calloutParty}
+        viewerId={user?.id}
         canJoin={canJoin}
         canCheckIn={canCheckIn}
         joining={joining}
@@ -425,9 +441,9 @@ export function ChallengeInviteCard({
         onPress={() => void openDetail()}
         style={{
           borderRadius: 14,
-          backgroundColor: THEME.surface,
+          backgroundColor: chrome?.backgroundColor ?? THEME.surface,
           borderWidth: 1,
-          borderColor: THEME.border,
+          borderColor: chrome?.borderColor ?? THEME.border,
           overflow: 'hidden',
           ...themeShadow('card'),
         }}>
@@ -484,7 +500,24 @@ export function ChallengeInviteCard({
               compact
             />
           ) : null}
-          {host ? (
+          {challenge.is_callout ? (
+            <View className="flex-row items-center" style={{ gap: 6, minHeight: 18 }}>
+              <CalloutFacePair
+                left={{
+                  name: calloutPersonName(calloutParty?.challenger),
+                  avatarUrl: calloutParty?.challenger?.avatar_url,
+                }}
+                right={{
+                  name: calloutPersonName(calloutParty?.opponent),
+                  avatarUrl: calloutParty?.opponent?.avatar_url,
+                }}
+                size={16}
+              />
+              <AppText className="min-w-0 flex-1 text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
+                {[vsLine, watchingLine].filter(Boolean).join(' · ')}
+              </AppText>
+            </View>
+          ) : host ? (
             <View className="flex-row items-center" style={{ gap: 6, minHeight: 18 }}>
               {host.avatarUrl ? <Avatar uri={host.avatarUrl} name={hostLabel} size={16} /> : null}
               <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
@@ -492,7 +525,18 @@ export function ChallengeInviteCard({
               </AppText>
             </View>
           ) : null}
-          <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
+          {challenge.is_callout ? (
+            <EntryFeeAmount
+              amount={challenge.buy_in_amount}
+              currency={challenge.currency}
+              textClassName="text-[12px] font-extrabold"
+              color={THEME.textPrimary}
+              size={12}
+              labeled
+            />
+          ) : (
+            <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
+          )}
         </View>
         <View
           className="flex-row items-center"
@@ -690,6 +734,8 @@ export function LobbyChallengeRow({
   nowMs,
   resultLine,
   forceEnded = false,
+  calloutParty,
+  viewerId,
   onPress: _onPress,
 }: {
   challenge: InviteChallenge;
@@ -697,10 +743,17 @@ export function LobbyChallengeRow({
   nowMs?: number;
   resultLine?: string | null;
   forceEnded?: boolean;
+  calloutParty?: CalloutCardParty | null;
+  viewerId?: string | null;
   onPress?: () => void;
 }) {
   const router = useRouter();
   const displayTitle = challengeDisplayTitle(challenge);
+  const chrome = challenge.is_callout
+    ? { borderColor: THEME.callout, backgroundColor: THEME.calloutSoft }
+    : { borderColor: THEME.border, backgroundColor: THEME.surface };
+  const vsLine = calloutPartySubtitle(calloutParty, viewerId);
+  const watchingLine = calloutWatchingCountLabel(calloutParty?.watchingCount ?? 0);
   const clock = Date.now();
   const ticking = scheduleNeedsTick(challenge, clock);
   const [tickMs, setTickMs] = useState(clock);
@@ -732,9 +785,9 @@ export function LobbyChallengeRow({
       onPress={openDetail}
       style={{
         borderRadius: 14,
-        backgroundColor: THEME.surface,
+        backgroundColor: chrome.backgroundColor,
         borderWidth: 1,
-        borderColor: challenge.is_callout ? THEME.callout : THEME.border,
+        borderColor: chrome.borderColor,
         paddingHorizontal: 12,
         paddingVertical: 10,
         gap: 4,
@@ -760,7 +813,26 @@ export function LobbyChallengeRow({
           />
         </View>
       </View>
-      <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
+      {challenge.is_callout ? (
+        <View className="flex-row items-center" style={{ gap: 8, minHeight: 28 }}>
+          <CalloutFacePair
+            left={{
+              name: calloutPersonName(calloutParty?.challenger),
+              avatarUrl: calloutParty?.challenger?.avatar_url,
+            }}
+            right={{
+              name: calloutPersonName(calloutParty?.opponent),
+              avatarUrl: calloutParty?.opponent?.avatar_url,
+            }}
+            size={22}
+          />
+          <AppText className="min-w-0 flex-1 text-[12px] text-muted" numberOfLines={1}>
+            {[vsLine, watchingLine].filter(Boolean).join(' · ')}
+          </AppText>
+        </View>
+      ) : (
+        <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
+      )}
       {resultLine ? (
         <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }} numberOfLines={1}>
           {resultLine}

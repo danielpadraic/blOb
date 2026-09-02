@@ -1,3 +1,5 @@
+import { calloutTitle, isCalloutChallenge } from '@/lib/callouts';
+
 const PLACEHOLDER_TITLES = new Set(['untitled challenge', 'unknown challenge', 'challenge']);
 
 export function isPlaceholderChallengeTitle(value: string | null | undefined): boolean {
@@ -22,9 +24,14 @@ export function challengeDisplayTitle(row: {
   task?: string | null;
   tasks?: Array<{ title?: string | null } | string> | null;
   extra_tasks?: Array<{ title?: string | null } | string> | null;
+  is_callout?: boolean | null;
+  win_condition?: string | null;
 } | null | undefined): string {
   if (!row) {
     return '';
+  }
+  if (isCalloutChallenge(row)) {
+    return calloutTitle(row.win_condition || row.title || row.task || firstTaskTitle(row.tasks));
   }
   const title = String(row.title ?? '').trim();
   if (title && !isPlaceholderChallengeTitle(title)) {

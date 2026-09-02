@@ -8,6 +8,7 @@ import {
   declineCallout,
   fetchCallout,
   fetchCalloutByChallengeId,
+  fetchCalloutCardParties,
   fetchCalloutObserverCandidates,
   fetchCalloutObservers,
   fetchCalloutOpponents,
@@ -65,6 +66,16 @@ export function useCallout(id?: string) {
     queryKey: ['callouts', 'one', id],
     enabled: Boolean(id),
     queryFn: () => fetchCallout(id!),
+  });
+}
+
+export function useCalloutCardParties(challengeIds: string[]) {
+  const ids = [...new Set(challengeIds.map((id) => String(id ?? '').trim()).filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ['callouts', 'card-parties', ids.join(',')],
+    enabled: ids.length > 0,
+    staleTime: 30_000,
+    queryFn: () => fetchCalloutCardParties(ids),
   });
 }
 

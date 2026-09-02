@@ -8,6 +8,8 @@ import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButto
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { officialFitnessProofIcons } from '@/components/challenge/ProofRequirementIcons';
 import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
+import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
+import { calloutCardChrome } from '@/lib/callouts';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
@@ -359,11 +361,12 @@ export function ChallengeCardVisual({
     );
   }
 
+  const chrome = calloutCardChrome(challenge.is_callout);
   return (
     <View
       style={{
-        backgroundColor: THEME.surface,
-        borderColor: challenge.is_callout ? THEME.callout : THEME.border,
+        backgroundColor: chrome?.backgroundColor ?? THEME.surface,
+        borderColor: chrome?.borderColor ?? THEME.border,
         borderWidth: 1,
         borderRadius: RADIUS,
         overflow: 'hidden',
@@ -440,6 +443,18 @@ function ProofMark({ proof, dark }: { proof: ProofChip; dark: boolean }) {
 }
 
 function MoneyRow({ challenge, dark }: { challenge: ChallengeWithStats; dark: boolean }) {
+  if (challenge.is_callout) {
+    return (
+      <EntryFeeAmount
+        amount={challenge.buy_in_amount}
+        currency={challenge.currency}
+        textClassName="text-[14px] font-extrabold"
+        color={THEME.textPrimary}
+        size={14}
+        labeled
+      />
+    );
+  }
   return (
     <LobbyEntryPrizeRow
       challenge={challenge}

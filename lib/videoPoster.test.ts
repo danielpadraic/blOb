@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { storedVideoPoster, videoPlaybackSrc, withStoredVideoPoster } from '@/lib/videoPosterUrl';
 import { previewFromStory } from '@/lib/wavePreview';
 
 describe('video posters', () => {
@@ -31,5 +32,14 @@ describe('video posters', () => {
         thumbnail_url: null,
       }),
     ).toBeNull();
+  });
+
+  it('stores the publish poster on the video URL and strips it for playback', () => {
+    const video = 'https://cdn.example/clip.mp4';
+    const poster = 'https://cdn.example/clip-poster.jpg';
+    const stored = withStoredVideoPoster(video, poster);
+    expect(storedVideoPoster(stored)).toBe(poster);
+    expect(videoPlaybackSrc(stored)).toBe(video);
+    expect(storedVideoPoster(video)).toBeNull();
   });
 });

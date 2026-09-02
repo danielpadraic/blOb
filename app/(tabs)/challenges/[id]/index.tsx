@@ -54,6 +54,7 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  useCalloutCardParties,
   useCalloutForChallenge,
   useCalloutObservers,
 } from '@/hooks/useCallouts';
@@ -167,6 +168,8 @@ function ChallengeStackTitle({
     task?: string | null;
     tasks?: Array<{ title?: string | null } | string> | null;
     extra_tasks?: Array<{ title?: string | null } | string> | null;
+    is_callout?: boolean | null;
+    win_condition?: string | null;
   } | null;
 }) {
   const label = challengeDisplayTitle(challenge);
@@ -258,6 +261,8 @@ export default function ChallengeDetailScreen() {
   );
   const isCalloutObserver = isCalloutChallengeObserver(calloutQuery.data, watchingIds, user?.id);
   const watchingCount = watchingIds.length;
+  const calloutParties = useCalloutCardParties(challenge?.is_callout && id ? [id] : []);
+  const calloutParty = id ? calloutParties.data?.get(id) ?? null : null;
   const boardProfiles = useQuery({
     queryKey: ['challenge-board-profiles', id, (roster.data ?? []).map((row) => row.user_id).join(',')],
     enabled: Boolean(id && roster.data && roster.data.length > 0),
@@ -1026,6 +1031,8 @@ export default function ChallengeDetailScreen() {
             challenge={challenge}
             host={heroHost}
             viewerId={user?.id}
+            calloutParty={calloutParty}
+            watchingCount={watchingCount}
             joined={isJoined}
             hosting={isHost && !isJoined}
             invited={inviteOnly && !isHost && !isJoined}

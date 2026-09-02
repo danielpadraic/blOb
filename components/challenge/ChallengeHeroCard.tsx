@@ -3,9 +3,11 @@ import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 import { ChallengeCardClock, ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
+import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { ChallengeHeroOverflowButton } from '@/components/challenge/ChallengeDetailOverflow';
@@ -18,6 +20,13 @@ import { challengeGoalSubtitle } from '@/lib/challengeGoal';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { isOfficialJoinable } from '@/lib/officialSeries';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import {
+  calloutCardChrome,
+  calloutPartySubtitle,
+  calloutPersonName,
+  calloutWatchingCountLabel,
+  type CalloutCardParty,
+} from '@/lib/callouts';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
 
@@ -31,6 +40,8 @@ type ChallengeHeroCardProps = {
   challenge: ChallengeWithStats;
   host?: HeroHost;
   viewerId?: string | null;
+  calloutParty?: CalloutCardParty | null;
+  watchingCount?: number;
   joined?: boolean;
   hosting?: boolean;
   invited?: boolean;
@@ -48,11 +59,14 @@ type ChallengeHeroCardProps = {
 
 const OFFICIAL_HERO = ['#1B5A50', '#123832', '#0E2421'] as const;
 const USER_HERO = ['#FFFFFF', '#F7F7F5'] as const;
+const CALLOUT_HERO = [THEME.calloutSoft, THEME.calloutWash] as const;
 
 export function ChallengeHeroCard({
   challenge,
   host,
   viewerId,
+  calloutParty,
+  watchingCount = 0,
   joined = false,
   hosting = false,
   invited = false,
@@ -68,6 +82,10 @@ export function ChallengeHeroCard({
   children,
 }: ChallengeHeroCardProps) {
   const official = Boolean(challenge.is_official);
+  const callout = Boolean(challenge.is_callout) && !official;
+  const chrome = calloutCardChrome(callout);
+  const vsLine = calloutPartySubtitle(calloutParty, viewerId);
+  const watchingLine = calloutWatchingCountLabel(calloutParty?.watchingCount ?? watchingCount);
   const filling = official && isOfficialJoinable(challenge);
   const tags = challengeCardTags({
     challenge,
@@ -115,7 +133,33 @@ export function ChallengeHeroCard({
           titleColor={titleColor}
         />
       ) : null}
-      {host ? (
+      {callout ? (
+        <View className="flex-row items-center" style={{ gap: 10 }}>
+          <CalloutFacePair
+            left={{
+              name: calloutPersonName(calloutParty?.challenger),
+              avatarUrl: calloutParty?.challenger?.avatar_url,
+            }}
+            right={{
+              name: calloutPersonName(calloutParty?.opponent),
+              avatarUrl: calloutParty?.opponent?.avatar_url,
+            }}
+            size={32}
+          />
+          <View className="min-w-0 flex-1">
+            {vsLine ? (
+              <AppText className="text-[13px] font-semibold" style={{ color: titleColor }} numberOfLines={1}>
+                {vsLine}
+              </AppText>
+            ) : null}
+            {watchingLine ? (
+              <AppText className="text-[12px]" style={{ color: muted }} numberOfLines={1}>
+                {watchingLine}
+              </AppText>
+            ) : null}
+          </View>
+        </View>
+      ) : host ? (
         <ProfileLink username={host.username} userId={host.id}>
           <AppText className="text-[13px]" style={{ color: muted }}>
             Hosted by{' '}
@@ -174,7 +218,18 @@ export function ChallengeHeroCard({
       ) : (
         <View className="flex-row items-start justify-between gap-3">
           <View className="min-w-0 flex-1">
-            <LobbyEntryPrizeRow challenge={challenge} color={titleColor} />
+            {callout ? (
+              <EntryFeeAmount
+                amount={challenge.buy_in_amount}
+                currency={challenge.currency}
+                textClassName="text-[15px] font-extrabold"
+                color={titleColor}
+                size={15}
+                labeled
+              />
+            ) : (
+              <LobbyEntryPrizeRow challenge={challenge} color={titleColor} />
+            )}
           </View>
           {showProgressRing && joined ? (
             <View className="items-center">
@@ -226,14 +281,14 @@ export function ChallengeHeroCard({
 
   return (
     <LinearGradient
-      colors={[...(official ? OFFICIAL_HERO : USER_HERO)]}
+      colors={[...(official ? OFFICIAL_HERO : callout ? CALLOUT_HERO : USER_HERO)]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
         borderRadius: 24,
         overflow: 'hidden',
         borderWidth: official ? 0 : 1,
-        borderColor: THEME.border,
+        borderColor: chrome?.borderColor ?? THEME.border,
         ...themeShadow('card'),
       }}>
       {challenge.cover_image_url ? (

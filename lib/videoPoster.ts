@@ -3,23 +3,29 @@ import { Platform } from 'react-native';
 
 import { uploadPostMedia } from '@/utils/upload';
 import { previewFromStory } from '@/lib/wavePreview';
+import { storedVideoPoster, videoPlaybackSrc } from '@/lib/videoPosterUrl';
 
 export { previewFromStory };
+export { storedVideoPoster, videoPlaybackSrc, withStoredVideoPoster } from '@/lib/videoPosterUrl';
 
 const POSTER_TIME_SEC = 0.2;
 const cache = new Map<string, string>();
 const persistOnce = new Set<string>();
 
 export function cachedPosterUri(videoUrl: string | null | undefined): string | null {
-  const key = videoUrl?.trim();
+  const key = videoPlaybackSrc(videoUrl) || videoUrl?.trim();
   if (!key) {
     return null;
   }
-  return cache.get(key) ?? null;
+  return cache.get(key) ?? storedVideoPoster(videoUrl);
 }
 
 export async function posterUriFor(videoUrl: string | null | undefined): Promise<string | null> {
-  const key = videoUrl?.trim();
+  const stored = storedVideoPoster(videoUrl);
+  if (stored) {
+    return stored;
+  }
+  const key = videoPlaybackSrc(videoUrl);
   if (!key) {
     return null;
   }
@@ -73,7 +79,7 @@ export async function persistGeneratedPoster(input: {
       fileStem: `${input.kind === 'reel' ? 'reels' : 'stories'}/${Date.now()}-poster`,
       mimeType: 'image/jpeg',
     });
-    cache.set(input.videoUrl, publicUrl);
+    cache.set(videoPlaybackSrc(input.videoUrl) || input.videoUrl, publicUrl);
     return publicUrl;
   } catch {
     persistOnce.delete(input.id);
