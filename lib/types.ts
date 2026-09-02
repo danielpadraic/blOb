@@ -354,6 +354,8 @@ export interface Challenge {
   description: string | null;
   rules: string | null;
   is_official: boolean;
+  /** Attached by accept_callout. Money stays on the callout RPCs. */
+  is_callout?: boolean;
   created_by: string | null;
   buy_in_amount: number;
   days_required: number;
@@ -426,6 +428,8 @@ export interface Challenge {
   cumulative_metric?: CumulativeMetric | string | null;
   cumulative_target?: number | null;
   cumulative_window?: CumulativeWindow | string | null;
+  win_window?: 'challenge' | 'week' | string | null;
+  metrics?: Array<{ id: string; target: number; name: string; unit?: 'mi' | 'km' | null }> | null;
   distance_meters_required?: number | null;
   timezone?: string | null;
   start_rule?: string | null;
@@ -458,6 +462,7 @@ export interface ChallengeParticipant {
   buy_in_paid?: number;
   currency?: WalletCurrency | string | null;
   distance_meters_total?: number | null;
+  metric_totals?: Record<string, number> | null;
 }
 
 export interface ChallengeParticipantWithProfile extends ChallengeParticipant {
@@ -695,6 +700,8 @@ export interface CoinTransfer {
   created_at: string;
 }
 
+export type CalloutFormat = 'consistency' | 'points';
+
 export type CalloutStatus =
   | 'pending'
   | 'active'
@@ -702,6 +709,13 @@ export type CalloutStatus =
   | 'settled'
   | 'disputed'
   | 'cancelled';
+
+export interface CalloutObserver {
+  callout_id: string;
+  user_id: string;
+  invited_by: string;
+  created_at: string;
+}
 
 export interface Callout {
   id: string;
@@ -718,6 +732,9 @@ export interface Callout {
   winner_id: string | null;
   challenger_cancel_at: string | null;
   opponent_cancel_at: string | null;
+  challenge_id?: string | null;
+  format?: CalloutFormat | string | null;
+  proofs?: ChallengeProof[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -754,6 +771,7 @@ export type NotificationType =
   | 'callout_resolved'
   | 'callout_disputed'
   | 'callout_cancelled'
+  | 'callout_observer_invited'
   | 'badge_unlocked'
   | 'challenge_cancelled'
   | 'message'
@@ -790,6 +808,7 @@ export type NotificationData = {
   transfer_id?: string;
   place?: number;
   callout_id?: string;
+  title?: string;
   currency?: string;
   badge_key?: string;
   coin_reward?: number;
@@ -1010,6 +1029,16 @@ export type Database = {
         [
           Relationship<'callouts_challenger_id_fkey', 'challenger_id', 'profiles', 'id'>,
           Relationship<'callouts_opponent_id_fkey', 'opponent_id', 'profiles', 'id'>,
+        ]
+      >;
+      callout_observers: TableDef<
+        CalloutObserver,
+        Partial<CalloutObserver>,
+        Partial<CalloutObserver>,
+        [
+          Relationship<'callout_observers_callout_id_fkey', 'callout_id', 'callouts', 'id'>,
+          Relationship<'callout_observers_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'callout_observers_invited_by_fkey', 'invited_by', 'profiles', 'id'>,
         ]
       >;
       challenge_invites: TableDef<
@@ -1813,6 +1842,8 @@ export type Database = {
           p_currency: string;
           p_win_condition: string;
           p_deadline: string;
+          p_proofs?: unknown;
+          p_format?: string;
         };
         Returns: Callout;
       };
@@ -1831,6 +1862,10 @@ export type Database = {
       cancel_callout: {
         Args: { p_callout_id: string };
         Returns: Callout;
+      };
+      invite_callout_observer: {
+        Args: { p_callout_id: string; p_user_id: string };
+        Returns: CalloutObserver;
       };
       mark_notifications_read: {
         Args: { p_ids?: string[] | null };

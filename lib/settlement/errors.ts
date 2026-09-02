@@ -28,7 +28,9 @@ export const SETTLEMENT_ERROR_COPY: Record<SettlementFailKind, string> = {
 const SETTLEMENT_RPC_COPY: Record<string, string> = {
   NOT_EVEN_SPLIT: SETTLEMENT_ERROR_COPY.not_even_split,
   POINTS_NO_EVEN_SPLIT:
-    'Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.',
+    'Points challenges can’t use Even split remaining. Pick Winner take all or top places.',
+  CUMULATIVE_NO_LAST_STANDING:
+    'Cumulative challenges can’t use Last standing. Pick Anyone who hits the goal, Top #, or Top %.',
   CONSISTENCY_NO_TOP_PLACES:
     'Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.',
   ILLEGAL_PAYOUT_PAIR: SETTLEMENT_ERROR_COPY.illegal_pair,
@@ -80,8 +82,10 @@ export function classifySettlementError(error: unknown): SettlementFailKind {
   if (
     raw.includes('points_no_even_split') ||
     raw.includes('consistency_no_top_places') ||
+    raw.includes('cumulative_no_last_standing') ||
     raw.includes('illegal_payout_pair') ||
     raw.includes('can’t use even split remaining') ||
+    raw.includes('can’t use last standing') ||
     raw.includes('can’t use top #')
   ) {
     return 'illegal_pair';

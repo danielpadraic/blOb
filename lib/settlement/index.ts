@@ -36,6 +36,7 @@ export {
 } from './shares';
 export {
   ILLEGAL_CONSISTENCY_TOP_PLACES_COPY,
+  ILLEGAL_CUMULATIVE_LAST_STANDING_COPY,
   ILLEGAL_POINTS_EVEN_SPLIT_COPY,
   rankedEligible,
   rankedShares,

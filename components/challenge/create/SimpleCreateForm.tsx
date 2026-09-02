@@ -17,15 +17,17 @@ import {
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
-import { DistanceMilesRow, ExtraTasksEditor, HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
-import { LocationPlacePicker } from '@/components/challenge/LocationPlacePicker';
+import { CumulativeMetricsEditor } from '@/components/challenge/create/CumulativeMetricsEditor';
+import { CreateIconChip } from '@/components/challenge/create/CreateIconChip';
+import { ExtraTasksEditor } from '@/components/challenge/create/ExtraTasksEditor';
+import { SimpleProofsEditor } from '@/components/challenge/create/SimpleProofsEditor';
 import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
 import { Button } from '@/components/ui/Button';
 import { Chip, ChipRow } from '@/components/ui/Chip';
-import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -42,24 +44,20 @@ import { useWalletOptional } from '@/hooks/useWallet';
 import { wizardStepIndex } from '@/lib/challengeTemplates';
 import {
   defaultPayoutIdForFamily,
-  formatFamilyOf,
   payoutOptionsForFamily,
 } from '@/lib/formatPayout';
+import { defaultCumulativeMetrics } from '@/lib/cumulativeMetrics';
 import {
   createHrefForDraft,
   isSimpleCreateDraft,
   pickSimpleDraft,
 } from '@/lib/challengeDraft';
 import {
-  SIMPLE_CUMULATIVE_WINDOWS,
   SIMPLE_CUSTOM_PERIODS,
   SIMPLE_DURATION_CHIPS,
   SIMPLE_FREQUENCY_CHIPS,
-  SIMPLE_PROOF_METHODS,
   SIMPLE_SCORING,
   SIMPLE_TYPES,
-  addSimpleProof,
-  applyBeforeAfterHrPreset,
   clearPersistedSimpleDraft,
   customFrequencyCopy,
   allowedMissesMax,
@@ -68,7 +66,6 @@ import {
   endsAtOf,
   frequencyHintOf,
   isLeftoverSimplePointsDraft,
-  removeSimpleProof,
   simpleDraftFromChallenge,
   simpleDraftToCreateValues,
   simpleHowYouWin,
@@ -94,15 +91,7 @@ import {
   type StartPreset,
 } from '@/lib/challengeSchedule';
 import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
-import {
-  SIMPLE_PROOF_CAP,
-  defaultSentenceForMethod,
-  ensureProofSentence,
-  makeProof,
-  proofDistanceMeters,
-  proofNameForMethodChange,
-  type ChallengeProofMethod,
-} from '@/lib/challengeProofs';
+import { defaultSentenceForMethod, makeProof } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
@@ -113,41 +102,6 @@ import { PRIVACY_MODE_LOCKED_MESSAGE } from '@/lib/privacyMode';
 import { circleDetailHref, LOBBY_HREF, publishedRowId, TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { getCreateChallengeMessage } from '@/utils/errors';
-
-function IconChip({
-  icon,
-  glyph,
-  label,
-  selected,
-  onPress,
-}: {
-  icon: string;
-  glyph?: GlyphId;
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const color = selected ? THEME.accent : THEME.textPrimary;
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      className="flex-row items-center rounded-full px-3"
-      style={{
-        backgroundColor: selected ? THEME.accentSoft : THEME.surface,
-        borderWidth: 1,
-        borderColor: selected ? THEME.accent : THEME.border,
-        minHeight: 44,
-        gap: 6,
-      }}>
-      {glyph ? <Glyph name={glyph} color={color} size={14} /> : icon ? <AppText className="text-[14px]">{icon}</AppText> : null}
-      <AppText className="text-sm font-semibold" style={{ color }}>
-        {label}
-      </AppText>
-    </Pressable>
-  );
-}
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -774,7 +728,7 @@ export function SimpleCreateForm() {
           <SectionLabel>{copy('create.type')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_TYPES.map((item) => (
-              <IconChip
+              <CreateIconChip
                 key={item.value}
                 icon={item.icon}
                 glyph={item.value === 'any_exercise' ? GLYPH.anyExercise : undefined}
@@ -799,30 +753,24 @@ export function SimpleCreateForm() {
           <SectionLabel>{copy('create.howYouWin')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_SCORING.map((item) => (
-              <IconChip
+              <CreateIconChip
                 key={item.value}
                 icon=""
                 label={item.label}
                 selected={simpleHowYouWin(draft) === item.value}
                 onPress={() => {
-                  const nextProofs =
-                    item.value === 'cumulative' && !draft.proofs.some((proof) => proof.method === 'distance')
-                      ? [
-                          makeProof(
-                            defaultSentenceForMethod('distance', 30, { unit: draft.distance_unit }),
-                            'distance',
-                            undefined,
-                            milesToMeters(1),
-                          ),
-                          ...draft.proofs,
-                        ].slice(0, 4)
-                      : draft.proofs;
                   patch({
                     scoring: item.value,
-                    proofs: nextProofs,
                     cumulative_window: draft.cumulative_window ?? 'challenge',
-                    cumulative_target_meters: draft.cumulative_target_meters || milesToMeters(100),
-                    payout: defaultPayoutIdForFamily(item.value === 'cumulative' ? 'points' : 'consistency'),
+                    win_window: draft.win_window ?? draft.cumulative_window ?? 'challenge',
+                    metrics:
+                      item.value === 'cumulative'
+                        ? draft.metrics?.length
+                          ? draft.metrics
+                          : defaultCumulativeMetrics()
+                        : draft.metrics,
+                    payout: defaultPayoutIdForFamily(item.value === 'cumulative' ? 'cumulative' : 'consistency'),
+                    top_places_value: draft.top_places_value ?? 3,
                   });
                 }}
               />
@@ -849,52 +797,32 @@ export function SimpleCreateForm() {
             </AppText>
           </Pressable>
           {simpleHowYouWin(draft) === 'cumulative' ? (
-            <View className="gap-2">
-              <DistanceMilesRow
-                meters={draft.cumulative_target_meters || milesToMeters(100)}
-                unit={draft.distance_unit ?? 'mi'}
-                onChangeMeters={(cumulative_target_meters) => patch({ cumulative_target_meters })}
-                onChangeUnit={(distance_unit) => patch({ distance_unit })}
-              />
-              <SectionLabel>{copy('create.cumulativeWindow')}</SectionLabel>
+            <CumulativeMetricsEditor
+              metrics={draft.metrics?.length ? draft.metrics : defaultCumulativeMetrics()}
+              window={draft.win_window ?? (draft.cumulative_window === 'week' ? 'week' : 'challenge')}
+              payout={draft.payout}
+              topPlacesValue={draft.top_places_value}
+              onMetricsChange={(metrics) => patch({ metrics })}
+              onWindowChange={(win_window) => patch({ win_window, cumulative_window: win_window })}
+              onPayoutChange={(payout) => patch({ payout })}
+              onTopPlacesChange={(top_places_value) => patch({ top_places_value })}
+            />
+          ) : (
+            <>
+              <SectionLabel>Payout</SectionLabel>
               <View className="flex-row flex-wrap gap-2">
-                {SIMPLE_CUMULATIVE_WINDOWS.map((item) => (
-                  <IconChip
-                    key={item.value}
+                {payoutOptionsForFamily('consistency').map((item) => (
+                  <CreateIconChip
+                    key={item.id}
                     icon=""
                     label={item.label}
-                    selected={(draft.cumulative_window ?? 'challenge') === item.value}
-                    onPress={() => patch({ cumulative_window: item.value })}
+                    selected={(draft.payout ?? defaultPayoutIdForFamily('consistency')) === item.id}
+                    onPress={() => patch({ payout: item.id })}
                   />
                 ))}
               </View>
-            </View>
-          ) : null}
-          <SectionLabel>Payout</SectionLabel>
-          <View className="flex-row flex-wrap gap-2">
-            {payoutOptionsForFamily(
-              formatFamilyOf({ scoring: simpleHowYouWin(draft), challenge_type: simpleHowYouWin(draft) }),
-            ).map((item) => (
-              <IconChip
-                key={item.id}
-                icon=""
-                label={item.label}
-                selected={(draft.payout ?? defaultPayoutIdForFamily(
-                  formatFamilyOf({ scoring: simpleHowYouWin(draft) }),
-                )) === item.id}
-                onPress={() => patch({ payout: item.id })}
-              />
-            ))}
-          </View>
-          {(draft.payout === 'top_count' || draft.payout === 'top_percent' || draft.payout === 'scaled') ? (
-            <StepperField
-              label={draft.payout === 'top_percent' ? 'Top percent' : 'Top places'}
-              value={Math.max(Number(draft.top_places_value) || (draft.payout === 'top_percent' ? 25 : 3), 1)}
-              min={1}
-              max={draft.payout === 'top_percent' ? 100 : 99}
-              onChange={(top_places_value) => patch({ top_places_value })}
-            />
-          ) : null}
+            </>
+          )}
         </View>
 
         <TourAnchor id="create-simple-title">
@@ -993,7 +921,7 @@ export function SimpleCreateForm() {
           <SectionLabel>{copy('create.duration')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_DURATION_CHIPS.map((item) => (
-              <IconChip
+              <CreateIconChip
                 key={String(item.value)}
                 icon=""
                 label={item.label}
@@ -1051,138 +979,12 @@ export function SimpleCreateForm() {
           ref={(node) => {
             sectionRefs.current['create-simple-proof'] = node;
           }}>
-          <SectionLabel>{copy('create.proofs')}</SectionLabel>
-          <View className="gap-3">
-            {draft.proofs.map((proof) => (
-              <View key={proof.id} className="gap-2">
-                <View className="flex-row items-center gap-2">
-                  <View className="flex-1">
-                    <Input
-                      placeholder={copy('create.proofFallback')}
-                      value={proof.name}
-                      onChangeText={(name) =>
-                        patch({
-                          proofs: draft.proofs.map((item) =>
-                            item.id === proof.id ? { ...item, name } : item,
-                          ),
-                        })
-                      }
-                      grow
-                      maxLength={90}
-                    />
-                  </View>
-                  {draft.proofs.length > 1 ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Remove proof"
-                      onPress={() => patch({ proofs: removeSimpleProof(draft.proofs, proof.id) })}
-                      className="h-[52px] w-[52px] items-center justify-center rounded-xl"
-                      style={{ borderWidth: 1, borderColor: THEME.border, backgroundColor: THEME.surface }}>
-                      <AppText className="text-[18px] font-semibold text-muted">×</AppText>
-                    </Pressable>
-                  ) : null}
-                </View>
-                <View className="flex-row flex-wrap gap-2">
-                  {SIMPLE_PROOF_METHODS.map((item) => (
-                    <IconChip
-                      key={item.value}
-                      icon={item.icon}
-                      label={item.label}
-                      selected={proof.method === item.value}
-                      onPress={() =>
-                        patch({
-                          proofs: draft.proofs.map((row) =>
-                            row.id === proof.id
-                              ? ensureProofSentence(
-                                  {
-                                    ...row,
-                                    method: item.value as ChallengeProofMethod,
-                                    minutes:
-                                      item.value === 'hr' ? Math.max(row.minutes || 30, 1) : row.minutes,
-                                    distance_meters:
-                                      item.value === 'distance'
-                                        ? proofDistanceMeters(row)
-                                        : row.distance_meters,
-                                    name: proofNameForMethodChange(
-                                      row,
-                                      item.value as ChallengeProofMethod,
-                                      item.value === 'hr' ? Math.max(row.minutes || 30, 1) : 30,
-                                    ),
-                                  },
-                                  item.value === 'hr' ? Math.max(row.minutes || 30, 1) : 30,
-                                )
-                              : row,
-                          ),
-                        })
-                      }
-                    />
-                  ))}
-                </View>
-                {proof.method === 'hr' ? (
-                  <HeartRateMinutesRow
-                    value={proof.minutes || 30}
-                    onChange={(minutes) =>
-                      patch({
-                        proofs: draft.proofs.map((row) =>
-                          row.id === proof.id
-                            ? ensureProofSentence({ ...row, method: 'hr', minutes }, minutes)
-                            : row,
-                        ),
-                      })
-                    }
-                  />
-                ) : null}
-                {proof.method === 'distance' ? (
-                  <DistanceMilesRow
-                    meters={proofDistanceMeters(proof)}
-                    unit={draft.distance_unit ?? 'mi'}
-                    onChangeMeters={(distance_meters) =>
-                      patch({
-                        proofs: draft.proofs.map((row) =>
-                          row.id === proof.id
-                            ? ensureProofSentence({ ...row, method: 'distance', distance_meters })
-                            : row,
-                        ),
-                      })
-                    }
-                    onChangeUnit={(distance_unit) => patch({ distance_unit })}
-                  />
-                ) : null}
-                {proof.method === 'location' ? (
-                  <LocationPlacePicker
-                    place={proof.place}
-                    onChange={(place) =>
-                      patch({
-                        proofs: draft.proofs.map((row) =>
-                          row.id === proof.id
-                            ? ensureProofSentence({ ...row, method: 'location', place })
-                            : row,
-                        ),
-                      })
-                    }
-                  />
-                ) : null}
-              </View>
-            ))}
-          </View>
-          <View className="flex-row flex-wrap gap-2">
-            {draft.proofs.length < SIMPLE_PROOF_CAP ? (
-              <IconChip
-                icon=""
-                label={copy('create.addProof')}
-                selected={false}
-                onPress={() => patch({ proofs: addSimpleProof(draft.proofs) })}
-              />
-            ) : null}
-            <IconChip
-              icon=""
-              label={copy('create.proofPreset')}
-              selected={false}
-              onPress={() => patch({ proofs: applyBeforeAfterHrPreset() })}
-            />
-          </View>
-          <AppText className="text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
-          <AppText className="text-[12px] leading-5 text-muted">{copy('create.proofsBelong')}</AppText>
+          <SimpleProofsEditor
+            proofs={draft.proofs}
+            onChange={(proofs) => patch({ proofs })}
+            distanceUnit={draft.distance_unit ?? 'mi'}
+            onDistanceUnitChange={(distance_unit) => patch({ distance_unit })}
+          />
         </View>
         </TourAnchor>
         <ExtraTasksEditor
@@ -1204,7 +1006,7 @@ export function SimpleCreateForm() {
           <SectionLabel>{copy('create.frequency')}</SectionLabel>
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_FREQUENCY_CHIPS.map((item) => (
-              <IconChip
+              <CreateIconChip
                 key={item.value}
                 icon=""
                 label={item.label}
@@ -1224,7 +1026,7 @@ export function SimpleCreateForm() {
               />
               <View className="flex-row flex-wrap gap-2">
                 {SIMPLE_CUSTOM_PERIODS.map((item) => (
-                  <IconChip
+                  <CreateIconChip
                     key={item.value}
                     icon=""
                     label={item.label}

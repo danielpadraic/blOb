@@ -11,6 +11,7 @@ export type RankedBoardRow = {
   score?: number | null;
   status?: string | null;
   eliminated_at?: string | null;
+  completed_at?: string | null;
 };
 
 export type RankedShare = {
@@ -33,12 +34,16 @@ export type RankedPayoutInput = {
   top_places_mode?: string | null;
   top_places_value?: string | number | null;
   top_places_distribution?: string | null;
+  /** Top % denominator: people in at start. Defaults to eligible row count. */
+  starting_field?: number | null;
 };
 
 const DROPPED = new Set(['refunded_pre_start', 'withdrawn', 'eliminated', 'failed']);
 
 export const ILLEGAL_POINTS_EVEN_SPLIT_COPY =
-  'Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.';
+  'Points challenges can’t use Even split remaining. Pick Winner take all or top places.';
+export const ILLEGAL_CUMULATIVE_LAST_STANDING_COPY =
+  'Cumulative challenges can’t use Last standing. Pick Anyone who hits the goal, Top #, or Top %.';
 export const ILLEGAL_CONSISTENCY_TOP_PLACES_COPY =
   'Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.';
 
@@ -83,7 +88,13 @@ function assertLegalPair(input: RankedPayoutInput): void {
   ) {
     return;
   }
-  throw new Error(family === 'consistency' ? ILLEGAL_CONSISTENCY_TOP_PLACES_COPY : ILLEGAL_POINTS_EVEN_SPLIT_COPY);
+  throw new Error(
+    family === 'consistency'
+      ? ILLEGAL_CONSISTENCY_TOP_PLACES_COPY
+      : family === 'cumulative'
+        ? ILLEGAL_CUMULATIVE_LAST_STANDING_COPY
+        : ILLEGAL_POINTS_EVEN_SPLIT_COPY,
+  );
 }
 
 function sortByScore(rows: RankedBoardRow[]): RankedBoardRow[] {
@@ -96,11 +107,47 @@ function sortByScore(rows: RankedBoardRow[]): RankedBoardRow[] {
   });
 }
 
-function topSlots(eligible: RankedBoardRow[], input: RankedPayoutInput): number {
+function finishSecond(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) {
+    return null;
+  }
+  return Math.floor(ms / 1000);
+}
+
+function hasFinished(row: RankedBoardRow): boolean {
+  return finishSecond(row.completed_at) != null || Number(row.score ?? 0) > 0;
+}
+
+function sortByCompletedAt(rows: RankedBoardRow[]): RankedBoardRow[] {
+  return rows.slice().sort((a, b) => {
+    const aAt = finishSecond(a.completed_at);
+    const bAt = finishSecond(b.completed_at);
+    if (aAt != null && bAt != null && aAt !== bAt) {
+      return aAt - bAt;
+    }
+    if (aAt != null && bAt == null) {
+      return -1;
+    }
+    if (aAt == null && bAt != null) {
+      return 1;
+    }
+    return String(a.user_id).localeCompare(String(b.user_id));
+  });
+}
+
+function topSlots(eligible: RankedBoardRow[], input: RankedPayoutInput, fieldSize?: number): number {
   const pair = asPair(input);
   const raw = Number(pair.top_places_value);
   const value = Number.isFinite(raw) && raw > 0 ? raw : pair.top_places_mode === 'percent' ? 25 : 3;
   if (pair.top_places_mode === 'percent') {
+    if (fieldSize != null || input.starting_field != null) {
+      const field = Math.max(Number(fieldSize ?? input.starting_field) || 0, 0);
+      return field <= 0 ? 0 : Math.max(1, Math.ceil((field * value) / 100));
+    }
     const scored = eligible.some((row) => Number(row.score ?? 0) > 0);
     if (!scored) {
       return 0;
@@ -117,6 +164,21 @@ function awardedForCut(sorted: RankedBoardRow[], slots: number): RankedBoardRow[
   const cut = sorted[Math.min(slots, sorted.length) - 1];
   const floor = Number(cut?.score ?? 0);
   return sorted.filter((row) => Number(row.score ?? 0) >= floor);
+}
+
+function awardedForFinishCut(sorted: RankedBoardRow[], slots: number): RankedBoardRow[] {
+  if (slots <= 0 || sorted.length === 0) {
+    return [];
+  }
+  const cut = sorted[Math.min(slots, sorted.length) - 1];
+  const cutSec = finishSecond(cut?.completed_at);
+  if (cutSec == null) {
+    return sorted.slice(0, Math.min(slots, sorted.length));
+  }
+  return sorted.filter((row) => {
+    const at = finishSecond(row.completed_at);
+    return at != null && at <= cutSec;
+  });
 }
 
 function placeOf(sorted: RankedBoardRow[], index: number): number {
@@ -213,6 +275,12 @@ export function resultWhyCopy(input: {
   if (family === 'consistency' && (structure === 'winner_take_all' || payout === 'winner_take_all')) {
     return 'Last standing.';
   }
+  if (family === 'cumulative') {
+    if (structure === 'top_places' || payout === 'top_places') {
+      return 'Ranked by who finishes every target first.';
+    }
+    return 'Anyone who hits the goal.';
+  }
   if (structure === 'top_places' || payout === 'top_places') {
     return String(input.top_places_distribution ?? '') === 'scaled'
       ? 'Highest points. Scaled.'
@@ -228,7 +296,7 @@ export function rankedShares(input: RankedPayoutInput): RankedShare[] {
   assertLegalPair(input);
   const family = asFamily(input);
   const pair = asPair(input);
-  const eligible = sortByScore(rankedEligible(input.rows));
+  const eligible = rankedEligible(input.rows);
   const pool = Number(input.pool);
   if (!Number.isFinite(pool) || pool <= 0 || eligible.length === 0) {
     return [];
@@ -241,16 +309,24 @@ export function rankedShares(input: RankedPayoutInput): RankedShare[] {
     pair.prize_structure === 'winner_take_all' || pair.payout_mode === 'winner_take_all';
   const topPlaces = pair.prize_structure === 'top_places' || pair.payout_mode === 'top_places';
 
-  let awarded = eligible;
-  if (lastStanding || (family === 'points' && winnerTakeAll && !topPlaces)) {
-    const best = Number(eligible[0]?.score ?? 0);
+  let awarded = sortByScore(eligible);
+  if (family === 'cumulative') {
+    awarded = sortByCompletedAt(eligible.filter(hasFinished));
+    if (topPlaces) {
+      awarded = awardedForFinishCut(
+        awarded,
+        topSlots(eligible, input, input.starting_field ?? eligible.length),
+      );
+    }
+  } else if (lastStanding || (family === 'points' && winnerTakeAll && !topPlaces)) {
+    const best = Number(awarded[0]?.score ?? 0);
     if (family === 'points' && best <= 0) {
       return [];
     }
-    awarded = eligible.filter((row) => Number(row.score ?? 0) === best);
+    awarded = awarded.filter((row) => Number(row.score ?? 0) === best);
   } else if (topPlaces) {
     const slots = topSlots(eligible, input);
-    awarded = awardedForCut(eligible, slots);
+    awarded = awardedForCut(awarded, slots);
     if (awarded.every((row) => Number(row.score ?? 0) <= 0)) {
       return [];
     }

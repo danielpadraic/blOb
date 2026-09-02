@@ -473,6 +473,64 @@ describe('ranked shares', () => {
     ).toEqual([]);
   });
 
+  it('even-splits Cumulative anyone-to among people who hit the target', () => {
+    const paid = rankedShares({
+      pool: 30,
+      family: 'cumulative',
+      challenge_type: 'cumulative',
+      prize_structure: 'equal_split',
+      payout_mode: 'even_split_remaining',
+      rows: [
+        { user_id: 'a', score: 1, status: 'completed' },
+        { user_id: 'b', score: 1, status: 'completed' },
+        { user_id: 'c', score: 0, status: 'joined' },
+      ],
+    });
+    expect(paid.map((row) => row.user_id).sort()).toEqual(['a', 'b']);
+    expect(paid.map((row) => row.amount)).toEqual([15, 15]);
+  });
+
+  it('pays Cumulative Top # by completed_at and splits a same-second cut', () => {
+    const paid = rankedShares({
+      pool: 40,
+      family: 'cumulative',
+      challenge_type: 'cumulative',
+      prize_structure: 'top_places',
+      payout_mode: 'top_places',
+      top_places_mode: 'count',
+      top_places_value: 3,
+      rows: [
+        { user_id: 'a', completed_at: '2026-09-01T12:00:00.000Z', status: 'completed' },
+        { user_id: 'b', completed_at: '2026-09-01T12:00:01.000Z', status: 'completed' },
+        { user_id: 'c', completed_at: '2026-09-01T12:00:02.400Z', status: 'completed' },
+        { user_id: 'd', completed_at: '2026-09-01T12:00:02.900Z', status: 'completed' },
+        { user_id: 'e', completed_at: '2026-09-01T12:00:04.000Z', status: 'completed' },
+      ],
+    });
+    expect(paid.map((row) => row.user_id).sort()).toEqual(['a', 'b', 'c', 'd']);
+    expect(paid.reduce((sum, row) => sum + row.amount, 0)).toBe(40);
+  });
+
+  it('uses the starting field for Cumulative Top %, not completer count', () => {
+    const paid = rankedShares({
+      pool: 20,
+      family: 'cumulative',
+      challenge_type: 'cumulative',
+      prize_structure: 'top_places',
+      payout_mode: 'top_places',
+      top_places_mode: 'percent',
+      top_places_value: 25,
+      starting_field: 8,
+      rows: [
+        { user_id: 'a', completed_at: '2026-09-01T12:00:00.000Z', status: 'completed' },
+        { user_id: 'b', completed_at: '2026-09-01T12:00:01.000Z', status: 'completed' },
+        { user_id: 'c', completed_at: '2026-09-01T12:00:02.000Z', status: 'completed' },
+        { user_id: 'd', status: 'joined' },
+      ],
+    });
+    expect(paid.map((row) => row.user_id)).toEqual(['a', 'b']);
+  });
+
   it('rejects an illegal points even-split pair', () => {
     expect(() =>
       rankedShares({

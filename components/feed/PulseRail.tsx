@@ -50,7 +50,7 @@ function PulseChip({ pill }: { pill: PulsePill }) {
         borderRadius: THEME.radius,
         backgroundColor: THEME.surface,
         borderWidth: 1,
-        borderColor: THEME.border,
+        borderColor: pill.isCallout ? THEME.callout : THEME.border,
         ...themeShadow('card'),
       }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

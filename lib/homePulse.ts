@@ -1,6 +1,7 @@
 import { isLiveOrUpcoming } from '@/lib/challengeDiscoverability';
 import { fetchActiveChallenges } from '@/lib/challenges';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { fetchWatchedCalloutChallenges } from '@/lib/callouts';
 import { copy } from '@/lib/copy';
 import { liveQuotePreview } from '@/lib/liveThread';
 import { challengeDetailHref } from '@/lib/routes';
@@ -44,6 +45,8 @@ export type PulsePill = {
   snippet: string;
   faces: PulseFace[];
   lastAt: string | null;
+  isCallout?: boolean;
+  watching?: boolean;
 };
 
 export type PulseChallengeLike = {
@@ -51,6 +54,8 @@ export type PulseChallengeLike = {
   title?: string | null;
   task?: string | null;
   status?: string | null;
+  is_callout?: boolean | null;
+  watching?: boolean | null;
 };
 
 /** Live / upcoming only. Ended and Settled never become pills. */
@@ -147,9 +152,11 @@ export function buildPulsePills(input: {
     return {
       id,
       title: challengeDisplayTitle(row) || 'Challenge',
-      snippet: pulseSnippet(latest),
+      snippet: latest ? pulseSnippet(latest) : row.watching ? 'Watching' : pulseSnippet(null),
       faces: collectPulseFaces(newestFirst, id, profiles),
       lastAt: latest?.created_at ?? null,
+      isCallout: Boolean(row.is_callout),
+      watching: Boolean(row.watching),
     };
   });
   return sortPulsePills(pills).slice(0, PULSE_CAP);
@@ -198,12 +205,30 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
   } catch {
     return [];
   }
+  try {
+    const watched = selectPulseChallenges(
+      (await fetchWatchedCalloutChallenges(userId)).map((row) => ({ ...row, watching: true })),
+    );
+    const seen = new Set(challenges.map((row) => String(row.id)));
+    for (const row of watched) {
+      const id = String(row.id ?? '').trim();
+      if (!id || seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      challenges.push(row);
+    }
+  } catch {
+    // Fighters keep their pills if the watch list fails.
+  }
   if (challenges.length === 0) {
     return [];
   }
   let posts: PulseLobbyPost[] = [];
   try {
-    posts = await fetchPulseLobbyPosts(challenges.map((row) => row.id));
+    posts = await fetchPulseLobbyPosts(
+      challenges.map((row) => String(row.id ?? '').trim()).filter(Boolean),
+    );
   } catch {
     posts = [];
   }

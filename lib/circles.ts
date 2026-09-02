@@ -141,6 +141,23 @@ export function challengeIdFromPost(post: { challenge_id?: string | null }): str
 }
 
 /** Origin links use this row only. Never a last-open snapshot. */
+export type CirclePageTab = 'details' | 'roster' | 'chat';
+
+/** Old links used tab=feed. Non-members never land on Chat. */
+export function asCirclePageTab(
+  raw?: string | null,
+  member?: boolean | null,
+): CirclePageTab {
+  const value = raw === 'feed' ? 'chat' : raw;
+  if (value === 'roster') {
+    return 'roster';
+  }
+  if (value === 'chat') {
+    return member === false ? 'details' : 'chat';
+  }
+  return 'details';
+}
+
 export function circleHrefFromPost(post: { circle_id?: string | null }) {
   const id = circleIdFromPost(post);
   return id ? circleDetailHref(id) : null;
@@ -160,7 +177,7 @@ export function circleNotificationPath(
   }
   if (type === 'circle_post' || type === 'circle_challenge_share') {
     const post = String(postId ?? '').trim();
-    return post ? `/circles/${id}?tab=feed&postId=${post}` : `/circles/${id}?tab=feed`;
+    return post ? `/circles/${id}?tab=chat&postId=${post}` : `/circles/${id}?tab=chat`;
   }
   if (type === 'circle_invite_accepted' || type === 'circle_join') {
     return `/circles/${id}`;

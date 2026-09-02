@@ -43,12 +43,12 @@ export function adminMetricHref(metric: string, range: string): Href {
 
 export function circleDetailHref(
   id: string,
-  extra?: { tab?: 'details' | 'roster' | 'feed'; postId?: string | null },
+  extra?: { tab?: 'details' | 'roster' | 'feed' | 'chat'; postId?: string | null },
 ): Href {
   const circleId = String(id ?? '').trim();
   const qs = new URLSearchParams();
   if (extra?.tab) {
-    qs.set('tab', extra.tab);
+    qs.set('tab', extra.tab === 'feed' ? 'chat' : extra.tab);
   }
   if (extra?.postId) {
     qs.set('postId', extra.postId);
@@ -133,7 +133,7 @@ export function checkinSubmitHref(
 /** Bob Retry after a crash. Never reload `/capture` (that reopens Wave). */
 export function errorRetryHref(pathname: string | null | undefined): string {
   const path = String(pathname ?? '');
-  if (path.includes('/capture')) {
+  if (path.includes('/capture') || path.includes('/feed/compose') || path === '/compose') {
     return '/feed';
   }
   const watch = path.match(/^\/(wave|round|story|reel)\/([^/?#]*)/);
@@ -161,12 +161,17 @@ export function inviteHref(token: string) {
 export const CAPTURE_HREF = '/capture' as const;
 
 /** Query `mode` stays `story` | `reel` | `post` so capture URLs stay stable. User-facing names are Wave / Round / post. */
-export function captureHref(mode: 'story' | 'reel' | 'post' = 'story', media?: 'photo' | 'video') {
+export function captureHref(
+  mode: 'story' | 'reel' | 'post' = 'story',
+  media?: 'photo' | 'video',
+  extra?: { challengeId?: string | null },
+) {
   const resolved =
     media === 'video' || media === 'photo' ? media : mode === 'post' ? 'photo' : 'video';
+  const challengeId = String(extra?.challengeId ?? '').trim();
   return {
     pathname: '/capture' as const,
-    params: { mode, media: resolved },
+    params: challengeId ? { mode, media: resolved, challengeId } : { mode, media: resolved },
   };
 }
 

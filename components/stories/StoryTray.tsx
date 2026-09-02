@@ -48,7 +48,7 @@ export function StoryTray() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingVertical: 0 }}>
         {groups.map((group) => {
-          const unseen = group.stories.some((story) => !viewedIds.has(story.id));
+          const unseen = group.stories.some((story) => story?.id && !viewedIds.has(story.id));
           const bubble = (
             <StoryBubble
               group={group}

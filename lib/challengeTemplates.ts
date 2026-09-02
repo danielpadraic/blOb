@@ -19,6 +19,11 @@ import {
 import { persistTasksForPublish, minMinutesForPublish, namedProofsForPublish } from '@/lib/challengeCreatePublish';
 import { pointsWinRulesSentence } from '@/lib/ruleActivityCopy';
 import { formatDistance, milesToMeters } from '@/lib/distance';
+import {
+  cumulativeMetricsProgressLabel,
+  filledCumulativeMetrics,
+  resolveCumulativeMetrics,
+} from '@/lib/cumulativeMetrics';
 import { proofDistanceMeters } from '@/lib/challengeProofs';
 import {
   comparablePointsHeadline,
@@ -166,6 +171,8 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   cumulative_metric: null,
   cumulative_target: '',
   cumulative_window: 'challenge',
+  win_window: 'challenge',
+  metrics: [],
   distance_meters_required: '',
 };
 
@@ -452,13 +459,41 @@ export function consistencyDistanceWinLine(values: CreateChallengeValues): strin
 }
 
 export function cumulativeReviewWinLine(values: CreateChallengeValues): string {
+  const metrics = filledCumulativeMetrics(
+    resolveCumulativeMetrics({
+      metrics: values.metrics,
+      scoring_config: values.scoring_config,
+      cumulative_target: values.cumulative_target,
+      cumulative_metric: values.cumulative_metric,
+      title: values.title,
+      task: values.task,
+      challenge_type: values.challenge_type,
+      format: values.format,
+    }),
+  );
+  const window =
+    values.win_window === 'week' || values.cumulative_window === 'week'
+      ? 'each week'
+      : values.cumulative_window === 'day'
+        ? 'each day'
+        : 'before the end date';
+  if (metrics.length > 0) {
+    const names = metrics
+      .map((item) => `${item.target} ${item.name.trim()}`)
+      .join(metrics.length > 1 ? ' and ' : '');
+    const must = metrics.length > 1 ? ' Must hit every target.' : '';
+    const payout =
+      values.payout_mode === 'top_places' || values.prize_structure === 'top_places'
+        ? ' Ranked by who finishes every target first.'
+        : ' Anyone who hits the goal splits the prize.';
+    return `Win by reaching ${names} ${window}.${payout}${must}`;
+  }
   const target = Math.max(Number(values.cumulative_target) || 0, 0);
   const meters = target > 0 ? target : milesToMeters(100);
-  const window = values.cumulative_window === 'week' ? 'each week' : values.cumulative_window === 'day' ? 'each day' : 'before the end date';
   const distanceProof = (values.challenge_proofs ?? []).find((proof) => proof.method === 'distance');
   const floor = distanceProof ? proofDistanceMeters(distanceProof) : Math.max(Number(values.distance_meters_required) || 0, 0);
   const floorLine = floor > 0 ? ` Each check-in needs ≥ ${formatDistance(floor)}.` : '';
-  return `Win by reaching ${formatDistance(meters)} ${window}. Everyone who hits the total splits the prize.${floorLine}`;
+  return `Win by reaching ${formatDistance(meters)} ${window}. Anyone who hits it splits the prize.${floorLine}`;
 }
 
 export function wizardMeans(
@@ -757,9 +792,22 @@ export function previewFromValues(values: CreateChallengeValues): ChallengeWithS
     category: values.category,
     challenge_type: unlimited ? 'consistency' : values.challenge_type,
     format: unlimited ? 'lms' : values.format ?? values.challenge_type,
-    cumulative_metric: isCumulativeDraft(values) ? values.cumulative_metric ?? 'distance_m' : null,
+    cumulative_metric: isCumulativeDraft(values) ? values.cumulative_metric ?? 'count' : null,
     cumulative_target: isCumulativeDraft(values) ? Math.max(Number(values.cumulative_target) || 0, 0) : null,
-    cumulative_window: isCumulativeDraft(values) ? values.cumulative_window ?? 'challenge' : null,
+    cumulative_window: isCumulativeDraft(values) ? values.win_window ?? values.cumulative_window ?? 'challenge' : null,
+    win_window: isCumulativeDraft(values) ? values.win_window ?? values.cumulative_window ?? 'challenge' : null,
+    metrics: isCumulativeDraft(values)
+      ? resolveCumulativeMetrics({
+          metrics: values.metrics,
+          scoring_config: values.scoring_config,
+          cumulative_target: values.cumulative_target,
+          cumulative_metric: values.cumulative_metric,
+          title: values.title,
+          task: values.task,
+          challenge_type: values.challenge_type,
+          format: values.format,
+        })
+      : [],
     distance_meters_required: Math.max(Number(values.distance_meters_required) || 0, 0) || null,
     misses_allowed: missesAllowedForPublish(values),
     visibility: values.visibility,

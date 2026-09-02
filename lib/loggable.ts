@@ -1,5 +1,12 @@
 import { normalizePeriodKey } from '@/lib/checkinPeriod';
 
+export function canCheckInOnChallenge(input: {
+  isParticipant?: boolean | null;
+  isCalloutObserver?: boolean | null;
+}): boolean {
+  return Boolean(input.isParticipant) && !input.isCalloutObserver;
+}
+
 export function asLoggableList<T extends { id?: string | null }>(
   value: T | T[] | null | undefined,
 ): T[] {

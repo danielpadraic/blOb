@@ -106,6 +106,7 @@ import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { parseDoneIds } from '@/lib/multiCheckin';
+import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
 import { challengeDetailHref, checkinSubmitHref, multiCheckinHref, publishedRowId } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
@@ -947,6 +948,20 @@ function SubmitWorkoutInner() {
             setFailKind(null);
             setError(null);
           }}
+        />
+      </Screen>
+    );
+  }
+
+  if (challenge?.is_callout && !participation) {
+    return (
+      <Screen padded={false} edges={['left', 'right', 'bottom']}>
+        <MascotState
+          kind="empty"
+          title={CALLOUT_WATCHING_LINE}
+          body="Watchers cheer in Live. They don’t Check In."
+          actionLabel="Open Live"
+          onAction={() => router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'feed' }) as never)}
         />
       </Screen>
     );

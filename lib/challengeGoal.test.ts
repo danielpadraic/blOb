@@ -76,12 +76,24 @@ describe('stored duration', () => {
         {
           challenge_type: 'cumulative',
           format: 'cumulative',
+          metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+          title: '128 miler',
+        },
+        { metricTotals: {}, unit: 'mi' },
+      ),
+    ).toBe('0 / 128 mi');
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'cumulative',
+          format: 'cumulative',
           cumulative_target: milesToMeters(128),
+          cumulative_metric: 'distance_m',
           title: '128 miler',
         },
         { distanceMetersCompleted: 0, unit: 'mi' },
       ),
-    ).toBe('0 mi / 128 mi');
+    ).toBe('0 / 128 mi');
     expect(
       challengeGoalLabel(
         {
@@ -91,7 +103,7 @@ describe('stored duration', () => {
         },
         { distanceMetersCompleted: 0, unit: 'mi' },
       ),
-    ).toBe('0 mi / 128 mi');
+    ).toBe('0 / 128 mi');
     expect(
       challengeGoalLabel(
         { challenge_type: 'cumulative', format: 'cumulative' },

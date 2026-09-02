@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -18,9 +19,11 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
-import { useCreatePost } from '@/hooks/useFeed';
+import { useCreatePost, seedPublishedPost } from '@/hooks/useFeed';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
+  seedPublishedReel,
+  seedPublishedWave,
   useCreateFeedEvent,
   useCreateReel,
   useCreateStory,
@@ -34,7 +37,7 @@ import {
   feedVisibilityForAudience,
   type PostAudience,
 } from '@/lib/postAudience';
-import type { ComposeInput, Post } from '@/lib/types';
+import type { ComposeInput, Post, PostWithMeta } from '@/lib/types';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import {
@@ -46,14 +49,18 @@ import {
 } from '@/lib/waveClips';
 import { publishedRowId, waveHref, roundHref } from '@/lib/routes';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
+import { fetchActiveChallenges } from '@/lib/challenges';
+import { pickHostedRoundChallengeId } from '@/lib/homeRounds';
 import { attachClipPostId } from '@/lib/social';
+import { sessionAuthor } from '@/lib/safeIds';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
-import { asGalleryMedia } from '@/utils/media';
-import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
+import { asGalleryMedia, localUriFromPickerAsset } from '@/utils/media';
+import { uploadPostMedia, uploadProgressPercent, uploadStoryMedia } from '@/utils/upload';
 
 type CaptureStudioProps = {
   initialMode?: CaptureMode;
   initialMedia?: 'photo' | 'video';
+  initialChallengeId?: string | null;
   onClose?: () => void;
 };
 
@@ -63,12 +70,16 @@ const POST_MAX = 60;
 export function CaptureStudio({
   initialMode = 'story',
   initialMedia,
+  initialChallengeId = null,
   onClose,
 }: CaptureStudioProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile } = useMyProfile();
-  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [challengeId, setChallengeId] = useState<string | null>(() =>
+    String(initialChallengeId ?? '').trim() || null,
+  );
   const [audienceOpen, setAudienceOpen] = useState(false);
   const createStory = useCreateStory();
   const createReel = useCreateReel();
@@ -100,6 +111,27 @@ export function CaptureStudio({
     () => challengeOptions.find((row) => row.id === challengeId) ?? null,
     [challengeId, challengeOptions],
   );
+
+  useEffect(() => {
+    if (mode !== 'reel' || challengeId || !user?.id) {
+      return;
+    }
+    let live = true;
+    void fetchActiveChallenges(user.id)
+      .then((rows) => {
+        if (!live) {
+          return;
+        }
+        const hosted = pickHostedRoundChallengeId(rows, user.id);
+        if (hosted) {
+          setChallengeId(hosted);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [mode, challengeId, user?.id]);
   const waveClips = useMemo(
     () => (mode === 'story' && draft ? waveClipWindows(draft.durationMs, draft.mediaType) : []),
     [draft, mode],
@@ -208,10 +240,15 @@ export function CaptureStudio({
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
-    if (result.canceled || !result.assets[0]?.uri) {
+    if (result.canceled) {
       return;
     }
     const asset = result.assets[0];
+    const uri = localUriFromPickerAsset(asset);
+    if (!uri) {
+      setError(copy('error.usePhotoOrVideo'));
+      return;
+    }
     const kind = asGalleryMedia({
       mimeType: asset.mimeType ?? asset.file?.type,
       fileName: asset.fileName,
@@ -225,16 +262,16 @@ export function CaptureStudio({
     const isVideo = kind === 'video';
     if (!isVideo) {
       rememberLastCapture({
-        uri: asset.uri,
+        uri,
         mimeType: asset.mimeType ?? asset.file?.type,
         blob: asset.file ?? null,
         size: asset.fileSize ?? null,
       });
     }
-    const durationMs = isVideo ? await resolveMediaDurationMs(asset.uri, asset.duration) : null;
+    const durationMs = isVideo ? await resolveMediaDurationMs(uri, asset.duration) : null;
     setFromCamera(false);
     acceptDraft({
-      uri: asset.uri,
+      uri,
       mediaType: isVideo ? 'video' : 'image',
       mimeType: asset.mimeType ?? asset.file?.type,
       blob: asset.file ?? null,
@@ -255,19 +292,27 @@ export function CaptureStudio({
       return;
     }
     setError(null);
-    setProgress(12);
+    setProgress(1);
     const tick = setInterval(() => {
       setProgress((value) => (value > 0 && value < 82 ? Math.min(82, value + 6) : value));
     }, 180);
     let publishedWaveId: string | null = null;
     let publishedReelId: string | null = null;
     try {
+      const onUploadProgress = (event: { loaded: number; total: number }) => {
+        const percent = uploadProgressPercent(event.loaded, event.total);
+        if (percent == null) {
+          return;
+        }
+        setProgress(Math.max(8, Math.min(82, percent)));
+      };
       const mediaUrl = await (mode === 'story'
         ? uploadStoryMedia({
             uri: draft.uri,
             userId: user.id,
             mimeType: draft.mimeType,
             blob: draft.blob,
+            onProgress: onUploadProgress,
           })
         : uploadPostMedia({
             uri: draft.uri,
@@ -275,6 +320,7 @@ export function CaptureStudio({
             fileStem: `${mode === 'reel' ? 'reels' : 'posts'}/${Date.now()}`, // Round storage prefix stays `reels/`.
             mimeType: draft.mimeType,
             blob: draft.blob,
+            onProgress: onUploadProgress,
           }));
       setProgress(88);
       const posterUrl =
@@ -312,7 +358,20 @@ export function CaptureStudio({
         const postedId = publishedRowId(posted);
         if (postedId) {
           await attachClipPostId('reel', publishedReelId, postedId);
+          seedPublishedPost(queryClient, user.id, {
+            ...(posted as Post),
+            id: postedId,
+            author_id: user.id,
+            author: sessionAuthor(profile, user.id) ?? undefined,
+            comments: [],
+            reactions: [],
+          } as PostWithMeta);
         }
+        seedPublishedReel(
+          queryClient,
+          { ...reel, id: publishedReelId, user_id: reel.user_id || user.id, profile: sessionAuthor(profile, user.id) },
+          profile ?? { id: user.id },
+        );
         try {
           await createFeedEvent.mutateAsync({
             event_type: 'reel_posted',
@@ -374,7 +433,16 @@ export function CaptureStudio({
           const postedId = publishedRowId(posted);
           if (postedId) {
             await attachClipPostId('story', storyId, postedId);
+            seedPublishedPost(queryClient, user.id, {
+              ...(posted as Post),
+              id: postedId,
+              author_id: user.id,
+              author: sessionAuthor(profile, user.id) ?? undefined,
+              comments: [],
+              reactions: [],
+            } as PostWithMeta);
           }
+          seedPublishedWave(queryClient, { ...story, id: storyId, user_id: story.user_id || user.id }, profile ?? { id: user.id });
         }
         const first = stories.find((row) => publishedRowId(row) === publishedWaveId) ?? stories[0];
         if (first && publishedWaveId) {
@@ -525,6 +593,30 @@ export function CaptureStudio({
               Retake
             </AppText>
           </Pressable>
+          {progress > 0 ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                paddingHorizontal: 12,
+                paddingBottom: 12,
+                paddingTop: 28,
+                backgroundColor: 'rgba(16,19,18,0.45)',
+              }}>
+              <View className="h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.28)' }}>
+                <View
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.max(6, progress)}%`, backgroundColor: THEME.accentBright }}
+                />
+              </View>
+              <AppText className="mt-1.5 text-[12px] font-semibold" style={{ color: '#fff' }}>
+                {progress < 88 ? `${Math.round(progress)}%` : 'Sharing…'}
+              </AppText>
+            </View>
+          ) : null}
         </Card>
       ) : null}
       {draft && fromCamera ? (

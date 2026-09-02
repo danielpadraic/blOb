@@ -42,11 +42,12 @@ type InlineComposerProps = {
   replyTo?: MentionChip | null;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
-  /** Keep the camera / gallery / GIF row open. Used by Live. */
+  /** Keep the camera / gallery / GIF row open. Used by comments. */
   pinned?: boolean;
-  /** Live: one thin bar — cam, field, Send. Home comments stay stacked. */
+  /** Live/Circle: idle one thin bar; focus shows tools + Send. */
   bar?: boolean;
   autoFocus?: boolean;
+  memberIds?: string[];
   onSubmit: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
 };
 
@@ -62,6 +63,7 @@ export function InlineComposer({
   pinned,
   bar = false,
   autoFocus = true,
+  memberIds,
   onSubmit,
 }: InlineComposerProps) {
   const { user } = useAuth();
@@ -70,17 +72,22 @@ export function InlineComposer({
   const holdFocus = useRef(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasExpanded = useRef(true);
-  const [internalExpanded, setInternalExpanded] = useState(true);
+  const [internalExpanded, setInternalExpanded] = useState(!bar);
   const [hasText, setHasText] = useState(false);
   const [fieldKey, setFieldKey] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [gifOpen, setGifOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fieldFocused, setFieldFocused] = useState(autoFocus);
-  const expanded = bar ? true : pinned ? true : (expandedProp ?? internalExpanded);
+  const expanded = pinned && !bar ? true : (expandedProp ?? internalExpanded);
+  const toolsOpen = bar
+    ? fieldFocused || hasText || attachments.length > 0 || gifOpen || Boolean(replyTo) || expanded
+    : expanded;
   const busy = Boolean(submitting || uploading);
   const canSend = hasText || attachments.length > 0;
-  const fieldCollapsed = bar ? !fieldFocused && !hasText && attachments.length === 0 : !expanded;
+  const fieldCollapsed = bar
+    ? !fieldFocused && !hasText && attachments.length === 0
+    : !expanded;
 
   function setExpanded(next: boolean) {
     onExpandedChange?.(next);
@@ -282,13 +289,13 @@ export function InlineComposer({
       ref={fieldRef}
       compact
       collapsed={fieldCollapsed}
-      maxLines={bar ? 4 : undefined}
       pickerPlacement="above"
       autoFocus={autoFocus}
       placeholder={placeholder}
       initialMention={replyTo}
       audience={audience}
       audienceUserIds={audienceUserIds}
+      memberIds={memberIds}
       onChange={onDocChange}
       onSubmit={() => void submit()}
       onFocus={() => {
@@ -334,23 +341,21 @@ export function InlineComposer({
 
   const attachIcons = (
     <>
-      {bar ? null : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Mention someone"
-          hitSlop={8}
-          onPress={() => fieldRef.current?.insertAt()}
-          onPressIn={() => {
-            holdFocus.current = true;
-            cancelCollapse();
-          }}
-          {...keepFocusProps()}
-          style={{ minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center' }}>
-          <AppText className="text-[16px] font-extrabold" style={{ color: THEME.accent }}>
-            @
-          </AppText>
-        </Pressable>
-      )}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Mention someone"
+        hitSlop={8}
+        onPress={() => fieldRef.current?.insertAt()}
+        onPressIn={() => {
+          holdFocus.current = true;
+          cancelCollapse();
+        }}
+        {...keepFocusProps()}
+        style={{ minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center' }}>
+        <AppText className="text-[16px] font-extrabold" style={{ color: THEME.accent }}>
+          @
+        </AppText>
+      </Pressable>
       <ReplyIcon
         glyph={GLYPH.camera}
         label="Camera"
@@ -361,17 +366,16 @@ export function InlineComposer({
           cancelCollapse();
         }}
       />
-      {bar ? null : (
-        <ReplyIcon
-          glyph={GLYPH.album}
-          label="Gallery"
-          onPress={() => void pickGallery()}
-          onPressIn={() => {
-            holdFocus.current = true;
-            cancelCollapse();
-          }}
-        />
-      )}
+      <ReplyIcon
+        glyph={GLYPH.album}
+        label="Gallery"
+        compact={bar}
+        onPress={() => void pickGallery()}
+        onPressIn={() => {
+          holdFocus.current = true;
+          cancelCollapse();
+        }}
+      />
       <ReplyIcon
         mark="GIF"
         label="GIF"
@@ -406,13 +410,11 @@ export function InlineComposer({
         </View>
       ) : null}
       {bar ? (
-        <View className="flex-row items-end" style={{ gap: 4, minHeight: 38 }}>
-          {attachIcons}
+        <>
           <View
-            className="min-w-0 flex-1"
+            className="min-w-0"
             style={{
               minHeight: 36,
-              maxHeight: 116,
               paddingHorizontal: 10,
               paddingVertical: 2,
               borderRadius: 18,
@@ -423,8 +425,14 @@ export function InlineComposer({
             }}>
             {field}
           </View>
-          {sendButton}
-        </View>
+          {toolsOpen ? (
+            <View className="flex-row items-center" style={{ gap: 2, minHeight: 36 }}>
+              {attachIcons}
+              <View className="flex-1" />
+              {sendButton}
+            </View>
+          ) : null}
+        </>
       ) : (
         <>
           {field}
@@ -437,7 +445,7 @@ export function InlineComposer({
           ) : null}
         </>
       )}
-      {expanded && gifOpen ? (
+      {toolsOpen && gifOpen ? (
         <GifPicker
           visible
           onClose={() => setGifOpen(false)}

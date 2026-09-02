@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  asCirclePageTab,
   challengeIdFromPost,
   circleCorporateBlockCopy,
   circleHrefFromPost,
@@ -158,13 +159,22 @@ describe('circle invite copy', () => {
     expect(circleJoinedNotifyCopy('Sam', 'Dawn Patrol')).toBe('Sam joined Dawn Patrol.');
   });
 
-  it('routes invite to Details and a post to Feed', () => {
+  it('maps old Feed links to Chat and keeps non-members on Details', () => {
+    expect(asCirclePageTab('feed', true)).toBe('chat');
+    expect(asCirclePageTab('chat', true)).toBe('chat');
+    expect(asCirclePageTab('chat', false)).toBe('details');
+    expect(asCirclePageTab('feed', false)).toBe('details');
+    expect(asCirclePageTab('roster', false)).toBe('roster');
+    expect(asCirclePageTab(undefined, true)).toBe('details');
+  });
+
+  it('routes invite to Details and a post to Chat', () => {
     expect(circleNotificationPath('circle_invite', 'circ-1')).toBe('/circles/circ-1?tab=details');
     expect(circleNotificationPath('circle_post', 'circ-1', 'p9')).toBe(
-      '/circles/circ-1?tab=feed&postId=p9',
+      '/circles/circ-1?tab=chat&postId=p9',
     );
     expect(circleNotificationPath('circle_challenge_share', 'circ-1', 'p2')).toBe(
-      '/circles/circ-1?tab=feed&postId=p2',
+      '/circles/circ-1?tab=chat&postId=p2',
     );
   });
 

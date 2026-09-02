@@ -6,9 +6,10 @@ import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 
 export default function CaptureScreen() {
-  const params = useLocalSearchParams<{ mode?: string; media?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; media?: string; challengeId?: string }>();
   const rawMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const rawMedia = Array.isArray(params.media) ? params.media[0] : params.media;
+  const rawChallengeId = Array.isArray(params.challengeId) ? params.challengeId[0] : params.challengeId;
   // Query `mode` stays `story` | `reel` | `post`. User-facing names are Wave / Round / post.
   const initialMode: CaptureMode =
     rawMode === 'reel' || rawMode === 'post' ? rawMode : 'story';
@@ -18,9 +19,10 @@ export default function CaptureScreen() {
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
       <CaptureStudio
-        key={`${initialMode}-${initialMedia}`}
+        key={`${initialMode}-${initialMedia}-${rawChallengeId ?? ''}`}
         initialMode={initialMode}
         initialMedia={initialMedia}
+        initialChallengeId={rawChallengeId}
       />
     </Screen>
   );

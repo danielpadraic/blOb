@@ -1,6 +1,9 @@
 import { requiredChallengeProofs } from '@/lib/challenges';
 import { parseProofParts, partSatisfies, proofDisplayName } from '@/lib/challengeProofs';
 import type { CheckinPhase } from '@/lib/challengeCheckin';
+import { isCheckinPost } from '@/lib/checkinPost';
+import { checkinHidesHomeShare } from '@/lib/checkinShare';
+import { isClipSharePost } from '@/lib/roundShare';
 
 type LoggableLike = {
   id: string;
@@ -26,8 +29,8 @@ export type MultiCheckinRow = {
 
 export const HOME_CHECKIN_STACK_WINDOW_MS = 2 * 60 * 1000;
 
-/** Slice 2: Home can collapse 2+ check-in posts from one author in this window. Not wired to FeedList yet. */
-export const HOME_CHECKIN_STACK_SLICE = 2;
+/** Slice 7: Home collapses 2+ check-in posts from one author in this window. */
+export const HOME_CHECKIN_STACK_SLICE = 7;
 
 const hubSnapshots: Record<string, Pick<MultiCheckinRow, 'title' | 'task' | 'remainingProofLabels'>> = {};
 
@@ -127,9 +130,20 @@ export type HomeCheckinPost = {
   challenge_id?: string | null;
   hidden_from_home?: boolean | null;
   checkin_id?: string | null;
+  checkin_stage?: string | null;
   source?: string | null;
+  type?: string | null;
+  kind?: string | null;
+  media_urls?: string[] | null;
+  privacy_mode?: string | null;
   author?: { display_name?: string | null; username?: string | null } | null;
-  challenge?: { title?: string | null } | null;
+  challenge?: { title?: string | null; privacy_mode?: string | null } | null;
+};
+
+export type HomeCheckinStackChild = {
+  postId: string;
+  challengeId: string;
+  title: string;
 };
 
 export type HomeCheckinStack = {
@@ -140,25 +154,49 @@ export type HomeCheckinStack = {
   titles: string[];
   firstPostId: string;
   postIds: string[];
+  items: HomeCheckinStackChild[];
 };
+
+export function isHomeCheckinStack(
+  item: HomeCheckinPost | HomeCheckinStack,
+): item is HomeCheckinStack {
+  return Boolean(item && 'kind' in item && item.kind === 'stack');
+}
+
+/** Public Home check-ins only. Hidden, private, corporate, Waves, and ordinary posts stay out. */
+export function homeCheckinStackable(post: HomeCheckinPost): boolean {
+  if (!post?.id || post.hidden_from_home || !post.challenge_id) {
+    return false;
+  }
+  if (isClipSharePost(post)) {
+    return false;
+  }
+  if (!isCheckinPost(post)) {
+    return false;
+  }
+  if (checkinHidesHomeShare(post.challenge ?? { privacy_mode: post.privacy_mode })) {
+    return false;
+  }
+  return true;
+}
 
 /** Groups 2+ Home-visible check-in posts from the same author within ~2 minutes. Lobby feeds stay unstacked. */
 export function stackHomeCheckinPosts(posts: HomeCheckinPost[]): Array<HomeCheckinPost | HomeCheckinStack> {
   const out: Array<HomeCheckinPost | HomeCheckinStack> = [];
   const used = new Set<string>();
-  for (let i = 0; i < posts.length; i += 1) {
-    const post = posts[i];
-    if (!post?.id || used.has(post.id) || post.hidden_from_home) {
-      if (post?.id && !used.has(post.id) && post.hidden_from_home) {
-        out.push(post);
-        used.add(post.id);
-      }
+  for (const post of posts) {
+    if (!post?.id || used.has(post.id)) {
+      continue;
+    }
+    if (!homeCheckinStackable(post)) {
+      out.push(post);
+      used.add(post.id);
       continue;
     }
     const author = String(post.author_id ?? '');
     const at = Date.parse(String(post.created_at ?? ''));
     const cluster = posts.filter((other) => {
-      if (!other?.id || used.has(other.id) || other.hidden_from_home) {
+      if (!other?.id || used.has(other.id) || !homeCheckinStackable(other)) {
         return false;
       }
       if (String(other.author_id ?? '') !== author) {
@@ -172,9 +210,12 @@ export function stackHomeCheckinPosts(posts: HomeCheckinPost[]): Array<HomeCheck
       const name =
         cluster[0]?.author?.display_name?.trim() ||
         (cluster[0]?.author?.username ? `@${cluster[0].author.username}` : 'Someone');
-      const titles = cluster
-        .map((item) => item.challenge?.title?.trim())
-        .filter((title): title is string => Boolean(title));
+      const items = cluster.map((item) => ({
+        postId: item.id,
+        challengeId: String(item.challenge_id),
+        title: item.challenge?.title?.trim() || '',
+      }));
+      const titles = items.map((item) => item.title).filter(Boolean);
       out.push({
         kind: 'stack',
         authorId: author,
@@ -183,6 +224,7 @@ export function stackHomeCheckinPosts(posts: HomeCheckinPost[]): Array<HomeCheck
         titles,
         firstPostId: cluster[0]!.id,
         postIds: cluster.map((item) => item.id),
+        items,
       });
       continue;
     }

@@ -29,6 +29,8 @@ describe('checkinSubmitHref', () => {
     expect(errorRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/challenges/abc-1?postId=p1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/feed')).toBe('/feed');
+    expect(errorRetryHref('/feed/compose')).toBe('/feed');
+    expect(errorRetryHref('/compose')).toBe('/feed');
     expect(errorRetryHref('/wave/undefined')).toBe('/feed');
     expect(errorRetryHref('/round/')).toBe('/feed');
     expect(errorRetryHref('/wave/2ca49850-b978-45d8-a282-2b644913c538')).toBe(

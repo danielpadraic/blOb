@@ -544,7 +544,11 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       cumulative_window:
         row.cumulative_window === 'week' || row.cumulative_window === 'day' || row.cumulative_window === 'challenge'
           ? row.cumulative_window
-          : DEFAULT_CREATE_VALUES.cumulative_window,
+          : row.win_window === 'week' || row.win_window === 'challenge'
+            ? row.win_window
+            : DEFAULT_CREATE_VALUES.cumulative_window,
+      win_window: row.win_window === 'week' || row.win_window === 'challenge' ? row.win_window : undefined,
+      metrics: Array.isArray(row.metrics) ? row.metrics : DEFAULT_CREATE_VALUES.metrics,
       distance_meters_required: asString(
         row.distance_meters_required,
         DEFAULT_CREATE_VALUES.distance_meters_required ?? '',
@@ -724,7 +728,16 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     cumulative_window:
       challenge.cumulative_window === 'week' || challenge.cumulative_window === 'day'
         ? challenge.cumulative_window
-        : 'challenge',
+        : challenge.win_window === 'week' || challenge.win_window === 'challenge'
+          ? challenge.win_window
+          : 'challenge',
+    win_window:
+      challenge.win_window === 'week' || challenge.win_window === 'challenge'
+        ? challenge.win_window
+        : challenge.cumulative_window === 'week'
+          ? 'week'
+          : 'challenge',
+    metrics: Array.isArray(challenge.metrics) ? challenge.metrics : [],
     distance_meters_required:
       challenge.distance_meters_required != null ? String(challenge.distance_meters_required) : '',
   });

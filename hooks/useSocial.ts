@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -12,6 +12,8 @@ import {
 } from '@/lib/clipRail';
 import { withSatelliteTimeout } from '@/lib/homeFeed';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
+import { publishedRowId } from '@/lib/routes';
+import { logMissingPublishAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
 import { supabase } from '@/lib/supabase';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import {
@@ -114,6 +116,63 @@ export const socialKeys = {
   conversation: (id: string) => ['conversation', id] as const,
   messages: (conversationId: string) => ['messages', conversationId] as const,
 };
+
+/** Put the new Wave in the rail/player cache with user_id before navigate. */
+export function seedPublishedWave(
+  queryClient: QueryClient,
+  story: Story | null | undefined,
+  author?: { id?: string | null; username?: string | null; display_name?: string | null; avatar_url?: string | null } | null,
+) {
+  const id = publishedRowId(story);
+  if (!id || !story) {
+    return;
+  }
+  const userId = safeUserId(author, story.user_id) ?? story.user_id;
+  if (!userId) {
+    logMissingPublishAuthor({ type: 'wave', postId: id, hasAuthor: false });
+  }
+  const seeded: Story = {
+    ...story,
+    id,
+    user_id: userId || story.user_id,
+  };
+  queryClient.setQueryData(socialKeys.story(id), seeded);
+  queryClient.setQueryData<Story[]>(socialKeys.stories(), (current) => {
+    const rows = (current ?? []).filter((row) => row?.id && row.id !== id && !String(row.id).startsWith('optimistic-'));
+    return [seeded, ...rows];
+  });
+}
+
+/** Put the new Round in the rail/player cache with author before navigate. */
+export function seedPublishedReel(
+  queryClient: QueryClient,
+  reel: ReelItem | null | undefined,
+  author?: { id?: string | null; username?: string | null; display_name?: string | null; avatar_url?: string | null } | null,
+) {
+  const id = publishedRowId(reel);
+  if (!id || !reel) {
+    return;
+  }
+  const userId = safeUserId(author, reel.user_id, reel.profile) ?? reel.user_id;
+  const profile = reel.profile ?? (userId ? sessionAuthor(author, userId) : null);
+  if (!userId) {
+    logMissingPublishAuthor({ type: 'round', postId: id, hasAuthor: false });
+  }
+  const seeded: ReelItem = {
+    ...reel,
+    id,
+    user_id: userId || reel.user_id,
+    profile: (profile as ReelItem['profile']) ?? null,
+  };
+  queryClient.setQueryData(socialKeys.reel(id), seeded);
+  queryClient.setQueriesData<ReelItem[]>({ queryKey: ['reels'] }, (current) => {
+    if (!current) {
+      return current;
+    }
+    const rows = current.filter((row) => row?.id && row.id !== id && !String(row.id).startsWith('optimistic-'));
+    return [seeded, ...rows];
+  });
+}
 
 function requireUserId(userId?: string | null): string {
   if (!userId) {
@@ -691,17 +750,20 @@ export function useStoryGroups(options?: { includeEmptyOwn?: boolean }) {
 
   const profiles = useMemo(() => {
     const map = new Map<string, { display_name: string | null; username: string; avatar_url: string | null }>();
-    if (profile) {
-      map.set(profile.id, profile);
+    const selfId = safeUserId(profile, user?.id);
+    if (profile && selfId) {
+      map.set(selfId, profile);
     }
     for (const friend of friendsQuery.data ?? []) {
-      if (friend.profile) {
-        map.set(friend.profile.id, friend.profile);
+      const id = safeUserId(friend.profile);
+      if (id && friend.profile) {
+        map.set(id, friend.profile);
       }
     }
     for (const follow of followingQuery.data ?? []) {
-      if (follow.profile) {
-        map.set(follow.profile.id, follow.profile);
+      const id = safeUserId(follow.profile);
+      if (id && follow.profile) {
+        map.set(id, follow.profile);
       }
     }
     for (const author of authorsQuery.data ?? []) {
@@ -710,7 +772,7 @@ export function useStoryGroups(options?: { includeEmptyOwn?: boolean }) {
       }
     }
     return map;
-  }, [authorsQuery.data, friendsQuery.data, followingQuery.data, profile]);
+  }, [authorsQuery.data, friendsQuery.data, followingQuery.data, profile, user?.id]);
 
   const postIds = useMemo(
     () => (storiesQuery.data ?? []).map((story) => story.post_id).filter((id): id is string => Boolean(id)),
@@ -858,13 +920,18 @@ export function useCreateStory() {
         const withoutOptimistic = (current ?? []).filter(
           (row) => row?.id && !row.id.startsWith('optimistic-'),
         );
-        const live = stories.filter((row) => Boolean(row?.id));
+        const live = stories
+          .filter((row) => Boolean(row?.id))
+          .map((row) => ({
+            ...row,
+            user_id: row.user_id || user?.id || row.user_id,
+          }));
         const ids = new Set(live.map((row) => row.id));
-        return [...live, ...withoutOptimistic.filter((row) => !ids.has(row.id))];
+        return [...live, ...withoutOptimistic.filter((row) => row?.id && !ids.has(row.id))];
       });
       for (const story of stories) {
         if (story?.id) {
-          queryClient.setQueryData(socialKeys.story(story.id), story);
+          seedPublishedWave(queryClient, story, { id: user?.id ?? story.user_id });
         }
       }
     },
@@ -1050,7 +1117,7 @@ export function useCreateReel() {
           challenge_id: input.challenge_id ?? null,
           duration_ms: input.duration_ms ?? null,
           created_at: new Date().toISOString(),
-          profile: null,
+          profile: sessionAuthor(null, user.id) as ReelItem['profile'],
         };
         queryClient.setQueriesData<ReelItem[]>({ queryKey: ['reels'] }, (current) =>
           current ? [optimistic, ...current] : current,
@@ -1063,8 +1130,12 @@ export function useCreateReel() {
         queryClient.setQueryData(key, data);
       });
     },
+    onSuccess: (reel) => {
+      seedPublishedReel(queryClient, reel as ReelItem, { id: user?.id ?? (reel as ReelItem)?.user_id });
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['reels'] });
+      void queryClient.invalidateQueries({ queryKey: ['host-round-prompt'] });
     },
   });
 }

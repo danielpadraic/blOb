@@ -46,6 +46,7 @@ export type LiveAuthorView = {
 };
 
 const missingLiveAuthorLogged = new Set<string>();
+const missingPublishAuthorLogged = new Set<string>();
 
 /** Live bubble / quote / compact row. Never throw when author is missing. */
 export function resolveLiveAuthor(post?: LivePostAuthorLike): LiveAuthorView {
@@ -62,6 +63,27 @@ export function resolveLiveAuthor(post?: LivePostAuthorLike): LiveAuthorView {
     username: author?.username?.trim() || null,
     avatarUrl: author?.avatar_url ?? null,
   };
+}
+
+/** Once per post. Only when the author join is missing after Wave / Feed / Round publish. */
+export function logMissingPublishAuthor(input: {
+  type?: string | null;
+  postId?: string | null;
+  hasAuthor?: boolean;
+}): void {
+  if (input.hasAuthor) {
+    return;
+  }
+  const postId = String(input.postId ?? '').trim();
+  if (!postId || missingPublishAuthorLogged.has(postId)) {
+    return;
+  }
+  missingPublishAuthorLogged.add(postId);
+  console.log('[blob:publish]', {
+    type: input.type ?? null,
+    postId,
+    hasAuthor: false,
+  });
 }
 
 /** Session profile for an optimistic check-in / compose row. */

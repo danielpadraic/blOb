@@ -111,6 +111,7 @@ export function TabChromeHeader({
   onToggleSearch,
   onToggleLogoMenu,
   onToggleMessages,
+  onHomePress,
   onLogoAction,
 }: TabChromeHeaderProps) {
   const router = useRouter();
@@ -213,9 +214,8 @@ export function TabChromeHeader({
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={logoMenuOpen ? 'Close menu' : 'Open menu'}
-            accessibilityState={{ expanded: logoMenuOpen }}
-            onPress={onToggleLogoMenu}
+            accessibilityLabel="Home"
+            onPress={onHomePress}
             hitSlop={4}
             className="flex-row items-center"
             style={{

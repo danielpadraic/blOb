@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, FlatList, Platform, RefreshControl, ScrollView, View, type ViewToken } from 'react-native';
 
+import { CheckinStackCard } from '@/components/feed/CheckinStackCard';
 import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
 import { VisiblePostsProvider } from '@/components/feed/PostMediaCarousel';
@@ -10,10 +11,13 @@ import { AppText } from '@/components/ui/AppText';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { HOME_FEED_SPLASH_MS, shouldShowHomeSplash } from '@/lib/homeFeed';
-// Slice 2: Home check-in stack (`stackHomeCheckinPosts` in lib/multiCheckin.ts) is not wired.
-// Keep separate Home cards this pass. Lobby feeds stay one post each.
+import { isHomeCheckinStack, stackHomeCheckinPosts, type HomeCheckinStack } from '@/lib/multiCheckin';
 import { FEED_COLUMN_MAX, TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
+
+type HomeFeedRow =
+  | { kind: 'post'; id: string; post: PostWithMeta }
+  | { kind: 'stack'; id: string; stack: HomeCheckinStack; posts: PostWithMeta[] };
 
 type FeedListProps = {
   posts: PostWithMeta[];
@@ -138,10 +142,23 @@ export function FeedList({
   onReact,
   onComment,
 }: FeedListProps) {
-  const listRef = useRef<FlatList<PostWithMeta>>(null);
+  const listRef = useRef<FlatList<HomeFeedRow>>(null);
   const [visibleIds, setVisibleIds] = useState<ReadonlySet<string>>(() => new Set());
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    setVisibleIds(new Set(viewableItems.map((row) => String((row.item as PostWithMeta).id))));
+    const ids = new Set<string>();
+    for (const row of viewableItems) {
+      const item = row.item as HomeFeedRow;
+      if (item.kind === 'stack') {
+        item.posts.forEach((post) => {
+          if (post?.id) {
+            ids.add(post.id);
+          }
+        });
+      } else if (item.post?.id) {
+        ids.add(item.post.id);
+      }
+    }
+    setVisibleIds(ids);
   }).current;
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 35, minimumViewTime: 80 }).current;
   const tour = useTourOptional();
@@ -151,6 +168,38 @@ export function FeedList({
     () => posts.filter((post) => Boolean(post?.id) && !post.deleted_at),
     [posts],
   );
+  const feedRows = useMemo<HomeFeedRow[]>(() => {
+    if (!homeChrome) {
+      return visiblePosts.map((post) => ({ kind: 'post', id: post.id, post }));
+    }
+    const byId = new Map(visiblePosts.map((post) => [post.id, post]));
+    const rows: HomeFeedRow[] = [];
+    for (const item of stackHomeCheckinPosts(visiblePosts)) {
+      if (isHomeCheckinStack(item)) {
+        const children = item.postIds
+          .map((id) => byId.get(id))
+          .filter((post): post is PostWithMeta => Boolean(post));
+        if (children.length < 2) {
+          for (const post of children) {
+            rows.push({ kind: 'post', id: post.id, post });
+          }
+          continue;
+        }
+        rows.push({
+          kind: 'stack',
+          id: `stack:${item.firstPostId}`,
+          stack: item,
+          posts: children,
+        });
+        continue;
+      }
+      const post = byId.get(item.id);
+      if (post) {
+        rows.push({ kind: 'post', id: post.id, post });
+      }
+    }
+    return rows;
+  }, [homeChrome, visiblePosts]);
   const challengeFeed = composeSource === 'challenge' || composeSource === 'circle';
   const scrolledTo = useRef<string | null>(null);
   const [slowSplash, setSlowSplash] = useState(false);
@@ -181,7 +230,9 @@ export function FeedList({
     if (!highlightPostId || scrolledTo.current === highlightPostId) {
       return;
     }
-    const index = visiblePosts.findIndex((post) => post.id === highlightPostId);
+    const index = feedRows.findIndex((row) =>
+      row.kind === 'stack' ? row.stack.postIds.includes(highlightPostId) : row.post.id === highlightPostId,
+    );
     if (index < 0) {
       return;
     }
@@ -194,7 +245,7 @@ export function FeedList({
       }
     }, 80);
     return () => clearTimeout(timer);
-  }, [highlightPostId, visiblePosts]);
+  }, [feedRows, highlightPostId]);
 
   const onComposeSubmit = useCallback(
     async (input: ComposeInput) => {
@@ -259,18 +310,30 @@ export function FeedList({
   );
 
   const renderItem = useCallback(
-    ({ item, index }: { item: PostWithMeta; index: number }) => (
+    ({ item, index }: { item: HomeFeedRow; index: number }) => (
       <View className={homeChrome ? 'mt-2' : 'mt-3'}>
-        <FeedRow
-          post={item}
-          currentUserId={currentUserId}
-          hideAudience={hideAudience}
-          challengeFeed={challengeFeed}
-          highlighted={highlightPostId === item.id}
-          homeChrome={homeChrome}
-          onReact={onReact}
-          onComment={onComment}
-        />
+        {item.kind === 'stack' ? (
+          <CheckinStackCard
+            stack={item.stack}
+            posts={item.posts}
+            currentUserId={currentUserId}
+            highlighted={Boolean(highlightPostId && item.stack.postIds.includes(highlightPostId))}
+            startExpanded={Boolean(highlightPostId && item.stack.postIds.includes(highlightPostId))}
+            onReact={onReact}
+            onComment={onComment}
+          />
+        ) : (
+          <FeedRow
+            post={item.post}
+            currentUserId={currentUserId}
+            hideAudience={hideAudience}
+            challengeFeed={challengeFeed}
+            highlighted={highlightPostId === item.post.id}
+            homeChrome={homeChrome}
+            onReact={onReact}
+            onComment={onComment}
+          />
+        )}
         {homeChrome && midFeedRail && index === 1 ? (
           <View className="mt-2">{midFeedRail}</View>
         ) : null}
@@ -355,7 +418,7 @@ export function FeedList({
           tour?.setHomeScroll(node as unknown as ScrollView);
         }}
         scrollEnabled={!tourLocked}
-        data={visiblePosts}
+        data={feedRows}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         onEndReached={() => {

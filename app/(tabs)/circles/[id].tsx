@@ -4,11 +4,11 @@ import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LiveThread } from '@/components/challenge/LiveThread';
 import { CircleInviteSheet } from '@/components/circles/CircleInviteSheet';
 import { CirclePageTabs, type CirclePageTab } from '@/components/circles/CirclePageTabs';
 import { CirclePinsSection } from '@/components/circles/CirclePinsSection';
 import { CircleVisibilityPicker } from '@/components/circles/CircleVisibilityPicker';
-import { FeedList } from '@/components/feed/FeedList';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton } from '@/components/navigation/StackBackButton';
@@ -27,10 +27,11 @@ import {
   useRemoveCircleMember,
   useUpdateCircleVisibility,
 } from '@/hooks/useCircles';
-import { useCircleFeed, useCreateComment, useCreatePost, useToggleReaction } from '@/hooks/useFeed';
+import { useCircleFeed, useCreatePost } from '@/hooks/useFeed';
+import { useToggleLiveReaction } from '@/hooks/useLiveReaction';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
-import { circleDisplayName } from '@/lib/circles';
+import { asCirclePageTab, circleDisplayName } from '@/lib/circles';
 import { createChallengeHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { flexChildMin, tabBarLift, THEME, themeShadow } from '@/lib/theme';
@@ -66,25 +67,25 @@ export default function CirclePageScreen() {
   const circle = circleQuery.data;
   const isMember = Boolean(circle?.my_role);
   const isHost = circle?.my_role === 'host';
-  const [pageTab, setPageTab] = useState<CirclePageTab>(
-    tabParam === 'feed' || tabParam === 'roster' || tabParam === 'details' ? tabParam : 'details',
-  );
+  const [pageTab, setPageTab] = useState<CirclePageTab>(() => asCirclePageTab(tabParam));
   const [inviteOpen, setInviteOpen] = useState(false);
-  const roster = useCircleMembers(id, pageTab === 'roster' && isMember);
+  const displayTab = asCirclePageTab(pageTab, circle ? isMember : null);
+  const roster = useCircleMembers(id, isMember);
+  const mentionMemberIds = useMemo(
+    () => (roster.data ?? []).map((row) => row.user_id).filter(Boolean),
+    [roster.data],
+  );
   const feed = useCircleFeed(id);
   const createPost = useCreatePost();
-  const createComment = useCreateComment();
-  const toggleReaction = useToggleReaction();
+  const toggleLiveReaction = useToggleLiveReaction();
   const accept = useAcceptCircleInvite();
   const leave = useLeaveCircle();
   const removeMember = useRemoveCircleMember(id);
   const setVisibility = useUpdateCircleVisibility(id);
 
   useEffect(() => {
-    if (tabParam === 'feed' || tabParam === 'roster' || tabParam === 'details') {
-      setPageTab(tabParam);
-    }
-  }, [tabParam]);
+    setPageTab(asCirclePageTab(tabParam, circle ? isMember : null));
+  }, [circle, isMember, tabParam]);
 
   const title = circleDisplayName(circle);
   const memberLabel =
@@ -107,7 +108,7 @@ export default function CirclePageScreen() {
       return;
     }
     accept.mutate(id, {
-      onSuccess: () => setPageTab('feed'),
+      onSuccess: () => setPageTab('chat'),
       onError: (error) => fail(error, 'Couldn’t join that Circle'),
     });
   }
@@ -178,7 +179,7 @@ export default function CirclePageScreen() {
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
 
   return (
-    <Screen padded={false} edges={['left', 'right']}>
+    <Screen padded={false} edges={['left', 'right']} keyboardAvoiding={displayTab !== 'chat'}>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -190,56 +191,39 @@ export default function CirclePageScreen() {
         }}
       />
       <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
-        <CirclePageTabs value={pageTab} onChange={setPageTab} />
+        <CirclePageTabs value={displayTab} onChange={setPageTab} member={isMember} />
       </View>
 
-      {pageTab === 'feed' ? (
-        isMember ? (
-          <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 12, gap: 10 }}>
-            <Button
-              title={copy('circles.createChallenge')}
-              onPress={() => router.push(createChallengeHref({ mode: 'simple', circleId: id }))}
-            />
-            <FeedList
-              posts={(feed.data ?? []).filter((post) => post.circle_id === id && post.type !== 'circle_invite')}
-              isLoading={feed.isLoading}
-              isRefreshing={feed.isRefetching && !feed.isLoading}
-              error={feed.error instanceof Error ? feed.error.message : null}
-              currentUserId={user?.id}
-              emptyTitle={copy('circles.feedEmpty')}
-              emptyBody=""
-              composerPlaceholder={copy('circles.composer')}
-              canCompose
-              composing={createPost.isPending}
-              hideAudience
-              composeSource="circle"
-              draftKey={`circle:${id}`}
-              highlightPostId={highlightPostId}
-              onRefresh={() => void feed.refetch()}
-              onRetry={() => void feed.refetch()}
-              onCompose={(input) =>
-                createPost.mutateAsync({
-                  ...input,
-                  circleId: id,
-                  source: 'circle',
-                  type: 'feed',
-                  audience: 'friends',
-                }).then((created) => {
-                  setPageTab('feed');
-                  return created;
-                })
-              }
-              onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-              onComment={(post, content, parentId, mentionedUserIds) =>
-                createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
-              }
-            />
-          </View>
-        ) : (
-          <View className="flex-1 items-center justify-center px-6">
-            <MascotState kind="empty" title={copy('circles.joinToSee')} compact />
-          </View>
-        )
+      {displayTab === 'chat' && isMember ? (
+        <LiveThread
+          posts={(feed.data ?? []).filter((post) => post.circle_id === id && post.type !== 'circle_invite')}
+          isLoading={feed.isLoading}
+          isRefreshing={feed.isRefetching && !feed.isLoading}
+          error={feed.error instanceof Error ? feed.error.message : null}
+          currentUserId={user?.id}
+          emptyTitle={copy('circles.feedEmpty')}
+          emptyBody=""
+          canCompose
+          composing={createPost.isPending}
+          highlightPostId={highlightPostId}
+          memberIds={mentionMemberIds}
+          placeholder={copy('circles.chatComposer')}
+          loadingTitle="Loading"
+          composeSource="circle"
+          composeAudience="friends"
+          onRefresh={() => void feed.refetch()}
+          onRetry={() => void feed.refetch()}
+          onCompose={(input) =>
+            createPost.mutateAsync({
+              ...input,
+              circleId: id,
+              source: 'circle',
+              type: 'feed',
+              audience: 'friends',
+            })
+          }
+          onReact={(post, type, commentId) => toggleLiveReaction.mutate({ post, type, commentId })}
+        />
       ) : (
         <ScrollView
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: tabClearance + 24, gap: 14 }}
@@ -255,7 +239,7 @@ export default function CirclePageScreen() {
               tintColor={THEME.circle}
             />
           }>
-          {pageTab === 'details' ? (
+          {displayTab === 'details' ? (
             <View className="gap-3">
               <View
                 style={{
@@ -325,7 +309,7 @@ export default function CirclePageScreen() {
             </View>
           ) : null}
 
-          {pageTab === 'roster' ? (
+          {displayTab === 'roster' ? (
             isMember ? (
               <View className="gap-3">
                 <View className="flex-row items-center justify-between">

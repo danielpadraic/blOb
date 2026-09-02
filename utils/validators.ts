@@ -302,6 +302,18 @@ export const createChallengeSchema = z
     cumulative_metric: z.enum(['distance_m', 'count']).nullable().optional(),
     cumulative_target: z.string().optional(),
     cumulative_window: z.enum(['challenge', 'week', 'day']).optional(),
+    win_window: z.enum(['challenge', 'week']).optional(),
+    metrics: z
+      .array(
+        z.object({
+          id: z.string(),
+          target: z.number().min(0),
+          name: z.string(),
+          unit: z.enum(['mi', 'km']).nullable().optional(),
+        }),
+      )
+      .max(4)
+      .optional(),
     distance_meters_required: z.string().optional(),
     discoverability: z.enum(['invite_only', 'friends_of_friends']).nullable().optional(),
     scoring_method: z.enum(['comparable_points']).nullable().optional(),

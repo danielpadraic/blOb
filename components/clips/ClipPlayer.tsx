@@ -365,7 +365,7 @@ export function ClipPlayer({
 
   useEffect(() => {
     const keepId = clips[indexRef.current]?.id ?? clips[startIndex]?.id;
-    const keep = clips.findIndex((row) => row.id === keepId);
+    const keep = clips.findIndex((row) => row?.id === keepId);
     if (keep >= 0 && keep !== indexRef.current) {
       setIndex(keep);
     }
@@ -1235,6 +1235,31 @@ function ClipCommentsPane({
 }
 
 function PreloadClip({ uri, startMs }: { uri: string; startMs: number }) {
+  if (Platform.OS === 'web') {
+    return <PrimeWebClip uri={uri} />;
+  }
+  return <PreloadNativeClip uri={uri} startMs={startMs} />;
+}
+
+function PrimeWebClip({ uri }: { uri: string }) {
+  useEffect(() => {
+    if (typeof document === 'undefined' || !uri) {
+      return undefined;
+    }
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.src = uri;
+    return () => {
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [uri]);
+  return null;
+}
+
+function PreloadNativeClip({ uri, startMs }: { uri: string; startMs: number }) {
   useVideoPlayer(uri, (instance) => {
     instance.muted = true;
     instance.currentTime = Math.max(startMs, 0) / 1000;
@@ -1924,6 +1949,7 @@ function WebClipVideo({
         ref: attach,
         src: uri,
         poster: poster ?? undefined,
+        preload: 'metadata',
         autoPlay: true,
         muted,
         loop,

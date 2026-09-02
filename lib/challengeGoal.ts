@@ -6,6 +6,12 @@ import {
 } from '@/lib/challengeExperience';
 import { athleteDistanceUnit, type DistanceUnit } from '@/lib/distance';
 import { challengeCumulativeProgress } from '@/lib/cumulative';
+import {
+  cumulativeMetricsProgressLabel,
+  filledCumulativeMetrics,
+  parseMetricTotals,
+  resolveCumulativeMetrics,
+} from '@/lib/cumulativeMetrics';
 import type { Challenge } from '@/lib/types';
 import { challengeWindowDays } from '@/utils/format';
 
@@ -29,11 +35,15 @@ type GoalChallenge = Pick<
   | 'frequency'
   | 'format'
   | 'cumulative_target'
+  | 'cumulative_metric'
   | 'cumulative_window'
   | 'distance_meters_required'
   | 'title'
   | 'task'
   | 'tasks'
+  | 'metrics'
+  | 'scoring_config'
+  | 'win_window'
 >;
 
 export function pointsGoalTarget(challenge: {
@@ -135,9 +145,15 @@ export function challengeGoalLabel(
     distanceMetersCompleted?: number;
     pointsCompleted?: number;
     unit?: DistanceUnit;
+    metricTotals?: Record<string, number> | null;
   },
 ): string {
   if (usesCumulativeScoring(challenge)) {
+    const metrics = resolveCumulativeMetrics(challenge);
+    const filled = filledCumulativeMetrics(metrics);
+    if (filled.length > 0) {
+      return cumulativeMetricsProgressLabel(filled, parseMetricTotals(extras?.metricTotals));
+    }
     const label = challengeCumulativeProgress(
       challenge,
       extras?.distanceMetersCompleted ?? 0,
@@ -183,9 +199,10 @@ export function challengeGoalLabel(
 
 export function challengeGoalSubtitle(challenge: GoalChallenge): string | null {
   if (usesCumulativeScoring(challenge)) {
-    return challenge.cumulative_window === 'week'
-      ? 'Everyone who hits the total each week splits the prize.'
-      : 'Everyone who hits the total splits the prize.';
+    const weekly = challenge.cumulative_window === 'week' || challenge.win_window === 'week';
+    return weekly
+      ? 'Anyone who hits the goal each week splits the prize.'
+      : 'Anyone who hits the goal splits the prize.';
   }
   if (usesPointsBoard(challenge) || usesTotalCountCheckins(challenge) || challenge.is_unlimited) {
     return null;

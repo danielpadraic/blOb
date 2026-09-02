@@ -208,7 +208,9 @@ const CREATE_RPC_MESSAGES: Record<string, string> = {
   CONSISTENCY_NO_TOP_PLACES:
     'Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.',
   POINTS_NO_EVEN_SPLIT:
-    'Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.',
+    'Points challenges can’t use Even split remaining. Pick Winner take all or top places.',
+  CUMULATIVE_NO_LAST_STANDING:
+    'Cumulative challenges can’t use Last standing. Pick Anyone who hits the goal, Top #, or Top %.',
 };
 
 export function getCreateChallengeMessage(error: unknown): string {
@@ -693,6 +695,25 @@ function humanize(raw: string): string {
   }
   if (message.includes('pick someone else to call out') || message.includes('pick someone to call out')) {
     return 'Pick someone else to call out.';
+  }
+  if (
+    message.includes('friend or someone in a live challenge') ||
+    message.includes('only call out a friend') ||
+    message.includes('only invite a friend')
+  ) {
+    return 'Pick a friend or someone in a live challenge with you.';
+  }
+  if (message.includes('already in this callout') || message.includes('already in this call-out')) {
+    return 'That person is already in this Callout.';
+  }
+  if (message.includes('only the two in this callout')) {
+    return 'Only the two in this Callout can invite watchers.';
+  }
+  if (message.includes('pick someone else to watch')) {
+    return 'Pick someone else to watch.';
+  }
+  if (message.includes('pending call-out with them') || message.includes('pending callout with them')) {
+    return 'You already have a pending Callout with them.';
   }
   if (message.includes('only the person who was called out can accept')) {
     return 'Only the person who was called out can accept.';

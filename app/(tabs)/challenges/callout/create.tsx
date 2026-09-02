@@ -1,32 +1,44 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { CreateIconChip } from '@/components/challenge/create/CreateIconChip';
+import { SimpleProofsEditor } from '@/components/challenge/create/SimpleProofsEditor';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { WalletBalances } from '@/components/currency/WalletBalances';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
-import { useCreateCallout, useMyCallouts, profileName } from '@/hooks/useCallouts';
 import {
-  useCoinRecipientSearch,
-  useCoinRecipientSuggestions,
-} from '@/hooks/useCoins';
+  profileName,
+  useCalloutOpponents,
+  useCreateCallout,
+  useMyCallouts,
+} from '@/hooks/useCallouts';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
+  CALLOUT_FORMATS,
+  CALLOUT_TASK_PLACEHOLDER,
+  CALLOUT_TITLE_PREFIX,
+  calloutFormatOf,
+  calloutProofsForCreate,
   calloutStatusLabel,
+  calloutTaskOk,
+  calloutTitle,
   deadlineFromPreset,
-  findProfileByUsername,
+  filterCalloutPeople,
   type CalloutDeadlinePreset,
 } from '@/lib/callouts';
+import { CALLOUT_PROOF_CAP, defaultChallengeProofs, type ChallengeProof } from '@/lib/challengeProofs';
+import { athleteDistanceUnit } from '@/lib/distance';
+import type { CalloutFormat } from '@/lib/types';
 import { normalizeCoinAmount, transferAmountError } from '@/lib/coins';
 import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '@/lib/currency';
-import { THEME } from '@/lib/theme';
+import { THEME, themeShadow } from '@/lib/theme';
 import type { PublicProfile, WalletCurrency } from '@/lib/types';
 import { copy } from '@/lib/copy';
 
@@ -48,18 +60,22 @@ export default function CreateCalloutScreen() {
   const { profile } = useMyProfile();
   const create = useCreateCallout();
   const mine = useMyCallouts();
-  const suggestions = useCoinRecipientSuggestions();
+  const opponents = useCalloutOpponents();
 
   const [currency, setCurrency] = useState<WalletCurrency>('coins');
   const [query, setQuery] = useState('');
   const [opponent, setOpponent] = useState<PublicProfile | null>(null);
+  const [task, setTask] = useState('');
   const [amountDraft, setAmountDraft] = useState('10');
-  const [winCondition, setWinCondition] = useState('');
   const [deadline, setDeadline] = useState<CalloutDeadlinePreset>('3d');
+  const [format, setFormat] = useState<CalloutFormat>('consistency');
+  const [proofs, setProofs] = useState<ChallengeProof[]>(() => defaultChallengeProofs());
+  const [distanceUnit, setDistanceUnit] = useState(athleteDistanceUnit());
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
-  const search = useCoinRecipientSearch(query);
+  const people = opponents.data ?? [];
+  const visiblePeople = useMemo(() => filterCalloutPeople(people, query), [people, query]);
   const wallet = walletBalance(profile, currency);
   const amount = normalizeCoinAmount(amountDraft, currency);
   const amountIssue = transferAmountError(amount, wallet, currency);
@@ -68,27 +84,20 @@ export default function CreateCalloutScreen() {
     currency === 'bucks' ? formatWalletWithUsd(amount, 'bucks') : formatWallet(amount, 'coins');
   const acks = currency === 'bucks' ? BUCKS_ACKS : COIN_ACKS;
   const allChecked = acks.every((item) => checked[item.id]);
-  const winOk = winCondition.trim().length >= 3;
+  const title = calloutTitle(task);
+  const winOk = calloutTaskOk(task);
 
   useEffect(() => {
-    if (!handle) {
+    if (!handle || opponent) {
       return;
     }
-    void findProfileByUsername(handle)
-      .then((found) => {
-        if (found) {
-          setOpponent(found);
-        }
-      })
-      .catch(() => undefined);
-  }, [handle]);
-
-  const results = useMemo(() => {
-    if (query.trim().length >= 2) {
-      return search.data ?? [];
+    const found = people.find(
+      (person) => person.username.toLowerCase() === handle.replace(/^@/, '').toLowerCase(),
+    );
+    if (found) {
+      setOpponent(found);
     }
-    return [];
-  }, [query, search.data]);
+  }, [handle, opponent, people]);
 
   async function submit() {
     if (!opponent || amountIssue || !winOk || !allChecked || create.isPending) {
@@ -100,12 +109,14 @@ export default function CreateCalloutScreen() {
         opponentId: opponent.id,
         amount,
         currency,
-        winCondition: winCondition.trim(),
+        winCondition: title,
         deadline: deadlineFromPreset(deadline),
+        proofs: calloutProofsForCreate(proofs),
+        format: calloutFormatOf(format),
       });
       router.replace(`/challenges/callout/${row.id}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Couldn’t send that call-out.');
+      setError(caught instanceof Error ? caught.message : 'Couldn’t send that Callout.');
     }
   }
 
@@ -113,12 +124,117 @@ export default function CreateCalloutScreen() {
     <Screen scroll>
       <AppText className="mb-1 text-[22px] font-bold text-charcoal">Call someone out</AppText>
       <AppText className="mb-4 text-muted">
-        1-on-1. Both of you accept the terms. The prize pays only when you both name the same winner.
+        1-on-1. You’re in. Pick one person. Nothing leaves your wallet until they accept.
       </AppText>
 
       {profile ? <WalletBalances profile={profile} /> : null}
 
-      <View className="mt-4">
+      <View className="mt-5">
+        <AppText className="mb-2 text-sm font-semibold text-charcoal">You</AppText>
+        <View
+          className="flex-row items-center px-3 py-3"
+          style={{
+            backgroundColor: THEME.calloutSoft,
+            borderColor: THEME.callout,
+            borderWidth: 1,
+            borderRadius: THEME.radius,
+          }}>
+          <Avatar uri={profile?.avatar_url} name={profileName(profile)} size={40} />
+          <View className="ml-3 flex-1">
+            <AppText className="font-semibold text-charcoal">{profileName(profile)}</AppText>
+            <AppText className="text-sm text-muted">Challenger — always in</AppText>
+          </View>
+        </View>
+      </View>
+
+      <View className="mt-5">
+        <AppText className="mb-2 text-sm font-semibold text-charcoal">Who</AppText>
+        {opponent ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Change ${profileName(opponent)}`}
+            onPress={() => setOpponent(null)}
+            className="flex-row items-center px-3 py-3"
+            style={{
+              backgroundColor: THEME.surface,
+              borderColor: THEME.border,
+              borderWidth: 1,
+              borderRadius: THEME.radius,
+            }}>
+            <Avatar uri={opponent.avatar_url} name={profileName(opponent)} size={40} />
+            <View className="ml-3 flex-1">
+              <AppText className="font-semibold text-charcoal">{profileName(opponent)}</AppText>
+              <AppText className="text-sm text-muted">@{opponent.username}</AppText>
+            </View>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.callout }}>
+              Change
+            </AppText>
+          </Pressable>
+        ) : (
+          <>
+            <Input
+              label="Search"
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Name or username"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {opponents.isFetching ? (
+              <ActivityIndicator className="mt-4" color={THEME.callout} />
+            ) : (
+              <PeopleList
+                people={visiblePeople}
+                empty={
+                  people.length === 0
+                    ? 'Add a friend or join a live challenge with them first.'
+                    : copy('friends.noneMatch')
+                }
+                onPick={(person) => {
+                  setOpponent(person);
+                  setQuery('');
+                }}
+              />
+            )}
+          </>
+        )}
+      </View>
+
+      <View className="mt-5">
+        <AppText className="mb-2 text-sm font-semibold text-charcoal">Title</AppText>
+        <View
+          className="flex-row items-center px-3"
+          style={{
+            minHeight: 52,
+            backgroundColor: THEME.surface,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            borderRadius: 12,
+          }}>
+          <AppText className="text-[16px] font-extrabold" style={{ color: THEME.callout }}>
+            {CALLOUT_TITLE_PREFIX}
+          </AppText>
+          <TextInput
+            value={task}
+            onChangeText={setTask}
+            placeholder={CALLOUT_TASK_PLACEHOLDER}
+            placeholderTextColor={THEME.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              marginLeft: 8,
+              minHeight: 44,
+              fontSize: 16,
+              color: THEME.textPrimary,
+            }}
+          />
+        </View>
+        <AppText className="mt-1.5 text-xs text-muted">Shows as {title}</AppText>
+      </View>
+
+      <View className="mt-5">
         <AppText className="mb-2 text-sm font-semibold text-charcoal">Stake currency</AppText>
         <SegmentedControl
           value={currency}
@@ -128,61 +244,8 @@ export default function CreateCalloutScreen() {
             setChecked({});
             setError(null);
           }}
-          accessibilityLabel="Call-out currency"
+          accessibilityLabel="Callout currency"
         />
-      </View>
-
-      <View className="mt-5">
-        {opponent ? (
-          <Pressable
-            onPress={() => setOpponent(null)}
-            className="flex-row items-center rounded-blob border px-3 py-3"
-            style={{
-              backgroundColor: THEME.surface,
-              borderColor: THEME.border,
-              borderRadius: THEME.radius,
-            }}>
-            <Avatar uri={opponent.avatar_url} name={profileName(opponent)} size={40} />
-            <View className="ml-3 flex-1">
-              <AppText className="font-semibold text-charcoal">{profileName(opponent)}</AppText>
-              <AppText className="text-sm text-muted">@{opponent.username}</AppText>
-            </View>
-            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
-              Change
-            </AppText>
-          </Pressable>
-        ) : (
-          <>
-            <Input
-              label="Who"
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search a username"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {search.isFetching && query.trim().length >= 2 ? (
-              <ActivityIndicator className="mt-4" color={THEME.accent} />
-            ) : null}
-            {query.trim().length >= 2 ? (
-              <PeopleList
-                title="Search"
-                people={results}
-                empty={copy('friends.noneMatch')}
-                onPick={(person) => {
-                  setOpponent(person);
-                  setQuery('');
-                }}
-              />
-            ) : (
-              <PeopleList
-                title="People you follow"
-                people={suggestions.data?.following ?? []}
-                onPick={setOpponent}
-              />
-            )}
-          </>
-        )}
       </View>
 
       <View className="mt-5 gap-4">
@@ -192,19 +255,11 @@ export default function CreateCalloutScreen() {
           onChangeText={setAmountDraft}
           placeholder="10"
           keyboardType="decimal-pad"
-          hint={`Each of you puts in this amount. Prize is ${formatWallet(amount * 2, currency)}. You have ${formatWallet(wallet, currency)}.`}
+          hint={`Each of you puts in this amount. Prize is ${formatWallet(amount * 2, currency)}. You have ${formatWallet(wallet, currency)}. Held only after they accept.`}
           error={amountDraft.trim() && amountIssue ? amountIssue : undefined}
         />
-        <Input
-          label="Win condition"
-          value={winCondition}
-          onChangeText={setWinCondition}
-          placeholder="First to 5 miles, most points, etc."
-          grow
-          hint="Both of you must later agree who met this."
-        />
         <View>
-          <AppText className="mb-2 text-sm font-semibold text-charcoal">Deadline</AppText>
+          <AppText className="mb-2 text-sm font-semibold text-charcoal">Duration</AppText>
           <ChipRow>
             {DEADLINES.map((item) => (
               <Chip
@@ -216,29 +271,70 @@ export default function CreateCalloutScreen() {
             ))}
           </ChipRow>
         </View>
+        <View>
+          <AppText className="mb-2 text-sm font-semibold text-charcoal">Format</AppText>
+          <View className="flex-row flex-wrap gap-2">
+            {CALLOUT_FORMATS.map((item) => (
+              <CreateIconChip
+                key={item.value}
+                icon=""
+                label={item.label}
+                selected={format === item.value}
+                onPress={() => setFormat(item.value)}
+              />
+            ))}
+          </View>
+        </View>
+        <SimpleProofsEditor
+          proofs={proofs}
+          onChange={setProofs}
+          cap={CALLOUT_PROOF_CAP}
+          distanceUnit={distanceUnit}
+          onDistanceUnitChange={setDistanceUnit}
+        />
       </View>
 
       {opponent && amount > 0 && winOk ? (
         <View className="mt-6">
-          <Card>
-            <View className="flex-row items-center">
-              <CurrencyMark currency={currency} size={36} />
+          <View
+            style={{
+              backgroundColor: THEME.calloutSoft,
+              borderColor: THEME.callout,
+              borderWidth: 1.5,
+              borderRadius: THEME.radius,
+              padding: 16,
+              ...themeShadow('card'),
+            }}>
+            <View
+              style={{
+                width: 4,
+                position: 'absolute',
+                left: 0,
+                top: 14,
+                bottom: 14,
+                borderRadius: 2,
+                backgroundColor: THEME.callout,
+              }}
+            />
+            <AppText className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: THEME.callout }}>
+              Callout
+            </AppText>
+            <AppText className="mt-1 text-[20px] font-extrabold text-charcoal">{title}</AppText>
+            <View className="mt-3 flex-row items-center">
+              <CurrencyMark currency={currency} size={32} />
               <View className="ml-2 flex-1">
-                <AppText className="text-sm font-semibold uppercase tracking-widest text-muted">
-                  Terms
+                <AppText className="text-[16px] font-bold text-charcoal">{amountLabel} each</AppText>
+                <AppText className="text-sm text-muted">
+                  vs {profileName(opponent)}. Winner takes {formatWallet(amount * 2, currency)}.
                 </AppText>
-                <AppText className="mt-1 text-[20px] font-bold text-charcoal">{amountLabel} each</AppText>
               </View>
             </View>
-            <AppText className="mt-2 text-muted">
-              vs {profileName(opponent)}. Winner takes {formatWallet(amount * 2, currency)}.
-            </AppText>
-          </Card>
+          </View>
 
           <AppText className="mt-5 mb-3 text-muted">
             {currency === 'bucks'
               ? 'Check all three. Real money. 1:1 with USD.'
-              : 'Check all three before you send the call-out.'}
+              : 'Check all three before you send the Callout.'}
           </AppText>
           <View className="gap-3">
             {acks.map((item) => {
@@ -252,7 +348,7 @@ export default function CreateCalloutScreen() {
                   className="rounded-blob border px-4 py-3"
                   style={{
                     backgroundColor: THEME.surface,
-                    borderColor: isOn ? THEME.primary : THEME.border,
+                    borderColor: isOn ? THEME.callout : THEME.border,
                     borderWidth: 1.5,
                     borderRadius: THEME.radius,
                   }}>
@@ -273,7 +369,7 @@ export default function CreateCalloutScreen() {
 
       <View className="mt-6 gap-3">
         <Button
-          title="Send call-out"
+          title="Send Callout"
           size="lg"
           loading={create.isPending}
           disabled={!opponent || Boolean(amountIssue) || !winOk || !allChecked}
@@ -285,7 +381,7 @@ export default function CreateCalloutScreen() {
       {(mine.data ?? []).length > 0 ? (
         <View className="mt-8">
           <AppText className="mb-2 text-[13px] font-semibold uppercase tracking-widest text-muted">
-            Your call-outs
+            Your Callouts
           </AppText>
           <View className="gap-2">
             {mine.data!.slice(0, 8).map((row) => (
@@ -294,15 +390,13 @@ export default function CreateCalloutScreen() {
                 onPress={() => router.push(`/challenges/callout/${row.id}`)}
                 className="rounded-blob border px-4 py-3"
                 style={{
-                  backgroundColor: THEME.surface,
+                  backgroundColor: THEME.calloutSoft,
                   borderColor: THEME.border,
                   borderRadius: THEME.radius,
                 }}>
-                <AppText className="font-semibold text-charcoal">
+                <AppText className="font-semibold text-charcoal">{calloutTitle(row.win_condition)}</AppText>
+                <AppText className="mt-1 text-sm text-muted">
                   {formatWallet(row.stake_amount, row.currency)} each · {calloutStatusLabel(row.status)}
-                </AppText>
-                <AppText className="mt-1 text-sm text-muted" numberOfLines={2}>
-                  {row.win_condition}
                 </AppText>
               </Pressable>
             ))}
@@ -318,7 +412,7 @@ const COIN_ACKS = [
     id: 'terms',
     title: 'You both have to accept these terms',
     body: (amount: string, name: string) =>
-      `${name} must accept ${amount} each and the win condition before anything is held.`,
+      `${name} must accept ${amount} each and the title before anything is held.`,
   },
   {
     id: 'hold',
@@ -353,24 +447,16 @@ const BUCKS_ACKS = [
 ] as const;
 
 function PeopleList({
-  title,
   people,
   empty,
   onPick,
 }: {
-  title: string;
   people: PublicProfile[];
   empty?: string;
   onPick: (profile: PublicProfile) => void;
 }) {
-  if (people.length === 0 && !empty) {
-    return null;
-  }
   return (
     <View className="mt-4">
-      <AppText className="mb-2 text-[13px] font-semibold uppercase tracking-widest text-muted">
-        {title}
-      </AppText>
       {people.length === 0 ? (
         <AppText className="text-sm text-muted">{empty}</AppText>
       ) : (
@@ -387,11 +473,14 @@ function PeopleList({
             return (
               <Pressable
                 key={person.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Call out ${name}`}
                 onPress={() => onPick(person)}
                 className="flex-row items-center px-3 py-3"
                 style={{
                   borderTopWidth: index === 0 ? 0 : 1,
                   borderTopColor: THEME.border,
+                  minHeight: 56,
                 }}>
                 <Avatar uri={person.avatar_url} name={name} size={40} />
                 <View className="ml-3 flex-1">

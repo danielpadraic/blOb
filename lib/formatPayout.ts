@@ -1,10 +1,11 @@
 import type { PrizeStructure, TopPlacesDistribution, TopPlacesMode } from '@/lib/types';
 
-export type FormatFamily = 'consistency' | 'points';
+export type FormatFamily = 'consistency' | 'points' | 'cumulative';
 
 export type ConsistencyPayoutId = 'even_split_remaining' | 'last_standing';
 export type PointsPayoutId = 'winner_take_all' | 'top_count' | 'top_percent' | 'scaled';
-export type PayoutControlId = ConsistencyPayoutId | PointsPayoutId;
+export type CumulativePayoutId = 'even_split_remaining' | 'top_count' | 'top_percent';
+export type PayoutControlId = ConsistencyPayoutId | PointsPayoutId | CumulativePayoutId;
 
 export type PayoutPair = {
   prize_structure: PrizeStructure;
@@ -56,6 +57,24 @@ const POINTS_OPTIONS: PayoutOption[] = [
   },
 ];
 
+const CUMULATIVE_OPTIONS: PayoutOption[] = [
+  {
+    id: 'even_split_remaining',
+    label: 'Anyone who hits the goal',
+    helper: 'Everyone who hits every target by the end splits the prize evenly.',
+  },
+  {
+    id: 'top_count',
+    label: 'Top #',
+    helper: 'Ranked by who finishes every target first.',
+  },
+  {
+    id: 'top_percent',
+    label: 'Top %',
+    helper: 'Ranked by who finishes every target first.',
+  },
+];
+
 export function formatFamilyOf(input: {
   format?: string | null;
   challenge_type?: string | null;
@@ -66,18 +85,30 @@ export function formatFamilyOf(input: {
     return 'consistency';
   }
   const key = String(input.format ?? input.challenge_type ?? input.scoring ?? 'consistency').toLowerCase();
-  if (key === 'points' || key === 'cumulative') {
+  if (key === 'points') {
     return 'points';
+  }
+  if (key === 'cumulative') {
+    return 'cumulative';
   }
   return 'consistency';
 }
 
 export function payoutOptionsForFamily(family: FormatFamily): PayoutOption[] {
-  return family === 'points' ? POINTS_OPTIONS : CONSISTENCY_OPTIONS;
+  if (family === 'points') {
+    return POINTS_OPTIONS;
+  }
+  if (family === 'cumulative') {
+    return CUMULATIVE_OPTIONS;
+  }
+  return CONSISTENCY_OPTIONS;
 }
 
 export function defaultPayoutIdForFamily(family: FormatFamily): PayoutControlId {
-  return family === 'points' ? 'winner_take_all' : 'even_split_remaining';
+  if (family === 'points') {
+    return 'winner_take_all';
+  }
+  return 'even_split_remaining';
 }
 
 function defaultTopValue(id: PayoutControlId): string {
@@ -158,6 +189,15 @@ export function payoutControlFromPair(
     }
     return 'even_split_remaining';
   }
+  if (family === 'cumulative') {
+    if (structure === 'top_places' || payout === 'top_places') {
+      if (String(input.top_places_mode ?? '') === 'percent') {
+        return 'top_percent';
+      }
+      return 'top_count';
+    }
+    return 'even_split_remaining';
+  }
   if (structure === 'top_places' || payout === 'top_places') {
     if (String(input.top_places_distribution ?? '') === 'scaled') {
       return 'scaled';
@@ -182,7 +222,10 @@ export function isIllegalFormatPayoutPair(input: {
   const family = formatFamilyOf(input);
   const structure = String(input.prize_structure ?? '').toLowerCase();
   const payout = String(input.payout_mode ?? '').toLowerCase();
-  if (family === 'consistency' && structure === 'top_places') {
+  if (family === 'consistency' && (structure === 'top_places' || payout === 'top_places')) {
+    return true;
+  }
+  if (family === 'cumulative' && (structure === 'winner_take_all' || payout === 'winner_take_all')) {
     return true;
   }
   if (family === 'points' && payout === 'even_split_remaining') {
@@ -227,7 +270,12 @@ export function publishPayoutFields(values: {
     if (family === 'consistency') {
       throw new Error('Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.');
     }
-    throw new Error('Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.');
+    if (family === 'cumulative') {
+      throw new Error(
+        'Cumulative challenges can’t use Last standing. Pick Anyone who hits the goal, Top #, or Top %.',
+      );
+    }
+    throw new Error('Points challenges can’t use Even split remaining. Pick Winner take all or top places.');
   }
   return pair;
 }

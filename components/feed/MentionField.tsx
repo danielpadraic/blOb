@@ -57,11 +57,13 @@ type MentionFieldProps = {
   collapsed?: boolean;
   /** Grow this many lines then scroll inside the field. Default is the shared Home lock. */
   maxLines?: number;
-  pickerPlacement?: 'above' | 'below';
+  pickerPlacement?: 'above' | 'below' | 'flow';
   initialText?: string;
+  initialChips?: MentionChip[];
   initialMention?: MentionChip | null;
   audience: PostAudience | string;
   audienceUserIds: string[];
+  memberIds?: string[];
   excludeIds?: string[];
   onChange: (doc: MentionDoc) => void;
   onSubmit?: () => void;
@@ -86,9 +88,11 @@ function MentionFieldInner(
     maxLines: maxLinesProp,
     pickerPlacement = 'below',
     initialText,
+    initialChips,
     initialMention,
     audience,
     audienceUserIds,
+    memberIds,
     excludeIds,
     onChange,
     onFocus,
@@ -103,7 +107,7 @@ function MentionFieldInner(
   const form = useKeyboardForm();
   const seeded = useRef(false);
   const textRef = useRef(initialText ?? '');
-  const chipsRef = useRef<MentionChip[]>([]);
+  const chipsRef = useRef<MentionChip[]>(initialChips ?? []);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -112,7 +116,7 @@ function MentionFieldInner(
     start: initialText?.length ?? 0,
     end: initialText?.length ?? 0,
   });
-  const [chips, setChips] = useState<MentionChip[]>([]);
+  const [chips, setChips] = useState<MentionChip[]>(initialChips ?? []);
   const [punctReadyIds, setPunctReadyIds] = useState<string[]>([]);
   const [forced, setForced] = useState<TextSelection | null>(null);
   const [suppressed, setSuppressed] = useState(false);
@@ -128,6 +132,7 @@ function MentionFieldInner(
     query: query?.query ?? '',
     audience,
     audienceUserIds,
+    memberIds,
     excludeIds,
     enabled: open,
   });
@@ -257,11 +262,11 @@ function MentionFieldInner(
   const dropdown = open ? (
     <View
       style={{
-        position: 'absolute',
+        position: pickerPlacement === 'flow' ? 'relative' : 'absolute',
         left: 0,
         right: 0,
         bottom: pickerPlacement === 'above' ? '100%' : undefined,
-        top: pickerPlacement === 'above' ? undefined : '100%',
+        top: pickerPlacement === 'above' ? undefined : pickerPlacement === 'flow' ? undefined : '100%',
         zIndex: 40,
         marginBottom: pickerPlacement === 'above' ? 4 : 0,
         marginTop: pickerPlacement === 'above' ? 0 : 4,
@@ -344,7 +349,7 @@ function MentionFieldInner(
 
   return (
     <View ref={boxRef} collapsable={false} style={{ position: 'relative', zIndex: open ? 20 : 0 }}>
-      {open ? (
+      {open && pickerPlacement !== 'flow' ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss mentions"
@@ -358,8 +363,8 @@ function MentionFieldInner(
             : null)}
           style={{
             position: 'absolute',
-            top: -640,
-            bottom: -640,
+            top: pickerPlacement === 'above' ? -640 : 0,
+            bottom: pickerPlacement === 'above' ? 0 : -640,
             left: -80,
             right: -80,
             zIndex: 10,
@@ -367,6 +372,21 @@ function MentionFieldInner(
         />
       ) : null}
       {pickerPlacement === 'above' ? dropdown : null}
+      <View style={{ position: 'relative' }}>
+      {!text.trim() && placeholder ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 6, zIndex: 1 }}>
+          <AppText
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={{
+              color: frost ? 'rgba(255,255,255,0.5)' : THEME.textMuted,
+              fontSize: compact ? 13 : 14,
+              lineHeight: LINE,
+            }}>
+            {placeholder}
+          </AppText>
+        </View>
+      ) : null}
       <TextInput
         ref={inputRef}
         value={text}
@@ -379,7 +399,7 @@ function MentionFieldInner(
           commit(next.text, next.selection, next.chips, next.forced, next.punctReadyIds);
           applyHeight(next.text);
         }}
-        placeholder={placeholder}
+        placeholder=""
         placeholderTextColor={frost ? 'rgba(255,255,255,0.5)' : THEME.textMuted}
         autoFocus={autoFocus}
         multiline
@@ -431,6 +451,7 @@ function MentionFieldInner(
               }),
         }}
       />
+      </View>
       {compact ? null : (
         <Pressable
           accessibilityRole="button"
@@ -443,7 +464,7 @@ function MentionFieldInner(
           </AppText>
         </Pressable>
       )}
-      {pickerPlacement === 'below' ? dropdown : null}
+      {pickerPlacement === 'below' || pickerPlacement === 'flow' ? dropdown : null}
     </View>
   );
 }

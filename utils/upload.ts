@@ -13,6 +13,20 @@ import { getErrorMessage } from '@/utils/errors';
 
 export type StorageBucket = 'avatars' | 'challenge-proofs' | 'post-media' | 'bug-reports';
 
+export type UploadProgressEvent = {
+  loaded: number;
+  total: number;
+};
+
+export type UploadProgressHandler = (event: UploadProgressEvent) => void;
+
+export function uploadProgressPercent(loaded: number, total: number): number | null {
+  if (!Number.isFinite(loaded) || !Number.isFinite(total) || total <= 0) {
+    return null;
+  }
+  return Math.max(0, Math.min(100, Math.round((loaded / total) * 100)));
+}
+
 const IMAGE_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/gif']);
 
 export function guessContentType(uri: string): string {
@@ -212,6 +226,54 @@ function humanStorageError(error: unknown, kind: 'photo' | 'proof' | 'avatar' | 
   return raw;
 }
 
+async function uploadObjectWithProgress(input: {
+  bucket: StorageBucket;
+  path: string;
+  contentType: string;
+  payload: Blob;
+  upsert: boolean;
+  onProgress: UploadProgressHandler;
+}): Promise<boolean> {
+  const base = String(process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '');
+  const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+  if (!base || typeof XMLHttpRequest === 'undefined') {
+    return false;
+  }
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token;
+  if (!token) {
+    return false;
+  }
+  const url = `${base}/storage/v1/object/${input.bucket}/${input.path
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/')}`;
+  return new Promise((resolve) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('apikey', anon);
+      xhr.setRequestHeader('Content-Type', input.contentType);
+      xhr.setRequestHeader('cache-control', '3600');
+      xhr.setRequestHeader('x-upsert', input.upsert ? 'true' : 'false');
+      xhr.upload.onprogress = (event) => {
+        const total = event.lengthComputable ? event.total : input.payload.size;
+        if (total > 0) {
+          input.onProgress({ loaded: event.loaded, total });
+        }
+      };
+      xhr.onload = () => {
+        resolve(xhr.status >= 200 && xhr.status < 300);
+      };
+      xhr.onerror = () => resolve(false);
+      xhr.send(input.payload);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 async function uploadObject(input: {
   bucket: StorageBucket;
   path: string;
@@ -220,6 +282,7 @@ async function uploadObject(input: {
   blob?: Blob | null;
   upsert?: boolean;
   size?: number | null;
+  onProgress?: UploadProgressHandler;
 }): Promise<string> {
   let { uri, contentType, blob, path } = input;
   if (contentType.startsWith('image/') && contentType !== 'image/gif') {
@@ -266,6 +329,20 @@ async function uploadObject(input: {
       cacheControl: '3600',
       upsert,
     });
+
+  if (input.onProgress) {
+    const progressed = await uploadObjectWithProgress({
+      bucket: input.bucket,
+      path,
+      contentType,
+      payload: typed,
+      upsert,
+      onProgress: input.onProgress,
+    });
+    if (progressed) {
+      return path;
+    }
+  }
 
   const primary = Platform.OS === 'web' ? typed : await blobToArrayBuffer(typed, uri);
   const first = await send(primary);
@@ -387,6 +464,7 @@ export async function uploadStoryMedia(input: {
   userId: string;
   mimeType?: string | null;
   blob?: Blob | null;
+  onProgress?: UploadProgressHandler;
 }): Promise<string> {
   const contentType = coerceImageContentType(input.mimeType ?? input.blob?.type, input.uri);
   if (!contentType.startsWith('image/') && !contentType.startsWith('video/')) {
@@ -398,6 +476,7 @@ export async function uploadStoryMedia(input: {
     fileStem: `stories/${Date.now()}`, // Storage prefix stays `stories/`. User-facing name is Wave.
     mimeType: contentType,
     blob: input.blob,
+    onProgress: input.onProgress,
   });
 }
 
@@ -407,6 +486,7 @@ export async function uploadPostMedia(input: {
   fileStem: string;
   mimeType?: string | null;
   blob?: Blob | null;
+  onProgress?: UploadProgressHandler;
 }): Promise<string> {
   const contentType = coerceImageContentType(input.mimeType ?? input.blob?.type, input.uri);
   if (!contentType.startsWith('image/') && !contentType.startsWith('video/')) {
@@ -420,6 +500,7 @@ export async function uploadPostMedia(input: {
     contentType,
     blob: input.blob,
     upsert: false,
+    onProgress: input.onProgress,
   });
   const { data } = supabase.storage.from(STORAGE_BUCKETS.postMedia).getPublicUrl(path);
   if (!data.publicUrl) {
@@ -443,6 +524,7 @@ export async function uploadPostAttachment(input: {
   mimeType?: string | null;
   blob?: Blob | null;
   originalName?: string;
+  onProgress?: UploadProgressHandler;
 }): Promise<string> {
   const contentType = normalizeContentType(input.mimeType ?? input.blob?.type, input.uri);
   if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
@@ -452,6 +534,7 @@ export async function uploadPostAttachment(input: {
       fileStem: input.fileStem,
       mimeType: contentType,
       blob: input.blob,
+      onProgress: input.onProgress,
     });
   }
   const ext = fileExtension(contentType, input.originalName);
@@ -467,6 +550,7 @@ export async function uploadPostAttachment(input: {
       contentType: storedType,
       blob: input.blob,
       upsert: false,
+      onProgress: input.onProgress,
     });
     const { data } = supabase.storage.from(STORAGE_BUCKETS.postMedia).getPublicUrl(path);
     if (!data.publicUrl) {

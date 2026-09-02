@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { authorLabel, resolveLiveAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
+import { authorLabel, logMissingPublishAuthor, resolveLiveAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
 
 describe('safeUserId', () => {
   it('does not throw when the user is missing', () => {
@@ -43,5 +43,24 @@ describe('sessionAuthor', () => {
       avatar_url: null,
     });
     expect(sessionAuthor(undefined, null)).toBeNull();
+  });
+});
+
+describe('logMissingPublishAuthor', () => {
+  it('logs once when author is missing and never when present', () => {
+    const logged: unknown[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      logMissingPublishAuthor({ type: 'wave', postId: 'p-log-1', hasAuthor: true });
+      logMissingPublishAuthor({ type: 'wave', postId: 'p-log-1', hasAuthor: false });
+      logMissingPublishAuthor({ type: 'wave', postId: 'p-log-1', hasAuthor: false });
+      logMissingPublishAuthor({ type: 'feed', postId: '', hasAuthor: false });
+    } finally {
+      console.log = original;
+    }
+    expect(logged).toEqual([['[blob:publish]', { type: 'wave', postId: 'p-log-1', hasAuthor: false }]]);
   });
 });

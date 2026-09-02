@@ -1,3 +1,4 @@
+import { calloutObserverInviteHref } from '@/lib/callouts';
 import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { circleNotificationPath } from '@/lib/circles';
 import { collapseChallengeDigests } from '@/lib/notifyDigest';
@@ -410,6 +411,15 @@ export function notificationHref(item: AppNotification): Href | null {
   if (item.type === 'proof_flagged' && notificationPostId(data)) {
     return postHref(notificationPostId(data)!);
   }
+  if (item.type === 'callout_observer_invited') {
+    const watchHref = calloutObserverInviteHref({
+      challenge_id: notificationChallengeId(data),
+      callout_id: typeof data.callout_id === 'string' ? data.callout_id : undefined,
+    });
+    if (watchHref) {
+      return watchHref as Href;
+    }
+  }
   if (data.callout_id) {
     return `/challenges/callout/${data.callout_id}`;
   }
@@ -508,6 +518,8 @@ export function notificationGlyph(type: string, data?: NotificationData): string
       return '⚠️';
     case 'callout_cancelled':
       return '↩️';
+    case 'callout_observer_invited':
+      return '👀';
     case 'badge_unlocked':
       return '🏅';
     case 'challenge_settled':

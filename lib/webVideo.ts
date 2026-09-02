@@ -40,8 +40,10 @@ export function applyWebVideoLock(node: HTMLVideoElement | null, poster?: string
   }
   const video = node as WebkitVideo;
   video.playsInline = true;
+  video.preload = 'metadata';
   video.setAttribute('playsinline', '');
   video.setAttribute('webkit-playsinline', 'true');
+  video.setAttribute('preload', 'metadata');
   video.controls = false;
   video.removeAttribute('controls');
   video.disablePictureInPicture = true;

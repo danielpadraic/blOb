@@ -5,7 +5,14 @@ import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
 import { filterClipsByAudience, type ClipLinkedPost } from '@/lib/clipAudience';
-import { fetchCorporateChallengeIds, fetchHiddenRailPostIds } from '@/lib/clipRail';
+import { fetchActiveChallenges } from '@/lib/challenges';
+import { fetchHiddenRailPostIds } from '@/lib/clipRail';
+import {
+  isHomeRoundsCoach,
+  isRestrictedRoundChallenge,
+  selectHomeRounds,
+  type HomeRoundsContext,
+} from '@/lib/homeRounds';
 import { isEndedPrizeStatus } from '@/lib/challengePot';
 import { isOfficialAccount, OFFICIAL_BOB_ID } from '@/lib/official';
 import { fetchSettledPrizePools } from '@/lib/settlement';
@@ -1212,8 +1219,74 @@ async function selectReels(limit: number) {
   return query;
 }
 
+async function fetchRestrictedRoundChallengeIds(ids: string[]): Promise<Set<string>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) {
+    return new Set();
+  }
+  const { data, error } = await supabase
+    .from('challenges')
+    .select('id, privacy_mode, visibility, challenge_lane')
+    .in('id', unique);
+  if (error) {
+    return new Set();
+  }
+  return new Set(
+    (data ?? [])
+      .filter((row) => isRestrictedRoundChallenge(row))
+      .map((row) => String(row.id ?? ''))
+      .filter(Boolean),
+  );
+}
+
+async function loadHomeRoundsContext(viewerId: string | null, reelChallengeIds: string[]): Promise<HomeRoundsContext> {
+  if (!viewerId) {
+    return {
+      liveOrUpcomingChallengeIds: new Set(),
+      memberChallengeIds: new Set(),
+      restrictedChallengeIds: await fetchRestrictedRoundChallengeIds(reelChallengeIds),
+      followedCoachIds: [],
+    };
+  }
+  const emptyRows = { data: [] as Array<{ id?: string; challenge_id?: string }> };
+  const [active, following, hosted, joined, restrictedChallengeIds] = await Promise.all([
+    fetchActiveChallenges(viewerId).catch(() => []),
+    fetchFollowing(viewerId).catch(() => [] as FollowEdge[]),
+    supabase.from('challenges').select('id').eq('created_by', viewerId).catch(() => emptyRows),
+    supabase.from('challenge_participants').select('challenge_id').eq('user_id', viewerId).catch(() => emptyRows),
+    fetchRestrictedRoundChallengeIds(reelChallengeIds),
+  ]);
+  const liveOrUpcomingChallengeIds = new Set(
+    active.map((row) => String(row.id ?? '').trim()).filter(Boolean),
+  );
+  const memberChallengeIds = new Set<string>(liveOrUpcomingChallengeIds);
+  for (const row of hosted.data ?? []) {
+    const id = String((row as { id?: string }).id ?? '').trim();
+    if (id) {
+      memberChallengeIds.add(id);
+    }
+  }
+  for (const row of joined.data ?? []) {
+    const id = String((row as { challenge_id?: string }).challenge_id ?? '').trim();
+    if (id) {
+      memberChallengeIds.add(id);
+    }
+  }
+  const followedCoachIds = following
+    .filter((edge) => isHomeRoundsCoach(edge.profile))
+    .map((edge) => edge.following_id)
+    .filter(Boolean);
+  return {
+    liveOrUpcomingChallengeIds,
+    memberChallengeIds,
+    restrictedChallengeIds,
+    followedCoachIds,
+  };
+}
+
 export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> {
-  const { data, error } = await selectReels(Math.max(1, limit));
+  const window = Math.min(Math.max(limit * 8, 48), 160);
+  const { data, error } = await selectReels(window);
   if (error) {
     if (isMissingRelationError(error)) {
       return [];
@@ -1222,22 +1295,24 @@ export async function fetchReels(limit = SOCIAL_PAGE_SIZE): Promise<ReelItem[]> 
   }
   const items = await withReelProfiles((data ?? []) as Reel[]);
   const viewerId = await currentViewerId();
-  const corporateIds = await fetchCorporateChallengeIds(
-    items.map((reel) => reel.challenge_id).filter((id): id is string => Boolean(id)),
-  );
   const hiddenPosts = await fetchHiddenRailPostIds(
     items.map((reel) => reel.post_id).filter((id): id is string => Boolean(id)),
   );
   const allowed = await clipsVisibleToViewer(items);
-  return allowed.filter((reel) => {
-    if (reel.challenge_id && corporateIds.has(reel.challenge_id)) {
-      return false;
-    }
+  const visible = allowed.filter((reel) => {
     if (reel.post_id && hiddenPosts.has(reel.post_id) && reel.user_id === viewerId) {
       return false;
     }
     return true;
-  }).slice(0, limit);
+  });
+  const rounds = selectHomeRounds(
+    visible,
+    await loadHomeRoundsContext(
+      viewerId,
+      visible.map((reel) => reel.challenge_id).filter((id): id is string => Boolean(id)),
+    ),
+  );
+  return rounds.slice(0, limit);
 }
 
 async function fetchReelByColumn(column: 'id' | 'post_id', value: string): Promise<ReelItem | null> {

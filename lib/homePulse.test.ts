@@ -94,6 +94,20 @@ describe('buildPulsePills', () => {
       }),
     ).not.toThrow();
   });
+
+  it('labels optional observer pills as watching, never Check In', () => {
+    const pills = buildPulsePills({
+      challenges: [{ id: 'watch-1', status: 'live', title: 'Callout: sit-ups', is_callout: true, watching: true }],
+      posts: [],
+    });
+    expect(pills[0]).toMatchObject({
+      id: 'watch-1',
+      snippet: 'Watching',
+      watching: true,
+      isCallout: true,
+    });
+    expect(pills[0].snippet.toLowerCase()).not.toMatch(/check in|bet|odds|wager/);
+  });
 });
 
 describe('pulseChallengeHref', () => {

@@ -69,6 +69,14 @@ export function settlementRpcForPayout(
 export function settlePayoutConfirmCopy(
   challenge: EvenSplitPayoutInput & PrizeStructureConfig,
 ): string {
+  const type = asKey(challenge.challenge_type);
+  const format = asKey(challenge.format);
+  if (type === 'cumulative' || format === 'cumulative') {
+    if (isEvenSplitPayout(challenge)) {
+      return 'Anyone who hits the goal splits the prize.';
+    }
+    return 'Ranked by who finishes every target first.';
+  }
   if (isPointsBoard(challenge) && !isEvenSplitPayout(challenge)) {
     return 'Highest points wins. Ties split.';
   }

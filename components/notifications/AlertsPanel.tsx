@@ -20,6 +20,7 @@ import {
   notificationHasHighFive,
   openHighFiveConversation,
 } from '@/lib/highFive';
+import { calloutAlertTitle } from '@/lib/callouts';
 import {
   friendRequestFromUserId,
   isCoinGrantAlert,
@@ -373,7 +374,9 @@ function NotificationRow({
           <AppText
             className={`flex-1 text-charcoal ${unread ? 'font-bold' : 'font-medium'}`}
             numberOfLines={item.type === 'bob_encouragement' || showHighFive ? 4 : 2}>
-            {item.title}
+            {item.type.startsWith('callout_')
+              ? calloutAlertTitle(item.title, item.data?.title)
+              : item.title}
           </AppText>
           <AppText className="text-[11px] text-muted">{formatFeedTime(item.created_at)}</AppText>
         </View>

@@ -57,6 +57,7 @@ type LobbyListCardViewProps = {
     organization_name?: string | null;
     organization?: string | null;
     is_official?: boolean | null;
+    is_callout?: boolean | null;
     cover_image_url?: string | null;
     category?: string | null;
   };
@@ -110,6 +111,7 @@ export function LobbyListCardView({
 }: LobbyListCardViewProps) {
   const typeTip = useChallengeTypeTip();
   const hasCover = Boolean(coverUri);
+  const callout = Boolean(challenge.is_callout);
   const darkHero = official || hasCover;
   const ink = official ? THEME.primaryForeground : THEME.textPrimary;
   const muted = official ? 'rgba(255,255,255,0.72)' : THEME.textMuted;
@@ -121,7 +123,7 @@ export function LobbyListCardView({
     : challengeScheduleState(challenge, nowMs);
   const primary = lobbyListPrimaryAction({ canCheckIn, canJoin, status });
   const hostLabel = host?.name?.trim() || (official ? 'Bob' : 'Host');
-  const wash = official ? THEME.primary : challengeTypeIconTint(challenge.category);
+  const wash = official ? THEME.primary : callout ? THEME.callout : challengeTypeIconTint(challenge.category);
 
   function runPrimary() {
     if (primary.kind === 'checkin') {
@@ -142,7 +144,7 @@ export function LobbyListCardView({
         borderRadius: CARD_RADIUS,
         backgroundColor: body,
         borderWidth: 1,
-        borderColor: official ? 'rgba(255,255,255,0.08)' : THEME.border,
+        borderColor: official ? 'rgba(255,255,255,0.08)' : callout ? THEME.callout : THEME.border,
         overflow: 'hidden',
         ...themeShadow('card'),
       }}>

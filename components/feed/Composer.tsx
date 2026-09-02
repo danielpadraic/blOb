@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, View } from 'react-native';
+import { Alert, Platform, Pressable, View, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -37,8 +37,9 @@ import { wallHostLabel } from '@/lib/profileWall';
 import { supabase } from '@/lib/supabase';
 import type { ComposeInput, QuoteSnapshot } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
-import { asGalleryMedia } from '@/utils/media';
-import { uploadPostAttachment } from '@/utils/upload';
+import { asGalleryMedia, localUriFromPickerAsset } from '@/utils/media';
+import { uploadPostAttachment, uploadProgressPercent } from '@/utils/upload';
+import { posterUriFor } from '@/lib/videoPoster';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
@@ -50,6 +51,10 @@ type Attachment = {
   name?: string;
   size?: number | null;
   blob?: Blob | null;
+  remoteUrl?: string | null;
+  progress?: number | null;
+  error?: string | null;
+  poster?: string | null;
 };
 
 type ComposerProps = {
@@ -197,18 +202,81 @@ export function Composer({
   }
 
   const busy = Boolean(submitting || uploading);
+  const uploadsReady = attachments.every(
+    (item) => item.kind === 'gif' || Boolean(item.remoteUrl),
+  );
   const canPost =
     Boolean(hasText || attachments.length > 0 || quote || attachedChallenge) &&
+    uploadsReady &&
     (audience !== 'specific' || audienceUserIds.length > 0);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const next: Attachment =
+      attachment.kind === 'gif'
+        ? { ...attachment, id, remoteUrl: attachment.uri, progress: 100 }
+        : { ...attachment, id, progress: 0, remoteUrl: null };
+    let accepted = false;
     setAttachments((current) => {
       if (current.length >= 4) {
         Alert.alert('That’s a full blob', 'You can attach up to 4 things per post.');
         return current;
       }
-      return [...current, { ...attachment, id: `${Date.now()}-${current.length}` }];
+      accepted = true;
+      return [...current, next];
     });
+    if (accepted && next.kind !== 'gif') {
+      void uploadQueued(next);
+    }
+  }
+
+  async function uploadQueued(attachment: Attachment) {
+    if (!user) {
+      return;
+    }
+    if (attachment.kind === 'video') {
+      void posterUriFor(attachment.uri).then((poster) => {
+        if (!poster) {
+          return;
+        }
+        setAttachments((current) =>
+          current.map((item) => (item.id === attachment.id ? { ...item, poster } : item)),
+        );
+      });
+    }
+    setUploading(true);
+    try {
+      const url = await uploadPostAttachment({
+        uri: attachment.uri,
+        userId: user.id,
+        fileStem: `${Date.now()}-${attachment.id}`,
+        mimeType: attachment.mimeType ?? attachment.blob?.type,
+        blob: attachment.blob,
+        originalName: attachment.name,
+        onProgress: (event) => {
+          const percent = uploadProgressPercent(event.loaded, event.total);
+          setAttachments((current) =>
+            current.map((item) =>
+              item.id === attachment.id ? { ...item, progress: percent ?? item.progress ?? 0, error: null } : item,
+            ),
+          );
+        },
+      });
+      setAttachments((current) =>
+        current.map((item) =>
+          item.id === attachment.id ? { ...item, remoteUrl: url, progress: 100, error: null } : item,
+        ),
+      );
+    } catch {
+      Alert.alert(copy('error.uploadRetry'));
+      setAttachments((current) =>
+        current.map((item) =>
+          item.id === attachment.id ? { ...item, error: copy('error.uploadRetry'), progress: null } : item,
+        ),
+      );
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function pickGallery() {
@@ -229,14 +297,19 @@ export function Composer({
         preferredAssetRepresentationMode:
           ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
-      if (result.canceled || !result.assets[0]?.uri) {
+      if (result.canceled) {
         return;
       }
       const asset = result.assets[0];
+      const uri = localUriFromPickerAsset(asset);
+      if (!uri) {
+        Alert.alert(copy('error.usePhotoOrVideo'));
+        return;
+      }
       const kind = asGalleryMedia({
         mimeType: asset.mimeType ?? asset.file?.type,
         fileName: asset.fileName,
-        uri: asset.uri,
+        uri,
         type: asset.type,
       });
       if (!kind) {
@@ -248,7 +321,7 @@ export function Composer({
         return;
       }
       addAttachment({
-        uri: asset.uri,
+        uri,
         kind,
         mimeType: asset.mimeType ?? asset.file?.type,
         name: asset.fileName ?? (kind === 'video' ? 'Video' : 'Photo'),
@@ -272,24 +345,15 @@ export function Composer({
     try {
       const mediaUrls: string[] = [];
       if (!quote) {
-        for (const [index, attachment] of attachments.entries()) {
+        for (const attachment of attachments) {
           if (attachment.kind === 'gif') {
             mediaUrls.push(attachment.uri);
             continue;
           }
-          try {
-            const url = await uploadPostAttachment({
-              uri: attachment.uri,
-              userId: user.id,
-              fileStem: `${Date.now()}-${index}`,
-              mimeType: attachment.mimeType ?? attachment.blob?.type,
-              blob: attachment.blob,
-              originalName: attachment.name,
-            });
-            mediaUrls.push(url);
-          } catch {
-            throw new Error(copy('error.composerUpload'));
+          if (!attachment.remoteUrl) {
+            throw new Error(copy('error.uploadRetry'));
           }
+          mediaUrls.push(attachment.remoteUrl);
         }
       }
       if (wallHost?.id) {
@@ -347,7 +411,7 @@ export function Composer({
           radius={14}
         />
         <View
-          className="min-w-0 flex-1 flex-row items-end"
+          className="min-w-0 flex-1 flex-row items-start"
           style={{
             backgroundColor: THEME.background,
             borderWidth: 1,
@@ -357,7 +421,7 @@ export function Composer({
             paddingRight: 4,
             paddingVertical: 4,
             minHeight: 40,
-            alignItems: 'flex-end',
+            alignItems: 'flex-start',
             overflow: 'visible',
           }}>
           <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end', overflow: 'visible' }}>
@@ -374,6 +438,7 @@ export function Composer({
               initialText={docRef.current.text}
               compact
               collapsed={!expanded && !hasText}
+              pickerPlacement="flow"
               audience={audience}
               audienceUserIds={audienceUserIds}
               onChange={onDocChange}
@@ -405,7 +470,7 @@ export function Composer({
           ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Post"
+            accessibilityLabel={busy ? 'Posting…' : 'Post'}
             onPress={() => void handleSubmit()}
             onPressIn={() => {
               holdFocus.current = true;
@@ -419,17 +484,21 @@ export function Composer({
               borderRadius: 14,
               backgroundColor: canPost && !busy ? THEME.primary : THEME.border,
             }}>
+            {busy ? (
+              <ActivityIndicator color={THEME.primaryForeground} size="small" />
+            ) : (
             <Glyph
               name={GLYPH.send}
               color={canPost && !busy ? THEME.primaryForeground : THEME.textMuted}
               size={18}
             />
+            )}
           </Pressable>
         </View>
       </View>
 
       {expanded ? (
-      <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44 }}>
+      <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44, zIndex: 2 }}>
         <ComposerIcon
           glyph={GLYPH.camera}
           label="Camera"
@@ -521,6 +590,7 @@ export function Composer({
               onRemove={() =>
                 setAttachments((current) => current.filter((item) => item.id !== attachment.id))
               }
+              onRetry={() => void uploadQueued(attachment)}
             />
           ))}
         </View>
@@ -577,11 +647,15 @@ function ComposerIcon({
 function AttachmentChip({
   attachment,
   onRemove,
+  onRetry,
 }: {
   attachment: Attachment;
   onRemove: () => void;
+  onRetry: () => void;
 }) {
-  const visual = attachment.kind !== 'video';
+  const poster = attachment.poster || (attachment.kind !== 'video' ? attachment.uri : null);
+  const uploading = !attachment.remoteUrl && attachment.kind !== 'gif' && !attachment.error;
+  const percent = typeof attachment.progress === 'number' ? attachment.progress : null;
   return (
     <View
       className="flex-row items-center overflow-hidden"
@@ -592,15 +666,63 @@ function AttachmentChip({
         backgroundColor: THEME.background,
         maxWidth: '100%',
       }}>
-      {visual ? (
-        <Image source={{ uri: attachment.uri }} style={{ width: 96, height: 72 }} contentFit="cover" />
-      ) : (
-        <View
-          className="items-center justify-center"
-          style={{ width: 96, height: 72, backgroundColor: THEME.primary }}>
-          <Glyph name={GLYPH.play} color="#fff" size={22} />
-        </View>
-      )}
+      <View style={{ width: 96, height: 72, backgroundColor: THEME.primary }}>
+        {poster ? (
+          <Image source={{ uri: poster }} style={{ width: 96, height: 72 }} contentFit="cover" />
+        ) : (
+          <View className="items-center justify-center" style={{ width: 96, height: 72 }}>
+            <Glyph name={GLYPH.play} color="#fff" size={22} />
+          </View>
+        )}
+        {uploading ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              top: 0,
+              backgroundColor: 'rgba(16,19,18,0.45)',
+              justifyContent: 'flex-end',
+              padding: 6,
+            }}>
+            <View className="h-1 overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.28)' }}>
+              <View
+                className="h-full rounded-full"
+                style={{
+                  width: percent == null ? '40%' : `${Math.max(6, percent)}%`,
+                  backgroundColor: THEME.accentBright,
+                }}
+              />
+            </View>
+            <AppText className="mt-1 text-[10px] font-bold" style={{ color: '#fff' }}>
+              {percent == null ? 'Uploading…' : `${percent}%`}
+            </AppText>
+          </View>
+        ) : null}
+        {attachment.error ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry upload"
+            onPress={onRetry}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(16,19,18,0.55)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 6,
+            }}>
+            <AppText className="text-center text-[10px] font-bold" style={{ color: '#fff' }}>
+              Try again
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Remove attachment"

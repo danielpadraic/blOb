@@ -5,9 +5,6 @@ import { asReactionType, POST_REACTION_TYPES, type PostReactionType } from '@/li
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia } from '@/utils/media';
 
-export const LIVE_CHIP_STARTING = 'Starting';
-export const LIVE_CHIP_DONE = 'Done';
-
 export type LivePostLike = CheckinPostLike & {
   id?: string | null;
   created_at?: string | null;

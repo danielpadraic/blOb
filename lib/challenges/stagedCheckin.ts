@@ -1,4 +1,9 @@
-import { saveCheckinProofWithClient, submitCheckinWithClient, parseChallengeCheckin } from '@/lib/checkin/rpc';
+import {
+  saveCheckinProofWithClient,
+  saveCheckinMetricValuesWithClient,
+  submitCheckinWithClient,
+  parseChallengeCheckin,
+} from '@/lib/checkin/rpc';
 import type { SaveCheckinProofInput } from '@/lib/checkin/rpc';
 import { requestPushAfterValue } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
@@ -50,6 +55,10 @@ export async function submitLocationProof(input: {
     throw new Error(error.message);
   }
   return parseChallengeCheckin((data ?? {}) as Record<string, unknown>);
+}
+
+export async function saveCheckinMetricValues(challengeId: string, values: Record<string, number>) {
+  await saveCheckinMetricValuesWithClient(supabase as never, challengeId, values);
 }
 
 export async function submitCheckin(challengeId: string) {

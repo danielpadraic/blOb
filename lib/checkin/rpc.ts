@@ -243,6 +243,20 @@ export async function saveCheckinProofWithClient(
   return parseChallengeCheckin((data ?? {}) as Record<string, unknown>);
 }
 
+export async function saveCheckinMetricValuesWithClient(
+  client: CheckinRpcClient,
+  challengeId: string,
+  values: Record<string, number>,
+): Promise<void> {
+  const { error } = (await client.rpc('save_checkin_metric_values', {
+    p_challenge_id: challengeId,
+    p_metric_values: values,
+  })) as { error: { message?: string } | null };
+  if (error) {
+    throw new Error(mapCheckinRpcError(error, 'save'));
+  }
+}
+
 export async function submitCheckinWithClient(
   client: CheckinRpcClient,
   challengeId: string,

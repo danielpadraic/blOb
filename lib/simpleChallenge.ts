@@ -10,6 +10,17 @@ import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
 import type { Challenge, ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
 import { milesToMeters, type DistanceUnit } from '@/lib/distance';
+import {
+  CUMULATIVE_METRIC_CAP,
+  defaultCumulativeMetrics,
+  filledCumulativeMetrics,
+  metricsFromLegacyTarget,
+  parseCumulativeMetrics,
+  resolveCumulativeMetrics,
+  serializeCumulativeMetrics,
+  winWindowOf,
+  type CumulativeMetric,
+} from '@/lib/cumulativeMetrics';
 import { locationPlaceIsSet } from '@/lib/locationProof';
 import {
   BEFORE_AFTER_HR_PRESET,
@@ -160,6 +171,8 @@ export type SimpleChallengeDraft = {
   points_to_win?: number;
   cumulative_target_meters?: number;
   cumulative_window?: 'challenge' | 'week' | 'day';
+  metrics?: CumulativeMetric[];
+  win_window?: 'challenge' | 'week';
   distance_unit?: 'mi' | 'km';
   allowed_misses?: number;
   payout?: PayoutControlId;
@@ -195,6 +208,8 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     points_to_win: 1,
     cumulative_target_meters: milesToMeters(100),
     cumulative_window: 'challenge',
+    metrics: defaultCumulativeMetrics(),
+    win_window: 'challenge',
     distance_unit: 'mi',
     allowed_misses: 0,
     payout: 'even_split_remaining',
@@ -309,7 +324,12 @@ export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | 
     cumulative_window:
       row.cumulative_window === 'week' || row.cumulative_window === 'day' || row.cumulative_window === 'challenge'
         ? row.cumulative_window
-        : base.cumulative_window,
+        : winWindowOf(row.win_window),
+    metrics: (() => {
+      const rows = parseCumulativeMetrics(row.metrics);
+      return rows.length > 0 ? rows : base.metrics;
+    })(),
+    win_window: winWindowOf(row.win_window ?? row.cumulative_window),
     distance_unit: row.distance_unit === 'km' ? 'km' : base.distance_unit,
     allowed_misses: clampAllowedMisses(
       Number(row.allowed_misses ?? row.misses_allowed) || 0,
@@ -326,7 +346,9 @@ export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | 
       row.payout === 'top_percent' ||
       row.payout === 'scaled'
         ? row.payout
-        : defaultPayoutIdForFamily(formatFamilyOf({ scoring: row.scoring as string })),
+        : defaultPayoutIdForFamily(
+            formatFamilyOf({ scoring: row.scoring === 'points' ? 'consistency' : (row.scoring as string) }),
+          ),
     top_places_value: Math.max(Number(row.top_places_value) || 0, 0) || base.top_places_value,
   });
 }
@@ -511,8 +533,8 @@ function simpleProofsForPublish(proofs: ChallengeProof[]): ChallengeProof[] {
   return proofs;
 }
 
-export function addSimpleProof(proofs: ChallengeProof[]): ChallengeProof[] {
-  if (proofs.length >= SIMPLE_PROOF_CAP) {
+export function addSimpleProof(proofs: ChallengeProof[], cap = SIMPLE_PROOF_CAP): ChallengeProof[] {
+  if (proofs.length >= cap) {
     return proofs;
   }
   return [...proofs, makeProof(defaultSentenceForMethod('photo'), 'photo')];
@@ -558,31 +580,39 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     draft.payout &&
     (family === 'consistency'
       ? draft.payout === 'even_split_remaining' || draft.payout === 'last_standing'
-      : draft.payout === 'winner_take_all' ||
-        draft.payout === 'top_count' ||
-        draft.payout === 'top_percent' ||
-        draft.payout === 'scaled')
+      : family === 'cumulative'
+        ? draft.payout === 'even_split_remaining' ||
+          draft.payout === 'top_count' ||
+          draft.payout === 'top_percent'
+        : draft.payout === 'winner_take_all' ||
+          draft.payout === 'top_count' ||
+          draft.payout === 'top_percent' ||
+          draft.payout === 'scaled')
       ? draft.payout
       : defaultPayoutIdForFamily(family);
   const payout = pairFromPayoutControl(payoutId, {
     top_places_value: draft.top_places_value != null ? String(draft.top_places_value) : undefined,
   });
-  let proofs = simpleProofsForPublish(
+  const proofs = simpleProofsForPublish(
     (draft.proofs.length > 0 ? draft.proofs : defaultChallengeProofs()).map((item) =>
       ensureProofSentence(item, item.minutes ?? DEFAULT_MIN_MINUTES),
     ),
   );
-  if (howYouWin === 'cumulative' && proofs.length > 0 && !proofs.some((item) => item.method === 'distance')) {
-    proofs = [
-      makeProof(
-        defaultSentenceForMethod('distance', 30, { unit: draft.distance_unit }),
-        'distance',
-        undefined,
-        milesToMeters(1),
-      ),
-      ...proofs,
-    ].slice(0, SIMPLE_PROOF_CAP);
-  }
+  const metrics =
+    howYouWin === 'cumulative'
+      ? serializeCumulativeMetrics(
+          filledCumulativeMetrics(draft.metrics).length
+            ? draft.metrics!
+            : Number(draft.cumulative_target_meters) > 0
+              ? metricsFromLegacyTarget({
+                  cumulative_target: draft.cumulative_target_meters,
+                  cumulative_metric: 'distance_m',
+                })
+              : defaultCumulativeMetrics(),
+        )
+      : [];
+  const primary = filledCumulativeMetrics(metrics)[0];
+  const winWindow = winWindowOf(draft.win_window ?? draft.cumulative_window);
   const legacyTypes = proofRequirementsFrom(proofs).map((item) => item.type);
   const hrMinutes = [
     ...proofs.filter((item) => item.method === 'hr').map((item) => item.minutes ?? DEFAULT_MIN_MINUTES),
@@ -634,12 +664,11 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     misses_allowed: String(
       simpleHowYouWin(draft) === 'cumulative' ? 0 : clampAllowedMisses(draft.allowed_misses ?? 0, draft),
     ),
-    cumulative_metric: howYouWin === 'cumulative' ? 'distance_m' : null,
-    cumulative_target:
-      howYouWin === 'cumulative'
-        ? String(Math.max(Number(draft.cumulative_target_meters) || milesToMeters(100), 1))
-        : '',
-    cumulative_window: draft.cumulative_window === 'week' || draft.cumulative_window === 'day' ? draft.cumulative_window : 'challenge',
+    cumulative_metric: howYouWin === 'cumulative' ? 'count' : null,
+    cumulative_target: howYouWin === 'cumulative' ? String(Math.max(primary?.target || 0, 0)) : '',
+    cumulative_window: winWindow,
+    metrics: howYouWin === 'cumulative' ? metrics : [],
+    win_window: howYouWin === 'cumulative' ? winWindow : undefined,
     distance_meters_required: String(
       proofDistanceMeters(proofs.find((item) => item.method === 'distance')),
     ),
@@ -734,7 +763,20 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
     cumulative_window:
       challenge.cumulative_window === 'week' || challenge.cumulative_window === 'day'
         ? challenge.cumulative_window
-        : 'challenge',
+        : winWindowOf((challenge as { win_window?: unknown }).win_window),
+    metrics: resolveCumulativeMetrics({
+      metrics: (challenge as { metrics?: unknown }).metrics,
+      scoring_config: challenge.scoring_config,
+      cumulative_target: challenge.cumulative_target,
+      cumulative_metric: challenge.cumulative_metric,
+      title: challenge.title,
+      task: challenge.task,
+      challenge_type: challenge.challenge_type,
+      format: challenge.format,
+    }),
+    win_window: winWindowOf(
+      (challenge as { win_window?: unknown }).win_window ?? challenge.cumulative_window,
+    ),
     distance_unit: 'mi' as DistanceUnit,
     allowed_misses: clampAllowedMisses(Number(challenge.misses_allowed) || 0, {
       duration_preset,
@@ -831,7 +873,20 @@ export function createValuesToSimpleDraft(values: CreateChallengeValues): Simple
     points_to_win: 1,
     cumulative_target_meters: Math.max(Number(values.cumulative_target) || milesToMeters(100), 1),
     cumulative_window:
-      values.cumulative_window === 'week' || values.cumulative_window === 'day' ? values.cumulative_window : 'challenge',
+      values.cumulative_window === 'week' || values.cumulative_window === 'day'
+        ? values.cumulative_window
+        : winWindowOf(values.win_window),
+    metrics: resolveCumulativeMetrics({
+      metrics: values.metrics,
+      scoring_config: values.scoring_config,
+      cumulative_target: values.cumulative_target,
+      cumulative_metric: values.cumulative_metric,
+      title: values.title,
+      task: values.task,
+      challenge_type: values.challenge_type,
+      format: values.format,
+    }),
+    win_window: winWindowOf(values.win_window ?? values.cumulative_window),
     distance_unit: 'mi',
     allowed_misses: clampAllowedMisses(Number(values.misses_allowed) || 0, { duration_preset, duration_days: days }),
     payout: payoutControlFromPair(formatFamilyOf(values), {
@@ -900,6 +955,15 @@ export function validateSimpleDraft(
   }
   if (draft.proofs.some((proof) => proof.method === 'location' && !locationPlaceIsSet(proof.place))) {
     return 'Drop a pin for the Location proof.';
+  }
+  if (simpleHowYouWin(draft) === 'cumulative') {
+    const rows = draft.metrics?.length ? draft.metrics : defaultCumulativeMetrics();
+    if (rows.length < 1 || rows.length > CUMULATIVE_METRIC_CAP) {
+      return 'Add at least one target.';
+    }
+    if (rows.some((item) => !(item.target > 0) || !item.name.trim())) {
+      return 'Name each target and set how much to hit.';
+    }
   }
   return null;
 }

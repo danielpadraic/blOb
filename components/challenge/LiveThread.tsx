@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, RefreshControl, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -6,13 +6,12 @@ import { LiveBubble } from '@/components/challenge/LiveBubble';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { MascotState } from '@/components/mascot/MascotState';
+import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { copy } from '@/lib/copy';
 import {
-  LIVE_CHIP_DONE,
-  LIVE_CHIP_STARTING,
   buildLiveThreadRows,
   findLiveParent,
   liveChatText,
@@ -25,7 +24,8 @@ import {
 import type { MentionChip } from '@/lib/mentions';
 import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
 import { tabBarLift, THEME } from '@/lib/theme';
-import type { CommentWithAuthor, ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
+import type { PostAudience } from '@/lib/postAudience';
+import type { CommentWithAuthor, ComposeInput, PostSource, PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
 type LiveReplyTarget = {
@@ -48,6 +48,12 @@ type LiveThreadProps = {
   composing?: boolean;
   highlightPostId?: string;
   footerReserve?: number;
+  memberIds?: string[];
+  placeholder?: string;
+  sendLabel?: string;
+  loadingTitle?: string;
+  composeSource?: PostSource;
+  composeAudience?: PostAudience;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose: (input: ComposeInput) => Promise<unknown> | void;
@@ -66,6 +72,12 @@ export function LiveThread({
   composing,
   highlightPostId,
   footerReserve = 0,
+  memberIds,
+  placeholder,
+  sendLabel,
+  loadingTitle,
+  composeSource = 'challenge',
+  composeAudience = 'public',
   onRefresh,
   onRetry,
   onCompose,
@@ -74,6 +86,7 @@ export function LiveThread({
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
   const keyboardOpen = keyboardOverlap > 0;
+  const social = useSocialSheetsOptional();
   const listRef = useRef<FlatList<LiveThreadRow>>(null);
   const highlightedOnce = useRef<string | null>(null);
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
@@ -123,29 +136,15 @@ export function LiveThread({
       await onCompose({
         content: split.text,
         mediaUrls: split.mediaUrls,
-        source: 'challenge',
-        audience: 'public',
+        source: composeSource,
+        audience: composeAudience,
         mentionedUserIds,
         parentId: parentId ?? null,
       });
       setReplyTo(null);
       pinToLiveEdge(true);
     },
-    [onCompose, pinToLiveEdge],
-  );
-
-  const submitChip = useCallback(
-    async (line: string) => {
-      if (composing) {
-        return;
-      }
-      try {
-        await submitLine(line);
-      } catch (error) {
-        Alert.alert('Couldn’t post that', getErrorMessage(error));
-      }
-    },
-    [composing, submitLine],
+    [composeAudience, composeSource, onCompose, pinToLiveEdge],
   );
 
   const startReply = useCallback((target: LiveReplyTarget) => {
@@ -210,6 +209,16 @@ export function LiveThread({
             highlighted={highlightPostId === item.post.id}
             quote={quote}
             onReact={(type) => onReact(item.post, type)}
+            onEdit={
+              currentUserId && postAuthor.authorId === currentUserId
+                ? () => social?.openEdit(item.post)
+                : undefined
+            }
+            onHistory={
+              item.post.edited_at && currentUserId && postAuthor.authorId === currentUserId
+                ? () => social?.openHistory(item.post)
+                : undefined
+            }
             onReply={
               canCompose
                 ? () =>
@@ -226,7 +235,7 @@ export function LiveThread({
         </View>
       );
     },
-    [canCompose, currentUserId, highlightPostId, onReact, posts, startReply],
+    [canCompose, currentUserId, highlightPostId, onReact, posts, social, startReply],
   );
 
   const composerPad = createStickyFooterPad(
@@ -250,7 +259,7 @@ export function LiveThread({
           onAction={onRetry}
         />
       ) : isLoading && rows.length === 0 ? (
-        <MascotState kind="loading" title="Loading Live" compact />
+        <MascotState kind="loading" title={loadingTitle ?? 'Loading Live'} compact />
       ) : (
         <FlatList
           ref={listRef}
@@ -333,38 +342,29 @@ export function LiveThread({
               </Pressable>
             </View>
           ) : null}
-          <View className="flex-row items-end" style={{ gap: 4 }}>
-            <LiveChip
-              label={LIVE_CHIP_STARTING}
-              disabled={Boolean(composing)}
-              onPress={() => void submitChip(LIVE_CHIP_STARTING)}
-            />
-            <LiveChip
-              label={LIVE_CHIP_DONE}
-              disabled={Boolean(composing)}
-              onPress={() => void submitChip(LIVE_CHIP_DONE)}
-            />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <InlineComposer
-                key={replyTo?.postId ?? 'live'}
-                pinned
-                bar
-                autoFocus={Boolean(replyTo)}
-                placeholder={copy('live.placeholder')}
-                submitLabel={copy('live.send')}
-                submitting={composing}
-                audience="public"
-                replyTo={replyTo?.mention}
-                onSubmit={async (content, mentionedUserIds) => {
-                  try {
-                    await submitLine(content, mentionedUserIds, replyTo?.postId);
-                  } catch (error) {
-                    Alert.alert('Couldn’t post that', getErrorMessage(error));
-                  }
-                }}
-              />
-            </View>
-          </View>
+          <InlineComposer
+            key={replyTo?.postId ?? 'live'}
+            bar
+            autoFocus={Boolean(replyTo)}
+            placeholder={placeholder ?? copy('live.placeholder')}
+            submitLabel={sendLabel ?? copy('live.send')}
+            submitting={composing}
+            audience={composeAudience}
+            memberIds={memberIds}
+            replyTo={replyTo?.mention}
+            onExpandedChange={(open) => {
+              if (open) {
+                pinToLiveEdge(false);
+              }
+            }}
+            onSubmit={async (content, mentionedUserIds) => {
+              try {
+                await submitLine(content, mentionedUserIds, replyTo?.postId);
+              } catch (error) {
+                Alert.alert('Couldn’t post that', getErrorMessage(error));
+              }
+            }}
+          />
         </View>
       ) : (
         <View style={{ height: composerPad }} />
@@ -372,35 +372,6 @@ export function LiveThread({
     </View>
   );
 }
-
-const LiveChip = memo(function LiveChip({
-  label,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      onPress={onPress}
-      style={{
-        minHeight: 28,
-        paddingHorizontal: 4,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: disabled ? 0.45 : 1,
-      }}>
-      <AppText className="text-[11px] font-semibold" style={{ color: THEME.accent }}>
-        {label}
-      </AppText>
-    </Pressable>
-  );
-});
 
 function mentionFromAuthor(
   author: PostWithMeta['author'],

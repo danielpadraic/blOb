@@ -17,6 +17,8 @@ type StepperProps = {
   step?: number;
   accessibilityLabel?: string;
   formatValue?: (value: number) => string;
+  /** Wider value box so large targets stay fully visible. */
+  wide?: boolean;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -50,8 +52,10 @@ export function StepperField({
   ...stepper
 }: StepperProps & { label: string; hint?: string }) {
   return (
-    <View className="w-full gap-1.5" style={{ overflow: 'visible', minWidth: 168, flexWrap: 'nowrap' }}>
-      <AppText className="text-sm font-semibold text-charcoal">{label}</AppText>
+    <View
+      className="w-full gap-1.5"
+      style={{ overflow: 'visible', minWidth: stepper.wide ? 188 : 168, flexWrap: 'wrap' }}>
+      {label ? <AppText className="text-sm font-semibold text-charcoal">{label}</AppText> : null}
       <Stepper {...stepper} accessibilityLabel={stepper.accessibilityLabel ?? label} />
       {hint ? <AppText className="text-[13px] leading-5 text-muted">{hint}</AppText> : null}
     </View>
@@ -66,8 +70,10 @@ export function Stepper({
   step = 1,
   accessibilityLabel,
   formatValue,
+  wide = false,
 }: StepperProps) {
   const allowDecimal = Boolean(formatValue) || step < 1;
+  const valueW = wide ? 104 : VALUE;
   const safe = clamp(Number.isFinite(value) ? value : min, min, max);
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState(String(safe));
@@ -104,7 +110,14 @@ export function Stepper({
   }
 
   return (
-    <View style={{ alignSelf: 'flex-start', width: BUMP + VALUE + BUMP + 8, overflow: 'visible' }}>
+    <View
+      style={{
+        alignSelf: 'flex-start',
+        width: wide ? undefined : BUMP + VALUE + BUMP + 8,
+        minWidth: BUMP + valueW + BUMP + 8,
+        maxWidth: '100%',
+        overflow: 'visible',
+      }}>
       <View
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
@@ -145,16 +158,16 @@ export function Stepper({
           selectTextOnFocus
           textAlign="center"
           style={{
-            width: VALUE,
-            maxWidth: VALUE,
-            minWidth: VALUE,
-            flexGrow: 0,
+            width: valueW,
+            maxWidth: wide ? 140 : valueW,
+            minWidth: valueW,
+            flexGrow: wide ? 1 : 0,
             flexShrink: 0,
-            flexBasis: VALUE,
-            height: BUMP,
-            minHeight: BUMP,
-            paddingHorizontal: 4,
-            fontSize: 16,
+            flexBasis: valueW,
+            height: wide ? 52 : BUMP,
+            minHeight: wide ? 52 : BUMP,
+            paddingHorizontal: 6,
+            fontSize: wide ? 22 : 16,
             fontWeight: '800',
             color: THEME.textPrimary,
             ...(Platform.OS === 'web'

@@ -9,6 +9,7 @@ import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import { MentionText } from '@/components/feed/MentionText';
+import { InChallengeChip, OriginChip } from '@/components/feed/OriginChip';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { OfficialMark } from '@/components/profile/OfficialMark';
@@ -605,48 +606,6 @@ function ProofFlagButton({ postId }: { postId: string }) {
   );
 }
 
-function OriginChip({
-  label,
-  color,
-  soft,
-  glyph,
-  onPress,
-}: {
-  label: string;
-  color: string;
-  soft: string;
-  glyph: (typeof GLYPH)[keyof typeof GLYPH];
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={label}
-      onPress={onPress}
-      hitSlop={4}
-      style={{
-        alignSelf: 'flex-start',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        minHeight: 28,
-        maxWidth: '100%',
-        paddingHorizontal: 10,
-        borderRadius: 999,
-        backgroundColor: soft,
-      }}>
-      <Glyph name={glyph} color={color} size={12} />
-      <AppText
-        numberOfLines={1}
-        ellipsizeMode="tail"
-        className="text-[12px] font-semibold"
-        style={{ color, flexShrink: 1, minWidth: 0 }}>
-        {label}
-      </AppText>
-    </Pressable>
-  );
-}
-
 function InCircleChip({ circleId, name }: { circleId: string; name?: string | null }) {
   const router = useRouter();
   const label = `in ${circleDisplayName({ name })}`;
@@ -657,67 +616,6 @@ function InCircleChip({ circleId, name }: { circleId: string; name?: string | nu
       soft={THEME.circleSoft}
       glyph={GLYPH.circle}
       onPress={() => router.push(circleDetailHref(circleId))}
-    />
-  );
-}
-
-function InChallengeChip({
-  challengeId,
-  title,
-  titleOnly,
-  visibility,
-  challengeLane,
-  isOfficial,
-  createdBy,
-  snapshot,
-}: {
-  challengeId: string;
-  title?: string | null;
-  titleOnly?: boolean;
-  visibility?: string | null;
-  challengeLane?: string | null;
-  isOfficial?: boolean | null;
-  createdBy?: string | null;
-  snapshot?: {
-    id?: string | null;
-    title?: string | null;
-    task?: string | null;
-    tasks?: Array<{ title?: string | null } | string> | null;
-    cover_image_url?: string | null;
-    prize_pool?: number | null;
-    buy_in_amount?: number | null;
-    days_required?: number | null;
-    target_count?: number | null;
-    starts_at?: string | null;
-    ends_at?: string | null;
-    visibility?: string | null;
-    challenge_lane?: unknown;
-    is_official?: boolean | null;
-    created_by?: string | null;
-  } | null;
-}) {
-  const openTag = useOpenChallengeFromTag();
-  const label = titleOnly
-    ? title?.trim() || 'this challenge'
-    : `in ${title?.trim() || 'this challenge'}`;
-  return (
-    <OriginChip
-      label={label}
-      color={THEME.accent}
-      soft={THEME.accentSoft}
-      glyph={GLYPH.flag}
-      onPress={() =>
-        void openTag({
-          challengeId,
-          visibility,
-          challenge_lane: challengeLane,
-          is_official: isOfficial,
-          created_by: createdBy,
-          snapshot: snapshot
-            ? { ...snapshot, id: challengeId, title: snapshot.title ?? title }
-            : { id: challengeId, title, visibility, challenge_lane: challengeLane, is_official: isOfficial, created_by: createdBy },
-        })
-      }
     />
   );
 }

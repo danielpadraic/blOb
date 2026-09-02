@@ -37,6 +37,13 @@ const LETTERBOX = 'rgba(16, 19, 18, 0.08)';
 
 const VisiblePostsContext = createContext<ReadonlySet<string> | null>(null);
 
+const VideoSlotContext = createContext<{
+  playingId: string | null;
+  primedId: string | null;
+  play: (id: string) => void;
+  stop: (id: string) => void;
+} | null>(null);
+
 export function VisiblePostsProvider({
   ids,
   children,
@@ -44,7 +51,29 @@ export function VisiblePostsProvider({
   ids: ReadonlySet<string>;
   children: ReactNode;
 }) {
-  return <VisiblePostsContext.Provider value={ids}>{children}</VisiblePostsContext.Provider>;
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const primedId = useMemo(() => {
+    for (const id of ids) {
+      if (id && id !== playingId) {
+        return id;
+      }
+    }
+    return null;
+  }, [ids, playingId]);
+  const slot = useMemo(
+    () => ({
+      playingId,
+      primedId,
+      play: (id: string) => setPlayingId(id),
+      stop: (id: string) => setPlayingId((current) => (current === id ? null : current)),
+    }),
+    [playingId, primedId],
+  );
+  return (
+    <VisiblePostsContext.Provider value={ids}>
+      <VideoSlotContext.Provider value={slot}>{children}</VideoSlotContext.Provider>
+    </VisiblePostsContext.Provider>
+  );
 }
 
 const WEB_FEED_TOUCH =
@@ -325,6 +354,7 @@ export function PostMediaCarousel({
       {...hoverProps}>
       {urls.length === 1 ? (
         <MediaSlide
+          postId={postId}
           uri={urls[0]}
           width={pageWidth}
           height={frameH}
@@ -351,6 +381,7 @@ export function PostMediaCarousel({
               {urls.map((uri, itemIndex) => (
                 <View key={`${uri}-${itemIndex}`} style={{ width: pageWidth, height: frameH }}>
                   <MediaSlide
+                    postId={postId}
                     uri={uri}
                     width={pageWidth}
                     height={frameH}
@@ -388,6 +419,7 @@ export function PostMediaCarousel({
 }
 
 function MediaSlide({
+  postId,
   uri,
   width,
   height,
@@ -396,6 +428,7 @@ function MediaSlide({
   onOpen,
   onPlayingChange,
 }: {
+  postId: string;
   uri: string;
   width: number;
   height: number;
@@ -415,7 +448,7 @@ function MediaSlide({
   };
   const body =
     kind === 'video' ? (
-      <PostVideo uri={uri} active={active} onPlayingChange={onPlayingChange} />
+      <PostVideo postId={postId} uri={uri} active={active} onPlayingChange={onPlayingChange} />
     ) : (
       <Image
         source={{ uri }}
@@ -477,30 +510,43 @@ function MediaSlide({
 }
 
 function PostVideo({
+  postId,
   uri,
   active,
   onPlayingChange,
 }: {
+  postId: string;
   uri: string;
   active: boolean;
   onPlayingChange?: (playing: boolean) => void;
 }) {
   const [playing, setPlaying] = useState(false);
   const poster = useVideoPoster(uri);
+  const slot = useContext(VideoSlotContext);
 
   useEffect(() => {
     if (!active && playing) {
       setPlaying(false);
+      slot?.stop(postId);
       onPlayingChange?.(false);
     }
-  }, [active, onPlayingChange, playing]);
+  }, [active, onPlayingChange, playing, postId, slot]);
 
-  if (!playing) {
+  useEffect(() => {
+    if (slot?.playingId && slot.playingId !== postId && playing) {
+      setPlaying(false);
+      onPlayingChange?.(false);
+    }
+  }, [onPlayingChange, playing, postId, slot?.playingId]);
+
+  const allowed = !slot || slot.playingId === postId;
+  if (!playing || !allowed) {
     return (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Play video"
         onPress={() => {
+          slot?.play(postId);
           setPlaying(true);
           onPlayingChange?.(true);
         }}
@@ -520,6 +566,7 @@ function PostVideo({
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
           />
         ) : null}
+        {slot?.primedId === postId ? <PrimeFeedVideo uri={uri} /> : null}
         <View
           style={{
             width: 44,
@@ -535,6 +582,24 @@ function PostVideo({
     );
   }
   return <PostVideoPlayer uri={uri} />;
+}
+
+function PrimeFeedVideo({ uri }: { uri: string }) {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || !uri) {
+      return undefined;
+    }
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.src = uri;
+    return () => {
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [uri]);
+  return null;
 }
 
 function PostVideoPlayer({ uri }: { uri: string }) {

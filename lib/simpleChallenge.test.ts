@@ -40,8 +40,25 @@ describe('Simple How you win', () => {
     expect(values.challenge_type).toBe('cumulative');
     expect(values.format).toBe('cumulative');
     expect(values.challenge_type).not.toBe('points');
-    expect(values.prize_structure).toBe('winner_take_all');
-    expect(values.payout_mode).toBe('winner_take_all');
+    expect(values.prize_structure).toBe('equal_split');
+    expect(values.payout_mode).toBe('even_split_remaining');
+  });
+
+  it('publishes 128 miles and Top # 3 from Simple Cumulative', () => {
+    const draft = defaultSimpleDraft();
+    draft.title = '128 miler';
+    draft.scoring = 'cumulative';
+    draft.metrics = [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }];
+    draft.payout = 'top_count';
+    draft.top_places_value = 3;
+    const values = simpleDraftToCreateValues(draft);
+    expect(values.metrics).toEqual([
+      expect.objectContaining({ target: 128, name: 'miles', unit: 'mi' }),
+    ]);
+    expect(Number(values.cumulative_target)).toBe(128);
+    expect(values.payout_mode).toBe('top_places');
+    expect(values.prize_structure).toBe('top_places');
+    expect(values.top_places_value).toBe('3');
   });
 
   it('does not publish a leftover Simple Points draft as a points board', () => {
@@ -70,27 +87,30 @@ describe('Simple How you win', () => {
     expect(values.target_count).toBe('30');
   });
 
-  it('clears even-split when Simple switches to Cumulative', () => {
+  it('resets leftover Last standing to anyone-to when Simple is Cumulative', () => {
     const draft = defaultSimpleDraft();
     draft.title = 'Hit 100';
     draft.scoring = 'cumulative';
     draft.payout = 'winner_take_all';
     const values = simpleDraftToCreateValues(draft);
-    expect(values.payout_mode).toBe('winner_take_all');
-    expect(values.prize_structure).not.toBe('top_places');
+    expect(values.payout_mode).toBe('even_split_remaining');
+    expect(values.prize_structure).toBe('equal_split');
   });
 });
 
 describe('Simple allowed misses', () => {
   it('publishes allowed_misses onto the existing misses_allowed field', () => {
     const draft = defaultSimpleDraft();
-    draft.title = 'Miss three';
+    draft.title = '30-Day Consistency';
+    draft.duration_preset = 30;
+    draft.duration_days = 30;
     draft.scoring = 'consistency';
-    draft.allowed_misses = 3;
+    draft.allowed_misses = 6;
     const values = simpleDraftToCreateValues(draft);
-    expect(values.misses_allowed).toBe('3');
-    const again = parseSimpleChallengeDraft({ ...draft, allowed_misses: 3 });
-    expect(again?.allowed_misses).toBe(3);
+    expect(values.misses_allowed).toBe('6');
+    const again = parseSimpleChallengeDraft({ ...draft, allowed_misses: 6 });
+    expect(again?.allowed_misses).toBe(6);
+    expect(createValuesToSimpleDraft(values).allowed_misses).toBe(6);
   });
 
   it('clears misses on cumulative publish', () => {

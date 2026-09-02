@@ -14,6 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiveThread } from '@/components/challenge/LiveThread';
 import { ChallengeDetailsCard } from '@/components/challenge/ChallengeDetailsCard';
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
+import { CalloutHonorCard } from '@/components/challenge/CalloutHonorCard';
+import { CalloutLiveWatchChip, CalloutWatchers } from '@/components/challenge/CalloutWatchers';
+import { HostRoundPromptChip } from '@/components/challenge/HostRoundPromptChip';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
 import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
@@ -36,13 +39,24 @@ import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecy
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
-import { BODY_METRICS_HREF, challengeDetailHref, checkinSubmitHref, LOBBY_HREF } from '@/lib/routes';
+import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
+import { BODY_METRICS_HREF, captureHref, challengeDetailHref, checkinSubmitHref, LOBBY_HREF } from '@/lib/routes';
+import {
+  CALLOUT_CHEER_PLACEHOLDER,
+  CALLOUT_WATCHING_LINE,
+  isCalloutChallengeObserver,
+  isCalloutFighter,
+} from '@/lib/callouts';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  useCalloutForChallenge,
+  useCalloutObservers,
+} from '@/hooks/useCallouts';
 import {
   useChallenge,
   useChallengeFeedPreview,
@@ -66,7 +80,7 @@ import { useViewerPeriodMisses } from '@/hooks/usePeriodMisses';
 import { currentRequiredPeriodWindow } from '@/lib/checkinPeriod';
 import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
-import { ChallengePageTabs, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
+import { ChallengePageTabs, CHALLENGE_LIVE_ONLY_TABS, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
 import {
   requiresOfficialBodyMetrics,
   usesComparablePointsScoring,
@@ -233,6 +247,17 @@ export default function ChallengeDetailScreen() {
   });
   const hostQuery = useProfile(challenge?.created_by ?? undefined);
   const roster = useChallengeParticipants(id);
+  const calloutQuery = useCalloutForChallenge(id, Boolean(challenge?.is_callout));
+  const observersQuery = useCalloutObservers(calloutQuery.data?.id);
+  const watchingIds = useMemo(
+    () => (observersQuery.data ?? []).map((row) => row.user_id),
+    [observersQuery.data],
+  );
+  const isCalloutFighterViewer = Boolean(
+    calloutQuery.data && isCalloutFighter(calloutQuery.data, user?.id),
+  );
+  const isCalloutObserver = isCalloutChallengeObserver(calloutQuery.data, watchingIds, user?.id);
+  const watchingCount = watchingIds.length;
   const boardProfiles = useQuery({
     queryKey: ['challenge-board-profiles', id, (roster.data ?? []).map((row) => row.user_id).join(',')],
     enabled: Boolean(id && roster.data && roster.data.length > 0),
@@ -281,13 +306,17 @@ export default function ChallengeDetailScreen() {
   const [receiptOpen, setReceiptOpen] = useState(receiptParam === '1');
 
   useEffect(() => {
+    if (isCalloutObserver) {
+      setPageTab('feed');
+      return;
+    }
     const next: ChallengePageTab = highlightPostId
       ? 'feed'
       : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
         ? tabParam
         : 'overview';
     setPageTab(next);
-  }, [highlightPostId, id, tabParam]);
+  }, [highlightPostId, id, isCalloutObserver, tabParam]);
 
   const hostProfile = hostQuery.data;
   const heroHost =
@@ -339,6 +368,19 @@ export default function ChallengeDetailScreen() {
   );
   const isJoined = Boolean(participation);
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
+  const mentionMemberIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (challenge?.created_by) {
+      ids.add(challenge.created_by);
+    }
+    for (const row of roster.data ?? []) {
+      if (row.user_id) {
+        ids.add(row.user_id);
+      }
+    }
+    return [...ids];
+  }, [challenge?.created_by, roster.data]);
+  const hostRoundPrompt = useHostRoundPrompt(challenge);
   const showOfficialTools = canOpenOfficialTools({
     challenge,
     viewerId: user?.id,
@@ -397,6 +439,9 @@ export default function ChallengeDetailScreen() {
     if (!challenge || isJoined) {
       return null;
     }
+    if (isCalloutObserver || challenge.is_callout) {
+      return CALLOUT_WATCHING_LINE;
+    }
     if (isHost) {
       return 'You’re already in this challenge.';
     }
@@ -425,7 +470,7 @@ export default function ChallengeDetailScreen() {
       return `You need ${formatWalletAmount(buyIn, challenge.currency)} to join. You have ${formatWalletAmount(held, challenge.currency)}.`;
     }
     return null;
-  }, [challenge, isHost, isJoined, profile]);
+  }, [challenge, isCalloutObserver, isHost, isJoined, profile]);
 
   const canJoinBase = Boolean(challenge) && !isJoined && !isHost && !joinBlocked;
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
@@ -518,8 +563,10 @@ export default function ChallengeDetailScreen() {
   const lastFocusFetchAt = useRef(Date.now());
   const refetchChallenge = useRef(challengeQuery.refetch);
   const refetchRoster = useRef(roster.refetch);
+  const refetchHostRound = useRef(hostRoundPrompt.refetch);
   refetchChallenge.current = challengeQuery.refetch;
   refetchRoster.current = roster.refetch;
+  refetchHostRound.current = hostRoundPrompt.refetch;
 
   useEffect(() => {
     lastFocusFetchAt.current = Date.now();
@@ -540,6 +587,7 @@ export default function ChallengeDetailScreen() {
       lastFocusFetchAt.current = now;
       void refetchChallenge.current();
       void refetchRoster.current();
+      void refetchHostRound.current();
     }, [id, loggedParam]),
   );
 
@@ -858,6 +906,7 @@ export default function ChallengeDetailScreen() {
           taskCount: Math.max(tasks.length, 1),
           distanceMetersCompleted: participation?.distance_meters_total ?? 0,
           pointsCompleted: participation?.points ?? 0,
+          metricTotals: participation?.metric_totals,
         });
   const moneyPhase = overviewMoneyPhase(challenge, new Date(nowMs));
   const prizeEnded = moneyPhase === 'settled' || moneyPhase === 'ended';
@@ -879,9 +928,10 @@ export default function ChallengeDetailScreen() {
         startNeeded ??
         copy('challenge.waitingToStart')
       : null;
-  const stickyJoin = !isJoined && (needsBodyMetrics || canJoin || needsTopUp);
+  const stickyJoin = !isCalloutObserver && !isJoined && (needsBodyMetrics || canJoin || needsTopUp);
   const stickyCheckin =
     isJoined &&
+    !isCalloutObserver &&
     challenge.status === 'live' &&
     !participation?.eliminated_at &&
     !waitingToStart &&
@@ -913,10 +963,18 @@ export default function ChallengeDetailScreen() {
         }}
       />
       <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
-        <ChallengePageTabs value={pageTab} onChange={setPageTab} />
+        <ChallengePageTabs
+          value={pageTab}
+          onChange={setPageTab}
+          options={isCalloutObserver ? CHALLENGE_LIVE_ONLY_TABS : undefined}
+        />
       </View>
       {pageTab === 'feed' ? (
-        <LiveThread
+        <View style={{ flex: 1, minHeight: 0 }}>
+          {challenge?.is_callout ? (
+            <CalloutLiveWatchChip watching={isCalloutObserver} count={watchingCount} />
+          ) : null}
+          <LiveThread
           posts={feed.data ?? []}
           isLoading={feed.isLoading}
           isRefreshing={refreshing}
@@ -925,20 +983,25 @@ export default function ChallengeDetailScreen() {
           currentUserId={user?.id}
           emptyTitle="Quiet in this challenge"
           emptyBody={
-            isJoined
+            isCalloutObserver
+              ? CALLOUT_WATCHING_LINE
+              : isJoined
               ? participation?.eliminated_at
                 ? 'You’re out, but you can still watch the check-ins.'
                 : copy('checkin.emptyBob')
               : 'Join the challenge to post in Live.'
           }
-          canCompose={isJoined && !participation?.eliminated_at}
+          canCompose={(isCalloutObserver || isJoined) && !participation?.eliminated_at}
           composing={createPost.isPending}
+          memberIds={mentionMemberIds}
+          placeholder={isCalloutObserver ? CALLOUT_CHEER_PLACEHOLDER : undefined}
           footerReserve={stickyJoin ? stickyBlock : 0}
           onRefresh={() => void onRefresh()}
           onRetry={() => void feed.refetch()}
           onCompose={(input) => createPost.mutateAsync(input)}
           onReact={(post, type, commentId) => toggleLiveReaction.mutate({ post, type, commentId })}
         />
+        </View>
       ) : (
       <ScrollView
         ref={scrollRef}
@@ -966,7 +1029,7 @@ export default function ChallengeDetailScreen() {
             joined={isJoined}
             hosting={isHost && !isJoined}
             invited={inviteOnly && !isHost && !isJoined}
-            showNotJoined={!isJoined && !isHost}
+            showNotJoined={!isJoined && !isHost && !isCalloutObserver}
             goalLabel={goalLabel}
             daysCompleted={daysCompleted}
             progressRatio={progressRatio}
@@ -989,7 +1052,27 @@ export default function ChallengeDetailScreen() {
         {startLine ? (
           <AppText className="mt-2 text-[13px] leading-5 text-muted">{startLine}</AppText>
         ) : null}
-        {pageTab === 'overview' && !loggedToday ? (
+        {pageTab === 'overview' && hostRoundPrompt.visible && !isCalloutObserver ? (
+          <View className="mt-3">
+            <HostRoundPromptChip
+              line={hostRoundPrompt.line}
+              onPress={() => {
+                if (!id) {
+                  return;
+                }
+                router.push(captureHref('reel', 'video', { challengeId: id }));
+              }}
+              onDismiss={() => hostRoundPrompt.dismiss()}
+            />
+          </View>
+        ) : null}
+        {pageTab === 'overview' && challenge?.is_callout && !isCalloutObserver ? (
+          <CalloutHonorCard challengeId={challenge.id} />
+        ) : null}
+        {pageTab === 'overview' && calloutQuery.data && isCalloutFighterViewer ? (
+          <CalloutWatchers callout={calloutQuery.data} me={user?.id} isFighter />
+        ) : null}
+        {pageTab === 'overview' && !loggedToday && !isCalloutObserver ? (
           <View className="mt-3">
             <PeriodCheckinDue challenge={challenge} submitted={false} nowMs={nowMs} />
           </View>
@@ -1017,7 +1100,7 @@ export default function ChallengeDetailScreen() {
         <View className="mt-4">
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
-        {pageTab === 'overview' ? (
+        {pageTab === 'overview' && !isCalloutObserver ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View board"
@@ -1251,7 +1334,7 @@ export default function ChallengeDetailScreen() {
         <View className="mt-4">
           <ChallengeResultCard challenge={challenge} settlement={receipt} userId={user?.id} />
         </View>
-        ) : moneyPhase === 'ended' ? null : challenge.is_official ? null : (
+        ) : moneyPhase === 'ended' ? null : challenge.is_official ? null : isCalloutObserver ? null : (
         <Card className="mt-4">
           <FieldNoteLabel
             note="pot"
@@ -1337,7 +1420,7 @@ export default function ChallengeDetailScreen() {
         </View>
         ) : null}
 
-        {pageTab === 'board' ? (
+        {pageTab === 'board' && !isCalloutObserver ? (
           <View className="mt-4">
             <ChallengeLeaderboard
               challenge={challenge}

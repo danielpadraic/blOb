@@ -21,9 +21,10 @@ type LiveReactionsProps = {
   currentUserId?: string;
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
+  onEdit?: () => void;
 };
 
-export function LiveReactions({ reactions, currentUserId, onReact, onReply }: LiveReactionsProps) {
+export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEdit }: LiveReactionsProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const counts = liveReactionCounts(reactions, currentUserId);
   const mineTypes = new Set(counts.filter((row) => row.mine).map((row) => row.type));
@@ -118,6 +119,15 @@ export function LiveReactions({ reactions, currentUserId, onReact, onReply }: Li
           style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
           <Glyph name={GLYPH.plus} color={THEME.textMuted} size={14} />
         </Pressable>
+        {onEdit ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit"
+            onPress={onEdit}
+            style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
+            <Glyph name={GLYPH.pencil} color={THEME.textMuted} size={14} />
+          </Pressable>
+        ) : null}
         {onReply ? (
           <Pressable
             accessibilityRole="button"

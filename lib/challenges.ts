@@ -74,7 +74,7 @@ const OFFICIAL_DISPLAY_SELECT =
   'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, cover_image_url, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
 
 const LOBBY_SELECTS = [
-  'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, format, cumulative_metric, cumulative_target, cumulative_window, distance_meters_required, misses_allowed',
+  'id, title, description, rules, is_official, is_callout, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, format, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics, distance_meters_required, misses_allowed',
   '*',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
@@ -142,6 +142,8 @@ export type CreateChallengeInput = {
   cumulative_metric?: string | null;
   cumulative_target?: number | null;
   cumulative_window?: string | null;
+  win_window?: string | null;
+  metrics?: unknown;
   distance_meters_required?: number | null;
 };
 
@@ -316,9 +318,9 @@ function mergeChallenges(...groups: Challenge[][]): Challenge[] {
 }
 
 export function isPointsChallenge(
-  challenge: { challenge_type?: string | null } | null | undefined,
+  challenge: { challenge_type?: string | null; format?: string | null } | null | undefined,
 ): boolean {
-  return challenge?.challenge_type === 'points';
+  return challenge?.challenge_type === 'points' || challenge?.format === 'points';
 }
 
 export function challengeTargetCount(
@@ -579,6 +581,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     description: (row.description as string | null) ?? null,
     rules: (row.rules as string | null) ?? null,
     is_official: Boolean(row.is_official),
+    is_callout: Boolean(row.is_callout),
     created_by: (row.created_by as string | null) ?? null,
     buy_in_amount: Number(row.buy_in_amount ?? 0),
     days_required: daysRequired,
@@ -660,6 +663,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     cumulative_metric: (row.cumulative_metric as string | null) ?? null,
     cumulative_target: row.cumulative_target == null ? null : Number(row.cumulative_target),
     cumulative_window: (row.cumulative_window as string | null) ?? null,
+    win_window: (row.win_window as string | null) ?? (row.cumulative_window as string | null) ?? null,
+    metrics: Array.isArray(row.metrics) ? row.metrics : null,
     distance_meters_required:
       row.distance_meters_required == null ? null : Number(row.distance_meters_required),
     task: (row.task as string | null) ?? null,
@@ -1567,7 +1572,9 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     discoverability: input.discoverability ?? null,
     cumulative_metric: input.cumulative_metric ?? null,
     cumulative_target: input.cumulative_target ?? null,
-    cumulative_window: input.cumulative_window ?? null,
+    cumulative_window: input.cumulative_window ?? input.win_window ?? null,
+    win_window: input.win_window ?? input.cumulative_window ?? null,
+    metrics: input.metrics ?? null,
     distance_meters_required: input.distance_meters_required ?? null,
   }, input.draft_id);
   if (
@@ -1575,6 +1582,8 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     (input.cumulative_metric ||
       input.cumulative_target != null ||
       input.cumulative_window ||
+      input.win_window ||
+      input.metrics != null ||
       input.distance_meters_required != null)
   ) {
     await supabase
@@ -1582,9 +1591,12 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
       .update({
         challenge_type: input.challenge_type,
         format: input.format ?? input.challenge_type,
+        payout_mode: input.payout_mode ?? null,
         cumulative_metric: input.cumulative_metric ?? null,
         cumulative_target: input.cumulative_target ?? null,
-        cumulative_window: input.cumulative_window ?? null,
+        cumulative_window: input.win_window ?? input.cumulative_window ?? null,
+        win_window: input.win_window ?? input.cumulative_window ?? null,
+        metrics: input.metrics ?? null,
         distance_meters_required: input.distance_meters_required ?? null,
       })
       .eq('id', result.challenge_id);
@@ -1821,7 +1833,27 @@ export async function updateUserChallenge(
   if (error) {
     throw new Error(getErrorMessage(error));
   }
-  return normalizeChallenge((data ?? {}) as unknown as ChallengeRow);
+  if (
+    payload.metrics != null ||
+    payload.win_window != null ||
+    payload.cumulative_window != null ||
+    payload.format != null ||
+    payload.payout_mode != null
+  ) {
+    await supabase
+      .from('challenges')
+      .update({
+        format: payload.format ?? undefined,
+        payout_mode: payload.payout_mode ?? undefined,
+        cumulative_window: payload.win_window ?? payload.cumulative_window ?? undefined,
+        win_window: payload.win_window ?? payload.cumulative_window ?? undefined,
+        metrics: payload.metrics ?? undefined,
+        cumulative_metric: payload.cumulative_metric ?? undefined,
+        cumulative_target: payload.cumulative_target ?? undefined,
+      })
+      .eq('id', challengeId);
+  }
+  return fetchChallengeById(challengeId);
 }
 
 export type OfficialChallengeDetailsPayload = {

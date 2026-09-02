@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
+import { CalloutHomePin } from '@/components/feed/CalloutHomePin';
 import { FeedEmptyState } from '@/components/feed/FeedEmptyState';
 import { FeedList } from '@/components/feed/FeedList';
 import { FeaturedOfficialStrip } from '@/components/feed/FeaturedOfficialStrip';
@@ -46,6 +47,7 @@ export default function FeedScreen() {
     void feed.refetch();
     void queryClient.invalidateQueries({ queryKey: socialKeys.stories() });
     void queryClient.invalidateQueries({ queryKey: [HOME_PULSE_KEY] });
+    void queryClient.invalidateQueries({ queryKey: ['callouts'] });
   }, [feed, queryClient]);
 
   const stickyAbove = useMemo(
@@ -54,6 +56,7 @@ export default function FeedScreen() {
         <StoryTray />
         <FeaturedOfficialStrip />
         <PulseRail />
+        <CalloutHomePin />
       </View>
     ),
     [],

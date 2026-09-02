@@ -23,8 +23,8 @@ describe('format × payout pairing', () => {
     });
   });
 
-  it('defaults Points / cumulative to winner take all and hides even-split remaining', () => {
-    expect(formatFamilyOf({ challenge_type: 'cumulative' })).toBe('points');
+  it('defaults Points to winner take all and hides even-split remaining', () => {
+    expect(formatFamilyOf({ challenge_type: 'points' })).toBe('points');
     expect(defaultPayoutIdForFamily('points')).toBe('winner_take_all');
     expect(payoutOptionsForFamily('points').some((item) => item.id === 'even_split_remaining')).toBe(
       false,
@@ -33,6 +33,32 @@ describe('format × payout pairing', () => {
       prize_structure: 'winner_take_all',
       payout_mode: 'winner_take_all',
     });
+  });
+
+  it('defaults Cumulative to anyone-who-hits and allows Top # / Top %', () => {
+    expect(formatFamilyOf({ challenge_type: 'cumulative' })).toBe('cumulative');
+    expect(defaultPayoutIdForFamily('cumulative')).toBe('even_split_remaining');
+    expect(payoutOptionsForFamily('cumulative').map((item) => item.label)).toEqual([
+      'Anyone who hits the goal',
+      'Top #',
+      'Top %',
+    ]);
+    expect(payoutOptionsForFamily('cumulative').map((item) => item.id)).toEqual([
+      'even_split_remaining',
+      'top_count',
+      'top_percent',
+    ]);
+    expect(defaultPayoutPairForFamily('cumulative')).toMatchObject({
+      prize_structure: 'equal_split',
+      payout_mode: 'even_split_remaining',
+    });
+    expect(
+      payoutControlFromPair('cumulative', {
+        prize_structure: 'top_places',
+        payout_mode: 'top_places',
+        top_places_mode: 'count',
+      }),
+    ).toBe('top_count');
   });
 
   it('resets Top 3 when switching to Consistency', () => {
@@ -57,7 +83,7 @@ describe('format × payout pairing', () => {
     ).toBe(false);
   });
 
-  it('rejects consistency + top places and points + even split remaining', () => {
+  it('rejects consistency + top places, points + even split, and cumulative + last standing', () => {
     expect(
       isIllegalFormatPayoutPair({
         format: 'consistency',
@@ -72,5 +98,19 @@ describe('format × payout pairing', () => {
         payout_mode: 'even_split_remaining',
       }),
     ).toBe(true);
+    expect(
+      isIllegalFormatPayoutPair({
+        format: 'cumulative',
+        prize_structure: 'winner_take_all',
+        payout_mode: 'winner_take_all',
+      }),
+    ).toBe(true);
+    expect(
+      isIllegalFormatPayoutPair({
+        format: 'cumulative',
+        prize_structure: 'equal_split',
+        payout_mode: 'even_split_remaining',
+      }),
+    ).toBe(false);
   });
 });

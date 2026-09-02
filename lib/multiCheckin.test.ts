@@ -6,6 +6,7 @@ import {
   nextEmptyCheckinId,
   parseDoneIds,
   stackHomeCheckinPosts,
+  type HomeCheckinPost,
 } from '@/lib/multiCheckin';
 import { checkinSubmitHref, MULTI_CHECKIN_HREF, multiCheckinHref } from '@/lib/routes';
 
@@ -47,48 +48,141 @@ describe('Multi Check-In hub rows', () => {
   });
 });
 
-describe('Home check-in stack (slice 2, not wired)', () => {
+function checkin(partial: Partial<HomeCheckinPost> & Pick<HomeCheckinPost, 'id'>): HomeCheckinPost {
+  return {
+    source: 'checkin',
+    author: { display_name: 'Ada' },
+    ...partial,
+  };
+}
+
+describe('Home check-in stack', () => {
   it('stacks two Home check-ins from the same author within two minutes', () => {
     const stacked = stackHomeCheckinPosts([
-      {
+      checkin({
         id: 'p1',
         author_id: 'u1',
         created_at: '2026-09-01T18:00:00.000Z',
-        author: { display_name: 'Ada' },
+        challenge_id: 'hobby',
         challenge: { title: 'Hobby' },
-      },
-      {
+      }),
+      checkin({
         id: 'p2',
         author_id: 'u1',
         created_at: '2026-09-01T18:01:10.000Z',
-        author: { display_name: 'Ada' },
+        challenge_id: 'gym',
         challenge: { title: 'Gym' },
-      },
+      }),
     ]);
     expect(stacked).toHaveLength(1);
     expect(stacked[0]).toMatchObject({
       kind: 'stack',
       count: 2,
       copy: 'Ada checked in to 2 challenges',
+      postIds: ['p1', 'p2'],
     });
   });
 
-  it('does not stack private Home-hidden posts', () => {
+  it('leaves a single check-in as a normal card', () => {
     const stacked = stackHomeCheckinPosts([
-      {
+      checkin({
         id: 'p1',
         author_id: 'u1',
         created_at: '2026-09-01T18:00:00.000Z',
-        hidden_from_home: true,
+        challenge_id: 'hobby',
+        challenge: { title: 'Hobby' },
+      }),
+    ]);
+    expect(stacked).toHaveLength(1);
+    expect(stacked[0]).toMatchObject({ id: 'p1' });
+    expect(stacked.some((item) => 'kind' in item && item.kind === 'stack')).toBe(false);
+  });
+
+  it('does not stack ordinary feed posts or Waves', () => {
+    const stacked = stackHomeCheckinPosts([
+      {
+        id: 'thought',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:00.000Z',
         author: { display_name: 'Ada' },
       },
       {
-        id: 'p2',
+        id: 'wave',
         author_id: 'u1',
         created_at: '2026-09-01T18:00:20.000Z',
+        type: 'wave_share',
         author: { display_name: 'Ada' },
       },
+      checkin({
+        id: 'p1',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:30.000Z',
+        challenge_id: 'hobby',
+        challenge: { title: 'Hobby' },
+      }),
+    ]);
+    expect(stacked.map((item) => ('kind' in item && item.kind === 'stack' ? 'stack' : item.id))).toEqual([
+      'thought',
+      'wave',
+      'p1',
+    ]);
+  });
+
+  it('hides one Home-hidden child from the stack and keeps the rest', () => {
+    const stacked = stackHomeCheckinPosts([
+      checkin({
+        id: 'p1',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:00.000Z',
+        challenge_id: 'hobby',
+        challenge: { title: 'Hobby' },
+      }),
+      checkin({
+        id: 'p-hidden',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:20.000Z',
+        challenge_id: 'yoga',
+        hidden_from_home: true,
+        challenge: { title: 'Yoga' },
+      }),
+      checkin({
+        id: 'p2',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:40.000Z',
+        challenge_id: 'gym',
+        challenge: { title: 'Gym' },
+      }),
+    ]);
+    expect(stacked).toHaveLength(2);
+    expect(stacked[0]).toMatchObject({ kind: 'stack', count: 2, postIds: ['p1', 'p2'] });
+    expect(stacked[1]).toMatchObject({ id: 'p-hidden' });
+  });
+
+  it('never stacks private or corporate children', () => {
+    const stacked = stackHomeCheckinPosts([
+      checkin({
+        id: 'p1',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:00.000Z',
+        challenge_id: 'hobby',
+        challenge: { title: 'Hobby' },
+      }),
+      checkin({
+        id: 'corp',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:20.000Z',
+        challenge_id: 'corp',
+        challenge: { title: 'Office', privacy_mode: 'private_corporate' },
+      }),
+      checkin({
+        id: 'priv',
+        author_id: 'u1',
+        created_at: '2026-09-01T18:00:40.000Z',
+        challenge_id: 'priv',
+        challenge: { title: 'Friends', privacy_mode: 'private' },
+      }),
     ]);
     expect(stacked.some((item) => 'kind' in item && item.kind === 'stack')).toBe(false);
+    expect(stacked.map((item) => ('id' in item ? item.id : ''))).toEqual(['p1', 'corp', 'priv']);
   });
 });

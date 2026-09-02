@@ -25,6 +25,8 @@ export function useMentionCandidates(input: {
   query: string;
   audience: PostAudience | string;
   audienceUserIds: string[];
+  /** Extra people to include (Live/Circle members) without replacing Home search. */
+  memberIds?: string[];
   excludeIds?: string[];
   enabled?: boolean;
 }) {
@@ -106,6 +108,14 @@ export function useMentionCandidates(input: {
     queryFn: () => fetchPublicProfilesByIds(input.audienceUserIds),
   });
 
+  const memberIds = input.memberIds ?? [];
+  const members = useQuery({
+    queryKey: ['mention-members', [...memberIds].sort().join(',')],
+    enabled: Boolean(pickerOpen && memberIds.length > 0 && input.audienceUserIds.length === 0),
+    staleTime: 30_000,
+    queryFn: () => fetchPublicProfilesByIds(memberIds),
+  });
+
   const rows = useMemo(() => {
     const blockedIds = blocked.data ?? new Set<string>();
     const exclude = new Set(input.excludeIds ?? []);
@@ -157,6 +167,9 @@ export function useMentionCandidates(input: {
       return out;
     }
 
+    for (const profile of members.data ?? []) {
+      take(profile, 'audience');
+    }
     for (const profile of friendProfiles) {
       take(profile, 'friend');
     }
@@ -207,6 +220,7 @@ export function useMentionCandidates(input: {
     friends.data,
     input.audienceUserIds,
     input.excludeIds,
+    members.data,
     query,
     scoped.data,
     searched.data,

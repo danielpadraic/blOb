@@ -19,6 +19,7 @@ import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { reportAppError } from '@/lib/appErrors';
 import { rawFeedError } from '@/lib/feedError';
+import { logMissingPublishAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
 import {
   dropCachedCircleId,
   isMissingCircleIdColumn,
@@ -1524,6 +1525,46 @@ export function seedChallengeLivePost(
   );
 }
 
+/** Seed Home / post cache with author_id + session profile before navigate. Never throw. */
+export function seedPublishedPost(
+  queryClient: QueryClient,
+  userId: string | undefined,
+  post: PostWithMeta,
+) {
+  if (!post?.id) {
+    return;
+  }
+  const authorId = safeUserId(post.author, post.author_id, userId) ?? post.author_id;
+  const author =
+    post.author ??
+    (authorId
+      ? asPublicProfile({
+          ...(post.author ?? {}),
+          ...sessionAuthor(post.author, authorId),
+          id: authorId,
+        })
+      : undefined);
+  if (!safeUserId(author, authorId)) {
+    logMissingPublishAuthor({ type: post.type, postId: post.id, hasAuthor: false });
+  }
+  const seeded: PostWithMeta = {
+    ...post,
+    author_id: authorId || post.author_id,
+    author,
+    comments: post.comments ?? [],
+    reactions: post.reactions ?? [],
+  };
+  if (userId) {
+    queryClient.setQueryData(['feed', 'post', seeded.id, userId], seeded);
+  }
+  queryClient.setQueryData(['feed', 'post', seeded.id], seeded);
+  if (!isHomeExcludedClipType(seeded.type)) {
+    queryClient.setQueryData(feedListKey('global', userId), (current) =>
+      prependFeedCache(current ?? [], seeded),
+    );
+  }
+}
+
 export function useCreatePost(challengeId?: string | null) {
   const { user } = useAuth();
   const { profile } = useMyProfile();
@@ -1621,9 +1662,10 @@ export function useCreatePost(challengeId?: string | null) {
       const previous = queryClient.getQueryData(listKey);
       const optimisticId = `optimistic-${Date.now()}`;
       if (user) {
+        const authorId = safeUserId(profile, user.id) ?? user.id;
         const optimistic: PostWithMeta = {
           id: optimisticId,
-          author_id: user.id,
+          author_id: authorId,
           challenge_id: input.challengeId ?? challengeId ?? null,
           circle_id: input.circleId ?? null,
           content: input.content.trim() || null,
@@ -1644,7 +1686,7 @@ export function useCreatePost(challengeId?: string | null) {
             available: true,
           })),
           created_at: new Date().toISOString(),
-          author: asPublicProfile({ ...(profile ?? {}), id: profile?.id ?? user.id }),
+          author: asPublicProfile({ ...(profile ?? {}), id: authorId }),
           comments: [],
           reactions: [],
         };
@@ -1658,28 +1700,39 @@ export function useCreatePost(challengeId?: string | null) {
       if (!context || !user) {
         return;
       }
-      const posted = asFeedPost(
-        createdPost,
-        asPublicProfile({ ...(profile ?? {}), id: profile?.id ?? user.id }),
-        input.mentionedUserIds,
-      );
-      if (isHomeExcludedClipType(posted.type ?? input.type)) {
-        return;
-      }
-      queryClient.setQueryData(context.listKey, (current) => {
-        let replaced = false;
-        const mapped = mapFeedCache(current, (posts) => {
-          const next = posts.map((post) => {
-            if (post.id !== context.optimisticId) {
-              return post;
-            }
-            replaced = true;
-            return { ...posted, comments: post.comments ?? [], reactions: post.reactions ?? [] };
+      try {
+        const authorId = safeUserId(profile, user.id, createdPost?.author, createdPost?.author_id) ?? user.id;
+        const author =
+          asPublicProfile({ ...(profile ?? {}), id: authorId }) ??
+          createdPost?.author ??
+          stubAuthor(authorId);
+        const posted = asFeedPost(createdPost, author, input.mentionedUserIds);
+        seedPublishedPost(queryClient, user.id, posted);
+        if (isHomeExcludedClipType(posted.type ?? input.type)) {
+          return;
+        }
+        queryClient.setQueryData(context.listKey, (current) => {
+          let replaced = false;
+          const mapped = mapFeedCache(current, (posts) => {
+            const defined = posts.filter((post): post is PostWithMeta => Boolean(post?.id));
+            const next = defined.map((post) => {
+              if (post.id !== context.optimisticId) {
+                return post;
+              }
+              replaced = true;
+              return { ...posted, comments: post.comments ?? [], reactions: post.reactions ?? [] };
+            });
+            return replaced ? next : [posted, ...defined.filter((post) => post.id !== posted.id)];
           });
-          return replaced ? next : [posted, ...posts.filter((post) => post.id !== posted.id)];
+          return mapped ?? prependFeedCache(current, posted);
         });
-        return mapped ?? prependFeedCache(current, posted);
-      });
+      } catch {
+        logMissingPublishAuthor({
+          type: input.type ?? createdPost?.type,
+          postId: createdPost?.id,
+          hasAuthor: Boolean(createdPost?.author),
+        });
+      }
     },
     onError: (_error, _input, context) => {
       if (context?.previous) {
@@ -1951,21 +2004,27 @@ function mapFeedCache(current: unknown, mapPosts: (posts: PostWithMeta[]) => Pos
 }
 
 function prependFeedCache(current: unknown, post: PostWithMeta): unknown {
+  if (!post?.id) {
+    return current;
+  }
   if (!current) {
     return [post];
   }
   if (Array.isArray(current)) {
-    return [post, ...(current as PostWithMeta[]).filter((row) => row.id !== post.id)];
+    return [post, ...(current as PostWithMeta[]).filter((row) => row?.id && row.id !== post.id)];
   }
   if (isInfiniteHomeData(current)) {
     const first = current.pages[0] ?? { posts: [], cursor: null, hasMore: true };
     return {
       ...current,
       pages: [
-        { ...first, posts: [post, ...first.posts.filter((row) => row.id !== post.id)] },
+        {
+          ...first,
+          posts: [post, ...first.posts.filter((row) => row?.id && row.id !== post.id)],
+        },
         ...current.pages.slice(1).map((page) => ({
           ...page,
-          posts: page.posts.filter((row) => row.id !== post.id),
+          posts: page.posts.filter((row) => row?.id && row.id !== post.id),
         })),
       ],
     };

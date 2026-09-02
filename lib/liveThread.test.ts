@@ -46,6 +46,11 @@ describe('liveCheckinLabel', () => {
 });
 
 describe('liveComposeFromInline', () => {
+  it('does not treat Starting or Done as special compose input', () => {
+    expect(liveComposeFromInline('Starting').text).toBe('Starting');
+    expect(liveComposeFromInline('Done').text).toBe('Done');
+  });
+
   it('keeps the line and pulls media URLs out for the lobby post', () => {
     const split = liveComposeFromInline(
       'Almost there\nhttps://cdn.example.com/object/public/post-media/u/1.jpg',

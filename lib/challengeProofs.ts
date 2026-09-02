@@ -132,6 +132,7 @@ export function extraProofImageUrls(
 }
 
 export const SIMPLE_PROOF_CAP = 4;
+export const CALLOUT_PROOF_CAP = 3;
 
 export const BEFORE_AFTER_HR_PRESET: Array<{ name: string; method: ChallengeProofMethod; minutes?: number }> = [
   { name: 'Post a pre-workout selfie.', method: 'photo' },

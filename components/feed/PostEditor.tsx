@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 
+import { GifPicker } from '@/components/feed/GifPicker';
+import { MentionField } from '@/components/feed/MentionField';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
-import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,7 +19,14 @@ import { saveCapturedProofLocally } from '@/lib/checkin';
 import { isCheckinPost } from '@/lib/checkinPost';
 import { proofDisplayName, uniqueProofUrls, type ChallengeProofPart } from '@/lib/challengeProofs';
 import { copy } from '@/lib/copy';
-import { canRemoveCheckinExtra, postEditUnchanged, requiredProofUrls } from '@/lib/postEdit';
+import {
+  ensureCameraPermission,
+  ensureLibraryPermission,
+  openAppSettings,
+  permissionCopy,
+} from '@/lib/mediaPermissions';
+import type { MentionChip } from '@/lib/mentions';
+import { canRemoveCheckinExtra, isPersistedMediaUrl, postEditUnchanged, requiredProofUrls } from '@/lib/postEdit';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -74,7 +82,18 @@ export function PostEditor({
   const [caption, setCaption] = useState(post.content ?? '');
   const [mediaUrls, setMediaUrls] = useState(originalMedia);
   const [drafts, setDrafts] = useState<DraftAsset[]>([]);
+  const [gifOpen, setGifOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const mentionChips = useMemo<MentionChip[]>(
+    () =>
+      (post.mentions ?? []).map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        label: row.displayName?.trim() || row.username,
+        kind: row.kind,
+      })),
+    [post.mentions],
+  );
   const [originalHiddenFromHome] = useState(Boolean(post.hidden_from_home));
   const [hiddenFromHome, setHiddenFromHome] = useState(originalHiddenFromHome);
 
@@ -108,33 +127,67 @@ export function PostEditor({
     setMediaUrls((current) => current.filter((item) => item !== url));
   }
 
-  async function pickMedia(proofId?: string) {
+  async function attachPicked(asset: ImagePicker.ImagePickerAsset, proofId?: string) {
+    if (!asset.uri) {
+      return;
+    }
+    if (proofId) {
+      void saveCapturedProofLocally({ uri: asset.uri });
+    }
+    setDrafts((current) => [
+      ...current.filter((row) => row.proofId !== proofId),
+      {
+        uri: asset.uri,
+        mimeType: asset.mimeType,
+        captured: Boolean(proofId),
+        proofId,
+      },
+    ]);
+  }
+
+  async function pickCamera(proofId?: string) {
+    const permission = await ensureCameraPermission();
+    if (!permission.ok) {
+      const copyBlock = permissionCopy('camera');
+      Alert.alert(copyBlock.title, copyBlock.body, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => void openAppSettings() },
+      ]);
+      return;
+    }
     try {
-      const camera = proofId
-        ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            quality: 0.9,
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images', 'videos'],
-            quality: 0.9,
-          });
-      if (camera.canceled || !camera.assets[0]?.uri) {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.9,
+      });
+      if (result.canceled || !result.assets[0]) {
         return;
       }
-      const asset = camera.assets[0];
-      if (proofId) {
-        void saveCapturedProofLocally({ uri: asset.uri });
-      }
-      setDrafts((current) => [
-        ...current.filter((row) => row.proofId !== proofId),
-        {
-          uri: asset.uri,
-          mimeType: asset.mimeType,
-          captured: Boolean(proofId),
-          proofId,
-        },
+      await attachPicked(result.assets[0], proofId);
+    } catch (error) {
+      onToast?.(getErrorMessage(error));
+    }
+  }
+
+  async function pickGallery(proofId?: string) {
+    const permission = await ensureLibraryPermission();
+    if (!permission.ok) {
+      const copyBlock = permissionCopy('library');
+      Alert.alert(copyBlock.title, copyBlock.body, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => void openAppSettings() },
       ]);
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        quality: 0.9,
+      });
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+      await attachPicked(result.assets[0], proofId);
     } catch (error) {
       onToast?.(getErrorMessage(error));
     }
@@ -174,6 +227,10 @@ export function PostEditor({
         const replacements: Record<string, string> = {};
         const uploaded: string[] = [];
         for (const draft of drafts) {
+          if (isPersistedMediaUrl(draft.uri) && !draft.proofId) {
+            uploaded.push(draft.uri);
+            continue;
+          }
           const remote = await uploadPostAttachment({
             uri: draft.uri,
             userId: user.id,
@@ -227,13 +284,18 @@ export function PostEditor({
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: 16 }}>
-          <Input
-            label="Caption"
-            value={caption}
-            onChangeText={setCaption}
-            grow
-            placeholder="Write a caption…"
-          />
+          <View style={{ gap: 6 }}>
+            <AppText className="text-[13px] font-semibold text-charcoal">Caption</AppText>
+            <MentionField
+              placeholder="Write a caption…"
+              initialText={post.content ?? ''}
+              initialChips={mentionChips}
+              audience={post.audience ?? 'public'}
+              audienceUserIds={post.audience_user_ids ?? []}
+              onChange={(doc) => setCaption(doc.text)}
+              accessibilityLabel="Caption"
+            />
+          </View>
           <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
             {hiddenFromHome ? copy('post.hiddenFromHome') : copy('post.hideFromHome')}
           </AppText>
@@ -277,7 +339,7 @@ export function PostEditor({
                             title="Replace"
                             variant="outline"
                             size="sm"
-                            onPress={() => void pickMedia(proof.id)}
+                            onPress={() => void pickCamera(proof.id)}
                           />
                         </View>
                       </View>
@@ -308,11 +370,21 @@ export function PostEditor({
                 />
               </View>
             ))}
-          <Button
-            title={checkin ? 'Add extra photo' : 'Add photo'}
-            variant="outline"
-            onPress={() => void pickMedia()}
-          />
+          <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+            <Button title="GIF" variant="outline" size="sm" onPress={() => setGifOpen((open) => !open)} />
+            <Button title="Camera" variant="outline" size="sm" onPress={() => void pickCamera()} />
+            <Button title="Gallery" variant="outline" size="sm" onPress={() => void pickGallery()} />
+          </View>
+          {gifOpen ? (
+            <GifPicker
+              visible
+              onClose={() => setGifOpen(false)}
+              onPick={(url) => {
+                setDrafts((current) => [...current, { uri: url }]);
+                setGifOpen(false);
+              }}
+            />
+          ) : null}
           <Button title="Save" loading={busy || edit.isPending} onPress={() => void onSave()} />
         </ScrollView>
       </View>

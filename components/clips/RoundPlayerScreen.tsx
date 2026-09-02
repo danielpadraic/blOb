@@ -12,6 +12,7 @@ import { usePost } from '@/hooks/useFeed';
 import { useReel, useReels, useStoryChallengePreviews } from '@/hooks/useSocial';
 import { buildRoundPlayList } from '@/lib/clipRail';
 import { copy } from '@/lib/copy';
+import { authorLabel, logMissingPublishAuthor, safeUserId } from '@/lib/safeIds';
 import { personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import { ROUND_RECORD_MAX_MS } from '@/lib/waveClips';
@@ -65,26 +66,32 @@ export function RoundPlayerScreen() {
       startIndex: play.startIndex,
       clips: play.items
         .filter((item) => Boolean(item?.id && item.video_url))
-        .map((item) => ({
+        .map((item) => {
+      const authorId = safeUserId(item.profile, { id: item.user_id }, user) ?? item.user_id ?? '';
+      if (!authorId) {
+        logMissingPublishAuthor({ type: 'round', postId: item.id, hasAuthor: false });
+      }
+      return {
       id: item.id,
       kind: 'round' as const,
       mediaUrl: item.video_url,
       mediaType: 'video' as const,
       caption: item.caption,
       durationMs: item.duration_ms || ROUND_RECORD_MAX_MS,
-      authorId: item.user_id,
-      authorName: personDisplayName(item.profile) || 'Blob',
+      authorId,
+      authorName: personDisplayName(item.profile) || authorLabel(item.profile) || 'Someone',
       authorAvatar: item.profile?.avatar_url ?? null,
       username: item.profile?.username ?? null,
       createdAt: item.created_at,
       postId: item.post_id,
       challengeId: item.challenge_id,
-      isOwn: item.user_id === user?.id,
-      audience: item.id === reel.id ? postQuery.data?.audience : undefined,
-      audienceUserIds: item.id === reel.id ? postQuery.data?.audience_user_ids : undefined,
+      isOwn: Boolean(authorId && authorId === user?.id),
+      audience: item.id === reelIdSafe ? postQuery.data?.audience : undefined,
+      audienceUserIds: item.id === reelIdSafe ? postQuery.data?.audience_user_ids : undefined,
       coverUrl: item.thumbnail_url ?? item.video_url,
-      privacyMode: item.id === reel.id ? privacyQuery.data : undefined,
-    })),
+      privacyMode: item.id === reelIdSafe ? privacyQuery.data : undefined,
+    };
+    }),
     };
   }, [postQuery.data, privacyQuery.data, railQuery.data, reel, user?.id]);
   const challenges = useMemo(

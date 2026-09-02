@@ -46,6 +46,7 @@ export type InviteChallenge = {
   title: string;
   status: string;
   is_official?: boolean | null;
+  is_callout?: boolean | null;
   buy_in_amount?: number | null;
   currency?: string | null;
   created_by?: string | null;
@@ -733,7 +734,7 @@ export function LobbyChallengeRow({
         borderRadius: 14,
         backgroundColor: THEME.surface,
         borderWidth: 1,
-        borderColor: THEME.border,
+        borderColor: challenge.is_callout ? THEME.callout : THEME.border,
         paddingHorizontal: 12,
         paddingVertical: 10,
         gap: 4,

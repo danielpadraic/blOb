@@ -18,6 +18,8 @@ export type OpenChallengeFromTagInput = {
   created_by?: string | null;
   isParticipant?: boolean;
   snapshot?: ChallengeLoadSnapshot | null;
+  postId?: string | null;
+  tab?: 'overview' | 'board' | 'feed';
 };
 
 export function useOpenChallengeFromTag() {
@@ -76,6 +78,8 @@ export function useOpenChallengeFromTag() {
           created_by: input.created_by,
         },
         returnTo: 'feed',
+        postId: input.postId,
+        extra: input.tab || input.postId ? { tab: input.tab ?? 'feed' } : undefined,
       });
     },
     [mine.data, router, user?.id],

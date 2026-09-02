@@ -45,7 +45,9 @@ const RPC_MESSAGES: Record<string, string> = {
   CONSISTENCY_NO_TOP_PLACES:
     'Consistency challenges can’t use Top #, Top %, or Scaled. Pick Even split remaining or Last standing.',
   POINTS_NO_EVEN_SPLIT:
-    'Points and cumulative challenges can’t use Even split remaining. Pick Winner take all or top places.',
+    'Points challenges can’t use Even split remaining. Pick Winner take all or top places.',
+  CUMULATIVE_NO_LAST_STANDING:
+    'Cumulative challenges can’t use Last standing. Pick Anyone who hits the goal, Top #, or Top %.',
   START_IN_PAST: 'Start time has to be in the future.',
   CHALLENGE_NOT_FOUND: 'Challenge not found.',
   ALREADY_STARTED: 'This challenge already started.',

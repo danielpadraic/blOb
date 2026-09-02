@@ -12,6 +12,7 @@ import { useStory, useStoryChallengePreviews, useStoryGroups } from '@/hooks/use
 import { flattenWaveStories } from '@/lib/clipRail';
 import { waveWatchName } from '@/lib/clipWatch';
 import { copy } from '@/lib/copy';
+import { authorLabel, logMissingPublishAuthor, safeUserId } from '@/lib/safeIds';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import { type FeedChallengePreview } from '@/lib/social';
@@ -67,13 +68,19 @@ export function WavePlayerScreen() {
       clips: flat.stories
         .filter((story) => Boolean(story?.id && story.media_url))
         .map((story) => {
-      const group = groups.find((row) => row.userId === story.user_id);
-      const name = waveWatchName({
-        isOwn: story.user_id === user?.id,
-        groupName: group?.name,
-        displayName: story.user_id === profile?.id ? profile?.display_name : null,
-        username: story.user_id === profile?.id ? profile?.username : null,
-      });
+      const group = (groups ?? []).find((row) => row?.userId && row.userId === story.user_id);
+      const authorId = safeUserId({ id: story.user_id }, user, profile) ?? story.user_id ?? '';
+      if (!authorId) {
+        logMissingPublishAuthor({ type: 'wave', postId: story.id, hasAuthor: false });
+      }
+      const isOwn = Boolean(authorId && (authorId === user?.id || authorId === profile?.id));
+      const name =
+        waveWatchName({
+          isOwn,
+          groupName: group?.name,
+          displayName: isOwn ? profile?.display_name : null,
+          username: isOwn ? profile?.username : null,
+        }) || authorLabel(isOwn ? profile : null);
       const item: ClipPlayItem = {
         id: story.id,
         kind: 'wave',
@@ -85,13 +92,13 @@ export function WavePlayerScreen() {
             ? Math.max(story.clip_duration_ms || WAVE_CLIP_MS, 400)
             : WAVE_CLIP_MS,
         startMs: story.clip_start_ms ?? 0,
-        authorId: story.user_id,
-        authorName: name,
-        authorAvatar: group?.avatar ?? (story.user_id === profile?.id ? profile?.avatar_url : null),
+        authorId,
+        authorName: name || 'Someone',
+        authorAvatar: group?.avatar ?? (isOwn ? profile?.avatar_url : null),
         createdAt: story.created_at,
         postId: story.post_id,
         challengeId: story.challenge_id,
-        isOwn: story.user_id === user?.id,
+        isOwn,
         coverUrl: story.thumbnail_url ?? null,
       };
       return item;

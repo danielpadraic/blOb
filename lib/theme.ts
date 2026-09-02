@@ -14,6 +14,9 @@ export const THEME = {
   circle: '#C4784A',
   circleSoft: '#F6EDE4',
   gold: '#D7A62F',
+  /** Callout family — gold, not Official dark and not peer mint. */
+  callout: '#D7A62F',
+  calloutSoft: '#F2F5F3',
   textPrimary: '#151716',
   textSecondary: '#151716',
   textMuted: '#7F8581',
@@ -114,5 +117,7 @@ export const COLORS = {
   accentSoft: THEME.accentSoft,
   circle: THEME.circle,
   circleSoft: THEME.circleSoft,
+  callout: THEME.callout,
+  calloutSoft: THEME.calloutSoft,
   danger: THEME.danger,
 } as const;

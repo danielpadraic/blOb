@@ -11,27 +11,21 @@ import { milesToMeters } from '@/lib/distance';
 import { defaultSimpleDraft, simpleDraftToCreateValues } from '@/lib/simpleChallenge';
 
 describe('Cumulative scoring', () => {
-  it('round-trips Simple Cumulative target, window, and Distance miles', () => {
+  it('round-trips Simple Cumulative target, window, and metric name', () => {
     const draft = defaultSimpleDraft();
     draft.scoring = 'cumulative';
-    draft.cumulative_target_meters = milesToMeters(100);
+    draft.metrics = [{ id: 'm1', target: 100, name: 'miles', unit: 'mi' }];
+    draft.win_window = 'challenge';
     draft.cumulative_window = 'challenge';
     draft.distance_unit = 'mi';
-    draft.proofs = [
-      {
-        id: 'd1',
-        name: 'Attach a run or walk of at least 1.00 miles.',
-        method: 'distance',
-        distance_meters: milesToMeters(1),
-      },
-    ];
     const values = simpleDraftToCreateValues(draft);
     expect(isCumulativeDraft(values)).toBe(true);
     expect(values.challenge_type).toBe('cumulative');
     expect(values.format).toBe('cumulative');
-    expect(Number(values.cumulative_target)).toBe(milesToMeters(100));
-    expect(values.cumulative_window).toBe('challenge');
-    expect(values.challenge_proofs?.some((proof) => proof.method === 'distance')).toBe(true);
+    expect(Number(values.cumulative_target)).toBe(100);
+    expect(values.win_window).toBe('challenge');
+    expect(values.metrics?.[0]).toMatchObject({ target: 100, name: 'miles', unit: 'mi' });
+    expect(values.payout_mode).toBe('even_split_remaining');
   });
 
   it('reads the saved meter target, then the title if that column is 0', () => {
@@ -57,7 +51,7 @@ describe('Cumulative scoring', () => {
         },
         { distanceMetersCompleted: 0, unit: 'mi' },
       ),
-    ).toBe('0 mi / 128 mi');
+    ).toBe('0 / 128 mi');
     expect(
       challengeGoalLabel(
         {

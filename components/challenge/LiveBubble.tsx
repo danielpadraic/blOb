@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { checkinExtraCaption } from '@/lib/checkinPost';
+import { copy } from '@/lib/copy';
 import {
   formatLiveClock,
   isLiveCheckinPost,
@@ -37,6 +38,8 @@ type LiveBubbleProps = {
   reactions?: Reaction[];
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
+  onEdit?: () => void;
+  onHistory?: () => void;
 };
 
 export const LiveBubble = memo(function LiveBubble({
@@ -47,6 +50,8 @@ export const LiveBubble = memo(function LiveBubble({
   reactions,
   onReact,
   onReply,
+  onEdit,
+  onHistory,
 }: LiveBubbleProps) {
   const lightbox = useMediaLightboxOptional();
   const { authorId: uid, name } = resolveLiveAuthor({
@@ -156,10 +161,15 @@ export const LiveBubble = memo(function LiveBubble({
                     {caption}
                   </AppText>
                 ) : null}
-                {time ? (
-                  <AppText className="mt-0.5 text-[11px]" style={{ color: THEME.textMuted }}>
-                    {time}
-                  </AppText>
+                {time || post.edited_at ? (
+                  <View className="mt-0.5 flex-row items-center" style={{ gap: 6 }}>
+                    {time ? (
+                      <AppText className="text-[11px]" style={{ color: THEME.textMuted }}>
+                        {time}
+                      </AppText>
+                    ) : null}
+                    <EditedMark editedAt={post.edited_at} onPress={onHistory} />
+                  </View>
                 ) : null}
               </View>
             </View>
@@ -212,10 +222,15 @@ export const LiveBubble = memo(function LiveBubble({
               ) : null}
             </View>
           )}
-          {checkin ? null : time ? (
-            <AppText className="mt-1 text-[11px]" style={{ color: THEME.textMuted }}>
-              {time}
-            </AppText>
+          {checkin ? null : time || post.edited_at ? (
+            <View className="mt-1 flex-row items-center" style={{ gap: 6 }}>
+              {time ? (
+                <AppText className="text-[11px]" style={{ color: THEME.textMuted }}>
+                  {time}
+                </AppText>
+              ) : null}
+              <EditedMark editedAt={post.edited_at} onPress={onHistory} />
+            </View>
           ) : null}
           <View style={{ marginTop: 2, alignSelf: alignEnd ? 'flex-end' : 'flex-start' }}>
             <LiveReactions
@@ -223,6 +238,7 @@ export const LiveBubble = memo(function LiveBubble({
               currentUserId={currentUserId}
               onReact={onReact}
               onReply={onReply}
+              onEdit={onEdit}
             />
           </View>
         </View>
@@ -230,6 +246,30 @@ export const LiveBubble = memo(function LiveBubble({
     </View>
   );
 });
+
+function EditedMark({
+  editedAt,
+  onPress,
+}: {
+  editedAt?: string | null;
+  onPress?: () => void;
+}) {
+  if (!editedAt) {
+    return null;
+  }
+  return (
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={copy('post.edited')}
+      disabled={!onPress}
+      onPress={onPress}
+      hitSlop={6}>
+      <AppText className="text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
+        {copy('post.edited')}
+      </AppText>
+    </Pressable>
+  );
+}
 
 function LiveQuoteChip({ quote, mine }: { quote: LiveQuote; mine?: boolean }) {
   const line = liveQuoteLine(quote.name, quote.text);

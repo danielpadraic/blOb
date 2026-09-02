@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { CalloutWatchers } from '@/components/challenge/CalloutWatchers';
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
@@ -20,7 +21,12 @@ import {
   useDeclineCallout,
   useSubmitCalloutResult,
 } from '@/hooks/useCallouts';
-import { calloutStatusLabel } from '@/lib/callouts';
+import {
+  calloutActiveChallengeHref,
+  calloutStatusLabel,
+  calloutTitle,
+  isCalloutFighter,
+} from '@/lib/callouts';
 import { formatWallet, formatWalletWithUsd } from '@/lib/currency';
 import { THEME } from '@/lib/theme';
 import type { PublicProfile } from '@/lib/types';
@@ -41,11 +47,25 @@ export default function CalloutDetailScreen() {
 
   const [acks, setAcks] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const isFighter = Boolean(callout && isCalloutFighter(callout, user?.id));
+  const challengeHref = calloutActiveChallengeHref(callout, {
+    tab: isFighter ? 'overview' : 'feed',
+  });
+  const bounceToChallenge = Boolean(challengeHref);
 
-  if (query.isLoading) {
+  useEffect(() => {
+    if (bounceToChallenge && challengeHref) {
+      router.replace(challengeHref as never);
+    }
+  }, [bounceToChallenge, challengeHref, router]);
+
+  if (query.isLoading || bounceToChallenge) {
     return (
       <Screen>
-        <MascotState kind="loading" title="Loading call-out" />
+        <MascotState
+          kind="loading"
+          title={bounceToChallenge ? 'Opening your Callout' : 'Loading Callout'}
+        />
       </Screen>
     );
   }
@@ -55,7 +75,7 @@ export default function CalloutDetailScreen() {
       <Screen>
         <MascotState
           kind="error"
-          title="Couldn’t load that call-out"
+          title="Couldn’t load that Callout"
           body={query.error instanceof Error ? query.error.message : 'It may have been removed.'}
           actionLabel="Back"
           onAction={() => router.back()}
@@ -88,10 +108,19 @@ export default function CalloutDetailScreen() {
   const busy =
     accept.isPending || decline.isPending || submit.isPending || cancel.isPending;
 
-  async function run(action: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>, openChallenge = false) {
     setError(null);
     try {
-      await action();
+      const result = await action();
+      if (openChallenge && result && typeof result === 'object') {
+        const href = calloutActiveChallengeHref(
+          result as { challenge_id?: string | null; status?: string },
+          { tab: 'overview' },
+        );
+        if (href) {
+          router.replace(href as never);
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'That didn’t go through.');
     }
@@ -108,13 +137,18 @@ export default function CalloutDetailScreen() {
           </View>
         ) : null}
         <Badge label={calloutStatusLabel(callout.status)} tone="charcoal" />
+        {me && !isFighter ? <Badge label="Watching" tone="charcoal" /> : null}
       </View>
 
       <View className="mt-4 flex-row items-center">
         <CurrencyMark currency={callout.currency} size={44} />
         <View className="ml-3 flex-1">
-          <AppText className="text-[22px] font-bold text-charcoal">{stakeLabel} each</AppText>
-          <AppText className="text-muted">Winner takes {pot}</AppText>
+          <AppText className="text-[22px] font-bold text-charcoal">
+            {calloutTitle(callout.win_condition)}
+          </AppText>
+          <AppText className="text-muted">
+            {stakeLabel} each · Winner takes {pot}
+          </AppText>
         </View>
       </View>
 
@@ -123,26 +157,37 @@ export default function CalloutDetailScreen() {
         <PersonCard label="Called out" profile={opponent} highlight={isOpponent} />
       </View>
 
-      <Card className="mt-4">
-        <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-          Win condition
+      <CalloutWatchers callout={callout} me={me} isFighter={isFighter} />
+      {!isFighter && callout.status !== 'pending' && callout.status !== 'cancelled' ? (
+        <AppText className="mt-3 text-sm leading-5 text-muted">
+          This Callout is live. Watching — no entry, no prize.
         </AppText>
-        <AppText className="mt-2 text-[16px] leading-6 text-charcoal">{callout.win_condition}</AppText>
+      ) : null}
+
+      <Card
+        className="mt-4"
+        style={{ backgroundColor: THEME.calloutSoft, borderColor: THEME.callout }}>
+        <AppText className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: THEME.callout }}>
+          Callout
+        </AppText>
+        <AppText className="mt-2 text-[16px] leading-6 text-charcoal">
+          {calloutTitle(callout.win_condition)}
+        </AppText>
         <AppText className="mt-3 text-sm text-muted">
           Deadline {formatDate(callout.deadline, 'MMM d, yyyy')}
         </AppText>
-        {callout.held ? (
+        {isFighter && callout.held ? (
           <AppText className="mt-2 text-sm text-muted">
             Stakes are held. They release when you both name the same winner, or both cancel.
           </AppText>
-        ) : callout.status === 'pending' ? (
+        ) : isFighter && callout.status === 'pending' ? (
           <AppText className="mt-2 text-sm text-muted">
             Nothing is held yet. Accepting deducts both stakes immediately.
           </AppText>
         ) : null}
       </Card>
 
-      {callout.status === 'pending' && isOpponent ? (
+      {callout.status === 'pending' && isOpponent && isFighter ? (
         <View className="mt-5 gap-3">
           {bucks ? (
             <>
@@ -192,7 +237,7 @@ export default function CalloutDetailScreen() {
             size="lg"
             loading={accept.isPending}
             disabled={bucks ? !acceptReady : busy}
-            onPress={() => void run(() => accept.mutateAsync(callout.id))}
+            onPress={() => void run(() => accept.mutateAsync(callout.id), true)}
           />
           <Button
             title="Decline"
@@ -203,13 +248,13 @@ export default function CalloutDetailScreen() {
         </View>
       ) : null}
 
-      {callout.status === 'pending' && isChallenger ? (
+      {callout.status === 'pending' && isChallenger && isFighter ? (
         <View className="mt-5 gap-3">
           <AppText className="text-sm leading-5 text-muted">
             Waiting for {profileName(them)} to accept. You can cancel before they do — nothing is held yet.
           </AppText>
           <Button
-            title="Cancel call-out"
+            title="Cancel Callout"
             variant="outline"
             loading={cancel.isPending}
             onPress={() => void run(() => cancel.mutateAsync(callout.id))}
@@ -217,7 +262,8 @@ export default function CalloutDetailScreen() {
         </View>
       ) : null}
 
-      {callout.status === 'active' || callout.status === 'resolving' || callout.status === 'disputed' ? (
+      {isFighter &&
+      (callout.status === 'active' || callout.status === 'resolving' || callout.status === 'disputed') ? (
         <View className="mt-5 gap-3">
           {callout.status === 'disputed' ? (
             <AppText className="text-sm leading-5 text-coral-dark">
@@ -278,7 +324,7 @@ export default function CalloutDetailScreen() {
 
       {callout.status === 'cancelled' ? (
         <AppText className="mt-5 text-sm leading-5 text-muted">
-          This call-out was cancelled.{callout.held ? '' : ' No stakes were kept.'}
+          This Callout was cancelled.{callout.held ? '' : ' No stakes were kept.'}
         </AppText>
       ) : null}
 
@@ -316,7 +362,7 @@ function PersonCard({
   highlight?: boolean;
 }) {
   return (
-    <Card className="flex-1" style={highlight ? { borderColor: THEME.accent } : undefined}>
+    <Card className="flex-1" style={highlight ? { borderColor: THEME.callout } : undefined}>
       <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
         {label}
       </AppText>

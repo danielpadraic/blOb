@@ -18,8 +18,8 @@ export default function ChallengesStackLayout() {
           fullScreenGestureEnabled: true,
         }}
       />
-      <Stack.Screen name="callout/create" options={{ title: 'Call out' }} />
-      <Stack.Screen name="callout/[id]" options={{ title: 'Call-out' }} />
+      <Stack.Screen name="callout/create" options={{ title: 'Callout' }} />
+      <Stack.Screen name="callout/[id]" options={{ title: 'Callout' }} />
       <Stack.Screen name="[id]" options={HIDDEN_STACK_HEADER} />
       <Stack.Screen name="u/[username]" options={PROFILE_STACK_TITLE} />
     </Stack>

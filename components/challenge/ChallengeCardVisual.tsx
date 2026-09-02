@@ -363,7 +363,7 @@ export function ChallengeCardVisual({
     <View
       style={{
         backgroundColor: THEME.surface,
-        borderColor: THEME.border,
+        borderColor: challenge.is_callout ? THEME.callout : THEME.border,
         borderWidth: 1,
         borderRadius: RADIUS,
         overflow: 'hidden',
