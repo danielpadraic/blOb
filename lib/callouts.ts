@@ -33,6 +33,22 @@ export const CALLOUT_FORMATS: { value: CalloutFormat; label: string }[] = [
   { value: 'points', label: 'Points' },
 ];
 
+export function calloutFormatLabel(value?: string | null): string {
+  return calloutFormatOf(value) === 'points' ? 'Points' : 'Consistency';
+}
+
+/** Format plus proof slot names. Never pot or odds. */
+export function calloutRulesLine(input?: {
+  proofs?: ChallengeProof[] | null;
+  format?: string | null;
+} | null): string {
+  const proofs = calloutProofsForCreate(input?.proofs)
+    .map((proof) => String(proof.name ?? '').trim())
+    .filter(Boolean);
+  const format = calloutFormatLabel(input?.format);
+  return proofs.length > 0 ? `${format} · ${proofs.join(' · ')}` : format;
+}
+
 export function calloutFormatOf(value: unknown): CalloutFormat {
   return String(value ?? '').toLowerCase() === 'points' ? 'points' : 'consistency';
 }

@@ -26,6 +26,7 @@ import {
   CALLOUT_TITLE_PREFIX,
   calloutFormatOf,
   calloutProofsForCreate,
+  calloutRulesLine,
   calloutStatusLabel,
   calloutTaskOk,
   calloutTitle,
@@ -326,6 +327,9 @@ export default function CreateCalloutScreen() {
                 <AppText className="text-[16px] font-bold text-charcoal">{amountLabel} each</AppText>
                 <AppText className="text-sm text-muted">
                   vs {profileName(opponent)}. Winner takes {formatWallet(amount * 2, currency)}.
+                </AppText>
+                <AppText className="mt-1 text-sm text-muted">
+                  {calloutRulesLine({ proofs, format })}
                 </AppText>
               </View>
             </View>

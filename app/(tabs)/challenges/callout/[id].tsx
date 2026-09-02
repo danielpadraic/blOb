@@ -23,6 +23,7 @@ import {
 } from '@/hooks/useCallouts';
 import {
   calloutActiveChallengeHref,
+  calloutRulesLine,
   calloutStatusLabel,
   calloutTitle,
   isCalloutFighter,
@@ -174,6 +175,9 @@ export default function CalloutDetailScreen() {
           {calloutTitle(callout.win_condition)}
         </AppText>
         <AppText className="mt-3 text-sm text-muted">
+          {calloutRulesLine(callout)}
+        </AppText>
+        <AppText className="mt-2 text-sm text-muted">
           Deadline {formatDate(callout.deadline, 'MMM d, yyyy')}
         </AppText>
         {isFighter && callout.held ? (
@@ -263,6 +267,7 @@ export default function CalloutDetailScreen() {
       ) : null}
 
       {isFighter &&
+      !challengeHref &&
       (callout.status === 'active' || callout.status === 'resolving' || callout.status === 'disputed') ? (
         <View className="mt-5 gap-3">
           {callout.status === 'disputed' ? (
@@ -275,7 +280,7 @@ export default function CalloutDetailScreen() {
             </AppText>
           ) : (
             <AppText className="text-sm leading-5 text-muted">
-              Who won? You both have to name the same person before the prize is released.
+              Who won? Only if the board cannot rank. You both have to name the same person.
             </AppText>
           )}
           <Button

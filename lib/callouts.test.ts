@@ -11,10 +11,12 @@ import {
   calloutCardMetaLine,
   calloutPartySubtitle,
   calloutVsLine,
+  calloutFormatLabel,
   calloutFormatOf,
   calloutHonorNeeded,
   calloutObserverInviteHref,
   calloutProofsForCreate,
+  calloutRulesLine,
   calloutRankedWinner,
   calloutTask,
   calloutTaskOk,
@@ -209,6 +211,13 @@ describe('callout proofs and rank', () => {
     expect(skipped[0]?.name.toLowerCase()).toContain('photo');
     expect(calloutFormatOf('points')).toBe('points');
     expect(calloutFormatOf('consistency')).toBe('consistency');
+    expect(calloutFormatLabel('points')).toBe('Points');
+    expect(calloutRulesLine({ format: 'points', proofs: skipped })).toBe(
+      'Points · Post a photo of the work.',
+    );
+    expect(calloutRulesLine({ format: 'consistency', proofs: [] }).toLowerCase()).not.toMatch(
+      /odds|pot|bet|wager/,
+    );
     expect(CALLOUT_PROOF_CAP).toBe(3);
   });
 
