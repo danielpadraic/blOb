@@ -160,7 +160,10 @@ export function FeedList({
     }
     setVisibleIds(ids);
   }).current;
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 35, minimumViewTime: 80 }).current;
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: homeChrome ? 50 : 35,
+    minimumViewTime: 80,
+  }).current;
   const tour = useTourOptional();
   const tourLocked = Boolean(tour?.active);
   const tone = useCopyTone();
@@ -268,6 +271,7 @@ export function FeedList({
     }
     return (
       <Composer
+        key={homeChrome ? 'home-composer' : draftKey ?? 'composer'}
         placeholder={composerPlaceholder}
         submitting={composing}
         hideAudience={hideAudience}
@@ -296,7 +300,6 @@ export function FeedList({
     () => (
       <View className={homeChrome ? 'gap-2' : 'gap-3'}>
         {headerTop}
-        {homeChrome ? composer : null}
         {headerExtra}
         {!embedded && !homeChrome ? (
           <View className="flex-row items-end justify-between pt-1">
@@ -306,7 +309,7 @@ export function FeedList({
         ) : null}
       </View>
     ),
-    [composer, embedded, headerExtra, headerTop, homeChrome],
+    [embedded, headerExtra, headerTop, homeChrome],
   );
 
   const renderItem = useCallback(
@@ -406,8 +409,10 @@ export function FeedList({
   return (
     <View style={[{ flex: 1 }, webColumn]}>
       {stickyAbove}
-      {composer && !homeChrome ? (
-        <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: 12 }}>
+      {composer ? (
+        <View
+          pointerEvents={tourLocked ? 'none' : 'auto'}
+          style={{ marginBottom: homeChrome ? 8 : 12 }}>
           {composer}
         </View>
       ) : null}

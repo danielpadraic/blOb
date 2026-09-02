@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -20,6 +20,7 @@ import { socialKeys } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import { homeFeedFirstPaintLoading } from '@/lib/homeFeed';
+import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
 import { THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
@@ -30,6 +31,9 @@ export default function FeedScreen() {
       stopAllLiveMedia();
     }, []),
   );
+  useEffect(() => {
+    logHomeFirstPaintQueries();
+  }, []);
   const { user } = useAuth();
   const tone = useCopyTone();
   const queryClient = useQueryClient();
@@ -53,8 +57,8 @@ export default function FeedScreen() {
   const stickyAbove = useMemo(
     () => (
       <View style={{ marginBottom: 6, gap: 8 }}>
-        <StoryTray />
         <FeaturedOfficialStrip />
+        <StoryTray />
         <PulseRail />
         <CalloutHomePin />
       </View>

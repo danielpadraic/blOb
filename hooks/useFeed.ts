@@ -65,6 +65,7 @@ import {
   type HomeFeedAllowContext,
   type HomeFeedCursor,
 } from '@/lib/homeFeed';
+import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at';
@@ -994,6 +995,9 @@ async function fetchHomeFeedPage(input: {
   seenIds: string[];
 }): Promise<HomeFeedPage> {
   const first = !input.cursor;
+  if (first) {
+    logHomeFirstPaintQueries();
+  }
   const base = await loadHomeFeedContext(input.userId, first);
   const schema = await resolvePostsSchema();
   const authorIds = [...new Set([input.userId, ...base.friendIds, ...base.officialIds, ...base.recommendedIds])];

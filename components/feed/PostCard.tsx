@@ -468,6 +468,7 @@ function PostCardInner({
             isOwner={mine}
             proof={checkin}
             pauseCycle={showComposer || menuOpen}
+            homeInline={homeFeed}
           />
         )}
 
@@ -862,6 +863,7 @@ function ProofMedia({
   isOwner,
   proof,
   pauseCycle,
+  homeInline,
 }: {
   postId: string;
   urls: string[];
@@ -870,6 +872,7 @@ function ProofMedia({
   isOwner?: boolean;
   proof?: boolean;
   pauseCycle?: boolean;
+  homeInline?: boolean;
 }) {
   const visuals = pagerUrlsForViewer({ urls, hidden, isOwner });
   const others = urls.filter((url) => {
@@ -897,6 +900,7 @@ function ProofMedia({
         labels={labels}
         captions={alignedCaptions}
         pauseCycle={pauseCycle}
+        homeInline={homeInline}
       />
       {others.map((url) => (
         <MediaChip key={url} url={url} />

@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { THEME } from '@/lib/theme';
+import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
 import { mediaKind } from '@/utils/media';
 
 export type LightboxItem = {
@@ -236,9 +237,9 @@ function MediaLightboxOverlay({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"
-            hitSlop={12}
+            hitSlop={8}
             onPress={onClose}
-            style={[styles.close, { top: Math.max(insets.top, 12) + 4 }]}>
+            style={[styles.close, { top: Math.max(insets.top, 8) }]}>
             <AppText style={styles.closeGlyph}>×</AppText>
           </Pressable>
 
@@ -346,13 +347,33 @@ function LightboxVideo({
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
     instance.muted = false;
+    instance.play();
   });
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return undefined;
+    }
+    const nodes = Array.from(document.querySelectorAll('video'));
+    const node = nodes[nodes.length - 1] ?? null;
+    if (!node) {
+      return undefined;
+    }
+    applyWebVideoLock(node);
+    node.addEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
+    node.addEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+    return () => {
+      node.removeEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
+      node.removeEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+    };
+  }, [uri]);
+
   return (
     <VideoView
       player={player}
       style={[style, { backgroundColor: 'transparent', overflow: 'hidden' }]}
       contentFit="contain"
-      nativeControls
+      nativeControls={false}
     />
   );
 }
@@ -377,13 +398,13 @@ const styles = StyleSheet.create({
   },
   close: {
     position: 'absolute',
-    right: 16,
-    zIndex: 2,
-    height: 40,
-    width: 40,
+    right: 12,
+    zIndex: 4,
+    height: 44,
+    width: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 22,
     backgroundColor: 'rgba(16, 19, 18, 0.45)',
   },
   closeGlyph: {

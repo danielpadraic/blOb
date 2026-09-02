@@ -1,4 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -17,6 +27,11 @@ import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import {
+  canAutoplayHomeVideo,
+  homeInlineVideoMuted,
+  homeVideoPreload,
+} from '@/lib/homeFeedVideo';
+import {
   POST_MEDIA_CYCLE_MS,
   canAutoCyclePager,
   carouselClaimsHorizontal,
@@ -31,6 +46,7 @@ import {
   type MediaSize,
 } from '@/lib/postMediaCarousel';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
+import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
 import { mediaKind } from '@/utils/media';
 
 const LETTERBOX = 'rgba(16, 19, 18, 0.08)';
@@ -40,8 +56,11 @@ const VisiblePostsContext = createContext<ReadonlySet<string> | null>(null);
 const VideoSlotContext = createContext<{
   playingId: string | null;
   primedId: string | null;
+  unmutedId: string | null;
   play: (id: string) => void;
   stop: (id: string) => void;
+  unmute: (id: string) => void;
+  mute: () => void;
 } | null>(null);
 
 export function VisiblePostsProvider({
@@ -52,6 +71,7 @@ export function VisiblePostsProvider({
   children: ReactNode;
 }) {
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [unmutedId, setUnmutedId] = useState<string | null>(null);
   const primedId = useMemo(() => {
     for (const id of ids) {
       if (id && id !== playingId) {
@@ -60,14 +80,37 @@ export function VisiblePostsProvider({
     }
     return null;
   }, [ids, playingId]);
+  const play = useCallback((id: string) => {
+    setPlayingId((current) => {
+      if (current && current !== id) {
+        return current;
+      }
+      if (current !== id) {
+        setUnmutedId(null);
+      }
+      return id;
+    });
+  }, []);
+  const stop = useCallback((id: string) => {
+    setPlayingId((current) => (current === id ? null : current));
+    setUnmutedId((current) => (current === id ? null : current));
+  }, []);
+  const unmute = useCallback((id: string) => {
+    setPlayingId(id);
+    setUnmutedId(id);
+  }, []);
+  const mute = useCallback(() => setUnmutedId(null), []);
   const slot = useMemo(
     () => ({
       playingId,
       primedId,
-      play: (id: string) => setPlayingId(id),
-      stop: (id: string) => setPlayingId((current) => (current === id ? null : current)),
+      unmutedId,
+      play,
+      stop,
+      unmute,
+      mute,
     }),
-    [playingId, primedId],
+    [mute, play, playingId, primedId, stop, unmute, unmutedId],
   );
   return (
     <VisiblePostsContext.Provider value={ids}>
@@ -99,7 +142,7 @@ function useReduceMotion() {
   return reduce;
 }
 
-function useInViewport(enabled: boolean, postId: string) {
+function useInViewport(enabled: boolean, postId: string, minRatio = 0.28) {
   const visibleIds = useContext(VisiblePostsContext);
   const listed = visibleIds != null;
   const listedInView = Boolean(visibleIds?.has(postId));
@@ -117,9 +160,9 @@ function useInViewport(enabled: boolean, postId: string) {
       if (node && typeof node.getBoundingClientRect === 'function') {
         const io = new IntersectionObserver(
           ([entry]) => {
-            setMeasured(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.28));
+            setMeasured(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= minRatio));
           },
-          { threshold: [0, 0.28, 0.5] },
+          { threshold: [0, minRatio, 0.5, 1] },
         );
         io.observe(node);
         return () => io.disconnect();
@@ -131,13 +174,13 @@ function useInViewport(enabled: boolean, postId: string) {
         const visible = Math.min(y + height, winH) - Math.max(y, 0);
         const ratio = height > 0 ? visible / height : 0;
         const onScreen = y < winH && y + height > 0 && x < winW && x + width > 0;
-        setMeasured(onScreen && ratio >= 0.28);
+        setMeasured(onScreen && ratio >= minRatio);
       });
     };
     tick();
     const id = setInterval(tick, 380);
     return () => clearInterval(id);
-  }, [enabled, listed, winH, winW]);
+  }, [enabled, listed, minRatio, winH, winW]);
 
   return { ref, inView: listed ? listedInView : measured };
 }
@@ -172,12 +215,15 @@ export function PostMediaCarousel({
   labels,
   captions,
   pauseCycle = false,
+  homeInline = false,
 }: {
   postId: string;
   urls: string[];
   labels?: string[];
   captions?: Array<string | null | undefined>;
   pauseCycle?: boolean;
+  /** Home list only: muted autoplay, speaker, phone-width player with X. */
+  homeInline?: boolean;
 }) {
   const lightbox = useMediaLightboxOptional();
   const { width: windowW, height: windowH } = useWindowDimensions();
@@ -193,7 +239,11 @@ export function PostMediaCarousel({
   });
   const stillCount = stillCountInPager(urls);
   const reducedMotion = useReduceMotion();
-  const { ref: inViewRef, inView } = useInViewport(stillCount >= 2 && !reducedMotion, postId);
+  const { ref: inViewRef, inView } = useInViewport(
+    (stillCount >= 2 && !reducedMotion) || homeInline,
+    postId,
+    homeInline ? 0.5 : 0.28,
+  );
   const pageWidth = Math.max(cardWidth, 1);
   const [index, setIndex] = useState(() => rememberedPagerIndex(postId, urls.length));
   const [userPaused, setUserPaused] = useState(false);
@@ -359,6 +409,9 @@ export function PostMediaCarousel({
           width={pageWidth}
           height={frameH}
           active
+          inView={inView}
+          homeInline={homeInline}
+          lightboxOpen={Boolean(lightbox?.open)}
           caption={captions?.[0]}
           onOpen={lightbox ? () => openAt(0) : undefined}
           onPlayingChange={setVideoPlaying}
@@ -386,8 +439,15 @@ export function PostMediaCarousel({
                     width={pageWidth}
                     height={frameH}
                     active={itemIndex === index}
+                    inView={inView}
+                    homeInline={homeInline}
+                    lightboxOpen={Boolean(lightbox?.open)}
                     caption={captions?.[itemIndex]}
-                    onOpen={lightbox && isStillPostMedia(uri) ? () => openAt(itemIndex) : undefined}
+                    onOpen={
+                      lightbox && (homeInline || isStillPostMedia(uri))
+                        ? () => openAt(itemIndex)
+                        : undefined
+                    }
                     onPlayingChange={itemIndex === index ? setVideoPlaying : undefined}
                   />
                 </View>
@@ -424,6 +484,9 @@ function MediaSlide({
   width,
   height,
   active,
+  inView,
+  homeInline,
+  lightboxOpen,
   caption,
   onOpen,
   onPlayingChange,
@@ -433,12 +496,16 @@ function MediaSlide({
   width: number;
   height: number;
   active: boolean;
+  inView: boolean;
+  homeInline?: boolean;
+  lightboxOpen?: boolean;
   caption?: string | null;
   onOpen?: () => void;
   onPlayingChange?: (playing: boolean) => void;
 }) {
   const tapStart = useRef<{ x: number; y: number; at: number } | null>(null);
   const kind = mediaKind(uri);
+  const stillOpen = kind !== 'video' ? onOpen : undefined;
   const frameStyle = {
     width,
     height,
@@ -448,7 +515,16 @@ function MediaSlide({
   };
   const body =
     kind === 'video' ? (
-      <PostVideo postId={postId} uri={uri} active={active} onPlayingChange={onPlayingChange} />
+      <PostVideo
+        postId={postId}
+        uri={uri}
+        active={active}
+        inView={inView}
+        homeInline={homeInline}
+        lightboxOpen={lightboxOpen}
+        onOpen={homeInline ? onOpen : undefined}
+        onPlayingChange={onPlayingChange}
+      />
     ) : (
       <Image
         source={{ uri }}
@@ -462,9 +538,9 @@ function MediaSlide({
     );
   return (
     <View
-      accessibilityRole={onOpen ? 'button' : undefined}
-      accessibilityLabel={onOpen ? 'Open photo' : undefined}
-      onAccessibilityTap={onOpen}
+      accessibilityRole={stillOpen ? 'button' : undefined}
+      accessibilityLabel={stillOpen ? 'Open photo' : undefined}
+      onAccessibilityTap={stillOpen}
       onTouchStart={(event) => {
         tapStart.current = {
           x: event.nativeEvent.pageX,
@@ -475,7 +551,7 @@ function MediaSlide({
       onTouchEnd={(event) => {
         const start = tapStart.current;
         tapStart.current = null;
-        if (!onOpen || !start) {
+        if (!stillOpen || !start) {
           return;
         }
         const dx = event.nativeEvent.pageX - start.x;
@@ -483,7 +559,7 @@ function MediaSlide({
         if (Date.now() - start.at > 450 || Math.abs(dx) > 8 || Math.abs(dy) > 8) {
           return;
         }
-        onOpen();
+        stillOpen();
       }}
       style={[frameStyle, WEB_FEED_TOUCH]}>
       {body}
@@ -513,31 +589,139 @@ function PostVideo({
   postId,
   uri,
   active,
+  inView,
+  homeInline,
+  lightboxOpen,
+  onOpen,
   onPlayingChange,
 }: {
   postId: string;
   uri: string;
   active: boolean;
+  inView: boolean;
+  homeInline?: boolean;
+  lightboxOpen?: boolean;
+  onOpen?: () => void;
   onPlayingChange?: (playing: boolean) => void;
 }) {
   const [playing, setPlaying] = useState(false);
   const poster = useVideoPoster(uri);
   const slot = useContext(VideoSlotContext);
+  const reduceMotion = useReduceMotion();
+  const canPlay = homeInline
+    ? canAutoplayHomeVideo({
+        inView: inView && !lightboxOpen,
+        active,
+        poster,
+        reduceMotion,
+      })
+    : false;
+  const isSlot = !slot || slot.playingId === postId;
+  const muted = homeInline
+    ? homeInlineVideoMuted({
+        playingId: slot?.playingId ?? postId,
+        postId,
+        unmutedId: slot?.unmutedId ?? null,
+      })
+    : false;
+  const primed =
+    homeInline &&
+    homeVideoPreload({ inView: false, primed: slot?.primedId === postId }) === 'metadata' &&
+    slot?.primedId === postId &&
+    !canPlay;
 
   useEffect(() => {
+    if (!homeInline) {
+      return;
+    }
+    if (canPlay) {
+      slot?.play(postId);
+      onPlayingChange?.(true);
+      return;
+    }
+    slot?.stop(postId);
+    onPlayingChange?.(false);
+  }, [canPlay, homeInline, onPlayingChange, postId, slot, slot?.playingId]);
+
+  useEffect(() => {
+    if (homeInline) {
+      return;
+    }
     if (!active && playing) {
       setPlaying(false);
       slot?.stop(postId);
       onPlayingChange?.(false);
     }
-  }, [active, onPlayingChange, playing, postId, slot]);
+  }, [active, homeInline, onPlayingChange, playing, postId, slot]);
 
   useEffect(() => {
+    if (homeInline) {
+      return;
+    }
     if (slot?.playingId && slot.playingId !== postId && playing) {
       setPlaying(false);
       onPlayingChange?.(false);
     }
-  }, [onPlayingChange, playing, postId, slot?.playingId]);
+  }, [homeInline, onPlayingChange, playing, postId, slot?.playingId]);
+
+  if (homeInline) {
+    const live = Boolean(canPlay && isSlot);
+    return (
+      <View style={{ width: '100%', height: '100%', backgroundColor: LETTERBOX, overflow: 'hidden' }}>
+        {poster ? (
+          <Image
+            source={{ uri: poster }}
+            contentFit="contain"
+            contentPosition="center"
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+        ) : null}
+        {primed ? <PrimeFeedVideo uri={uri} /> : null}
+        {live ? <HomeFeedVideo uri={uri} poster={poster} muted={muted} /> : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={onOpen ? 'Open video' : muted ? 'Unmute video' : 'Mute video'}
+          onPress={() => {
+            if (onOpen) {
+              slot?.mute();
+              onOpen();
+              return;
+            }
+            if (muted) {
+              slot?.unmute(postId);
+            } else {
+              slot?.mute();
+            }
+          }}
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={muted ? 'Unmute' : 'Mute'}
+          onPress={() => {
+            if (muted) {
+              slot?.unmute(postId);
+            } else {
+              slot?.mute();
+            }
+          }}
+          hitSlop={6}
+          style={{
+            position: 'absolute',
+            right: 10,
+            bottom: 10,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(16,19,18,0.55)',
+          }}>
+          <Glyph name={muted ? GLYPH.mute : GLYPH.unmute} color="#fff" size={18} />
+        </Pressable>
+      </View>
+    );
+  }
 
   const allowed = !slot || slot.playingId === postId;
   if (!playing || !allowed) {
@@ -600,6 +784,100 @@ function PrimeFeedVideo({ uri }: { uri: string }) {
     };
   }, [uri]);
   return null;
+}
+
+function HomeFeedVideo({
+  uri,
+  poster,
+  muted,
+}: {
+  uri: string;
+  poster: string | null;
+  muted: boolean;
+}) {
+  if (Platform.OS === 'web') {
+    return <WebHomeFeedVideo uri={uri} poster={poster} muted={muted} />;
+  }
+  return <NativeHomeFeedVideo uri={uri} muted={muted} />;
+}
+
+function WebHomeFeedVideo({
+  uri,
+  poster,
+  muted,
+}: {
+  uri: string;
+  poster: string | null;
+  muted: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) {
+      return undefined;
+    }
+    applyWebVideoLock(node, poster);
+    node.muted = muted;
+    node.defaultMuted = muted;
+    node.loop = true;
+    node.preload = 'metadata';
+    const play = () => {
+      void node.play().catch(() => undefined);
+    };
+    node.addEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
+    node.addEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+    play();
+    return () => {
+      node.removeEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
+      node.removeEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+      node.pause();
+    };
+  }, [muted, poster, uri]);
+
+  return createElement('video', {
+    ref,
+    src: uri,
+    poster: poster ?? undefined,
+    muted,
+    playsInline: true,
+    loop: true,
+    preload: 'metadata',
+    controls: false,
+    style: {
+      width: '100%',
+      height: '100%',
+      objectFit: 'contain',
+      backgroundColor: LETTERBOX,
+    },
+  });
+}
+
+function NativeHomeFeedVideo({ uri, muted }: { uri: string; muted: boolean }) {
+  const player = useVideoPlayer(uri, (instance) => {
+    instance.loop = true;
+    instance.muted = muted;
+    instance.play();
+  });
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [muted, player]);
+
+  useEffect(() => {
+    return () => {
+      player.pause();
+    };
+  }, [player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={{ width: '100%', height: '100%', backgroundColor: 'transparent', overflow: 'hidden' }}
+      contentFit="contain"
+      nativeControls={false}
+    />
+  );
 }
 
 function PostVideoPlayer({ uri }: { uri: string }) {

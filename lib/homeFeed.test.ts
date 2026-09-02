@@ -69,7 +69,7 @@ describe('home feed splash', () => {
 });
 
 describe('home feed pages', () => {
-  it('pages 8–12 visible cards and never uses a 50-row first paint', () => {
+  it('pages about 15 visible cards and never uses a 50-row first paint', () => {
     expect(HOME_PAGE_SIZE).toBeGreaterThanOrEqual(HOME_PAGE_MIN);
     expect(HOME_PAGE_SIZE).toBeLessThanOrEqual(HOME_PAGE_MAX);
     expect(HOME_RAW_WINDOW).toBeLessThan(50);

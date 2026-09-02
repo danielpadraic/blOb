@@ -6,7 +6,17 @@ export const STORIES_CORE_COLUMNS =
 
 export const STORIES_OPTIONAL_COLUMNS = [] as const;
 
-export type StoriesOptionalColumn = (typeof STORIES_OPTIONAL_COLUMNS)[number];
+/** Drop only when a 42703 / schema-cache miss would empty Waves. Home posts stay up either way. */
+export const STORIES_FALLBACK_DROP = [
+  'sequence_id',
+  'sequence_index',
+  'clip_start_ms',
+  'clip_duration_ms',
+] as const;
+
+export type StoriesOptionalColumn =
+  | (typeof STORIES_OPTIONAL_COLUMNS)[number]
+  | (typeof STORIES_FALLBACK_DROP)[number];
 
 export type StoriesSchema = {
   select: string;
@@ -69,7 +79,7 @@ export function missingStoriesColumn(error: {
     return null;
   }
   const blob = `${error.code ?? ''} ${error.message ?? ''}`;
-  for (const column of STORIES_OPTIONAL_COLUMNS) {
+  for (const column of [...STORIES_OPTIONAL_COLUMNS, ...STORIES_FALLBACK_DROP]) {
     if (isMissingColumnError(blob, column)) {
       return column;
     }
@@ -102,7 +112,17 @@ async function loadStoriesSchema(): Promise<StoriesSchema> {
   const core = await trySelect(STORIES_CORE_COLUMNS);
   let working = STORIES_CORE_COLUMNS;
   if (!core.ok) {
-    return CORE_SCHEMA;
+    const missing = missingStoriesColumn({ message: core.message, code: core.code });
+    if (missing) {
+      working = selectWithoutStoriesColumn(STORIES_CORE_COLUMNS, missing);
+      const retry = await trySelect(working);
+      if (retry.ok) {
+        logSkippedColumn(missing);
+        return schemaFromSelect(working);
+      }
+    }
+    logSkippedColumn('stories-core');
+    return schemaFromSelect(selectWithoutStoriesColumn(STORIES_CORE_COLUMNS, 'sequence_id'));
   }
   for (const column of STORIES_OPTIONAL_COLUMNS) {
     const next = `${working}, ${column}`;

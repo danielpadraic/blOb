@@ -8,11 +8,11 @@ export function homePulseQueryKey(userId?: string) {
 }
 
 /** Isolated from Home posts. A miss hides Pulse — it never empties the feed. */
-export function useHomePulse() {
+export function useHomePulse(options?: { enabled?: boolean }) {
   const { user } = useAuth();
   return useQuery({
     queryKey: homePulseQueryKey(user?.id),
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id) && options?.enabled !== false,
     retry: false,
     staleTime: 15_000,
     queryFn: async (): Promise<PulsePill[]> => {

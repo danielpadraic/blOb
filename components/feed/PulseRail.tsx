@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
+import { useAfterFirstPaint } from '@/hooks/useAfterFirstPaint';
 import { useHomePulse } from '@/hooks/useHomePulse';
 import { copy } from '@/lib/copy';
 import { pulseChallengeHref, type PulseFace, type PulsePill } from '@/lib/homePulse';
@@ -71,13 +72,16 @@ function PulseChip({ pill }: { pill: PulsePill }) {
 
 /** Home Pulse. Fetches itself so a refresh does not remount the Home composer. */
 export function PulseRail() {
-  const pulse = useHomePulse();
+  const railReady = useAfterFirstPaint();
+  const pulse = useHomePulse({ enabled: railReady });
   const refetchPulse = pulse.refetch;
 
   useFocusEffect(
     useCallback(() => {
-      void refetchPulse();
-    }, [refetchPulse]),
+      if (railReady) {
+        void refetchPulse();
+      }
+    }, [railReady, refetchPulse]),
   );
 
   const pills = pulse.data ?? [];

@@ -4,11 +4,11 @@ import { asPostAudience, viewerCanSeeHomePost } from '@/lib/postAudience';
 
 export const HOME_FEED_SPLASH_MS = 3000;
 export const HOME_SATELLITE_MS = 2500;
-export const HOME_PAGE_SIZE = 10;
-export const HOME_PAGE_MIN = 8;
-export const HOME_PAGE_MAX = 12;
+export const HOME_PAGE_SIZE = 15;
+export const HOME_PAGE_MIN = 12;
+export const HOME_PAGE_MAX = 18;
 /** Raw rows per source. Not 50 — first paint is one screen after filters. */
-export const HOME_RAW_WINDOW = 16;
+export const HOME_RAW_WINDOW = 24;
 export const HOME_FIRST_PAINT_WINDOWS = 2;
 
 export function withSatelliteTimeout<T>(

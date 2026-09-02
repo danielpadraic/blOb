@@ -1083,7 +1083,14 @@ export function useReels(limit = SOCIAL_PAGE_SIZE, options?: { enabled?: boolean
   return useQuery({
     queryKey: socialKeys.reels(limit),
     enabled: options?.enabled !== false,
-    queryFn: () => fetchReels(limit),
+    retry: false,
+    queryFn: async () => {
+      try {
+        return await fetchReels(limit);
+      } catch {
+        return [];
+      }
+    },
   });
 }
 

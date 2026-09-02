@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
-import { InteractionManager, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { useAfterFirstPaint } from '@/hooks/useAfterFirstPaint';
 import { useAuth } from '@/hooks/useAuth';
 import { useReels } from '@/hooks/useSocial';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
@@ -50,29 +51,7 @@ function reelHandle(profile?: PublicProfile | null): string {
 
 export function ReelsRow() {
   const router = useRouter();
-  const [railReady, setRailReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const arm = () => {
-      if (!cancelled) {
-        setRailReady(true);
-      }
-    };
-    if (Platform.OS === 'web' && typeof requestIdleCallback === 'function') {
-      const idleId = requestIdleCallback(arm, { timeout: 800 });
-      return () => {
-        cancelled = true;
-        cancelIdleCallback(idleId);
-      };
-    }
-    const handle = InteractionManager.runAfterInteractions(arm);
-    return () => {
-      cancelled = true;
-      handle.cancel();
-    };
-  }, []);
-
+  const railReady = useAfterFirstPaint();
   const reels = useReels(8, { enabled: railReady });
   const liveReels = (reels.data ?? [])
     .filter((reel) => Boolean(reel?.id))
