@@ -3,8 +3,16 @@ import { Platform, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
+import { Chip, ChipRow } from '@/components/ui/Chip';
 import { AppText } from '@/components/ui/AppText';
-import { clampQty, QTY_BANDS, type QtyKind } from '@/lib/interestsFollowup';
+import {
+  clampQty,
+  QTY_BANDS,
+  QTY_PERIODS,
+  QTY_PERIOD_LABELS,
+  type QtyKind,
+} from '@/lib/interestsFollowup';
+import type { QtyPeriod } from '@/lib/interestsCatalog';
 import { THEME } from '@/lib/theme';
 
 type QtySliderProps = {
@@ -150,14 +158,40 @@ type QtyPairSliderProps = {
   goal: number | null;
   onCurrent: (next: number) => void;
   onGoal: (next: number) => void;
+  unitLabel?: string;
+  period?: QtyPeriod | null;
+  onPeriod?: (next: QtyPeriod) => void;
 };
 
-export function QtyPairSlider({ kind, current, goal, onCurrent, onGoal }: QtyPairSliderProps) {
-  const unit = QTY_BANDS[kind].unitLabel;
+export function QtyPairSlider({
+  kind,
+  current,
+  goal,
+  onCurrent,
+  onGoal,
+  unitLabel,
+  period,
+  onPeriod,
+}: QtyPairSliderProps) {
+  const unit = unitLabel ?? QTY_BANDS[kind].unitLabel;
   return (
     <View className="gap-3">
       <QtySlider label={`Current · ${unit}`} kind={kind} value={current} onChange={onCurrent} />
       <QtySlider label={`Goal · ${unit}`} kind={kind} value={goal} onChange={onGoal} />
+      {onPeriod ? (
+        <View className="gap-1">
+          <ChipRow>
+            {QTY_PERIODS.map((value) => (
+              <Chip
+                key={value}
+                label={QTY_PERIOD_LABELS[value]}
+                selected={period === value}
+                onPress={() => onPeriod(value)}
+              />
+            ))}
+          </ChipRow>
+        </View>
+      ) : null}
     </View>
   );
 }

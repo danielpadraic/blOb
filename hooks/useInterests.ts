@@ -6,7 +6,7 @@ import {
   chipDef,
   type InterestRoomSlug,
 } from '@/lib/interestsCatalog';
-import { type ChipStance, type RoomSaveAction, stateForSave } from '@/lib/interests';
+import { type ChipStance, type RoomSaveAction, stanceMarks, stateForSave } from '@/lib/interests';
 import { emptyFollowUp, savePayload, type ChipFollowUp } from '@/lib/interestsFollowup';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
@@ -32,18 +32,24 @@ export type ProfileInterestChipRow = {
   chip_id: string;
   excel: boolean;
   level_up: boolean;
+  stance_score: number | string | null;
   rating_value: number | string | null;
   rating_unknown: boolean;
   current_qty: number | string | null;
   goal_qty: number | string | null;
+  qty_period: string | null;
   indoor_outdoor: string | null;
   preferred_proof: string | null;
+  preferred_proofs: string[] | null;
   extras: unknown;
   is_public: boolean;
   pinned: boolean;
   pin_rank: number | null;
   catalog?: CatalogChipRow | null;
 };
+
+const CHIP_COLUMNS =
+  'chip_id, excel, level_up, stance_score, rating_value, rating_unknown, current_qty, goal_qty, qty_period, indoor_outdoor, preferred_proof, preferred_proofs, extras, is_public, pinned, pin_rank';
 
 export const interestsKeys = {
   catalog: ['interest-catalog'] as const,
@@ -80,12 +86,7 @@ export function useMyInterests() {
     queryFn: async () => {
       const [rooms, chips, work, other] = await Promise.all([
         supabase.from('profile_interest_rooms').select('room_slug, state, skipped_at').eq('user_id', userId!),
-        supabase
-          .from('profile_interest_chips')
-          .select(
-            'chip_id, excel, level_up, rating_value, rating_unknown, current_qty, goal_qty, indoor_outdoor, preferred_proof, extras, is_public, pinned, pin_rank',
-          )
-          .eq('user_id', userId!),
+        supabase.from('profile_interest_chips').select(CHIP_COLUMNS).eq('user_id', userId!),
         supabase.from('profile_work').select('occupation, employer').eq('user_id', userId!).maybeSingle(),
         supabase.from('interest_other_text').select('room_slug, raw_text').eq('user_id', userId!),
       ]);
@@ -122,6 +123,8 @@ export function useSaveInterestRoom() {
       action: RoomSaveAction;
       stances: Record<string, ChipStance>;
       followUps?: Record<string, ChipFollowUp>;
+      chipSlug?: string;
+      completeRoom?: boolean;
       otherText?: string;
       occupation?: string;
       employer?: string;
@@ -129,6 +132,7 @@ export function useSaveInterestRoom() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
+      const userId = user.id;
       const rows = (catalog.data ?? []).filter((row) => row.room_slug === input.room);
       const bySlug = new Map(rows.map((row) => [row.slug, row]));
       const selected = Object.entries(input.stances)
@@ -141,7 +145,7 @@ export function useSaveInterestRoom() {
         })
         .filter(Boolean) as { chip: CatalogChipRow; stance: ChipStance }[];
 
-      const state = stateForSave(input.action, selected.length);
+      const state = stateForSave(input.action, selected.length, input.completeRoom);
       const skippedAt = input.action === 'skip' ? new Date().toISOString() : null;
       const completedAt =
         state === 'complete_empty' || state === 'complete_filled' ? new Date().toISOString() : null;
@@ -159,22 +163,56 @@ export function useSaveInterestRoom() {
       }
 
       const roomChipIds = rows.map((row) => row.id);
-      const previousPins =
-        input.action === 'save' && roomChipIds.length > 0
+      const previous =
+        roomChipIds.length > 0
           ? await supabase
               .from('profile_interest_chips')
               .select('chip_id, is_public, pinned, pin_rank')
               .eq('user_id', user.id)
               .in('chip_id', roomChipIds)
-          : { data: [] as { chip_id: string; is_public: boolean; pinned: boolean; pin_rank: number | null }[], error: null };
-      if (previousPins.error) {
-        throw new Error(getErrorMessage(previousPins.error));
+          : {
+              data: [] as { chip_id: string; is_public: boolean; pinned: boolean; pin_rank: number | null }[],
+              error: null,
+            };
+      if (previous.error) {
+        throw new Error(getErrorMessage(previous.error));
       }
-      const pinById = new Map(
-        (previousPins.data ?? []).map((row) => [row.chip_id, row] as const),
-      );
+      const pinById = new Map((previous.data ?? []).map((row) => [row.chip_id, row] as const));
+      const existingIds = new Set((previous.data ?? []).map((row) => row.chip_id));
 
-      if (input.action !== 'skip' && roomChipIds.length > 0) {
+      function chipInsert(row: { chip: CatalogChipRow; stance: ChipStance }, followUp: ChipFollowUp) {
+        const prior = pinById.get(row.chip.id);
+        const local = chipDef(input.room, row.chip.slug);
+        const marks = stanceMarks(followUp.stanceScore);
+        const fields = savePayload({
+          followUp,
+          slug: row.chip.slug,
+          ratingKind: row.chip.rating_kind ?? local?.ratingKind ?? null,
+          qtyKind: row.chip.qty_kind ?? local?.qtyKind ?? null,
+          allowsIndoorOutdoor: local?.allowsIndoorOutdoor ?? row.chip.allows_indoor_outdoor,
+        });
+        return {
+          user_id: userId,
+          chip_id: row.chip.id,
+          excel: marks.excel,
+          level_up: marks.levelUp,
+          stance_score: fields.stance_score,
+          rating_value: fields.rating_value,
+          rating_unknown: fields.rating_unknown,
+          current_qty: fields.current_qty,
+          goal_qty: fields.goal_qty,
+          qty_period: fields.qty_period,
+          indoor_outdoor: fields.indoor_outdoor,
+          preferred_proof: fields.preferred_proof,
+          preferred_proofs: fields.preferred_proofs,
+          extras: fields.extras,
+          is_public: prior?.is_public ?? false,
+          pinned: prior?.pinned ?? false,
+          pin_rank: prior?.pinned ? prior.pin_rank : null,
+        };
+      }
+
+      if ((input.action === 'skip' || input.action === 'none') && roomChipIds.length > 0) {
         const del = await supabase
           .from('profile_interest_chips')
           .delete()
@@ -185,44 +223,47 @@ export function useSaveInterestRoom() {
         }
       }
 
-      if (input.action === 'save' && selected.length > 0) {
-        const insert = await supabase.from('profile_interest_chips').insert(
-          selected.map((row) => {
-            const prior = pinById.get(row.chip.id);
-            const local = chipDef(input.room, row.chip.slug);
-            const fields = savePayload({
-              followUp: input.followUps?.[row.chip.slug] ?? emptyFollowUp(),
-              slug: row.chip.slug,
-              ratingKind: row.chip.rating_kind ?? local?.ratingKind ?? null,
-              qtyKind: row.chip.qty_kind ?? local?.qtyKind ?? null,
-              allowsIndoorOutdoor: row.chip.allows_indoor_outdoor || Boolean(local?.allowsIndoorOutdoor),
-            });
-            return {
-              user_id: user.id,
-              chip_id: row.chip.id,
-              excel: row.stance.excel,
-              level_up: row.stance.levelUp,
-              rating_value: fields.rating_value,
-              rating_unknown: fields.rating_unknown,
-              current_qty: fields.current_qty,
-              goal_qty: fields.goal_qty,
-              indoor_outdoor: fields.indoor_outdoor,
-              preferred_proof: fields.preferred_proof,
-              extras: fields.extras,
-              is_public: prior?.is_public ?? false,
-              pinned: prior?.pinned ?? false,
-              pin_rank: prior?.pinned ? prior.pin_rank : null,
-            };
-          }),
-        );
-        if (insert.error) {
-          throw new Error(getErrorMessage(insert.error));
+      if (input.action === 'select') {
+        const keepIds = new Set(selected.map((row) => row.chip.id));
+        const dropIds = roomChipIds.filter((id) => !keepIds.has(id));
+        if (dropIds.length > 0) {
+          const del = await supabase
+            .from('profile_interest_chips')
+            .delete()
+            .eq('user_id', user.id)
+            .in('chip_id', dropIds);
+          if (del.error) {
+            throw new Error(getErrorMessage(del.error));
+          }
+        }
+        const toInsert = selected.filter((row) => !existingIds.has(row.chip.id));
+        if (toInsert.length > 0) {
+          const insert = await supabase
+            .from('profile_interest_chips')
+            .insert(toInsert.map((row) => chipInsert(row, input.followUps?.[row.chip.slug] ?? emptyFollowUp())));
+          if (insert.error) {
+            throw new Error(getErrorMessage(insert.error));
+          }
+        }
+      }
+
+      if (input.action === 'card' && input.chipSlug) {
+        const row = selected.find((item) => item.chip.slug === input.chipSlug);
+        if (row) {
+          const write = await supabase
+            .from('profile_interest_chips')
+            .upsert(chipInsert(row, input.followUps?.[row.chip.slug] ?? emptyFollowUp()));
+          if (write.error) {
+            throw new Error(getErrorMessage(write.error));
+          }
         }
       }
 
       const workChip = selected.find((row) => row.chip.slug === 'work');
       if (input.room === 'personal_development' && input.action !== 'skip') {
-        if (workChip && input.action === 'save') {
+        if (input.action === 'none' || (input.action === 'select' && !workChip)) {
+          await supabase.from('profile_work').delete().eq('user_id', user.id);
+        } else if (input.action === 'card' && input.chipSlug === 'work' && workChip) {
           const occupation = String(input.occupation ?? '').trim();
           const employer = String(input.employer ?? '').trim();
           if (!occupation || !employer) {
@@ -237,8 +278,6 @@ export function useSaveInterestRoom() {
           if (workWrite.error) {
             throw new Error(getErrorMessage(workWrite.error));
           }
-        } else {
-          await supabase.from('profile_work').delete().eq('user_id', user.id);
         }
       }
 
@@ -246,7 +285,7 @@ export function useSaveInterestRoom() {
       if (input.action === 'skip') {
         return;
       }
-      if (input.action === 'save' && otherChip && String(input.otherText ?? '').trim()) {
+      if (input.action === 'card' && input.chipSlug === 'other' && otherChip && String(input.otherText ?? '').trim()) {
         const otherWrite = await supabase.from('interest_other_text').upsert(
           {
             user_id: user.id,
@@ -258,12 +297,15 @@ export function useSaveInterestRoom() {
         if (otherWrite.error) {
           throw new Error(getErrorMessage(otherWrite.error));
         }
-      } else {
+      } else if (input.action === 'none' || (input.action === 'select' && !otherChip)) {
         await supabase.from('interest_other_text').delete().eq('user_id', user.id).eq('room_slug', input.room);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: interestsKeys.mine(user?.id) });
+      if (variables.action === 'none' || variables.completeRoom) {
+        void queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      }
     },
   });
 }

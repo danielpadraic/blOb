@@ -1585,6 +1585,7 @@ export type Database = {
         state: 'incomplete' | 'complete_empty' | 'complete_filled';
         skipped_at: string | null;
         completed_at: string | null;
+        coins_granted_at: string | null;
         updated_at: string;
       }>;
       profile_interest_chips: TableDef<{
@@ -1592,12 +1593,15 @@ export type Database = {
         chip_id: string;
         excel: boolean;
         level_up: boolean;
+        stance_score: number | null;
         rating_value: number | null;
         rating_unknown: boolean;
         current_qty: number | null;
         goal_qty: number | null;
+        qty_period: string | null;
         indoor_outdoor: string | null;
         preferred_proof: string | null;
+        preferred_proofs: string[];
         extras: Record<string, unknown>;
         is_public: boolean;
         pinned: boolean;

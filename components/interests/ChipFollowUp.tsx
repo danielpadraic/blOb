@@ -17,42 +17,48 @@ import {
   PROOF_PREFS,
   PROOF_LABELS,
   RATING_LABELS,
+  allProofsSelected,
   isQtyKind,
   isRatingKind,
+  qtyUnitLabel,
   setQtyUnknown,
+  setQtyPeriod,
   setQtyValue,
   setRatingUnknown,
   setRatingValue,
+  toggleAllProofs,
+  toggleProof,
   type ChipFollowUp,
 } from '@/lib/interestsFollowup';
 import { copy } from '@/lib/copy';
-import { THEME, themeShadow } from '@/lib/theme';
 
 type ChipFollowUpCardProps = {
   chip: InterestChipDef;
   followUp: ChipFollowUp;
   onChange: (next: ChipFollowUp) => void;
+  units?: 'imperial' | 'metric';
 };
 
-export function ChipFollowUpCard({ chip, followUp, onChange }: ChipFollowUpCardProps) {
+export function ChipFollowUpCard({
+  chip,
+  followUp,
+  onChange,
+  units = 'imperial',
+}: ChipFollowUpCardProps) {
   const ratingKind = isRatingKind(chip.ratingKind) ? chip.ratingKind : null;
   const qtyKind = isQtyKind(chip.qtyKind) ? chip.qtyKind : null;
   const showAcademics = chip.slug === 'academics';
   const showFasting = chip.slug === 'fasting';
   const showRank = ratingKind === 'mmr';
+  const showGrade = ratingKind === 'grade';
+  const showNumericRating = Boolean(ratingKind) && !showRank && !showGrade;
   const showIndoor = chip.allowsIndoorOutdoor;
+  const showQty = Boolean(qtyKind) && !showFasting;
+  const qtyOptional = Boolean(chip.isOther);
 
   return (
-    <View
-      className="gap-3 p-4"
-      style={{
-        backgroundColor: THEME.surface,
-        borderRadius: THEME.radius,
-        ...themeShadow(),
-      }}>
-      <AppText className="text-[15px] font-extrabold text-charcoal">{chip.label}</AppText>
-
-      {ratingKind ? (
+    <View className="gap-3">
+      {showNumericRating && ratingKind ? (
         <View className="gap-2">
           <Input
             label={RATING_LABELS[ratingKind]}
@@ -70,21 +76,52 @@ export function ChipFollowUpCard({ chip, followUp, onChange }: ChipFollowUpCardP
       ) : null}
 
       {showRank ? (
-        <Input
-          label={copy('interests.rank')}
-          value={followUp.mmrLabel}
-          onChangeText={(mmrLabel) => onChange({ ...followUp, mmrLabel })}
-        />
+        <View className="gap-2">
+          <Input
+            label={copy('interests.rank')}
+            value={followUp.ratingUnknown ? '' : followUp.mmrLabel}
+            onChangeText={(mmrLabel) => onChange({ ...followUp, mmrLabel, ratingUnknown: false })}
+            editable={!followUp.ratingUnknown}
+          />
+          <Chip
+            label={copy('interests.unknown')}
+            selected={followUp.ratingUnknown}
+            onPress={() => onChange(setRatingUnknown({ ...followUp, mmrLabel: '' }, !followUp.ratingUnknown))}
+          />
+        </View>
       ) : null}
 
-      {qtyKind && !showFasting ? (
+      {showGrade ? (
+        <View className="gap-2">
+          <Input
+            label={copy('interests.grade')}
+            value={followUp.ratingUnknown ? '' : followUp.gradeLabel}
+            onChangeText={(gradeLabel) => onChange({ ...followUp, gradeLabel, ratingUnknown: false })}
+            editable={!followUp.ratingUnknown}
+          />
+          <Chip
+            label={copy('interests.unknown')}
+            selected={followUp.ratingUnknown}
+            onPress={() => onChange(setRatingUnknown({ ...followUp, gradeLabel: '' }, !followUp.ratingUnknown))}
+          />
+        </View>
+      ) : null}
+
+      {showQty && qtyKind ? (
         <QtyPairSlider
           kind={qtyKind}
           current={followUp.currentQty}
           goal={followUp.goalQty}
+          unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
+          period={followUp.qtyPeriod}
+          onPeriod={(next) => onChange(setQtyPeriod(followUp, next))}
           onCurrent={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
           onGoal={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
         />
+      ) : null}
+
+      {qtyOptional && showQty ? (
+        <AppText className="text-[12px] text-muted">Optional.</AppText>
       ) : null}
 
       {showIndoor ? (
@@ -182,6 +219,7 @@ export function ChipFollowUpCard({ chip, followUp, onChange }: ChipFollowUpCardP
               kind={qtyKind}
               current={followUp.currentQty}
               goal={followUp.goalQty}
+              unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
               onCurrent={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
               onGoal={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
             />
@@ -194,24 +232,26 @@ export function ChipFollowUpCard({ chip, followUp, onChange }: ChipFollowUpCardP
         </>
       ) : null}
 
-      <View className="gap-1">
-        <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.proof')}</AppText>
-        <ChipRow>
-          {PROOF_PREFS.map((value) => (
+      {chip.isWork ? null : (
+        <View className="gap-1">
+          <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.proof')}</AppText>
+          <ChipRow>
+            {PROOF_PREFS.map((value) => (
+              <Chip
+                key={value}
+                label={PROOF_LABELS[value]}
+                selected={followUp.preferredProofs.includes(value)}
+                onPress={() => onChange(toggleProof(followUp, value))}
+              />
+            ))}
             <Chip
-              key={value}
-              label={PROOF_LABELS[value]}
-              selected={followUp.preferredProof === value}
-              onPress={() =>
-                onChange({
-                  ...followUp,
-                  preferredProof: followUp.preferredProof === value ? null : value,
-                })
-              }
+              label={copy('interests.allProofs')}
+              selected={allProofsSelected(followUp.preferredProofs)}
+              onPress={() => onChange(toggleAllProofs(followUp))}
             />
-          ))}
-        </ChipRow>
-      </View>
+          </ChipRow>
+        </View>
+      )}
     </View>
   );
 }

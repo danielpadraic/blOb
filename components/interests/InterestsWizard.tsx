@@ -3,20 +3,26 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ActivityCard } from '@/components/interests/ActivityCard';
 import { BackdropSlot } from '@/components/interests/BackdropSlot';
-import { ChipFollowUpCard } from '@/components/interests/ChipFollowUp';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useInterestCatalog, useMyInterests, useSaveInterestRoom } from '@/hooks/useInterests';
-import { continueBlocked, setChipMark, toggleChipStance, type ChipStance } from '@/lib/interests';
 import {
+  roomContinueBlocked,
+  stanceFromMarks,
+  stanceMarks,
+  toggleRoomPickerChip,
+  type ChipStance,
+} from '@/lib/interests';
+import {
+  activityCardBlocked,
   dropFollowUp,
-  ensureFollowUp,
+  emptyFollowUp,
   followUpFromRow,
   isQtyKind,
   isRatingKind,
@@ -26,12 +32,16 @@ import {
 import {
   INTEREST_PROMPT,
   INTEREST_ROOM_SLUGS,
+  NONE_CHIP_SLUG,
+  ROOM_REQUEST,
   chipDef,
+  defaultQtyPeriod,
   nextRoomSlug,
   roomDef,
   type InterestChipDef,
   type InterestRoomSlug,
 } from '@/lib/interestsCatalog';
+import { preferredUnitSystem } from '@/lib/bodyMetrics';
 import { copy, type CopyTone } from '@/lib/copy';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
@@ -54,13 +64,16 @@ export function InterestsWizard({
   const updateProfile = useUpdateProfile();
   const prompted = Boolean(profile?.interests_prompted_at);
   const [step, setStep] = useState<WizardStep>(prompted ? INTEREST_ROOM_SLUGS[0] : 'prompt');
+  const [cardIndex, setCardIndex] = useState<number | null>(null);
   const [stances, setStances] = useState<Record<string, ChipStance>>({});
+  const [noneOfThese, setNoneOfThese] = useState(false);
   const [followUps, setFollowUps] = useState<Record<string, ChipFollowUp>>({});
   const [otherText, setOtherText] = useState('');
   const [occupation, setOccupation] = useState('');
   const [employer, setEmployer] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [hydratedRoom, setHydratedRoom] = useState<string | null>(null);
+  const units = preferredUnitSystem(profile);
 
   const room = step === 'prompt' ? null : roomDef(step);
   const catalogChips = (catalog.data ?? []).filter((row) => row.room_slug === step);
@@ -71,14 +84,19 @@ export function InterestsWizard({
           return {
             slug: row.slug,
             label: row.label,
-            allowsIndoorOutdoor: row.allows_indoor_outdoor,
+            allowsIndoorOutdoor: local?.allowsIndoorOutdoor ?? row.allows_indoor_outdoor,
             ratingKind: isRatingKind(row.rating_kind) ? row.rating_kind : (local?.ratingKind ?? null),
             qtyKind: isQtyKind(row.qty_kind) ? row.qty_kind : (local?.qtyKind ?? null),
+            defaultPeriod: local?.defaultPeriod,
             isWork: row.slug === 'work',
             isOther: row.slug === 'other',
           };
         })
       : [...(room?.chips ?? [])];
+
+  const selectedChips = chips.filter((chip) => stances[chip.slug]);
+  const cardChip = cardIndex != null ? selectedChips[cardIndex] : null;
+  const onCard = Boolean(cardChip && step !== 'prompt');
 
   useEffect(() => {
     if (step === 'prompt' || !mine.data || hydratedRoom === step) {
@@ -90,31 +108,41 @@ export function InterestsWizard({
       if (row.catalog?.room_slug !== step) {
         continue;
       }
-      next[row.catalog.slug] = { excel: row.excel, levelUp: row.level_up };
+      const score = stanceFromMarks(row.excel, row.level_up, row.stance_score == null ? null : Number(row.stance_score));
+      next[row.catalog.slug] = stanceMarks(score);
       nextFollow[row.catalog.slug] = followUpFromRow(row);
     }
+    const roomRow = mine.data.rooms.find((item) => item.room_slug === step);
     setStances(next);
     setFollowUps(nextFollow);
+    setNoneOfThese(roomRow?.state === 'complete_empty' && Object.keys(next).length === 0);
     setOtherText(mine.data.other.find((item) => item.room_slug === step)?.raw_text ?? '');
     setOccupation(mine.data.work?.occupation ?? '');
     setEmployer(mine.data.work?.employer ?? '');
     setHydratedRoom(step);
+    setCardIndex(null);
     setFormError(null);
   }, [hydratedRoom, mine.data, step]);
 
   function onChipPress(slug: string) {
-    setStances((current) => {
-      const next = toggleChipStance(current, slug);
-      setFollowUps((follow) =>
-        next[slug] ? ensureFollowUp(follow, slug) : dropFollowUp(follow, slug),
-      );
-      return next;
+    const next = toggleRoomPickerChip({ selected: stances, noneOfThese }, slug);
+    setStances(next.selected);
+    setNoneOfThese(next.noneOfThese);
+    setFollowUps((follow) => {
+      if (slug === NONE_CHIP_SLUG) {
+        return {};
+      }
+      return next.selected[slug]
+        ? {
+            ...follow,
+            [slug]:
+              follow[slug] ??
+              emptyFollowUp(defaultQtyPeriod(chips.find((chip) => chip.slug === slug) ?? chips[0])),
+          }
+        : dropFollowUp(follow, slug);
     });
+    setFormError(null);
   }
-
-  const workOn = chips.some((chip) => chip.isWork && stances[chip.slug]);
-  const otherOn = chips.some((chip) => chip.isOther && stances[chip.slug]);
-  const selectedChips = chips.filter((chip) => stances[chip.slug]);
 
   function leave() {
     if (router.canGoBack()) {
@@ -135,6 +163,7 @@ export function InterestsWizard({
 
   async function goNext(from: InterestRoomSlug) {
     const next = nextRoomSlug(from);
+    setCardIndex(null);
     if (next) {
       setHydratedRoom(null);
       setStep(next);
@@ -149,45 +178,31 @@ export function InterestsWizard({
       setStep(INTEREST_ROOM_SLUGS[0]);
       return;
     }
-    const blocked = continueBlocked({
-      stances,
-      workOn,
-      occupation,
-      employer,
-      otherOn,
-      otherText,
-    });
+    if (catalogChips.length === 0) {
+      setFormError('Couldn’t load this room. Try again.');
+      return;
+    }
+    const blocked = roomContinueBlocked({ selected: stances, noneOfThese });
     if (blocked) {
       setFormError(blocked);
       return;
     }
     setFormError(null);
     try {
+      if (noneOfThese) {
+        await saveRoom.mutateAsync({ room: step, action: 'none', stances: {} });
+        await markPrompted();
+        await goNext(step);
+        return;
+      }
       await saveRoom.mutateAsync({
         room: step,
-        action: 'save',
+        action: 'select',
         stances,
         followUps: pruneFollowUps(followUps, stances),
-        otherText,
-        occupation,
-        employer,
       });
       await markPrompted();
-      await goNext(step);
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : copy('error.preferenceSave', tone));
-    }
-  }
-
-  async function onNone() {
-    if (step === 'prompt') {
-      return;
-    }
-    setFormError(null);
-    try {
-      await saveRoom.mutateAsync({ room: step, action: 'none', stances: {} });
-      await markPrompted();
-      await goNext(step);
+      setCardIndex(0);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : copy('error.preferenceSave', tone));
     }
@@ -208,109 +223,130 @@ export function InterestsWizard({
     }
   }
 
+  async function onCardNext() {
+    if (step === 'prompt' || !cardChip) {
+      return;
+    }
+    const followUp = followUps[cardChip.slug] ?? emptyFollowUp(defaultQtyPeriod(cardChip));
+    const blocked = activityCardBlocked({
+      chip: cardChip,
+      followUp,
+      occupation,
+      employer,
+      otherText,
+    });
+    if (blocked) {
+      setFormError(blocked);
+      return;
+    }
+    setFormError(null);
+    const last = cardIndex === selectedChips.length - 1;
+    try {
+      await saveRoom.mutateAsync({
+        room: step,
+        action: 'card',
+        stances,
+        followUps: pruneFollowUps({ ...followUps, [cardChip.slug]: followUp }, stances),
+        chipSlug: cardChip.slug,
+        completeRoom: last,
+        otherText,
+        occupation,
+        employer,
+      });
+      if (last) {
+        await goNext(step);
+        return;
+      }
+      setCardIndex((current) => (current == null ? 0 : current + 1));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : copy('error.preferenceSave', tone));
+    }
+  }
+
   const title = step === 'prompt' ? INTEREST_PROMPT.title : room?.title ?? '';
   const sub = step === 'prompt' ? INTEREST_PROMPT.sub : room?.sub ?? '';
   const footerPad = createStickyFooterPad(keyboardOpen, tabBarLift(insets.bottom, 'sticky') + 8);
   const roomIndex = step === 'prompt' ? 0 : INTEREST_ROOM_SLUGS.indexOf(step) + 1;
 
   return (
-    <BackdropSlot roomSlug={step === 'prompt' ? 'health_fitness' : step} playing>
+    <BackdropSlot roomSlug={step === 'prompt' ? 'health_fitness' : step} playing={!onCard}>
       <View style={{ flex: 1, minHeight: 0 }}>
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            paddingTop: 48,
-            paddingBottom: 24,
-            gap: 12,
-          }}
-          keyboardShouldPersistTaps="handled">
-          <AppText className="text-[12px] font-semibold" style={{ color: THEME.accentBright }}>
-            {step === 'prompt'
-              ? copy('interests.promptKicker', tone)
-              : `${roomIndex} / ${INTEREST_ROOM_SLUGS.length}`}
-          </AppText>
-          <AppText
-            className="text-[26px] font-extrabold"
-            style={{ color: THEME.primaryForeground, lineHeight: 32 }}>
-            {title}
-          </AppText>
-          <AppText className="text-[15px] leading-5" style={{ color: THEME.accentBright }}>
-            {sub}
-          </AppText>
+        {onCard && cardChip ? (
+          <ActivityCard
+            chip={cardChip}
+            index={cardIndex ?? 0}
+            total={selectedChips.length}
+            followUp={followUps[cardChip.slug] ?? emptyFollowUp(defaultQtyPeriod(cardChip))}
+            onChange={(next) => {
+              setFollowUps((current) => ({ ...current, [cardChip.slug]: next }));
+              setStances((current) => ({ ...current, [cardChip.slug]: stanceMarks(next.stanceScore) }));
+              setFormError(null);
+            }}
+            occupation={occupation}
+            employer={employer}
+            otherText={otherText}
+            onOccupation={setOccupation}
+            onEmployer={setEmployer}
+            onOtherText={setOtherText}
+            error={formError}
+            units={units}
+          />
+        ) : (
+          <ScrollView
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 48,
+              paddingBottom: 24,
+              gap: 12,
+            }}
+            keyboardShouldPersistTaps="handled">
+            <AppText className="text-[12px] font-semibold" style={{ color: THEME.accentBright }}>
+              {step === 'prompt'
+                ? copy('interests.promptKicker', tone)
+                : `${roomIndex} / ${INTEREST_ROOM_SLUGS.length}`}
+            </AppText>
+            <AppText
+              className="text-[26px] font-extrabold"
+              style={{ color: THEME.primaryForeground, lineHeight: 32 }}>
+              {title}
+            </AppText>
+            {step !== 'prompt' ? (
+              <AppText className="text-[16px] font-semibold leading-5" style={{ color: THEME.primaryForeground }}>
+                {copy('interests.roomRequest', tone)}
+              </AppText>
+            ) : null}
+            <AppText className="text-[15px] leading-5" style={{ color: THEME.accentBright }}>
+              {sub}
+            </AppText>
 
-          {step !== 'prompt' ? (
-            <ChipRow>
-              {chips.map((chip) => {
-                const stance = stances[chip.slug];
-                return (
+            {step !== 'prompt' ? (
+              <ChipRow>
+                {chips.map((chip) => (
                   <View key={chip.slug} style={{ width: '31%', maxWidth: '31%' }}>
                     <Chip
                       label={chip.label}
-                      selected={Boolean(stance)}
-                      excel={stance?.excel}
-                      levelUp={stance?.levelUp}
+                      selected={Boolean(stances[chip.slug])}
                       onPress={() => onChipPress(chip.slug)}
-                      onToggleExcel={() => setStances((current) => setChipMark(current, chip.slug, 'excel'))}
-                      onToggleLevelUp={() =>
-                        setStances((current) => setChipMark(current, chip.slug, 'levelUp'))
-                      }
                     />
                   </View>
-                );
-              })}
-            </ChipRow>
-          ) : null}
+                ))}
+                <View style={{ width: '31%', maxWidth: '31%' }}>
+                  <Chip
+                    label={copy('interests.none', tone)}
+                    selected={noneOfThese}
+                    onPress={() => onChipPress(NONE_CHIP_SLUG)}
+                  />
+                </View>
+              </ChipRow>
+            ) : null}
 
-          {selectedChips.map((chip) => (
-            <ChipFollowUpCard
-              key={`follow-${chip.slug}`}
-              chip={chip}
-              followUp={followUps[chip.slug] ?? followUpFromRow({})}
-              onChange={(next) => setFollowUps((current) => ({ ...current, [chip.slug]: next }))}
-            />
-          ))}
-
-          {workOn ? (
-            <View
-              className="gap-3 p-4"
-              style={{
-                backgroundColor: THEME.surface,
-                borderRadius: THEME.radius,
-                ...themeShadow(),
-              }}>
-              <Input
-                label={copy('interests.occupation')}
-                value={occupation}
-                onChangeText={setOccupation}
-                autoCapitalize="words"
-              />
-              <Input
-                label={copy('interests.employer')}
-                value={employer}
-                onChangeText={setEmployer}
-                autoCapitalize="words"
-              />
-            </View>
-          ) : null}
-
-          {otherOn ? (
-            <View
-              className="p-4"
-              style={{
-                backgroundColor: THEME.surface,
-                borderRadius: THEME.radius,
-                ...themeShadow(),
-              }}>
-              <Input label={copy('interests.other')} value={otherText} onChangeText={setOtherText} grow />
-            </View>
-          ) : null}
-
-          {formError ? (
-            <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
-              {formError}
-            </AppText>
-          ) : null}
-        </ScrollView>
+            {formError ? (
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
+                {formError}
+              </AppText>
+            ) : null}
+          </ScrollView>
+        )}
 
         <View
           className="gap-2 px-4 pt-2"
@@ -335,6 +371,17 @@ export function InterestsWizard({
                 onPress={leave}
               />
             </>
+          ) : onCard ? (
+            <Button
+              title={
+                cardIndex === selectedChips.length - 1
+                  ? copy('interests.done', tone)
+                  : copy('interests.next', tone)
+              }
+              size="lg"
+              onPress={() => void onCardNext()}
+              loading={saveRoom.isPending}
+            />
           ) : (
             <>
               <Button
@@ -343,22 +390,15 @@ export function InterestsWizard({
                 onPress={() => void onContinue()}
                 loading={saveRoom.isPending}
               />
-              <View className="flex-row gap-2">
-                <View style={{ flex: 1 }}>
-                  <Button title={copy('interests.none', tone)} variant="outline" onPress={() => void onNone()} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Button title={copy('interests.skip', tone)} variant="ghost" onPress={() => void onSkip()} />
-                </View>
-              </View>
+              <Button title={copy('interests.skip', tone)} variant="ghost" onPress={() => void onSkip()} />
             </>
           )}
         </View>
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Close"
-        onPress={leave}
+        accessibilityLabel={onCard ? 'Back' : 'Close'}
+        onPress={onCard ? () => setCardIndex(null) : leave}
         style={{
           position: 'absolute',
           top: 8,
@@ -368,7 +408,7 @@ export function InterestsWizard({
           justifyContent: 'center',
         }}>
         <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
-          {copy('interests.close')}
+          {onCard ? 'Back' : copy('interests.close')}
         </AppText>
       </Pressable>
     </BackdropSlot>

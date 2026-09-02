@@ -11,12 +11,15 @@ export type InterestRoomSlug = (typeof INTEREST_ROOM_SLUGS)[number];
 
 export type InterestRoomState = 'incomplete' | 'complete_empty' | 'complete_filled';
 
+export type QtyPeriod = 'session' | 'day' | 'week' | 'month' | 'year';
+
 export type InterestChipDef = {
   slug: string;
   label: string;
   allowsIndoorOutdoor: boolean;
   ratingKind: 'dupr' | 'utr' | 'ntrp' | 'handicap' | 'mmr' | 'grade' | 'other' | null;
   qtyKind: 'pages_week' | 'books_year' | 'miles_outing' | 'sessions_week' | 'fasting_hours' | null;
+  defaultPeriod?: QtyPeriod;
   isWork?: boolean;
   isOther?: boolean;
 };
@@ -40,22 +43,22 @@ const FITNESS: InterestChipDef[] = [
   { slug: 'hyrox', label: 'Hyrox', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'pilates', label: 'Pilates', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'rowing', label: 'Rowing', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'miles_outing' },
-  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null, isOther: true },
+  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week', isOther: true },
 ];
 
 const SPORTS: InterestChipDef[] = [
-  { slug: 'pickleball', label: 'Pickleball', allowsIndoorOutdoor: true, ratingKind: 'dupr', qtyKind: null },
-  { slug: 'tennis', label: 'Tennis', allowsIndoorOutdoor: true, ratingKind: 'utr', qtyKind: null },
-  { slug: 'golf', label: 'Golf', allowsIndoorOutdoor: true, ratingKind: 'handicap', qtyKind: null },
+  { slug: 'pickleball', label: 'Pickleball', allowsIndoorOutdoor: true, ratingKind: 'dupr', qtyKind: 'sessions_week' },
+  { slug: 'tennis', label: 'Tennis', allowsIndoorOutdoor: true, ratingKind: 'utr', qtyKind: 'sessions_week' },
+  { slug: 'golf', label: 'Golf', allowsIndoorOutdoor: true, ratingKind: 'handicap', qtyKind: 'sessions_week' },
   { slug: 'basketball', label: 'Basketball', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'soccer', label: 'Soccer', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'baseball', label: 'Baseball', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'volleyball', label: 'Volleyball', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
-  { slug: 'climbing', label: 'Climbing', allowsIndoorOutdoor: true, ratingKind: 'grade', qtyKind: null },
+  { slug: 'climbing', label: 'Climbing', allowsIndoorOutdoor: true, ratingKind: 'grade', qtyKind: 'sessions_week' },
   { slug: 'martial_arts', label: 'Martial arts', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'hockey', label: 'Hockey', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'football', label: 'Football', allowsIndoorOutdoor: true, ratingKind: null, qtyKind: 'sessions_week' },
-  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null, isOther: true },
+  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week', isOther: true },
 ];
 
 const PERSONAL: InterestChipDef[] = [
@@ -67,36 +70,36 @@ const PERSONAL: InterestChipDef[] = [
   { slug: 'languages', label: 'Languages', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'music', label: 'Music', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'writing', label: 'Writing', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'pages_week' },
-  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null, isOther: true },
+  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week', isOther: true },
 ];
 
 const RELATIONSHIPS: InterestChipDef[] = [
-  { slug: 'dating', label: 'Dating', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null },
-  { slug: 'marriage', label: 'Marriage', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null },
-  { slug: 'friendship', label: 'Friendship', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null },
-  { slug: 'communication', label: 'Communication', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null },
-  { slug: 'family', label: 'Family', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null },
-  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null, isOther: true },
+  { slug: 'dating', label: 'Dating', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
+  { slug: 'marriage', label: 'Marriage', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
+  { slug: 'friendship', label: 'Friendship', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
+  { slug: 'communication', label: 'Communication', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
+  { slug: 'family', label: 'Family', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
+  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week', isOther: true },
 ];
 
 const ESPORTS: InterestChipDef[] = [
-  { slug: 'league', label: 'League', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'cs2', label: 'CS2', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'valorant', label: 'Valorant', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'dota_2', label: 'Dota 2', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'mlbb', label: 'MLBB', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'pubg_mobile', label: 'PUBG Mobile', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'fortnite', label: 'Fortnite', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'rocket_league', label: 'Rocket League', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'apex', label: 'Apex', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'cod', label: 'CoD', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'ea_fc', label: 'EA FC', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'nba_2k', label: 'NBA 2K', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'sf_tekken', label: 'SF/Tekken', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'smash', label: 'Smash', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'starcraft_ii', label: 'StarCraft II', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'free_fire', label: 'Free Fire', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: null },
-  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null, isOther: true },
+  { slug: 'league', label: 'League', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'cs2', label: 'CS2', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'valorant', label: 'Valorant', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'dota_2', label: 'Dota 2', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'mlbb', label: 'MLBB', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'pubg_mobile', label: 'PUBG Mobile', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'fortnite', label: 'Fortnite', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'rocket_league', label: 'Rocket League', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'apex', label: 'Apex', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'cod', label: 'CoD', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'ea_fc', label: 'EA FC', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'nba_2k', label: 'NBA 2K', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'sf_tekken', label: 'SF/Tekken', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'smash', label: 'Smash', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'starcraft_ii', label: 'StarCraft II', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'free_fire', label: 'Free Fire', allowsIndoorOutdoor: false, ratingKind: 'mmr', qtyKind: 'sessions_week' },
+  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week', isOther: true },
 ];
 
 const OUTDOORS: InterestChipDef[] = [
@@ -109,7 +112,7 @@ const OUTDOORS: InterestChipDef[] = [
   { slug: 'skiing', label: 'Skiing', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'snowboarding', label: 'Snowboarding', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'gardening', label: 'Gardening', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
-  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: null, isOther: true },
+  { slug: 'other', label: 'Other', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week', isOther: true },
 ];
 
 export const INTEREST_ROOMS: readonly InterestRoomDef[] = [
@@ -155,6 +158,20 @@ export const INTEREST_PROMPT = {
   title: 'What do you currently excel at or want to improve?',
   sub: 'This will help us improve your experience and design custom challenges and training.',
 } as const;
+
+export const ROOM_REQUEST = 'Which of these are you currently doing or would like to improve?';
+
+export const NONE_CHIP_SLUG = 'none_of_these';
+
+export function defaultQtyPeriod(chip: InterestChipDef): QtyPeriod {
+  if (chip.defaultPeriod) {
+    return chip.defaultPeriod;
+  }
+  if (chip.qtyKind === 'books_year') {
+    return 'year';
+  }
+  return 'week';
+}
 
 export function isInterestRoomSlug(value: string): value is InterestRoomSlug {
   return (INTEREST_ROOM_SLUGS as readonly string[]).includes(value);
