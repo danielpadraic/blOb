@@ -10,22 +10,12 @@ import {
   type CompressKind,
 } from '@/utils/compressImage';
 import { getErrorMessage } from '@/utils/errors';
+import type { UploadProgressHandler } from '@/lib/uploadProgress';
+
+export type { UploadProgressEvent, UploadProgressHandler } from '@/lib/uploadProgress';
+export { uploadProgressPercent } from '@/lib/uploadProgress';
 
 export type StorageBucket = 'avatars' | 'challenge-proofs' | 'post-media' | 'bug-reports';
-
-export type UploadProgressEvent = {
-  loaded: number;
-  total: number;
-};
-
-export type UploadProgressHandler = (event: UploadProgressEvent) => void;
-
-export function uploadProgressPercent(loaded: number, total: number): number | null {
-  if (!Number.isFinite(loaded) || !Number.isFinite(total) || total <= 0) {
-    return null;
-  }
-  return Math.max(0, Math.min(100, Math.round((loaded / total) * 100)));
-}
 
 const IMAGE_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/gif']);
 

@@ -1675,7 +1675,7 @@ export function useCreatePost(challengeId?: string | null) {
           quoted_post_id: input.quotedPostId ?? null,
           quote_snapshot: input.quoteSnapshot ?? null,
           wall_host_id: input.wallHostId ?? null,
-          wall_host: input.wallHostId ? { id: input.wallHostId } : null,
+          wall_host: input.wallHostId ? ({ id: input.wallHostId } as PostWithMeta['wall_host']) : null,
           source: input.source ?? 'feed',
           type: input.type ?? 'feed',
           duration_ms: input.durationMs ?? null,
@@ -1701,12 +1701,13 @@ export function useCreatePost(challengeId?: string | null) {
         return;
       }
       try {
-        const authorId = safeUserId(profile, user.id, createdPost?.author, createdPost?.author_id) ?? user.id;
+        const row = createdPost as PostWithMeta;
+        const authorId = safeUserId(profile, user.id, row.author, row.author_id) ?? user.id;
         const author =
           asPublicProfile({ ...(profile ?? {}), id: authorId }) ??
-          createdPost?.author ??
+          row.author ??
           stubAuthor(authorId);
-        const posted = asFeedPost(createdPost, author, input.mentionedUserIds);
+        const posted = asFeedPost(row, author, input.mentionedUserIds);
         seedPublishedPost(queryClient, user.id, posted);
         if (isHomeExcludedClipType(posted.type ?? input.type)) {
           return;
@@ -1727,10 +1728,11 @@ export function useCreatePost(challengeId?: string | null) {
           return mapped ?? prependFeedCache(current, posted);
         });
       } catch {
+        const row = createdPost as PostWithMeta;
         logMissingPublishAuthor({
-          type: input.type ?? createdPost?.type,
-          postId: createdPost?.id,
-          hasAuthor: Boolean(createdPost?.author),
+          type: input.type ?? row.type,
+          postId: row.id,
+          hasAuthor: Boolean(row.author),
         });
       }
     },

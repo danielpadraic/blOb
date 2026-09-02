@@ -28,6 +28,7 @@ import {
   useCreateReel,
   useCreateStory,
   useStoryChallengeOptions,
+  type ReelItem,
 } from '@/hooks/useSocial';
 import { cameraIsAvailable, ensureCapturePermissions, ensureLibraryPermission, openAppSettings, type MediaPermissionResult } from '@/lib/mediaPermissions';
 import {
@@ -53,9 +54,10 @@ import { fetchActiveChallenges } from '@/lib/challenges';
 import { pickHostedRoundChallengeId } from '@/lib/homeRounds';
 import { attachClipPostId } from '@/lib/social';
 import { sessionAuthor } from '@/lib/safeIds';
+import { uploadProgressPercent } from '@/lib/uploadProgress';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { asGalleryMedia, localUriFromPickerAsset } from '@/utils/media';
-import { uploadPostMedia, uploadProgressPercent, uploadStoryMedia } from '@/utils/upload';
+import { uploadPostMedia, uploadStoryMedia } from '@/utils/upload';
 
 type CaptureStudioProps = {
   initialMode?: CaptureMode;
@@ -369,7 +371,12 @@ export function CaptureStudio({
         }
         seedPublishedReel(
           queryClient,
-          { ...reel, id: publishedReelId, user_id: reel.user_id || user.id, profile: sessionAuthor(profile, user.id) },
+          {
+            ...reel,
+            id: publishedReelId,
+            user_id: reel.user_id || user.id,
+            profile: sessionAuthor(profile, user.id) as ReelItem['profile'],
+          },
           profile ?? { id: user.id },
         );
         try {

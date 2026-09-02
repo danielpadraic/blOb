@@ -114,6 +114,7 @@ describe('clip rail', () => {
     expect(solo.stories.map((row) => row.id)).toEqual(['other', 'new']);
     expect(solo.startIndex).toBe(1);
     expect(flattenWaveStories({ groups, startStoryId: 'new' }).stories.map((row) => row.id)).toEqual(['new']);
+    expect(authorRanges([undefined as never, { authorId: 'p1' }]).map((row) => row.authorId)).toEqual(['', 'p1']);
   });
 
   it('plays Rounds in rail order and starts on the tapped clip', () => {

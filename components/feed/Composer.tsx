@@ -38,8 +38,9 @@ import { supabase } from '@/lib/supabase';
 import type { ComposeInput, QuoteSnapshot } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { asGalleryMedia, localUriFromPickerAsset } from '@/utils/media';
-import { uploadPostAttachment, uploadProgressPercent } from '@/utils/upload';
+import { uploadPostAttachment } from '@/utils/upload';
 import { posterUriFor } from '@/lib/videoPoster';
+import { uploadProgressPercent } from '@/lib/uploadProgress';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
@@ -152,6 +153,19 @@ export function Composer({
     persistDraft(docRef.current, attachments);
   }, [attachments, persistDraft]);
 
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+    for (const item of attachments) {
+      if (item.kind !== 'gif' && !item.remoteUrl && item.progress == null && !item.error) {
+        void uploadQueued(item);
+      }
+    }
+    // Resume a stored draft once; new attaches call uploadQueued themselves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   function cancelCollapse() {
     if (blurTimer.current) {
       clearTimeout(blurTimer.current);
@@ -211,21 +225,17 @@ export function Composer({
     (audience !== 'specific' || audienceUserIds.length > 0);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
+    if (attachments.length >= 4) {
+      Alert.alert('That’s a full blob', 'You can attach up to 4 things per post.');
+      return;
+    }
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const next: Attachment =
       attachment.kind === 'gif'
         ? { ...attachment, id, remoteUrl: attachment.uri, progress: 100 }
         : { ...attachment, id, progress: 0, remoteUrl: null };
-    let accepted = false;
-    setAttachments((current) => {
-      if (current.length >= 4) {
-        Alert.alert('That’s a full blob', 'You can attach up to 4 things per post.');
-        return current;
-      }
-      accepted = true;
-      return [...current, next];
-    });
-    if (accepted && next.kind !== 'gif') {
+    setAttachments((current) => [...current, next]);
+    if (next.kind !== 'gif') {
       void uploadQueued(next);
     }
   }
