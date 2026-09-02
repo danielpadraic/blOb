@@ -35,6 +35,13 @@ export function clampStanceScore(value: number): number {
   return Math.min(5, Math.max(1, Math.round(value)));
 }
 
+/** Vertical stance track: 1 = top (Excel), 5 = bottom (Leveling up). Default 3. */
+export function stanceFromTrackTop(t: number): number {
+  return clampStanceScore(t * 4 + 1);
+}
+
+export const CARD_SLIDE_MS = 300;
+
 /** 1–2 excel, 3 both, 4–5 level_up. */
 export function stanceMarks(score: number): ChipStance {
   const clamped = clampStanceScore(score);

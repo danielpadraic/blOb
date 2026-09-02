@@ -15,6 +15,7 @@ import {
   roomsNeedYouDot,
   setChipMark,
   stanceFromMarks,
+  stanceFromTrackTop,
   stanceMarks,
   stateForSave,
   toggleChipStance,
@@ -74,6 +75,12 @@ describe('interests stance', () => {
     expect(selected.c1).toEqual({ excel: true, levelUp: true });
     const both = setChipMark(selected, 'c1', 'levelUp');
     expect(both.c1.excel).toBe(true);
+  });
+
+  it('maps the vertical stance track with Excel at the top', () => {
+    expect(stanceFromTrackTop(0)).toBe(1);
+    expect(stanceFromTrackTop(1)).toBe(5);
+    expect(stanceFromTrackTop(0.5)).toBe(3);
   });
 
   it('clears activities when None of these is tapped, and Continue needs a choice', () => {

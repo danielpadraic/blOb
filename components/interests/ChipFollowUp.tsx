@@ -14,10 +14,7 @@ import {
   FASTING_PRACTICE_LABELS,
   INDOOR_OUTDOOR,
   INDOOR_LABELS,
-  PROOF_PREFS,
-  PROOF_LABELS,
   RATING_LABELS,
-  allProofsSelected,
   isQtyKind,
   isRatingKind,
   qtyUnitLabel,
@@ -26,8 +23,6 @@ import {
   setQtyValue,
   setRatingUnknown,
   setRatingValue,
-  toggleAllProofs,
-  toggleProof,
   type ChipFollowUp,
 } from '@/lib/interestsFollowup';
 import { copy } from '@/lib/copy';
@@ -231,27 +226,6 @@ export function ChipFollowUpCard({
           />
         </>
       ) : null}
-
-      {chip.isWork ? null : (
-        <View className="gap-1">
-          <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.proof')}</AppText>
-          <ChipRow>
-            {PROOF_PREFS.map((value) => (
-              <Chip
-                key={value}
-                label={PROOF_LABELS[value]}
-                selected={followUp.preferredProofs.includes(value)}
-                onPress={() => onChange(toggleProof(followUp, value))}
-              />
-            ))}
-            <Chip
-              label={copy('interests.allProofs')}
-              selected={allProofsSelected(followUp.preferredProofs)}
-              onPress={() => onChange(toggleAllProofs(followUp))}
-            />
-          </ChipRow>
-        </View>
-      )}
     </View>
   );
 }

@@ -15,8 +15,6 @@ import {
   setQtyValue,
   setRatingUnknown,
   setRatingValue,
-  toggleAllProofs,
-  toggleProof,
 } from '@/lib/interestsFollowup';
 import { toggleChipStance } from '@/lib/interests';
 
@@ -155,17 +153,16 @@ describe('activity card required fields', () => {
 });
 
 describe('proofs and period', () => {
-  it('stores Photo + Fitness Tracker, or all five, and never Health', () => {
-    const two = toggleProof(toggleProof(emptyFollowUp(), 'photo'), 'fitness_tracker');
-    expect(savePayload({
-      followUp: two,
-      slug: 'running',
-      ratingKind: null,
-      qtyKind: 'miles_outing',
-      allowsIndoorOutdoor: true,
-    }).preferred_proofs).toEqual(['photo', 'fitness_tracker']);
-    const all = toggleAllProofs(emptyFollowUp());
-    expect(all.preferredProofs).toHaveLength(5);
+  it('does not require proof on an Activity Card', () => {
+    const chip = chipDef('health_fitness', 'running')!;
+    const followUp = {
+      ...emptyFollowUp(),
+      currentQty: 3,
+      goalQty: 5,
+      qtyPeriod: 'week' as const,
+      indoorOutdoor: 'outdoor' as const,
+    };
+    expect(activityCardBlocked({ chip, followUp })).toBeNull();
     expect(PROOF_LABELS.fitness_tracker).not.toMatch(/health/i);
   });
 

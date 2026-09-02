@@ -203,8 +203,6 @@ export function useSaveInterestRoom() {
           goal_qty: fields.goal_qty,
           qty_period: fields.qty_period,
           indoor_outdoor: fields.indoor_outdoor,
-          preferred_proof: fields.preferred_proof,
-          preferred_proofs: fields.preferred_proofs,
           extras: fields.extras,
           is_public: prior?.is_public ?? false,
           pinned: prior?.pinned ?? false,

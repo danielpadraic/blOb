@@ -4,9 +4,13 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/AppText';
-import { clampStanceScore } from '@/lib/interests';
+import { clampStanceScore, stanceFromTrackTop } from '@/lib/interests';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
+
+const TRACK_H = 140;
+const THUMB = 28;
+const TRACK_W = 8;
 
 type StanceSliderProps = {
   value: number;
@@ -14,16 +18,19 @@ type StanceSliderProps = {
 };
 
 export function StanceSlider({ value, onChange }: StanceSliderProps) {
-  const width = useSharedValue(1);
+  const height = useSharedValue(TRACK_H);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const score = clampStanceScore(value);
+  // stance_score 1 = top (Excel), 5 = bottom (Leveling up).
   const ratio = (score - 1) / 4;
+  const thumbTop = ratio * (TRACK_H - THUMB);
+  const fillH = thumbTop + THUMB / 2;
 
-  function applyX(x: number) {
-    const track = width.value || 1;
-    const t = Math.min(Math.max(x / track, 0), 1);
-    onChangeRef.current(clampStanceScore(t * 4 + 1));
+  function applyY(y: number) {
+    const track = height.value || TRACK_H;
+    const t = Math.min(Math.max(y / track, 0), 1);
+    onChangeRef.current(stanceFromTrackTop(t));
   }
 
   const gesture = useMemo(
@@ -31,55 +38,58 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
       Gesture.Pan()
         .minDistance(0)
         .onBegin((event) => {
-          runOnJS(applyX)(event.x);
+          runOnJS(applyY)(event.y);
         })
         .onUpdate((event) => {
-          runOnJS(applyX)(event.x);
+          runOnJS(applyY)(event.y);
         }),
     [],
   );
 
   return (
-    <View className="gap-1">
+    <View className="items-center" style={{ gap: THEME.space[8] }}>
+      <AppText className="text-[13px] font-bold" style={{ color: THEME.textPrimary }}>
+        {copy('interests.excel')}
+      </AppText>
       <GestureDetector gesture={gesture}>
         <View
-          className="h-11 justify-center"
+          style={{
+            height: TRACK_H,
+            width: 44,
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+          }}
           onLayout={(event) => {
-            width.value = Math.max(event.nativeEvent.layout.width, 1);
+            height.value = Math.max(event.nativeEvent.layout.height, 1);
           }}
           accessibilityRole="adjustable"
           accessibilityLabel="Excel to leveling up"
           accessibilityValue={{ min: 1, max: 5, now: score }}>
-          <View className="h-6 justify-center overflow-hidden rounded-full" style={{ backgroundColor: THEME.border }}>
+          <View
+            style={{
+              width: TRACK_W,
+              height: TRACK_H,
+              borderRadius: 999,
+              backgroundColor: THEME.border,
+              overflow: 'hidden',
+            }}>
             <View
-              className="h-full rounded-full"
               style={{
-                width: `${Math.min(Math.max(ratio, 0), 1) * 100}%`,
+                width: TRACK_W,
+                height: Math.min(Math.max(fillH, 0), TRACK_H),
                 backgroundColor: THEME.accent,
+                borderRadius: 999,
               }}
             />
-            <View
-              pointerEvents="none"
-              className="absolute inset-0 flex-row items-center justify-between px-2">
-              <AppText
-                className="text-[11px] font-bold"
-                style={{ color: ratio > 0.12 ? THEME.primaryForeground : THEME.textPrimary }}>
-                {copy('interests.excel')}
-              </AppText>
-              <AppText
-                className="text-[11px] font-bold"
-                numberOfLines={1}
-                style={{ color: ratio > 0.78 ? THEME.primaryForeground : THEME.textPrimary }}>
-                {copy('interests.levelingUp')}
-              </AppText>
-            </View>
           </View>
           <View
-            className="absolute h-7 w-7 rounded-full"
+            pointerEvents="none"
             style={{
-              top: 8,
-              left: `${Math.min(Math.max(ratio, 0), 1) * 100}%`,
-              marginLeft: -14,
+              position: 'absolute',
+              top: thumbTop,
+              width: THUMB,
+              height: THUMB,
+              borderRadius: 999,
               backgroundColor: THEME.surface,
               borderWidth: 2,
               borderColor: THEME.accent,
@@ -87,7 +97,9 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
           />
         </View>
       </GestureDetector>
-      <AppText className="text-center text-[13px] font-extrabold text-charcoal">{score}</AppText>
+      <AppText className="text-[13px] font-bold" style={{ color: THEME.textPrimary }}>
+        {copy('interests.levelingUp')}
+      </AppText>
     </View>
   );
 }

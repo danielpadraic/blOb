@@ -12,8 +12,6 @@ import { THEME, themeShadow } from '@/lib/theme';
 
 type ActivityCardProps = {
   chip: InterestChipDef;
-  index: number;
-  total: number;
   followUp: ChipFollowUp;
   onChange: (next: ChipFollowUp) => void;
   occupation: string;
@@ -28,8 +26,6 @@ type ActivityCardProps = {
 
 export function ActivityCard({
   chip,
-  index,
-  total,
   followUp,
   onChange,
   occupation,
@@ -45,14 +41,11 @@ export function ActivityCard({
     <ScrollView
       contentContainerStyle={{
         paddingHorizontal: 16,
-        paddingTop: 56,
+        paddingTop: 12,
         paddingBottom: 16,
         alignItems: 'center',
       }}
       keyboardShouldPersistTaps="handled">
-      <AppText className="mb-3 self-start text-[13px] font-semibold" style={{ color: THEME.accentBright }}>
-        {chip.label}  {index + 1} of {total}
-      </AppText>
       <View
         className="w-full gap-3 p-4"
         style={{

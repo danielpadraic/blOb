@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActivityCard } from '@/components/interests/ActivityCard';
+import { ActivityCardPager, type ActivityCardPagerHandle } from '@/components/interests/ActivityCardPager';
 import { BackdropSlot } from '@/components/interests/BackdropSlot';
+import { useReduceMotion } from '@/components/interests/useReduceMotion';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
@@ -73,6 +75,9 @@ export function InterestsWizard({
   const [employer, setEmployer] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [hydratedRoom, setHydratedRoom] = useState<string | null>(null);
+  const [sliding, setSliding] = useState(false);
+  const pagerRef = useRef<ActivityCardPagerHandle>(null);
+  const reduceMotion = useReduceMotion();
   const units = preferredUnitSystem(profile);
 
   const room = step === 'prompt' ? null : roomDef(step);
@@ -224,7 +229,7 @@ export function InterestsWizard({
   }
 
   async function onCardNext() {
-    if (step === 'prompt' || !cardChip) {
+    if (step === 'prompt' || !cardChip || sliding) {
       return;
     }
     const followUp = followUps[cardChip.slug] ?? emptyFollowUp(defaultQtyPeriod(cardChip));
@@ -254,13 +259,32 @@ export function InterestsWizard({
         employer,
       });
       if (last) {
+        setSliding(true);
+        await pagerRef.current?.exit('left');
+        setSliding(false);
         await goNext(step);
         return;
       }
       setCardIndex((current) => (current == null ? 0 : current + 1));
     } catch (error) {
+      setSliding(false);
       setFormError(error instanceof Error ? error.message : copy('error.preferenceSave', tone));
     }
+  }
+
+  async function onCardBack() {
+    if (sliding || cardIndex == null) {
+      return;
+    }
+    if (cardIndex > 0) {
+      setFormError(null);
+      setCardIndex(cardIndex - 1);
+      return;
+    }
+    setSliding(true);
+    await pagerRef.current?.exit('right');
+    setSliding(false);
+    setCardIndex(null);
   }
 
   const title = step === 'prompt' ? INTEREST_PROMPT.title : room?.title ?? '';
@@ -272,25 +296,70 @@ export function InterestsWizard({
     <BackdropSlot roomSlug={step === 'prompt' ? 'health_fitness' : step} playing={!onCard}>
       <View style={{ flex: 1, minHeight: 0 }}>
         {onCard && cardChip ? (
-          <ActivityCard
-            chip={cardChip}
-            index={cardIndex ?? 0}
-            total={selectedChips.length}
-            followUp={followUps[cardChip.slug] ?? emptyFollowUp(defaultQtyPeriod(cardChip))}
-            onChange={(next) => {
-              setFollowUps((current) => ({ ...current, [cardChip.slug]: next }));
-              setStances((current) => ({ ...current, [cardChip.slug]: stanceMarks(next.stanceScore) }));
-              setFormError(null);
-            }}
-            occupation={occupation}
-            employer={employer}
-            otherText={otherText}
-            onOccupation={setOccupation}
-            onEmployer={setEmployer}
-            onOtherText={setOtherText}
-            error={formError}
-            units={units}
-          />
+          <View style={{ flex: 1, minHeight: 0 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: 8,
+                paddingHorizontal: 16,
+                paddingTop: 8,
+                paddingBottom: 8,
+              }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                onPress={() => void onCardBack()}
+                style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}>
+                <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
+                  Back
+                </AppText>
+              </Pressable>
+              <View style={{ flex: 1, minWidth: 0, paddingTop: 10, gap: 8 }}>
+                <AppText
+                  className="text-[13px] font-semibold"
+                  numberOfLines={1}
+                  style={{ color: THEME.accentBright }}>
+                  {cardChip.label} · {(cardIndex ?? 0) + 1} of {selectedChips.length}
+                </AppText>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {selectedChips.map((chip, index) => (
+                    <View
+                      key={chip.slug}
+                      style={{
+                        flex: 1,
+                        height: 3,
+                        borderRadius: 999,
+                        backgroundColor: index <= (cardIndex ?? 0) ? THEME.accent : THEME.border,
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+            </View>
+            <ActivityCardPager ref={pagerRef} index={cardIndex ?? 0} reduceMotion={reduceMotion}>
+              {selectedChips.map((chip, index) => (
+                <ActivityCard
+                  key={chip.slug}
+                  chip={chip}
+                  followUp={followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))}
+                  onChange={(next) => {
+                    setFollowUps((current) => ({ ...current, [chip.slug]: next }));
+                    setStances((current) => ({ ...current, [chip.slug]: stanceMarks(next.stanceScore) }));
+                    setFormError(null);
+                  }}
+                  occupation={occupation}
+                  employer={employer}
+                  otherText={otherText}
+                  onOccupation={setOccupation}
+                  onEmployer={setEmployer}
+                  onOtherText={setOtherText}
+                  error={index === cardIndex ? formError : null}
+                  units={units}
+                />
+              ))}
+            </ActivityCardPager>
+          </View>
         ) : (
           <ScrollView
             contentContainerStyle={{
@@ -380,7 +449,7 @@ export function InterestsWizard({
               }
               size="lg"
               onPress={() => void onCardNext()}
-              loading={saveRoom.isPending}
+              loading={saveRoom.isPending || sliding}
             />
           ) : (
             <>
@@ -395,22 +464,24 @@ export function InterestsWizard({
           )}
         </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={onCard ? 'Back' : 'Close'}
-        onPress={onCard ? () => setCardIndex(null) : leave}
-        style={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          minWidth: 44,
-          minHeight: 44,
-          justifyContent: 'center',
-        }}>
-        <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
-          {onCard ? 'Back' : copy('interests.close')}
-        </AppText>
-      </Pressable>
+      {onCard ? null : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={leave}
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            minWidth: 44,
+            minHeight: 44,
+            justifyContent: 'center',
+          }}>
+          <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
+            {copy('interests.close')}
+          </AppText>
+        </Pressable>
+      )}
     </BackdropSlot>
   );
 }

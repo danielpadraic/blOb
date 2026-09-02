@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
-import { Chip, ChipRow } from '@/components/ui/Chip';
 import { AppText } from '@/components/ui/AppText';
 import {
   clampQty,
@@ -179,17 +178,46 @@ export function QtyPairSlider({
       <QtySlider label={`Current · ${unit}`} kind={kind} value={current} onChange={onCurrent} />
       <QtySlider label={`Goal · ${unit}`} kind={kind} value={goal} onChange={onGoal} />
       {onPeriod ? (
-        <View className="gap-1">
-          <ChipRow>
-            {QTY_PERIODS.map((value) => (
-              <Chip
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'nowrap',
+            gap: 4,
+            width: '100%',
+          }}>
+          {QTY_PERIODS.map((value) => {
+            const on = period === value;
+            return (
+              <Pressable
                 key={value}
-                label={QTY_PERIOD_LABELS[value]}
-                selected={period === value}
                 onPress={() => onPeriod(value)}
-              />
-            ))}
-          </ChipRow>
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 28,
+                  paddingHorizontal: 2,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: on ? THEME.accent : THEME.surface,
+                  borderColor: on ? THEME.accent : THEME.border,
+                }}>
+                <AppText
+                  numberOfLines={1}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: '700',
+                    lineHeight: 12,
+                    color: on ? THEME.accentForeground : THEME.textPrimary,
+                  }}>
+                  {QTY_PERIOD_LABELS[value]}
+                </AppText>
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
     </View>
