@@ -3,9 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import {
   INTEREST_ROOM_SLUGS,
+  chipDef,
   type InterestRoomSlug,
 } from '@/lib/interestsCatalog';
 import { type ChipStance, type RoomSaveAction, stateForSave } from '@/lib/interests';
+import { emptyFollowUp, savePayload, type ChipFollowUp } from '@/lib/interestsFollowup';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -17,6 +19,7 @@ export type CatalogChipRow = {
   sort_order: number;
   allows_indoor_outdoor: boolean;
   rating_kind: string | null;
+  qty_kind: string | null;
 };
 
 export type ProfileInterestRoomRow = {
@@ -29,6 +32,13 @@ export type ProfileInterestChipRow = {
   chip_id: string;
   excel: boolean;
   level_up: boolean;
+  rating_value: number | string | null;
+  rating_unknown: boolean;
+  current_qty: number | string | null;
+  goal_qty: number | string | null;
+  indoor_outdoor: string | null;
+  preferred_proof: string | null;
+  extras: unknown;
   is_public: boolean;
   pinned: boolean;
   pin_rank: number | null;
@@ -43,7 +53,7 @@ export const interestsKeys = {
 async function fetchCatalog(): Promise<CatalogChipRow[]> {
   const { data, error } = await supabase
     .from('interest_chips')
-    .select('id, room_slug, slug, label, sort_order, allows_indoor_outdoor, rating_kind')
+    .select('id, room_slug, slug, label, sort_order, allows_indoor_outdoor, rating_kind, qty_kind')
     .order('sort_order', { ascending: true });
   if (error) {
     throw new Error(getErrorMessage(error));
@@ -72,7 +82,9 @@ export function useMyInterests() {
         supabase.from('profile_interest_rooms').select('room_slug, state, skipped_at').eq('user_id', userId!),
         supabase
           .from('profile_interest_chips')
-          .select('chip_id, excel, level_up, is_public, pinned, pin_rank')
+          .select(
+            'chip_id, excel, level_up, rating_value, rating_unknown, current_qty, goal_qty, indoor_outdoor, preferred_proof, extras, is_public, pinned, pin_rank',
+          )
           .eq('user_id', userId!),
         supabase.from('profile_work').select('occupation, employer').eq('user_id', userId!).maybeSingle(),
         supabase.from('interest_other_text').select('room_slug, raw_text').eq('user_id', userId!),
@@ -109,6 +121,7 @@ export function useSaveInterestRoom() {
       room: InterestRoomSlug;
       action: RoomSaveAction;
       stances: Record<string, ChipStance>;
+      followUps?: Record<string, ChipFollowUp>;
       otherText?: string;
       occupation?: string;
       employer?: string;
@@ -176,11 +189,26 @@ export function useSaveInterestRoom() {
         const insert = await supabase.from('profile_interest_chips').insert(
           selected.map((row) => {
             const prior = pinById.get(row.chip.id);
+            const local = chipDef(input.room, row.chip.slug);
+            const fields = savePayload({
+              followUp: input.followUps?.[row.chip.slug] ?? emptyFollowUp(),
+              slug: row.chip.slug,
+              ratingKind: row.chip.rating_kind ?? local?.ratingKind ?? null,
+              qtyKind: row.chip.qty_kind ?? local?.qtyKind ?? null,
+              allowsIndoorOutdoor: row.chip.allows_indoor_outdoor || Boolean(local?.allowsIndoorOutdoor),
+            });
             return {
               user_id: user.id,
               chip_id: row.chip.id,
               excel: row.stance.excel,
               level_up: row.stance.levelUp,
+              rating_value: fields.rating_value,
+              rating_unknown: fields.rating_unknown,
+              current_qty: fields.current_qty,
+              goal_qty: fields.goal_qty,
+              indoor_outdoor: fields.indoor_outdoor,
+              preferred_proof: fields.preferred_proof,
+              extras: fields.extras,
               is_public: prior?.is_public ?? false,
               pinned: prior?.pinned ?? false,
               pin_rank: prior?.pinned ? prior.pin_rank : null,

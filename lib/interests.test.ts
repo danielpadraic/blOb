@@ -105,7 +105,9 @@ describe('You reminder dot', () => {
 });
 
 describe('public profile', () => {
-  it('does not select birth date, occupation, or employer', () => {
-    expect(PUBLIC_PROFILE_COLUMNS).not.toMatch(/date_of_birth|occupation|employer/);
+  it('does not select birth date, occupation, employer, ratings, or proof', () => {
+    expect(PUBLIC_PROFILE_COLUMNS).not.toMatch(
+      /date_of_birth|occupation|employer|rating_value|preferred_proof/,
+    );
   });
 });

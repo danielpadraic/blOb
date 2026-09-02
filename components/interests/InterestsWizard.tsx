@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackdropSlot } from '@/components/interests/BackdropSlot';
+import { ChipFollowUpCard } from '@/components/interests/ChipFollowUp';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
@@ -14,10 +15,21 @@ import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useInterestCatalog, useMyInterests, useSaveInterestRoom } from '@/hooks/useInterests';
 import { continueBlocked, setChipMark, toggleChipStance, type ChipStance } from '@/lib/interests';
 import {
+  dropFollowUp,
+  ensureFollowUp,
+  followUpFromRow,
+  isQtyKind,
+  isRatingKind,
+  pruneFollowUps,
+  type ChipFollowUp,
+} from '@/lib/interestsFollowup';
+import {
   INTEREST_PROMPT,
   INTEREST_ROOM_SLUGS,
+  chipDef,
   nextRoomSlug,
   roomDef,
+  type InterestChipDef,
   type InterestRoomSlug,
 } from '@/lib/interestsCatalog';
 import { copy, type CopyTone } from '@/lib/copy';
@@ -43,6 +55,7 @@ export function InterestsWizard({
   const prompted = Boolean(profile?.interests_prompted_at);
   const [step, setStep] = useState<WizardStep>(prompted ? INTEREST_ROOM_SLUGS[0] : 'prompt');
   const [stances, setStances] = useState<Record<string, ChipStance>>({});
+  const [followUps, setFollowUps] = useState<Record<string, ChipFollowUp>>({});
   const [otherText, setOtherText] = useState('');
   const [occupation, setOccupation] = useState('');
   const [employer, setEmployer] = useState('');
@@ -51,33 +64,37 @@ export function InterestsWizard({
 
   const room = step === 'prompt' ? null : roomDef(step);
   const catalogChips = (catalog.data ?? []).filter((row) => row.room_slug === step);
-  const chips =
+  const chips: InterestChipDef[] =
     catalogChips.length > 0
-      ? catalogChips.map((row) => ({
-          slug: row.slug,
-          label: row.label,
-          isWork: row.slug === 'work',
-          isOther: row.slug === 'other',
-        }))
-      : (room?.chips ?? []).map((chip) => ({
-          slug: chip.slug,
-          label: chip.label,
-          isWork: Boolean(chip.isWork),
-          isOther: Boolean(chip.isOther),
-        }));
+      ? catalogChips.map((row) => {
+          const local = step === 'prompt' ? null : chipDef(step, row.slug);
+          return {
+            slug: row.slug,
+            label: row.label,
+            allowsIndoorOutdoor: row.allows_indoor_outdoor,
+            ratingKind: isRatingKind(row.rating_kind) ? row.rating_kind : (local?.ratingKind ?? null),
+            qtyKind: isQtyKind(row.qty_kind) ? row.qty_kind : (local?.qtyKind ?? null),
+            isWork: row.slug === 'work',
+            isOther: row.slug === 'other',
+          };
+        })
+      : [...(room?.chips ?? [])];
 
   useEffect(() => {
     if (step === 'prompt' || !mine.data || hydratedRoom === step) {
       return;
     }
     const next: Record<string, ChipStance> = {};
+    const nextFollow: Record<string, ChipFollowUp> = {};
     for (const row of mine.data.chips) {
       if (row.catalog?.room_slug !== step) {
         continue;
       }
       next[row.catalog.slug] = { excel: row.excel, levelUp: row.level_up };
+      nextFollow[row.catalog.slug] = followUpFromRow(row);
     }
     setStances(next);
+    setFollowUps(nextFollow);
     setOtherText(mine.data.other.find((item) => item.room_slug === step)?.raw_text ?? '');
     setOccupation(mine.data.work?.occupation ?? '');
     setEmployer(mine.data.work?.employer ?? '');
@@ -85,8 +102,19 @@ export function InterestsWizard({
     setFormError(null);
   }, [hydratedRoom, mine.data, step]);
 
+  function onChipPress(slug: string) {
+    setStances((current) => {
+      const next = toggleChipStance(current, slug);
+      setFollowUps((follow) =>
+        next[slug] ? ensureFollowUp(follow, slug) : dropFollowUp(follow, slug),
+      );
+      return next;
+    });
+  }
+
   const workOn = chips.some((chip) => chip.isWork && stances[chip.slug]);
   const otherOn = chips.some((chip) => chip.isOther && stances[chip.slug]);
+  const selectedChips = chips.filter((chip) => stances[chip.slug]);
 
   function leave() {
     if (router.canGoBack()) {
@@ -139,6 +167,7 @@ export function InterestsWizard({
         room: step,
         action: 'save',
         stances,
+        followUps: pruneFollowUps(followUps, stances),
         otherText,
         occupation,
         employer,
@@ -220,7 +249,7 @@ export function InterestsWizard({
                       selected={Boolean(stance)}
                       excel={stance?.excel}
                       levelUp={stance?.levelUp}
-                      onPress={() => setStances((current) => toggleChipStance(current, chip.slug))}
+                      onPress={() => onChipPress(chip.slug)}
                       onToggleExcel={() => setStances((current) => setChipMark(current, chip.slug, 'excel'))}
                       onToggleLevelUp={() =>
                         setStances((current) => setChipMark(current, chip.slug, 'levelUp'))
@@ -231,6 +260,15 @@ export function InterestsWizard({
               })}
             </ChipRow>
           ) : null}
+
+          {selectedChips.map((chip) => (
+            <ChipFollowUpCard
+              key={`follow-${chip.slug}`}
+              chip={chip}
+              followUp={followUps[chip.slug] ?? followUpFromRow({})}
+              onChange={(next) => setFollowUps((current) => ({ ...current, [chip.slug]: next }))}
+            />
+          ))}
 
           {workOn ? (
             <View
