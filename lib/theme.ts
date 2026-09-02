@@ -27,6 +27,10 @@ export const THEME = {
   border: '#E8EBE8',
   borderSubtle: 'rgba(25, 34, 31, 0.12)',
   danger: '#9A3B3B',
+  /** In-app player X — white glyph on a 55% dark disc. Never a 1px hairline. */
+  playerCloseDisc: 'rgba(16, 19, 18, 0.55)',
+  playerCloseGlyph: '#FFFFFF',
+  playerCloseSize: 44,
   radius: 22,
   radiusSm: 14,
   radiusLg: 22,

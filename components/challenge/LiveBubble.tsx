@@ -102,7 +102,7 @@ export const LiveBubble = memo(function LiveBubble({
           </ProfileLink>
         )}
         <View style={{ flexShrink: 1, minWidth: 0, alignItems: alignEnd ? 'flex-end' : 'flex-start' }}>
-          {alignEnd ? null : (
+          {alignEnd || checkin ? null : (
             <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
               {name}
             </AppText>

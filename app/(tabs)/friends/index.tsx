@@ -19,7 +19,6 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { CircleCard } from '@/components/circles/CircleCard';
 import { FriendCard } from '@/components/social/FriendCard';
 import { FriendRequestCard } from '@/components/social/FriendRequestCard';
-import { RecommendedProfiles } from '@/components/feed/RecommendedProfiles';
 import { FriendsHeader } from '@/components/social/FriendsHeader';
 import { UserSearchResult } from '@/components/social/UserSearchResult';
 import { Input } from '@/components/ui/Input';
@@ -46,6 +45,7 @@ import { isOfficialAccount } from '@/lib/official';
 import { CIRCLES_CREATE_HREF, directMessageHref } from '@/lib/routes';
 import {
   detectPeopleSearch,
+  namedFriendEdges,
   otherFriendshipUserId,
   peopleRelation,
   type FriendEdge,
@@ -102,12 +102,9 @@ export default function FriendsScreen() {
   const acceptRequest = useAcceptFriendRequest();
   const rejectRequest = useRejectFriendRequest();
 
-  const friends = (friendsQuery.data ?? []).filter((row) => {
-    const profile = row.profile;
-    return Boolean(profile?.id && (profile.display_name?.trim() || profile.username?.trim()));
-  });
-  const incoming = requestsQuery.data?.incoming ?? [];
-  const outgoing = requestsQuery.data?.outgoing ?? [];
+  const friends = namedFriendEdges(friendsQuery.data ?? []);
+  const incoming = namedFriendEdges(requestsQuery.data?.incoming ?? []);
+  const outgoing = namedFriendEdges(requestsQuery.data?.outgoing ?? []);
   const requestCount = incoming.length + outgoing.length;
 
   const graph = useMemo(() => {
@@ -428,7 +425,6 @@ function FriendsPane({
   if (friends.length === 0) {
     return (
       <PaneScroll refreshControl={refreshControl}>
-        <RecommendedProfiles />
         <MascotState
           kind="empty"
           title={copy('friends.empty', tone)}
@@ -446,7 +442,6 @@ function FriendsPane({
       keyExtractor={(friend) => `${friend.user_a_id}-${friend.user_b_id}`}
       style={PANE_SCROLL}
       contentContainerStyle={PANE_CONTENT}
-      ListHeaderComponent={<RecommendedProfiles />}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       initialNumToRender={16}

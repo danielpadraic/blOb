@@ -17,6 +17,7 @@ export function ChallengeScheduleMeta({
   tone = 'light',
   forceEnded = false,
   hideClock = false,
+  chipOnly = false,
 }: {
   challenge: ScheduleChallenge;
   nowMs?: number;
@@ -24,6 +25,8 @@ export function ChallengeScheduleMeta({
   tone?: 'light' | 'dark';
   forceEnded?: boolean;
   hideClock?: boolean;
+  /** Relative chip only — never also print Starts Tomorrow 9:00 AM. */
+  chipOnly?: boolean;
 }) {
   const live = challengeScheduleState(challenge, nowMs);
   const state = forceEnded
@@ -36,7 +39,7 @@ export function ChallengeScheduleMeta({
         urgent: false,
       }
     : live;
-  const showClock = !hideClock && Boolean(state.datetime || state.countdown);
+  const showClock = !chipOnly && !hideClock && Boolean(state.datetime || state.countdown);
   if (!showClock && !state.chip && !state.gate) {
     return null;
   }

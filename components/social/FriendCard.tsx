@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { personDisplayName, type FriendEdge } from '@/lib/social';
-import { THEME } from '@/lib/theme';
 
 type FriendCardProps = {
   friend: FriendEdge;
@@ -20,7 +19,6 @@ export function FriendCard({ friend, messaging, onMessage }: FriendCardProps) {
   const router = useRouter();
   const profile = friend.profile;
   const name = personDisplayName(profile);
-  const tags = profile?.skill_tags?.slice(0, 2) ?? [];
   const handle = profile?.username ?? profile?.id;
 
   return (
@@ -43,19 +41,6 @@ export function FriendCard({ friend, messaging, onMessage }: FriendCardProps) {
               @{profile.username}
             </AppText>
           ) : null}
-          {tags.length > 0 ? (
-            <AppText className="mt-1 text-[12px] text-muted" numberOfLines={1}>
-              {tags.join(' · ')}
-            </AppText>
-          ) : profile?.bio ? (
-            <AppText className="mt-1 text-[12px] text-muted" numberOfLines={2}>
-              {profile.bio}
-            </AppText>
-          ) : (
-            <AppText className="mt-1 text-[12px]" style={{ color: THEME.accent }}>
-              Ready to compete
-            </AppText>
-          )}
         </View>
       </View>
       <View className="mt-3 flex-row gap-2">

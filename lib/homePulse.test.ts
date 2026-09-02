@@ -24,8 +24,11 @@ describe('selectPulseChallenges', () => {
 });
 
 describe('pulseSnippet', () => {
-  it('uses the Live line, Check-in Complete, or No chatter yet', () => {
-    expect(pulseSnippet({ content: 'starting now', source: 'challenge' })).toBe('starting now');
+  it('uses last check-in state, never the latest Live chat line', () => {
+    expect(pulseSnippet({ content: '@Mrs. H was that the last lap?', source: 'challenge' })).toBe(
+      'No chatter yet',
+    );
+    expect(pulseSnippet({ source: 'checkin', checkin_stage: 'started' })).toBe('Check-in');
     expect(pulseSnippet({ source: 'checkin', checkin_stage: 'complete' })).toBe('Check-in Complete');
     expect(pulseSnippet(null)).toBe('No chatter yet');
     expect(pulseSnippet({ content: '', media_urls: [] })).toBe('No chatter yet');
@@ -58,13 +61,35 @@ describe('buildPulsePills', () => {
     const pills = buildPulsePills({ challenges, posts });
     expect(pills).toHaveLength(PULSE_CAP);
     expect(pills.map((row) => row.id).includes('c14')).toBe(false);
-    expect(pills[0]).toMatchObject({ id: 'c3', snippet: 'later' });
-    expect(pills[1]).toMatchObject({ id: 'c2', snippet: 'starting now' });
-    expect(pills.find((row) => row.id === 'c1')).toMatchObject({
+    expect(pills[0]).toMatchObject({
+      id: 'c1',
       title: 'Official Weekly',
       snippet: 'Check-in Complete',
     });
+    expect(pills.find((row) => row.id === 'c2')?.snippet).toBe('No chatter yet');
+    expect(pills.find((row) => row.id === 'c3')?.snippet).toBe('No chatter yet');
     expect(pills.find((row) => row.id === 'c4')?.snippet).toBe('No chatter yet');
+  });
+
+  it('keeps Check-in Complete when a later Live reply exists', () => {
+    const pills = buildPulsePills({
+      challenges: [{ id: 'c1', status: 'live', title: '30-Day' }],
+      posts: [
+        {
+          challenge_id: 'c1',
+          content: '@Mrs. H was that the last lap?',
+          source: 'challenge',
+          created_at: '2026-09-01T19:00:00.000Z',
+        },
+        {
+          challenge_id: 'c1',
+          source: 'checkin',
+          checkin_stage: 'complete',
+          created_at: '2026-09-01T12:00:00.000Z',
+        },
+      ],
+    });
+    expect(pills[0].snippet).toBe('Check-in Complete');
   });
 
   it('takes up to three recent Live authors for the face pile', () => {

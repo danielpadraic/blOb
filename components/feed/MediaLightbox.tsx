@@ -25,6 +25,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
+import { PlayerCloseButton } from '@/components/ui/PlayerCloseButton';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
@@ -228,14 +229,9 @@ function MediaLightboxOverlay({
             ))}
           </ScrollView>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={8}
-            onPress={onClose}
-            style={[styles.close, { top: Math.max(insets.top, 8) }]}>
-            <AppText style={styles.closeGlyph}>×</AppText>
-          </Pressable>
+          <View style={[styles.close, { top: Math.max(insets.top, 8) }]}>
+            <PlayerCloseButton accessibilityLabel="Close" onPress={onClose} />
+          </View>
 
           {items.length > 1 ? (
             <View
@@ -423,20 +419,8 @@ const styles = StyleSheet.create({
   },
   close: {
     position: 'absolute',
-    right: 12,
+    left: 12,
     zIndex: 4,
-    height: 44,
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 22,
-    backgroundColor: 'rgba(16, 19, 18, 0.45)',
-  },
-  closeGlyph: {
-    color: THEME.primaryForeground,
-    fontSize: 28,
-    fontWeight: '500',
-    lineHeight: 30,
   },
   dots: {
     position: 'absolute',

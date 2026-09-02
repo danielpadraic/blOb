@@ -292,6 +292,19 @@ export function isAcceptedFriend(row: Pick<Friendship, 'status'>): boolean {
   return row.status === 'accepted';
 }
 
+/** People row: accepted friend with a real display name or @handle. */
+export function isNamedFriendProfile(
+  profile?: Pick<PublicProfile, 'id' | 'display_name' | 'username'> | null,
+): boolean {
+  return Boolean(profile?.id && (profile.display_name?.trim() || profile.username?.trim()));
+}
+
+export function namedFriendEdges<T extends { profile?: Pick<PublicProfile, 'id' | 'display_name' | 'username'> | null }>(
+  rows: T[],
+): T[] {
+  return rows.filter((row) => isNamedFriendProfile(row.profile));
+}
+
 export function canRespondToFriendRequest(
   row: Pick<Friendship, 'status' | 'requested_by'>,
   userId: string,

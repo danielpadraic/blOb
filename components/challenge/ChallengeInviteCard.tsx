@@ -12,7 +12,7 @@ import {
 } from '@/components/challenge/ChallengeTypeIcon';
 import { LobbyListCardView } from '@/components/challenge/LobbyListCardView';
 import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
-import { ChallengeCardClock, ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
+import { ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
@@ -463,13 +463,6 @@ export function ChallengeInviteCard({
               <View style={{ flex: 1, minWidth: 0 }}>
                 <ChallengeTagRow tags={tags} compact />
               </View>
-              <ChallengeCardClock
-                challenge={challenge}
-                nowMs={nowMs}
-                forceEnded={section === 'ended'}
-                overlay
-                light={official}
-              />
             </View>
           </View>
         </View>
@@ -485,6 +478,7 @@ export function ChallengeInviteCard({
             nowMs={nowMs}
             compact
             hideClock
+            chipOnly
             forceEnded={section === 'ended'}
           />
           {resultLine ? (
@@ -800,7 +794,6 @@ export function LobbyChallengeRow({
           numberOfLines={2}>
           {displayTitle}
         </AppText>
-        <ChallengeCardClock challenge={challenge} nowMs={nowMs ?? tickMs} forceEnded={forceEnded} overlay />
       </View>
       <View className="flex-row items-center" style={{ gap: 8 }}>
         <View style={{ flexGrow: 1, minWidth: 0 }}>
@@ -809,6 +802,7 @@ export function LobbyChallengeRow({
             nowMs={nowMs ?? tickMs}
             compact
             hideClock
+            chipOnly
             forceEnded={forceEnded}
           />
         </View>

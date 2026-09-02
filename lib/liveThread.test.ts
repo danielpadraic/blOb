@@ -74,7 +74,8 @@ describe('liveQuotePreview', () => {
 
 describe('liveQuoteLine', () => {
   it('joins name and snippet on one line', () => {
-    expect(liveQuoteLine('Courtney', 'Check-in Complete')).toBe('Courtney · Check-in Complete');
+    expect(liveQuoteLine('Courtney', 'Check-in Complete')).toBe('Courtney');
+    expect(liveQuoteLine('Courtney', 'Check-in')).toBe('Courtney');
     expect(liveQuoteLine('Courtney', 'starting now')).toBe('Courtney · starting now');
     expect(liveQuoteLine('Courtney', '')).toBe('Courtney');
     expect(liveQuoteLine('', 'Photo')).toBe('Photo');
@@ -110,6 +111,32 @@ describe('liveReactionCounts', () => {
 });
 
 describe('buildLiveThreadRows', () => {
+  it('keeps a check-in as one receipt and does not emit its comments as lobby lines', () => {
+    const rows = buildLiveThreadRows([
+      {
+        id: 'checkin-1',
+        author_id: 'a',
+        challenge_id: 'c',
+        content: 'Checked in today',
+        media_urls: ['https://cdn.example.com/proof.jpg'],
+        created_at: '2026-09-01T12:00:00.000Z',
+        source: 'checkin',
+        checkin_stage: 'complete',
+        comments: [
+          {
+            id: 'n1',
+            post_id: 'checkin-1',
+            author_id: 'b',
+            content: 'Nice',
+            created_at: '2026-09-01T12:01:00.000Z',
+          },
+        ],
+      },
+    ]);
+    expect(rows.map((row) => row.id)).toEqual(['checkin-1']);
+    expect(rows[0]?.kind).toBe('post');
+  });
+
   it('keeps existing comments as later chat rows, not a nested card', () => {
     const rows = buildLiveThreadRows([
       {

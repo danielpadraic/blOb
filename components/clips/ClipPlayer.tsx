@@ -31,6 +31,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { PlayerCloseButton } from '@/components/ui/PlayerCloseButton';
 import { Input } from '@/components/ui/Input';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/hooks/useAuth';
@@ -681,17 +682,11 @@ export function ClipPlayer({
               paddingTop: commentsMode ? 8 : topPad + (kind === 'wave' ? 10 : 0),
               paddingHorizontal: 12,
             }}>
-            <View className="flex-row items-center">
-              <Pressable
-                accessibilityRole="button"
+            <View className="flex-row items-center" style={{ gap: 8 }}>
+              <PlayerCloseButton
                 accessibilityLabel={commentsMode ? 'Close comments' : clip.kind === 'wave' ? copy('wave.close') : 'Close'}
                 onPress={requestClose}
-                hitSlop={8}
-                style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, justifyContent: 'center' }}>
-                <AppText className="text-[22px] font-bold" style={{ color: '#fff' }}>
-                  ×
-                </AppText>
-              </Pressable>
+              />
               <Avatar uri={clip.authorAvatar} name={clip.authorName} size={36} />
               <View className="ml-2 min-w-0 flex-1">
                 <AppText className="text-[14px] font-bold" style={{ color: '#fff' }} numberOfLines={1}>

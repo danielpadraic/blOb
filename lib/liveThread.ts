@@ -85,6 +85,9 @@ export function liveQuotePreview(post: CheckinPostLike & { content?: string | nu
 export function liveQuoteLine(name?: string | null, snippet?: string | null): string {
   const who = String(name ?? '').replace(/\s+/g, ' ').trim();
   const what = String(snippet ?? '').replace(/\s+/g, ' ').trim();
+  if (what === 'Check-in' || what === 'Check-in Complete') {
+    return who;
+  }
   if (who && what) {
     return `${who} · ${what}`;
   }
@@ -200,6 +203,9 @@ export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
   const rows: LiveThreadRow[] = [];
   for (const post of sortLivePosts(posts)) {
     rows.push({ id: post.id, createdAt: post.created_at, kind: 'post', post });
+    if (isCheckinPost(post)) {
+      continue;
+    }
     for (const comment of post.comments ?? []) {
       if (!comment?.id) {
         continue;

@@ -8,8 +8,9 @@ import {
   fetchWatchedCalloutChallenges,
   type CalloutCardParty,
 } from '@/lib/callouts';
+import { isCheckinPost } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
-import { liveQuotePreview } from '@/lib/liveThread';
+import { liveCheckinLabel } from '@/lib/liveThread';
 import { challengeDetailHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -80,10 +81,10 @@ export function selectPulseChallenges<T extends PulseChallengeLike>(rows: T[]): 
 }
 
 export function pulseSnippet(post?: PulseLobbyPost | null): string {
-  if (!post || post.deleted_at) {
+  if (!post || post.deleted_at || !isCheckinPost(post)) {
     return copy('pulse.noChatter');
   }
-  return liveQuotePreview(post) || copy('pulse.noChatter');
+  return liveCheckinLabel(post);
 }
 
 export function pulseChallengeHref(id: string) {
@@ -147,10 +148,14 @@ export function buildPulsePills(input: {
       return right - left;
     });
   const latestByChallenge = new Map<string, PulseLobbyPost>();
+  const latestCheckinByChallenge = new Map<string, PulseLobbyPost>();
   for (const post of newestFirst) {
     const id = String(post.challenge_id ?? '');
     if (!latestByChallenge.has(id)) {
       latestByChallenge.set(id, post);
+    }
+    if (isCheckinPost(post) && !latestCheckinByChallenge.has(id)) {
+      latestCheckinByChallenge.set(id, post);
     }
   }
   const profiles = new Map((input.profiles ?? []).filter((row) => row?.id).map((row) => [row.id, row]));
@@ -161,6 +166,7 @@ export function buildPulsePills(input: {
   const pills = challenges.map((row) => {
     const id = String(row.id);
     const latest = latestByChallenge.get(id) ?? null;
+    const latestCheckin = latestCheckinByChallenge.get(id) ?? null;
     const isCallout = Boolean(row.is_callout);
     const party = isCallout ? parties.get(id) ?? null : null;
     const fighterFaces = calloutPartyFaces(party);
@@ -169,14 +175,14 @@ export function buildPulsePills(input: {
       id,
       title: challengeDisplayTitle(row) || 'Challenge',
       snippet: isCallout
-        ? calloutLine || (row.watching ? 'Watching' : pulseSnippet(latest))
-        : latest
-          ? pulseSnippet(latest)
+        ? calloutLine || (row.watching ? 'Watching' : pulseSnippet(latestCheckin))
+        : latestCheckin
+          ? pulseSnippet(latestCheckin)
           : row.watching
             ? 'Watching'
             : pulseSnippet(null),
       faces: isCallout && fighterFaces.length > 0 ? fighterFaces : collectPulseFaces(newestFirst, id, profiles),
-      lastAt: latest?.created_at ?? null,
+      lastAt: latestCheckin?.created_at ?? (isCallout ? latest?.created_at ?? null : null),
       isCallout,
       watching: Boolean(row.watching),
     };
@@ -216,7 +222,7 @@ async function fetchPulseLobbyPosts(challengeIds: string[]): Promise<PulseLobbyP
   return (slim.data ?? []) as PulseLobbyPost[];
 }
 
-/** Joined ∪ hosted live/upcoming + last Live line the viewer can already see. */
+/** Joined ∪ hosted live/upcoming + last check-in state the viewer can already see. */
 export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]> {
   if (!userId) {
     return [];

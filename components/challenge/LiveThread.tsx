@@ -194,7 +194,7 @@ export function LiveThread({
       const parentAuthor = parent ? resolveLiveAuthor(parent) : null;
       const postAuthor = resolveLiveAuthor(item.post);
       const quote =
-        parent && !isLiveCheckinPost(item.post)
+        parent && !isLiveCheckinPost(item.post) && !isLiveCheckinPost(parent)
           ? {
               name: parentAuthor?.name ?? 'Someone',
               text: liveQuotePreview(parent),

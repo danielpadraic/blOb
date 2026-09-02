@@ -26,7 +26,6 @@ import { copy } from '@/lib/copy';
 import { formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
 import {
   challengeScheduleState,
-  lobbyCardClock,
   lobbyListPrimaryAction,
   type ScheduleChallenge,
 } from '@/lib/lobbyChallenge';
@@ -132,7 +131,6 @@ export function LobbyListCardView({
   const hairline = official ? 'rgba(255,255,255,0.10)' : callout ? THEME.callout : THEME.border;
   const vsLine = calloutPartySubtitle(calloutParty, viewerId);
   const watchingLine = calloutWatchingCountLabel(calloutParty?.watchingCount ?? 0);
-  const clock = lobbyCardClock(challenge, nowMs, forceEnded);
   const schedule = forceEnded
     ? { chip: null as string | null, gate: null as string | null }
     : challengeScheduleState(challenge, nowMs);
@@ -243,29 +241,6 @@ export function LobbyListCardView({
                 }
               />
             </View>
-            {clock ? (
-              <View
-                style={{
-                  flexGrow: 0,
-                  flexShrink: 0,
-                  maxWidth: 148,
-                  backgroundColor: darkHero ? 'rgba(16, 19, 18, 0.46)' : THEME.surface,
-                  borderRadius: 8,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                }}>
-                <AppText
-                  style={{
-                    color: clock.urgent ? THEME.danger : darkHero ? THEME.primaryForeground : THEME.textPrimary,
-                    fontSize: 10,
-                    fontWeight: '600',
-                    fontVariant: ['tabular-nums'],
-                  }}
-                  numberOfLines={1}>
-                  {clock.line}
-                </AppText>
-              </View>
-            ) : null}
           </View>
           <AppText
             className="text-[16px] font-extrabold"
@@ -296,27 +271,6 @@ export function LobbyListCardView({
             className="flex-row items-center"
             style={{ gap: 8, minHeight: 22, flexWrap: 'wrap' }}>
             <View className="flex-row items-center" style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, gap: 8 }}>
-              {schedule.chip ? (
-                <View
-                  className="flex-row items-center"
-                  style={{
-                    borderWidth: 1,
-                    borderColor: THEME.accent,
-                    borderRadius: 999,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    gap: 4,
-                    flexShrink: 1,
-                  }}>
-                  <Glyph name={GLYPH.clock} color={THEME.accent} size={11} />
-                  <AppText
-                    className="text-[11px] font-semibold"
-                    style={{ color: THEME.accent, fontVariant: ['tabular-nums'] }}
-                    numberOfLines={1}>
-                    {schedule.chip}
-                  </AppText>
-                </View>
-              ) : null}
               {schedule.gate ? (
                 <View className="flex-row items-center" style={{ gap: 4, flexShrink: 1, minWidth: 0 }}>
                   <Glyph name={GLYPH.people} color={muted} size={12} />
