@@ -3,7 +3,7 @@ import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { circleNotificationPath } from '@/lib/circles';
 import { collapseChallengeDigests } from '@/lib/notifyDigest';
 import { postHref } from '@/lib/postShare';
-import { challengeDetailHref, conversationHref, reelHref, storyHref } from '@/lib/routes';
+import { challengeDetailHref, conversationHref, INTERESTS_HREF, reelHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
@@ -390,6 +390,9 @@ export function notificationHref(item: AppNotification): Href | null {
   if (item.type === 'profile_incomplete') {
     return '/profile/body-metrics';
   }
+  if (item.type === 'interests_reminder') {
+    return INTERESTS_HREF;
+  }
   if (item.type === 'payout_received') {
     const payoutChallengeId = notificationChallengeId(data);
     if (payoutChallengeId) {
@@ -535,6 +538,8 @@ export function notificationGlyph(type: string, data?: NotificationData): string
       return '↩️';
     case 'profile_incomplete':
       return '📋';
+    case 'interests_reminder':
+      return '👋';
     case 'bob_encouragement':
       return '👋';
     default:

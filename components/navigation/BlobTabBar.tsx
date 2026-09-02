@@ -7,7 +7,9 @@ import { ComposeTabButton } from '@/components/navigation/ComposeTabButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
 import { Avatar } from '@/components/ui/Avatar';
+import { useMyInterests, interestRoomStates } from '@/hooks/useInterests';
 import { useMyProfile } from '@/hooks/useProfile';
+import { roomsNeedYouDot } from '@/lib/interests';
 import { LOBBY_HREF } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -158,12 +160,18 @@ function TabSlot({
 
 function YouTabSlot({ selected, onPress }: { selected: boolean; onPress: () => void }) {
   const { profile } = useMyProfile();
+  const { mine } = useMyInterests();
   const name = profile ? personDisplayName(profile) : 'You';
+  const showDot = roomsNeedYouDot({
+    dismissedHome: profile?.interests_dismissed_home_at,
+    prompted: profile?.interests_prompted_at,
+    states: interestRoomStates(mine.data?.rooms),
+  });
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel="You"
+      accessibilityLabel={showDot ? 'You. Interests still open.' : 'You'}
       onPress={onPress}
       hitSlop={4}
       style={{
@@ -175,12 +183,29 @@ function YouTabSlot({ selected, onPress }: { selected: boolean; onPress: () => v
       }}>
       <View
         style={{
+          position: 'relative',
           padding: 2,
           borderRadius: 999,
           borderWidth: 2,
           borderColor: selected ? THEME.accent : 'transparent',
         }}>
         <Avatar uri={profile?.avatar_url} name={name} size={28} />
+        {showDot ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: THEME.accent,
+              borderWidth: 1,
+              borderColor: THEME.surface,
+            }}
+          />
+        ) : null}
       </View>
     </Pressable>
   );

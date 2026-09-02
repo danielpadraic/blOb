@@ -16,6 +16,7 @@ import { ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleM
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
+import { useOfficialDobOptional } from '@/components/interests/OfficialDobHost';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -24,6 +25,7 @@ import { usePeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
+import { requiresOfficialBodyMetrics } from '@/lib/challengeExperience';
 import { fetchChallengeById } from '@/lib/challenges';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
@@ -305,6 +307,7 @@ export function ChallengeInviteCard({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [joining, setJoining] = useState(false);
   const joinSheet = useJoinConfirm();
+  const officialDob = useOfficialDobOptional();
   const shareHost = useInviteHost();
   const typeTip = useChallengeTypeTip();
 
@@ -375,7 +378,17 @@ export function ChallengeInviteCard({
     if (joining || joinSheet.loading) {
       return;
     }
-    if (official && user && !hasCompletedBodyMetrics(profile)) {
+    if (challenge.is_official && officialDob && !officialDob.ensureAdult()) {
+      return;
+    }
+    if (requiresOfficialBodyMetrics({
+      is_official: challenge.is_official,
+      series_id: challenge.series_id,
+      category: challenge.category,
+      scoring_method: challenge.scoring_method,
+      scoring_config: challenge.scoring_config,
+      comparable_points_config: challenge.comparable_points_config,
+    }) && user && !hasCompletedBodyMetrics(profile)) {
       router.push(BODY_METRICS_HREF);
       return;
     }

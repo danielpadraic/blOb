@@ -66,6 +66,10 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     tutorial_completed_at: profile.tutorial_completed_at ?? null,
     create_tour_opt_out_at: profile.create_tour_opt_out_at ?? null,
     official_pitch_dismissed_challenge_id: profile.official_pitch_dismissed_challenge_id ?? null,
+    date_of_birth: (profile as Profile).date_of_birth ?? null,
+    interests_prompted_at: (profile as Profile).interests_prompted_at ?? null,
+    interests_dismissed_home_at: (profile as Profile).interests_dismissed_home_at ?? null,
+    interests_skipped_all_at: (profile as Profile).interests_skipped_all_at ?? null,
   };
 }
 

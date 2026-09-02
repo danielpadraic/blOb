@@ -100,6 +100,7 @@ export function OfficialPitchHost() {
     !suppressed &&
     Boolean(user) &&
     !tour?.active &&
+    Boolean(profile?.interests_dismissed_home_at) &&
     localReady &&
     !inOfficial.isLoading &&
     inOfficial.data === false &&

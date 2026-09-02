@@ -9,31 +9,98 @@ type ChipProps = {
   selected?: boolean;
   onPress?: () => void;
   minHeight?: number;
+  excel?: boolean;
+  levelUp?: boolean;
+  onToggleExcel?: () => void;
+  onToggleLevelUp?: () => void;
 };
 
-export function Chip({ label, selected, onPress, minHeight = 36 }: ChipProps) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  minHeight = 36,
+  excel,
+  levelUp,
+  onToggleExcel,
+  onToggleLevelUp,
+}: ChipProps) {
+  const dual = Boolean(onToggleExcel || onToggleLevelUp);
+  const fillSelected = selected && !dual;
+  return (
+    <View
+      className="items-center justify-center rounded-full px-3"
+      style={{
+        backgroundColor: fillSelected ? THEME.accent : THEME.surface,
+        borderWidth: 1,
+        borderColor: selected ? THEME.accent : THEME.border,
+        minHeight: dual && selected ? 58 : minHeight,
+        width: dual ? '100%' : undefined,
+        flexShrink: 0,
+        paddingVertical: dual && selected ? 8 : 0,
+      }}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={{ selected: Boolean(selected) }}
+        hitSlop={4}
+        className="items-center justify-center"
+        style={dual ? { width: '100%' } : undefined}>
+        <AppText
+          className="text-center text-sm font-semibold capitalize"
+          numberOfLines={1}
+          style={{
+            color: fillSelected ? THEME.accentForeground : THEME.textPrimary,
+            includeFontPadding: false,
+            textAlignVertical: 'center',
+            lineHeight: 16,
+            flexShrink: 0,
+          }}>
+          {label}
+        </AppText>
+      </Pressable>
+      {dual && selected ? (
+        <View className="mt-1 flex-row gap-1">
+          <Mark label="Excel" on={Boolean(excel)} onPress={onToggleExcel} />
+          <Mark label="Level up" on={Boolean(levelUp)} onPress={onToggleLevelUp} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function Mark({
+  label,
+  on,
+  onPress,
+}: {
+  label: string;
+  on: boolean;
+  onPress?: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityState={{ selected: Boolean(selected) }}
-      className="items-center justify-center rounded-full px-4"
+      accessibilityState={{ selected: on }}
+      accessibilityLabel={label}
+      hitSlop={4}
       style={{
-        backgroundColor: selected ? THEME.accent : THEME.surface,
+        minHeight: 22,
+        paddingHorizontal: 8,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: on ? THEME.accent : 'transparent',
         borderWidth: 1,
-        borderColor: selected ? THEME.accent : THEME.border,
-        minHeight,
-        flexShrink: 0,
+        borderColor: on ? THEME.accent : THEME.border,
       }}>
       <AppText
-        className="text-center text-sm font-semibold capitalize"
-        numberOfLines={1}
+        className="text-center text-[10px] font-semibold"
         style={{
-          color: selected ? THEME.accentForeground : THEME.textPrimary,
+          color: on ? THEME.accentForeground : THEME.textMuted,
           includeFontPadding: false,
-          textAlignVertical: 'center',
-          lineHeight: 16,
-          flexShrink: 0,
+          lineHeight: 12,
         }}>
         {label}
       </AppText>

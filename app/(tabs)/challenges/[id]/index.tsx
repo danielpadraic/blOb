@@ -31,6 +31,7 @@ import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
+import { useOfficialDob } from '@/components/interests/OfficialDobHost';
 import { JoinCtaButton, JOIN_CTA_HEIGHT } from '@/components/challenge/JoinCtaButton';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { HealthProofCaption } from '@/components/challenge/HealthProofCaption';
@@ -289,6 +290,7 @@ export default function ChallengeDetailScreen() {
   const submittedCheckins = useSubmittedCheckinCount(id, challengeQuery.data);
   const completions = usePeriodCompletions(id, challengeQuery.data);
   const joinSheet = useJoinConfirm();
+  const officialDob = useOfficialDob();
   const inviteHost = useInviteHost();
   const markJudging = useMarkChallengeJudging();
   const settle = useSettleChallenge();
@@ -753,6 +755,9 @@ export default function ChallengeDetailScreen() {
 
   function onJoinPress() {
     if (joinSheet.loading || !challenge || isHost || isJoined || !canJoinBase) {
+      return;
+    }
+    if (challenge.is_official && !officialDob.ensureAdult()) {
       return;
     }
     if (needsBodyMetrics) {

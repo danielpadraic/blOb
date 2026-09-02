@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
+import { useOfficialDob } from '@/components/interests/OfficialDobHost';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -13,6 +14,7 @@ import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { openChallengeLobby } from '@/lib/challengeOpen';
+import { requiresOfficialBodyMetrics } from '@/lib/challengeExperience';
 import { fetchOfficialDiscoverChallenges, withParticipantCounts } from '@/lib/challenges';
 import { formatCashCompact } from '@/lib/currency';
 import { fillGatePair } from '@/lib/lobbyChallenge';
@@ -58,6 +60,7 @@ export function FeaturedOfficialStrip() {
   const { profile } = useMyProfile();
   const mine = useMyChallengeProgress();
   const joinSheet = useJoinConfirm();
+  const officialDob = useOfficialDob();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const joinedIds = new Set((mine.data ?? []).map((row) => row.challenge_id));
 
@@ -94,7 +97,9 @@ export function FeaturedOfficialStrip() {
   const buyIn = Math.max(Number(card.buy_in_amount) || 0, 0);
   const title = officialHomeTitle(card);
   const joinLabel = `Join ${formatCashCompact(buyIn || 1)}`;
-  const needsBodyMetrics = Boolean(user && card.is_official && !hasCompletedBodyMetrics(profile));
+  const needsBodyMetrics = Boolean(
+    user && requiresOfficialBodyMetrics(card) && !hasCompletedBodyMetrics(profile),
+  );
   const arming = card.status === 'arming' || Boolean(card.armed_at);
   const armingLine = arming
     ? armingCountdownLabel(card.armed_at, new Date(nowMs)) ?? 'Starts in …'
@@ -107,6 +112,9 @@ export function FeaturedOfficialStrip() {
   }
 
   function onJoin() {
+    if (card.is_official && !officialDob.ensureAdult()) {
+      return;
+    }
     if (needsBodyMetrics) {
       router.push(BODY_METRICS_HREF);
       return;

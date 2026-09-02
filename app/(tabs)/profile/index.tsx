@@ -31,6 +31,7 @@ import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
 import { StreakBadgesRow } from '@/components/profile/StreakBadgesRow';
 import { PrivacySettingsCard } from '@/components/profile/PrivacySettingsCard';
+import { InterestsYouCard } from '@/components/interests/InterestsYouCard';
 import { useBugReport } from '@/components/bug/BugReportHost';
 
 const PHYSICAL_DISCLAIMER = 'Always private. Used for Challenge recommendations and competition placement.';
@@ -131,6 +132,8 @@ export default function ProfileScreen() {
         <SendWalletButton onPress={() => wallet?.openSend()} />
 
         <PrivacySettingsCard />
+
+        <InterestsYouCard profile={profile} />
 
         {hasCompletedBodyMetrics(profile) ? (
           <Card padded={false}>

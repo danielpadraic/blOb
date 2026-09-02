@@ -322,6 +322,10 @@ export interface Profile {
   tutorial_completed_at?: string | null;
   create_tour_opt_out_at?: string | null;
   official_pitch_dismissed_challenge_id?: string | null;
+  date_of_birth?: string | null;
+  interests_prompted_at?: string | null;
+  interests_dismissed_home_at?: string | null;
+  interests_skipped_all_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -752,6 +756,7 @@ export type NotificationType =
   | 'challenge_lost'
   | 'payout_received'
   | 'profile_incomplete'
+  | 'interests_reminder'
   | 'friend_request'
   | 'friend_accepted'
   | 'friend_challenge'
@@ -900,6 +905,10 @@ export type ProfileUpdate = Partial<
     | 'mute_mentions'
     | 'checkin_share_home'
     | 'checkin_share_wave'
+    | 'date_of_birth'
+    | 'interests_prompted_at'
+    | 'interests_dismissed_home_at'
+    | 'interests_skipped_all_at'
   >
 >;
 
@@ -1555,10 +1564,76 @@ export type Database = {
         Partial<BugReportRow>,
         [Relationship<'bug_reports_user_id_fkey', 'user_id', 'profiles', 'id'>]
       >;
+      interest_rooms: TableDef<{
+        slug: string;
+        title: string;
+        sort_order: number;
+      }>;
+      interest_chips: TableDef<{
+        id: string;
+        room_slug: string;
+        slug: string;
+        label: string;
+        sort_order: number;
+        allows_indoor_outdoor: boolean;
+        rating_kind: string | null;
+        qty_kind: string | null;
+      }>;
+      profile_interest_rooms: TableDef<{
+        user_id: string;
+        room_slug: string;
+        state: 'incomplete' | 'complete_empty' | 'complete_filled';
+        skipped_at: string | null;
+        completed_at: string | null;
+        updated_at: string;
+      }>;
+      profile_interest_chips: TableDef<{
+        user_id: string;
+        chip_id: string;
+        excel: boolean;
+        level_up: boolean;
+        rating_value: number | null;
+        rating_unknown: boolean;
+        current_qty: number | null;
+        goal_qty: number | null;
+        indoor_outdoor: string | null;
+        preferred_proof: string | null;
+        extras: Record<string, unknown>;
+        is_public: boolean;
+        pinned: boolean;
+        pin_rank: number | null;
+        updated_at: string;
+      }>;
+      profile_work: TableDef<{
+        user_id: string;
+        occupation: string;
+        employer: string;
+        updated_at: string;
+      }>;
+      interest_other_text: TableDef<{
+        id: string;
+        user_id: string;
+        room_slug: string;
+        raw_text: string;
+        normalized_slug: string | null;
+        created_at: string;
+      }>;
     };
     Views: {
       profiles_public: {
         Row: AsRecord<PublicProfile>;
+        Relationships: [];
+      };
+      profile_interest_chips_public: {
+        Row: AsRecord<{
+          user_id: string;
+          chip_id: string;
+          excel: boolean;
+          level_up: boolean;
+          is_public: boolean;
+          pinned: boolean;
+          pin_rank: number | null;
+        }>;
         Relationships: [];
       };
     };
@@ -2119,6 +2194,14 @@ export type Database = {
       };
       share_challenge_to_circle: {
         Args: { p_circle_id: string; p_challenge_id: string; p_caption?: string | null };
+        Returns: string;
+      };
+      notify_interests_skipped: {
+        Args: Record<string, never>;
+        Returns: string | null;
+      };
+      official_dob_status: {
+        Args: { p_uid: string };
         Returns: string;
       };
     };

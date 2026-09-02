@@ -13,7 +13,7 @@ import {
   syncDeviceTimezone,
   type NotificationNavData,
 } from '@/lib/push';
-import { BODY_METRICS_HREF, challengeDetailHref, storyHref } from '@/lib/routes';
+import { BODY_METRICS_HREF, INTERESTS_HREF, challengeDetailHref, storyHref } from '@/lib/routes';
 import type { AppNotification } from '@/lib/types';
 
 function hrefFromPushData(data: NotificationNavData): Href | null {
@@ -113,6 +113,10 @@ export function usePushNotifications() {
       }
       if (data.challenge_id) {
         router.push(challengeDetailHref(data.challenge_id, 'lobby'));
+        return;
+      }
+      if (data.type === 'interests_reminder') {
+        router.push(INTERESTS_HREF);
         return;
       }
       if (data.type === 'profile_incomplete') {

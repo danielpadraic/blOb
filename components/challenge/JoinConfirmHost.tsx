@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { StyleSheet, View } from 'react-native';
 
 import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
+import { useOfficialDobOptional } from '@/components/interests/OfficialDobHost';
 import { useJoinChallenge } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
@@ -25,6 +26,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
   const join = useJoinChallenge();
   const { profile } = useMyProfile();
   const wallet = useWalletOptional();
+  const officialDob = useOfficialDobOptional();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pendingRef = useRef<Challenge | null>(null);
@@ -40,10 +42,13 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
   }, [join.isPending]);
 
   const open = useCallback((next: Challenge) => {
+    if (next.is_official && officialDob && !officialDob.ensureAdult()) {
+      return;
+    }
     pendingRef.current = null;
     setError(null);
     setChallenge(next);
-  }, []);
+  }, [officialDob]);
 
   const confirm = useCallback(async () => {
     if (!challenge || join.isPending) {
@@ -68,9 +73,19 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       pendingRef.current = null;
       setChallenge(null);
     } catch (caught) {
-      setError(getJoinChallengeMessage(caught));
+      const message = getJoinChallengeMessage(caught);
+      if (
+        challenge.is_official &&
+        officialDob &&
+        (message.includes('birth date') || message.includes('18 and up'))
+      ) {
+        officialDob.ensureAdult();
+        setChallenge(null);
+        return;
+      }
+      setError(message);
     }
-  }, [challenge, join, profile, wallet]);
+  }, [challenge, join, officialDob, profile, wallet]);
 
   useEffect(() => {
     if (topUpOpen || !pendingRef.current) {

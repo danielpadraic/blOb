@@ -249,6 +249,7 @@ export function isWatchSurfacePath(pathname?: string | null): boolean {
 export const MESSAGES_HREF = '/messages' as const;
 export const BODY_METRICS_HREF = '/profile/body-metrics' as const;
 export const FITNESS_HISTORY_HREF = '/profile/fitness-history' as const;
+export const INTERESTS_HREF = '/profile/interests' as Href;
 
 export function conversationHref(
   id: string,

@@ -11,6 +11,8 @@ import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialS
 import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
 import { InviteHost } from '@/components/challenge/InviteHost';
 import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
+import { InterestsHomeHost } from '@/components/interests/InterestsHomeHost';
+import { OfficialDobProvider } from '@/components/interests/OfficialDobHost';
 import { BugReportHost } from '@/components/bug/BugReportHost';
 import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { TourHost } from '@/components/tour/TourHost';
@@ -48,11 +50,13 @@ export const unstable_settings = {
 export default function TabLayout() {
   return (
     <TourProvider>
-      <JoinConfirmProvider>
+      <OfficialDobProvider>
+        <JoinConfirmProvider>
         <BugReportHost>
           <TabLayoutInner />
         </BugReportHost>
-      </JoinConfirmProvider>
+        </JoinConfirmProvider>
+      </OfficialDobProvider>
     </TourProvider>
   );
 }
@@ -445,6 +449,7 @@ function TabLayoutInner() {
         <AlertsOverlay visible={alertsOpen} onClose={closeAlerts} />
         <SearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
         <HealthLogPromptHost />
+        {onOnboarding ? null : <InterestsHomeHost />}
         {onOnboarding ? null : <OfficialPitchHost />}
         </SocialSheetsHost>
         </InviteHost>
