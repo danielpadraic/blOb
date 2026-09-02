@@ -1,0 +1,11 @@
+{
+  "name": "blOb (Expo SDK 57)",
+  "install": "npm install",
+  "terminals": [
+    {
+      "name": "expo-web",
+      "command": "npx expo start --web --port 8081"
+    }
+  ],
+  "ports": [8081]
+}
