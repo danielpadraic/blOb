@@ -1,6 +1,6 @@
 {
   "name": "blOb (Expo SDK 57)",
-  "install": "npm install",
+  "install": "npm ci",
   "terminals": [
     {
       "name": "expo-web",
