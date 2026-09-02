@@ -27,7 +27,12 @@ import {
   KeyboardFormContext,
   useKeyboardOverlap,
 } from '@/components/ui/KeyboardFormShell';
-import { CHECKIN_PHOTO_CAP, proofDisplayName, type ChallengeProof } from '@/lib/challengeProofs';
+import {
+  CHECKIN_PHOTO_CAP,
+  excludeRequiredSlotMedia,
+  proofDisplayName,
+  type ChallengeProof,
+} from '@/lib/challengeProofs';
 import {
   CHECKIN_PROOF_CAPTION_MAX,
   clampProofCaption,
@@ -253,7 +258,14 @@ export function CheckinComposer({
       Alert.alert('That’s the limit', `You can attach up to ${CHECKIN_PHOTO_CAP} photos.`);
       return;
     }
-    onExtrasChange([...extras, { ...attachment, id: `${Date.now()}-${extras.length}` }]);
+    const next = excludeRequiredSlotMedia(
+      [...extras, { ...attachment, id: `${Date.now()}-${extras.length}` }],
+      proofs.map((proof) => drafts[proof.id]?.uri),
+    );
+    if (next.length === extras.length) {
+      return;
+    }
+    onExtrasChange(next);
   }
 
   function addMany(attachments: Omit<CheckinExtra, 'id'>[]) {
@@ -267,13 +279,20 @@ export function CheckinComposer({
     if (accepted.length === 0) {
       return;
     }
-    onExtrasChange([
-      ...extras,
-      ...accepted.map((attachment, index) => ({
-        ...attachment,
-        id: `${Date.now()}-${extras.length + index}`,
-      })),
-    ]);
+    const next = excludeRequiredSlotMedia(
+      [
+        ...extras,
+        ...accepted.map((attachment, index) => ({
+          ...attachment,
+          id: `${Date.now()}-${extras.length + index}`,
+        })),
+      ],
+      proofs.map((proof) => drafts[proof.id]?.uri),
+    );
+    if (next.length === extras.length) {
+      return;
+    }
+    onExtrasChange(next);
   }
 
   async function pickGallery(requested: 'photo' | 'video' | 'any' = 'photo') {

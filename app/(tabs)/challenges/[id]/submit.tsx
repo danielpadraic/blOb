@@ -44,6 +44,8 @@ import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   beginCameraProof,
   captureTypeForMethod,
+  excludeRequiredSlotMedia,
+  existingUrlForProof,
   extraProofImageUrls,
   guidedCheckinPrompt,
   isGuidedCameraProof,
@@ -185,7 +187,7 @@ function SubmitWorkoutInner() {
   const router = useRouter();
   const pathname = usePathname();
   const navFocused = useIsFocused();
-  const checkinLogRef = useRef(false);
+  const checkinLogRef = useRef<string | null>(null);
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
@@ -262,13 +264,14 @@ function SubmitWorkoutInner() {
   }, [uid, profile?.checkin_share_home, profile?.checkin_share_wave]);
 
   useEffect(() => {
-    if (!id || checkinLogRef.current) {
+    if (!id || challengeQuery.isLoading || !checkinQuery.isFetched) {
       return;
     }
-    if (challengeQuery.isLoading) {
+    const token = `${checkinQuery.data?.id ?? 'none'}:${proofSteps.map((proof) => drafts[proof.id]?.uri ?? '').join('|')}`;
+    if (checkinLogRef.current === token) {
       return;
     }
-    checkinLogRef.current = true;
+    checkinLogRef.current = token;
     const next = nextEmptyRequiredProof(proofSteps, (proof) => Boolean(drafts[proof.id]?.uri));
     const nextPhotoEmpty = Boolean(next && isGuidedCameraProof(next) && !drafts[next.id]?.uri);
     const hasExistingFrames =
@@ -277,11 +280,16 @@ function SubmitWorkoutInner() {
         const uri = drafts[proof.id]?.uri;
         return Boolean(uri && !uri.startsWith('health:'));
       });
+    const filled = proofSteps.find((proof) => Boolean(drafts[proof.id]?.uri));
+    const slot = filled?.id ?? next?.id ?? proofSteps[0]?.id ?? null;
     console.log('[blob:checkin]', {
+      checkinId: checkinQuery.data?.id ?? null,
+      slot,
+      existingUrl: slot ? drafts[slot]?.uri ?? null : null,
+      nextId: next?.id ?? null,
       href: String(checkinSubmitHref(id)),
       id,
       focused: navFocused,
-      ask: null,
       shouldAutoOpen: shouldAutoOpenCheckinCamera({
         skippedAuto,
         honorOnly,
@@ -289,11 +297,12 @@ function SubmitWorkoutInner() {
         nextPhotoEmpty,
         preferHealth: false,
       }),
-      nextPhotoId: next?.id ?? null,
       pathname,
     });
   }, [
     challengeQuery.isLoading,
+    checkinQuery.data?.id,
+    checkinQuery.isFetched,
     drafts,
     extras.length,
     honorOnly,
@@ -308,31 +317,36 @@ function SubmitWorkoutInner() {
     if (usesTotalCountCheckins(challenge) && checkinQuery.data?.phase === 'submitted') {
       return;
     }
-    const parts = checkinQuery.data?.proof_parts;
-    if (!parts) {
+    if (!checkinQuery.data) {
       return;
     }
+    const parts = checkinQuery.data.proof_parts ?? {};
     const steps = requiredChallengeProofs(challenge);
+    const legacy = {
+      pre_selfie_url: checkinQuery.data.pre_selfie_url,
+      post_selfie_url: checkinQuery.data.post_selfie_url,
+      hr_monitor_url: checkinQuery.data.hr_monitor_url,
+    };
     setDrafts((current) => {
       const next = { ...current };
       for (const proof of steps) {
         const part = parts[proof.id];
-        if (!part) {
+        const localUri = current[proof.id]?.uri;
+        const remoteUrl = existingUrlForProof(proof, parts, legacy);
+        if (!part && !remoteUrl) {
           continue;
         }
-        const localUri = current[proof.id]?.uri;
-        const remoteUrl = String(part.url ?? '').trim();
         next[proof.id] = {
-          uri: part.healthWorkoutId
+          uri: part?.healthWorkoutId
             ? `health:${part.healthWorkoutId}`
             : remoteUrl || localUri,
           mimeType: current[proof.id]?.mimeType,
-          text: part.text ?? current[proof.id]?.text,
-          fromLibrary: part.fromLibrary ?? current[proof.id]?.fromLibrary,
-          health: part.health ?? current[proof.id]?.health ?? null,
-          inFence: part.in_fence ?? current[proof.id]?.inFence,
+          text: part?.text ?? current[proof.id]?.text,
+          fromLibrary: part?.fromLibrary ?? current[proof.id]?.fromLibrary,
+          health: part?.health ?? current[proof.id]?.health ?? null,
+          inFence: part?.in_fence ?? current[proof.id]?.inFence,
           durationMs: current[proof.id]?.durationMs,
-          caption: part.caption ?? current[proof.id]?.caption,
+          caption: part?.caption ?? current[proof.id]?.caption,
         };
       }
       return next;
@@ -352,7 +366,7 @@ function SubmitWorkoutInner() {
       const text = stripHealthSummaryFromNotes(String(checkinQuery.data.notes), snapshot);
       setCaption((current) => (current.text.trim() ? current : { text, chips: current.chips }));
     }
-    const extraUrls = extraProofImageUrls(steps, parts);
+    const extraUrls = extraProofImageUrls(steps, parts, legacy);
     if (extraUrls.length > 0) {
       setExtras((current) => {
         if (current.some((item) => !item.remoteUrl && item.kind !== 'gif')) {
@@ -375,7 +389,17 @@ function SubmitWorkoutInner() {
         ];
       });
     }
-  }, [challenge, checkinQuery.data?.id, checkinQuery.data?.notes, checkinQuery.data?.proof_parts, checkinQuery.data?.updated_at]);
+  }, [
+    challenge,
+    checkinQuery.data,
+    checkinQuery.data?.id,
+    checkinQuery.data?.notes,
+    checkinQuery.data?.pre_selfie_url,
+    checkinQuery.data?.post_selfie_url,
+    checkinQuery.data?.hr_monitor_url,
+    checkinQuery.data?.proof_parts,
+    checkinQuery.data?.updated_at,
+  ]);
 
   const filledCount = proofSteps.filter((proof) =>
     partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
@@ -568,10 +592,14 @@ function SubmitWorkoutInner() {
   }
 
   function handleExtrasChange(next: CheckinExtra[]) {
-    const removed = next.length < extras.length;
-    setExtras(next);
+    const deduped = excludeRequiredSlotMedia(
+      next,
+      proofSteps.map((proof) => drafts[proof.id]?.uri),
+    );
+    const removed = deduped.length < extras.length;
+    setExtras(deduped);
     if (removed) {
-      void persistExtraMedia(next).catch((caught) => {
+      void persistExtraMedia(deduped).catch((caught) => {
         setError(getErrorMessage(caught));
       });
     }
@@ -1038,10 +1066,24 @@ function SubmitWorkoutInner() {
   const firstHealth = firstEmptyMedia && proofPrefersHealthAttach(firstEmptyMedia, challenge) ? firstEmptyMedia : null;
   const serverPart = (proofId: string) => checkinQuery.data?.proof_parts?.[proofId];
   const serverHasProof = (proofId: string) => {
+    const proof = proofSteps.find((item) => item.id === proofId);
+    if (!proof) {
+      return false;
+    }
+    const url = existingUrlForProof(proof, checkinQuery.data?.proof_parts, {
+      pre_selfie_url: checkinQuery.data?.pre_selfie_url,
+      post_selfie_url: checkinQuery.data?.post_selfie_url,
+      hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+    });
     const part = serverPart(proofId);
-    return Boolean(part && partSatisfies(proofSteps.find((item) => item.id === proofId) ?? { id: proofId, name: '', method: 'photo' }, part, { sessionDistance }));
+    return Boolean(
+      url ||
+        (part && partSatisfies(proof, part, { sessionDistance })),
+    );
   };
+  const checkinReady = checkinQuery.isFetched && !checkinQuery.isLoading;
   const shouldAutoHealth =
+    checkinReady &&
     !skippedAuto &&
     !preferCamera &&
     iosHealthReady &&
@@ -1058,15 +1100,22 @@ function SubmitWorkoutInner() {
       const uri = drafts[proof.id]?.uri;
       return Boolean((uri && !uri.startsWith('health:')) || serverHasProof(proof.id));
     });
-  const shouldAutoOpen = shouldAutoOpenCheckinCamera({
-    skippedAuto,
-    honorOnly,
-    hasExistingFrames,
-    nextPhotoEmpty: Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? ''),
-    preferHealth: shouldAutoHealth,
-  });
+  const shouldAutoOpen =
+    checkinReady &&
+    shouldAutoOpenCheckinCamera({
+      skippedAuto,
+      honorOnly,
+      hasExistingFrames,
+      nextPhotoEmpty: Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? ''),
+      preferHealth: shouldAutoHealth,
+    });
   const shouldOpenGuided =
-    !skippedAuto && !honorOnly && Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? '');
+    checkinReady &&
+    !skippedAuto &&
+    !honorOnly &&
+    Boolean(nextPhoto) &&
+    !drafts[nextPhoto?.id ?? '']?.uri &&
+    !serverHasProof(nextPhoto?.id ?? '');
   const activeCaptureId =
     captureId ??
     (shouldOpenGuided

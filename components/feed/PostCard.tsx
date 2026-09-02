@@ -526,7 +526,8 @@ function PostCardInner({
                 onSubmit={async (text, mentionedUserIds) => {
                   try {
                     await onComment(text, null, mentionedUserIds);
-                    setComposerExpanded(true);
+                    setShowComposer(false);
+                    setComposerExpanded(false);
                   } catch (error) {
                     Alert.alert('Couldn’t post that reply', getErrorMessage(error));
                   }

@@ -130,7 +130,20 @@ async function hydrateCheckin(data: Record<string, unknown>): Promise<ChallengeC
       };
     }),
   );
-  return { ...parsed, proof_parts: parts };
+  const signLegacy = async (url?: string | null) => {
+    const raw = String(url ?? '').trim();
+    if (!raw) {
+      return null;
+    }
+    return (await signedProofUrl(raw)) ?? raw;
+  };
+  return {
+    ...parsed,
+    proof_parts: parts,
+    pre_selfie_url: await signLegacy(parsed.pre_selfie_url),
+    post_selfie_url: await signLegacy(parsed.post_selfie_url),
+    hr_monitor_url: await signLegacy(parsed.hr_monitor_url),
+  };
 }
 
 function isSubmittedToday(

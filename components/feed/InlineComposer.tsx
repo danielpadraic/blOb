@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, View } from 'react-native';
+import { Alert, Keyboard, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -74,7 +74,6 @@ export function InlineComposer({
   const wasExpanded = useRef(true);
   const [internalExpanded, setInternalExpanded] = useState(!bar);
   const [hasText, setHasText] = useState(false);
-  const [fieldKey, setFieldKey] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [gifOpen, setGifOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -272,10 +271,13 @@ export function InlineComposer({
         latest.chips.map((chip) => chip.userId),
       );
       docRef.current = { text: '', chips: [] };
+      fieldRef.current?.clear();
       setHasText(false);
       setAttachments([]);
       setGifOpen(false);
-      setFieldKey((value) => value + 1);
+      setFieldFocused(false);
+      setExpanded(false);
+      Keyboard.dismiss();
     } catch (error) {
       Alert.alert('Couldn’t post that reply', getErrorMessage(error));
     } finally {
@@ -285,7 +287,6 @@ export function InlineComposer({
 
   const field = (
     <MentionField
-      key={fieldKey}
       ref={fieldRef}
       compact
       collapsed={fieldCollapsed}

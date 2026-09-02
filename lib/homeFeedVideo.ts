@@ -79,3 +79,14 @@ export function homeInlineVideoMuted(input: {
   }
   return input.unmutedId !== input.postId;
 }
+
+/** Maximize only when this post has a playable src. Grey maximize stays on the card. */
+export function canOpenHomeVideoPlayer(input: {
+  hasSrc?: boolean;
+  src?: string | null;
+}): boolean {
+  if (input.hasSrc === false) {
+    return false;
+  }
+  return Boolean(input.src?.trim()) || input.hasSrc === true;
+}

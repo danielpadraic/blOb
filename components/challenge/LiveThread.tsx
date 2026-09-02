@@ -343,7 +343,6 @@ export function LiveThread({
             </View>
           ) : null}
           <InlineComposer
-            key={replyTo?.postId ?? 'live'}
             bar
             autoFocus={Boolean(replyTo)}
             placeholder={placeholder ?? copy('live.placeholder')}
@@ -360,6 +359,7 @@ export function LiveThread({
             onSubmit={async (content, mentionedUserIds) => {
               try {
                 await submitLine(content, mentionedUserIds, replyTo?.postId);
+                setReplyTo(null);
               } catch (error) {
                 Alert.alert('Couldn’t post that', getErrorMessage(error));
               }

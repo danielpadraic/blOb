@@ -18,6 +18,7 @@ import { isOfficialAccount, OFFICIAL_BOB_ID } from '@/lib/official';
 import { fetchSettledPrizePools } from '@/lib/settlement';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 import { asLoggableList } from '@/lib/loggable';
+import { conversationLastMessageAt, sortConversationsNewestFirst } from '@/lib/conversationList';
 import { publishedRowId } from '@/lib/routes';
 import { WAVE_CLIP_MS, type WaveClipWindow } from '@/lib/waveClips';
 import type {
@@ -82,6 +83,7 @@ export type ConversationPreview = Conversation & {
   membership: ConversationMember;
   members: ConversationMember[];
   last_message: Message | null;
+  last_message_at: string;
   unread: boolean;
   peer: PublicProfile | null;
   people: PublicProfile[];
@@ -1449,19 +1451,23 @@ export async function fetchConversations(userId: string): Promise<ConversationPr
         people: [] as PublicProfile[],
       };
     })
-    .filter((row): row is ConversationPreview => Boolean(row))
-    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    .filter(Boolean)
+    .map((row) => ({
+      ...row!,
+      last_message_at: conversationLastMessageAt(row!),
+    }));
+  const ordered = sortConversationsNewestFirst(previews);
 
   const otherIds = [
     ...new Set(
-      previews.flatMap((row) =>
+      ordered.flatMap((row) =>
         row.members.map((member) => member.user_id).filter((id) => id !== userId),
       ),
     ),
   ];
   const profiles = await fetchPublicProfilesByIds(otherIds);
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
-  return previews.map((row) => {
+  return ordered.map((row) => {
     const people = row.members
       .map((member) => member.user_id)
       .filter((id) => id !== userId)
@@ -1527,6 +1533,7 @@ export async function fetchConversation(
     membership,
     members: memberRows,
     last_message: lastMessage,
+    last_message_at: conversationLastMessageAt({ last_message: lastMessage, updated_at: conversation.updated_at }),
     unread: conversationHasUnread(membership, lastMessage, userId),
     peer: profiles[0] ?? null,
     people: profiles,

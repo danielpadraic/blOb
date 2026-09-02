@@ -5,6 +5,7 @@ import {
   HOME_FIRST_PAINT_QUERIES,
   HOME_VIDEO_VISIBLE_RATIO,
   canAutoplayHomeVideo,
+  canOpenHomeVideoPlayer,
   homeInlineVideoMuted,
   homeVideoPreload,
   logHomeVideoIfGrey,
@@ -58,6 +59,14 @@ describe('home feed video', () => {
     expect(
       homeInlineVideoMuted({ playingId: 'b', postId: 'a', unmutedId: 'a' }),
     ).toBe(true);
+  });
+
+  it('opens the in-app player only when the clip has a src', () => {
+    expect(canOpenHomeVideoPlayer({ src: 'https://cdn.test/clip.mp4' })).toBe(true);
+    expect(canOpenHomeVideoPlayer({ hasSrc: true })).toBe(true);
+    expect(canOpenHomeVideoPlayer({ hasSrc: false, src: 'https://cdn.test/clip.mp4' })).toBe(false);
+    expect(canOpenHomeVideoPlayer({ src: '   ' })).toBe(false);
+    expect(canOpenHomeVideoPlayer({ src: null })).toBe(false);
   });
 
   it('keeps Pulse and Rounds off the first-paint query list', () => {

@@ -10,6 +10,7 @@ import {
   filterStoriesForRail,
   loadHiddenRailAuthors,
 } from '@/lib/clipRail';
+import { sortConversationsNewestFirst } from '@/lib/conversationList';
 import { withSatelliteTimeout } from '@/lib/homeFeed';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { publishedRowId } from '@/lib/routes';
@@ -1271,18 +1272,19 @@ export function useSendMessage() {
         if (!current) {
           return current;
         }
-        return [...current]
-          .map((conversation) =>
+        return sortConversationsNewestFirst(
+          current.map((conversation) =>
             conversation.id === input.conversation_id
               ? {
                   ...conversation,
                   updated_at: now,
                   last_message: optimistic,
+                  last_message_at: now,
                   unread: false,
                 }
               : conversation,
-          )
-          .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+          ),
+        );
       });
       return { previousMessages, previousConversations, messageKey, conversationKey };
     },

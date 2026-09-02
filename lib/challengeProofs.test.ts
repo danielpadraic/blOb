@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   defaultSentenceForMethod,
+  excludeRequiredSlotMedia,
+  existingUrlForProof,
+  extraProofImageUrls,
   guidedCheckinPrompt,
   guidedCheckinTitle,
   legacyTypeForProof,
   methodLabel,
+  namedProofsFromLegacyTypes,
   nextEmptyRequiredProof,
   partSatisfies,
   proofSlotNeedsRewrite,
@@ -185,5 +189,54 @@ describe('proof slot rewrite', () => {
   it('rewrites a slot when the draft is a new local file', () => {
     expect(proofSlotNeedsRewrite('file:///tmp/retake.jpg', 'https://cdn.example/old.jpg')).toBe(true);
     expect(proofSlotNeedsRewrite('https://cdn.example/old.jpg', 'https://cdn.example/old.jpg')).toBe(false);
+  });
+});
+
+describe('check-in slot hydrate', () => {
+  const pre = { id: 'p_random_pre', name: 'Post a pre-workout selfie.', method: 'photo' as const };
+  const post = { id: 'p_random_post', name: 'Post a post-workout selfie.', method: 'photo' as const };
+  const hr = {
+    id: 'p_random_hr',
+    name: 'Share proof of at least 30 minutes of elevated heart rate.',
+    method: 'hr' as const,
+    minutes: 30,
+  };
+
+  it('maps a saved pre URL onto the pre slot even when ids do not match', () => {
+    expect(
+      existingUrlForProof(pre, { pre: { method: 'photo', url: 'https://cdn.example/pre.jpg' } }),
+    ).toBe('https://cdn.example/pre.jpg');
+    expect(
+      existingUrlForProof(pre, {}, { pre_selfie_url: 'https://cdn.example/legacy-pre.jpg' }),
+    ).toBe('https://cdn.example/legacy-pre.jpg');
+    expect(existingUrlForProof(post, { pre: { method: 'photo', url: 'https://cdn.example/pre.jpg' } })).toBeNull();
+  });
+
+  it('keeps a filled required URL out of extras and skips the next empty slot', () => {
+    const parts = {
+      pre: { method: 'photo' as const, url: 'https://cdn.example/pre.jpg' },
+      extra: { method: 'photo' as const, url: 'https://cdn.example/cheer.jpg' },
+    };
+    expect(extraProofImageUrls([pre, post, hr], parts)).toEqual(['https://cdn.example/cheer.jpg']);
+    expect(
+      excludeRequiredSlotMedia(
+        [
+          { uri: 'https://cdn.example/pre.jpg?token=1', remoteUrl: 'https://cdn.example/pre.jpg' },
+          { uri: 'https://cdn.example/cheer.jpg' },
+        ],
+        ['https://cdn.example/pre.jpg'],
+      ).map((item) => item.uri),
+    ).toEqual(['https://cdn.example/cheer.jpg']);
+    expect(nextEmptyRequiredProof([pre, post, hr], (proof) => Boolean(existingUrlForProof(proof, parts)))?.id).toBe(
+      'p_random_post',
+    );
+  });
+
+  it('pins official selfie slots to pre / post / hr', () => {
+    expect(namedProofsFromLegacyTypes(['pre_selfie', 'post_selfie', 'hr_monitor']).map((proof) => proof.id)).toEqual([
+      'pre',
+      'post',
+      'hr',
+    ]);
   });
 });

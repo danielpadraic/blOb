@@ -105,30 +105,69 @@ export function proofImageUrls(part?: ChallengeProofPart | null): string[] {
   return uniqueProofUrls([part?.url, ...(part?.urls ?? [])]);
 }
 
+const PROOF_ROLE_ALIASES = new Set(['pre', 'post', 'hr', 'pre_selfie', 'post_selfie', 'hr_monitor']);
+
 export function extraProofImageUrls(
   proofs: ChallengeProof[],
   parts: Record<string, ChallengeProofPart> | null | undefined,
+  legacy?: {
+    pre_selfie_url?: string | null;
+    post_selfie_url?: string | null;
+    hr_monitor_url?: string | null;
+  },
 ): string[] {
-  if (!parts) {
-    return [];
-  }
   const required = new Set<string>();
   for (const proof of proofs) {
-    const primary = parts[proof.id]?.url?.trim();
+    const primary = existingUrlForProof(proof, parts, legacy);
     if (primary) {
-      required.add(primary);
+      required.add(mediaUrlKey(primary));
+    }
+    const listed = parts?.[proof.id]?.url?.trim();
+    if (listed) {
+      required.add(mediaUrlKey(listed));
     }
   }
   const extras: string[] = [];
+  const seen = new Set<string>();
+  const addExtra = (url: string) => {
+    const key = mediaUrlKey(url);
+    if (!key || required.has(key) || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    extras.push(url);
+  };
   for (const proof of proofs) {
-    for (const url of proofImageUrls(parts[proof.id])) {
-      if (required.has(url) || extras.includes(url)) {
-        continue;
-      }
-      extras.push(url);
+    for (const url of proofImageUrls(parts?.[proof.id])) {
+      addExtra(url);
+    }
+  }
+  const knownIds = new Set(proofs.map((proof) => proof.id));
+  for (const [id, part] of Object.entries(parts ?? {})) {
+    if (knownIds.has(id) || PROOF_ROLE_ALIASES.has(id)) {
+      continue;
+    }
+    for (const url of proofImageUrls(part)) {
+      addExtra(url);
     }
   }
   return extras;
+}
+
+export function excludeRequiredSlotMedia<T extends { uri: string; remoteUrl?: string | null }>(
+  extras: T[],
+  requiredUrls: Array<string | null | undefined>,
+): T[] {
+  const required = new Set(
+    requiredUrls
+      .map((url) => (typeof url === 'string' ? url.trim() : ''))
+      .filter(Boolean)
+      .map((url) => mediaUrlKey(url)),
+  );
+  return extras.filter((item) => {
+    const raw = String(item.remoteUrl ?? item.uri ?? '').trim();
+    return !raw || !required.has(mediaUrlKey(raw));
+  });
 }
 
 export const SIMPLE_PROOF_CAP = 4;
@@ -487,6 +526,52 @@ export function isPostWorkoutProof(proof: Pick<ChallengeProof, 'id' | 'name'>): 
   return proof.id === 'post' || isCheckoutProofName(lower);
 }
 
+export function existingUrlForProof(
+  proof: ChallengeProof,
+  parts?: Record<string, ChallengeProofPart> | null,
+  legacy?: {
+    pre_selfie_url?: string | null;
+    post_selfie_url?: string | null;
+    hr_monitor_url?: string | null;
+  },
+): string | null {
+  const direct = String(parts?.[proof.id]?.url ?? '').trim();
+  if (direct) {
+    return direct;
+  }
+  const role = isPreWorkoutProof(proof)
+    ? 'pre'
+    : isPostWorkoutProof(proof)
+      ? 'post'
+      : proof.method === 'hr' || isHeartRateNamed(proof)
+        ? 'hr'
+        : null;
+  if (role && parts) {
+    const aliases =
+      role === 'pre'
+        ? ['pre', 'pre_selfie']
+        : role === 'post'
+          ? ['post', 'post_selfie']
+          : ['hr', 'hr_monitor'];
+    for (const key of aliases) {
+      const url = String(parts[key]?.url ?? '').trim();
+      if (url) {
+        return url;
+      }
+    }
+  }
+  if (role === 'pre') {
+    return String(legacy?.pre_selfie_url ?? '').trim() || null;
+  }
+  if (role === 'post') {
+    return String(legacy?.post_selfie_url ?? '').trim() || null;
+  }
+  if (role === 'hr') {
+    return String(legacy?.hr_monitor_url ?? '').trim() || null;
+  }
+  return null;
+}
+
 function isBeforeAfterHeartRateProofs(proofs: ChallengeProof[]): boolean {
   return (
     proofs.length === 3 &&
@@ -789,8 +874,26 @@ export function proofRequirementsFrom(proofs: ChallengeProof[]): Array<{ type: P
     .map((type) => ({ type, required: true as const }));
 }
 
+export function stableProofIdForLegacyType(type: string): string | null {
+  const key = type.trim().toLowerCase();
+  if (key === 'pre_selfie' || key === 'pre') {
+    return 'pre';
+  }
+  if (key === 'post_selfie' || key === 'post') {
+    return 'post';
+  }
+  if (key === 'hr_monitor' || key === 'hr') {
+    return 'hr';
+  }
+  return null;
+}
+
 export function namedProofsFromLegacyTypes(types: string[]): ChallengeProof[] {
-  const list = types.filter(Boolean).map((type) => makeProof(nameFromLegacyType(type), methodFromLegacyType(type)));
+  const list = types.filter(Boolean).map((type) => {
+    const proof = makeProof(nameFromLegacyType(type), methodFromLegacyType(type));
+    const stable = stableProofIdForLegacyType(type);
+    return stable ? { ...proof, id: stable } : proof;
+  });
   return list.length > 0 ? list : [makeProof(defaultSentenceForMethod('honor'), 'honor')];
 }
 

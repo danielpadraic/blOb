@@ -76,6 +76,8 @@ type MentionFieldProps = {
 export type MentionFieldHandle = {
   insertAt: () => void;
   focus: () => void;
+  blur: () => void;
+  clear: () => void;
   getDoc: () => MentionDoc;
 };
 
@@ -177,6 +179,11 @@ function MentionFieldInner(
   useImperativeHandle(ref, () => ({
     insertAt: insertAtTrigger,
     focus: () => inputRef.current?.focus(),
+    blur: () => inputRef.current?.blur(),
+    clear: () => {
+      commit('', { start: 0, end: 0 }, [], true);
+      inputRef.current?.blur();
+    },
     getDoc: () => mentionDocFromState(textRef.current, chipsRef.current),
   }));
 

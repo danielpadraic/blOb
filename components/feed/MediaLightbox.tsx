@@ -1,5 +1,6 @@
 import {
   createContext,
+  createElement,
   useCallback,
   useContext,
   useEffect,
@@ -10,7 +11,6 @@ import {
 } from 'react';
 import {
   BackHandler,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -25,7 +25,8 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
-import { THEME } from '@/lib/theme';
+import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
+import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
 import { mediaKind } from '@/utils/media';
 
@@ -100,8 +101,10 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
 
   return (
     <MediaLightboxContext.Provider value={value}>
-      {children}
-      <MediaLightboxOverlay state={state} onClose={closeLightbox} />
+      <View style={{ flex: 1 }}>
+        {children}
+        <MediaLightboxOverlay state={state} onClose={closeLightbox} />
+      </View>
     </MediaLightboxContext.Provider>
   );
 }
@@ -147,26 +150,18 @@ function MediaLightboxOverlay({
     if (!open || Platform.OS !== 'web') {
       return;
     }
-    const win = globalThis as unknown as {
-      history?: { pushState: (data: object, unused: string) => void; state?: { blobLightbox?: boolean }; back: () => void };
-      addEventListener?: (type: string, listener: () => void) => void;
-      removeEventListener?: (type: string, listener: () => void) => void;
-    };
-    win.history?.pushState({ blobLightbox: true }, '');
     const onKey = (event: { key?: string }) => {
       if (event.key === 'Escape') {
         onClose();
       }
     };
-    const onPop = () => onClose();
-    win.addEventListener?.('keydown', onKey as () => void);
-    win.addEventListener?.('popstate', onPop);
+    const win = globalThis as unknown as {
+      addEventListener?: (type: string, listener: (event: { key?: string }) => void) => void;
+      removeEventListener?: (type: string, listener: (event: { key?: string }) => void) => void;
+    };
+    win.addEventListener?.('keydown', onKey);
     return () => {
-      win.removeEventListener?.('keydown', onKey as () => void);
-      win.removeEventListener?.('popstate', onPop);
-      if (win.history?.state?.blobLightbox) {
-        win.history.back();
-      }
+      win.removeEventListener?.('keydown', onKey);
     };
   }, [open, onClose]);
 
@@ -196,18 +191,16 @@ function MediaLightboxOverlay({
 
   const items = state?.items ?? [];
   const current = items[page];
+  const columnW = Math.min(pageWidth, FEED_COLUMN_MAX);
+
+  if (!open || !state) {
+    return null;
+  }
 
   return (
-    <Modal
-      visible={open}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      presentationStyle="overFullScreen"
-      onRequestClose={onClose}
-      supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}>
-      {state ? (
-        <View style={[styles.layer, { width: pageWidth, height: pageHeight }]}>
+        <View
+          pointerEvents="auto"
+          style={[styles.layer, { width: pageWidth, height: pageHeight }]}>
           <ScrollView
             ref={pager}
             horizontal
@@ -228,6 +221,7 @@ function MediaLightboxOverlay({
                 key={`${item.uri}-${itemIndex}`}
                 item={item}
                 width={pageWidth}
+                mediaWidth={columnW}
                 height={pageHeight}
                 onClose={onClose}
               />
@@ -269,29 +263,30 @@ function MediaLightboxOverlay({
             </View>
           ) : null}
         </View>
-      ) : null}
-    </Modal>
   );
 }
 
 function LightboxPage({
   item,
   width,
+  mediaWidth,
   height,
   onClose,
 }: {
   item: LightboxItem;
   width: number;
+  mediaWidth: number;
   height: number;
   onClose: () => void;
 }) {
+  const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
   const zoomable = Platform.OS === 'ios' && kind !== 'video';
-  const mediaStyle = { width, height };
+  const mediaStyle = { width: mediaWidth, height };
 
   const media =
     kind === 'video' ? (
-      <LightboxVideo uri={item.uri} style={mediaStyle} />
+      <LightboxVideo uri={playUri} style={mediaStyle} />
     ) : (
       <Image
         source={{ uri: item.uri }}
@@ -344,6 +339,7 @@ function LightboxVideo({
   uri: string;
   style: { width: number; height: number };
 }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
     instance.muted = false;
@@ -351,22 +347,44 @@ function LightboxVideo({
   });
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    if (Platform.OS !== 'web') {
       return undefined;
     }
-    const nodes = Array.from(document.querySelectorAll('video'));
-    const node = nodes[nodes.length - 1] ?? null;
+    const node = ref.current;
     if (!node) {
       return undefined;
     }
     applyWebVideoLock(node);
+    node.muted = false;
+    node.playsInline = true;
+    const play = () => {
+      void node.play().catch(() => undefined);
+    };
     node.addEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
     node.addEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+    play();
     return () => {
       node.removeEventListener('webkitbeginfullscreen', preventWebVideoFullscreen);
       node.removeEventListener('webkitendfullscreen', preventWebVideoFullscreen);
+      node.pause();
     };
   }, [uri]);
+
+  if (Platform.OS === 'web') {
+    return createElement('video', {
+      ref,
+      src: uri,
+      playsInline: true,
+      controls: false,
+      style: {
+        width: style.width,
+        height: style.height,
+        maxWidth: FEED_COLUMN_MAX,
+        objectFit: 'contain',
+        backgroundColor: 'transparent',
+      },
+    });
+  }
 
   return (
     <VideoView
@@ -379,10 +397,6 @@ function LightboxVideo({
 }
 
 const styles = StyleSheet.create({
-  layer: {
-    backgroundColor: DIM,
-    overflow: 'hidden',
-  },
   pageDim: {
     position: 'absolute',
     top: 0,
@@ -395,6 +409,17 @@ const styles = StyleSheet.create({
     left: 0,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  layer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 80,
+    elevation: 80,
+    backgroundColor: DIM,
+    overflow: 'hidden',
   },
   close: {
     position: 'absolute',

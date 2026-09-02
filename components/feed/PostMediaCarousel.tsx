@@ -29,6 +29,7 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import {
   canAutoplayHomeVideo,
+  canOpenHomeVideoPlayer,
   homeInlineVideoMuted,
   homeVideoPreload,
   logHomeVideoIfGrey,
@@ -723,7 +724,7 @@ function PostVideo({
           accessibilityRole="button"
           accessibilityLabel={onOpen ? 'Open video' : muted ? 'Unmute video' : 'Mute video'}
           onPress={() => {
-            if (onOpen) {
+            if (onOpen && canOpenHomeVideoPlayer({ hasSrc, src })) {
               slot?.mute();
               onOpen();
               return;
