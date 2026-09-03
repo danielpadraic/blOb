@@ -18,6 +18,7 @@ import { SharedTabs } from '@/components/ui/SharedTabs';
 import { AppHeader } from '@/components/wallet/AppHeader';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyInterests } from '@/hooks/useInterests';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
   useCompetingChallenges,
@@ -35,6 +36,7 @@ import { openChallengeLobby } from '@/lib/challengeOpen';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { fetchLobbyFriendCounts } from '@/lib/challenges';
 import { asCopyTone, copy } from '@/lib/copy';
+import { interestsRankProfile, rankInterestChallenges } from '@/lib/interestsMatch';
 import {
   applyLobbyFilters,
   clearLobbyFilterChip,
@@ -128,6 +130,7 @@ export default function ChallengesScreen() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const { mine: interestMine } = useMyInterests();
   const tone = asCopyTone(profile?.motivation_tone);
   const hostingQuery = useHostingChallenges({
     enabled: tab === 'hosting' || tab === 'official',
@@ -284,6 +287,14 @@ export default function ChallengesScreen() {
     () => ({ nowMs, checkedToday, friendCounts }),
     [checkedToday, friendCounts, nowMs],
   );
+  const interestRank = useMemo(
+    () =>
+      interestsRankProfile({
+        rooms: interestMine.data?.rooms,
+        chips: interestMine.data?.chips,
+      }),
+    [interestMine.data?.chips, interestMine.data?.rooms],
+  );
 
   function filtersFor(listTab: LobbyTab, rows: ChallengeWithStats[]) {
     const current = store[listTab].filters;
@@ -301,20 +312,25 @@ export default function ChallengesScreen() {
     );
   }
 
-  const official = applyList(officialAll, 'official');
+  const official = rankInterestChallenges(applyList(officialAll, 'official'), interestRank, {
+    pinWeek10: interestRank.chips.length > 0,
+  });
   const active = applyList(activeAll, 'active');
   const hosting = applyList(hostingAll, 'hosting');
   const ended = applyList(endedAll, 'ended');
-  const friends = sortLobbyRows(
-    applyLobbyFilters(
-      friendsAll
-        .map((row) => row.challenge)
-        .filter((row) => matchesSearch(challengeDisplayTitle(row), search)),
-      'active',
-      filtersFor('active', friendsAll.map((row) => row.challenge)),
-      filterCtx,
+  const friends = rankInterestChallenges(
+    sortLobbyRows(
+      applyLobbyFilters(
+        friendsAll
+          .map((row) => row.challenge)
+          .filter((row) => matchesSearch(challengeDisplayTitle(row), search)),
+        'active',
+        filtersFor('active', friendsAll.map((row) => row.challenge)),
+        filterCtx,
+      ),
+      store.active.sort,
     ),
-    store.active.sort,
+    interestRank,
   );
   const visibleDrafts =
     tab === 'hosting' ? drafts.filter((item) => matchesSearch(item.title ?? '', search)) : [];

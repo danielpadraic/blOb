@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityCard } from '@/components/interests/ActivityCard';
 import { ActivityCardPager, type ActivityCardPagerHandle } from '@/components/interests/ActivityCardPager';
 import { BackdropSlot } from '@/components/interests/BackdropSlot';
+import { InterestsStartThisSheet } from '@/components/interests/InterestsStartThisSheet';
 import { RoomSlide } from '@/components/interests/RoomSlide';
 import { useReduceMotion } from '@/components/interests/useReduceMotion';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
-import { useInterestCatalog, useMyInterests, useSaveInterestRoom } from '@/hooks/useInterests';
+import { useDismissStartThis, useInterestCatalog, useMyInterests, useSaveInterestRoom } from '@/hooks/useInterests';
 import {
   roomContinueBlocked,
   stanceFromMarks,
@@ -45,6 +46,11 @@ import {
 } from '@/lib/interestsCatalog';
 import { preferredUnitSystem } from '@/lib/bodyMetrics';
 import { copy, type CopyTone } from '@/lib/copy';
+import {
+  pickStartThisStarter,
+  shouldOfferStartThis,
+  startThisHref,
+} from '@/lib/interestsMatch';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 type WizardStep = 'prompt' | InterestRoomSlug;
@@ -63,6 +69,7 @@ export function InterestsWizard({
   const catalog = useInterestCatalog();
   const { mine } = useMyInterests();
   const saveRoom = useSaveInterestRoom();
+  const dismissStartThis = useDismissStartThis();
   const updateProfile = useUpdateProfile();
   const prompted = Boolean(profile?.interests_prompted_at);
   const [step, setStep] = useState<WizardStep>(prompted ? INTEREST_ROOM_SLUGS[0] : 'prompt');
@@ -78,6 +85,11 @@ export function InterestsWizard({
   const [sliding, setSliding] = useState(false);
   const [roomDir, setRoomDir] = useState<1 | -1>(1);
   const [bobCheck, setBobCheck] = useState(false);
+  const [startThis, setStartThis] = useState<{
+    room: InterestRoomSlug;
+    chipLabel: string;
+    href: ReturnType<typeof startThisHref>;
+  } | null>(null);
   const pagerRef = useRef<ActivityCardPagerHandle>(null);
   const bobTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useReduceMotion();
@@ -270,6 +282,8 @@ export function InterestsWizard({
     }
     setFormError(null);
     const last = cardIndex === selectedChips.length - 1;
+    const existingRoom = (mine.data?.rooms ?? []).find((row) => row.room_slug === step);
+    const wasAlreadyFilled = existingRoom?.state === 'complete_filled';
     try {
       await saveRoom.mutateAsync({
         room: step,
@@ -283,6 +297,28 @@ export function InterestsWizard({
         employer,
       });
       if (last) {
+        const picked = shouldOfferStartThis({
+          wasAlreadyFilled,
+          dismissedAt: existingRoom?.start_this_dismissed_at,
+          completeFilled: true,
+        })
+          ? pickStartThisStarter(
+              selectedChips.map((chip) => ({
+                slug: chip.slug,
+                label: chip.label,
+                room: step,
+                stanceScore: (followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))).stanceScore,
+              })),
+            )
+          : null;
+        if (picked) {
+          setStartThis({
+            room: step,
+            chipLabel: picked.chipLabel,
+            href: startThisHref(picked.starter),
+          });
+          return;
+        }
         setSliding(true);
         setRoomDir(1);
         flashBobCheck();
@@ -318,6 +354,25 @@ export function InterestsWizard({
     await pagerRef.current?.exit('right');
     setSliding(false);
     setCardIndex(null);
+  }
+
+  async function finishStartThis(goCreate: boolean) {
+    if (!startThis) {
+      return;
+    }
+    const from = startThis.room;
+    const href = startThis.href;
+    try {
+      await dismissStartThis.mutateAsync(from);
+    } catch {
+      // Cap is best-effort. Still leave the sheet so it cannot loop.
+    }
+    setStartThis(null);
+    if (goCreate) {
+      router.push(href);
+      return;
+    }
+    await goNext(from);
   }
 
   const title = step === 'prompt' ? INTEREST_PROMPT.title : room?.title ?? '';
@@ -531,6 +586,14 @@ export function InterestsWizard({
           </AppText>
         </Pressable>
       )}
+      <InterestsStartThisSheet
+        visible={Boolean(startThis)}
+        chipLabel={startThis?.chipLabel ?? ''}
+        tone={tone}
+        loading={dismissStartThis.isPending}
+        onStart={() => void finishStartThis(true)}
+        onNotNow={() => void finishStartThis(false)}
+      />
     </BackdropSlot>
   );
 }

@@ -26,6 +26,7 @@ export type ProfileInterestRoomRow = {
   room_slug: InterestRoomSlug;
   state: 'incomplete' | 'complete_empty' | 'complete_filled';
   skipped_at: string | null;
+  start_this_dismissed_at: string | null;
 };
 
 export type ProfileInterestChipRow = {
@@ -86,7 +87,10 @@ export function useMyInterests() {
     enabled: Boolean(userId),
     queryFn: async () => {
       const [rooms, chips, work, other] = await Promise.all([
-        supabase.from('profile_interest_rooms').select('room_slug, state, skipped_at').eq('user_id', userId!),
+        supabase
+          .from('profile_interest_rooms')
+          .select('room_slug, state, skipped_at, start_this_dismissed_at')
+          .eq('user_id', userId!),
         supabase.from('profile_interest_chips').select(CHIP_COLUMNS).eq('user_id', userId!),
         supabase.from('profile_work').select('occupation, employer').eq('user_id', userId!).maybeSingle(),
         supabase.from('interest_other_text').select('room_slug, raw_text').eq('user_id', userId!),
@@ -151,12 +155,23 @@ export function useSaveInterestRoom() {
       const completedAt =
         state === 'complete_empty' || state === 'complete_filled' ? new Date().toISOString() : null;
 
+      const priorRoom = await supabase
+        .from('profile_interest_rooms')
+        .select('start_this_dismissed_at')
+        .eq('user_id', user.id)
+        .eq('room_slug', input.room)
+        .maybeSingle();
+      if (priorRoom.error) {
+        throw new Error(getErrorMessage(priorRoom.error));
+      }
+
       const roomWrite = await supabase.from('profile_interest_rooms').upsert({
         user_id: user.id,
         room_slug: input.room,
         state,
         skipped_at: skippedAt,
         completed_at: completedAt,
+        start_this_dismissed_at: priorRoom.data?.start_this_dismissed_at ?? null,
         updated_at: new Date().toISOString(),
       });
       if (roomWrite.error) {
@@ -357,6 +372,32 @@ export function usePinInterestChip() {
         if (String(patch.error.message ?? '').includes('PIN_CAP')) {
           throw new Error('You can pin up to 8.');
         }
+        throw new Error(getErrorMessage(patch.error));
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: interestsKeys.mine(user?.id) });
+    },
+  });
+}
+
+export function useDismissStartThis() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (room: InterestRoomSlug) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      const patch = await supabase
+        .from('profile_interest_rooms')
+        .update({
+          start_this_dismissed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
+        .eq('room_slug', room);
+      if (patch.error) {
         throw new Error(getErrorMessage(patch.error));
       }
     },

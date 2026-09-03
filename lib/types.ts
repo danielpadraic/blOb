@@ -1586,6 +1586,7 @@ export type Database = {
         skipped_at: string | null;
         completed_at: string | null;
         coins_granted_at: string | null;
+        start_this_dismissed_at: string | null;
         updated_at: string;
       }>;
       profile_interest_chips: TableDef<{

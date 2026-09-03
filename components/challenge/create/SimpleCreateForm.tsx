@@ -80,6 +80,7 @@ import {
   type SimpleDurationPreset,
   type SimpleFrequency,
 } from '@/lib/simpleChallenge';
+import { simpleDraftFromStarter, starterFromCreateParams } from '@/lib/interestsMatch';
 import { milesToMeters } from '@/lib/distance';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
@@ -121,6 +122,12 @@ export function SimpleCreateForm() {
     draftId?: string;
     from?: string;
     circle?: string;
+    template?: string;
+    src?: string;
+    days?: string;
+    freq?: string;
+    vis?: string;
+    title?: string;
   }>();
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const circleId = firstRouteParam(params.circle);
@@ -128,6 +135,18 @@ export function SimpleCreateForm() {
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
   const fromAdvanced = (Array.isArray(params.from) ? params.from[0] : params.from) === 'advanced';
+  const interestsStarter = useMemo(
+    () =>
+      starterFromCreateParams({
+        template: firstRouteParam(params.template),
+        src: firstRouteParam(params.src),
+        days: firstRouteParam(params.days),
+        freq: firstRouteParam(params.freq),
+        vis: firstRouteParam(params.vis),
+        title: firstRouteParam(params.title),
+      }),
+    [params.days, params.freq, params.src, params.template, params.title, params.vis],
+  );
   const { user } = useAuth();
   const { profile, refetch, isFetched } = useMyProfile();
   const walletSheet = useWalletOptional();
@@ -146,6 +165,7 @@ export function SimpleCreateForm() {
   const simpleDraftIdRef = useRef<string | null>(null);
   const draftRef = useRef<SimpleChallengeDraft>(defaultSimpleDraft());
   const hydratedRemote = useRef(false);
+  const interestsHydrated = useRef(false);
   const editedRef = useRef(false);
   const draftFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draftFlash, setDraftFlash] = useState(false);
@@ -288,7 +308,16 @@ export function SimpleCreateForm() {
   }
 
   useEffect(() => {
-    if (editId || hydratedRemote.current || editedRef.current || draftsQuery.isLoading) {
+    if (editId || interestsHydrated.current || !interestsStarter) {
+      return;
+    }
+    interestsHydrated.current = true;
+    hydratedRemote.current = true;
+    setDraft(simpleDraftFromStarter(interestsStarter));
+  }, [editId, interestsStarter]);
+
+  useEffect(() => {
+    if (editId || hydratedRemote.current || editedRef.current || draftsQuery.isLoading || interestsStarter) {
       return;
     }
     const remote = pickSimpleDraft(draftsQuery.data ?? [], resumeDraftId);
@@ -314,7 +343,7 @@ export function SimpleCreateForm() {
         router.replace(createHrefForDraft(advanced, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
       }
     }
-  }, [draftsQuery.data, draftsQuery.isLoading, editId, resumeDraftId, returnTo, router]);
+  }, [draftsQuery.data, draftsQuery.isLoading, editId, interestsStarter, resumeDraftId, returnTo, router]);
 
   useEffect(() => {
     if (!editId || !editing.data) {

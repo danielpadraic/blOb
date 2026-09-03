@@ -11,6 +11,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
+import { useMyInterests } from '@/hooks/useInterests';
 import { useMyProfile } from '@/hooks/useProfile';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { openChallengeLobby } from '@/lib/challengeOpen';
@@ -18,11 +19,11 @@ import { requiresOfficialBodyMetrics } from '@/lib/challengeExperience';
 import { fetchOfficialDiscoverChallenges, withParticipantCounts } from '@/lib/challenges';
 import { formatCashCompact } from '@/lib/currency';
 import { fillGatePair } from '@/lib/lobbyChallenge';
+import { interestsRankProfile, pickJoinableOfficialWithInterests } from '@/lib/interestsMatch';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
   officialGuaranteeAmount,
-  OFFICIAL_WEEK_10_SLUG,
 } from '@/lib/officialSeries';
 import { BODY_METRICS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -41,14 +42,6 @@ function withStripTimeout<T>(run: Promise<T>, fallback: T): Promise<T> {
   ]);
 }
 
-function pickJoinableOfficial(
-  rows: ChallengeWithStats[],
-  joinedIds: Set<string>,
-): ChallengeWithStats | null {
-  const joinable = rows.filter((row) => isOfficialJoinable(row) && !joinedIds.has(row.id));
-  return joinable.find((row) => row.series_id === OFFICIAL_WEEK_10_SLUG) ?? joinable[0] ?? null;
-}
-
 function officialHomeTitle(card: ChallengeWithStats): string {
   const guarantee = officialGuaranteeAmount(card) || 10;
   return `Weekly ${formatCashCompact(guarantee)}`;
@@ -58,21 +51,31 @@ export function FeaturedOfficialStrip() {
   const router = useRouter();
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const { mine: interestMine } = useMyInterests();
   const mine = useMyChallengeProgress();
   const joinSheet = useJoinConfirm();
   const officialDob = useOfficialDob();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const joinedIds = new Set((mine.data ?? []).map((row) => row.challenge_id));
+  const interestRank = interestsRankProfile({
+    rooms: interestMine.data?.rooms,
+    chips: interestMine.data?.chips,
+  });
+  const interestKey = interestRank.chips
+    .map((chip) => `${chip.chipSlug}:${chip.stanceScore}:${chip.highestLevel ?? ''}`)
+    .join(',');
 
   const featured = useQuery({
-    queryKey: ['home-official-strip', user?.id],
+    queryKey: ['home-official-strip', user?.id, interestKey],
     staleTime: 30_000,
     retry: false,
     queryFn: (): Promise<ChallengeWithStats | null> =>
       withStripTimeout(
         fetchOfficialDiscoverChallenges(user?.id)
           .then((rows) => withParticipantCounts(rows))
-          .then((rows) => pickJoinableOfficial(rows, joinedIds)),
+          .then((rows) =>
+            pickJoinableOfficialWithInterests(rows, joinedIds, interestRank, isOfficialJoinable),
+          ),
         null,
       ),
   });

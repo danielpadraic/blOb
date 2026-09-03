@@ -63,6 +63,12 @@ export function createChallengeHref(extra?: {
   mode?: 'simple' | 'advanced';
   circleId?: string | null;
   returnTo?: string;
+  template?: string | null;
+  src?: string | null;
+  days?: number | string | null;
+  freq?: number | string | null;
+  vis?: string | null;
+  title?: string | null;
 }): Href {
   const qs = new URLSearchParams();
   if (extra?.mode) {
@@ -73,6 +79,24 @@ export function createChallengeHref(extra?: {
   }
   if (extra?.returnTo) {
     qs.set('returnTo', extra.returnTo);
+  }
+  if (extra?.template) {
+    qs.set('template', extra.template);
+  }
+  if (extra?.src) {
+    qs.set('src', extra.src);
+  }
+  if (extra?.days != null && String(extra.days).trim()) {
+    qs.set('days', String(extra.days));
+  }
+  if (extra?.freq != null && String(extra.freq).trim()) {
+    qs.set('freq', String(extra.freq));
+  }
+  if (extra?.vis) {
+    qs.set('vis', extra.vis);
+  }
+  if (extra?.title) {
+    qs.set('title', extra.title);
   }
   const query = qs.toString();
   return (`/challenges/create${query ? `?${query}` : ''}`) as Href;

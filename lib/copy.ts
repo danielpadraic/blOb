@@ -68,6 +68,12 @@ const STRINGS = {
   'interests.nutritionGoals': 'Describe your nutrition goals',
   'interests.currentDiet': 'Describe your current diet',
   'interests.dietNote': 'Not medical advice.',
+  'interests.startThisTitle': {
+    gentle: 'You picked {chip}. Start a Simple challenge?',
+    honest: 'You picked {chip}. Start a Simple challenge now.',
+  },
+  'interests.startThisCta': 'Start a Simple challenge',
+  'interests.startThisNotNow': 'Not now',
   'profile.encouragementLabel': 'How should Bob nudge you?',
   'profile.encouragementHelp': 'Alerts from Bob when you check in, miss, or come back. Separate from how the app talks to you.',
   'error.uploadPhoto': 'Couldn’t upload photo. Try again.',
