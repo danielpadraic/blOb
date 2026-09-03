@@ -11,6 +11,7 @@ import {
 import {
   allRoomsComplete,
   continueBlocked,
+  interestsWeeklyNudgeDue,
   roomContinueBlocked,
   roomsNeedYouDot,
   setChipMark,
@@ -144,12 +145,64 @@ describe('You reminder dot', () => {
     expect(roomsNeedYouDot({ dismissedHome: '2026-09-02', states: done })).toBe(false);
     expect(allRoomsComplete(done)).toBe(true);
   });
+
+  it('shows the weekly Interests popup only after Home skip and a full week with rooms still open', () => {
+    const empty = Object.fromEntries(INTEREST_ROOM_SLUGS.map((slug) => [slug, 'incomplete' as const]));
+    const done = Object.fromEntries(INTEREST_ROOM_SLUGS.map((slug) => [slug, 'complete_empty' as const]));
+    const week = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.parse('2026-09-16T12:00:00.000Z');
+    expect(
+      interestsWeeklyNudgeDue({
+        dismissedHome: null,
+        nowMs: now,
+        states: empty,
+      }),
+    ).toBe(false);
+    expect(
+      interestsWeeklyNudgeDue({
+        dismissedHome: '2026-09-15T12:00:00.000Z',
+        nowMs: now,
+        states: empty,
+      }),
+    ).toBe(false);
+    expect(
+      interestsWeeklyNudgeDue({
+        dismissedHome: '2026-09-02T12:00:00.000Z',
+        nowMs: now,
+        states: empty,
+      }),
+    ).toBe(true);
+    expect(
+      interestsWeeklyNudgeDue({
+        dismissedHome: '2026-09-02T12:00:00.000Z',
+        lastNudge: '2026-09-15T12:00:00.000Z',
+        nowMs: now,
+        states: empty,
+      }),
+    ).toBe(false);
+    expect(
+      interestsWeeklyNudgeDue({
+        dismissedHome: '2026-09-02T12:00:00.000Z',
+        lastNudge: '2026-09-09T12:00:00.000Z',
+        nowMs: now,
+        states: empty,
+      }),
+    ).toBe(true);
+    expect(
+      interestsWeeklyNudgeDue({
+        dismissedHome: '2026-09-02T12:00:00.000Z',
+        nowMs: now,
+        states: done,
+      }),
+    ).toBe(false);
+    expect(now - Date.parse('2026-09-09T12:00:00.000Z')).toBe(week);
+  });
 });
 
 describe('public profile', () => {
   it('does not select birth date, occupation, employer, ratings, stance, or proof', () => {
     expect(PUBLIC_PROFILE_COLUMNS).not.toMatch(
-      /date_of_birth|occupation|employer|rating_value|preferred_proof|preferred_proofs|stance_score|extras|diet/,
+      /date_of_birth|occupation|employer|rating_value|preferred_proof|preferred_proofs|stance_score|extras|diet|interests_nudge_at/,
     );
   });
 });

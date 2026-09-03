@@ -326,6 +326,7 @@ export interface Profile {
   interests_prompted_at?: string | null;
   interests_dismissed_home_at?: string | null;
   interests_skipped_all_at?: string | null;
+  interests_nudge_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -909,6 +910,7 @@ export type ProfileUpdate = Partial<
     | 'interests_prompted_at'
     | 'interests_dismissed_home_at'
     | 'interests_skipped_all_at'
+    | 'interests_nudge_at'
   >
 >;
 

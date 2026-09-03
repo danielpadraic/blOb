@@ -31,6 +31,45 @@ export function allRoomsComplete(states: Partial<Record<InterestRoomSlug, Intere
   return INTEREST_ROOM_SLUGS.every((slug) => isRoomComplete(states[slug]));
 }
 
+/** One week between Home reminders to finish incomplete Interests rooms. */
+export const INTERESTS_WEEKLY_NUDGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function latestTimestamp(...values: Array<string | null | undefined>): string | null {
+  let best: string | null = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const ms = Date.parse(value);
+    if (Number.isFinite(ms) && ms >= bestMs) {
+      best = value;
+      bestMs = ms;
+    }
+  }
+  return best;
+}
+
+export function interestsWeeklyNudgeDue(input: {
+  dismissedHome?: string | null;
+  lastNudge?: string | null;
+  nowMs?: number;
+  states: Partial<Record<InterestRoomSlug, InterestRoomState>>;
+}): boolean {
+  if (!input.dismissedHome) {
+    return false;
+  }
+  if (allRoomsComplete(input.states)) {
+    return false;
+  }
+  const last = latestTimestamp(input.lastNudge, input.dismissedHome);
+  const lastMs = last ? Date.parse(last) : Number.NaN;
+  if (!Number.isFinite(lastMs)) {
+    return true;
+  }
+  return (input.nowMs ?? Date.now()) - lastMs >= INTERESTS_WEEKLY_NUDGE_MS;
+}
+
 /** 50-point skill scale. 1 = full left (Level Up), 50 = full right (Excel). Default 25. */
 export const STANCE_MIN = 1;
 export const STANCE_MAX = 50;

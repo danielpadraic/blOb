@@ -70,6 +70,7 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     interests_prompted_at: (profile as Profile).interests_prompted_at ?? null,
     interests_dismissed_home_at: (profile as Profile).interests_dismissed_home_at ?? null,
     interests_skipped_all_at: (profile as Profile).interests_skipped_all_at ?? null,
+    interests_nudge_at: (profile as Profile).interests_nudge_at ?? null,
   };
 }
 
@@ -221,6 +222,7 @@ function omitOptionalPreferences<
     default_post_audience?: unknown;
     checkin_share_home?: unknown;
     checkin_share_wave?: unknown;
+    interests_nudge_at?: unknown;
   },
 >(
   row: T,
@@ -233,6 +235,7 @@ function omitOptionalPreferences<
   | 'default_post_audience'
   | 'checkin_share_home'
   | 'checkin_share_wave'
+  | 'interests_nudge_at'
 > {
   const {
     motivation_tone: _tone,
@@ -242,6 +245,7 @@ function omitOptionalPreferences<
     default_post_audience: _audience,
     checkin_share_home: _shareHome,
     checkin_share_wave: _shareWave,
+    interests_nudge_at: _interestsNudge,
     ...rest
   } = row;
   return rest;

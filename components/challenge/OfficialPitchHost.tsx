@@ -10,8 +10,11 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { officialBob } from '@/copy/officialBob';
 import { useAuth } from '@/hooks/useAuth';
+import { interestRoomStates, useMyInterests } from '@/hooks/useInterests';
 import { useMyProfile } from '@/hooks/useProfile';
 import { fetchOfficialDiscoverChallenges } from '@/lib/challenges';
+import { interestsWeeklyNudgeDue, latestTimestamp } from '@/lib/interests';
+import { readInterestsNudgeAt } from '@/lib/interestsNudge';
 import {
   officialPitchSuppressed,
   persistOfficialPitchDismissed,
@@ -30,6 +33,7 @@ let skippedThisSession = false;
 export function OfficialPitchHost() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const { mine } = useMyInterests();
   const router = useRouter();
   const segments = useSegments();
   const tour = useTourOptional();
@@ -39,6 +43,7 @@ export function OfficialPitchHost() {
   })();
   const [skipped, setSkipped] = useState(skippedThisSession);
   const [localDismissedId, setLocalDismissedId] = useState<string | null>(null);
+  const [localNudge, setLocalNudge] = useState<string | null>(null);
   const [localReady, setLocalReady] = useState(!user?.id);
   const inOfficial = useQuery({
     queryKey: ['official-participation', user?.id],
@@ -75,16 +80,20 @@ export function OfficialPitchHost() {
     let cancelled = false;
     if (!user?.id) {
       setLocalDismissedId(null);
+      setLocalNudge(null);
       setLocalReady(true);
       return;
     }
     setLocalReady(false);
-    void readOfficialPitchDismissedId(user.id).then((id) => {
-      if (!cancelled) {
-        setLocalDismissedId(id);
-        setLocalReady(true);
-      }
-    });
+    void Promise.all([readOfficialPitchDismissedId(user.id), readInterestsNudgeAt(user.id)]).then(
+      ([id, nudge]) => {
+        if (!cancelled) {
+          setLocalDismissedId(id);
+          setLocalNudge(nudge);
+          setLocalReady(true);
+        }
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -93,6 +102,14 @@ export function OfficialPitchHost() {
   const advertisedId = joinable.data?.[0]?.id ?? null;
   const dismissedId = profile?.official_pitch_dismissed_challenge_id ?? localDismissedId;
   const suppressed = officialPitchSuppressed(advertisedId, dismissedId);
+  const roomsLoaded = Boolean(mine.data) && !mine.isLoading && !mine.isError;
+  const interestsWeeklyDue =
+    roomsLoaded &&
+    interestsWeeklyNudgeDue({
+      dismissedHome: profile?.interests_dismissed_home_at,
+      lastNudge: latestTimestamp(profile?.interests_nudge_at, localNudge),
+      states: interestRoomStates(mine.data?.rooms),
+    });
 
   const visible =
     onHome &&
@@ -101,6 +118,8 @@ export function OfficialPitchHost() {
     Boolean(user) &&
     !tour?.active &&
     Boolean(profile?.interests_dismissed_home_at) &&
+    !mine.isLoading &&
+    !interestsWeeklyDue &&
     localReady &&
     !inOfficial.isLoading &&
     inOfficial.data === false &&

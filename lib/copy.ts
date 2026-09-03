@@ -43,6 +43,15 @@ const STRINGS = {
     gentle: 'No rush. Open You whenever you want to finish.',
     honest: 'You skipped for now. Finish them on You when you are ready.',
   },
+  'interests.weeklyTitle': {
+    gentle: 'Your interests are waiting.',
+    honest: 'Interests are still open.',
+  },
+  'interests.weeklyBody': {
+    gentle: 'Finish selecting them in Interests so we can place you in better challenges.',
+    honest: 'Finish Interests. Matching is weaker until you do.',
+  },
+  'interests.weeklyCta': 'Finish interests',
   'interests.dobSave': 'Save birth date',
   'interests.unknown': 'Unknown',
   'interests.rank': 'Rank',
