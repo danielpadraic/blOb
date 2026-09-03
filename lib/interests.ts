@@ -31,13 +31,23 @@ export function allRoomsComplete(states: Partial<Record<InterestRoomSlug, Intere
   return INTEREST_ROOM_SLUGS.every((slug) => isRoomComplete(states[slug]));
 }
 
+/** 50-point skill scale. 1 = full left (Level Up), 50 = full right (Excel). Default 25. */
+export const STANCE_MIN = 1;
+export const STANCE_MAX = 50;
+export const STANCE_DEFAULT = 25;
+
 export function clampStanceScore(value: number): number {
-  return Math.min(5, Math.max(1, Math.round(value)));
+  if (!Number.isFinite(value)) {
+    return STANCE_DEFAULT;
+  }
+  const clamped = Math.min(STANCE_MAX, Math.max(STANCE_MIN, value));
+  return Math.round(clamped * 100) / 100;
 }
 
-/** Horizontal stance track: 1 = full left (Leveling up), 5 = full right (Excel). Default 3. */
+/** Horizontal stance track. Does not snap to whole points. */
 export function stanceFromTrack(t: number): number {
-  return clampStanceScore(t * 4 + 1);
+  const unit = Math.min(Math.max(t, 0), 1);
+  return clampStanceScore(STANCE_MIN + unit * (STANCE_MAX - STANCE_MIN));
 }
 
 /** @deprecated Use stanceFromTrack. Left/top t=0 is score 1. */
@@ -47,13 +57,13 @@ export function stanceFromTrackTop(t: number): number {
 
 export const CARD_SLIDE_MS = 300;
 
-/** 1–2 level_up, 3 both, 4–5 excel. */
+/** 1–20 level_up, 21–30 both, 31–50 excel. */
 export function stanceMarks(score: number): ChipStance {
   const clamped = clampStanceScore(score);
-  if (clamped <= 2) {
+  if (clamped <= 20) {
     return { excel: false, levelUp: true };
   }
-  if (clamped >= 4) {
+  if (clamped >= 31) {
     return { excel: true, levelUp: false };
   }
   return { excel: true, levelUp: true };
@@ -64,19 +74,19 @@ export function stanceFromMarks(
   levelUp: boolean,
   score?: number | null,
 ): number {
-  if (score != null && Number.isFinite(score) && score >= 1 && score <= 5) {
+  if (score != null && Number.isFinite(score) && score >= STANCE_MIN && score <= STANCE_MAX) {
     return clampStanceScore(score);
   }
   if (excel && levelUp) {
-    return 3;
+    return STANCE_DEFAULT;
   }
   if (excel) {
-    return 4;
+    return 40;
   }
   if (levelUp) {
-    return 2;
+    return 10;
   }
-  return 3;
+  return STANCE_DEFAULT;
 }
 
 export function toggleChipStance(
@@ -88,7 +98,7 @@ export function toggleChipStance(
     delete next[chipId];
     return next;
   }
-  return { ...current, [chipId]: stanceMarks(3) };
+  return { ...current, [chipId]: stanceMarks(STANCE_DEFAULT) };
 }
 
 export function setChipMark(
@@ -96,7 +106,7 @@ export function setChipMark(
   chipId: string,
   mark: 'excel' | 'levelUp',
 ): Record<string, ChipStance> {
-  const row = current[chipId] ?? stanceMarks(3);
+  const row = current[chipId] ?? stanceMarks(STANCE_DEFAULT);
   const next = { ...row, [mark]: !row[mark] };
   if (!next.excel && !next.levelUp) {
     next[mark] = true;

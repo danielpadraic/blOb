@@ -55,7 +55,7 @@ const STRINGS = {
   'interests.fastingNote': 'Not medical advice.',
   'interests.roomRequest': 'Which of these are you currently doing or would like to improve?',
   'interests.excel': 'Excel',
-  'interests.levelingUp': 'Leveling up',
+  'interests.levelingUp': 'Level Up',
   'interests.next': 'Next',
   'interests.done': 'Done',
   'interests.allProofs': 'All of the above',

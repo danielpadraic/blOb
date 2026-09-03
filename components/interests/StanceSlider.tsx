@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/AppText';
-import { clampStanceScore, stanceFromTrack } from '@/lib/interests';
+import { clampStanceScore, STANCE_MAX, STANCE_MIN, stanceFromTrack } from '@/lib/interests';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
@@ -23,8 +23,8 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const score = clampStanceScore(value);
-  // 1 = full left (Leveling up), 5 = full right (Excel).
-  const ratio = Math.min(Math.max((score - 1) / 4, 0), 1);
+  // 1 = full left (Level Up), 50 = full right (Excel). Free slide, no snap.
+  const ratio = Math.min(Math.max((score - STANCE_MIN) / (STANCE_MAX - STANCE_MIN), 0), 1);
   const pad = THUMB / 2;
   const travel = Math.max(trackW - THUMB, 0);
 
@@ -71,8 +71,7 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
               setTrackW(next);
             }}
             accessibilityRole="adjustable"
-            accessibilityLabel="Leveling up to Excel"
-            accessibilityValue={{ min: 1, max: 5, now: score }}>
+            accessibilityLabel="Level Up to Excel">
             <View
               style={{
                 height: TRACK_H,

@@ -1,4 +1,4 @@
-import type { ChipStance } from '@/lib/interests';
+import { clampStanceScore, stanceFromMarks, STANCE_DEFAULT, type ChipStance } from '@/lib/interests';
 import {
   QTY_PERIODS,
   QTY_PERIOD_LABELS,
@@ -21,6 +21,7 @@ export const QTY_KINDS = [
   'sessions_week',
   'fasting_hours',
   'laps',
+  'steps_day',
 ] as const;
 export type QtyKind = (typeof QTY_KINDS)[number];
 
@@ -142,6 +143,15 @@ export const QTY_BANDS: Record<QtyKind, QtyBand> = {
     maxLabel: '100+',
     unitLabel: 'laps',
   },
+  steps_day: {
+    kind: 'steps_day',
+    min: 0,
+    max: 20000,
+    step: 500,
+    minLabel: '<1,500',
+    maxLabel: '20,000+',
+    unitLabel: 'steps',
+  },
 };
 
 export { QTY_PERIODS, QTY_PERIOD_LABELS };
@@ -173,7 +183,7 @@ export type ChipFollowUp = {
 
 export function emptyFollowUp(period: QtyPeriod = 'week'): ChipFollowUp {
   return {
-    stanceScore: 3,
+    stanceScore: STANCE_DEFAULT,
     ratingValue: null,
     ratingUnknown: false,
     currentQty: null,
@@ -282,6 +292,9 @@ export function qtyUnitLabel(
   }
   if (kind === 'sessions_week' || chipSlug === 'rowing') {
     return 'sessions';
+  }
+  if (kind === 'steps_day' || chipSlug === 'walking') {
+    return 'steps';
   }
   if (kind === 'miles_outing') {
     return units === 'metric' ? 'km' : 'mi';
@@ -583,6 +596,20 @@ export function extrasFromFollowUp(input: {
   return extras;
 }
 
+export function coerceFollowUpForChip(chip: InterestChipDef, followUp: ChipFollowUp): ChipFollowUp {
+  if (chip.qtyKind !== 'steps_day') {
+    return followUp;
+  }
+  const staleMiles = (value: number | null) => value != null && value <= 25;
+  return {
+    ...followUp,
+    qtyPeriod: 'day',
+    goalQtyPeriod: 'day',
+    currentQty: staleMiles(followUp.currentQty) ? null : followUp.currentQty,
+    goalQty: staleMiles(followUp.goalQty) ? null : followUp.goalQty,
+  };
+}
+
 export function followUpFromRow(row: {
   stance_score?: number | string | null;
   excel?: boolean | null;
@@ -619,16 +646,11 @@ export function followUpFromRow(row: {
   const currentQty = row.current_qty == null || row.current_qty === '' ? null : Number(row.current_qty);
   const goalQty = row.goal_qty == null || row.goal_qty === '' ? null : Number(row.goal_qty);
   const rawScore = row.stance_score == null || row.stance_score === '' ? null : Number(row.stance_score);
-  const stanceScore =
-    rawScore != null && Number.isFinite(rawScore)
-      ? Math.min(5, Math.max(1, Math.round(rawScore)))
-      : row.excel && row.level_up
-        ? 3
-        : row.excel
-          ? 2
-          : row.level_up
-            ? 4
-            : 3;
+  const stanceScore = stanceFromMarks(
+    Boolean(row.excel),
+    Boolean(row.level_up),
+    rawScore != null && Number.isFinite(rawScore) ? rawScore : null,
+  );
   const dietGoals = Array.isArray(extras.goals) ? extras.goals.filter(isDietGoal) : [];
   const dietStyles = Array.isArray(extras.diet) ? extras.diet.filter(isDietStyle) : [];
   return {
@@ -680,7 +702,7 @@ export function savePayload(input: {
   const extras = extrasFromFollowUp(input);
   const ratingUnknown = Boolean(input.ratingKind) && input.followUp.ratingUnknown;
   const proofs = input.followUp.preferredProofs.filter(isPreferredProof);
-  const score = Math.min(5, Math.max(1, Math.round(input.followUp.stanceScore || 3)));
+  const score = clampStanceScore(input.followUp.stanceScore || STANCE_DEFAULT);
   const hasQty = Boolean(input.qtyKind) && !input.followUp.qtyUnknown;
   const storeGoal =
     hasQty &&
@@ -701,14 +723,15 @@ export function savePayload(input: {
       : storeGoal
         ? (input.followUp.goalQty ?? input.followUp.currentQty)
         : null;
+  const dayOnly = input.qtyKind === 'steps_day' || input.slug === 'walking';
   return {
     stance_score: score,
     rating_value: ratingUnknown || !input.ratingKind ? null : input.followUp.ratingValue,
     rating_unknown: ratingUnknown,
     current_qty: currentQty,
     goal_qty: goalQty,
-    qty_period: input.qtyKind ? input.followUp.qtyPeriod : null,
-    goal_qty_period: storeGoal ? (input.followUp.goalQtyPeriod ?? input.followUp.qtyPeriod) : null,
+    qty_period: !input.qtyKind ? null : dayOnly ? 'day' : input.followUp.qtyPeriod,
+    goal_qty_period: !storeGoal ? null : dayOnly ? 'day' : (input.followUp.goalQtyPeriod ?? input.followUp.qtyPeriod),
     indoor_outdoor: null,
     preferred_proof: proofs[0] ?? null,
     preferred_proofs: proofs,

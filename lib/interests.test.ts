@@ -69,24 +69,25 @@ describe('interests catalog', () => {
 });
 
 describe('interests stance', () => {
-  it('defaults to 3 (both marks) and maps 1–2 level up, 4–5 excel', () => {
-    expect(stanceMarks(3)).toEqual({ excel: true, levelUp: true });
+  it('defaults to 25 (both marks) and maps 1–20 level up, 31–50 excel', () => {
+    expect(stanceMarks(25)).toEqual({ excel: true, levelUp: true });
     expect(stanceMarks(1)).toEqual({ excel: false, levelUp: true });
-    expect(stanceMarks(5)).toEqual({ excel: true, levelUp: false });
-    expect(stanceFromMarks(true, false, null)).toBe(4);
-    expect(stanceFromMarks(false, true, null)).toBe(2);
-    expect(stanceFromMarks(true, true, 3)).toBe(3);
+    expect(stanceMarks(50)).toEqual({ excel: true, levelUp: false });
+    expect(stanceFromMarks(true, false, null)).toBe(40);
+    expect(stanceFromMarks(false, true, null)).toBe(10);
+    expect(stanceFromMarks(true, true, 25)).toBe(25);
     const selected = toggleChipStance({}, 'c1');
     expect(selected.c1).toEqual({ excel: true, levelUp: true });
     const both = setChipMark(selected, 'c1', 'levelUp');
     expect(both.c1.excel).toBe(true);
   });
 
-  it('maps a horizontal track with Leveling up at the left to stance 1–5', () => {
+  it('maps a free-sliding 50-point track with Level Up at the left', () => {
     expect(stanceFromTrack(0)).toBe(1);
-    expect(stanceFromTrack(0.5)).toBe(3);
-    expect(stanceFromTrack(1)).toBe(5);
+    expect(stanceFromTrack(0.5)).toBe(25.5);
+    expect(stanceFromTrack(1)).toBe(50);
     expect(stanceFromTrackTop(0)).toBe(1);
+    expect(stanceFromTrack(0.2)).not.toBe(stanceFromTrack(0.21));
   });
 
   it('clears activities when None of these is tapped, and Continue needs a choice', () => {

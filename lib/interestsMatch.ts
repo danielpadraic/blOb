@@ -1,6 +1,6 @@
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { chipDef, isDietChip, type InterestRoomSlug } from '@/lib/interestsCatalog';
-import { clampStanceScore } from '@/lib/interests';
+import { clampStanceScore, STANCE_DEFAULT } from '@/lib/interests';
 import { isSportsLevel, type SportsLevel } from '@/lib/interestsFollowup';
 import { OFFICIAL_WEEK_10_SLUG } from '@/lib/officialSeries';
 import { createChallengeHref } from '@/lib/routes';
@@ -201,11 +201,11 @@ export function familyForChip(room: InterestRoomSlug, slug: string): InterestFam
 
 export function preferredDifficultyFromStance(stanceScore: number): CardDifficulty {
   const n = clampStanceScore(stanceScore);
-  // 1 = Leveling up (left) → intro / shorter. 5 = Excel (right) → longer / harder.
-  if (n <= 2) {
+  // 1 = Level Up (left) → intro / shorter. 50 = Excel (right) → longer / harder.
+  if (n <= 20) {
     return 'beginner';
   }
-  if (n >= 4) {
+  if (n >= 31) {
     return 'advanced';
   }
   return 'intermediate';
@@ -296,7 +296,7 @@ export function interestsRankProfile(input: {
       room,
       family,
       sportSlug: family === 'sports' ? slug : null,
-      stanceScore: clampStanceScore(Number(row.stance_score) || 3),
+      stanceScore: clampStanceScore(Number(row.stance_score) || STANCE_DEFAULT),
       highestLevel: typeof rawLevel === 'string' && isSportsLevel(rawLevel) ? rawLevel : null,
       sortOrder: Number(row.catalog?.sort_order) || 0,
     });

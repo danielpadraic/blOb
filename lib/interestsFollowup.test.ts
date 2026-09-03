@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { chipDef, QTY_PERIODS, QTY_PERIOD_LABELS, roomDef } from '@/lib/interestsCatalog';
+import { chipDef, QTY_PERIODS, QTY_PERIOD_LABELS, qtyPeriodsForChip, roomDef } from '@/lib/interestsCatalog';
 import {
   PROOF_LABELS,
+  QTY_BANDS,
   activityCardBlocked,
   clampQty,
+  coerceFollowUpForChip,
   currentVolumeLabel,
   dropFollowUp,
   emptyFollowUp,
@@ -32,6 +34,8 @@ describe('catalog copy pass', () => {
     expect(chipDef('health_fitness', 'lifting')?.allowsIndoorOutdoor).toBe(false);
     expect(chipDef('health_fitness', 'lifting')?.qtyKind).toBe('sessions_week');
     expect(chipDef('health_fitness', 'swimming')?.qtyKind).toBe('laps');
+    expect(chipDef('health_fitness', 'walking')?.qtyKind).toBe('steps_day');
+    expect(chipDef('health_fitness', 'walking')?.defaultPeriod).toBe('day');
     expect(chipDef('health_fitness', 'rowing')?.qtyKind).toBe('sessions_week');
     expect(chipDef('personal_development', 'reading')?.qtyKind).toBe('pages_week');
     expect(chipDef('personal_development', 'fasting')?.qtyKind).toBe('fasting_hours');
@@ -70,6 +74,39 @@ describe('catalog copy pass', () => {
     expect(qtyUnitLabel('laps', 'swimming', 'imperial')).toBe('laps');
     expect(qtyUnitLabel('sessions_week', 'lifting', 'imperial')).toBe('sessions');
     expect(qtyUnitLabel('sessions_week', 'rowing', 'imperial')).toBe('sessions');
+    expect(qtyUnitLabel('steps_day', 'walking', 'imperial')).toBe('steps');
+  });
+
+  it('counts Walking in daily steps from under 1,500 to 20,000+', () => {
+    const walking = chipDef('health_fitness', 'walking')!;
+    expect(qtyPeriodsForChip(walking)).toEqual(['day']);
+    expect(QTY_BANDS.steps_day.minLabel).toBe('<1,500');
+    expect(QTY_BANDS.steps_day.maxLabel).toBe('20,000+');
+    expect(QTY_BANDS.steps_day.max).toBe(20000);
+    expect(clampQty('steps_day', 8000)).toBe(8000);
+    expect(clampQty('steps_day', 25000)).toBe(20000);
+    const stale = coerceFollowUpForChip(walking, {
+      ...emptyFollowUp('week'),
+      currentQty: 3,
+      goalQty: 5,
+      qtyPeriod: 'week',
+      goalQtyPeriod: 'week',
+    });
+    expect(stale.qtyPeriod).toBe('day');
+    expect(stale.goalQtyPeriod).toBe('day');
+    expect(stale.currentQty).toBeNull();
+    expect(stale.goalQty).toBeNull();
+    const payload = savePayload({
+      followUp: { ...emptyFollowUp('week'), currentQty: 8000, goalQty: 10000, qtyPeriod: 'week' },
+      slug: 'walking',
+      ratingKind: null,
+      qtyKind: 'steps_day',
+      allowsIndoorOutdoor: false,
+      room: 'health_fitness',
+    });
+    expect(payload.qty_period).toBe('day');
+    expect(payload.goal_qty_period).toBe('day');
+    expect(payload.current_qty).toBe(8000);
   });
 
   it('keeps four period chips with the full Per day/week/month/year labels', () => {

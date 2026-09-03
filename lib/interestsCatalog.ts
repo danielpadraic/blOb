@@ -19,7 +19,8 @@ export type QtyKind =
   | 'miles_outing'
   | 'sessions_week'
   | 'fasting_hours'
-  | 'laps';
+  | 'laps'
+  | 'steps_day';
 
 export type InterestChipDef = {
   slug: string;
@@ -42,7 +43,7 @@ export type InterestRoomDef = {
 const FITNESS: InterestChipDef[] = [
   { slug: 'running', label: 'Running', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'miles_outing' },
   { slug: 'lifting', label: 'Lifting', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
-  { slug: 'walking', label: 'Walking', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'miles_outing' },
+  { slug: 'walking', label: 'Walking', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'steps_day', defaultPeriod: 'day' },
   { slug: 'cycling', label: 'Cycling', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'miles_outing' },
   { slug: 'hiit', label: 'HIIT', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
   { slug: 'yoga', label: 'Yoga', allowsIndoorOutdoor: false, ratingKind: null, qtyKind: 'sessions_week' },
@@ -185,10 +186,20 @@ export function defaultQtyPeriod(chip: InterestChipDef): QtyPeriod {
   if (chip.defaultPeriod) {
     return chip.defaultPeriod;
   }
+  if (chip.qtyKind === 'steps_day') {
+    return 'day';
+  }
   if (chip.qtyKind === 'books_year') {
     return 'year';
   }
   return 'week';
+}
+
+export function qtyPeriodsForChip(chip: InterestChipDef): readonly QtyPeriod[] {
+  if (chip.qtyKind === 'steps_day') {
+    return ['day'];
+  }
+  return QTY_PERIODS;
 }
 
 export function isInterestRoomSlug(value: string): value is InterestRoomSlug {

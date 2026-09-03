@@ -165,10 +165,13 @@ export function QtySlider({ label, kind, value, onChange, previewValue, emptyOk,
 export function PeriodRow({
   period,
   onPeriod,
+  periods = QTY_PERIODS,
 }: {
   period: QtyPeriod | null;
   onPeriod: (next: QtyPeriod) => void;
+  periods?: readonly QtyPeriod[];
 }) {
+  const single = periods.length === 1;
   return (
     <View
       style={{
@@ -176,8 +179,9 @@ export function PeriodRow({
         flexWrap: 'nowrap',
         gap: 4,
         width: '100%',
+        justifyContent: 'flex-start',
       }}>
-      {QTY_PERIODS.map((value) => {
+      {periods.map((value) => {
         const on = period === value;
         return (
           <Pressable
@@ -187,10 +191,10 @@ export function PeriodRow({
             accessibilityState={{ selected: on }}
             accessibilityLabel={QTY_PERIOD_LABELS[value]}
             style={{
-              flex: 1,
-              minWidth: 0,
+              flex: single ? 0 : 1,
+              minWidth: single ? undefined : 0,
               minHeight: 32,
-              paddingHorizontal: 2,
+              paddingHorizontal: single ? 12 : 2,
               borderRadius: 999,
               borderWidth: 1,
               alignItems: 'center',
@@ -224,6 +228,7 @@ type QtyBlockProps = {
   previewValue?: number | null;
   emptyOk?: boolean;
   unitLabel?: string;
+  periods?: readonly QtyPeriod[];
 };
 
 export function QtyBlock({
@@ -236,6 +241,7 @@ export function QtyBlock({
   previewValue,
   emptyOk,
   unitLabel,
+  periods,
 }: QtyBlockProps) {
   return (
     <View className="gap-2">
@@ -248,7 +254,7 @@ export function QtyBlock({
         emptyOk={emptyOk}
         unitLabel={unitLabel}
       />
-      <PeriodRow period={period} onPeriod={onPeriod} />
+      <PeriodRow period={period} onPeriod={onPeriod} periods={periods} />
     </View>
   );
 }
@@ -267,6 +273,7 @@ type QtyPairSliderProps = {
   onGoalPeriod?: (next: QtyPeriod) => void;
   hideGoal?: boolean;
   unitLabel?: string;
+  periods?: readonly QtyPeriod[];
 };
 
 export function QtyPairSlider({
@@ -283,6 +290,7 @@ export function QtyPairSlider({
   onGoalPeriod,
   hideGoal,
   unitLabel,
+  periods,
 }: QtyPairSliderProps) {
   return (
     <View style={{ gap: 8 }}>
@@ -294,6 +302,7 @@ export function QtyPairSlider({
         period={currentPeriod}
         onPeriod={onCurrentPeriod}
         unitLabel={unitLabel}
+        periods={periods}
       />
       {hideGoal || !goalLabel || !onGoalPeriod ? null : (
         <QtyBlock
@@ -306,6 +315,7 @@ export function QtyPairSlider({
           previewValue={current}
           emptyOk
           unitLabel={unitLabel}
+          periods={periods}
         />
       )}
     </View>
@@ -317,5 +327,9 @@ function formatQty(kind: QtyKind, value: number): string {
   if (band.step < 1) {
     return String(Number(value.toFixed(1)));
   }
-  return String(Math.round(value));
+  const rounded = Math.round(value);
+  if (kind === 'steps_day') {
+    return rounded.toLocaleString('en-US');
+  }
+  return String(rounded);
 }

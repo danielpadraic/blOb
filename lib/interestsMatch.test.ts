@@ -38,7 +38,7 @@ function chip(input: {
   extras?: Record<string, unknown>;
 }) {
   return {
-    stance_score: input.stance ?? 3,
+    stance_score: input.stance ?? 25,
     extras: input.extras ?? {},
     catalog: {
       slug: input.slug,
@@ -93,7 +93,7 @@ describe('interests ranking signal', () => {
 });
 
 describe('interests lobby boost', () => {
-  it('lifts running-family public Simples after a filled Running chip at Leveling up', () => {
+  it('lifts running-family public Simples after a filled Running chip at Level Up', () => {
     const profile = interestsRankProfile({
       rooms: [room('health_fitness', 'complete_filled')],
       chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 1 })],
@@ -114,9 +114,9 @@ describe('interests lobby boost', () => {
   it('prefers longer running Simples when stance is Excel', () => {
     const profile = interestsRankProfile({
       rooms: [room('health_fitness', 'complete_filled')],
-      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 5 })],
+      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 50 })],
     });
-    expect(preferredDifficultyFromStance(5)).toBe('advanced');
+    expect(preferredDifficultyFromStance(50)).toBe('advanced');
     const rows = [
       card('run-intro', { title: 'Couch to 5K', days_required: 7 }),
       card('run-long', { title: 'Marathon block', days_required: 30 }),
@@ -130,7 +130,7 @@ describe('interests lobby boost', () => {
   it('does not rerank Official Challenges or the Weekly $10 hero', () => {
     const profile = interestsRankProfile({
       rooms: [room('health_fitness', 'complete_filled')],
-      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 5 })],
+      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 50 })],
     });
     const rows = [
       card('week', {
@@ -158,7 +158,7 @@ describe('interests lobby boost', () => {
         room('sports', 'complete_filled'),
       ],
       chips: [
-        chip({ slug: 'running', room: 'health_fitness', label: 'Running', sort: 1, stance: 5 }),
+        chip({ slug: 'running', room: 'health_fitness', label: 'Running', sort: 1, stance: 50 }),
         chip({
           slug: 'pickleball',
           room: 'sports',
@@ -187,7 +187,7 @@ describe('interests lobby boost', () => {
           slug: 'pickleball',
           room: 'sports',
           label: 'Pickleball',
-          stance: 3,
+          stance: 25,
           extras: { highest_level: 'college' },
         }),
       ],
@@ -233,7 +233,7 @@ describe('Start this starter', () => {
   it('picks a live Simple running template and skips Diet', () => {
     expect(SIMPLE_TYPES.map((item) => item.value)).toContain('running');
     const picked = pickStartThisStarter([
-      { slug: 'diet_nutrition', label: 'Diet & Nutrition', room: 'health_fitness', stanceScore: 3 },
+      { slug: 'diet_nutrition', label: 'Diet & Nutrition', room: 'health_fitness', stanceScore: 25 },
       { slug: 'running', label: 'Running', room: 'health_fitness', stanceScore: 1 },
     ]);
     expect(picked?.chipSlug).toBe('running');
@@ -248,13 +248,13 @@ describe('Start this starter', () => {
     expect(copy('interests.startThisTitle', 'honest', { chip: 'Running' })).toBe(
       'Start a Running challenge now.',
     );
-    expect(starterForChip({ slug: 'diet_nutrition', label: 'Diet & Nutrition', room: 'health_fitness', stanceScore: 3 })).toBeNull();
+    expect(starterForChip({ slug: 'diet_nutrition', label: 'Diet & Nutrition', room: 'health_fitness', stanceScore: 25 })).toBeNull();
   });
 
   it('skips the sheet when no Simple template exists for the selected chips', () => {
     expect(
       pickStartThisStarter([
-        { slug: 'dating', label: 'Dating', room: 'relationships', stanceScore: 3 },
+        { slug: 'dating', label: 'Dating', room: 'relationships', stanceScore: 25 },
       ]),
     ).toBeNull();
   });
@@ -264,7 +264,7 @@ describe('Start this starter', () => {
       slug: 'hiking',
       label: 'Hiking',
       room: 'outdoors',
-      stanceScore: 3,
+      stanceScore: 25,
     });
     expect(starter?.templateId).toBe('custom');
     expect(starter?.visibility).toBe('friends');

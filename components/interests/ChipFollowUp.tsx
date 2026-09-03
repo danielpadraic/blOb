@@ -7,6 +7,7 @@ import { AppText } from '@/components/ui/AppText';
 import {
   isDietChip,
   isPlayCard,
+  qtyPeriodsForChip,
   showsGoalQty,
   showsHighestLevel,
   type InterestChipDef,
@@ -126,12 +127,14 @@ export function ChipFollowUpCard({
           goal={followUp.goalQty}
           currentLabel={currentVolumeLabel(chip)}
           goalLabel={goalVolumeLabel(chip)}
-          currentPeriod={followUp.qtyPeriod}
-          goalPeriod={followUp.goalQtyPeriod}
-          onCurrentPeriod={(next) => onChange(setQtyPeriod(followUp, next))}
-          onGoalPeriod={(next) => onChange(setGoalQtyPeriod(followUp, next))}
+          currentPeriod={qtyKind === 'steps_day' ? 'day' : followUp.qtyPeriod}
+          goalPeriod={qtyKind === 'steps_day' ? 'day' : followUp.goalQtyPeriod}
+          onCurrentPeriod={(next) => onChange(setQtyPeriod(followUp, qtyKind === 'steps_day' ? 'day' : next))}
+          onGoalPeriod={(next) => onChange(setGoalQtyPeriod(followUp, qtyKind === 'steps_day' ? 'day' : next))}
           onCurrent={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
           onGoal={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
+          unitLabel={qtyKind === 'steps_day' ? 'steps' : undefined}
+          periods={qtyPeriodsForChip(chip)}
         />
       ) : null}
 

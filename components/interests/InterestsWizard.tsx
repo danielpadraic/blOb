@@ -27,6 +27,7 @@ import {
   activityCardBlocked,
   dropFollowUp,
   emptyFollowUp,
+  coerceFollowUpForChip,
   followUpFromRow,
   isQtyKind,
   isRatingKind,
@@ -144,9 +145,11 @@ export function InterestsWizard({
       if (row.catalog?.room_slug !== step) {
         continue;
       }
+      const local = step === 'prompt' ? null : chipDef(step, row.catalog.slug);
       const score = stanceFromMarks(row.excel, row.level_up, row.stance_score == null ? null : Number(row.stance_score));
       next[row.catalog.slug] = stanceMarks(score);
-      nextFollow[row.catalog.slug] = followUpFromRow(row);
+      const follow = followUpFromRow(row);
+      nextFollow[row.catalog.slug] = local ? coerceFollowUpForChip(local, follow) : follow;
     }
     const roomRow = mine.data.rooms.find((item) => item.room_slug === step);
     setStances(next);
