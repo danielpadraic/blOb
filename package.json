@@ -65,7 +65,7 @@
     "vitest": "^3.2.4"
   },
   "scripts": {
-    "postinstall": "patch-package --error-on-fail=false",
+    "postinstall": "[ \"$VERCEL\" = 1 ] || patch-package",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
