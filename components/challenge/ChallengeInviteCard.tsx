@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 
 import {
   ChallengeTypeBadge,
@@ -38,7 +38,8 @@ import {
 } from '@/lib/callouts';
 import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
-import { BODY_METRICS_HREF, challengeDetailHref, checkinSubmitHref } from '@/lib/routes';
+import { pushChallengeHref } from '@/lib/challengeNav';
+import { BODY_METRICS_HREF, challengeHref, checkinSubmitHref } from '@/lib/routes';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
@@ -299,6 +300,7 @@ export function ChallengeInviteCard({
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const router = useRouter();
+  const pathname = usePathname();
   const mine = useMyChallengeProgress();
   const joined =
     joinedProp ??
@@ -365,9 +367,7 @@ export function ChallengeInviteCard({
     }
     seedChallengeDetailQuery({ ...challenge, id: challengeId });
     prefetchChallengeDetail(challengeId, challenge);
-    router.push(
-      challengeDetailHref(challengeId, context === 'feed' ? 'feed' : 'lobby', null, { tab: 'overview' }),
-    );
+    pushChallengeHref(router, String(challengeHref(challengeId)), 'invite-card', challengeId, pathname);
   }
 
   async function onJoinOrView() {
@@ -403,7 +403,7 @@ export function ChallengeInviteCard({
   }
 
   function onCheckIn() {
-    router.push(checkinSubmitHref(challenge.id));
+    pushChallengeHref(router, String(checkinSubmitHref(challenge.id)), 'invite-checkin', challenge.id, pathname);
   }
 
   const hostLabel = host?.name?.trim() || 'Host';
@@ -755,6 +755,7 @@ export function LobbyChallengeRow({
   onPress?: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const displayTitle = challengeDisplayTitle(challenge);
   const chrome = challenge.is_callout
     ? { borderColor: THEME.callout, backgroundColor: THEME.calloutSoft }
@@ -780,9 +781,7 @@ export function LobbyChallengeRow({
     }
     seedChallengeDetailQuery({ ...challenge, id: challengeId });
     prefetchChallengeDetail(challengeId, challenge);
-    router.push(
-      challengeDetailHref(challengeId, context === 'feed' ? 'feed' : 'lobby', null, { tab: 'overview' }),
-    );
+    pushChallengeHref(router, String(challengeHref(challengeId)), 'lobby-row', challengeId, pathname);
   }
 
   return (

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeCarousel } from '@/components/challenge/ChallengeCarousel';
@@ -15,6 +15,7 @@ import { THEME } from '@/lib/theme';
 
 export function ChallengeRail() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const active = useFeedActiveChallenges();
@@ -46,7 +47,7 @@ export function ChallengeRail() {
   }
 
   function open(id: string, snapshot?: (typeof activeRows)[number]) {
-    openChallengeLobby(router, { id, snapshot, returnTo: 'feed' });
+    openChallengeLobby(router, { id, snapshot, returnTo: 'feed', source: 'home-rail', pathname });
   }
 
   return (

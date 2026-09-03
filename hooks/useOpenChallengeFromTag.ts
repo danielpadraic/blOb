@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useMyChallengeProgress } from '@/hooks/useChallenge';
@@ -24,6 +24,7 @@ export type OpenChallengeFromTagInput = {
 
 export function useOpenChallengeFromTag() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const mine = useMyChallengeProgress();
 
@@ -80,8 +81,10 @@ export function useOpenChallengeFromTag() {
         returnTo: 'feed',
         postId: input.postId,
         extra: input.tab || input.postId ? { tab: input.tab ?? 'feed' } : undefined,
+        source: 'feed-tag',
+        pathname,
       });
     },
-    [mine.data, router, user?.id],
+    [mine.data, pathname, router, user?.id],
   );
 }

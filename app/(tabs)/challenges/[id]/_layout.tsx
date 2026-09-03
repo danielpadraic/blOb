@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 
 import {
@@ -6,16 +6,22 @@ import {
   ChallengeDetailOverflowHost,
   useChallengeDetailOverflow,
 } from '@/components/challenge/ChallengeDetailOverflow';
+import { BindChallengesStack } from '@/components/navigation/BindChallengesStack';
 import { StackBackButton } from '@/components/navigation/StackBackButton';
 import { WalletBar } from '@/components/wallet/WalletBar';
+import { firstRouteParam } from '@/lib/challengeLoad';
 import { THEME } from '@/lib/theme';
 
 export default function ChallengeIdLayout() {
   const overflow = useChallengeDetailOverflow();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const id = firstRouteParam(params.id);
 
   return (
-    <View style={{ flex: 1 }} pointerEvents="box-none">
+    <View key={id || 'challenge'} style={{ flex: 1 }} pointerEvents="box-none">
+      <BindChallengesStack />
       <Stack
+        key={id || 'challenge'}
         screenOptions={{
           headerTintColor: THEME.textPrimary,
           headerStyle: { backgroundColor: THEME.background },

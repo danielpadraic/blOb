@@ -34,6 +34,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
+import { clearLastOpenChallenge, goHome, pushChallengeHref } from '@/lib/challengeNav';
 import { checkinSubmitHref, CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF, MULTI_CHECKIN_HREF } from '@/lib/routes';
 import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
@@ -237,11 +238,10 @@ function TabLayoutInner() {
   function onHomePress() {
     closeOverlays();
     if (pathname === '/feed' || pathname === '/feed/') {
-      tour?.scrollHomeToTop();
+      goHome(router, { alreadyHome: true, after: () => tour?.scrollHomeToTop() });
       return;
     }
-    router.navigate('/feed');
-    setTimeout(() => tour?.scrollHomeToTop(), 80);
+    goHome(router, { after: () => setTimeout(() => tour?.scrollHomeToTop(), 80) });
   }
 
   useEffect(() => {
@@ -268,6 +268,7 @@ function TabLayoutInner() {
               platform: Platform.OS,
             })
           ) {
+            clearLastOpenChallenge();
             router.replace('/feed');
           }
         });
@@ -303,6 +304,7 @@ function TabLayoutInner() {
       ) {
         backgroundedAt.current = null;
         appState.current = next;
+        clearLastOpenChallenge();
         router.replace('/feed');
         return;
       }
@@ -322,7 +324,10 @@ function TabLayoutInner() {
   function onAction(id: QuickActionId | LogoMenuAction, challenge?: LoggableChallenge) {
     if (id === 'log') {
       if (challenge?.id) {
-        go(checkinSubmitHref(challenge.id));
+        closeOverlays();
+        const href = String(checkinSubmitHref(challenge.id));
+        const pickedId = challenge.id;
+        setTimeout(() => pushChallengeHref(router, href, 'plus-checkin', pickedId, pathname), 60);
         return;
       }
       const list = loggable.data ?? [];
@@ -331,7 +336,10 @@ function TabLayoutInner() {
         return;
       }
       if (list.length === 1 && list[0]?.id) {
-        go(checkinSubmitHref(list[0].id));
+        closeOverlays();
+        const href = String(checkinSubmitHref(list[0].id));
+        const pickedId = list[0].id;
+        setTimeout(() => pushChallengeHref(router, href, 'plus-checkin', pickedId, pathname), 60);
         return;
       }
       return;

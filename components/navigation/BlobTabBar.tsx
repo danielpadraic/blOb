@@ -11,6 +11,7 @@ import { useMyInterests, interestRoomStates } from '@/hooks/useInterests';
 import { useMyProfile } from '@/hooks/useProfile';
 import { roomsNeedYouDot } from '@/lib/interests';
 import { LOBBY_HREF } from '@/lib/routes';
+import { goHome } from '@/lib/challengeNav';
 import { personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
 
@@ -57,10 +58,10 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
     }
     if (href === '/feed') {
       if (pathname === '/feed' || pathname === '/feed/') {
-        tour?.scrollHomeToTop();
+        goHome(router, { alreadyHome: true, after: () => tour?.scrollHomeToTop() });
         return;
       }
-      router.navigate('/feed');
+      goHome(router, { after: () => undefined });
       return;
     }
     router.navigate(href);

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { useOfficialDob } from '@/components/interests/OfficialDobHost';
@@ -56,6 +56,7 @@ function officialHomeTitle(card: ChallengeWithStats): string {
 
 export function FeaturedOfficialStrip() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const mine = useMyChallengeProgress();
@@ -108,7 +109,7 @@ export function FeaturedOfficialStrip() {
   const showFill = Boolean(fill && fill.count < fill.min);
 
   function openDetail() {
-    openChallengeLobby(router, { id: card.id, snapshot: card, returnTo: 'feed' });
+    openChallengeLobby(router, { id: card.id, snapshot: card, returnTo: 'feed', source: 'home-official', pathname });
   }
 
   function onJoin() {

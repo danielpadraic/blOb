@@ -102,6 +102,11 @@ export function createChallengeHref(extra?: {
   return (`/challenges/create${query ? `?${query}` : ''}`) as Href;
 }
 
+/** Overview / Live for this row only. Never last-open. */
+export function challengeHref(id: string): Href {
+  return `/challenges/${String(id ?? '').trim()}` as Href;
+}
+
 export function challengeDetailHref(
   id: string,
   returnTo: 'lobby' | 'feed' = 'lobby',
@@ -123,7 +128,8 @@ export function challengeDetailHref(
     qs.set('receipt', '1');
   }
   const query = qs.toString();
-  return (`/challenges/${challengeId}${query ? `?${query}` : ''}`) as Href;
+  const path = String(challengeHref(challengeId));
+  return (query ? `${path}?${query}` : path) as Href;
 }
 
 export const MULTI_CHECKIN_HREF = '/checkin' as Href;

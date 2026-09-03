@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Button } from '@/components/ui/Button';
@@ -19,7 +19,8 @@ import {
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { CIRCLE_PIN_CAP, type CirclePin } from '@/lib/circles';
 import { copy } from '@/lib/copy';
-import { challengeDetailHref } from '@/lib/routes';
+import { challengeHref } from '@/lib/routes';
+import { pushChallengeHref } from '@/lib/challengeNav';
 import { flexChildMin, THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -49,6 +50,7 @@ export function CirclePinsSection({
 }) {
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const pins = useCirclePins(circleId);
   const unpin = useUnpinCircleChallenge(circleId);
   const reorder = useReorderCirclePins(circleId);
@@ -178,7 +180,9 @@ export function CirclePinsSection({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={copy('circles.viewChallenge')}
-            onPress={() => router.push(challengeDetailHref(pin.challenge_id))}
+            onPress={() =>
+              pushChallengeHref(router, String(challengeHref(pin.challenge_id)), 'circle-pin', pin.challenge_id, pathname)
+            }
             style={{ minHeight: 44, minWidth: 52, justifyContent: 'center' }}>
             <AppText className="text-[14px] font-extrabold" style={{ color: THEME.accent }}>
               {copy('circles.viewChallenge')}

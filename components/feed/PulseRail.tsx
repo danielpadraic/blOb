@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, usePathname, useRouter } from 'expo-router';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -8,6 +8,7 @@ import { useAfterFirstPaint } from '@/hooks/useAfterFirstPaint';
 import { useHomePulse } from '@/hooks/useHomePulse';
 import { copy } from '@/lib/copy';
 import { pulseChallengeHref, type PulseFace, type PulsePill } from '@/lib/homePulse';
+import { pushChallengeHref } from '@/lib/challengeNav';
 import { THEME, flexChildMin, themeShadow } from '@/lib/theme';
 
 const PILL_WIDTH = 168;
@@ -38,11 +39,15 @@ function FacePile({ faces }: { faces: PulseFace[] }) {
 
 function PulseChip({ pill }: { pill: PulsePill }) {
   const router = useRouter();
+  const pathname = usePathname();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${pill.title}. ${pill.snippet}`}
-      onPress={() => router.push(pulseChallengeHref(pill.id))}
+      onPress={() => {
+        const href = String(pulseChallengeHref(pill.id));
+        pushChallengeHref(router, href, 'pulse-pill', pill.id, pathname);
+      }}
       style={{
         width: PILL_WIDTH,
         minHeight: 44,

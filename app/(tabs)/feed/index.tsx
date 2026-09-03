@@ -18,6 +18,7 @@ import { useCopyTone } from '@/hooks/useCopy';
 import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/hooks/useFeed';
 import { socialKeys } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { clearLastOpenChallenge } from '@/lib/challengeNav';
 import { copy } from '@/lib/copy';
 import { homeFeedFirstPaintLoading } from '@/lib/homeFeed';
 import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
@@ -29,6 +30,7 @@ export default function FeedScreen() {
   useFocusEffect(
     useCallback(() => {
       stopAllLiveMedia();
+      clearLastOpenChallenge();
     }, []),
   );
   useEffect(() => {

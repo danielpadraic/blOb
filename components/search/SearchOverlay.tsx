@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
@@ -21,6 +21,7 @@ type SearchOverlayProps = {
 export function SearchOverlay({ visible, onClose }: SearchOverlayProps) {
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [term, setTerm] = useState('');
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export function SearchOverlay({ visible, onClose }: SearchOverlayProps) {
       return;
     }
     onClose();
-    openChallengeLobby(router, { id, returnTo: 'feed' });
+    openChallengeLobby(router, { id, returnTo: 'feed', source: 'search', pathname });
   }
 
   return (

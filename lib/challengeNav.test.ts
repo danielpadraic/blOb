@@ -1,0 +1,151 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  bindChallengesStack,
+  challengeIdFromPath,
+  challengesStackAtLobby,
+  clearLastOpenChallenge,
+  leftoverChallengePath,
+  shouldPopBeforeChallengePush,
+  type NestedNavState,
+} from '@/lib/challengeNav';
+
+const THIRTY = 'f28b5591-6c32-4d82-8218-a13b3cafe8a1';
+const PRAYER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const CHALLENGE_ROUTE_NAMES = ['index', 'create', 'callout/create', '[id]'];
+
+function challengesState(leaf: 'index' | 'live' | 'submit', id = THIRTY): NestedNavState {
+  if (leaf === 'index') {
+    return {
+      index: 0,
+      routeNames: CHALLENGE_ROUTE_NAMES,
+      routes: [{ name: 'index' }],
+    };
+  }
+  return {
+    index: 1,
+    routeNames: CHALLENGE_ROUTE_NAMES,
+    routes: [
+      { name: 'index' },
+      {
+        name: '[id]',
+        params: { id },
+        state:
+          leaf === 'submit'
+            ? { index: 1, routes: [{ name: 'index' }, { name: 'submit' }] }
+            : { index: 0, routes: [{ name: 'index' }] },
+      },
+    ],
+  };
+}
+
+afterEach(() => {
+  bindChallengesStack(null);
+});
+
+describe('challengeIdFromPath', () => {
+  it('reads only the path id, never create or callout', () => {
+    expect(challengeIdFromPath(`/challenges/${PRAYER}/submit`)).toBe(PRAYER);
+    expect(challengeIdFromPath(`/challenges/${THIRTY}?tab=feed`)).toBe(THIRTY);
+    expect(challengeIdFromPath('/challenges/create')).toBeNull();
+    expect(challengeIdFromPath('/challenges/callout/create')).toBeNull();
+    expect(challengeIdFromPath('/feed')).toBeNull();
+  });
+});
+
+describe('leftoverChallengePath', () => {
+  it('reports leftover Live and leftover submit for that stacked id', () => {
+    expect(leftoverChallengePath(challengesState('live'))).toBe(`/challenges/${THIRTY}`);
+    expect(leftoverChallengePath(challengesState('submit', PRAYER))).toBe(
+      `/challenges/${PRAYER}/submit`,
+    );
+    expect(leftoverChallengePath(challengesState('index'))).toBeNull();
+  });
+});
+
+describe('shouldPopBeforeChallengePush', () => {
+  it('pops leftover 30-Day Live before Prayer Check In', () => {
+    expect(
+      shouldPopBeforeChallengePush(
+        '/feed',
+        `/challenges/${PRAYER}/submit`,
+        leftoverChallengePath(challengesState('live')),
+      ),
+    ).toBe(true);
+  });
+
+  it('pops leftover Prayer camera before a 30-Day Overview card', () => {
+    expect(
+      shouldPopBeforeChallengePush(
+        '/feed',
+        `/challenges/${THIRTY}`,
+        leftoverChallengePath(challengesState('submit', PRAYER)),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not pop same-challenge Begin on Live', () => {
+    expect(
+      shouldPopBeforeChallengePush(
+        `/challenges/${THIRTY}`,
+        `/challenges/${THIRTY}/submit`,
+      ),
+    ).toBe(false);
+  });
+
+  it('pops leftover submit when opening that challenge Overview', () => {
+    expect(
+      shouldPopBeforeChallengePush(
+        '/feed',
+        `/challenges/${PRAYER}`,
+        leftoverChallengePath(challengesState('submit', PRAYER)),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('clearLastOpenChallenge', () => {
+  it('resets the challenges stack to Lobby and never keeps last-open id', () => {
+    const dispatch = vi.fn();
+    bindChallengesStack({
+      getState: () => challengesState('live'),
+      dispatch,
+    });
+    expect(clearLastOpenChallenge()).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'RESET',
+      payload: { index: 0, routes: [{ name: 'index' }] },
+    });
+    expect(challengesStackAtLobby(challengesState('index'))).toBe(true);
+  });
+
+  it('does nothing when Lobby is already the stacked screen', () => {
+    const dispatch = vi.fn();
+    bindChallengesStack({
+      getState: () => challengesState('index'),
+      dispatch,
+    });
+    expect(clearLastOpenChallenge()).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('resets leftover [id] on the unfocused challenges tab from Home', () => {
+    const dispatch = vi.fn();
+    bindChallengesStack({
+      getState: () => ({
+        index: 0,
+        routes: [
+          { name: 'feed' },
+          { name: 'challenges', state: { ...challengesState('live'), key: 'challenges-stack' } },
+        ],
+      }),
+      dispatch,
+    });
+    expect(clearLastOpenChallenge()).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'RESET',
+      payload: { index: 0, routes: [{ name: 'index' }] },
+      target: 'challenges-stack',
+    });
+  });
+});

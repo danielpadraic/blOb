@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -18,6 +18,7 @@ import {
   type MultiCheckinState,
 } from '@/lib/multiCheckin';
 import { checkinSubmitHref, TABS_HREF } from '@/lib/routes';
+import { pushChallengeHref } from '@/lib/challengeNav';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 const STATE_COPY: Record<MultiCheckinState, string> = {
@@ -29,6 +30,7 @@ const STATE_COPY: Record<MultiCheckinState, string> = {
 export default function MultiCheckinScreen() {
   const params = useLocalSearchParams<{ done?: string }>();
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const loggable = useLoggableChallenges();
   const doneIds = parseDoneIds(params.done);
@@ -54,7 +56,8 @@ export default function MultiCheckinScreen() {
   const nextId = nextEmptyCheckinId(rows, doneIds[doneIds.length - 1] ?? null);
 
   function openSubmit(id: string) {
-    router.push(checkinSubmitHref(id, { from: 'multi', done: doneIds }));
+    const href = String(checkinSubmitHref(id, { from: 'multi', done: doneIds }));
+    pushChallengeHref(router, href, 'checkin-pick', id, pathname);
   }
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { remainingFromChallenge } from '@/components/challenge/ChallengePosterCard';
@@ -117,6 +117,7 @@ function hostByIdHas(map: Map<string, InviteHost>, id?: string | null) {
 
 export default function ChallengesScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useLocalSearchParams<{ notice?: string }>();
   const notice = Array.isArray(params.notice) ? params.notice[0] : params.notice;
   const [toast, setToast] = useState<string | null>(null);
@@ -433,7 +434,7 @@ export default function ChallengesScreen() {
   }, [ticking]);
 
   function openChallenge(id: string, snapshot?: ChallengeWithStats) {
-    openChallengeLobby(router, { id, snapshot, returnTo: 'lobby', extra: { tab: 'overview' } });
+    openChallengeLobby(router, { id, snapshot, returnTo: 'lobby', extra: { tab: 'overview' }, source: 'lobby-card', pathname });
   }
 
   async function onRefresh() {

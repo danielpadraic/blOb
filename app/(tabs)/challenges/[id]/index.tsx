@@ -2,6 +2,7 @@ import {
   Stack,
   useFocusEffect,
   useLocalSearchParams,
+  usePathname,
   useRouter,
   type ErrorBoundaryProps,
 } from 'expo-router';
@@ -43,6 +44,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { BODY_METRICS_HREF, captureHref, challengeDetailHref, checkinSubmitHref, LOBBY_HREF } from '@/lib/routes';
+import { pushChallengeHref } from '@/lib/challengeNav';
 import {
   CALLOUT_CHEER_PLACEHOLDER,
   CALLOUT_WATCHING_LINE,
@@ -231,6 +233,7 @@ export default function ChallengeDetailScreen() {
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   useDismissTo(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
   const { user } = useAuth();
@@ -1540,7 +1543,7 @@ export default function ChallengeDetailScreen() {
                   if (!id) {
                     return;
                   }
-                  router.push(checkinSubmitHref(id));
+                  pushChallengeHref(router, String(checkinSubmitHref(id)), 'live-begin', id, pathname);
                 }}
               />
             )}

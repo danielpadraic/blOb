@@ -107,9 +107,10 @@ import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { firstRouteParam } from '@/lib/challengeLoad';
 import { parseDoneIds } from '@/lib/multiCheckin';
 import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
-import { challengeDetailHref, checkinSubmitHref, multiCheckinHref, publishedRowId } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref, multiCheckinHref, publishedRowId, TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
@@ -183,11 +184,17 @@ export default function SubmitWorkoutScreen() {
 
 function SubmitWorkoutInner() {
   const params = useLocalSearchParams<{ id: string; from?: string; done?: string }>();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const id = firstRouteParam(params.id);
   const router = useRouter();
   const pathname = usePathname();
   const navFocused = useIsFocused();
   const checkinLogRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!id) {
+      router.replace(TABS_HREF);
+    }
+  }, [id, router]);
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);

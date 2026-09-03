@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkinSubmitHref, clipRouteId, errorRetryHref, publishedRowId, waveHref } from '@/lib/routes';
+import { challengeHref, checkinSubmitHref, clipRouteId, errorRetryHref, publishedRowId, waveHref } from '@/lib/routes';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 
 describe('checkinSubmitHref', () => {
   it('opens submit for that challenge and never Wave or capture', () => {
+    expect(challengeHref('abc-1')).toBe('/challenges/abc-1');
     expect(checkinSubmitHref('abc-1')).toBe('/challenges/abc-1/submit');
     expect(String(checkinSubmitHref('abc-1'))).not.toContain('capture');
     expect(String(checkinSubmitHref('abc-1'))).not.toContain('wave');

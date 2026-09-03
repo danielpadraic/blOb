@@ -2,7 +2,8 @@ import { usePathname, useRouter } from 'expo-router';
 
 import { AppText } from '@/components/ui/AppText';
 import { splitMentionedText, type MentionRecord } from '@/lib/mentions';
-import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
+import { challengeHref, circleDetailHref } from '@/lib/routes';
+import { pushChallengeHref } from '@/lib/challengeNav';
 import { THEME } from '@/lib/theme';
 
 type MentionTextProps = {
@@ -51,7 +52,7 @@ export function MentionText({ content, mentions = [], numberOfLines, className, 
                 return;
               }
               if (kind === 'challenge') {
-                router.push(challengeDetailHref(mention.userId, 'feed'));
+                pushChallengeHref(router, String(challengeHref(mention.userId)), 'mention', mention.userId, pathname);
                 return;
               }
               router.push(profileHref(pathname, mention.username));

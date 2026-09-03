@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
@@ -52,6 +52,7 @@ export function ProfileChallengeRow({
   canEdit?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const social = useSocialSheetsOptional();
   const queryClient = useQueryClient();
   const status = item.participation?.status
@@ -102,7 +103,13 @@ export function ProfileChallengeRow({
         if (!challenge?.id) {
           return;
         }
-        openChallengeLobby(router, { id: challenge.id, snapshot: challenge, returnTo: 'lobby' });
+        openChallengeLobby(router, {
+          id: challenge.id,
+          snapshot: challenge,
+          returnTo: 'lobby',
+          source: 'profile-row',
+          pathname,
+        });
       }}
       className="px-3 py-2.5"
       style={{
