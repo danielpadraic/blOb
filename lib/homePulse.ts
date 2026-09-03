@@ -1,5 +1,6 @@
+import { isEndedPrizeStatus } from '@/lib/challengePot';
 import { isLiveOrUpcoming } from '@/lib/challengeDiscoverability';
-import { fetchActiveChallenges } from '@/lib/challenges';
+import { fetchCompetingChallenges, fetchHostingChallenges } from '@/lib/challenges';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
   calloutCardMetaLine,
@@ -11,6 +12,7 @@ import {
 import { isCheckinPost } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
 import { liveCheckinLabel } from '@/lib/liveThread';
+import { isEndedLobbyStatus } from '@/lib/lobbyChallenge';
 import { namedChallengeHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -63,15 +65,49 @@ export type PulseChallengeLike = {
   status?: string | null;
   is_callout?: boolean | null;
   watching?: boolean | null;
+  joined?: boolean | null;
+  hosting?: boolean | null;
+  created_by?: string | null;
 };
 
-/** Live / upcoming only. Ended and Settled never become pills. */
-export function selectPulseChallenges<T extends PulseChallengeLike>(rows: T[]): T[] {
+function pulseStatus(status: string | null | undefined): string {
+  return String(status ?? '').trim().toLowerCase();
+}
+
+/** Ended / Settled / judging never keep a Home Pulse pill. */
+export function isPulseEndedStatus(status: string | null | undefined): boolean {
+  const value = pulseStatus(status);
+  return isEndedLobbyStatus(value) || isEndedPrizeStatus(value);
+}
+
+/**
+ * Home Pulse membership lock:
+ * 1. Joined participant + live/upcoming (existing upcoming statuses — no new rule)
+ * 2. Host + not Ended/Settled (same live/upcoming set as today)
+ * 3. Observer on a Callout via callout_observers, not Ended
+ * Never public Active the viewer did not join. Never Ended.
+ */
+export function isPulsePillEligible(row: PulseChallengeLike, viewerId?: string | null): boolean {
+  const id = String(row?.id ?? '').trim();
+  if (!id || isPulseEndedStatus(row.status) || !isLiveOrUpcoming(pulseStatus(row.status))) {
+    return false;
+  }
+  const hosting = Boolean(row.hosting) || Boolean(viewerId && String(row.created_by ?? '') === viewerId);
+  const joined = Boolean(row.joined);
+  const watchingCallout = Boolean(row.watching) && Boolean(row.is_callout);
+  return joined || hosting || watchingCallout;
+}
+
+/** One pill per challenge. Membership required — live/upcoming alone is not enough. */
+export function selectPulseChallenges<T extends PulseChallengeLike>(
+  rows: T[],
+  viewerId?: string | null,
+): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const row of rows) {
     const id = String(row?.id ?? '').trim();
-    if (!id || seen.has(id) || !isLiveOrUpcoming(row.status)) {
+    if (!id || seen.has(id) || !isPulsePillEligible(row, viewerId)) {
       continue;
     }
     seen.add(id);
@@ -139,7 +175,7 @@ export function buildPulsePills(input: {
   calloutParties?: Map<string, CalloutCardParty> | CalloutCardParty[];
   viewerId?: string | null;
 }): PulsePill[] {
-  const challenges = selectPulseChallenges(input.challenges);
+  const challenges = selectPulseChallenges(input.challenges, input.viewerId);
   const newestFirst = [...input.posts]
     .filter((post) => Boolean(post?.challenge_id) && !post.deleted_at)
     .sort((a, b) => {
@@ -222,20 +258,36 @@ async function fetchPulseLobbyPosts(challengeIds: string[]): Promise<PulseLobbyP
   return (slim.data ?? []) as PulseLobbyPost[];
 }
 
-/** Joined ∪ hosted live/upcoming + last check-in state the viewer can already see. */
+/** Joined live/upcoming ∪ non-ended hosting ∪ observer Callout. Never public Active. Never Ended. */
 export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]> {
   if (!userId) {
     return [];
   }
   let challenges: PulseChallengeLike[] = [];
   try {
-    challenges = selectPulseChallenges(await fetchActiveChallenges(userId));
+    const [joined, hosted] = await Promise.all([
+      fetchCompetingChallenges(userId),
+      fetchHostingChallenges(userId),
+    ]);
+    challenges = selectPulseChallenges(
+      [
+        ...joined.map((row) => ({ ...row, joined: true, hosting: String(row.created_by ?? '') === userId })),
+        ...hosted.map((row) => ({ ...row, hosting: true, joined: false })),
+      ],
+      userId,
+    );
   } catch {
     return [];
   }
   try {
+    // Observer Callout pills read callout_observers. No extra table.
     const watched = selectPulseChallenges(
-      (await fetchWatchedCalloutChallenges(userId)).map((row) => ({ ...row, watching: true })),
+      (await fetchWatchedCalloutChallenges(userId)).map((row) => ({
+        ...row,
+        watching: true,
+        is_callout: true,
+      })),
+      userId,
     );
     const seen = new Set(challenges.map((row) => String(row.id)));
     for (const row of watched) {

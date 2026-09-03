@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PULSE_CAP,
   buildPulsePills,
+  isPulsePillEligible,
   pulseChallengeHref,
   pulseSnippet,
   selectPulseChallenges,
@@ -10,16 +11,59 @@ import {
 } from '@/lib/homePulse';
 
 describe('selectPulseChallenges', () => {
-  it('keeps live and upcoming, drops ended and settled, and dedupes', () => {
+  it('keeps joined live and upcoming, drops ended and settled, and dedupes', () => {
     const rows = selectPulseChallenges([
-      { id: 'live-1', status: 'live', title: 'Dawn run' },
-      { id: 'up-1', status: 'upcoming', title: 'Open gym' },
-      { id: 'ended-1', status: 'ended', title: 'Last week' },
-      { id: 'settled-1', status: 'settled', title: 'Paid out' },
-      { id: 'live-1', status: 'in_progress', title: 'Dawn run copy' },
-      { id: 'official-1', status: 'arming', title: 'Official Weekly' },
+      { id: 'live-1', status: 'live', title: 'Dawn run', joined: true },
+      { id: 'up-1', status: 'upcoming', title: 'Open gym', joined: true },
+      { id: 'ended-1', status: 'ended', title: 'Last week', joined: true },
+      { id: 'settled-1', status: 'settled', title: 'Paid out', joined: true },
+      { id: 'live-1', status: 'in_progress', title: 'Dawn run copy', joined: true },
+      { id: 'official-1', status: 'arming', title: 'Official Weekly', joined: true },
     ]);
     expect(rows.map((row) => row.id)).toEqual(['live-1', 'up-1', 'official-1']);
+  });
+
+  it('keeps hosting that is not ended, and drops hosted Ended pots', () => {
+    const rows = selectPulseChallenges(
+      [
+        { id: 'host-live', status: 'live', title: 'Hosted live', hosting: true, created_by: 'me' },
+        { id: 'host-ended', status: 'ended', title: 'Hosted ended', hosting: true, created_by: 'me' },
+        { id: 'host-settled', status: 'settled', title: 'Hosted settled', hosting: true, created_by: 'me' },
+      ],
+      'me',
+    );
+    expect(rows.map((row) => row.id)).toEqual(['host-live']);
+  });
+
+  it('keeps observer Callout pills and drops ended watching', () => {
+    const rows = selectPulseChallenges([
+      { id: 'watch-live', status: 'live', title: 'Sit-ups', is_callout: true, watching: true },
+      { id: 'watch-ended', status: 'ended', title: 'Old callout', is_callout: true, watching: true },
+    ]);
+    expect(rows.map((row) => row.id)).toEqual(['watch-live']);
+  });
+
+  it('never keeps public Active the viewer did not join, host, or watch', () => {
+    const rows = selectPulseChallenges([
+      { id: 'public-1', status: 'live', title: 'Random public' },
+      { id: 'public-2', status: 'in_progress', title: 'Stranger pot' },
+    ]);
+    expect(rows).toEqual([]);
+    expect(isPulsePillEligible({ id: 'public-1', status: 'live' })).toBe(false);
+  });
+
+  it('does not keep watching on a non-Callout, and dedupes joined + watching to one pill', () => {
+    expect(
+      selectPulseChallenges([{ id: 'plain', status: 'live', title: 'Peer', watching: true }]).map(
+        (row) => row.id,
+      ),
+    ).toEqual([]);
+    expect(
+      selectPulseChallenges([
+        { id: 'same', status: 'live', title: 'Sit-ups', joined: true, is_callout: true },
+        { id: 'same', status: 'live', title: 'Sit-ups', watching: true, is_callout: true },
+      ]).map((row) => row.id),
+    ).toEqual(['same']);
   });
 });
 
@@ -52,6 +96,7 @@ describe('buildPulsePills', () => {
       id: `c${index + 1}`,
       status: index === 13 ? 'ended' : 'live',
       title: index === 0 ? 'Official Weekly' : `Peer ${index + 1}`,
+      joined: true,
     }));
     const posts = [
       { id: 'p2', challenge_id: 'c2', content: 'starting now', author_id: 'a2', created_at: '2026-09-01T18:00:00.000Z' },
@@ -73,7 +118,7 @@ describe('buildPulsePills', () => {
 
   it('keeps Check-in Complete when a later Live reply exists', () => {
     const pills = buildPulsePills({
-      challenges: [{ id: 'c1', status: 'live', title: '30-Day' }],
+      challenges: [{ id: 'c1', status: 'live', title: '30-Day', joined: true }],
       posts: [
         {
           challenge_id: 'c1',
@@ -94,7 +139,7 @@ describe('buildPulsePills', () => {
 
   it('takes up to three recent Live authors for the face pile', () => {
     const pills = buildPulsePills({
-      challenges: [{ id: 'c1', status: 'live', title: 'Crew' }],
+      challenges: [{ id: 'c1', status: 'live', title: 'Crew', joined: true }],
       posts: [
         { challenge_id: 'c1', author: { id: 'a1' }, created_at: '2026-09-01T19:00:00.000Z', content: 'now' },
         { challenge_id: 'c1', author: undefined, author_id: 'a1', created_at: '2026-09-01T18:30:00.000Z', content: 'again' },
@@ -114,7 +159,7 @@ describe('buildPulsePills', () => {
   it('does not throw when author is missing', () => {
     expect(() =>
       buildPulsePills({
-        challenges: [{ id: 'c1', status: 'live', title: 'Crew' }],
+        challenges: [{ id: 'c1', status: 'live', title: 'Crew', joined: true }],
         posts: [{ challenge_id: 'c1', author: undefined, author_id: undefined, content: 'starting now' }],
       }),
     ).not.toThrow();
@@ -137,7 +182,7 @@ describe('buildPulsePills', () => {
 
   it('uses fighter faces and vs / watching on Callout pills, never pot language', () => {
     const pills = buildPulsePills({
-      challenges: [{ id: 'co-1', status: 'live', title: 'sit-ups', is_callout: true }],
+      challenges: [{ id: 'co-1', status: 'live', title: 'sit-ups', is_callout: true, joined: true }],
       posts: [
         {
           challenge_id: 'co-1',

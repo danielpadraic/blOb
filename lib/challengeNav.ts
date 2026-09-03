@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { challengeHref, checkinSubmitHref } from '@/lib/routes';
 
@@ -368,7 +370,7 @@ export function setCheckinAssignHref(fn: CheckinAssign | null): void {
 }
 
 function ensureWebCheckinHref(href: string, pickedId: string): void {
-  if (typeof window === 'undefined') {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) {
     return;
   }
   setTimeout(() => {
@@ -385,7 +387,7 @@ function ensureWebCheckinHref(href: string, pickedId: string): void {
 }
 
 function ensureWebNamedChallengeHref(href: string, destId: string): void {
-  if (typeof window === 'undefined') {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) {
     return;
   }
   setTimeout(() => {
