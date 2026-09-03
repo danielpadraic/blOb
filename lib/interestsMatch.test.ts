@@ -96,9 +96,9 @@ describe('interests lobby boost', () => {
   it('lifts running-family public Simples after a filled Running chip at Leveling up', () => {
     const profile = interestsRankProfile({
       rooms: [room('health_fitness', 'complete_filled')],
-      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 5 })],
+      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 1 })],
     });
-    expect(preferredDifficultyFromStance(5)).toBe('beginner');
+    expect(preferredDifficultyFromStance(1)).toBe('beginner');
     const rows = [
       card('lift', { title: 'Strength block', days_required: 21 }),
       card('run-long', { title: 'Marathon block', days_required: 30 }),
@@ -114,9 +114,9 @@ describe('interests lobby boost', () => {
   it('prefers longer running Simples when stance is Excel', () => {
     const profile = interestsRankProfile({
       rooms: [room('health_fitness', 'complete_filled')],
-      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 1 })],
+      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 5 })],
     });
-    expect(preferredDifficultyFromStance(1)).toBe('advanced');
+    expect(preferredDifficultyFromStance(5)).toBe('advanced');
     const rows = [
       card('run-intro', { title: 'Couch to 5K', days_required: 7 }),
       card('run-long', { title: 'Marathon block', days_required: 30 }),
@@ -234,7 +234,7 @@ describe('Start this starter', () => {
     expect(SIMPLE_TYPES.map((item) => item.value)).toContain('running');
     const picked = pickStartThisStarter([
       { slug: 'diet_nutrition', label: 'Diet & Nutrition', room: 'health_fitness', stanceScore: 3 },
-      { slug: 'running', label: 'Running', room: 'health_fitness', stanceScore: 5 },
+      { slug: 'running', label: 'Running', room: 'health_fitness', stanceScore: 1 },
     ]);
     expect(picked?.chipSlug).toBe('running');
     expect(picked?.starter.templateId).toBe('running');

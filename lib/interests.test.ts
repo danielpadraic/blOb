@@ -15,6 +15,7 @@ import {
   roomsNeedYouDot,
   setChipMark,
   stanceFromMarks,
+  stanceFromTrack,
   stanceFromTrackTop,
   stanceMarks,
   stateForSave,
@@ -68,11 +69,12 @@ describe('interests catalog', () => {
 });
 
 describe('interests stance', () => {
-  it('defaults to 3 (both marks) and maps 1–2 excel, 4–5 level up', () => {
+  it('defaults to 3 (both marks) and maps 1–2 level up, 4–5 excel', () => {
     expect(stanceMarks(3)).toEqual({ excel: true, levelUp: true });
-    expect(stanceMarks(1)).toEqual({ excel: true, levelUp: false });
-    expect(stanceMarks(5)).toEqual({ excel: false, levelUp: true });
-    expect(stanceFromMarks(true, false, null)).toBe(2);
+    expect(stanceMarks(1)).toEqual({ excel: false, levelUp: true });
+    expect(stanceMarks(5)).toEqual({ excel: true, levelUp: false });
+    expect(stanceFromMarks(true, false, null)).toBe(4);
+    expect(stanceFromMarks(false, true, null)).toBe(2);
     expect(stanceFromMarks(true, true, 3)).toBe(3);
     const selected = toggleChipStance({}, 'c1');
     expect(selected.c1).toEqual({ excel: true, levelUp: true });
@@ -80,10 +82,11 @@ describe('interests stance', () => {
     expect(both.c1.excel).toBe(true);
   });
 
-  it('maps the vertical stance track with Excel at the top', () => {
+  it('maps a horizontal track with Leveling up at the left to stance 1–5', () => {
+    expect(stanceFromTrack(0)).toBe(1);
+    expect(stanceFromTrack(0.5)).toBe(3);
+    expect(stanceFromTrack(1)).toBe(5);
     expect(stanceFromTrackTop(0)).toBe(1);
-    expect(stanceFromTrackTop(1)).toBe(5);
-    expect(stanceFromTrackTop(0.5)).toBe(3);
   });
 
   it('clears activities when None of these is tapped, and Continue needs a choice', () => {

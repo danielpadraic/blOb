@@ -285,7 +285,7 @@ export function QtyPairSlider({
   unitLabel,
 }: QtyPairSliderProps) {
   return (
-    <View className="gap-4">
+    <View style={{ gap: 8 }}>
       <QtyBlock
         label={currentLabel}
         kind={kind}

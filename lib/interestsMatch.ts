@@ -201,13 +201,12 @@ export function familyForChip(room: InterestRoomSlug, slug: string): InterestFam
 
 export function preferredDifficultyFromStance(stanceScore: number): CardDifficulty {
   const n = clampStanceScore(stanceScore);
-  // Stored 1 = Excel (slider top), 5 = Leveling up (slider bottom).
-  // Leveling up → intro / shorter. Excel → longer / harder.
+  // 1 = Leveling up (left) → intro / shorter. 5 = Excel (right) → longer / harder.
   if (n <= 2) {
-    return 'advanced';
+    return 'beginner';
   }
   if (n >= 4) {
-    return 'beginner';
+    return 'advanced';
   }
   return 'intermediate';
 }

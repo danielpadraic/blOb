@@ -22,7 +22,8 @@ type ActivityCardProps = {
   onEmployer: (next: string) => void;
   onOtherText: (next: string) => void;
   error: string | null;
-  units?: 'imperial' | 'metric';
+  index: number;
+  total: number;
 };
 
 export function ActivityCard({
@@ -37,38 +38,59 @@ export function ActivityCard({
   onEmployer,
   onOtherText,
   error,
-  units = 'imperial',
+  index,
+  total,
 }: ActivityCardProps) {
   return (
     <ScrollView
       contentContainerStyle={{
         paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 16,
-        alignItems: 'center',
+        paddingTop: 4,
+        paddingBottom: 12,
       }}
       keyboardShouldPersistTaps="handled">
       <View
-        className="w-full gap-3 p-4"
+        className="w-full p-4"
         style={{
-          maxWidth: 370,
           backgroundColor: THEME.surface,
           borderRadius: THEME.radius,
+          gap: 8,
           ...themeShadow(),
         }}>
-        <AppText
-          className="text-center text-[34px] font-extrabold"
-          numberOfLines={2}
-          style={{ color: THEME.textPrimary, lineHeight: 40 }}>
-          {chip.label}
-        </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+          <AppText
+            className="text-[22px] font-extrabold"
+            numberOfLines={1}
+            style={{ color: THEME.textPrimary, lineHeight: 26, flex: 1, minWidth: 0 }}>
+            {chip.label}
+          </AppText>
+          <AppText
+            className="text-[13px] font-semibold"
+            numberOfLines={1}
+            style={{ color: THEME.textMuted, paddingTop: 4 }}>
+            {index + 1} of {total}
+          </AppText>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          {Array.from({ length: Math.max(total, 1) }, (_, i) => (
+            <View
+              key={i}
+              style={{
+                flex: 1,
+                height: 3,
+                borderRadius: 999,
+                backgroundColor: i <= index ? THEME.accent : THEME.border,
+              }}
+            />
+          ))}
+        </View>
         <StanceSlider
           value={followUp.stanceScore}
           onChange={(next) => onChange({ ...followUp, stanceScore: clampStanceScore(next) })}
         />
-        <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} units={units} />
+        <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} />
         {chip.isWork ? (
-          <View className="gap-3">
+          <View style={{ gap: 8 }}>
             <Input
               label={copy('interests.occupation')}
               value={occupation}

@@ -30,7 +30,6 @@ import {
   goalVolumeLabel,
   isQtyKind,
   isRatingKind,
-  qtyUnitLabel,
   setGoalQtyPeriod,
   setQtyPeriod,
   setQtyUnknown,
@@ -48,7 +47,6 @@ type ChipFollowUpCardProps = {
   followUp: ChipFollowUp;
   onChange: (next: ChipFollowUp) => void;
   room: InterestRoomSlug;
-  units?: 'imperial' | 'metric';
 };
 
 export function ChipFollowUpCard({
@@ -56,7 +54,6 @@ export function ChipFollowUpCard({
   followUp,
   onChange,
   room,
-  units = 'imperial',
 }: ChipFollowUpCardProps) {
   const ratingKind = isRatingKind(chip.ratingKind) ? chip.ratingKind : null;
   const qtyKind = isQtyKind(chip.qtyKind) ? chip.qtyKind : null;
@@ -72,9 +69,9 @@ export function ChipFollowUpCard({
   const qtyOptional = Boolean(chip.isOther);
 
   return (
-    <View className="gap-3">
+    <View style={{ gap: 8 }}>
       {showNumericRating && ratingKind ? (
-        <View className="gap-2">
+        <View style={{ gap: 8 }}>
           <Input
             label={RATING_LABELS[ratingKind]}
             value={followUp.ratingUnknown ? '' : followUp.ratingValue == null ? '' : String(followUp.ratingValue)}
@@ -91,7 +88,7 @@ export function ChipFollowUpCard({
       ) : null}
 
       {showRank ? (
-        <View className="gap-2">
+        <View style={{ gap: 8 }}>
           <Input
             label={copy('interests.rank')}
             value={followUp.ratingUnknown ? '' : followUp.mmrLabel}
@@ -107,7 +104,7 @@ export function ChipFollowUpCard({
       ) : null}
 
       {showGrade ? (
-        <View className="gap-2">
+        <View style={{ gap: 8 }}>
           <Input
             label={copy('interests.grade')}
             value={followUp.ratingUnknown ? '' : followUp.gradeLabel}
@@ -135,18 +132,16 @@ export function ChipFollowUpCard({
           onGoalPeriod={(next) => onChange(setGoalQtyPeriod(followUp, next))}
           onCurrent={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
           onGoal={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
-          unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
         />
       ) : null}
 
       {showPlay && qtyKind ? (
-        <View className="gap-2">
+        <View style={{ gap: 8 }}>
           <QtySlider
             label={copy('interests.currentlyPlay')}
             kind={qtyKind}
             value={followUp.currentQty}
             onChange={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
-            unitLabel={qtyUnitLabel(qtyKind, chip.slug, units)}
           />
           <PeriodRow
             period={followUp.qtyPeriod}
@@ -218,7 +213,6 @@ export function ChipFollowUpCard({
               onChangeText={(otherDietText) => onChange({ ...followUp, otherDietText })}
             />
           ) : null}
-          <AppText className="text-[12px] text-muted">{copy('interests.dietNote')}</AppText>
         </>
       ) : null}
 
@@ -296,7 +290,7 @@ export function ChipFollowUpCard({
           </View>
           <AppText className="text-[12px] text-muted">{copy('interests.fastingNote')}</AppText>
           {followUp.qtyUnknown ? null : (
-            <View className="gap-3">
+            <View style={{ gap: 8 }}>
               <QtySlider
                 label="Current · hours"
                 kind={qtyKind}

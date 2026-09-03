@@ -35,21 +35,26 @@ export function clampStanceScore(value: number): number {
   return Math.min(5, Math.max(1, Math.round(value)));
 }
 
-/** Vertical stance track: 1 = top (Excel), 5 = bottom (Leveling up). Default 3. */
-export function stanceFromTrackTop(t: number): number {
+/** Horizontal stance track: 1 = full left (Leveling up), 5 = full right (Excel). Default 3. */
+export function stanceFromTrack(t: number): number {
   return clampStanceScore(t * 4 + 1);
+}
+
+/** @deprecated Use stanceFromTrack. Left/top t=0 is score 1. */
+export function stanceFromTrackTop(t: number): number {
+  return stanceFromTrack(t);
 }
 
 export const CARD_SLIDE_MS = 300;
 
-/** 1–2 excel, 3 both, 4–5 level_up. */
+/** 1–2 level_up, 3 both, 4–5 excel. */
 export function stanceMarks(score: number): ChipStance {
   const clamped = clampStanceScore(score);
   if (clamped <= 2) {
-    return { excel: true, levelUp: false };
+    return { excel: false, levelUp: true };
   }
   if (clamped >= 4) {
-    return { excel: false, levelUp: true };
+    return { excel: true, levelUp: false };
   }
   return { excel: true, levelUp: true };
 }
@@ -66,10 +71,10 @@ export function stanceFromMarks(
     return 3;
   }
   if (excel) {
-    return 2;
+    return 4;
   }
   if (levelUp) {
-    return 4;
+    return 2;
   }
   return 3;
 }

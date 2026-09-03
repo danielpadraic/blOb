@@ -44,7 +44,6 @@ import {
   type InterestChipDef,
   type InterestRoomSlug,
 } from '@/lib/interestsCatalog';
-import { preferredUnitSystem } from '@/lib/bodyMetrics';
 import { copy, type CopyTone } from '@/lib/copy';
 import {
   pickStartThisStarter,
@@ -54,6 +53,8 @@ import {
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 type WizardStep = 'prompt' | InterestRoomSlug;
+
+const FOOTER_BTN = { width: '100%' as const, height: 36, borderRadius: 999 };
 
 export function InterestsWizard({
   fromHome = false,
@@ -93,7 +94,6 @@ export function InterestsWizard({
   const pagerRef = useRef<ActivityCardPagerHandle>(null);
   const bobTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useReduceMotion();
-  const units = preferredUnitSystem(profile);
 
   const room = step === 'prompt' ? null : roomDef(step);
   const catalogChips = (catalog.data ?? []).filter((row) => row.room_slug === step);
@@ -378,7 +378,7 @@ export function InterestsWizard({
 
   const title = step === 'prompt' ? INTEREST_PROMPT.title : room?.title ?? '';
   const sub = step === 'prompt' ? INTEREST_PROMPT.sub : room?.sub ?? '';
-  const footerPad = createStickyFooterPad(keyboardOpen, tabBarLift(insets.bottom, 'sticky') + 8);
+  const footerPad = createStickyFooterPad(keyboardOpen, tabBarLift(insets.bottom, 'sticky'));
   const roomIndex = step === 'prompt' ? 0 : INTEREST_ROOM_SLUGS.indexOf(step) + 1;
 
   return (
@@ -390,11 +390,10 @@ export function InterestsWizard({
               <View
                 style={{
                   flexDirection: 'row',
-                  alignItems: 'flex-start',
-                  gap: 8,
+                  alignItems: 'center',
                   paddingHorizontal: 16,
-                  paddingTop: 8,
-                  paddingBottom: 8,
+                  paddingTop: 4,
+                  minHeight: 44,
                 }}>
                 <Pressable
                   accessibilityRole="button"
@@ -405,27 +404,6 @@ export function InterestsWizard({
                     Back
                   </AppText>
                 </Pressable>
-                <View style={{ flex: 1, minWidth: 0, paddingTop: 10, gap: 8 }}>
-                  <AppText
-                    className="text-[13px] font-semibold"
-                    numberOfLines={1}
-                    style={{ color: THEME.accentBright }}>
-                    {cardChip.label} · {(cardIndex ?? 0) + 1} of {selectedChips.length}
-                  </AppText>
-                  <View style={{ flexDirection: 'row', gap: 4 }}>
-                    {selectedChips.map((chip, index) => (
-                      <View
-                        key={chip.slug}
-                        style={{
-                          flex: 1,
-                          height: 3,
-                          borderRadius: 999,
-                          backgroundColor: index <= (cardIndex ?? 0) ? THEME.accent : THEME.border,
-                        }}
-                      />
-                    ))}
-                  </View>
-                </View>
               </View>
               <ActivityCardPager ref={pagerRef} index={cardIndex ?? 0} reduceMotion={reduceMotion}>
                 {selectedChips.map((chip, index) => (
@@ -446,7 +424,8 @@ export function InterestsWizard({
                     onEmployer={setEmployer}
                     onOtherText={setOtherText}
                     error={index === cardIndex ? formError : null}
-                    units={units}
+                    index={index}
+                    total={selectedChips.length}
                   />
                 ))}
               </ActivityCardPager>
@@ -523,48 +502,84 @@ export function InterestsWizard({
         </RoomSlide>
 
         <View
-          className="gap-2 px-4 pt-2"
           style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: footerPad,
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,
-            paddingBottom: footerPad,
             ...themeShadow('bar'),
           }}>
           {step === 'prompt' ? (
             <>
-              <Button
-                title={copy('interests.continue', tone)}
-                size="lg"
-                onPress={() => void onContinue()}
-                loading={saveRoom.isPending || updateProfile.isPending}
-              />
-              <Button
-                title={fromHome ? copy('interests.skipForNow', tone) : copy('interests.skip', tone)}
-                variant="ghost"
-                onPress={leave}
-              />
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={copy('interests.continue', tone)}
+                  size="sm"
+                  style={FOOTER_BTN}
+                  onPress={() => void onContinue()}
+                  loading={saveRoom.isPending || updateProfile.isPending}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={fromHome ? copy('interests.skipForNow', tone) : copy('interests.skip', tone)}
+                  variant="outline"
+                  size="sm"
+                  style={FOOTER_BTN}
+                  onPress={leave}
+                />
+              </View>
             </>
           ) : onCard ? (
-            <Button
-              title={
-                cardIndex === selectedChips.length - 1
-                  ? copy('interests.done', tone)
-                  : copy('interests.next', tone)
-              }
-              size="lg"
-              onPress={() => void onCardNext()}
-              loading={saveRoom.isPending || sliding}
-            />
+            <>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={
+                    cardIndex === selectedChips.length - 1
+                      ? copy('interests.done', tone)
+                      : copy('interests.next', tone)
+                  }
+                  size="sm"
+                  style={FOOTER_BTN}
+                  onPress={() => void onCardNext()}
+                  loading={saveRoom.isPending || sliding}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={copy('interests.skip', tone)}
+                  variant="outline"
+                  size="sm"
+                  style={FOOTER_BTN}
+                  onPress={() => void onSkip()}
+                />
+              </View>
+            </>
           ) : (
             <>
-              <Button
-                title={copy('interests.continue', tone)}
-                size="lg"
-                onPress={() => void onContinue()}
-                loading={saveRoom.isPending}
-              />
-              <Button title={copy('interests.skip', tone)} variant="ghost" onPress={() => void onSkip()} />
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={copy('interests.continue', tone)}
+                  size="sm"
+                  style={FOOTER_BTN}
+                  onPress={() => void onContinue()}
+                  loading={saveRoom.isPending}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={copy('interests.skip', tone)}
+                  variant="outline"
+                  size="sm"
+                  style={FOOTER_BTN}
+                  onPress={() => void onSkip()}
+                />
+              </View>
             </>
           )}
         </View>
