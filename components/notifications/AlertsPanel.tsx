@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
@@ -29,6 +29,7 @@ import {
   notificationGlyph,
   notificationHref,
 } from '@/lib/notifications';
+import { pushNotificationHref } from '@/lib/challengeNav';
 import { circleDetailHref, conversationHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
@@ -77,6 +78,7 @@ function groupByDay(items: AppNotification[]): ListRow[] {
 
 export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const list = useNotifications();
   const markRead = useMarkNotificationsRead();
@@ -198,10 +200,10 @@ export function AlertsPanel({ compact = false, onClose }: AlertsPanelProps) {
       onClose?.();
       const href = notificationHref(item);
       if (href) {
-        router.push(href);
+        pushNotificationHref(router, href, 'alert', pathname);
       }
     },
-    [markRead, onClose, onHighFive, router],
+    [markRead, onClose, onHighFive, pathname, router],
   );
 
   return (

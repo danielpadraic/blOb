@@ -331,6 +331,53 @@ export async function inviteToChallenge(
   return row as ChallengeInvite;
 }
 
+export function notificationHrefFromPushData(data: {
+  type?: string;
+  challenge_id?: string;
+  href?: string;
+  post_id?: string;
+  story_id?: string;
+  username?: string;
+  callout_id?: string;
+  actor_id?: string;
+  notification_id?: string;
+}): Href | null {
+  if (
+    data.type === 'challenge_checkin_reminder' ||
+    data.type === 'health_begin' ||
+    data.type === 'health_checkout'
+  ) {
+    if (data.challenge_id) {
+      return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
+    }
+  }
+  if (data.href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(data.href) && data.challenge_id) {
+    return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
+  }
+  if (data.href && !/\/submit(?:\?|$)/.test(data.href)) {
+    return data.href as Href;
+  }
+  return notificationHref({
+    id: '',
+    user_id: '',
+    actor_id: null,
+    type: data.type ?? '',
+    title: '',
+    body: null,
+    data: {
+      challenge_id: data.challenge_id,
+      post_id: data.post_id,
+      story_id: data.story_id,
+      username: data.username,
+      callout_id: data.callout_id,
+      actor_id: data.actor_id,
+      notification_id: data.notification_id,
+    },
+    read_at: null,
+    created_at: '',
+  });
+}
+
 export function notificationHref(item: AppNotification): Href | null {
   const data = item.data ?? {};
   if (

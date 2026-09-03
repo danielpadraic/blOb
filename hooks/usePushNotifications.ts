@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
-import { markNotificationRead, notificationHref } from '@/lib/notifications';
+import { pushChallengeHref, pushNotificationHref } from '@/lib/challengeNav';
+import { markNotificationRead, notificationHrefFromPushData } from '@/lib/notifications';
 import {
   getPushPermissionState,
   notificationDataFromResponse,
@@ -14,51 +15,13 @@ import {
   type NotificationNavData,
 } from '@/lib/push';
 import { BODY_METRICS_HREF, INTERESTS_HREF, challengeDetailHref, storyHref } from '@/lib/routes';
-import type { AppNotification } from '@/lib/types';
-
-function hrefFromPushData(data: NotificationNavData): Href | null {
-  if (
-    data.type === 'challenge_checkin_reminder' ||
-    data.type === 'health_begin' ||
-    data.type === 'health_checkout'
-  ) {
-    if (data.challenge_id) {
-      return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
-    }
-  }
-  if (data.href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(data.href) && data.challenge_id) {
-    return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
-  }
-  if (data.href && !/\/submit(?:\?|$)/.test(data.href)) {
-    return data.href as Href;
-  }
-  const fake: AppNotification = {
-    id: '',
-    user_id: '',
-    actor_id: null,
-    type: data.type ?? '',
-    title: '',
-    body: null,
-    data: {
-      challenge_id: data.challenge_id,
-      post_id: data.post_id,
-      story_id: data.story_id,
-      username: data.username,
-      callout_id: data.callout_id,
-      actor_id: data.actor_id,
-      notification_id: data.notification_id,
-    },
-    read_at: null,
-    created_at: '',
-  };
-  return notificationHref(fake);
-}
 
 /** Registers an existing grant and opens tapped alerts. Does not prompt. */
 export function usePushNotifications() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const router = useRouter();
+  const pathname = usePathname();
   const userId = user?.id;
 
   useEffect(() => {
@@ -102,9 +65,9 @@ export function usePushNotifications() {
       if (data.notification_id) {
         void markNotificationRead(data.notification_id);
       }
-      const href = hrefFromPushData(data);
+      const href = notificationHrefFromPushData(data);
       if (href) {
-        router.push(href);
+        pushNotificationHref(router, href, 'push-tap', pathname);
         return;
       }
       if (data.story_id) {
@@ -112,7 +75,13 @@ export function usePushNotifications() {
         return;
       }
       if (data.challenge_id) {
-        router.push(challengeDetailHref(data.challenge_id, 'lobby'));
+        pushChallengeHref(
+          router,
+          String(challengeDetailHref(data.challenge_id, 'lobby')),
+          'push-tap',
+          data.challenge_id,
+          pathname,
+        );
         return;
       }
       if (data.type === 'interests_reminder') {
@@ -148,5 +117,5 @@ export function usePushNotifications() {
     return () => {
       received.remove();
     };
-  }, [router]);
+  }, [pathname, router]);
 }

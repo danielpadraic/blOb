@@ -12,6 +12,7 @@ import {
   isLobbyListPath,
   leftoverChallengePath,
   pushChallengeHref,
+  pushNotificationHref,
   remountChallengesStack,
   resetChallengesNestedInTabs,
   resolveNamedChallengeHref,
@@ -20,6 +21,7 @@ import {
   shouldRemountBeforeNamedPush,
   type NestedNavState,
 } from '@/lib/challengeNav';
+import { challengeDetailHref } from '@/lib/routes';
 
 const THIRTY = 'f28b5591-6c32-4d82-8218-a13b3cafe8a1';
 const PRAYER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -283,5 +285,40 @@ describe('named challenge href lock', () => {
     pushChallengeHref({ push }, `/challenges/${THIRTY}?tab=feed`, 'home-pill', THIRTY, '/feed');
     expect(push).toHaveBeenCalledWith(`/challenges/${THIRTY}?tab=feed`);
     expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('notification tap lock', () => {
+  it('remounts leftover 30-Day Live before a Prayer check-in reminder Overview', () => {
+    vi.useFakeTimers();
+    try {
+      const push = vi.fn();
+      bindChallengesStack({
+        getState: () => challengesState('live'),
+        dispatch: vi.fn(),
+      });
+      expect(boundLeftoverId()).toBe(THIRTY);
+      const href = String(challengeDetailHref(PRAYER, 'lobby', null, { tab: 'overview' }));
+      expect(href).toBe(`/challenges/${PRAYER}?tab=overview`);
+      pushNotificationHref({ push }, href, 'alert');
+      expect(push).not.toHaveBeenCalled();
+      expect(boundLeftoverId()).toBe('');
+      vi.advanceTimersByTime(60);
+      expect(push).toHaveBeenCalledTimes(1);
+      expect(push.mock.calls[0]?.[0]).toBe(`/challenges/${PRAYER}?tab=overview`);
+      expect(String(push.mock.calls[0]?.[0])).not.toMatch(/submit/);
+      expect(push.mock.calls[0]?.[0]).not.toBe('/challenges');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rewrites leftover camera submit to Overview and never opens Lobby with no id', () => {
+    const push = vi.fn();
+    pushNotificationHref({ push }, `/challenges/${PRAYER}/submit`, 'push-tap');
+    expect(push).toHaveBeenCalledWith(`/challenges/${PRAYER}?tab=overview`);
+    push.mockClear();
+    pushNotificationHref({ push }, '/challenges', 'alert');
+    expect(push).not.toHaveBeenCalled();
   });
 });

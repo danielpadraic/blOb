@@ -64,7 +64,13 @@ export function boundLeftoverId(): string {
 }
 
 const CHECKIN_NAV_SOURCES = new Set(['plus-checkin', 'checkin-pick', 'invite-checkin', 'live-begin']);
-const HOME_NAMED_NAV_SOURCES = new Set(['home-pill', 'home-in-challenge', 'plus-checkin']);
+const HOME_NAMED_NAV_SOURCES = new Set([
+  'home-pill',
+  'home-in-challenge',
+  'plus-checkin',
+  'alert',
+  'push-tap',
+]);
 
 export function logBlobNav(source: string, id: string, href: string, mountedId?: string): void {
   const leftover = mountedId ?? boundLeftoverId();
@@ -358,6 +364,34 @@ export function pushChallengeHref(
     return;
   }
   go();
+}
+
+/**
+ * Alert / push taps. Named challenge id uses the Home-pill remount path.
+ * Overview href stays Overview. Never camera submit. Never Lobby with no id.
+ */
+export function pushNotificationHref(
+  router: { push: (href: never) => void },
+  href: string | object,
+  source: 'alert' | 'push-tap',
+  pathname?: string | null,
+): void {
+  if (typeof href !== 'string') {
+    router.push(href as never);
+    return;
+  }
+  const destId = challengeIdFromPath(href);
+  if (!destId) {
+    if (isLobbyListPath(href)) {
+      return;
+    }
+    router.push(href as never);
+    return;
+  }
+  const destHref = isChallengeSubmitPath(href)
+    ? `/challenges/${destId}?tab=overview`
+    : href;
+  pushChallengeHref(router, destHref, source, destId, pathname);
 }
 
 type CheckinAssign = (href: string) => void;
