@@ -67,7 +67,7 @@ export const CHALLENGE_FEED_COLUMNS =
   'id, title, status, is_official, buy_in_amount, prize_pool, currency, cover_image_url, created_by, visibility';
 const CHALLENGE_FEED_COLUMNS_SPONSOR = `${CHALLENGE_FEED_COLUMNS}, sponsor_name, sponsor_logo_url`;
 const CHALLENGE_FEED_COLUMNS_LANE = `${CHALLENGE_FEED_COLUMNS_SPONSOR}, challenge_lane`;
-const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at, ends_at, series_id, category, challenge_type, task, tasks, days_required, target_count, length_value, host_budget, min_participants`;
+const CHALLENGE_FEED_COLUMNS_EMBED = `${CHALLENGE_FEED_COLUMNS_LANE}, starts_at, ends_at, timezone, series_id, category, challenge_type, task, tasks, days_required, target_count, length_value, host_budget, min_participants`;
 
 export type FollowEdge = Follow & { profile: PublicProfile | null };
 export type FriendEdge = Friendship & { profile: PublicProfile | null };
@@ -139,6 +139,7 @@ export type FeedChallengePreview = {
   challenge_lane?: string | null;
   starts_at?: string | null;
   ends_at?: string | null;
+  timezone?: string | null;
   series_id?: string | null;
   category?: string | null;
   challenge_type?: string | null;

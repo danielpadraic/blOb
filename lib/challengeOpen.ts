@@ -193,6 +193,7 @@ export function seedChallengeFeedPreview(
     challenge_lane: typeof row.challenge_lane === 'string' ? row.challenge_lane : null,
     starts_at: row.starts_at ?? null,
     ends_at: row.ends_at ?? null,
+    timezone: row.timezone ?? null,
     task: row.task ?? null,
     tasks: row.tasks ?? null,
     days_required: row.days_required ?? null,

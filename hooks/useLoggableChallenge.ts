@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { checkinPeriodKey, checkinPeriodKeyCandidates, normalizePeriodKey } from '@/lib/checkinPeriod';
+import { checkinPeriodKey, normalizePeriodKey } from '@/lib/checkinPeriod';
 import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
@@ -59,9 +59,9 @@ const CHALLENGE_SELECTS = [
   'id, title, task, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required',
-  'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes',
-  'id, title, is_official, status, starts_at, ends_at, is_unlimited',
-  'id, title, is_official, status, starts_at, ends_at',
+  'id, title, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, timezone',
+  'id, title, is_official, status, starts_at, ends_at, is_unlimited, timezone',
+  'id, title, is_official, status, starts_at, ends_at, timezone',
 ] as const;
 
 export function useLoggableChallenges() {
@@ -163,35 +163,23 @@ function submittedThisPeriod(
   challenge: LoggableChallenge,
   checkinRows: Map<string, CheckinPeriodState>,
 ): boolean {
-  return checkinPeriodKeyCandidates(challenge).some(
-    (key) => checkinRows.get(`${challenge.id}:${key}`)?.phase === 'submitted',
-  );
+  const key = checkinPeriodKey(challenge);
+  return checkinRows.get(`${challenge.id}:${key}`)?.phase === 'submitted';
 }
 
 function phaseForPeriod(
   challenge: LoggableChallenge,
   checkinRows: Map<string, CheckinPeriodState>,
 ): CheckinPhase {
-  for (const key of checkinPeriodKeyCandidates(challenge)) {
-    const phase = checkinRows.get(`${challenge.id}:${key}`)?.phase;
-    if (phase) {
-      return phase;
-    }
-  }
-  return 'none';
+  const phase = checkinRows.get(`${challenge.id}:${checkinPeriodKey(challenge)}`)?.phase;
+  return phase ?? 'none';
 }
 
 function partsForPeriod(
   challenge: LoggableChallenge,
   checkinRows: Map<string, CheckinPeriodState>,
 ): unknown {
-  for (const key of checkinPeriodKeyCandidates(challenge)) {
-    const row = checkinRows.get(`${challenge.id}:${key}`);
-    if (row) {
-      return row.parts;
-    }
-  }
-  return null;
+  return checkinRows.get(`${challenge.id}:${checkinPeriodKey(challenge)}`)?.parts ?? null;
 }
 
 async function fetchActiveParticipations(userId: string): Promise<ParticipationRow[]> {

@@ -22,6 +22,7 @@ export type ChallengeLoadSnapshot = {
   distance_meters_required?: number | null;
   starts_at?: string | null;
   ends_at?: string | null;
+  timezone?: string | null;
   visibility?: string | null;
   challenge_lane?: unknown;
   privacy_mode?: string | null;

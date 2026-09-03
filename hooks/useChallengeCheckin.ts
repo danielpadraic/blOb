@@ -154,7 +154,7 @@ function isSubmittedToday(
     return false;
   }
   const key = normalizePeriodKey(row.period_key);
-  if (key && checkinPeriodKeyCandidates(challenge).includes(key)) {
+  if (key && key === checkinPeriodKey(challenge)) {
     return true;
   }
   if (!row.submitted_at) {
@@ -165,7 +165,7 @@ function isSubmittedToday(
     return false;
   }
   const tz = challengeClockTz(challenge);
-  return dateStampInZone(submitted, tz) === dateStampInZone(new Date(), tz);
+  return dateStampInZone(submitted, tz) === checkinPeriodKey(challenge);
 }
 
 export async function fetchCurrentPeriodCheckin(

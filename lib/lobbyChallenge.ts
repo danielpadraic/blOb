@@ -2,7 +2,7 @@ import { format, isSameDay } from 'date-fns';
 
 import { usesComparablePointsScoring } from '@/lib/challengeExperience';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
-import { checkinPeriodKeyCandidates, normalizePeriodKey, type CheckinPeriodChallenge } from '@/lib/checkinPeriod';
+import { checkinPeriodKey, normalizePeriodKey, type CheckinPeriodChallenge } from '@/lib/checkinPeriod';
 import {
   CHALLENGE_CATEGORIES,
   challengeCategoryLabel,
@@ -552,7 +552,7 @@ export function checkedInForCurrentPeriod(
     return false;
   }
   const key = normalizePeriodKey(row.period_key);
-  return Boolean(key && checkinPeriodKeyCandidates(challenge).includes(key));
+  return Boolean(key && key === checkinPeriodKey(challenge));
 }
 
 export async function loadLobbyLayout(): Promise<LobbyLayout> {
