@@ -1,5 +1,5 @@
 import { firstRouteParam } from '@/lib/challengeLoad';
-import { checkinSubmitHref } from '@/lib/routes';
+import { challengeHref, checkinSubmitHref } from '@/lib/routes';
 
 export type NestedNavRoute = {
   name: string;
@@ -62,11 +62,18 @@ export function boundLeftoverId(): string {
 }
 
 const CHECKIN_NAV_SOURCES = new Set(['plus-checkin', 'checkin-pick', 'invite-checkin', 'live-begin']);
+const HOME_NAMED_NAV_SOURCES = new Set(['home-pill', 'home-in-challenge', 'plus-checkin']);
 
 export function logBlobNav(source: string, id: string, href: string, mountedId?: string): void {
   const leftover = mountedId ?? boundLeftoverId();
-  if (CHECKIN_NAV_SOURCES.has(source)) {
-    console.log('[blob:nav]', { source, pickedId: id, href, mountedId: leftover });
+  if (HOME_NAMED_NAV_SOURCES.has(source) || CHECKIN_NAV_SOURCES.has(source)) {
+    console.log('[blob:nav]', {
+      source,
+      id,
+      href,
+      ...(CHECKIN_NAV_SOURCES.has(source) ? { pickedId: id } : {}),
+      mountedId: leftover,
+    });
     return;
   }
   console.log('[blob:nav]', { source, id, href, mountedId: leftover });
@@ -95,6 +102,30 @@ export function isChallengeSubmitPath(pathname?: string | null): boolean {
   const path = stripQuery(pathname);
   const id = challengeIdFromPath(path);
   return Boolean(id && path === `/challenges/${id}/submit`);
+}
+
+/** Challenges tab list only. Never a named challenge. */
+export function isLobbyListPath(pathname?: string | null): boolean {
+  return stripQuery(pathname) === '/challenges';
+}
+
+/**
+ * Home pill / “in {name}” / View. Always `/challenges/{id}`.
+ * Never rewrite a named tap to the Lobby list.
+ */
+export function resolveNamedChallengeHref(href: string, id: string): string {
+  const destId = String(id ?? '').trim() || challengeIdFromPath(href) || '';
+  if (!destId) {
+    return String(href ?? '');
+  }
+  if (isLobbyListPath(href) || !challengeIdFromPath(href)) {
+    return String(challengeHref(destId));
+  }
+  return String(href);
+}
+
+export function shouldRemountBeforeNamedPush(mountedId: string, destId: string): boolean {
+  return Boolean(mountedId) && Boolean(destId) && mountedId !== destId;
 }
 
 export function isChallengesStackState(state?: NestedNavState | null): boolean {
@@ -307,25 +338,24 @@ export function pushChallengeHref(
   id: string,
   pathname?: string | null,
 ): void {
+  const destId = challengeIdFromPath(href) ?? String(id ?? '').trim();
+  const destHref = destId ? resolveNamedChallengeHref(href, destId) : String(href);
   const mountedId = boundLeftoverId();
-  logBlobNav(source, id, href, mountedId);
-  const destId = challengeIdFromPath(href) ?? id;
-  const fromHome = !challengeIdFromPath(pathname);
-  const needsFresh =
-    fromHome ||
-    (Boolean(mountedId) && mountedId !== destId) ||
-    shouldPopBeforeChallengePush(pathname, href, boundLeftoverChallengePath());
-  if (!needsFresh) {
-    router.push(href as never);
+  logBlobNav(source, destId, destHref, mountedId);
+  if (!destId) {
+    router.push(destHref as never);
     return;
   }
-  const hadLeftover = Boolean(mountedId);
-  clearLastOpenChallenge();
-  if (hadLeftover) {
-    setTimeout(() => router.push(href as never), 60);
+  const go = () => {
+    router.push(destHref as never);
+    ensureWebNamedChallengeHref(destHref, destId);
+  };
+  if (shouldRemountBeforeNamedPush(mountedId, destId)) {
+    remountChallengesStack();
+    setTimeout(go, 60);
     return;
   }
-  router.push(href as never);
+  go();
 }
 
 type CheckinAssign = (href: string) => void;
@@ -344,6 +374,23 @@ function ensureWebCheckinHref(href: string, pickedId: string): void {
   setTimeout(() => {
     const current = `${window.location.pathname}${window.location.search}`;
     if (!shouldForceCheckinNavigation(current, pickedId)) {
+      return;
+    }
+    if (assignCheckinHref) {
+      assignCheckinHref(href);
+      return;
+    }
+    window.location.assign(href);
+  }, 100);
+}
+
+function ensureWebNamedChallengeHref(href: string, destId: string): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  setTimeout(() => {
+    const currentId = challengeIdFromPath(window.location.pathname);
+    if (currentId === destId) {
       return;
     }
     if (assignCheckinHref) {

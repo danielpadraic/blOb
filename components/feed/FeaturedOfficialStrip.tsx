@@ -109,7 +109,7 @@ export function FeaturedOfficialStrip() {
   const showFill = Boolean(fill && fill.count < fill.min);
 
   function openDetail() {
-    openChallengeLobby(router, { id: card.id, snapshot: card, returnTo: 'feed', source: 'home-official', pathname });
+    openChallengeLobby(router, { id: card.id, snapshot: card, returnTo: 'feed', source: 'home-in-challenge', pathname });
   }
 
   function onJoin() {

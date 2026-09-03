@@ -46,7 +46,7 @@ function PulseChip({ pill }: { pill: PulsePill }) {
       accessibilityLabel={`${pill.title}. ${pill.snippet}`}
       onPress={() => {
         const href = String(pulseChallengeHref(pill.id));
-        pushChallengeHref(router, href, 'pulse-pill', pill.id, pathname);
+        pushChallengeHref(router, href, 'home-pill', pill.id, pathname);
       }}
       style={{
         width: PILL_WIDTH,

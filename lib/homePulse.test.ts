@@ -184,7 +184,8 @@ describe('pulseChallengeHref', () => {
     const href = String(pulseChallengeHref('abc-123'));
     expect(href).toContain('/challenges/abc-123');
     expect(href).toContain('tab=feed');
-    expect(href).toContain('returnTo=feed');
+    expect(href).not.toBe('/challenges');
+    expect(href).not.toContain('returnTo');
     expect(href).not.toContain('abc-999');
     expect(href).not.toContain('/submit');
   });

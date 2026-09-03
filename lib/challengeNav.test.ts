@@ -9,11 +9,15 @@ import {
   challengesStackAtLobby,
   clearLastOpenChallenge,
   isForbiddenCheckinHref,
+  isLobbyListPath,
   leftoverChallengePath,
+  pushChallengeHref,
   remountChallengesStack,
   resetChallengesNestedInTabs,
+  resolveNamedChallengeHref,
   shouldForceCheckinNavigation,
   shouldPopBeforeChallengePush,
+  shouldRemountBeforeNamedPush,
   type NestedNavState,
 } from '@/lib/challengeNav';
 
@@ -249,5 +253,35 @@ describe('Check In href lock', () => {
       state: { index: 0, routes: [{ name: 'index' }] },
     });
     expect(leftoverChallengePath(next?.routes[1]?.state)).toBeNull();
+  });
+});
+
+describe('named challenge href lock', () => {
+  it('never collapses a Home pill or in-challenge tap to the Lobby list', () => {
+    expect(isLobbyListPath('/challenges')).toBe(true);
+    expect(isLobbyListPath(`/challenges/${THIRTY}`)).toBe(false);
+    expect(resolveNamedChallengeHref('/challenges', THIRTY)).toBe(`/challenges/${THIRTY}`);
+    expect(resolveNamedChallengeHref(`/challenges/${THIRTY}?tab=feed`, THIRTY)).toBe(
+      `/challenges/${THIRTY}?tab=feed`,
+    );
+    expect(resolveNamedChallengeHref(`/challenges/${PRAYER}`, PRAYER)).not.toBe('/challenges');
+    expect(shouldRemountBeforeNamedPush(THIRTY, PRAYER)).toBe(true);
+    expect(shouldRemountBeforeNamedPush('', THIRTY)).toBe(false);
+    expect(shouldRemountBeforeNamedPush(THIRTY, THIRTY)).toBe(false);
+  });
+
+  it('pushes the full /challenges/{id} from Home without resetting to Lobby', () => {
+    const dispatch = vi.fn();
+    const push = vi.fn();
+    bindChallengesStack({
+      getState: () => ({
+        index: 0,
+        routes: [{ name: 'feed' }, { name: 'challenges', state: challengesState('index') }],
+      }),
+      dispatch,
+    });
+    pushChallengeHref({ push }, `/challenges/${THIRTY}?tab=feed`, 'home-pill', THIRTY, '/feed');
+    expect(push).toHaveBeenCalledWith(`/challenges/${THIRTY}?tab=feed`);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

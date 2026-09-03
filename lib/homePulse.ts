@@ -11,7 +11,7 @@ import {
 import { isCheckinPost } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
 import { liveCheckinLabel } from '@/lib/liveThread';
-import { challengeDetailHref } from '@/lib/routes';
+import { namedChallengeHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { PublicProfile } from '@/lib/types';
@@ -88,7 +88,7 @@ export function pulseSnippet(post?: PulseLobbyPost | null): string {
 }
 
 export function pulseChallengeHref(id: string) {
-  return challengeDetailHref(String(id).trim(), 'feed', null, { tab: 'feed' });
+  return namedChallengeHref(String(id).trim(), { tab: 'feed' });
 }
 
 export function sortPulsePills<T extends { lastAt: string | null }>(pills: T[]): T[] {

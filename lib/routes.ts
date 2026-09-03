@@ -102,9 +102,15 @@ export function createChallengeHref(extra?: {
   return (`/challenges/create${query ? `?${query}` : ''}`) as Href;
 }
 
-/** Overview / Live for this row only. Never last-open. */
+/** Overview / Live for this row only. Never last-open. Never the Lobby list. */
 export function challengeHref(id: string): Href {
   return `/challenges/${String(id ?? '').trim()}` as Href;
+}
+
+/** Home named-challenge taps. `?tab=feed` only for Pulse / Live chips. */
+export function namedChallengeHref(id: string, extra?: { tab?: 'feed' }): Href {
+  const path = String(challengeHref(id));
+  return extra?.tab === 'feed' ? (`${path}?tab=feed` as Href) : (path as Href);
 }
 
 export function challengeDetailHref(

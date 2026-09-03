@@ -8,7 +8,7 @@ import { fetchChallengeById, normalizeChallenge } from '@/lib/challenges';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
 import { challengeDetailHref } from '@/lib/routes';
-import { pushChallengeHref } from '@/lib/challengeNav';
+import { pushChallengeHref, resolveNamedChallengeHref } from '@/lib/challengeNav';
 import type { FeedChallengePreview } from '@/lib/social';
 import type { ChallengeWithStats } from '@/lib/types';
 
@@ -318,7 +318,10 @@ export function openChallengeLobby(
     seedChallengeFeedPreview(snapshot, client);
   }
   prefetchChallengeDetail(id, challengeSnapshotHasIdentity(snapshot) ? snapshot : undefined, client);
-  const href = String(challengeDetailHref(id, input.returnTo ?? 'lobby', input.postId, input.extra));
+  const href = resolveNamedChallengeHref(
+    String(challengeDetailHref(id, input.returnTo ?? 'lobby', input.postId, input.extra)),
+    id,
+  );
   pushChallengeHref(router, href, input.source ?? 'open-challenge', id, input.pathname);
   return true;
 }

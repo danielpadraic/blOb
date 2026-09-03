@@ -47,7 +47,7 @@ export function ChallengeRail() {
   }
 
   function open(id: string, snapshot?: (typeof activeRows)[number]) {
-    openChallengeLobby(router, { id, snapshot, returnTo: 'feed', source: 'home-rail', pathname });
+    openChallengeLobby(router, { id, snapshot, returnTo: 'feed', source: 'home-in-challenge', pathname });
   }
 
   return (

@@ -81,7 +81,7 @@ export function useOpenChallengeFromTag() {
         returnTo: 'feed',
         postId: input.postId,
         extra: input.tab || input.postId ? { tab: input.tab ?? 'feed' } : undefined,
-        source: 'feed-tag',
+        source: 'home-in-challenge',
         pathname,
       });
     },

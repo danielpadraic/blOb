@@ -7,6 +7,7 @@ import { isActiveWaveTagStatus } from '@/lib/waveTags';
 describe('checkinSubmitHref', () => {
   it('opens submit for that challenge and never Wave or capture', () => {
     expect(challengeHref('abc-1')).toBe('/challenges/abc-1');
+    expect(String(challengeHref('abc-1'))).not.toBe('/challenges');
     expect(checkinSubmitHref('abc-1')).toBe('/challenges/abc-1/submit');
     expect(String(checkinSubmitHref('abc-1'))).not.toContain('capture');
     expect(String(checkinSubmitHref('abc-1'))).not.toContain('wave');
