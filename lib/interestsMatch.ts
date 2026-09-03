@@ -55,6 +55,9 @@ export type RankableChallenge = {
   category?: string | null;
   series_id?: string | null;
   privacy_mode?: string | null;
+  visibility?: string | null;
+  is_official?: boolean | null;
+  created_at?: string | null;
   days_required?: number | null;
   length_value?: number | null;
   length_unit?: string | null;
@@ -133,6 +136,14 @@ function isCorporate(row: RankableChallenge): boolean {
   return row.privacy_mode === 'private_corporate';
 }
 
+/** Public Simple + joinable peer cards only. Officials and corporate stay in place. */
+export function isInterestBoostable(row: RankableChallenge): boolean {
+  if (row.is_official || isWeek10Official(row) || isCorporate(row)) {
+    return false;
+  }
+  return true;
+}
+
 export function isWeek10Official(row: Pick<RankableChallenge, 'series_id'>): boolean {
   return row.series_id === OFFICIAL_WEEK_10_SLUG;
 }
@@ -190,6 +201,8 @@ export function familyForChip(room: InterestRoomSlug, slug: string): InterestFam
 
 export function preferredDifficultyFromStance(stanceScore: number): CardDifficulty {
   const n = clampStanceScore(stanceScore);
+  // Stored 1 = Excel (slider top), 5 = Leveling up (slider bottom).
+  // Leveling up → intro / shorter. Excel → longer / harder.
   if (n <= 2) {
     return 'advanced';
   }
@@ -240,7 +253,7 @@ function sportMatches(haystack: string, slug: string, label: string): boolean {
 }
 
 export function cardMatchesChip(row: RankableChallenge, chip: InterestChipSignal): boolean {
-  if (!chip.family || isCorporate(row)) {
+  if (!chip.family || !isInterestBoostable(row)) {
     return false;
   }
   const haystack = haystackOf(row);
@@ -298,35 +311,24 @@ function matchingChip(row: RankableChallenge, chips: InterestChipSignal[]): Inte
 }
 
 /**
- * Boost matching joinable cards after the current list sort.
- * No completed-room signal, or no selected chips, leaves order unchanged.
- * Weekly $10 stays first when pinWeek10 is set. Corporate cards are never boosted.
+ * Boost matching public Simple / joinable peer cards after the current list sort.
+ * Officials, Weekly $10, and private corporate cards keep their existing place.
+ * No completed-room chips leaves order unchanged. Ties keep the incoming order (created_at / current sort).
  */
 export function rankInterestChallenges<T extends RankableChallenge>(
   rows: T[],
   profile: InterestsRankProfile,
-  options?: { pinWeek10?: boolean },
 ): T[] {
-  const pinWeek10 = Boolean(options?.pinWeek10);
-  if (rows.length < 2) {
-    return rows;
-  }
-  const boost = profile.chips.length > 0;
-  if (!boost && !pinWeek10) {
+  if (rows.length < 2 || profile.chips.length === 0) {
     return rows;
   }
   return [...rows]
-    .map((row, index) => {
-      const chip = boost && !isCorporate(row) ? matchingChip(row, profile.chips) : null;
-      return { row, index, chip };
-    })
+    .map((row, index) => ({
+      row,
+      index,
+      chip: matchingChip(row, profile.chips),
+    }))
     .sort((a, b) => {
-      if (pinWeek10) {
-        const week = Number(isWeek10Official(a.row)) - Number(isWeek10Official(b.row));
-        if (week !== 0) {
-          return -week;
-        }
-      }
       const matched = Number(Boolean(b.chip)) - Number(Boolean(a.chip));
       if (matched !== 0) {
         return matched;
@@ -361,15 +363,13 @@ export function rankInterestChallenges<T extends RankableChallenge>(
     .map((item) => item.row);
 }
 
-export function pickJoinableOfficialWithInterests<T extends RankableChallenge>(
+export function pickJoinableOfficialHero<T extends RankableChallenge>(
   rows: T[],
   joinedIds: Set<string>,
-  profile: InterestsRankProfile,
   isJoinable: (row: T) => boolean,
 ): T | null {
   const joinable = rows.filter((row) => isJoinable(row) && !joinedIds.has(row.id));
-  const ranked = rankInterestChallenges(joinable, profile, { pinWeek10: true });
-  return ranked.find((row) => isWeek10Official(row)) ?? ranked[0] ?? null;
+  return joinable.find((row) => isWeek10Official(row)) ?? joinable[0] ?? null;
 }
 
 function durationDaysForStance(stanceScore: number): number {
@@ -469,7 +469,11 @@ export function shouldOfferStartThis(input: {
   wasAlreadyFilled: boolean;
   dismissedAt?: string | null;
   completeFilled: boolean;
+  fromYouEditor?: boolean;
 }): boolean {
+  if (input.fromYouEditor) {
+    return false;
+  }
   return input.completeFilled && !input.wasAlreadyFilled && !input.dismissedAt;
 }
 
@@ -509,6 +513,7 @@ export function simpleDraftFromStarter(
     frequency,
     custom_checkins: frequencyPerWeek,
     custom_period: 'week',
+    scoring: 'consistency',
     visibility: starter.visibility,
   };
 }

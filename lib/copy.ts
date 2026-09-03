@@ -69,8 +69,8 @@ const STRINGS = {
   'interests.currentDiet': 'Describe your current diet',
   'interests.dietNote': 'Not medical advice.',
   'interests.startThisTitle': {
-    gentle: 'You picked {chip}. Start a Simple challenge?',
-    honest: 'You picked {chip}. Start a Simple challenge now.',
+    gentle: 'Start a {chip} challenge.',
+    honest: 'Start a {chip} challenge now.',
   },
   'interests.startThisCta': 'Start a Simple challenge',
   'interests.startThisNotNow': 'Not now',

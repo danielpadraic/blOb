@@ -7,8 +7,9 @@ import {
   cardDifficulty,
   familyForChip,
   interestsRankProfile,
+  isInterestBoostable,
   mealPlanCopyOnCard,
-  pickJoinableOfficialWithInterests,
+  pickJoinableOfficialHero,
   pickStartThisStarter,
   preferredDifficultyFromStance,
   rankInterestChallenges,
@@ -22,6 +23,7 @@ import {
 } from '@/lib/interestsMatch';
 import { OFFICIAL_WEEK_10_SLUG } from '@/lib/officialSeries';
 import { SIMPLE_TYPES } from '@/lib/simpleChallenge';
+import { copy } from '@/lib/copy';
 
 function room(slug: string, state: 'incomplete' | 'complete_empty' | 'complete_filled') {
   return { room_slug: slug, state };
@@ -91,7 +93,7 @@ describe('interests ranking signal', () => {
 });
 
 describe('interests lobby boost', () => {
-  it('keeps Weekly $10 first and lifts running-family cards after a filled Running chip', () => {
+  it('lifts running-family public Simples after a filled Running chip at Leveling up', () => {
     const profile = interestsRankProfile({
       rooms: [room('health_fitness', 'complete_filled')],
       chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 5 })],
@@ -101,11 +103,52 @@ describe('interests lobby boost', () => {
       card('lift', { title: 'Strength block', days_required: 21 }),
       card('run-long', { title: 'Marathon block', days_required: 30 }),
       card('run-intro', { title: 'Couch to 5K', days_required: 7 }),
-      card('week', { title: 'Weekly $10', series_id: OFFICIAL_WEEK_10_SLUG, days_required: 7 }),
     ];
-    expect(
-      rankInterestChallenges(rows, profile, { pinWeek10: true }).map((row) => row.id),
-    ).toEqual(['week', 'run-intro', 'run-long', 'lift']);
+    expect(rankInterestChallenges(rows, profile).map((row) => row.id)).toEqual([
+      'run-intro',
+      'run-long',
+      'lift',
+    ]);
+  });
+
+  it('prefers longer running Simples when stance is Excel', () => {
+    const profile = interestsRankProfile({
+      rooms: [room('health_fitness', 'complete_filled')],
+      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 1 })],
+    });
+    expect(preferredDifficultyFromStance(1)).toBe('advanced');
+    const rows = [
+      card('run-intro', { title: 'Couch to 5K', days_required: 7 }),
+      card('run-long', { title: 'Marathon block', days_required: 30 }),
+    ];
+    expect(rankInterestChallenges(rows, profile).map((row) => row.id)).toEqual([
+      'run-long',
+      'run-intro',
+    ]);
+  });
+
+  it('does not rerank Official Challenges or the Weekly $10 hero', () => {
+    const profile = interestsRankProfile({
+      rooms: [room('health_fitness', 'complete_filled')],
+      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 5 })],
+    });
+    const rows = [
+      card('week', {
+        title: 'Weekly $10',
+        series_id: OFFICIAL_WEEK_10_SLUG,
+        is_official: true,
+        days_required: 7,
+      }),
+      card('official-run', { title: '30-Day Run Club', is_official: true, days_required: 7 }),
+      card('peer-run', { title: 'Morning run', visibility: 'public', days_required: 7 }),
+    ];
+    expect(isInterestBoostable(rows[0])).toBe(false);
+    expect(isInterestBoostable(rows[1])).toBe(false);
+    expect(rankInterestChallenges(rows, profile).map((row) => row.id)).toEqual([
+      'peer-run',
+      'week',
+      'official-run',
+    ]);
   });
 
   it('does not let college pickleball bury a Running card', () => {
@@ -169,17 +212,17 @@ describe('interests lobby boost', () => {
   });
 
   it('keeps Weekly $10 as the Home hero even when a running Official is joinable', () => {
-    const profile = interestsRankProfile({
-      rooms: [room('health_fitness', 'complete_filled')],
-      chips: [chip({ slug: 'running', room: 'health_fitness', label: 'Running', stance: 5 })],
-    });
-    const picked = pickJoinableOfficialWithInterests(
+    const picked = pickJoinableOfficialHero(
       [
-        card('run', { title: 'Run Club', days_required: 7 }),
-        card('week', { title: 'Weekly $10', series_id: OFFICIAL_WEEK_10_SLUG, days_required: 7 }),
+        card('run', { title: 'Run Club', days_required: 7, is_official: true }),
+        card('week', {
+          title: 'Weekly $10',
+          series_id: OFFICIAL_WEEK_10_SLUG,
+          days_required: 7,
+          is_official: true,
+        }),
       ],
       new Set(),
-      profile,
       () => true,
     );
     expect(picked?.id).toBe('week');
@@ -199,6 +242,12 @@ describe('Start this starter', () => {
     expect(String(startThisHref(picked!.starter))).toContain('mode=simple');
     expect(String(startThisHref(picked!.starter))).toContain('template=running');
     expect(String(startThisHref(picked!.starter))).toContain('src=interests');
+    expect(copy('interests.startThisTitle', 'gentle', { chip: 'Running' })).toBe(
+      'Start a Running challenge.',
+    );
+    expect(copy('interests.startThisTitle', 'honest', { chip: 'Running' })).toBe(
+      'Start a Running challenge now.',
+    );
     expect(starterForChip({ slug: 'diet_nutrition', label: 'Diet & Nutrition', room: 'health_fitness', stanceScore: 3 })).toBeNull();
   });
 
@@ -222,13 +271,22 @@ describe('Start this starter', () => {
     const draft = simpleDraftFromStarter(starter!);
     expect(draft.currency).toBe('coins');
     expect(draft.buy_in).toBe(0);
+    expect(draft.scoring).toBe('consistency');
     expect(draft.visibility).toBe('friends');
   });
 
-  it('offers the sheet once per room, never on reopen', () => {
+  it('offers the sheet once per room, never on You edit or reopen', () => {
     expect(
       shouldOfferStartThis({ wasAlreadyFilled: false, dismissedAt: null, completeFilled: true }),
     ).toBe(true);
+    expect(
+      shouldOfferStartThis({
+        wasAlreadyFilled: false,
+        dismissedAt: null,
+        completeFilled: true,
+        fromYouEditor: true,
+      }),
+    ).toBe(false);
     expect(
       shouldOfferStartThis({ wasAlreadyFilled: true, dismissedAt: null, completeFilled: true }),
     ).toBe(false);

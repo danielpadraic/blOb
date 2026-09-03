@@ -301,6 +301,7 @@ export function InterestsWizard({
           wasAlreadyFilled,
           dismissedAt: existingRoom?.start_this_dismissed_at,
           completeFilled: true,
+          fromYouEditor: !fromHome,
         })
           ? pickStartThisStarter(
               selectedChips.map((chip) => ({

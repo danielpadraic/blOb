@@ -312,9 +312,7 @@ export default function ChallengesScreen() {
     );
   }
 
-  const official = rankInterestChallenges(applyList(officialAll, 'official'), interestRank, {
-    pinWeek10: interestRank.chips.length > 0,
-  });
+  const official = applyList(officialAll, 'official');
   const active = applyList(activeAll, 'active');
   const hosting = applyList(hostingAll, 'hosting');
   const ended = applyList(endedAll, 'ended');
