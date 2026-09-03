@@ -174,11 +174,15 @@ function slotPart(
 }
 
 export default function SubmitWorkoutScreen() {
+  const params = useLocalSearchParams<{ id?: string }>();
+  const id = firstRouteParam(params.id);
   const router = useRouter();
   return (
-    <CheckinSafeBoundary onBack={() => router.back()}>
-      <SubmitWorkoutInner />
-    </CheckinSafeBoundary>
+    <View key={id || 'submit'} style={{ flex: 1 }}>
+      <CheckinSafeBoundary onBack={() => router.back()}>
+        <SubmitWorkoutInner />
+      </CheckinSafeBoundary>
+    </View>
   );
 }
 

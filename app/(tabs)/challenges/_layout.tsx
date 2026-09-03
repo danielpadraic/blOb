@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 
-import { BindChallengesStack } from '@/components/navigation/BindChallengesStack';
+import { BindChallengesStack, ChallengesStackHost } from '@/components/navigation/BindChallengesStack';
+import { challengeScreenGetId } from '@/lib/challengeNav';
 import { HIDDEN_STACK_HEADER, PROFILE_STACK_TITLE, TAB_STACK_SCREEN_OPTIONS } from '@/lib/routes';
 
 export const unstable_settings = {
@@ -9,7 +10,7 @@ export const unstable_settings = {
 
 export default function ChallengesStackLayout() {
   return (
-    <>
+    <ChallengesStackHost>
       <BindChallengesStack />
       <Stack screenOptions={TAB_STACK_SCREEN_OPTIONS}>
         <Stack.Screen name="index" options={HIDDEN_STACK_HEADER} />
@@ -23,9 +24,13 @@ export default function ChallengesStackLayout() {
         />
         <Stack.Screen name="callout/create" options={{ title: 'Callout' }} />
         <Stack.Screen name="callout/[id]" options={{ title: 'Callout' }} />
-        <Stack.Screen name="[id]" options={HIDDEN_STACK_HEADER} />
+        <Stack.Screen
+          name="[id]"
+          dangerouslySingular={(_name, params) => challengeScreenGetId({ params })}
+          options={HIDDEN_STACK_HEADER}
+        />
         <Stack.Screen name="u/[username]" options={PROFILE_STACK_TITLE} />
       </Stack>
-    </>
+    </ChallengesStackHost>
   );
 }

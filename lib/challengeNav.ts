@@ -26,9 +26,45 @@ export type BoundChallengesNav = {
 };
 
 let boundChallenges: BoundChallengesNav | null = null;
+let challengesEpoch = 0;
+const epochListeners = new Set<(epoch: number) => void>();
 
-export function logBlobNav(source: string, id: string, href: string): void {
-  console.log('[blob:nav]', { source, id, href });
+/** Expo Router reuses one `[id]` screen unless this returns THAT row’s id. */
+export function challengeScreenGetId(input: { params?: Record<string, unknown> }): string | undefined {
+  const id = firstRouteParam(input.params?.id);
+  return id || undefined;
+}
+
+export function challengesStackEpoch(): number {
+  return challengesEpoch;
+}
+
+export function subscribeChallengesEpoch(listener: (epoch: number) => void): () => void {
+  epochListeners.add(listener);
+  return () => {
+    epochListeners.delete(listener);
+  };
+}
+
+/** Unmount every `/challenges/*` screen. Home must not restore last-open. */
+export function remountChallengesStack(): number {
+  challengesEpoch += 1;
+  boundChallenges = null;
+  epochListeners.forEach((listener) => listener(challengesEpoch));
+  return challengesEpoch;
+}
+
+export function boundLeftoverId(): string {
+  return challengeIdFromPath(boundLeftoverChallengePath()) ?? '';
+}
+
+export function logBlobNav(source: string, id: string, href: string, mountedId?: string): void {
+  console.log('[blob:nav]', {
+    source,
+    id,
+    href,
+    mountedId: mountedId ?? boundLeftoverId(),
+  });
 }
 
 function stripQuery(value: string | null | undefined): string {
@@ -151,16 +187,18 @@ export function boundLeftoverChallengePath(): string | null {
   return leftoverChallengePath(nestedChallengesState(state) ?? state);
 }
 
-/** Pop leftover `[id]` / submit so Home is not a last-open challenge. */
+/** Unmount leftover `[id]` / submit so Home is not a last-open challenge. */
 export function clearLastOpenChallenge(): boolean {
+  const leftover = Boolean(boundLeftoverId());
   const bound = boundChallenges;
+  remountChallengesStack();
   if (!bound?.nav.dispatch) {
-    return false;
+    return leftover;
   }
   const state = bound.nav.getState?.();
   const nested = nestedChallengesState(state) ?? state;
   if (!nested || challengesStackAtLobby(nested)) {
-    return false;
+    return leftover;
   }
   const action = bound.target
     ? { ...resetChallengesToLobbyAction(), target: bound.target }
@@ -170,7 +208,7 @@ export function clearLastOpenChallenge(): boolean {
 }
 
 /**
- * Home / Check In / a different challenge must pop leftover Live or camera.
+ * Home / Check In / a different challenge must unmount leftover Live or camera.
  * Same-challenge Begin (Live → that submit) must not flash Lobby.
  */
 export function shouldPopBeforeChallengePush(
@@ -199,13 +237,23 @@ export function pushChallengeHref(
   id: string,
   pathname?: string | null,
 ): void {
-  logBlobNav(source, id, href);
-  if (shouldPopBeforeChallengePush(pathname, href, boundLeftoverChallengePath())) {
-    const popped = clearLastOpenChallenge();
-    if (popped) {
-      setTimeout(() => router.push(href as never), 60);
-      return;
-    }
+  const mountedId = boundLeftoverId();
+  logBlobNav(source, id, href, mountedId);
+  const destId = challengeIdFromPath(href) ?? id;
+  const fromHome = !challengeIdFromPath(pathname);
+  const needsFresh =
+    fromHome ||
+    (Boolean(mountedId) && mountedId !== destId) ||
+    shouldPopBeforeChallengePush(pathname, href, boundLeftoverChallengePath());
+  if (!needsFresh) {
+    router.push(href as never);
+    return;
+  }
+  const hadLeftover = Boolean(mountedId);
+  clearLastOpenChallenge();
+  if (hadLeftover) {
+    setTimeout(() => router.push(href as never), 60);
+    return;
   }
   router.push(href as never);
 }
@@ -214,8 +262,8 @@ export function goHome(
   router: { navigate: (href: never) => void },
   extra?: { alreadyHome?: boolean; after?: () => void },
 ): void {
-  logBlobNav('home', '', '/feed');
   clearLastOpenChallenge();
+  logBlobNav('home', '', '/feed', '');
   if (extra?.alreadyHome) {
     extra.after?.();
     return;

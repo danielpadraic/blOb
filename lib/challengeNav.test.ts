@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   bindChallengesStack,
+  boundLeftoverId,
   challengeIdFromPath,
+  challengeScreenGetId,
   challengesStackAtLobby,
   clearLastOpenChallenge,
   leftoverChallengePath,
+  remountChallengesStack,
   shouldPopBeforeChallengePush,
   type NestedNavState,
 } from '@/lib/challengeNav';
@@ -50,6 +53,15 @@ describe('challengeIdFromPath', () => {
     expect(challengeIdFromPath('/challenges/create')).toBeNull();
     expect(challengeIdFromPath('/challenges/callout/create')).toBeNull();
     expect(challengeIdFromPath('/feed')).toBeNull();
+  });
+});
+
+describe('challengeScreenGetId', () => {
+  it('keys the [id] screen to that row only, never a 30-Day default', () => {
+    expect(challengeScreenGetId({ params: { id: PRAYER } })).toBe(PRAYER);
+    expect(challengeScreenGetId({ params: { id: THIRTY } })).toBe(THIRTY);
+    expect(challengeScreenGetId({ params: { id: PRAYER } })).not.toBe(THIRTY);
+    expect(challengeScreenGetId({ params: {} })).toBeUndefined();
   });
 });
 
@@ -147,5 +159,17 @@ describe('clearLastOpenChallenge', () => {
       payload: { index: 0, routes: [{ name: 'index' }] },
       target: 'challenges-stack',
     });
+  });
+});
+
+describe('remountChallengesStack', () => {
+  it('clears leftover mountedId so Home is not last-open', () => {
+    bindChallengesStack({
+      getState: () => challengesState('live'),
+      dispatch: vi.fn(),
+    });
+    expect(boundLeftoverId()).toBe(THIRTY);
+    remountChallengesStack();
+    expect(boundLeftoverId()).toBe('');
   });
 });
