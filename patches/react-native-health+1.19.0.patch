@@ -1,8 +1,41 @@
 diff --git a/node_modules/react-native-health/RCTAppleHealthKit/RCTAppleHealthKit.m b/node_modules/react-native-health/RCTAppleHealthKit/RCTAppleHealthKit.m
-index e8ddce1..071a493 100644
+index e8ddce1..aec7017 100644
 --- a/node_modules/react-native-health/RCTAppleHealthKit/RCTAppleHealthKit.m
 +++ b/node_modules/react-native-health/RCTAppleHealthKit/RCTAppleHealthKit.m
-@@ -841,7 +841,7 @@ -(void)startObserving {
+@@ -656,18 +656,20 @@ - (void)initializeHealthKit:(NSDictionary *)input callback:(RCTResponseSenderBlo
+             return;
+         }
+ 
+-        [self.healthStore requestAuthorizationToShareTypes:writeDataTypes readTypes:readDataTypes completion:^(BOOL success, NSError *error) {
+-            if (!success) {
+-                NSString *errMsg = [NSString stringWithFormat:@"Error with HealthKit authorization: %@", error];
+-                 NSLog(@"%@", errMsg);
+-                callback(@[RCTMakeError(errMsg, nil, nil)]);
+-                return;
+-            } else {
+-                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+-                    callback(@[[NSNull null], @true]);
+-                });
+-            }
+-        }];
++        dispatch_async(dispatch_get_main_queue(), ^{
++            [self.healthStore requestAuthorizationToShareTypes:writeDataTypes readTypes:readDataTypes completion:^(BOOL success, NSError *error) {
++                if (!success) {
++                    NSString *errMsg = [NSString stringWithFormat:@"Error with HealthKit authorization: %@", error];
++                     NSLog(@"%@", errMsg);
++                    callback(@[RCTMakeError(errMsg, nil, nil)]);
++                    return;
++                } else {
++                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
++                        callback(@[[NSNull null], @true]);
++                    });
++                }
++            }];
++        });
+     } else {
+         callback(@[RCTMakeError(@"HealthKit data is not available", nil, nil)]);
+     }
+@@ -841,7 +843,7 @@ -(void)startObserving {
  - (void)emitEventInternal:(NSNotification *)notification {
    if (self.hasListeners) {
      self.callableJSModules = [RCTAppleHealthKit sharedJsModule];
@@ -11,3 +44,63 @@ index e8ddce1..071a493 100644
      [self sendEventWithName:notification.name
                     body:notification.userInfo];
    }
+diff --git a/node_modules/react-native-health/index.js b/node_modules/react-native-health/index.js
+index 06e5105..dd080bd 100644
+--- a/node_modules/react-native-health/index.js
++++ b/node_modules/react-native-health/index.js
+@@ -1,14 +1,46 @@
+ import { Activities, Observers, Permissions, Units } from './src/constants'
+ 
+-const { AppleHealthKit } = require('react-native').NativeModules
+-
+-export const HealthKit = Object.assign({}, AppleHealthKit, {
+-  Constants: {
+-    Activities,
+-    Observers,
+-    Permissions,
+-    Units,
++const Constants = {
++  Activities,
++  Observers,
++  Permissions,
++  Units,
++}
++
++function getNative() {
++  return require('react-native').NativeModules.AppleHealthKit
++}
++
++// New Architecture lazy-loads NativeModules. Do not Object.assign at import time
++// (agencyenterprise/react-native-health#395). Resolve methods on each access.
++export const HealthKit = new Proxy(
++  {},
++  {
++    get(_target, prop) {
++      if (prop === 'Constants') {
++        return Constants
++      }
++      if (prop === '__esModule') {
++        return false
++      }
++      if (prop === 'then') {
++        return undefined
++      }
++      const native = getNative()
++      if (!native) {
++        return undefined
++      }
++      const value = native[prop]
++      return typeof value === 'function' ? value.bind(native) : value
++    },
++    has(_target, prop) {
++      if (prop === 'Constants') {
++        return true
++      }
++      const native = getNative()
++      return Boolean(native && prop in native)
++    },
+   },
+-})
++)
+ 
+ module.exports = HealthKit

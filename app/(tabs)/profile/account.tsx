@@ -164,11 +164,8 @@ export default function AccountScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={health.title}
-            disabled={health.connecting || health.disconnecting || health.status === 'unavailable'}
+            disabled={health.connecting || health.disconnecting}
             onPress={() => {
-              if (health.status === 'unavailable') {
-                return;
-              }
               if (health.status === 'connected') {
                 setHealthSheet(true);
                 return;
@@ -176,6 +173,14 @@ export default function AccountScreen() {
               void health.connect().then((row) => {
                 if (row.status === 'not_connected') {
                   Alert.alert(health.title, copy('health.permissionDenied'));
+                  return;
+                }
+                if (row.status === 'unavailable') {
+                  Alert.alert(health.title, copy('health.unavailable'));
+                  return;
+                }
+                if (row.status === 'needs_install') {
+                  Alert.alert(health.title, copy('health.installSubtitle'));
                 }
               });
             }}

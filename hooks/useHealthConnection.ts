@@ -72,9 +72,6 @@ export function useHealthConnection() {
         return { status: 'unavailable', lastSyncedAt: null, lastError: null };
       }
       const detail = await provider.getAvailabilityDetail?.();
-      if (detail === 'unavailable') {
-        return { status: 'unavailable', lastSyncedAt: null, lastError: null };
-      }
       const result = await provider.requestAccess();
       if (result === 'unavailable') {
         if (detail === 'needs_install' || detail === 'needs_update') {

@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 import {
   clearLocalHealthStatus,
@@ -67,10 +67,41 @@ function loadKit(): NativeKit | null {
     return null;
   }
   try {
-    // UI must never import this module. Dynamic require keeps Android/web compiling.
+    const native = (NativeModules as { AppleHealthKit?: Omit<NativeKit, 'Constants'> }).AppleHealthKit;
+    if (!native || typeof native.initHealthKit !== 'function') {
+      return null;
+    }
+    // UI must never import this module at top level. Constants are JS-only.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('react-native-health') as { default?: NativeKit } & NativeKit;
-    return mod.default ?? mod;
+    const mod = require('react-native-health') as {
+      Constants?: NativeKit['Constants'];
+      default?: { Constants?: NativeKit['Constants'] };
+    };
+    const constants = mod.Constants ?? mod.default?.Constants;
+    if (!constants?.Permissions) {
+      return null;
+    }
+    return {
+      Constants: constants,
+      isAvailable:
+        typeof native.isAvailable === 'function'
+          ? native.isAvailable.bind(native)
+          : (callback) => callback(null, true),
+      initHealthKit: native.initHealthKit.bind(native),
+      getAuthStatus:
+        typeof native.getAuthStatus === 'function'
+          ? native.getAuthStatus.bind(native)
+          : ((_permissions, callback) => callback('', {})),
+      getAnchoredWorkouts:
+        typeof native.getAnchoredWorkouts === 'function'
+          ? native.getAnchoredWorkouts.bind(native)
+          : ((_options, callback) => callback(null, { data: [] })),
+      getHeartRateSamples:
+        typeof native.getHeartRateSamples === 'function'
+          ? native.getHeartRateSamples.bind(native)
+          : ((_options, callback) => callback('', [])),
+      setObserver: typeof native.setObserver === 'function' ? native.setObserver.bind(native) : undefined,
+    };
   } catch {
     return null;
   }
@@ -230,55 +261,22 @@ async function heartRateFor(
 }
 
 class AppleHealthProvider implements HealthProvider {
-  private available: boolean | null = null;
-
   isAvailable(): boolean {
     if (Platform.OS !== 'ios') {
       return false;
-    }
-    if (this.available != null) {
-      return this.available;
     }
     return loadKit() != null;
   }
 
   async getAvailabilityDetail(): Promise<HealthAvailabilityDetail> {
-    return (await this.probeAvailable()) ? 'ready' : 'unavailable';
-  }
-
-  private async probeAvailable(): Promise<boolean> {
-    if (Platform.OS !== 'ios') {
-      this.available = false;
-      return false;
-    }
-    const kit = loadKit();
-    if (!kit) {
-      this.available = false;
-      return false;
-    }
-    try {
-      const ok = await new Promise<boolean>((resolve) => {
-        const timer = setTimeout(() => resolve(false), 2500);
-        kit.isAvailable((error, available) => {
-          clearTimeout(timer);
-          if (error) {
-            resolve(false);
-            return;
-          }
-          resolve(Boolean(available));
-        });
-      });
-      this.available = ok;
-      return ok;
-    } catch {
-      this.available = false;
-      return false;
-    }
+    // initHealthKit present means we can show the system sheet. Do not treat a
+    // timed-out isAvailable probe as unavailable.
+    return loadKit() ? 'ready' : 'unavailable';
   }
 
   async getAuthStatus(): Promise<HealthAuthStatus> {
-    const available = await this.probeAvailable();
-    if (!available) {
+    const kit = loadKit();
+    if (!kit) {
       return 'unknown';
     }
     const local = await readLocalHealthStatus();
@@ -287,10 +285,6 @@ class AppleHealthProvider implements HealthProvider {
     }
     if (local === 'denied') {
       return 'denied';
-    }
-    const kit = loadKit();
-    if (!kit) {
-      return 'unknown';
     }
     try {
       const native = await new Promise<HealthAuthStatus>((resolve) => {
@@ -314,10 +308,6 @@ class AppleHealthProvider implements HealthProvider {
   }
 
   async requestAccess(): Promise<HealthAccessResult> {
-    const available = await this.probeAvailable();
-    if (!available) {
-      return 'unavailable';
-    }
     const kit = loadKit();
     if (!kit) {
       return 'unavailable';
@@ -351,10 +341,6 @@ class AppleHealthProvider implements HealthProvider {
   }
 
   async requestWorkoutWrite(): Promise<HealthAccessResult> {
-    const available = await this.probeAvailable();
-    if (!available) {
-      return 'unavailable';
-    }
     const kit = loadKit();
     if (!kit) {
       return 'unavailable';
@@ -457,10 +443,6 @@ class AppleHealthProvider implements HealthProvider {
   }
 
   private async readyKit(): Promise<NativeKit | null> {
-    const available = await this.probeAvailable();
-    if (!available) {
-      return null;
-    }
     return loadKit();
   }
 }
