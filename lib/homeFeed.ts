@@ -134,10 +134,11 @@ export function uniquePostsById<T extends { id: string }>(posts: T[]): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const post of posts) {
-    if (seen.has(post.id)) {
+    const id = String(post?.id ?? '').trim();
+    if (!id || seen.has(id)) {
       continue;
     }
-    seen.add(post.id);
+    seen.add(id);
     out.push(post);
   }
   return out;

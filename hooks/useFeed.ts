@@ -340,6 +340,7 @@ function postInsertPayload(
 }
 
 async function withSocial(posts: PostWithMeta[], viewerId?: string): Promise<PostWithMeta[]> {
+  posts = posts.filter((post): post is PostWithMeta => Boolean(post?.id));
   const ids = posts.map((post) => post.id);
   if (ids.length === 0) {
     return posts;
@@ -576,6 +577,7 @@ async function fetchComments(postIds: string[]) {
 }
 
 async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
+  posts = posts.filter((post): post is PostWithMeta => Boolean(post?.id));
   const ids = new Set<string>();
   for (const post of posts) {
     const authorId = String(post.author_id ?? '').trim();
@@ -661,6 +663,9 @@ function dedupePosts(groups: PostWithMeta[][]): PostWithMeta[] {
   const byId = new Map<string, PostWithMeta>();
   for (const group of groups) {
     for (const post of group) {
+      if (!post?.id) {
+        continue;
+      }
       byId.set(post.id, post);
     }
   }
@@ -1527,8 +1532,24 @@ export function seedChallengeLivePost(
   if (!id || !post?.id) {
     return;
   }
+  const authorId = safeUserId(post.author, post.author_id, userId) ?? post.author_id;
+  const author =
+    post.author ??
+    (authorId
+      ? asPublicProfile({
+          ...(sessionAuthor(post.author, authorId) ?? {}),
+          id: authorId,
+        })
+      : undefined);
+  const seeded: PostWithMeta = {
+    ...post,
+    author_id: authorId || post.author_id,
+    author,
+    comments: post.comments ?? [],
+    reactions: post.reactions ?? [],
+  };
   queryClient.setQueryData(feedListKey(id, userId), (current) =>
-    prependFeedCache(current ?? [], post),
+    prependFeedCache(current ?? [], seeded),
   );
 }
 

@@ -51,8 +51,9 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       route: 'error_boundary',
       error,
       message: error?.message?.trim() || 'Something went wrong',
+      payload: { pathname: pathname || webPathname() || null },
     });
-  }, [error]);
+  }, [error, pathname]);
   return (
     <View className="flex-1 justify-center" style={{ backgroundColor: THEME.background }}>
       <MascotState

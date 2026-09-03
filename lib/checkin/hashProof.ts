@@ -32,15 +32,36 @@ async function bytesFromUri(uri: string): Promise<string | null> {
   }
   try {
     const fs = await import('expo-file-system');
+    if (typeof fs.File !== 'function') {
+      return bytesFromFetch(uri);
+    }
     const file = new fs.File(uri);
     if (typeof file.base64 === 'function') {
       const encoded = await file.base64();
       return encoded || null;
     }
   } catch {
+    // Fall through to fetch for blob:/web preview URIs.
+  }
+  return bytesFromFetch(uri);
+}
+
+async function bytesFromFetch(uri: string): Promise<string | null> {
+  try {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      return null;
+    }
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let bin = '';
+    for (const byte of bytes) {
+      bin += String.fromCharCode(byte);
+    }
+    return btoa(bin);
+  } catch {
     return null;
   }
-  return null;
 }
 
 /** SHA-256 of file bytes when we have them; else storage object / Health id. Never throws. */

@@ -193,6 +193,7 @@ function SubmitWorkoutInner() {
   const pathname = usePathname();
   const navFocused = useIsFocused();
   const checkinLogRef = useRef<string | null>(null);
+  const hydrateServerRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -275,6 +276,13 @@ function SubmitWorkoutInner() {
   }, [uid, profile?.checkin_share_home, profile?.checkin_share_wave]);
 
   useEffect(() => {
+    if (!id || totalCount || !checkinQuery.isFetched || checkinQuery.data?.phase !== 'submitted') {
+      return;
+    }
+    router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'feed' }) as never);
+  }, [checkinQuery.data?.phase, checkinQuery.isFetched, id, router, totalCount]);
+
+  useEffect(() => {
     if (!id || challengeQuery.isLoading || !checkinQuery.isFetched) {
       return;
     }
@@ -331,6 +339,19 @@ function SubmitWorkoutInner() {
     if (!checkinQuery.data) {
       return;
     }
+    const hydrateKey = [
+      checkinQuery.data.id,
+      checkinQuery.data.updated_at ?? '',
+      checkinQuery.data.notes ?? '',
+      checkinQuery.data.pre_selfie_url ?? '',
+      checkinQuery.data.post_selfie_url ?? '',
+      checkinQuery.data.hr_monitor_url ?? '',
+      JSON.stringify(checkinQuery.data.proof_parts ?? {}),
+    ].join('|');
+    if (hydrateServerRef.current === hydrateKey) {
+      return;
+    }
+    hydrateServerRef.current = hydrateKey;
     const parts = checkinQuery.data.proof_parts ?? {};
     const steps = requiredChallengeProofs(challenge);
     const legacy = {
@@ -340,6 +361,7 @@ function SubmitWorkoutInner() {
     };
     setDrafts((current) => {
       const next = { ...current };
+      let changed = false;
       for (const proof of steps) {
         const part = parts[proof.id];
         const localUri = current[proof.id]?.uri;
@@ -347,7 +369,7 @@ function SubmitWorkoutInner() {
         if (!part && !remoteUrl) {
           continue;
         }
-        next[proof.id] = {
+        const merged: SlotDraft = {
           uri: part?.healthWorkoutId
             ? `health:${part.healthWorkoutId}`
             : remoteUrl || localUri,
@@ -359,23 +381,44 @@ function SubmitWorkoutInner() {
           durationMs: current[proof.id]?.durationMs,
           caption: part?.caption ?? current[proof.id]?.caption,
         };
+        const prior = current[proof.id];
+        const same =
+          prior?.uri === merged.uri &&
+          prior?.mimeType === merged.mimeType &&
+          prior?.text === merged.text &&
+          prior?.fromLibrary === merged.fromLibrary &&
+          prior?.health === merged.health &&
+          prior?.inFence === merged.inFence &&
+          prior?.durationMs === merged.durationMs &&
+          prior?.caption === merged.caption;
+        if (!same) {
+          next[proof.id] = merged;
+          changed = true;
+        }
       }
-      return next;
+      return changed ? next : current;
     });
     setProofCaptions((current) => {
       const next = { ...current };
+      let changed = false;
       for (const proof of steps) {
         const saved = clampProofCaption(parts[proof.id]?.caption ?? '');
         if (saved && !next[proof.id]?.trim()) {
           next[proof.id] = saved;
+          changed = true;
         }
       }
-      return next;
+      return changed ? next : current;
     });
     if (checkinQuery.data?.notes) {
       const snapshot = Object.values(parts).map((part) => part.health).find(Boolean) ?? null;
       const text = stripHealthSummaryFromNotes(String(checkinQuery.data.notes), snapshot);
-      setCaption((current) => (current.text.trim() ? current : { text, chips: current.chips }));
+      setCaption((current) => {
+        if (current.text.trim() || text === current.text) {
+          return current;
+        }
+        return { text, chips: current.chips };
+      });
     }
     const extraUrls = extraProofImageUrls(steps, parts, legacy);
     if (extraUrls.length > 0) {
