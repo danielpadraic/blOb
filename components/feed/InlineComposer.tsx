@@ -48,6 +48,7 @@ type InlineComposerProps = {
   bar?: boolean;
   autoFocus?: boolean;
   memberIds?: string[];
+  initialText?: string;
   onSubmit: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
 };
 
@@ -64,16 +65,17 @@ export function InlineComposer({
   bar = false,
   autoFocus = true,
   memberIds,
+  initialText,
   onSubmit,
 }: InlineComposerProps) {
   const { user } = useAuth();
   const fieldRef = useRef<MentionFieldHandle>(null);
-  const docRef = useRef<MentionDoc>({ text: '', chips: [] });
+  const docRef = useRef<MentionDoc>({ text: initialText ?? '', chips: [] });
   const holdFocus = useRef(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasExpanded = useRef(true);
   const [internalExpanded, setInternalExpanded] = useState(!bar);
-  const [hasText, setHasText] = useState(false);
+  const [hasText, setHasText] = useState(() => Boolean(initialText?.trim()));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [gifOpen, setGifOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -293,6 +295,7 @@ export function InlineComposer({
       pickerPlacement="above"
       autoFocus={autoFocus}
       placeholder={placeholder}
+      initialText={initialText}
       initialMention={replyTo}
       audience={audience}
       audienceUserIds={audienceUserIds}

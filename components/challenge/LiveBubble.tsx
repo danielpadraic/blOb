@@ -9,7 +9,7 @@ import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { checkinExtraCaption } from '@/lib/checkinPost';
+import { checkinCardCaption } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
 import {
   formatLiveClock,
@@ -63,7 +63,7 @@ export const LiveBubble = memo(function LiveBubble({
   const visuals = liveVisualUrls(post, mine);
   const time = formatLiveClock(post.created_at);
   const caption = checkin
-    ? checkinExtraCaption(post.content, null)
+    ? checkinCardCaption(post.content, null, post.edited_at)
     : liveChatText(post.content, post.media_urls);
   const items: LightboxItem[] = visuals.map((uri) => ({
     uri,

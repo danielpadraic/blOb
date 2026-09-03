@@ -17,8 +17,8 @@ import {
   type MultiCheckinRow,
   type MultiCheckinState,
 } from '@/lib/multiCheckin';
-import { checkinSubmitHref, TABS_HREF } from '@/lib/routes';
-import { pushChallengeHref } from '@/lib/challengeNav';
+import { pushCheckinSubmit } from '@/lib/challengeNav';
+import { TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 const STATE_COPY: Record<MultiCheckinState, string> = {
@@ -56,8 +56,7 @@ export default function MultiCheckinScreen() {
   const nextId = nextEmptyCheckinId(rows, doneIds[doneIds.length - 1] ?? null);
 
   function openSubmit(id: string) {
-    const href = String(checkinSubmitHref(id, { from: 'multi', done: doneIds }));
-    pushChallengeHref(router, href, 'checkin-pick', id, pathname);
+    pushCheckinSubmit(router, id, 'checkin-pick', { from: 'multi', done: doneIds }, pathname);
   }
 
   return (

@@ -1,14 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  assertCheckinSubmitHref,
   bindChallengesStack,
   boundLeftoverId,
   challengeIdFromPath,
   challengeScreenGetId,
   challengesStackAtLobby,
   clearLastOpenChallenge,
+  isForbiddenCheckinHref,
   leftoverChallengePath,
   remountChallengesStack,
+  resetChallengesNestedInTabs,
+  shouldForceCheckinNavigation,
   shouldPopBeforeChallengePush,
   type NestedNavState,
 } from '@/lib/challengeNav';
@@ -156,8 +160,47 @@ describe('clearLastOpenChallenge', () => {
     expect(clearLastOpenChallenge()).toBe(true);
     expect(dispatch).toHaveBeenCalledWith({
       type: 'RESET',
-      payload: { index: 0, routes: [{ name: 'index' }] },
-      target: 'challenges-stack',
+      payload: {
+        index: 0,
+        stale: true,
+        routes: [
+          { name: 'feed' },
+          {
+            name: 'challenges',
+            key: undefined,
+            params: undefined,
+            state: { index: 0, stale: true, routes: [{ name: 'index' }] },
+          },
+        ],
+      },
+    });
+  });
+
+  it('binds tabs from inside Live so Home can drop leftover 30-Day without focusing Lobby', () => {
+    const dispatch = vi.fn();
+    const tabs = {
+      getState: () => ({
+        index: 0,
+        routes: [
+          { name: 'feed' },
+          { name: 'challenges', key: 'challenges-tab', state: challengesState('live') },
+        ],
+      }),
+      dispatch,
+    };
+    const stack = {
+      getState: () => challengesState('live'),
+      getParent: () => tabs,
+      dispatch: vi.fn(),
+    };
+    bindChallengesStack(stack);
+    expect(boundLeftoverId()).toBe(THIRTY);
+    expect(clearLastOpenChallenge()).toBe(true);
+    expect(dispatch).toHaveBeenCalled();
+    expect(stack.dispatch).not.toHaveBeenCalled();
+    expect(dispatch.mock.calls[0]?.[0]).toMatchObject({
+      type: 'RESET',
+      payload: { index: 0 },
     });
   });
 });
@@ -171,5 +214,40 @@ describe('remountChallengesStack', () => {
     expect(boundLeftoverId()).toBe(THIRTY);
     remountChallengesStack();
     expect(boundLeftoverId()).toBe('');
+  });
+});
+
+describe('Check In href lock', () => {
+  it('builds /challenges/{pickedId}/submit and never pulse Live query', () => {
+    const href = assertCheckinSubmitHref(PRAYER);
+    expect(href).toBe(`/challenges/${PRAYER}/submit`);
+    expect(href).not.toContain('returnTo');
+    expect(href).not.toContain('tab=feed');
+    expect(href).not.toContain(THIRTY);
+    expect(isForbiddenCheckinHref(`/challenges/${THIRTY}?returnTo=feed&tab=feed`, PRAYER)).toBe(true);
+    expect(isForbiddenCheckinHref(`/challenges/${PRAYER}/submit`, PRAYER)).toBe(false);
+    expect(shouldForceCheckinNavigation(`/challenges/${THIRTY}?returnTo=feed&tab=feed`, PRAYER)).toBe(
+      true,
+    );
+    expect(shouldForceCheckinNavigation(`/challenges/${PRAYER}/submit`, PRAYER)).toBe(false);
+  });
+
+  it('resets leftover 30-Day on Home without focusing Lobby', () => {
+    const home = {
+      index: 0,
+      routes: [
+        { name: 'feed' },
+        { name: 'challenges', key: 'challenges-tab', state: challengesState('live') },
+      ],
+    };
+    const next = resetChallengesNestedInTabs(home);
+    expect(next?.index).toBe(0);
+    expect(next?.routes[0]?.name).toBe('feed');
+    expect(next?.routes[1]).toMatchObject({
+      name: 'challenges',
+      key: 'challenges-tab',
+      state: { index: 0, routes: [{ name: 'index' }] },
+    });
+    expect(leftoverChallengePath(next?.routes[1]?.state)).toBeNull();
   });
 });

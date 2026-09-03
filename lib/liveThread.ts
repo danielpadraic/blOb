@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 
+import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
 import { asReactionType, POST_REACTION_TYPES, type PostReactionType } from '@/lib/reactions';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
@@ -55,6 +56,27 @@ export function liveComposeFromInline(content: string): { text: string; mediaUrl
     text: commentTextWithoutMedia(trimmed).trim(),
     mediaUrls: commentMediaUrls(trimmed),
   };
+}
+
+/** Prefill the lobby composer for Edit. Keep check-in captions as stored. */
+export function liveEditPrefill(post: { content?: string | null; media_urls?: string[] | null } & CheckinPostLike): string {
+  if (isLiveCheckinPost(post)) {
+    return (post.content ?? '').trim();
+  }
+  return liveChatText(post.content, post.media_urls);
+}
+
+/** Keep existing proof files. New attachments append. Check-in never drops the last file. */
+export function liveEditMediaUrls(
+  post: { media_urls?: string[] | null } & CheckinPostLike,
+  added: string[],
+): string[] {
+  const existing = uniqueProofUrls(post.media_urls ?? []);
+  const next = uniqueProofUrls([...existing, ...added]);
+  if (isLiveCheckinPost(post) && next.length === 0) {
+    return existing;
+  }
+  return next;
 }
 
 export function liveChatText(content?: string | null, mediaUrls?: string[] | null): string {

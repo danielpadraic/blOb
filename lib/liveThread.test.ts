@@ -10,6 +10,8 @@ import {
   liveQuotePreview,
   liveReactionCounts,
   liveComposeFromInline,
+  liveEditMediaUrls,
+  liveEditPrefill,
   sortLivePosts,
   toggleLiveReactionList,
 } from '@/lib/liveThread';
@@ -180,5 +182,33 @@ describe('applyLiveReaction', () => {
       'like',
     );
     expect(post.reactions?.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
+  });
+});
+
+describe('liveEditPrefill', () => {
+  it('keeps a lobby caption and a check-in caption as stored', () => {
+    expect(liveEditPrefill({ content: 'Does the reply work?', media_urls: [] })).toBe(
+      'Does the reply work?',
+    );
+    expect(
+      liveEditPrefill({
+        content: 'Feeling strong',
+        media_urls: ['https://cdn.example/proof.jpg'],
+        source: 'checkin',
+      }),
+    ).toBe('Feeling strong');
+  });
+});
+
+describe('liveEditMediaUrls', () => {
+  it('appends new lobby media and never drops the last check-in proof', () => {
+    expect(liveEditMediaUrls({ media_urls: ['https://cdn.example/a.jpg'] }, ['https://cdn.example/b.jpg'])).toEqual([
+      'https://cdn.example/a.jpg',
+      'https://cdn.example/b.jpg',
+    ]);
+    expect(
+      liveEditMediaUrls({ media_urls: ['https://cdn.example/proof.jpg'], source: 'checkin' }, []),
+    ).toEqual(['https://cdn.example/proof.jpg']);
+    expect(liveEditMediaUrls({ media_urls: [], source: 'checkin' }, [])).toEqual([]);
   });
 });

@@ -43,8 +43,8 @@ import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
-import { BODY_METRICS_HREF, captureHref, challengeDetailHref, checkinSubmitHref, LOBBY_HREF } from '@/lib/routes';
-import { pushChallengeHref } from '@/lib/challengeNav';
+import { BODY_METRICS_HREF, captureHref, challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
+import { pushCheckinSubmit } from '@/lib/challengeNav';
 import {
   CALLOUT_CHEER_PLACEHOLDER,
   CALLOUT_WATCHING_LINE,
@@ -1543,7 +1543,7 @@ export default function ChallengeDetailScreen() {
                   if (!id) {
                     return;
                   }
-                  pushChallengeHref(router, String(checkinSubmitHref(id)), 'live-begin', id, pathname);
+                  pushCheckinSubmit(router, id, 'live-begin', undefined, pathname);
                 }}
               />
             )}

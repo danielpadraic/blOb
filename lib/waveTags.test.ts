@@ -10,6 +10,8 @@ describe('checkinSubmitHref', () => {
     expect(checkinSubmitHref('abc-1')).toBe('/challenges/abc-1/submit');
     expect(String(checkinSubmitHref('abc-1'))).not.toContain('capture');
     expect(String(checkinSubmitHref('abc-1'))).not.toContain('wave');
+    expect(String(checkinSubmitHref('abc-1'))).not.toContain('returnTo');
+    expect(String(checkinSubmitHref('abc-1'))).not.toContain('tab=feed');
   });
 
   it('keeps a gallery file when Safari omits uri', () => {

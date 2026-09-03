@@ -34,8 +34,8 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
-import { clearLastOpenChallenge, goHome, pushChallengeHref } from '@/lib/challengeNav';
-import { checkinSubmitHref, CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF, MULTI_CHECKIN_HREF } from '@/lib/routes';
+import { clearLastOpenChallenge, goHome, pushCheckinSubmit } from '@/lib/challengeNav';
+import { CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF, MULTI_CHECKIN_HREF } from '@/lib/routes';
 import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
@@ -325,9 +325,7 @@ function TabLayoutInner() {
     if (id === 'log') {
       if (challenge?.id) {
         closeOverlays();
-        const href = String(checkinSubmitHref(challenge.id));
-        const pickedId = challenge.id;
-        setTimeout(() => pushChallengeHref(router, href, 'plus-checkin', pickedId, pathname), 60);
+        pushCheckinSubmit(router, challenge.id, 'plus-checkin', undefined, pathname);
         return;
       }
       const list = loggable.data ?? [];
@@ -337,9 +335,7 @@ function TabLayoutInner() {
       }
       if (list.length === 1 && list[0]?.id) {
         closeOverlays();
-        const href = String(checkinSubmitHref(list[0].id));
-        const pickedId = list[0].id;
-        setTimeout(() => pushChallengeHref(router, href, 'plus-checkin', pickedId, pathname), 60);
+        pushCheckinSubmit(router, list[0].id, 'plus-checkin', undefined, pathname);
         return;
       }
       return;

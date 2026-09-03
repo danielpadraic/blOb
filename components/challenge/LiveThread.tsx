@@ -10,6 +10,7 @@ import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
+import { useEditPost } from '@/hooks/usePostEdit';
 import { copy } from '@/lib/copy';
 import {
   buildLiveThreadRows,
@@ -17,6 +18,8 @@ import {
   liveChatText,
   isLiveCheckinPost,
   liveComposeFromInline,
+  liveEditMediaUrls,
+  liveEditPrefill,
   liveQuoteLine,
   liveQuotePreview,
   type LiveThreadRow,
@@ -87,9 +90,11 @@ export function LiveThread({
   const keyboardOverlap = useKeyboardOverlap();
   const keyboardOpen = keyboardOverlap > 0;
   const social = useSocialSheetsOptional();
+  const editPost = useEditPost();
   const listRef = useRef<FlatList<LiveThreadRow>>(null);
   const highlightedOnce = useRef<string | null>(null);
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
+  const [editing, setEditing] = useState<PostWithMeta | null>(null);
   const rows = useMemo(
     () => buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id))),
     [posts],
@@ -130,6 +135,26 @@ export function LiveThread({
   const submitLine = useCallback(
     async (content: string, mentionedUserIds: string[] = [], parentId?: string | null) => {
       const split = liveComposeFromInline(content);
+      if (editing) {
+        const mediaUrls = liveEditMediaUrls(editing, split.mediaUrls);
+        if (isLiveCheckinPost(editing) && mediaUrls.length === 0) {
+          Alert.alert(copy('post.savePhotoFirst'));
+          return;
+        }
+        if (!split.text && mediaUrls.length === 0) {
+          return;
+        }
+        await editPost.mutateAsync({
+          postId: editing.id,
+          caption: split.text,
+          mediaUrls,
+          hiddenMediaUrls: editing.hidden_media_urls ?? [],
+          checkinId: editing.checkin_id,
+        });
+        setEditing(null);
+        pinToLiveEdge(true);
+        return;
+      }
       if (!split.text && split.mediaUrls.length === 0) {
         return;
       }
@@ -144,11 +169,17 @@ export function LiveThread({
       setReplyTo(null);
       pinToLiveEdge(true);
     },
-    [composeAudience, composeSource, onCompose, pinToLiveEdge],
+    [composeAudience, composeSource, editPost, editing, onCompose, pinToLiveEdge],
   );
 
   const startReply = useCallback((target: LiveReplyTarget) => {
+    setEditing(null);
     setReplyTo(target);
+  }, []);
+
+  const startEdit = useCallback((post: PostWithMeta) => {
+    setReplyTo(null);
+    setEditing(post);
   }, []);
 
   const renderItem = useCallback(
@@ -211,7 +242,7 @@ export function LiveThread({
             onReact={(type) => onReact(item.post, type)}
             onEdit={
               currentUserId && postAuthor.authorId === currentUserId
-                ? () => social?.openEdit(item.post)
+                ? () => startEdit(item.post)
                 : undefined
             }
             onHistory={
@@ -235,7 +266,7 @@ export function LiveThread({
         </View>
       );
     },
-    [canCompose, currentUserId, highlightPostId, onReact, posts, social, startReply],
+    [canCompose, currentUserId, highlightPostId, onReact, posts, social, startEdit, startReply],
   );
 
   const composerPad = createStickyFooterPad(
@@ -341,16 +372,38 @@ export function LiveThread({
                 </AppText>
               </Pressable>
             </View>
+          ) : editing ? (
+            <View
+              className="flex-row items-center"
+              style={{ gap: 8, minHeight: 28, marginBottom: 2 }}>
+              <AppText
+                className="text-[12px]"
+                style={{ flex: 1, minWidth: 0, color: THEME.textMuted }}
+                numberOfLines={1}>
+                {copy('live.edit')}
+              </AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel edit"
+                onPress={() => setEditing(null)}
+                style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
+                <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
+                  ×
+                </AppText>
+              </Pressable>
+            </View>
           ) : null}
           <InlineComposer
+            key={editing ? `edit-${editing.id}` : replyTo ? `reply-${replyTo.postId}` : 'live'}
             bar
-            autoFocus={Boolean(replyTo)}
+            autoFocus={Boolean(replyTo || editing)}
             placeholder={placeholder ?? copy('live.placeholder')}
-            submitLabel={sendLabel ?? copy('live.send')}
-            submitting={composing}
+            submitLabel={editing ? copy('live.save') : (sendLabel ?? copy('live.send'))}
+            submitting={Boolean(composing || editPost.isPending)}
             audience={composeAudience}
             memberIds={memberIds}
-            replyTo={replyTo?.mention}
+            initialText={editing ? liveEditPrefill(editing) : undefined}
+            replyTo={editing ? null : replyTo?.mention}
             onExpandedChange={(open) => {
               if (open) {
                 pinToLiveEdge(false);
@@ -386,6 +439,7 @@ function mentionFromAuthor(
     userId: userId ?? username ?? '',
     username: username || userId || 'someone',
     label: authorLabel(author),
+    visibleName: author?.display_name?.trim() || authorLabel(author),
   };
 }
 

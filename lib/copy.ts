@@ -722,6 +722,8 @@ const STRINGS = {
   'live.placeholder': 'Message the lobby…',
   'live.cheerPlaceholder': 'Cheer them on…',
   'live.send': 'Send',
+  'live.save': 'Save',
+  'live.edit': 'Edit',
   'pulse.noChatter': 'No chatter yet',
   'pulse.rail': 'Pulse',
   'detail.checkinDue': 'Check-in due',

@@ -107,7 +107,7 @@ function MentionFieldInner(
   const inputRef = useRef<TextInput>(null);
   const boxRef = useRef<View>(null);
   const form = useKeyboardForm();
-  const seeded = useRef(false);
+  const seededMentionId = useRef<string | null>(null);
   const textRef = useRef(initialText ?? '');
   const chipsRef = useRef<MentionChip[]>(initialChips ?? []);
   const onChangeRef = useRef(onChange);
@@ -188,19 +188,20 @@ function MentionFieldInner(
   }));
 
   useEffect(() => {
-    if (seeded.current) {
+    const mentionId = initialMention?.userId ?? '';
+    if (!mentionId || !initialMention || textRef.current.trim()) {
       return;
     }
-    seeded.current = true;
-    if (!initialMention?.userId || textRef.current.trim()) {
+    if (seededMentionId.current === mentionId) {
       return;
     }
+    seededMentionId.current = mentionId;
     const next = insertMention('', { start: 0, end: 0 }, mentionInsertLabel(initialMention));
     commit(next.text, next.selection, [initialMention], true);
     keepFocus();
-    // Seed the reply @author token once. Do not re-run when the parent re-renders.
+    // Seed @author when Reply sets a mention. Keyed remount also covers this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialMention?.userId]);
 
   useEffect(() => {
     if (!query) {

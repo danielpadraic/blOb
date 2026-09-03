@@ -38,8 +38,8 @@ import {
 } from '@/lib/callouts';
 import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challengeOpen';
-import { pushChallengeHref } from '@/lib/challengeNav';
-import { BODY_METRICS_HREF, challengeHref, checkinSubmitHref } from '@/lib/routes';
+import { pushChallengeHref, pushCheckinSubmit } from '@/lib/challengeNav';
+import { BODY_METRICS_HREF, challengeHref } from '@/lib/routes';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
@@ -403,7 +403,7 @@ export function ChallengeInviteCard({
   }
 
   function onCheckIn() {
-    pushChallengeHref(router, String(checkinSubmitHref(challenge.id)), 'invite-checkin', challenge.id, pathname);
+    pushCheckinSubmit(router, challenge.id, 'invite-checkin', undefined, pathname);
   }
 
   const hostLabel = host?.name?.trim() || 'Host';
