@@ -35,7 +35,7 @@ import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
 import { checkinSubmitHref, CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF, MULTI_CHECKIN_HREF } from '@/lib/routes';
-import { stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
+import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
 import { THEME } from '@/lib/theme';
@@ -454,7 +454,7 @@ function TabLayoutInner() {
         </SocialSheetsHost>
         </InviteHost>
       </View>
-      {watchOpen || onOnboarding || pathname.includes('/capture') ? null : (
+      {watchOpen || onOnboarding || isLiveCameraPath(pathname) ? null : (
         <BlobTabBar
           composeOpen={sheetOpen}
           onToggleCompose={toggleSheet}

@@ -1,5 +1,7 @@
 import { AppState, Platform } from 'react-native';
 
+import { webCameraVideoConstraints, type CameraFovKind } from '@/lib/cameraFov';
+
 export function logCameraError(error: unknown, extra?: string) {
   const name =
     error && typeof error === 'object' && 'name' in error
@@ -146,6 +148,7 @@ export function registerNativeCameraStop(stop: () => void): () => void {
   };
 }
 
+/** Wave / Round / check-in camera. Also hides the Home tab bar so the shutter is not under +. */
 export function isLiveCameraPath(pathname: string | null | undefined): boolean {
   const path = String(pathname ?? '');
   return path.includes('/capture') || path.includes('/submit');
@@ -192,9 +195,11 @@ export async function primeCameraFromGesture(
   }
   stopPrimedCameraStream();
   try {
-    primed = await getUserMediaWatched({
-      video: { facingMode: facing === 'front' ? 'user' : 'environment' },
+    primed = await getUserMediaFacing({
+      facing,
       audio: kind === 'video',
+      kind: kind === 'video' ? 'video' : 'still',
+      deviceId: null,
     });
     const held = primed;
     setTimeout(() => {
@@ -289,21 +294,62 @@ async function pickCameraDeviceId(facing: 'front' | 'back'): Promise<string | nu
   }
 }
 
+async function getUserMediaFacing(input: {
+  facing: 'front' | 'back';
+  audio: boolean;
+  kind: CameraFovKind;
+  deviceId: string | null;
+}): Promise<MediaStream> {
+  const sized = webCameraVideoConstraints(input.facing, input.kind);
+  const attempts: MediaStreamConstraints[] = [];
+  if (input.deviceId) {
+    attempts.push({
+      video: {
+        deviceId: { exact: input.deviceId },
+        width: sized.width,
+        height: sized.height,
+        aspectRatio: sized.aspectRatio,
+      },
+      audio: input.audio,
+    });
+  }
+  attempts.push({
+    video: sized,
+    audio: input.audio,
+  });
+  attempts.push({
+    video: input.deviceId
+      ? { deviceId: { exact: input.deviceId } }
+      : { facingMode: input.facing === 'front' ? 'user' : 'environment' },
+    audio: input.audio,
+  });
+  let lastError: unknown;
+  for (const constraints of attempts) {
+    try {
+      return await getUserMediaWatched(constraints);
+    } catch (error) {
+      lastError = error;
+      logCameraError(error, 'getUserMedia fallback');
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Camera didn’t start.');
+}
+
 export async function openWebCameraStream(input: {
   facing: 'front' | 'back';
   audio: boolean;
   existing?: MediaStream | null;
+  kind?: CameraFovKind;
 }): Promise<MediaStream> {
   if (input.existing) {
     stopMedia({ stream: input.existing });
     liveStreams.delete(input.existing);
   }
   const deviceId = await pickCameraDeviceId(input.facing);
-  const stream = await getUserMediaWatched({
-    video: deviceId
-      ? { deviceId: { exact: deviceId } }
-      : { facingMode: input.facing === 'front' ? 'user' : 'environment' },
+  return getUserMediaFacing({
+    facing: input.facing,
     audio: input.audio,
+    kind: input.kind ?? (input.audio ? 'video' : 'still'),
+    deviceId,
   });
-  return stream;
 }

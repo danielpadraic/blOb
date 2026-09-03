@@ -10,6 +10,7 @@ import {
 import { AppState, BackHandler, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { useIsFocused, usePathname } from 'expo-router';
 import { Camera, CameraView, type CameraMountError, type CameraType } from 'expo-camera';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -54,6 +55,14 @@ import {
 import { applyWebVideoLock } from '@/lib/webVideo';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
 import { saveOwnCapture } from '@/lib/saveCapture';
+import {
+  centeredFovCrop,
+  expoCameraZoom,
+  frontFovZoom,
+  webCanvasCaptureStreamSupported,
+  webPreviewCssTransform,
+  type CameraFovFacing,
+} from '@/lib/cameraFov';
 
 type InAppCameraProps = {
   capture: CaptureMedia;
@@ -121,6 +130,7 @@ export function InAppCamera({
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const cropDrawRef = useRef(0);
   const [sessionOn, setSessionOn] = useState(true);
   const focusedRef = useRef(focused);
   const chunksRef = useRef<Blob[]>([]);
@@ -136,11 +146,20 @@ export function InAppCamera({
   const holdRef = useRef(false);
   const skipPressRef = useRef(false);
   const video = !checkin && capture === 'video';
+  const fovFacing: CameraFovFacing = facing === 'front' ? 'front' : 'back';
+  const fovKind = video ? 'video' : 'still';
+  const fovZoom = frontFovZoom(fovFacing, fovKind);
+  // Stills: digital crop on preview + saved frame (exact 1.30×). Video: CameraView zoom so the clip matches the preview.
+  const nativeExpoZoom = video ? expoCameraZoom(fovFacing, 'video') : 0;
+  const nativePreviewScale = video ? 1 : fovZoom;
+  const webCropVideo = video && fovZoom > 1 && webCanvasCaptureStreamSupported();
+  const previewFovZoom = video && fovZoom > 1 && !webCropVideo ? 1 : fovZoom;
   const parentBlocked = blocked || webFallback;
   const readyPreview = !parentBlocked && ask === 'ready';
   const shutterEnabled = readyPreview && !busy;
   const shutterOpaque = recording || readyPreview;
-  const bottomPad = chromeInset ? TAB_BAR_PEEK : Math.max(insets.bottom, 16) + 8;
+  const bottomPad =
+    checkin || !chromeInset ? Math.max(insets.bottom, 16) + 8 : TAB_BAR_PEEK;
   const previewRotateDeg = checkin
     ? checkinPreviewRotateDeg({
         device: checkinDeviceOrientation({
@@ -182,6 +201,10 @@ export function InAppCamera({
   }, [checkin, web]);
 
   function killSession() {
+    if (cropDrawRef.current) {
+      cancelAnimationFrame(cropDrawRef.current);
+      cropDrawRef.current = 0;
+    }
     stopMedia({
       stream: webStreamRef.current,
       video: webVideoRef.current,
@@ -313,6 +336,7 @@ export function InAppCamera({
             facing: facing === 'front' ? 'front' : 'back',
             audio: video,
             existing: primed,
+            kind: fovKind,
           });
           if (cancelled || !focusedRef.current) {
             stopMedia({ stream });
@@ -470,10 +494,21 @@ export function InAppCamera({
           return;
         }
         const canvas = document.createElement('canvas');
-        canvas.width = node.videoWidth;
-        canvas.height = node.videoHeight;
+        const crop = centeredFovCrop(node.videoWidth, node.videoHeight, fovZoom);
+        canvas.width = crop.width;
+        canvas.height = crop.height;
         const ctx = canvas.getContext('2d');
-        ctx?.drawImage(node, 0, 0);
+        ctx?.drawImage(
+          node,
+          crop.originX,
+          crop.originY,
+          crop.width,
+          crop.height,
+          0,
+          0,
+          crop.width,
+          crop.height,
+        );
         const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86));
         if (!blob) {
           return;
@@ -483,8 +518,8 @@ export function InAppCamera({
           ? await normalizeCheckinStill({
               ...snapped,
               previewRotateDeg: checkinWebSnapRotateDegrees({
-                pixelWidth: node.videoWidth,
-                pixelHeight: node.videoHeight,
+                pixelWidth: crop.width,
+                pixelHeight: crop.height,
                 previewRotateDeg,
               }),
             })
@@ -503,7 +538,13 @@ export function InAppCamera({
         photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, shutterSound: false });
       }
       if (photo?.uri) {
-        const snapped = { uri: photo.uri, mimeType: 'image/jpeg' as const, blob: null };
+        const cropped = await cropNativeStillToFov({
+          uri: photo.uri,
+          width: photo.width,
+          height: photo.height,
+          zoom: fovZoom,
+        });
+        const snapped = { uri: cropped.uri, mimeType: 'image/jpeg' as const, blob: null };
         const next = checkin ? await normalizeCheckinStill(snapped) : snapped;
         finishCapture({
           uri: next.uri,
@@ -525,12 +566,30 @@ export function InAppCamera({
     }
     if (web) {
       const stream = webStreamRef.current;
+      const node = webVideoRef.current;
       if (!stream) {
         return;
       }
       if (!webMediaRecorderAvailable()) {
         onUnavailable?.();
         return;
+      }
+      let recordStream: MediaStream = stream;
+      if (webCropVideo && node) {
+        if (node.videoWidth <= 0) {
+          await waitWebVideoFrame(node);
+        }
+        if (node.videoWidth > 0) {
+          const cropped = startWebVideoFovCrop(node, fovZoom, cropDrawRef);
+          if (cropped) {
+            stream.getAudioTracks().forEach((track) => {
+              if (cropped.getAudioTracks().every((audio) => audio.id !== track.id)) {
+                cropped.addTrack(track);
+              }
+            });
+            recordStream = cropped;
+          }
+        }
       }
       const mime =
         typeof MediaRecorder.isTypeSupported === 'function' &&
@@ -540,9 +599,12 @@ export function InAppCamera({
             ? 'video/webm'
             : '';
       chunksRef.current = [];
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      const recorder = mime ? new MediaRecorder(recordStream, { mimeType: mime }) : new MediaRecorder(recordStream);
       recorderRef.current = recorder;
       watchLiveMedia({ recorder, stream });
+      if (recordStream !== stream) {
+        watchLiveMedia({ stream: recordStream });
+      }
       const startedAt = Date.now();
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -550,6 +612,10 @@ export function InAppCamera({
         }
       };
       recorder.onstop = () => {
+        if (cropDrawRef.current) {
+          cancelAnimationFrame(cropDrawRef.current);
+          cropDrawRef.current = 0;
+        }
         recordingRef.current = false;
         setRecording(false);
         holdRef.current = false;
@@ -571,6 +637,10 @@ export function InAppCamera({
       try {
         recorder.start(250);
       } catch (error) {
+        if (cropDrawRef.current) {
+          cancelAnimationFrame(cropDrawRef.current);
+          cropDrawRef.current = 0;
+        }
         recordingRef.current = false;
         setRecording(false);
         logCameraError(error, 'MediaRecorder.start');
@@ -615,6 +685,10 @@ export function InAppCamera({
   }
 
   function stopRecording() {
+    if (cropDrawRef.current) {
+      cancelAnimationFrame(cropDrawRef.current);
+      cropDrawRef.current = 0;
+    }
     if (!recordingRef.current) {
       return;
     }
@@ -698,13 +772,21 @@ export function InAppCamera({
         );
       }}>
       {showFrame && web ? (
-        <WebCameraPreview attach={attachWebVideo} rotateDeg={previewRotateDeg} box={previewBox} />
+        <WebCameraPreview
+          attach={attachWebVideo}
+          facing={fovFacing}
+          zoom={previewFovZoom}
+          rotateDeg={previewRotateDeg}
+          box={previewBox}
+        />
       ) : showFrame && ask === 'ready' ? (
         <NativeCameraPreview
           key={facing}
           cameraRef={cameraRef}
           facing={facing}
           video={video}
+          zoom={nativeExpoZoom}
+          previewScale={nativePreviewScale}
           rotateDeg={previewRotateDeg}
           box={previewBox}
           onReady={onCameraReady}
@@ -969,14 +1051,19 @@ function useRecordingElapsed(recording: boolean, maxDuration: number) {
 
 const WebCameraPreview = memo(function WebCameraPreview({
   attach,
+  facing,
+  zoom,
   rotateDeg = 0,
   box,
 }: {
   attach: (node: HTMLVideoElement | null) => void;
+  facing: CameraFovFacing;
+  zoom: number;
   rotateDeg?: number;
   box?: { width: number; height: number };
 }) {
   const rotate = rotateDeg !== 0 && !!box?.width && !!box?.height;
+  const transform = webPreviewCssTransform({ facing, zoom, rotateDeg: rotate ? rotateDeg : 0 });
   return (
     <View style={{ flex: 1, overflow: 'hidden' }}>
       {createElement('video', {
@@ -998,7 +1085,8 @@ const WebCameraPreview = memo(function WebCameraPreview({
           top: rotate && box ? (box.height - box.width) / 2 : 0,
           objectFit: 'cover',
           backgroundColor: '#101312',
-          transform: rotate ? `rotate(${rotateDeg}deg)` : undefined,
+          transformOrigin: 'center center',
+          transform,
         },
       })}
     </View>
@@ -1009,6 +1097,8 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   cameraRef,
   facing,
   video,
+  zoom,
+  previewScale,
   rotateDeg = 0,
   box,
   onReady,
@@ -1019,6 +1109,8 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   cameraRef: RefObject<CameraView | null>;
   facing: CameraType;
   video: boolean;
+  zoom: number;
+  previewScale: number;
   rotateDeg?: number;
   box?: { width: number; height: number };
   onReady: () => void;
@@ -1058,6 +1150,14 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   }, []);
 
   const rotate = rotateDeg !== 0 && !!box?.width && !!box?.height;
+  const scale = previewScale > 1 ? previewScale : 1;
+  const transform: Array<{ rotate: string } | { scale: number }> = [];
+  if (rotate) {
+    transform.push({ rotate: `${rotateDeg}deg` });
+  }
+  if (scale > 1) {
+    transform.push({ scale });
+  }
   return (
     <View style={{ flex: 1, overflow: 'hidden' }}>
       <CameraView
@@ -1071,11 +1171,14 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
                 height: box.width,
                 left: (box.width - box.height) / 2,
                 top: (box.height - box.width) / 2,
-                transform: [{ rotate: `${rotateDeg}deg` }],
+                transform,
               }
-            : { flex: 1 }
+            : scale > 1
+              ? { flex: 1, transform: [{ scale }] }
+              : { flex: 1 }
         }
         facing={facing}
+        zoom={zoom}
         mode={video ? 'video' : 'picture'}
         mute={false}
         onCameraReady={handleReady}
@@ -1086,11 +1189,110 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
 }, (prev, next) =>
   prev.facing === next.facing &&
   prev.video === next.video &&
+  prev.zoom === next.zoom &&
+  prev.previewScale === next.previewScale &&
   prev.cameraRef === next.cameraRef &&
   prev.rotateDeg === next.rotateDeg &&
   prev.box?.width === next.box?.width &&
   prev.box?.height === next.box?.height,
 );
+
+function cropNativeStillToFov(input: {
+  uri: string;
+  width?: number | null;
+  height?: number | null;
+  zoom: number;
+}): Promise<{ uri: string }> {
+  if (input.zoom <= 1.001) {
+    return Promise.resolve({ uri: input.uri });
+  }
+  return (async () => {
+    try {
+      const image = await ImageManipulator.manipulate(input.uri).renderAsync();
+      const width = Math.max(1, Math.round(image.width || input.width || 1));
+      const height = Math.max(1, Math.round(image.height || input.height || 1));
+      const crop = centeredFovCrop(width, height, input.zoom);
+      if (crop.width >= width && crop.height >= height) {
+        return { uri: input.uri };
+      }
+      const saved = await ImageManipulator.manipulate(input.uri)
+        .crop(crop)
+        .renderAsync()
+        .then((next) =>
+          next.saveAsync({
+            format: SaveFormat.JPEG,
+            compress: 0.8,
+          }),
+        );
+      return saved.uri ? { uri: saved.uri } : { uri: input.uri };
+    } catch {
+      return { uri: input.uri };
+    }
+  })();
+}
+
+function startWebVideoFovCrop(
+  node: HTMLVideoElement,
+  zoom: number,
+  drawRef: { current: number },
+): MediaStream | null {
+  if (typeof document === 'undefined' || zoom <= 1.001) {
+    return null;
+  }
+  if (drawRef.current) {
+    cancelAnimationFrame(drawRef.current);
+    drawRef.current = 0;
+  }
+  const crop = centeredFovCrop(node.videoWidth, node.videoHeight, zoom);
+  const canvas = document.createElement('canvas');
+  canvas.width = crop.width;
+  canvas.height = crop.height;
+  canvas.setAttribute('aria-hidden', 'true');
+  canvas.style.position = 'fixed';
+  canvas.style.left = '-9999px';
+  canvas.style.top = '0';
+  canvas.style.width = '2px';
+  canvas.style.height = '2px';
+  canvas.style.opacity = '0';
+  canvas.style.pointerEvents = 'none';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  if (!ctx || typeof canvas.captureStream !== 'function') {
+    canvas.remove();
+    return null;
+  }
+  const draw = () => {
+    ctx.drawImage(
+      node,
+      crop.originX,
+      crop.originY,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      crop.width,
+      crop.height,
+    );
+    drawRef.current = requestAnimationFrame(draw);
+  };
+  try {
+    const stream = canvas.captureStream(30);
+    const cleanup = () => {
+      cancelAnimationFrame(drawRef.current);
+      drawRef.current = 0;
+      canvas.remove();
+    };
+    stream.addEventListener('inactive', cleanup);
+    stream.getVideoTracks()[0]?.addEventListener('ended', cleanup);
+    draw();
+    return stream;
+  } catch {
+    cancelAnimationFrame(drawRef.current);
+    drawRef.current = 0;
+    canvas.remove();
+    return null;
+  }
+}
 
 function RecordingRing({ recording, maxDuration }: { recording: boolean; maxDuration: number }) {
   const elapsed = useRecordingElapsed(recording, maxDuration);

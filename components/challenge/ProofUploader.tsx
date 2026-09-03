@@ -201,7 +201,7 @@ export function ProofUploader({
           blocked={blocked}
           blockedReason={blockedReason}
           webFallback={webFallback}
-          chromeInset={fill}
+          chromeInset={false}
           hrScreenshot={type === 'hr_monitor'}
           faceHint={faceHint}
           title={title}
