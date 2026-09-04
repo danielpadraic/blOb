@@ -27,7 +27,7 @@ export default function ChallengesStackLayout() {
         <Stack.Screen
           name="[id]"
           dangerouslySingular={(_name, params) => challengeScreenGetId({ params })}
-          options={HIDDEN_STACK_HEADER}
+          options={{ ...HIDDEN_STACK_HEADER, fullScreenGestureEnabled: false }}
         />
         <Stack.Screen name="u/[username]" options={PROFILE_STACK_TITLE} />
       </Stack>

@@ -94,7 +94,7 @@ export const LiveBubble = memo(function LiveBubble({
     meta: time,
   }));
   const alignEnd = mine && !system;
-  const canSwipeReply = Boolean(onReply) && !removed && !editing && Platform.OS !== 'web';
+  const canSwipeReply = Boolean(onReply) && !removed && !editing;
   const swipe = useRef(new Animated.Value(0)).current;
   const swipeLive = useRef(false);
   const replyRef = useRef(onReply);
@@ -110,6 +110,8 @@ export const LiveBubble = memo(function LiveBubble({
           swipeLive.current && liveSwipeClaimsReply(gesture.dx, gesture.dy),
         onMoveShouldSetPanResponderCapture: (_, gesture) =>
           swipeLive.current && liveSwipeClaimsReply(gesture.dx, gesture.dy),
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderMove: (_, gesture) => {
           swipe.setValue(Math.max(0, Math.min(gesture.dx, REPLY_SWIPE_MAX)));
         },
@@ -185,6 +187,7 @@ export const LiveBubble = memo(function LiveBubble({
           maxWidth: '86%',
           alignSelf: alignEnd ? 'flex-end' : 'flex-start',
           transform: [{ translateX: swipe }],
+          ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null),
         }}>
         {alignEnd ? null : (
           <ProfileLink username={post.author?.username} userId={uid}>

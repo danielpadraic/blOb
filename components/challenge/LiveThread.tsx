@@ -200,21 +200,7 @@ export function LiveThread({
   const startReply = useCallback((target: LiveReplyTarget) => {
     setEditing(null);
     setReplyTo(target);
-    const index = rows.findIndex(
-      (row) =>
-        (row.kind === 'comment' && row.comment.id === target.postId) ||
-        (row.kind === 'post' && row.post.id === target.postId),
-    );
-    if (index >= 0) {
-      requestAnimationFrame(() => {
-        try {
-          listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.2 });
-        } catch {
-          /* keep typing */
-        }
-      });
-    }
-  }, [rows]);
+  }, []);
 
   const startEdit = useCallback((post: PostWithMeta) => {
     setReplyTo(null);
@@ -341,8 +327,8 @@ export function LiveThread({
           data={rows}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => {
             if (highlightKey && highlightedOnce.current === highlightKey) {

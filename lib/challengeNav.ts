@@ -23,6 +23,7 @@ export type NavLike = {
   getState?: () => NestedNavState | undefined;
   getParent?: () => NavLike | undefined;
   dispatch?: (action: unknown) => void;
+  setOptions?: (options: Record<string, unknown>) => void;
 };
 
 export type BoundChallengesNav = {

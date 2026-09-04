@@ -2,6 +2,7 @@ import {
   Stack,
   useFocusEffect,
   useLocalSearchParams,
+  useNavigation,
   usePathname,
   useRouter,
   type ErrorBoundaryProps,
@@ -45,6 +46,7 @@ import { StackBackButton, useDismissTo } from '@/components/navigation/StackBack
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { BODY_METRICS_HREF, captureHref, challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
+import { applyLiveBackGesture, liveScreenBackGesture } from '@/lib/liveThread';
 import {
   CALLOUT_CHEER_PLACEHOLDER,
   CALLOUT_WATCHING_LINE,
@@ -242,6 +244,7 @@ export default function ChallengeDetailScreen() {
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const router = useRouter();
+  const navigation = useNavigation();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   useDismissTo(returnTo === 'feed' ? '/feed' : LOBBY_HREF);
@@ -339,6 +342,14 @@ export default function ChallengeDetailScreen() {
         : 'overview';
     setPageTab(next);
   }, [highlightCommentId, highlightPostId, id, isCalloutObserver, tabParam]);
+
+  const liveTabFocused = pageTab === 'feed';
+  useFocusEffect(
+    useCallback(() => {
+      applyLiveBackGesture(navigation, liveTabFocused);
+      return () => applyLiveBackGesture(navigation, false);
+    }, [liveTabFocused, navigation]),
+  );
 
   useEffect(() => {
     if (noticeParam) {
@@ -996,6 +1007,7 @@ export default function ChallengeDetailScreen() {
           headerBackVisible: false,
           headerLeft: () => <StackBackButton />,
           headerRight: () => <ChallengeDetailHeaderRight />,
+          ...liveScreenBackGesture(liveTabFocused),
         }}
       />
       <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>

@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 
+import { findChallengesStack, type NavLike } from '@/lib/challengeNav';
 import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
 import { asReactionType, POST_REACTION_TYPES, type PostReactionType } from '@/lib/reactions';
@@ -69,6 +70,37 @@ export function liveSwipeClaimsReply(dx: number, dy: number): boolean {
 /** iMessage feel: past this the release fires Reply. */
 export const REPLY_SWIPE_TRIGGER = 52;
 export const REPLY_SWIPE_MAX = 72;
+
+export type LiveBackGestureOptions = {
+  gestureEnabled: boolean;
+  fullScreenGestureEnabled: false;
+};
+
+/** Live keeps swipe-to-reply. Overview/Board keep a normal stack back. */
+export function liveScreenBackGesture(liveFocused: boolean): LiveBackGestureOptions {
+  return {
+    gestureEnabled: !liveFocused,
+    fullScreenGestureEnabled: false,
+  };
+}
+
+export type LiveGestureNav = {
+  setOptions?: (options: LiveBackGestureOptions) => void;
+  getParent?: () => LiveGestureNav | undefined;
+  getState?: () => unknown;
+};
+
+/** Nested Live screen + the Lobby `[id]` screen. Never the tab bar. */
+export function applyLiveBackGesture(nav: LiveGestureNav | null | undefined, liveFocused: boolean): void {
+  const options = liveScreenBackGesture(liveFocused);
+  nav?.setOptions?.(options);
+  const stack = findChallengesStack(nav as NavLike);
+  if (stack) {
+    stack.setOptions?.(options);
+    return;
+  }
+  nav?.getParent?.()?.setOptions?.(options);
+}
 
 export function isLiveCheckinPost(post: CheckinPostLike): boolean {
   return isCheckinPost(post);

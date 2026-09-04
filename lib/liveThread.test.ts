@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  applyLiveBackGesture,
   applyLiveReaction,
   buildLiveThreadRows,
   findLiveHighlightIndex,
@@ -9,14 +10,15 @@ import {
   liveChatText,
   liveCheckinHeadline,
   liveCheckinLabel,
-  liveProofCaption,
-  liveQuoteLine,
-  liveSwipeClaimsReply,
-  liveQuotePreview,
-  liveReactionCounts,
   liveComposeFromInline,
   liveEditMediaUrls,
   liveEditPrefill,
+  liveProofCaption,
+  liveQuoteLine,
+  liveQuotePreview,
+  liveReactionCounts,
+  liveScreenBackGesture,
+  liveSwipeClaimsReply,
   sortLivePosts,
   toggleLiveReactionList,
 } from '@/lib/liveThread';
@@ -108,6 +110,51 @@ describe('liveSwipeClaimsReply', () => {
     expect(liveSwipeClaimsReply(6, 0)).toBe(false);
     expect(liveSwipeClaimsReply(-40, 2)).toBe(false);
     expect(liveSwipeClaimsReply(20, 40)).toBe(false);
+  });
+});
+
+describe('liveScreenBackGesture', () => {
+  it('turns off stack pop on Live and leaves Overview/Board with a back swipe', () => {
+    expect(liveScreenBackGesture(true)).toEqual({
+      gestureEnabled: false,
+      fullScreenGestureEnabled: false,
+    });
+    expect(liveScreenBackGesture(false)).toEqual({
+      gestureEnabled: true,
+      fullScreenGestureEnabled: false,
+    });
+  });
+
+  it('locks the Live screen and the Lobby [id] screen, not the tab bar', () => {
+    const tabs = {
+      setOptions: vi.fn(),
+      getState: () => ({
+        routeNames: ['feed', 'challenges'],
+        routes: [{ name: 'feed' }, { name: 'challenges' }],
+      }),
+    };
+    const challenges = {
+      setOptions: vi.fn(),
+      getState: () => ({
+        routeNames: ['index', 'create', 'callout/create', '[id]'],
+        routes: [{ name: 'index' }, { name: '[id]' }],
+      }),
+      getParent: () => tabs,
+    };
+    const live = {
+      setOptions: vi.fn(),
+      getParent: () => challenges,
+    };
+    applyLiveBackGesture(live, true);
+    expect(live.setOptions).toHaveBeenCalledWith({
+      gestureEnabled: false,
+      fullScreenGestureEnabled: false,
+    });
+    expect(challenges.setOptions).toHaveBeenCalledWith({
+      gestureEnabled: false,
+      fullScreenGestureEnabled: false,
+    });
+    expect(tabs.setOptions).not.toHaveBeenCalled();
   });
 });
 

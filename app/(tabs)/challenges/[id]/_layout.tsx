@@ -30,6 +30,7 @@ export default function ChallengeIdLayout() {
           headerTitleStyle: { fontWeight: '700', color: THEME.textPrimary },
           contentStyle: { backgroundColor: THEME.background },
           headerShown: false,
+          fullScreenGestureEnabled: false,
         }}>
         <Stack.Screen
           name="index"
