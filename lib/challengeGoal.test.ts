@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { milesToMeters } from '@/lib/distance';
-import { challengeDurationDays, challengeGoalLabel, storedDurationDays } from '@/lib/challengeGoal';
+import {
+  challengeDurationDays,
+  challengeGoalLabel,
+  challengeRingDays,
+  storedDurationDays,
+} from '@/lib/challengeGoal';
 
 describe('stored duration', () => {
   it('prefers length_value then days_required over a stale 6-day window', () => {
@@ -115,5 +120,23 @@ describe('stored duration', () => {
   it('does not invent 6 when nothing is saved', () => {
     expect(storedDurationDays({ days_required: 0, length_value: null })).toBeNull();
     expect(challengeDurationDays({ days_required: 0, length_value: null })).toBe(1);
+  });
+
+  it('has no ring days and no denominator when only ends_at is saved', () => {
+    const row = {
+      days_required: 0,
+      length_value: null,
+      starts_at: '2026-08-01T09:00:00.000Z',
+      ends_at: '2026-08-07T09:00:00.000Z',
+    };
+    expect(challengeRingDays(row)).toBeNull();
+    expect(challengeGoalLabel(row, { daysCompleted: 0 })).toBe('0 days');
+    expect(challengeGoalLabel(row, { daysCompleted: 1 })).toBe('1 day');
+  });
+
+  it('keeps ring days at the saved duration and gives Official a target fallback', () => {
+    expect(challengeRingDays({ duration_days: 30, ends_at: '2026-08-07T09:00:00.000Z' })).toBe(30);
+    expect(challengeRingDays({ is_official: true, target_count: 10 })).toBe(10);
+    expect(challengeRingDays({ is_official: true })).toBe(7);
   });
 });

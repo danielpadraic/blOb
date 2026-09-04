@@ -16,7 +16,7 @@ import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { parseChallengeProofs } from '@/lib/challengeProofs';
-import { challengeDurationDays, challengeGoalLabel, challengeGoalSubtitle } from '@/lib/challengeGoal';
+import { challengeGoalLabel, challengeGoalSubtitle, challengeRingDays } from '@/lib/challengeGoal';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
@@ -139,7 +139,8 @@ export function ChallengeCardVisual({
   });
   const proofs = proofChips(challenge);
   const days = Math.max(Number(myDays) || 0, 0);
-  const duration = challengeDurationDays(challenge);
+  // Ring uses saved duration_days (30 stays 30) — no ring rather than an ends_at window.
+  const duration = challengeRingDays(challenge) ?? 0;
   const progress = joinedProgressCopy(challenge, days, { distanceMetersCompleted: myMeters ?? 0 });
   const showRing =
     !official &&
@@ -149,7 +150,11 @@ export function ChallengeCardVisual({
     !usesTotalCountCheckins(challenge) &&
     !usesCumulativeScoring(challenge);
   const goal =
-    official || usesPointsBoard(challenge) || usesTotalCountCheckins(challenge) || usesCumulativeScoring(challenge)
+    official ||
+    duration <= 0 ||
+    usesPointsBoard(challenge) ||
+    usesTotalCountCheckins(challenge) ||
+    usesCumulativeScoring(challenge)
       ? challengeGoalLabel(challenge, { daysCompleted: days, distanceMetersCompleted: myMeters ?? 0 })
       : `${duration}-Day Consistency`;
   const goalSub = official ? challengeGoalSubtitle(challenge) : null;

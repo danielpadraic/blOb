@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { checkinPeriodKey, normalizePeriodKey } from '@/lib/checkinPeriod';
+import { checkinPeriodCacheStamp, checkinPeriodKey, normalizePeriodKey } from '@/lib/checkinPeriod';
 import { isClosedForLogs } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
@@ -9,7 +9,6 @@ import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { checkinTaskLabel } from '@/lib/checkin';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
 import { loggableStatusLine } from '@/lib/loggable';
-import { utcDateStamp } from '@/utils/dates';
 import { getErrorMessage } from '@/utils/errors';
 
 export { asLoggableList, loggableStatusLine } from '@/lib/loggable';
@@ -66,7 +65,8 @@ const CHALLENGE_SELECTS = [
 
 export function useLoggableChallenges() {
   const { user } = useAuth();
-  const date = utcDateStamp();
+  // Already-checked-in / due use the challenge tz window — never a UTC-midnight cache key.
+  const date = checkinPeriodCacheStamp();
 
   return useQuery({
     queryKey: ['loggable-challenge', user?.id, date],

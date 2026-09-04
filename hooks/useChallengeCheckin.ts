@@ -53,6 +53,7 @@ export type ChallengeCheckinView = ChallengeCheckin & {
   isPrimary: boolean;
 };
 
+/** Already-checked-in / due use the challenge tz window from starts_at — never UTC midnight. */
 function periodKeyFor(challenge?: PeriodChallenge | null): string {
   if (!challenge) {
     return '';
@@ -60,7 +61,12 @@ function periodKeyFor(challenge?: PeriodChallenge | null): string {
   try {
     return checkinPeriodKey(challenge);
   } catch {
-    return normalizePeriodKey(dateStampInZone(new Date(), 'UTC'));
+    try {
+      return normalizePeriodKey(dateStampInZone(new Date(), challengeClockTz(challenge)));
+    } catch {
+      // Fail closed: no key beats a silent UTC-midnight window.
+      return '';
+    }
   }
 }
 

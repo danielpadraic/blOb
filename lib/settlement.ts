@@ -140,15 +140,24 @@ export function challengeLoggingOpensAt(challenge: {
   return official ?? scheduled;
 }
 
+/**
+ * A challenge that has not started must not show a live Check In camera that
+ * then fails at Send (`checkin_assert_open`). Missing starts_at on a live row
+ * counts as started so old rows keep their Check In.
+ */
 export function hasChallengeStarted(
   challenge: {
     starts_at?: string | null;
     official_started_at?: string | null;
     status?: string | null;
   },
-  _now = new Date(),
+  now = new Date(),
 ): boolean {
-  return String(challenge.status ?? '') === 'live';
+  if (String(challenge.status ?? '') !== 'live') {
+    return false;
+  }
+  const opens = challengeLoggingOpensAt(challenge);
+  return !opens || now.getTime() >= opens.getTime();
 }
 
 export function loggingOpensHelper(

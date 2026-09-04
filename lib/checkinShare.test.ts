@@ -68,17 +68,25 @@ describe('check-in share prefs', () => {
     });
   });
 
-  it('forces Home off for private and corporate, and leaves Waves as the toggle', () => {
+  it('forces Home and Waves off for private and corporate', () => {
     expect(checkinHidesHomeShare({ privacy_mode: 'private_corporate' })).toBe(true);
     expect(checkinHidesHomeShare({ privacy_mode: 'private' })).toBe(true);
     expect(checkinHidesHomeShare({ privacy_mode: 'public' })).toBe(false);
     expect(applyCheckinShareLock({ home: true, wave: true }, true)).toEqual({
       home: false,
-      wave: true,
+      wave: false,
+    });
+    expect(applyCheckinShareLock({ home: false, wave: true }, true)).toEqual({
+      home: false,
+      wave: false,
     });
     expect(applyCheckinShareLock({ home: true, wave: false }, false)).toEqual({
       home: true,
       wave: false,
+    });
+    expect(applyCheckinShareLock({ home: true, wave: true }, false)).toEqual({
+      home: true,
+      wave: true,
     });
   });
 

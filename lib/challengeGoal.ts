@@ -13,7 +13,6 @@ import {
   resolveCumulativeMetrics,
 } from '@/lib/cumulativeMetrics';
 import type { Challenge } from '@/lib/types';
-import { challengeWindowDays } from '@/utils/format';
 
 type GoalChallenge = Pick<
   Challenge,
@@ -101,22 +100,27 @@ export function storedDurationDays(challenge: {
   return days > 0 ? days : null;
 }
 
-/** Calendar days the host saved. Never a check-in product or a 100 fallback. */
-export function challengeDurationDays(
-  challenge: {
-    is_official?: boolean | null;
-    is_unlimited?: boolean | null;
-    days_required?: number | null;
-    target_count?: number | null;
-    length_value?: number | null;
-    length_unit?: string | null;
-    duration_days?: number | null;
-    starts_at?: string | null;
-    ends_at?: string | null;
-  } | null | undefined,
-): number {
+type DurationChallenge = {
+  is_official?: boolean | null;
+  is_unlimited?: boolean | null;
+  days_required?: number | null;
+  target_count?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+  duration_days?: number | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+};
+
+/**
+ * Overview ring uses saved duration_days (30 stays 30) — never an ends_at window.
+ * Null means the host saved no length: show no ring instead of a fake denominator.
+ */
+export function challengeRingDays(
+  challenge: DurationChallenge | null | undefined,
+): number | null {
   if (!challenge) {
-    return 1;
+    return null;
   }
   if (challenge.is_official) {
     return Math.max(
@@ -124,17 +128,14 @@ export function challengeDurationDays(
       1,
     );
   }
-  const saved = storedDurationDays(challenge);
-  if (saved) {
-    return saved;
-  }
-  if (challenge.starts_at && challenge.ends_at) {
-    const windowDays = challengeWindowDays(challenge.starts_at, challenge.ends_at);
-    if (windowDays > 0) {
-      return windowDays;
-    }
-  }
-  return 1;
+  return storedDurationDays(challenge);
+}
+
+/** Calendar days the host saved. Never a check-in product or a 100 fallback. */
+export function challengeDurationDays(
+  challenge: DurationChallenge | null | undefined,
+): number {
+  return challengeRingDays(challenge) ?? 1;
 }
 
 export function challengeGoalLabel(
@@ -192,8 +193,12 @@ export function challengeGoalLabel(
     const days = challengeDurationDays(challenge);
     return `${days}-day challenge`;
   }
-  const target = challengeDurationDays(challenge);
+  // Overview ring uses saved duration_days (30 stays 30) — never an ends_at window.
+  const target = challengeRingDays(challenge);
   const done = Math.max(Number(extras?.daysCompleted) || 0, 0);
+  if (target == null) {
+    return `${done} day${done === 1 ? '' : 's'}`;
+  }
   return `${done} of ${target} days`;
 }
 

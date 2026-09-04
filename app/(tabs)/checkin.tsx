@@ -28,12 +28,14 @@ const STATE_COPY: Record<MultiCheckinState, string> = {
 };
 
 export default function MultiCheckinScreen() {
-  const params = useLocalSearchParams<{ done?: string }>();
+  const params = useLocalSearchParams<{ done?: string; notice?: string }>();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const loggable = useLoggableChallenges();
   const doneIds = parseDoneIds(params.done);
+  // Extras never block Send: a failed extra lands as a line, not an error screen.
+  const notice = String((Array.isArray(params.notice) ? params.notice[0] : params.notice) ?? '').trim();
 
   useFocusEffect(
     useCallback(() => {
@@ -62,6 +64,22 @@ export default function MultiCheckinScreen() {
   return (
     <Screen scroll padded edges={TAB_ROOT_EDGES} contentPaddingBottom={tabBarLift(insets.bottom) + 88}>
       <AppText className="mb-3 text-[22px] font-extrabold text-charcoal">{copy('checkin.multiTitle')}</AppText>
+      {notice ? (
+        <View
+          style={{
+            marginBottom: 12,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.surface,
+          }}>
+          <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+            {notice}
+          </AppText>
+        </View>
+      ) : null}
       <View style={{ gap: 10 }}>
         {rows.map((row) => (
           <HubRow key={row.id} row={row} onPress={() => openSubmit(row.id)} />

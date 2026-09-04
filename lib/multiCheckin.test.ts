@@ -20,6 +20,16 @@ describe('Multi Check-In routing', () => {
     );
     expect(MULTI_CHECKIN_HREF).toBe('/checkin');
     expect(multiCheckinHref('abc-1')).toBe('/checkin?done=abc-1');
+    expect(multiCheckinHref(['abc-1', 'abc-2'])).toBe('/checkin?done=abc-1,abc-2');
+    expect(multiCheckinHref(null)).toBe('/checkin');
+  });
+
+  it('carries a failed-extra notice without dropping the done ids', () => {
+    expect(multiCheckinHref('abc-1', 'Your check-in still counts.')).toBe(
+      '/checkin?done=abc-1&notice=Your%20check-in%20still%20counts.',
+    );
+    expect(multiCheckinHref('abc-1', null)).toBe('/checkin?done=abc-1');
+    expect(multiCheckinHref('abc-1', '  ')).toBe('/checkin?done=abc-1');
   });
 });
 

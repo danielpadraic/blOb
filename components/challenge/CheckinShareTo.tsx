@@ -61,10 +61,13 @@ export function CheckinShareTo({
         {copy('checkin.alsoLive')}
       </AppText>
       <View className="flex-1" />
+      {/* Corporate / hideHome challenges never publish Home or Wave — no dead toggle. */}
       {hideHome ? null : (
-        <CompactToggle label={copy('checkin.shareHome')} value={shareHome} onChange={onShareHomeChange} />
+        <>
+          <CompactToggle label={copy('checkin.shareHome')} value={shareHome} onChange={onShareHomeChange} />
+          <CompactToggle label={copy('checkin.shareWave')} value={shareWave} onChange={onShareWaveChange} />
+        </>
       )}
-      <CompactToggle label={copy('checkin.shareWave')} value={shareWave} onChange={onShareWaveChange} />
     </View>
   );
 }

@@ -90,7 +90,7 @@ import {
   openAppSettings,
   permissionCopy,
 } from '@/lib/mediaPermissions';
-import { copy } from '@/lib/copy';
+import { copy, interpolateCopy } from '@/lib/copy';
 import {
   composeCheckinNotes,
   proofPrefersHealthAttach,
@@ -809,15 +809,13 @@ function SubmitWorkoutInner() {
         notes,
         extraMedia: extraUrls,
       });
-      if (failedExtras.length > 0) {
-        setFailKind('upload');
-        setError(
-          failedExtras.length === 1
-            ? 'One photo didn’t upload. The rest are ready to send.'
-            : `${failedExtras.length} photos didn’t upload. The rest are ready to send.`,
-        );
-        return;
-      }
+      // Extra photos/videos/GIFs never block Send. Board counts required proof.
+      const extraWarning =
+        failedExtras.length === 0
+          ? null
+          : failedExtras.length === 1
+            ? copy('checkin.extraFailed')
+            : interpolateCopy(copy('checkin.extraFailedMany'), { n: failedExtras.length });
       const checkinId = honorOnly || readyNow ? (await submitCheckin.mutateAsync())?.id : saved?.id;
       let postId: string | undefined;
       if (checkinId) {
@@ -932,10 +930,15 @@ function SubmitWorkoutInner() {
       }
       await successHaptic();
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      // A failed extra never rolls back the required slot — warn, do not block.
+      if (extraWarning) {
+        setFailKind(null);
+        setError(extraWarning);
+      }
       const from = Array.isArray(params.from) ? params.from[0] : params.from;
       if (from === 'multi') {
         void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
-        router.replace(multiCheckinHref([...parseDoneIds(params.done), id]));
+        router.replace(multiCheckinHref([...parseDoneIds(params.done), id], extraWarning));
         return;
       }
       if (!readyNow) {
@@ -950,7 +953,9 @@ function SubmitWorkoutInner() {
         void checkinQuery.refetch();
         return;
       }
-      router.replace(challengeDetailHref(id, 'lobby', postId, { tab: 'feed' }));
+      router.replace(
+        challengeDetailHref(id, 'lobby', postId, { tab: 'feed', notice: extraWarning }),
+      );
     } catch (caught) {
       const kind = classifyCheckinError(caught);
       if (kind === 'reused') {

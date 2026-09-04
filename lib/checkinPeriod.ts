@@ -158,6 +158,17 @@ export function checkinPeriodKey(
   return normalizePeriodKey(dateStampInZone(now, challengeClockTz(challenge)));
 }
 
+/**
+ * Cache-bust stamp for lists that mix challenges (the Check In picker).
+ * Already-checked-in / due use the challenge tz window — never a UTC-midnight key.
+ */
+export function checkinPeriodCacheStamp(now = new Date()): string {
+  return [
+    normalizePeriodKey(dateStampInZone(now, DEFAULT_CHALLENGE_TIMEZONE)),
+    normalizePeriodKey(dateStampInZone(now, OFFICIAL_SERIES_TIMEZONE)),
+  ].join('|');
+}
+
 /** THIS period’s key, plus Official window stamps. Never UTC unless that is the clock. */
 export function checkinPeriodKeyCandidates(
   challenge?: CheckinPeriodChallenge | null,

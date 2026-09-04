@@ -44,7 +44,7 @@ export function prefsFromProfile(profile?: {
   };
 }
 
-/** Private / corporate: no Home announce. Waves stay a user toggle. */
+/** Private / corporate: no Home announce and no Wave. */
 export function checkinHidesHomeShare(challenge?: {
   privacy_mode?: string | null;
   visibility?: string | null;
@@ -57,12 +57,16 @@ export function checkinHidesHomeShare(challenge?: {
   return isPrivateCorporate(challenge) || isPrivateChallenge(challenge ?? {});
 }
 
+/** Corporate / hideHome challenges never publish Home or Wave. */
 export function applyCheckinShareLock(
   prefs: CheckinSharePrefs,
   hideHome: boolean,
 ): CheckinSharePrefs {
+  if (hideHome) {
+    return { home: false, wave: false };
+  }
   return {
-    home: hideHome ? false : prefs.home !== false,
+    home: prefs.home !== false,
     wave: prefs.wave === true,
   };
 }

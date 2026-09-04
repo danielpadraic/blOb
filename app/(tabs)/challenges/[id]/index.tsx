@@ -147,7 +147,12 @@ import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { athleteDistanceUnit } from '@/lib/distance';
 import { cumulativeTargetMeters, rawCumulativeTargetMeters } from '@/lib/cumulative';
-import { challengeGoalLabel, challengeDurationDays, pointsGoalTarget } from '@/lib/challengeGoal';
+import {
+  challengeGoalLabel,
+  challengeDurationDays,
+  challengeRingDays,
+  pointsGoalTarget,
+} from '@/lib/challengeGoal';
 import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
@@ -221,15 +226,19 @@ export default function ChallengeDetailScreen() {
     logged?: string;
     funded?: string;
     postId?: string;
+    commentId?: string;
     tab?: string;
     receipt?: string;
+    notice?: string;
   }>();
   const routeParam = firstRouteParam(params.id);
   const { id, waiting: waitingForId } = useStableChallengeRouteId(routeParam);
   const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
+  const highlightCommentId = Array.isArray(params.commentId) ? params.commentId[0] : params.commentId;
   const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const receiptParam = Array.isArray(params.receipt) ? params.receipt[0] : params.receipt;
+  const noticeParam = Array.isArray(params.notice) ? params.notice[0] : params.notice;
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const router = useRouter();
@@ -306,9 +315,11 @@ export default function ChallengeDetailScreen() {
   const [settleOpen, setSettleOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [watchToast, setWatchToast] = useState<string | null>(null);
+  // Extras never block Send: a failed extra lands as a line beside the receipt.
+  const [notice, setNotice] = useState<string | null>(noticeParam ?? null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pageTab, setPageTab] = useState<ChallengePageTab>(
-    highlightPostId ? 'feed' : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
+    highlightPostId || highlightCommentId ? 'feed' : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
       ? tabParam
       : receiptParam === '1'
         ? 'overview'
@@ -321,13 +332,19 @@ export default function ChallengeDetailScreen() {
       setPageTab('feed');
       return;
     }
-    const next: ChallengePageTab = highlightPostId
+    const next: ChallengePageTab = highlightPostId || highlightCommentId
       ? 'feed'
       : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
         ? tabParam
         : 'overview';
     setPageTab(next);
-  }, [highlightPostId, id, isCalloutObserver, tabParam]);
+  }, [highlightCommentId, highlightPostId, id, isCalloutObserver, tabParam]);
+
+  useEffect(() => {
+    if (noticeParam) {
+      setNotice(noticeParam);
+    }
+  }, [noticeParam]);
 
   const hostProfile = hostQuery.data;
   const heroHost =
@@ -847,9 +864,13 @@ export default function ChallengeDetailScreen() {
   const totalCount = usesTotalCountCheckins(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
   const previewHero = Boolean(challenge.preview_hero);
-  const showDayRing = !previewHero && isJoined && usesConsistencyExperience(challenge);
   const checkinTarget = challengeTargetCount(challenge);
-  const target = totalCount ? checkinTarget : durationDays;
+  // Overview ring uses saved duration_days (30 stays 30) — no ring rather than a fake 6.
+  const ringDays = challengeRingDays(challenge);
+  const hasRingTarget = totalCount ? checkinTarget > 0 : ringDays != null;
+  const showDayRing =
+    !previewHero && isJoined && usesConsistencyExperience(challenge) && hasRingTarget;
+  const target = totalCount ? checkinTarget : (ringDays ?? durationDays);
   const submittedCount = Math.max(
     submittedCheckins.data ?? 0,
     loggedToday && !totalCount ? 1 : 0,
@@ -936,8 +957,9 @@ export default function ChallengeDetailScreen() {
   const progressRatio = isUnlimited
     ? 1
     : daysCompleted / Math.max(isPoints ? Math.max(tasks.length, 1) : target, 1);
+  // Before start the sticky copy stays "starts …" — not a camera that dies on Send.
   const startLine =
-    waitingToStart && challenge.status !== 'live' && !hasCheckins
+    waitingToStart && !hasCheckins
       ? startsInLabel(challenge, new Date(nowMs)) ??
         startNeeded ??
         copy('challenge.waitingToStart')
@@ -983,6 +1005,26 @@ export default function ChallengeDetailScreen() {
           options={isCalloutObserver ? CHALLENGE_LIVE_ONLY_TABS : undefined}
         />
       </View>
+      {notice ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss"
+          onPress={() => setNotice(null)}
+          style={{
+            marginHorizontal: 16,
+            marginTop: 8,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.surface,
+          }}>
+          <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+            {notice}
+          </AppText>
+        </Pressable>
+      ) : null}
       {pageTab === 'feed' ? (
         <View style={{ flex: 1, minHeight: 0 }}>
           {challenge?.is_callout ? (
@@ -994,6 +1036,7 @@ export default function ChallengeDetailScreen() {
           isRefreshing={refreshing}
           error={feed.error instanceof Error ? feed.error.message : null}
           highlightPostId={highlightPostId}
+          highlightCommentId={highlightCommentId}
           currentUserId={user?.id}
           emptyTitle="Quiet in this challenge"
           emptyBody={

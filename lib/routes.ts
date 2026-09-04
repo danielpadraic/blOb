@@ -117,7 +117,12 @@ export function challengeDetailHref(
   id: string,
   returnTo: 'lobby' | 'feed' = 'lobby',
   postId?: string | null,
-  extra?: { tab?: 'overview' | 'board' | 'feed'; receipt?: boolean; commentId?: string | null },
+  extra?: {
+    tab?: 'overview' | 'board' | 'feed';
+    receipt?: boolean;
+    commentId?: string | null;
+    notice?: string | null;
+  },
 ): Href {
   const challengeId = String(id ?? '').trim();
   const qs = new URLSearchParams();
@@ -138,6 +143,11 @@ export function challengeDetailHref(
     qs.set('comments', '1');
     qs.set('commentId', commentId);
   }
+  // Extras never block Send: a failed extra rides along as a line, not an error screen.
+  const notice = String(extra?.notice ?? '').trim();
+  if (notice) {
+    qs.set('notice', notice);
+  }
   const query = qs.toString();
   const path = String(challengeHref(challengeId));
   return (query ? `${path}?${query}` : path) as Href;
@@ -146,14 +156,22 @@ export function challengeDetailHref(
 export const MULTI_CHECKIN_HREF = '/checkin' as Href;
 
 /** Hub after a Send from Multi Check-In. Literal path — Safari. */
-export function multiCheckinHref(doneIds?: string[] | string | null): Href {
+export function multiCheckinHref(
+  doneIds?: string[] | string | null,
+  notice?: string | null,
+): Href {
   const ids = (Array.isArray(doneIds) ? doneIds : doneIds ? [doneIds] : [])
     .map((id) => String(id ?? '').trim())
     .filter(Boolean);
-  if (ids.length === 0) {
-    return MULTI_CHECKIN_HREF;
+  const parts: string[] = [];
+  if (ids.length > 0) {
+    parts.push(`done=${ids.join(',')}`);
   }
-  return `/checkin?done=${ids.join(',')}` as Href;
+  const line = String(notice ?? '').trim();
+  if (line) {
+    parts.push(`notice=${encodeURIComponent(line)}`);
+  }
+  return (parts.length ? `${MULTI_CHECKIN_HREF}?${parts.join('&')}` : MULTI_CHECKIN_HREF) as Href;
 }
 
 /** Check In / Begin / Continue only. Literal path — object `{ pathname, params }` breaks Safari. Never `/capture`. */

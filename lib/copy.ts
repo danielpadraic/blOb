@@ -713,6 +713,8 @@ const STRINGS = {
   'checkin.offlineBob': 'No signal. I’ll wait here.',
   'checkin.permissionBob': 'Camera is off. I can’t take the proof without it.',
   'checkin.uploadFailBob': 'That photo didn’t make it. Try once more.',
+  'checkin.extraFailed': 'Couldn’t add that extra photo. Your check-in still counts.',
+  'checkin.extraFailedMany': 'Couldn’t add {n} extra photos. Your check-in still counts.',
   'checkin.alreadyBob': 'Already counted today. Come back for the next window.',
   'checkin.notLiveBob': 'This challenge isn’t taking check-ins right now.',
   'checkin.submitBanner': 'You started. Submit before 11:59 p.m. Central.',

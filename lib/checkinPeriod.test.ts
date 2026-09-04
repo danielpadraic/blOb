@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkinPeriodCacheStamp,
   checkinPeriodKey,
   challengeClockTz,
   consistencyPeriodAt,
@@ -156,5 +157,19 @@ describe('consistencyPeriodAt', () => {
     );
     expect(slice?.periodKey).toBe('2026-09-02');
     expect(slice?.endsAt.toISOString()).toBe('2026-09-03T06:00:00.000Z');
+  });
+});
+
+describe('checkinPeriodCacheStamp', () => {
+  it('does not roll at UTC midnight', () => {
+    // 6:30pm Denver Sep 3 is already Sep 4 in UTC — the picker must still say Sep 3.
+    expect(checkinPeriodCacheStamp(new Date('2026-09-03T20:30:00Z'))).toBe('2026-09-03|2026-09-03');
+    expect(checkinPeriodCacheStamp(new Date('2026-09-04T00:30:00Z'))).toBe('2026-09-03|2026-09-03');
+  });
+
+  it('rolls at host midnight', () => {
+    // 11:30pm Denver Sep 3 (Chicago is already Sep 4), then 12:30am Denver Sep 4.
+    expect(checkinPeriodCacheStamp(new Date('2026-09-04T05:30:00Z'))).toBe('2026-09-03|2026-09-04');
+    expect(checkinPeriodCacheStamp(new Date('2026-09-04T06:30:00Z'))).toBe('2026-09-04|2026-09-04');
   });
 });
