@@ -105,6 +105,7 @@ export function ClipSocial({
           audience={audience}
           audienceUserIds={post?.audience_user_ids ?? []}
           expanded={composerExpanded}
+          autoFocus
           onExpandedChange={(next) => {
             setComposerExpanded(next);
             onComposerFocus?.(next);

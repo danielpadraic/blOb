@@ -23,6 +23,7 @@ import { homeFeedEmptyPhase } from '@/lib/homeFeed';
 import { isHomeCheckinStack, stackHomeCheckinPosts, type HomeCheckinStack } from '@/lib/multiCheckin';
 import { FEED_COLUMN_MAX, TAB_BAR_CONTENT_INSET, THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
+import type { MentionChip } from '@/lib/mentions';
 
 type HomeFeedRow =
   | { kind: 'post'; id: string; post: PostWithMeta }
@@ -46,6 +47,7 @@ type FeedListProps = {
   headerExtra?: ReactNode;
   empty?: ReactNode;
   highlightPostId?: string;
+  highlightCommentId?: string | null;
   onHighlightedLayout?: (y: number) => void;
   hideAudience?: boolean;
   composeSource?: ComposeInput['source'];
@@ -65,6 +67,7 @@ type FeedListProps = {
     content: string,
     parentId?: string | null,
     mentionedUserIds?: string[],
+    mentionChips?: MentionChip[],
   ) => Promise<unknown> | void;
 };
 
@@ -74,6 +77,7 @@ type FeedRowProps = {
   hideAudience?: boolean;
   challengeFeed?: boolean;
   highlighted?: boolean;
+  highlightCommentId?: string | null;
   homeChrome?: boolean;
   onReact: FeedListProps['onReact'];
   onComment?: FeedListProps['onComment'];
@@ -85,6 +89,7 @@ const FeedRow = memo(function FeedRow({
   hideAudience,
   challengeFeed,
   highlighted,
+  highlightCommentId,
   homeChrome,
   onReact,
   onComment,
@@ -99,8 +104,12 @@ const FeedRow = memo(function FeedRow({
     if (!onComment) {
       return undefined;
     }
-    return (content: string, parentId?: string | null, mentionedUserIds?: string[]) =>
-      onComment(post, content, parentId, mentionedUserIds);
+    return (
+      content: string,
+      parentId?: string | null,
+      mentionedUserIds?: string[],
+      mentionChips?: MentionChip[],
+    ) => onComment(post, content, parentId, mentionedUserIds, mentionChips);
   }, [onComment, post]);
 
   return (
@@ -110,6 +119,8 @@ const FeedRow = memo(function FeedRow({
       hideAudience={hideAudience}
       challengeFeed={challengeFeed}
       highlighted={highlighted}
+      highlightCommentId={highlightCommentId}
+      startThreadOpen={Boolean(highlightCommentId)}
       homeFeed={homeChrome}
       onReact={handleReact}
       onComment={handleComment}
@@ -135,6 +146,7 @@ export function FeedList({
   headerExtra,
   empty,
   highlightPostId,
+  highlightCommentId,
   onHighlightedLayout,
   hideAudience,
   composeSource,
@@ -315,6 +327,7 @@ export function FeedList({
             currentUserId={currentUserId}
             highlighted={Boolean(highlightPostId && item.stack.postIds.includes(highlightPostId))}
             startExpanded={Boolean(highlightPostId && item.stack.postIds.includes(highlightPostId))}
+            highlightCommentId={highlightPostId && item.stack.postIds.includes(highlightPostId) ? highlightCommentId : undefined}
             onReact={onReact}
             onComment={onComment}
           />
@@ -325,6 +338,7 @@ export function FeedList({
             hideAudience={hideAudience}
             challengeFeed={challengeFeed}
             highlighted={highlightPostId === item.post.id}
+            highlightCommentId={highlightPostId === item.post.id ? highlightCommentId : undefined}
             homeChrome={homeChrome}
             onReact={onReact}
             onComment={onComment}
@@ -335,7 +349,7 @@ export function FeedList({
         ) : null}
       </View>
     ),
-    [challengeFeed, currentUserId, hideAudience, highlightPostId, homeChrome, midFeedRail, onComment, onReact],
+    [challengeFeed, currentUserId, hideAudience, highlightCommentId, highlightPostId, homeChrome, midFeedRail, onComment, onReact],
   );
 
   if (error && !homeChrome && !headerTop && !stickyAbove) {
@@ -389,6 +403,7 @@ export function FeedList({
                 hideAudience={hideAudience}
                 challengeFeed={challengeFeed}
                 highlighted={highlightPostId === post.id}
+                highlightCommentId={highlightPostId === post.id ? highlightCommentId : undefined}
                 onReact={onReact}
                 onComment={onComment}
               />
@@ -453,7 +468,7 @@ export function FeedList({
             onRetry={onRetry}
           />
         }
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
@@ -461,7 +476,7 @@ export function FeedList({
         maxToRenderPerBatch={5}
         initialNumToRender={5}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS !== 'web'}
+        removeClippedSubviews={false}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CONTENT_INSET, flexGrow: 1 }}
         refreshControl={
           onRefresh ? (

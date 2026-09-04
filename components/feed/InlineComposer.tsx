@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,6 +10,13 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
 import type { MentionChip, MentionDoc } from '@/lib/mentions';
+import {
+  clearComposerDraft,
+  composerDraftKey,
+  readComposerDraft,
+  writeComposerDraft,
+  type ComposerDraftAttachment,
+} from '@/lib/composerDraft';
 import {
   ensureCameraPermission,
   ensureLibraryPermission,
@@ -47,9 +54,12 @@ type InlineComposerProps = {
   /** Live/Circle: idle one thin bar; focus shows tools + Send. */
   bar?: boolean;
   autoFocus?: boolean;
+  /** One-line when idle; keep the draft. Home comment footer. */
+  collapseWhenIdle?: boolean;
+  draftKey?: string;
   memberIds?: string[];
   initialText?: string;
-  onSubmit: (content: string, mentionedUserIds: string[]) => Promise<unknown> | void;
+  onSubmit: (content: string, mentionedUserIds: string[], chips: MentionChip[]) => Promise<unknown> | void;
 };
 
 export function InlineComposer({
@@ -63,32 +73,70 @@ export function InlineComposer({
   onExpandedChange,
   pinned,
   bar = false,
-  autoFocus = true,
+  autoFocus = false,
+  collapseWhenIdle = false,
+  draftKey,
   memberIds,
   initialText,
   onSubmit,
 }: InlineComposerProps) {
   const { user } = useAuth();
+  const scope = draftKey ? composerDraftKey(draftKey) : null;
+  const stored = scope ? readComposerDraft(scope) : null;
   const fieldRef = useRef<MentionFieldHandle>(null);
-  const docRef = useRef<MentionDoc>({ text: initialText ?? '', chips: [] });
+  const docRef = useRef<MentionDoc>(stored?.doc ?? { text: initialText ?? '', chips: [] });
   const holdFocus = useRef(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wasExpanded = useRef(true);
+  const wasExpanded = useRef(false);
   const [internalExpanded, setInternalExpanded] = useState(!bar);
-  const [hasText, setHasText] = useState(() => Boolean(initialText?.trim()));
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [hasText, setHasText] = useState(() =>
+    Boolean((stored?.doc.text ?? initialText)?.trim()),
+  );
+  const [attachments, setAttachments] = useState<Attachment[]>(() =>
+    (stored?.attachments ?? []).map((row) => ({ ...row })),
+  );
   const [gifOpen, setGifOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [fieldFocused, setFieldFocused] = useState(autoFocus);
+  const [fieldFocused, setFieldFocused] = useState(false);
   const expanded = pinned && !bar ? true : (expandedProp ?? internalExpanded);
-  const toolsOpen = bar
-    ? fieldFocused || hasText || attachments.length > 0 || gifOpen || Boolean(replyTo) || expanded
-    : expanded;
+  const toolsOpen = collapseWhenIdle
+    ? fieldFocused || gifOpen
+    : bar
+      ? fieldFocused || hasText || attachments.length > 0 || gifOpen || Boolean(replyTo) || expanded
+      : expanded;
   const busy = Boolean(submitting || uploading);
   const canSend = hasText || attachments.length > 0;
-  const fieldCollapsed = bar
-    ? !fieldFocused && !hasText && attachments.length === 0
-    : !expanded;
+  const fieldCollapsed = collapseWhenIdle
+    ? !fieldFocused && !gifOpen
+    : bar
+      ? !fieldFocused && !hasText && attachments.length === 0
+      : !expanded && !hasText;
+
+  const persistDraft = useCallback(
+    (doc: MentionDoc, files: Attachment[]) => {
+      if (!scope) {
+        return;
+      }
+      if (doc.text.trim() || files.length > 0) {
+        writeComposerDraft(scope, {
+          doc,
+          attachments: files.map(
+            (file): ComposerDraftAttachment => ({
+              id: file.id,
+              uri: file.uri,
+              kind: file.kind,
+              mimeType: file.mimeType,
+              name: file.name,
+              blob: file.blob,
+            }),
+          ),
+        });
+        return;
+      }
+      clearComposerDraft(scope);
+    },
+    [scope],
+  );
 
   function setExpanded(next: boolean) {
     onExpandedChange?.(next);
@@ -120,18 +168,23 @@ export function InlineComposer({
   }
 
   useEffect(() => {
-    if (expanded && !wasExpanded.current) {
+    if (autoFocus && expanded && !wasExpanded.current) {
       fieldRef.current?.focus();
     }
     wasExpanded.current = expanded;
-  }, [expanded]);
+  }, [autoFocus, expanded]);
 
   useEffect(() => () => cancelCollapse(), []);
+
+  useEffect(() => {
+    persistDraft(docRef.current, attachments);
+  }, [attachments, persistDraft]);
 
   function onDocChange(doc: MentionDoc) {
     docRef.current = doc;
     const next = doc.text.trim().length > 0;
     setHasText((current) => (current === next ? current : next));
+    persistDraft(doc, attachments);
   }
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
@@ -271,6 +324,7 @@ export function InlineComposer({
       await onSubmit(
         content,
         latest.chips.map((chip) => chip.userId),
+        latest.chips,
       );
       docRef.current = { text: '', chips: [] };
       fieldRef.current?.clear();
@@ -279,6 +333,9 @@ export function InlineComposer({
       setGifOpen(false);
       setFieldFocused(false);
       setExpanded(false);
+      if (scope) {
+        clearComposerDraft(scope);
+      }
       Keyboard.dismiss();
     } catch (error) {
       Alert.alert('Couldn’t post that reply', getErrorMessage(error));
@@ -295,7 +352,8 @@ export function InlineComposer({
       pickerPlacement="above"
       autoFocus={autoFocus}
       placeholder={placeholder}
-      initialText={initialText}
+      initialText={stored?.doc.text || initialText}
+      initialChips={stored?.doc.chips}
       initialMention={replyTo}
       audience={audience}
       audienceUserIds={audienceUserIds}

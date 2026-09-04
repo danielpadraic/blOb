@@ -6,6 +6,7 @@ import { attachClipPostId } from '@/lib/social';
 import { isClipSocialPost, type ClipKind } from '@/lib/clipPost';
 import { publishedRowId } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
+import type { MentionChip } from '@/lib/mentions';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 
 type ClipSocialInput = {
@@ -92,7 +93,12 @@ export function useClipSocial(input: ClipSocialInput) {
       }
       toggleReaction.mutate({ post: target, type, commentId });
     },
-    onComment: async (content: string, parentId?: string | null, mentionedUserIds?: string[]) => {
+    onComment: async (
+      content: string,
+      parentId?: string | null,
+      mentionedUserIds?: string[],
+      mentionChips?: MentionChip[],
+    ) => {
       const target = post ?? (await ensurePost());
       if (!target) {
         return;
@@ -102,6 +108,7 @@ export function useClipSocial(input: ClipSocialInput) {
         content,
         parentId,
         mentionedUserIds,
+        mentionChips,
       });
     },
   };

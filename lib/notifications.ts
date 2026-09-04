@@ -1,9 +1,10 @@
 import { calloutObserverInviteHref } from '@/lib/callouts';
 import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { circleNotificationPath } from '@/lib/circles';
+import { withCommentQuery } from '@/lib/commentDeepLink';
 import { collapseChallengeDigests } from '@/lib/notifyDigest';
 import { postHref } from '@/lib/postShare';
-import { challengeDetailHref, conversationHref, INTERESTS_HREF, reelHref, storyHref } from '@/lib/routes';
+import { challengeDetailHref, conversationHref, feedHref, INTERESTS_HREF, reelHref, storyHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
@@ -16,6 +17,11 @@ export function notificationChallengeId(data?: NotificationData | null): string 
 
 export function notificationPostId(data?: NotificationData | null): string | undefined {
   return data?.post_id ?? data?.postId;
+}
+
+export function notificationCommentId(data?: NotificationData | null): string | undefined {
+  const id = typeof data?.comment_id === 'string' ? data.comment_id.trim() : '';
+  return id || undefined;
 }
 
 export function notificationCircleId(data?: NotificationData | null): string | undefined {
@@ -331,12 +337,27 @@ export async function inviteToChallenge(
   return row as ChallengeInvite;
 }
 
+function commentAwareHref(href: string | null | undefined, data?: NotificationData | null): Href | null {
+  const raw = String(href ?? '').trim();
+  if (!raw) {
+    return null;
+  }
+  const commentId = notificationCommentId(data);
+  if (!commentId) {
+    return raw as Href;
+  }
+  return withCommentQuery(raw, commentId) as Href;
+}
+
 export function notificationHrefFromPushData(data: {
   type?: string;
   challenge_id?: string;
   href?: string;
   post_id?: string;
+  comment_id?: string;
+  parent_comment_id?: string;
   story_id?: string;
+  reel_id?: string;
   username?: string;
   callout_id?: string;
   actor_id?: string;
@@ -355,7 +376,10 @@ export function notificationHrefFromPushData(data: {
     return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
   }
   if (data.href && !/\/submit(?:\?|$)/.test(data.href)) {
-    return data.href as Href;
+    return commentAwareHref(data.href, {
+      comment_id: data.comment_id,
+      parent_comment_id: data.parent_comment_id,
+    });
   }
   return notificationHref({
     id: '',
@@ -367,7 +391,10 @@ export function notificationHrefFromPushData(data: {
     data: {
       challenge_id: data.challenge_id,
       post_id: data.post_id,
+      comment_id: data.comment_id,
+      parent_comment_id: data.parent_comment_id,
       story_id: data.story_id,
+      reel_id: data.reel_id,
       username: data.username,
       callout_id: data.callout_id,
       actor_id: data.actor_id,
@@ -399,8 +426,9 @@ export function notificationHref(item: AppNotification): Href | null {
     }
     return '/feed';
   }
+  const commentId = notificationCommentId(data);
   if (data.href) {
-    return data.href as Href;
+    return commentAwareHref(data.href, data);
   }
   if (data.conversation_id || item.type === 'message') {
     const conversationId = data.conversation_id;
@@ -410,10 +438,10 @@ export function notificationHref(item: AppNotification): Href | null {
     return '/messages';
   }
   if (data.story_id) {
-    return storyHref(data.story_id);
+    return storyHref(data.story_id, commentId ? { comments: true, commentId } : undefined);
   }
   if (data.reel_id) {
-    return reelHref(data.reel_id);
+    return reelHref(data.reel_id, commentId ? { comments: true, commentId } : undefined);
   }
   const circlePath = circleNotificationPath(item.type, notificationCircleId(data), notificationPostId(data));
   if (circlePath) {
@@ -484,13 +512,16 @@ export function notificationHref(item: AppNotification): Href | null {
       item.type === 'post_comment' ||
       item.type === 'post_reaction')
   ) {
-    return challengeDetailHref(challengeId, 'feed', postId);
+    return challengeDetailHref(challengeId, 'feed', postId, {
+      tab: 'feed',
+      commentId,
+    });
   }
   if (challengeId) {
     return challengeDetailHref(challengeId, 'lobby');
   }
   if (postId) {
-    return postHref(postId);
+    return commentId ? feedHref(postId, { commentId }) : postHref(postId);
   }
   if (
     item.type === 'tagged' ||

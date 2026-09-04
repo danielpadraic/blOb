@@ -41,6 +41,39 @@ export function mentionInsertLabel(chip: MentionChip): string {
   return chip.label.trim() || chip.username.replace(/^@/, '');
 }
 
+export function mentionChipFromAuthor(
+  author?: {
+    id?: string | null;
+    username?: string | null;
+    display_name?: string | null;
+  } | null,
+  userId?: string | null,
+): MentionChip | null {
+  const id = String(userId ?? author?.id ?? '').trim();
+  if (!id) {
+    return null;
+  }
+  const username = author?.username?.trim() ?? '';
+  const label = author?.display_name?.trim() || username || 'blob';
+  return {
+    userId: id,
+    username: username || id,
+    label,
+  };
+}
+
+export function mentionRecordsFromChips(chips?: MentionChip[] | null): MentionRecord[] {
+  return (chips ?? [])
+    .filter((chip) => chip.userId && (chip.kind ?? 'user') === 'user')
+    .map((chip) => ({
+      userId: chip.userId,
+      username: chip.username,
+      displayName: chip.label,
+      available: true,
+      kind: chip.kind ?? 'user',
+    }));
+}
+
 export function emptyMentionParts(): MentionPart[] {
   return [{ type: 'text', id: nextId('t'), value: '' }];
 }

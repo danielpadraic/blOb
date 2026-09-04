@@ -169,4 +169,13 @@ describe('splitMentionedText', () => {
     const parts = splitMentionedText('hey @Daniel', [mention]);
     expect(parts[1]).toMatchObject({ type: 'mention', value: '@Daniel' });
   });
+
+  it('links a spaced display-name chip by user id', () => {
+    const ranges = mentionTokenRanges('@Daniel Harder thanks', [daniel]);
+    expect(ranges[0]).toMatchObject({
+      start: 0,
+      end: '@Daniel Harder'.length,
+      userId: 'user-daniel',
+    });
+  });
 });

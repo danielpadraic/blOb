@@ -808,6 +808,7 @@ export type NotificationData = {
   from_user_id?: string;
   notification_id?: string;
   comment_id?: string;
+  parent_comment_id?: string;
   story_id?: string;
   reel_id?: string;
   username?: string;

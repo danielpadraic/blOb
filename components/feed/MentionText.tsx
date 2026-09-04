@@ -18,7 +18,7 @@ export function MentionText({ content, mentions = [], numberOfLines, className, 
   const router = useRouter();
   const pathname = usePathname();
   const parts = splitMentionedText(content, mentions);
-  const ink = color ?? THEME.ink;
+  const ink = color ?? THEME.textPrimary;
   return (
     <AppText
       className={className ?? 'text-[14px] leading-[20px]'}
@@ -55,7 +55,7 @@ export function MentionText({ content, mentions = [], numberOfLines, className, 
                 pushChallengeHref(router, String(challengeHref(mention.userId)), 'mention', mention.userId, pathname);
                 return;
               }
-              router.push(profileHref(pathname, mention.username));
+              router.push(profileHref(pathname, mention.username || mention.userId));
             }}
             style={{ color: mentionColor, fontWeight: '700' }}>
             {part.value}

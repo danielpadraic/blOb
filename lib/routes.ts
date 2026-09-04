@@ -117,7 +117,7 @@ export function challengeDetailHref(
   id: string,
   returnTo: 'lobby' | 'feed' = 'lobby',
   postId?: string | null,
-  extra?: { tab?: 'overview' | 'board' | 'feed'; receipt?: boolean },
+  extra?: { tab?: 'overview' | 'board' | 'feed'; receipt?: boolean; commentId?: string | null },
 ): Href {
   const challengeId = String(id ?? '').trim();
   const qs = new URLSearchParams();
@@ -132,6 +132,11 @@ export function challengeDetailHref(
   }
   if (extra?.receipt) {
     qs.set('receipt', '1');
+  }
+  const commentId = String(extra?.commentId ?? '').trim();
+  if (commentId) {
+    qs.set('comments', '1');
+    qs.set('commentId', commentId);
   }
   const query = qs.toString();
   const path = String(challengeHref(challengeId));
@@ -215,9 +220,19 @@ export const STORY_CREATE_HREF = captureHref('story');
 export const CAPTURE_STORY_HREF = captureHref('story');
 export const CAPTURE_REEL_HREF = captureHref('reel');
 
-export function feedHref(postId?: string | null): Href {
+export function feedHref(postId?: string | null, extra?: { commentId?: string | null }): Href {
   const id = String(postId ?? '').trim();
-  return (id ? `/feed?postId=${encodeURIComponent(id)}` : TABS_HREF) as Href;
+  if (!id) {
+    return TABS_HREF as Href;
+  }
+  const qs = new URLSearchParams();
+  qs.set('postId', id);
+  const commentId = String(extra?.commentId ?? '').trim();
+  if (commentId) {
+    qs.set('comments', '1');
+    qs.set('commentId', commentId);
+  }
+  return `/feed?${qs.toString()}` as Href;
 }
 
 type ClipHrefExtra = {

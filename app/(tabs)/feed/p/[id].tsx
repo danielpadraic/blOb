@@ -1,5 +1,4 @@
-import { Stack } from 'expo-router';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 
 import { PostCard } from '@/components/feed/PostCard';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -7,11 +6,13 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreateComment, usePost, useToggleReaction } from '@/hooks/useFeed';
+import { firstSearchParam } from '@/lib/commentDeepLink';
 import { TAB_STACK_SCREEN_OPTIONS } from '@/lib/routes';
 
 export default function PostThreadScreen() {
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; commentId?: string; comments?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const commentId = firstSearchParam(params.commentId);
   const { user } = useAuth();
   const post = usePost(id);
   const toggleReaction = useToggleReaction();
@@ -29,13 +30,18 @@ export default function PostThreadScreen() {
           post={post.data}
           currentUserId={user?.id}
           commenting={createComment.isPending}
-          onReact={(type, commentId) => toggleReaction.mutate({ post: post.data!, type, commentId })}
-          onComment={(content, parentId, mentionedUserIds) =>
+          highlightCommentId={commentId}
+          startThreadOpen
+          onReact={(type, commentIdArg) =>
+            toggleReaction.mutate({ post: post.data!, type, commentId: commentIdArg })
+          }
+          onComment={(content, parentId, mentionedUserIds, mentionChips) =>
             createComment.mutateAsync({
               postId: post.data!.id,
               content,
               parentId,
               mentionedUserIds,
+              mentionChips,
             })
           }
         />

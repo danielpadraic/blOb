@@ -75,11 +75,29 @@ type MentionFieldProps = {
 
 export type MentionFieldHandle = {
   insertAt: () => void;
+  seedMention: (chip: MentionChip) => void;
   focus: () => void;
   blur: () => void;
   clear: () => void;
   getDoc: () => MentionDoc;
 };
+
+function seedFromMention(
+  initialText?: string,
+  initialChips?: MentionChip[],
+  initialMention?: MentionChip | null,
+): { text: string; chips: MentionChip[]; selection: TextSelection } {
+  if (initialMention?.userId && !String(initialText ?? '').trim()) {
+    const next = insertMention('', { start: 0, end: 0 }, mentionInsertLabel(initialMention), { suffix: ' ' });
+    return { text: next.text, chips: [initialMention], selection: next.selection };
+  }
+  const text = initialText ?? '';
+  return {
+    text,
+    chips: initialChips ?? [],
+    selection: { start: text.length, end: text.length },
+  };
+}
 
 function MentionFieldInner(
   {
@@ -104,21 +122,19 @@ function MentionFieldInner(
   }: MentionFieldProps,
   ref: ForwardedRef<MentionFieldHandle>,
 ) {
+  const seeded = seedFromMention(initialText, initialChips, initialMention);
   const inputRef = useRef<TextInput>(null);
   const boxRef = useRef<View>(null);
   const form = useKeyboardForm();
-  const seededMentionId = useRef<string | null>(null);
-  const textRef = useRef(initialText ?? '');
-  const chipsRef = useRef<MentionChip[]>(initialChips ?? []);
+  const seededMentionId = useRef<string | null>(initialMention?.userId ?? null);
+  const textRef = useRef(seeded.text);
+  const chipsRef = useRef<MentionChip[]>(seeded.chips);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const [text, setText] = useState(initialText ?? '');
-  const [selection, setSelection] = useState<TextSelection>({
-    start: initialText?.length ?? 0,
-    end: initialText?.length ?? 0,
-  });
-  const [chips, setChips] = useState<MentionChip[]>(initialChips ?? []);
+  const [text, setText] = useState(seeded.text);
+  const [selection, setSelection] = useState<TextSelection>(seeded.selection);
+  const [chips, setChips] = useState<MentionChip[]>(seeded.chips);
   const [punctReadyIds, setPunctReadyIds] = useState<string[]>([]);
   const [forced, setForced] = useState<TextSelection | null>(null);
   const [suppressed, setSuppressed] = useState(false);
@@ -178,6 +194,17 @@ function MentionFieldInner(
 
   useImperativeHandle(ref, () => ({
     insertAt: insertAtTrigger,
+    seedMention: (chip: MentionChip) => {
+      if (!chip.userId || textRef.current.trim()) {
+        return;
+      }
+      if (chipsRef.current.some((row) => row.userId === chip.userId)) {
+        return;
+      }
+      seededMentionId.current = chip.userId;
+      const next = insertMention('', { start: 0, end: 0 }, mentionInsertLabel(chip), { suffix: ' ' });
+      commit(next.text, next.selection, [chip], true);
+    },
     focus: () => inputRef.current?.focus(),
     blur: () => inputRef.current?.blur(),
     clear: () => {
@@ -188,6 +215,14 @@ function MentionFieldInner(
   }));
 
   useEffect(() => {
+    if (seeded.text) {
+      onChangeRef.current(mentionDocFromState(seeded.text, seeded.chips));
+    }
+    // Seed once from the author already on the row. Do not wait on search.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const mentionId = initialMention?.userId ?? '';
     if (!mentionId || !initialMention || textRef.current.trim()) {
       return;
@@ -196,12 +231,14 @@ function MentionFieldInner(
       return;
     }
     seededMentionId.current = mentionId;
-    const next = insertMention('', { start: 0, end: 0 }, mentionInsertLabel(initialMention));
+    const next = insertMention('', { start: 0, end: 0 }, mentionInsertLabel(initialMention), { suffix: ' ' });
     commit(next.text, next.selection, [initialMention], true);
-    keepFocus();
+    if (autoFocus) {
+      keepFocus();
+    }
     // Seed @author when Reply sets a mention. Keyed remount also covers this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMention?.userId]);
+  }, [autoFocus, initialMention?.userId]);
 
   useEffect(() => {
     if (!query) {
@@ -216,7 +253,7 @@ function MentionFieldInner(
   }, [collapsed, text]);
 
   function pick(chip: MentionChip) {
-    const next = insertMention(text, selection, mentionInsertLabel(chip));
+    const next = insertMention(text, selection, mentionInsertLabel(chip), { suffix: ' ' });
     const nextChips = chips.some((row) => row.userId === chip.userId) ? chips : [...chips, chip];
     setSuppressed(true);
     commit(next.text, next.selection, nextChips, true, []);
@@ -422,7 +459,7 @@ function MentionFieldInner(
         accessibilityLabel={accessibilityLabel ?? 'Write a post'}
         onFocus={() => {
           form?.setFieldFocused?.(true);
-          if (boxRef.current) {
+          if (!compact && boxRef.current) {
             form?.scrollFieldIntoView(boxRef.current);
           }
           onFocus?.();

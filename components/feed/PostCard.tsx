@@ -1,5 +1,5 @@
-import { memo, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, View } from 'react-native';
+import { memo, useEffect, useRef, useState } from 'react';
+import { Alert, Keyboard, Linking, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
@@ -49,6 +49,7 @@ import { circleDetailHref } from '@/lib/routes';
 import { circleDisplayName, circleIdFromPost } from '@/lib/circles';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
+import { mentionChipFromAuthor, type MentionChip } from '@/lib/mentions';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { flexChildMin, THEME } from '@/lib/theme';
@@ -72,10 +73,13 @@ type PostCardProps = {
     content: string,
     parentId?: string | null,
     mentionedUserIds?: string[],
+    mentionChips?: MentionChip[],
   ) => Promise<unknown> | void;
   commenting?: boolean;
   highlighted?: boolean;
   homeFeed?: boolean;
+  highlightCommentId?: string | null;
+  startThreadOpen?: boolean;
 };
 
 function PostCardInner({
@@ -88,10 +92,17 @@ function PostCardInner({
   commenting,
   highlighted,
   homeFeed,
+  highlightCommentId,
+  startThreadOpen,
 }: PostCardProps) {
   const tone = useCopyTone();
-  const [showComposer, setShowComposer] = useState(false);
-  const [composerExpanded, setComposerExpanded] = useState(true);
+  const [threadOpen, setThreadOpen] = useState(() => Boolean(startThreadOpen || highlightCommentId));
+  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<{
+    parentId: string;
+    mention: MentionChip;
+  } | null>(null);
+  const [missingComment, setMissingComment] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const social = useSocialSheetsOptional();
   const menuOpen = useOverflowMenuOpen(post.id);
@@ -104,6 +115,21 @@ function PostCardInner({
   const handle = post.author?.username?.trim() || uid;
   const comments = post.comments ?? [];
   const audience = asPostAudience(post.audience);
+
+  useEffect(() => {
+    if (highlightCommentId || startThreadOpen) {
+      setThreadOpen(true);
+    }
+  }, [highlightCommentId, startThreadOpen]);
+
+  useEffect(() => {
+    if (!highlightCommentId || !threadOpen) {
+      setMissingComment(false);
+      return;
+    }
+    const found = comments.some((comment) => comment.id === highlightCommentId);
+    setMissingComment(!found);
+  }, [comments, highlightCommentId, threadOpen]);
   const content = post.content?.trim() ?? '';
   const quote = asQuoteSnapshot(post.quote_snapshot);
   const shareParentId = isClipSharePost(post) ? post.parent_id ?? post.quoted_post_id : null;
@@ -467,7 +493,7 @@ function PostCardInner({
             hidden={post.hidden_media_urls}
             isOwner={mine}
             proof={checkin}
-            pauseCycle={showComposer || menuOpen}
+            pauseCycle={threadOpen || menuOpen}
             homeInline={homeFeed}
           />
         )}
@@ -483,68 +509,74 @@ function PostCardInner({
           onReply={
             onComment
               ? () => {
-                  setShowComposer((open) => !open);
-                  setComposerExpanded(true);
+                  setThreadOpen((open) => {
+                    const next = !open;
+                    if (!next) {
+                      setComposerExpanded(false);
+                      setReplyTarget(null);
+                      Keyboard.dismiss();
+                    }
+                    return next;
+                  });
                 }
               : undefined
           }
         />
         )}
 
-        {homeRoundShare || !showComposer || !onComment ? null : (
-          <View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close comments"
-              onPress={() => setShowComposer(false)}
-              style={{
-                position: 'absolute',
-                top: -900,
-                right: -24,
-                bottom: 0,
-                left: -24,
-                zIndex: 0,
+        {homeRoundShare || !threadOpen || !onComment ? null : (
+          <View style={{ zIndex: 1, gap: 8 }}>
+            {missingComment ? (
+              <AppText className="text-[13px] text-muted">That comment isn’t available.</AppText>
+            ) : null}
+            <CommentThread
+              comments={comments}
+              currentUserId={currentUserId}
+              composing={commenting}
+              audience={audience}
+              audienceUserIds={post.audience_user_ids ?? []}
+              highlightCommentId={highlightCommentId}
+              replyMode="callback"
+              showEmpty
+              showAll
+              onReply={onComment}
+              onReplyPress={(comment, mention) => {
+                if (mention) {
+                  setReplyTarget({ parentId: comment.id, mention });
+                } else {
+                  const fallback = mentionChipFromAuthor(comment.author, comment.author_id);
+                  if (fallback) {
+                    setReplyTarget({ parentId: comment.id, mention: fallback });
+                  }
+                }
+                setComposerExpanded(true);
+              }}
+              onReact={(commentId, type) => onReact(type, commentId)}
+            />
+            <InlineComposer
+              key={replyTarget ? `reply-${replyTarget.parentId}` : `top-${post.id}`}
+              placeholder="Write a comment…"
+              submitLabel="Send"
+              submitting={commenting}
+              audience={audience}
+              audienceUserIds={post.audience_user_ids ?? []}
+              bar
+              collapseWhenIdle
+              autoFocus={Boolean(replyTarget)}
+              expanded={composerExpanded}
+              onExpandedChange={setComposerExpanded}
+              draftKey={`comment:${post.id}${replyTarget ? `:reply:${replyTarget.parentId}` : ''}`}
+              replyTo={replyTarget?.mention ?? null}
+              onSubmit={async (text, mentionedUserIds, chips) => {
+                try {
+                  await onComment(text, replyTarget?.parentId ?? null, mentionedUserIds, chips);
+                  setReplyTarget(null);
+                  setComposerExpanded(false);
+                } catch (error) {
+                  Alert.alert('Couldn’t post that reply', getErrorMessage(error));
+                }
               }}
             />
-            <View style={{ zIndex: 1 }}>
-              <InlineComposer
-                placeholder="Write a reply…"
-                submitting={commenting}
-                audience={audience}
-                audienceUserIds={post.audience_user_ids ?? []}
-                expanded={composerExpanded}
-                onExpandedChange={setComposerExpanded}
-                replyTo={
-                  uid
-                    ? {
-                        userId: uid,
-                        username: handle || 'someone',
-                        label: name,
-                      }
-                    : null
-                }
-                onSubmit={async (text, mentionedUserIds) => {
-                  try {
-                    await onComment(text, null, mentionedUserIds);
-                    setShowComposer(false);
-                    setComposerExpanded(false);
-                  } catch (error) {
-                    Alert.alert('Couldn’t post that reply', getErrorMessage(error));
-                  }
-                }}
-              />
-              {comments.length > 0 ? (
-                <CommentThread
-                  comments={comments}
-                  currentUserId={currentUserId}
-                  composing={commenting}
-                  audience={audience}
-                  audienceUserIds={post.audience_user_ids ?? []}
-                  onReply={onComment ?? (async () => undefined)}
-                  onReact={(commentId, type) => onReact(type, commentId)}
-                />
-              ) : null}
-            </View>
           </View>
         )}
       </View>

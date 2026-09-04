@@ -28,6 +28,7 @@ import {
   type PostsSchema,
 } from '@/lib/postsSelect';
 import { supabase } from '@/lib/supabase';
+import { mentionRecordsFromChips, type MentionChip } from '@/lib/mentions';
 import type {
   CommentWithAuthor,
   ComposeInput,
@@ -505,7 +506,7 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
       userId: row.mentioned_user_id,
       username: profile?.username ?? 'blob',
       displayName: profile?.display_name,
-      available: Boolean(profile?.username) && !blockedIds.has(row.mentioned_user_id),
+      available: Boolean(profile) && !blockedIds.has(row.mentioned_user_id),
     });
     mentionsByComment.set(row.comment_id, list);
   }
@@ -2230,9 +2231,10 @@ async function insertCommentMentions(
       ),
     );
   } catch (error) {
-    if (!isMentionAccessDenied(error) && !isMissingRelationError(error)) {
-      console.log('[blob:feed] comment_mentions insert skipped', getErrorMessage(error));
+    if (isMentionAccessDenied(error) || isMissingRelationError(error)) {
+      return;
     }
+    throw error;
   }
 }
 
@@ -2247,16 +2249,28 @@ export function useCreateComment(challengeId?: string | null) {
       content: string;
       parentId?: string | null;
       mentionedUserIds?: string[];
+      mentionChips?: MentionChip[];
     }) => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
+      const authorId = user.id;
 
       const base = {
         post_id: input.postId,
-        author_id: user.id,
+        author_id: authorId,
         content: input.content,
       };
+
+      async function persist(row: { id: string; post_id: string; parent_id?: string | null; content: string; created_at: string }) {
+        try {
+          await insertCommentMentions(row.id, authorId, input.mentionedUserIds);
+        } catch (error) {
+          await supabase.from('comments').delete().eq('id', row.id).eq('author_id', authorId);
+          throw error;
+        }
+        return row;
+      }
 
       if (input.parentId) {
         if (!isPersistedId(input.parentId)) {
@@ -2270,16 +2284,14 @@ export function useCreateComment(challengeId?: string | null) {
         if (nested.error) {
           throw new Error(getErrorMessage(nested.error));
         }
-        await insertCommentMentions(nested.data.id, user.id, input.mentionedUserIds);
-        return nested.data;
+        return persist(nested.data);
       }
 
       const { data, error } = await supabase.from('comments').insert(base).select().single();
       if (error) {
         throw new Error(getErrorMessage(error));
       }
-      await insertCommentMentions(data.id, user.id, input.mentionedUserIds);
-      return data;
+      return persist(data);
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: ['feed'] });
@@ -2294,6 +2306,13 @@ export function useCreateComment(challengeId?: string | null) {
           created_at: new Date().toISOString(),
           author: asPublicProfile({ ...(profile ?? {}), id: profile?.id ?? user.id }),
           reactions: [],
+          mentions: mentionRecordsFromChips(input.mentionChips).length
+            ? mentionRecordsFromChips(input.mentionChips)
+            : (input.mentionedUserIds ?? []).map((userId) => ({
+                userId,
+                username: '',
+                available: true,
+              })),
         };
         patchFeedPosts(queryClient, input.postId, (post) => ({
           ...post,

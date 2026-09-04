@@ -431,8 +431,14 @@ export default function PublicProfileScreen() {
             commenting={createComment.isPending}
             onRetry={() => void posts.refetch()}
             onReact={(post, type, commentId) => toggleReaction.mutate({ post, type, commentId })}
-            onComment={(post, content, parentId, mentionedUserIds) =>
-              createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds })
+            onComment={(post, content, parentId, mentionedUserIds, mentionChips) =>
+              createComment.mutateAsync({
+                postId: post.id,
+                content,
+                parentId,
+                mentionedUserIds,
+                mentionChips,
+              })
             }
           />
         ) : null}

@@ -20,9 +20,11 @@ import { socialKeys } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { clearLastOpenChallenge } from '@/lib/challengeNav';
 import { copy } from '@/lib/copy';
+import { firstSearchParam } from '@/lib/commentDeepLink';
 import { homeFeedFirstPaintLoading } from '@/lib/homeFeed';
 import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
+import type { MentionChip } from '@/lib/mentions';
 import { THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
@@ -39,8 +41,9 @@ export default function FeedScreen() {
   const { user } = useAuth();
   const tone = useCopyTone();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ postId?: string }>();
-  const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
+  const params = useLocalSearchParams<{ postId?: string; commentId?: string; comments?: string }>();
+  const highlightPostId = firstSearchParam(params.postId);
+  const highlightCommentId = firstSearchParam(params.commentId);
   const feed = useFeed();
   const createPost = useCreatePost();
   const createComment = useCreateComment();
@@ -88,8 +91,20 @@ export default function FeedScreen() {
     [toggleReaction],
   );
   const onComment = useCallback(
-    (post: PostWithMeta, content: string, parentId?: string | null, mentionedUserIds?: string[]) =>
-      createComment.mutateAsync({ postId: post.id, content, parentId, mentionedUserIds }),
+    (
+      post: PostWithMeta,
+      content: string,
+      parentId?: string | null,
+      mentionedUserIds?: string[],
+      mentionChips?: MentionChip[],
+    ) =>
+      createComment.mutateAsync({
+        postId: post.id,
+        content,
+        parentId,
+        mentionedUserIds,
+        mentionChips,
+      }),
     [createComment],
   );
 
@@ -142,6 +157,7 @@ export default function FeedScreen() {
         onRefresh={onRefresh}
         onRetry={() => void feed.refetch()}
         highlightPostId={highlightPostId}
+        highlightCommentId={highlightCommentId}
         onCompose={onCompose}
         onReact={onReact}
         onComment={onComment}

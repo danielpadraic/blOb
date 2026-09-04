@@ -10,6 +10,7 @@ import { useChallengeFeedPreview } from '@/hooks/useChallenge';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import type { HomeCheckinStack } from '@/lib/multiCheckin';
 import { THEME } from '@/lib/theme';
+import type { MentionChip } from '@/lib/mentions';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 
 type CheckinStackCardProps = {
@@ -18,12 +19,14 @@ type CheckinStackCardProps = {
   currentUserId?: string;
   highlighted?: boolean;
   startExpanded?: boolean;
+  highlightCommentId?: string | null;
   onReact: (post: PostWithMeta, type: ReactionType, commentId?: string | null) => void;
   onComment?: (
     post: PostWithMeta,
     content: string,
     parentId?: string | null,
     mentionedUserIds?: string[],
+    mentionChips?: MentionChip[],
   ) => Promise<unknown> | void;
 };
 
@@ -33,6 +36,7 @@ export function CheckinStackCard({
   currentUserId,
   highlighted,
   startExpanded,
+  highlightCommentId,
   onReact,
   onComment,
 }: CheckinStackCardProps) {
@@ -83,11 +87,17 @@ export function CheckinStackCard({
                 currentUserId={currentUserId}
                 homeFeed
                 highlighted={highlighted && post.id === stack.firstPostId}
+                highlightCommentId={
+                  highlightCommentId && post.comments?.some((row) => row.id === highlightCommentId)
+                    ? highlightCommentId
+                    : undefined
+                }
+                startThreadOpen={Boolean(highlightCommentId && post.comments?.some((row) => row.id === highlightCommentId))}
                 onReact={(type, commentId) => onReact(post, type, commentId)}
                 onComment={
                   onComment
-                    ? (content, parentId, mentionedUserIds) =>
-                        onComment(post, content, parentId, mentionedUserIds)
+                    ? (content, parentId, mentionedUserIds, mentionChips) =>
+                        onComment(post, content, parentId, mentionedUserIds, mentionChips)
                     : undefined
                 }
               />

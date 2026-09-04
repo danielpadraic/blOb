@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { InlineComposer } from '@/components/feed/InlineComposer';
@@ -10,6 +10,7 @@ import { ProfileLink } from '@/components/profile/ProfileLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { mentionChipFromAuthor, type MentionChip } from '@/lib/mentions';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, ReactionType } from '@/lib/types';
 import { nestComments } from '@/utils/comments';
@@ -18,11 +19,13 @@ import { formatFeedTime } from '@/utils/format';
 import { commentMediaUrls, commentTextWithoutMedia, mediaKind } from '@/utils/media';
 
 const INDENT = 12;
+const HIGHLIGHT_MS = 1600;
 
 type ReplyHandler = (
   content: string,
   parentId?: string | null,
   mentionedUserIds?: string[],
+  mentionChips?: MentionChip[],
 ) => Promise<unknown> | void;
 
 type CommentThreadProps = {
@@ -33,6 +36,12 @@ type CommentThreadProps = {
   composing?: boolean;
   audience?: string;
   audienceUserIds?: string[];
+  highlightCommentId?: string | null;
+  /** Home: Reply focuses the footer composer. Wave keeps a composer under the row. */
+  replyMode?: 'inline' | 'callback';
+  onReplyPress?: (comment: CommentWithAuthor, mention: MentionChip | null) => void;
+  showEmpty?: boolean;
+  showAll?: boolean;
 };
 
 export function CommentThread({
@@ -43,16 +52,27 @@ export function CommentThread({
   composing,
   audience,
   audienceUserIds,
+  highlightCommentId,
+  replyMode = 'inline',
+  onReplyPress,
+  showEmpty = false,
+  showAll: showAllProp,
 }: CommentThreadProps) {
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(Boolean(showAllProp));
   const roots = nestComments(comments);
 
   if (comments.length === 0) {
-    return null;
+    if (!showEmpty) {
+      return null;
+    }
+    return (
+      <AppText className="text-[13px] text-muted">No comments yet</AppText>
+    );
   }
 
   const previewLimit = 3;
-  const visibleRoots = showAll ? roots : roots.slice(0, previewLimit);
+  const expanded = showAllProp || showAll;
+  const visibleRoots = expanded ? roots : roots.slice(0, previewLimit);
   const hiddenCount = roots.length - visibleRoots.length;
 
   return (
@@ -75,6 +95,9 @@ export function CommentThread({
           onReact={onReact}
           audience={audience}
           audienceUserIds={audienceUserIds}
+          highlightCommentId={highlightCommentId}
+          replyMode={replyMode}
+          onReplyPress={onReplyPress}
         />
       ))}
     </View>
@@ -90,6 +113,9 @@ function CommentItem({
   onReact,
   audience,
   audienceUserIds,
+  highlightCommentId,
+  replyMode,
+  onReplyPress,
 }: {
   comment: CommentWithAuthor;
   nested: boolean;
@@ -99,19 +125,40 @@ function CommentItem({
   onReact?: (commentId: string, type: ReactionType) => void;
   audience?: string;
   audienceUserIds?: string[];
+  highlightCommentId?: string | null;
+  replyMode: 'inline' | 'callback';
+  onReplyPress?: (comment: CommentWithAuthor, mention: MentionChip | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [highlighted, setHighlighted] = useState(false);
+  const nodeRef = useRef<View>(null);
   const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
-  const handle = comment.author?.username ?? 'blob';
   const replies = comment.replies ?? [];
   const body = commentTextWithoutMedia(comment.content);
   const mediaUrls = commentMediaUrls(comment.content);
+  const mention = mentionChipFromAuthor(comment.author, comment.author_id);
+
+  useEffect(() => {
+    if (highlightCommentId !== comment.id) {
+      return;
+    }
+    setHighlighted(true);
+    const node = nodeRef.current;
+    if (node && Platform.OS === 'web') {
+      const el = node as unknown as { scrollIntoView?: (opts?: { block?: string; behavior?: string }) => void };
+      el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    }
+    const timer = setTimeout(() => setHighlighted(false), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [comment.id, highlightCommentId]);
 
   return (
     <View
+      ref={nodeRef}
+      collapsable={false}
       className="gap-1.5"
-      style={
+      style={[
         nested
           ? {
               marginLeft: INDENT,
@@ -119,8 +166,17 @@ function CommentItem({
               borderLeftColor: THEME.accentSoft,
               paddingLeft: 8,
             }
-          : undefined
-      }>
+          : undefined,
+        highlighted
+          ? {
+              backgroundColor: THEME.accentSoft,
+              borderRadius: 12,
+              paddingVertical: 6,
+              paddingHorizontal: 6,
+              marginHorizontal: -6,
+            }
+          : undefined,
+      ]}>
       <View className="flex-row gap-2">
         <ProfileLink username={comment.author?.username} userId={comment.author_id}>
           <Avatar uri={comment.author?.avatar_url} name={name} size={nested ? 20 : 24} />
@@ -152,19 +208,19 @@ function CommentItem({
               currentUserId={currentUserId}
               onReact={(type) => onReact?.(comment.id, type)}
               onReply={() => {
-                if (!open) {
-                  setOpen(true);
-                  setExpanded(true);
+                if (replyMode === 'callback') {
+                  onReplyPress?.(comment, mention);
                   return;
                 }
-                setExpanded((value) => !value);
+                setOpen(true);
+                setExpanded(true);
               }}
             />
           </View>
         </View>
       </View>
 
-      {open ? (
+      {replyMode === 'inline' && open ? (
         <View style={{ marginLeft: 28, marginTop: 6 }}>
           <InlineComposer
             placeholder={`Reply to ${name}…`}
@@ -172,15 +228,12 @@ function CommentItem({
             audience={audience}
             audienceUserIds={audienceUserIds}
             expanded={expanded}
+            autoFocus
             onExpandedChange={setExpanded}
-            replyTo={{
-              userId: comment.author_id,
-              username: handle,
-              label: name,
-            }}
-            onSubmit={async (text, mentionedUserIds) => {
+            replyTo={mention}
+            onSubmit={async (text, mentionedUserIds, chips) => {
               try {
-                await onReply(text, comment.id, mentionedUserIds);
+                await onReply(text, comment.id, mentionedUserIds, chips);
                 setOpen(false);
                 setExpanded(true);
               } catch (error) {
@@ -202,6 +255,9 @@ function CommentItem({
           onReact={onReact}
           audience={audience}
           audienceUserIds={audienceUserIds}
+          highlightCommentId={highlightCommentId}
+          replyMode={replyMode}
+          onReplyPress={onReplyPress}
         />
       ))}
     </View>
