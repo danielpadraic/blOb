@@ -1,12 +1,12 @@
 import {
   asStartPreset,
+  challengeScheduleTimezone,
   endsAtFromStartAndDays,
   inOneHour,
   resolveStartForPublish,
   startPresetFromValues,
   type StartPreset,
 } from '@/lib/challengeSchedule';
-import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
 import type { Challenge, ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
 import { milesToMeters, type DistanceUnit } from '@/lib/distance';
@@ -246,7 +246,7 @@ export function refreshSimpleDraftStart(draft: SimpleChallengeDraft, now = new D
     preset,
     starts_at: draft.starts_at,
     duration_days: durationDaysOf(draft),
-    timezone: resolveChallengeTimezone(),
+    timezone: challengeScheduleTimezone(),
     now,
   });
   return { ...draft, start_preset: preset, starts_at: resolved.starts_at };

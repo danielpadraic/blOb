@@ -448,10 +448,7 @@ export function ChallengeInviteCard({
   }
 
   return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={cardLabel}
-        onPress={() => void openDetail()}
+      <View
         style={{
           borderRadius: 14,
           backgroundColor: chrome?.backgroundColor ?? THEME.surface,
@@ -460,6 +457,10 @@ export function ChallengeInviteCard({
           overflow: 'hidden',
           ...themeShadow('card'),
         }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={cardLabel}
+          onPress={() => void openDetail()}>
         <View style={{ height: 80, margin: 8, marginBottom: 0, borderRadius: 10, overflow: 'hidden' }}>
           <MediaPanel
             steps={mediaSteps}
@@ -545,6 +546,7 @@ export function ChallengeInviteCard({
             <LobbyEntryPrizeRow challenge={challenge} color={THEME.textPrimary} compact />
           )}
         </View>
+        </Pressable>
         <View
           className="flex-row items-center"
           style={{
@@ -560,7 +562,7 @@ export function ChallengeInviteCard({
           {canCheckIn ? <TextAction label="Check In" onPress={onCheckIn} /> : null}
           <TextAction label="Share" onPress={onShare} />
         </View>
-      </Pressable>
+      </View>
     );
 }
 

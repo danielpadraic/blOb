@@ -4,6 +4,7 @@ import {
   inOneHour,
   resolveStartForPublish,
   startPresetFromValues,
+  tomorrowMorning,
 } from '@/lib/challengeSchedule';
 import { startTomorrowInZone } from '@/lib/challengeTimezone';
 
@@ -20,6 +21,22 @@ describe('challenge start presets', () => {
     });
     expect(Math.abs(new Date(resolved.starts_at).getTime() - inOneHour(later).getTime())).toBeLessThan(2000);
     expect(resolved.starts_at).not.toBe(original);
+  });
+
+  it('defaults Start tomorrow to next Denver morning, not UTC date and not today', () => {
+    const elevenPmDenver = new Date('2026-08-28T05:00:00.000Z');
+    const utcDate = elevenPmDenver.toISOString().slice(0, 10);
+    const resolved = resolveStartForPublish({
+      preset: 'tomorrow',
+      duration_days: 7,
+      now: elevenPmDenver,
+    });
+    expect(tomorrowMorning(elevenPmDenver).toISOString()).toBe('2026-08-28T06:00:00.000Z');
+    expect(resolved.starts_at).toBe(startTomorrowInZone(elevenPmDenver, 'America/Denver').toISOString());
+    expect(resolved.starts_at).toBe('2026-08-28T06:00:00.000Z');
+    expect(resolved.starts_at).not.toBe(`${utcDate}T00:00:00.000Z`);
+    expect(resolved.starts_at).not.toBe('2026-08-29T00:00:00.000Z');
+    expect(new Date(resolved.starts_at).getTime()).toBeGreaterThan(elevenPmDenver.getTime());
   });
 
   it('resolves Start tomorrow as the next Denver calendar date with a 30-day end', () => {

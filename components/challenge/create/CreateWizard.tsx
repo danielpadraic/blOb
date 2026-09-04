@@ -113,13 +113,13 @@ import {
   formatChallengeEndLine,
   inOneHour,
   MAX_CHALLENGE_DURATION_DAYS,
+  challengeScheduleTimezone,
   resolveStartForPublish,
   startPresetFromValues,
   tomorrowMorning,
   withFreshSchedule,
   type StartPreset,
 } from '@/lib/challengeSchedule';
-import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
 import {
   COMPARABLE_POINTS_METHOD,
   parseComparablePointsConfig,
@@ -1458,7 +1458,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         preset: startPreset,
         starts_at: formValues.starts_at,
         duration_days: formValues.duration_days || formValues.duration_value,
-        timezone: resolveChallengeTimezone(),
+        timezone: challengeScheduleTimezone(profile?.timezone),
       });
       if (startPreset === 'custom') {
         const start = Date.parse(schedule.starts_at);
@@ -1747,6 +1747,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             isUnlimited={isUnlimited}
             startsAt={values.starts_at}
             startPreset={startPreset}
+            timeZone={challengeScheduleTimezone(profile?.timezone)}
             durationDays={values.duration_value || values.duration_days || '7'}
             frequency={values.frequency}
               onDurationTypeChange={onDurationTypeChange}
@@ -2354,6 +2355,7 @@ function DurationSlide({
   isUnlimited,
   startsAt,
   startPreset,
+  timeZone,
   durationDays,
   frequency,
   onDurationTypeChange,
@@ -2365,6 +2367,7 @@ function DurationSlide({
   isUnlimited: boolean;
   startsAt: string;
   startPreset: StartPreset;
+  timeZone: string;
   durationDays: string;
   frequency: ChallengeFrequency;
   onDurationTypeChange: (next: CreateChallengeValues['duration_type']) => void;
@@ -2393,7 +2396,9 @@ function DurationSlide({
               <Chip
                 label="Tomorrow morning"
                 selected={startPreset === 'tomorrow'}
-                onPress={() => onScheduleChange({ starts_at: tomorrowMorning().toISOString() }, 'tomorrow')}
+                onPress={() =>
+                  onScheduleChange({ starts_at: tomorrowMorning(new Date(), timeZone).toISOString() }, 'tomorrow')
+                }
               />
               <Chip
                 label="Custom"

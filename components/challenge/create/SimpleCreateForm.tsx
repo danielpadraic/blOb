@@ -85,13 +85,13 @@ import { milesToMeters } from '@/lib/distance';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import {
+  challengeScheduleTimezone,
   formatChallengeEndLine,
   inOneHour,
   resolveStartForPublish,
   tomorrowMorning,
   type StartPreset,
 } from '@/lib/challengeSchedule';
-import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
 import { defaultSentenceForMethod, makeProof } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { firstRouteParam } from '@/lib/challengeLoad';
@@ -496,7 +496,7 @@ export function SimpleCreateForm() {
         preset: draft.start_preset,
         starts_at: draft.starts_at,
         duration_days: draft.duration_preset === 'custom' ? draft.duration_days : draft.duration_preset,
-        timezone: resolveChallengeTimezone(profile?.timezone),
+        timezone: challengeScheduleTimezone(profile?.timezone),
       });
       const toPublish = { ...draft, starts_at: schedule.starts_at };
       if (toPublish.start_preset === 'custom') {
@@ -912,7 +912,7 @@ export function SimpleCreateForm() {
                   start_preset: 'tomorrow' as StartPreset,
                   starts_at: tomorrowMorning(
                     new Date(),
-                    resolveChallengeTimezone(profile?.timezone),
+                    challengeScheduleTimezone(profile?.timezone),
                   ).toISOString(),
                 })
               }

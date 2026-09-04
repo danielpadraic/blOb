@@ -2,7 +2,7 @@ import { addDays, addMonths, addWeeks, differenceInCalendarDays, differenceInHou
 
 import {
   addZonedCalendarDays,
-  resolveChallengeTimezone,
+  DEFAULT_CHALLENGE_TIMEZONE,
   startTomorrowInZone,
 } from '@/lib/challengeTimezone';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -25,9 +25,15 @@ export function defaultChallengeStart(now = new Date()): Date {
   return next;
 }
 
-/** Next local calendar date at 00:00 in the challenge timezone. Not +24h. */
+/** Named challenge zone, else America/Denver. Never the device Intl zone. */
+export function challengeScheduleTimezone(timeZone?: string | null): string {
+  const named = String(timeZone ?? '').trim();
+  return named || DEFAULT_CHALLENGE_TIMEZONE;
+}
+
+/** Next local calendar date at 00:00 in the challenge timezone. Not +24h. Not UTC date. */
 export function tomorrowMorning(now = new Date(), timeZone?: string | null): Date {
-  return startTomorrowInZone(now, resolveChallengeTimezone(timeZone));
+  return startTomorrowInZone(now, challengeScheduleTimezone(timeZone));
 }
 
 export function inOneHour(now = new Date()): Date {
@@ -229,13 +235,13 @@ export function formatScheduleDateTime(iso: string): string {
   return format(date, 'EEE, MMM d · h:mm a');
 }
 
-export function startPresetFor(iso: string, now = new Date()): StartPreset {
+export function startPresetFor(iso: string, now = new Date(), timeZone?: string | null): StartPreset {
   const date = parseScheduleDate(iso);
   if (!date) {
     return 'custom';
   }
   const hour = inOneHour(now).getTime();
-  const morning = tomorrowMorning(now).getTime();
+  const morning = tomorrowMorning(now, timeZone).getTime();
   const stamp = date.getTime();
   if (Math.abs(stamp - hour) < 2 * 60 * 1000) {
     return 'hour';
@@ -247,8 +253,12 @@ export function startPresetFor(iso: string, now = new Date()): StartPreset {
 }
 
 /** Old drafts without start_preset still classify via the 2-minute window. */
-export function startPresetFromValues(startsAt: string | null | undefined, now = new Date()): StartPreset {
-  return startPresetFor(startsAt ?? '', now);
+export function startPresetFromValues(
+  startsAt: string | null | undefined,
+  now = new Date(),
+  timeZone?: string | null,
+): StartPreset {
+  return startPresetFor(startsAt ?? '', now, timeZone);
 }
 
 export function asStartPreset(value: unknown): StartPreset | null {
@@ -267,8 +277,8 @@ export function resolveStartForPublish(input: {
   now?: Date;
 }): { starts_at: string; ends_at: string } {
   const now = input.now ?? new Date();
-  const timeZone = resolveChallengeTimezone(input.timezone);
-  const preset = input.preset ?? startPresetFromValues(input.starts_at, now);
+  const timeZone = challengeScheduleTimezone(input.timezone);
+  const preset = input.preset ?? startPresetFromValues(input.starts_at, now, timeZone);
   const start =
     preset === 'hour'
       ? inOneHour(now)

@@ -153,10 +153,7 @@ export function LobbyListCardView({
   }
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={cardLabel}
-      onPress={onOpenDetail}
+    <View
       style={{
         borderRadius: CARD_RADIUS,
         backgroundColor: body,
@@ -167,6 +164,10 @@ export function LobbyListCardView({
         overflow: 'hidden',
         ...themeShadow('card'),
       }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={cardLabel}
+        onPress={onOpenDetail}>
       <View
         style={{
           height: HERO_H,
@@ -345,6 +346,7 @@ export function LobbyListCardView({
           </AppText>
         ) : null}
       </View>
+      </Pressable>
 
       <View
         className="flex-row items-center"
@@ -373,7 +375,7 @@ export function LobbyListCardView({
         </View>
         <TextAction label="Share" official={official} onPress={onShare} />
       </View>
-    </Pressable>
+    </View>
   );
 }
 

@@ -6,8 +6,7 @@ import { notifyFriendsOfCreatedChallenge } from '@/lib/notifications';
 import { applyLaneForPublish } from '@/lib/challengeLane';
 import { parseComparablePointsConfig } from '@/lib/comparablePoints';
 import { asPrivacyMode } from '@/lib/privacyMode';
-import { durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
-import { resolveChallengeTimezone } from '@/lib/challengeTimezone';
+import { challengeScheduleTimezone, durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
   fetchChallengeShareState,
   fetchActiveChallenges,
@@ -905,7 +904,7 @@ export function useCreateChallenge() {
           proofTypeFromMethod(firstProofMethod(namedProofs)),
         proof_review: values.proof_review ?? 'auto',
         payout_mode: payout.payout_mode,
-        timezone: resolveChallengeTimezone(),
+        timezone: challengeScheduleTimezone(profile.timezone),
         start_rule: 'at_starts_at',
         discoverability: values.discoverability ?? null,
         privacy_mode: asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane),

@@ -125,10 +125,7 @@ export function FeaturedOfficialStrip() {
 
   return (
     <TourAnchor id="tour-official">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${title}. ${armingLine ?? (showFill && fill ? `${fill.count}/${fill.min} to start` : '')}. ${joinLabel}`}
-        onPress={openDetail}
+      <View
         style={{
           minHeight: 58,
           borderRadius: 18,
@@ -140,6 +137,16 @@ export function FeaturedOfficialStrip() {
           paddingRight: 8,
           paddingLeft: 10,
         }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${title}. ${armingLine ?? (showFill && fill ? `${fill.count}/${fill.min} to start` : '')}`}
+          onPress={openDetail}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}>
         <View
           style={{
             width: 3,
@@ -189,14 +196,12 @@ export function FeaturedOfficialStrip() {
             </View>
           ) : null}
         </View>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={joinLabel}
           disabled={joinSheet.loading}
-          onPress={(event) => {
-            event.stopPropagation();
-            onJoin();
-          }}
+          onPress={onJoin}
           style={{
             minHeight: 36,
             paddingHorizontal: 14,
@@ -210,7 +215,7 @@ export function FeaturedOfficialStrip() {
             {joinLabel}
           </AppText>
         </Pressable>
-      </Pressable>
+      </View>
     </TourAnchor>
   );
 }
