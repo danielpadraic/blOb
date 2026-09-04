@@ -184,6 +184,31 @@ describe('official weekly proofs', () => {
     ).toBe(false);
   });
 
+  it('keeps the composer visible when a written note is required too', () => {
+    // Prayer needs photo + note. A full-screen camera would hide the note requirement.
+    expect(
+      shouldAutoOpenCheckinCamera({
+        skippedAuto: false,
+        honorOnly: false,
+        hasExistingFrames: false,
+        nextPhotoEmpty: true,
+        preferHealth: false,
+        needsWrittenProof: true,
+      }),
+    ).toBe(false);
+    // Photo-only challenges still open the camera first.
+    expect(
+      shouldAutoOpenCheckinCamera({
+        skippedAuto: false,
+        honorOnly: false,
+        hasExistingFrames: false,
+        nextPhotoEmpty: true,
+        preferHealth: false,
+        needsWrittenProof: false,
+      }),
+    ).toBe(true);
+  });
+
   it('counts a Health attach as the heart-rate slot', () => {
     const hr: ChallengeProof = { id: 'hr', name: 'Heart rate', method: 'hr' };
     expect(partSatisfies(hr, { method: 'hr', healthWorkoutId: 'hw-1' })).toBe(true);

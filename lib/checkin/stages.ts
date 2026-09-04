@@ -76,12 +76,15 @@ export function shouldAutoOpenCheckinCamera(input: {
   hasExistingFrames: boolean;
   nextPhotoEmpty: boolean;
   preferHealth: boolean;
+  /** A written note is required too, so the slots must be readable before a camera covers them. */
+  needsWrittenProof?: boolean;
 }): boolean {
   return (
     !input.skippedAuto &&
     !input.honorOnly &&
     !input.hasExistingFrames &&
     input.nextPhotoEmpty &&
-    !input.preferHealth
+    !input.preferHealth &&
+    !input.needsWrittenProof
   );
 }

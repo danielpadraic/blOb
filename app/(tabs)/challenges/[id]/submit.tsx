@@ -282,6 +282,12 @@ function SubmitWorkoutInner() {
   const rawPhase = checkinQuery.data?.phase ?? 'none';
   const phase = totalCount && rawPhase === 'submitted' ? 'none' : rawPhase;
   const honorOnly = proofsAreHonorOnly(proofSteps);
+  /**
+   * Prayer needs a photo and a written note. Auto-opening the camera hides the note requirement
+   * behind a full-screen viewfinder, so these challenges land on the composer with both slots
+   * visible and the user taps the photo slot when ready.
+   */
+  const needsWrittenProof = proofSteps.some((proof) => proof.method === 'checkin');
   const mentionAudienceIds = useMemo(() => {
     const ids = new Set<string>();
     if (challenge?.created_by) {
@@ -355,6 +361,7 @@ function SubmitWorkoutInner() {
         hasExistingFrames,
         nextPhotoEmpty,
         preferHealth: false,
+        needsWrittenProof,
       }),
       pathname,
     });
@@ -1215,11 +1222,13 @@ function SubmitWorkoutInner() {
       hasExistingFrames,
       nextPhotoEmpty: Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? ''),
       preferHealth: shouldAutoHealth,
+      needsWrittenProof,
     });
   const shouldOpenGuided =
     checkinReady &&
     !skippedAuto &&
     !honorOnly &&
+    !needsWrittenProof &&
     Boolean(nextPhoto) &&
     !drafts[nextPhoto?.id ?? '']?.uri &&
     !serverHasProof(nextPhoto?.id ?? '');
