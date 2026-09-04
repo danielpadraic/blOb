@@ -252,23 +252,27 @@ export function readWebOrientationSnapshot(): {
   windowWidth: number;
   windowHeight: number;
 } {
+  const empty = { screenType: null, screenAngle: null, windowWidth: 0, windowHeight: 0 };
   if (typeof window === 'undefined') {
-    return { screenType: null, screenAngle: null, windowWidth: 0, windowHeight: 0 };
+    return empty;
   }
-  const screen = window.screen as Screen & {
-    orientation?: { type?: string; angle?: number };
-  };
-  const type = screen.orientation?.type ?? null;
-  const angle =
-    typeof screen.orientation?.angle === 'number'
-      ? screen.orientation.angle
-      : typeof (window as { orientation?: number }).orientation === 'number'
-        ? (window as { orientation?: number }).orientation ?? null
-        : null;
-  return {
-    screenType: type,
-    screenAngle: angle,
-    windowWidth: window.innerWidth,
-    windowHeight: window.innerHeight,
-  };
+  try {
+    const screen = (window as { screen?: { orientation?: { type?: string; angle?: number } } }).screen;
+    const type = screen?.orientation?.type ?? null;
+    const windowAngle = (window as { orientation?: number }).orientation;
+    const angle =
+      typeof screen?.orientation?.angle === 'number'
+        ? screen.orientation.angle
+        : typeof windowAngle === 'number'
+          ? windowAngle
+          : null;
+    return {
+      screenType: type,
+      screenAngle: angle,
+      windowWidth: typeof window.innerWidth === 'number' ? window.innerWidth : 0,
+      windowHeight: typeof window.innerHeight === 'number' ? window.innerHeight : 0,
+    };
+  } catch {
+    return empty;
+  }
 }

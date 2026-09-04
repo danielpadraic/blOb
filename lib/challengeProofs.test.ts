@@ -17,6 +17,7 @@ import {
   signupProofLines,
   uniqueProofUrls,
 } from '@/lib/challengeProofs';
+import { requiredChallengeProofs } from '@/lib/challenges';
 import { SIMPLE_PROOF_METHODS } from '@/lib/simpleChallenge';
 
 describe('signupProofLines', () => {
@@ -238,5 +239,28 @@ describe('check-in slot hydrate', () => {
       'post',
       'hr',
     ]);
+  });
+});
+
+describe('points task proofs beat leftover photo type', () => {
+  it('opens a note check-in for Prayer, not a selfie camera', () => {
+    const proofs = requiredChallengeProofs({
+      challenge_type: 'points',
+      scoring_method: 'consistency',
+      proofs: [{ id: 'invented', name: 'Post a photo of the work.', method: 'photo' }],
+      proof_type: 'photo',
+      proof_requirements: [],
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Pray for somebody',
+          points: 10,
+          once: false,
+          proof_required: true,
+          proof_types: ['text_note'],
+        },
+      ],
+    });
+    expect(proofs.map((proof) => proof.method)).toEqual(['checkin']);
   });
 });

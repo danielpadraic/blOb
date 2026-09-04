@@ -12,6 +12,7 @@ import {
   checkinWebSnapRotateDegrees,
   exifOrientationToDegrees,
   readJpegExifOrientation,
+  readWebOrientationSnapshot,
 } from '@/lib/checkinPhotoOrientation';
 
 function jpegWithOrientation(orientation: number): Uint8Array {
@@ -76,5 +77,25 @@ describe('readJpegExifOrientation', () => {
     expect(readJpegExifOrientation(jpegWithOrientation(6))).toBe(6);
     expect(exifOrientationToDegrees(6)).toBe(90);
     expect(readJpegExifOrientation(new Uint8Array([0x00, 0x01]))).toBeNull();
+  });
+});
+
+describe('readWebOrientationSnapshot', () => {
+  it('does not throw when window.screen is missing (iOS native)', () => {
+    const previous = globalThis.window;
+    (globalThis as { window?: unknown }).window = {
+      innerWidth: 390,
+      innerHeight: 844,
+    };
+    try {
+      expect(readWebOrientationSnapshot()).toEqual({
+        screenType: null,
+        screenAngle: null,
+        windowWidth: 390,
+        windowHeight: 844,
+      });
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
   });
 });

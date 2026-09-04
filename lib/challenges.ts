@@ -1350,6 +1350,15 @@ export async function fetchLobbyFriendCounts(
   }
 }
 
+function explicitTaskProofTypes(
+  challenge: { tasks?: Challenge['tasks'] | null } | null | undefined,
+): ProofType[] {
+  const fromTasks = (challenge?.tasks ?? [])
+    .filter((task) => task.proof_required)
+    .flatMap((task) => task.proof_types ?? []);
+  return [...new Set(fromTasks)].filter(Boolean) as ProofType[];
+}
+
 export function requiredProofTypes(
   challenge: Pick<
     Challenge,
@@ -1368,10 +1377,7 @@ export function requiredProofTypes(
   > | null | undefined,
 ): ProofType[] {
   if (isPointsChallenge(challenge) && !usesComparablePointsScoring(challenge)) {
-    const fromTasks = (challenge?.tasks ?? [])
-      .filter((task) => task.proof_required)
-      .flatMap((task) => task.proof_types ?? []);
-    const unique = [...new Set(fromTasks)].filter(Boolean) as ProofType[];
+    const unique = explicitTaskProofTypes(challenge);
     if (unique.length > 0) {
       return unique.slice(0, 3);
     }
@@ -1432,6 +1438,16 @@ export function requiredChallengeProofs(
     | 'category'
   > | null | undefined,
 ): ChallengeProof[] {
+  if (
+    isPointsChallenge(challenge) &&
+    !usesComparablePointsScoring(challenge) &&
+    !isCorporateChallenge(challenge)
+  ) {
+    const taskTypes = explicitTaskProofTypes(challenge);
+    if (taskTypes.length > 0) {
+      return namedProofsFromLegacyTypes(taskTypes);
+    }
+  }
   const stored = parseChallengeProofs(challenge?.proofs);
   const requirements =
     usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)

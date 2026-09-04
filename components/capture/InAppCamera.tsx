@@ -120,7 +120,11 @@ export function InAppCamera({
   const insets = useSafeAreaInsets();
   const windowSize = useWindowDimensions();
   const [previewBox, setPreviewBox] = useState({ width: windowSize.width, height: windowSize.height });
-  const [webOrient, setWebOrient] = useState(readWebOrientationSnapshot);
+  const [webOrient, setWebOrient] = useState(() =>
+    Platform.OS === 'web'
+      ? readWebOrientationSnapshot()
+      : { screenType: null as string | null, screenAngle: null as number | null, windowWidth: 0, windowHeight: 0 },
+  );
   const navFocused = useIsFocused();
   const pathname = usePathname();
   const web = Platform.OS === 'web';
@@ -187,15 +191,23 @@ export function InAppCamera({
     }
     const sync = () => setWebOrient(readWebOrientationSnapshot());
     sync();
-    const screen = window.screen as Screen & { orientation?: { unlock?: () => Promise<void>; addEventListener?: (name: string, fn: () => void) => void; removeEventListener?: (name: string, fn: () => void) => void } };
-    void screen.orientation?.unlock?.().catch(() => undefined);
+    const screen = window.screen as
+      | (Screen & {
+          orientation?: {
+            unlock?: () => Promise<void>;
+            addEventListener?: (name: string, fn: () => void) => void;
+            removeEventListener?: (name: string, fn: () => void) => void;
+          };
+        })
+      | undefined;
+    void screen?.orientation?.unlock?.().catch(() => undefined);
     window.addEventListener('resize', sync);
     window.addEventListener('orientationchange', sync);
-    screen.orientation?.addEventListener?.('change', sync);
+    screen?.orientation?.addEventListener?.('change', sync);
     return () => {
       window.removeEventListener('resize', sync);
       window.removeEventListener('orientationchange', sync);
-      screen.orientation?.removeEventListener?.('change', sync);
+      screen?.orientation?.removeEventListener?.('change', sync);
     };
   }, [checkin, web]);
 
