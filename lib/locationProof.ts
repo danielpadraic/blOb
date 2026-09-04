@@ -51,15 +51,6 @@ export function locationProofSentence(place?: Pick<LocationPlace, 'label'> | nul
   return label ? `Check in at ${label}.` : 'Check in at the pinned place.';
 }
 
-export function locationStartCaption(name: string, place: string): string {
-  return `${name.trim() || 'Someone'} is at ${placeLabel({ label: place })}!`;
-}
-
-export function locationCompleteCaption(name: string, challengeTitle: string): string {
-  const title = challengeTitle.trim() || 'the challenge';
-  return `${name.trim() || 'Someone'} checked in for ${title}.`;
-}
-
 export function locationTooFarCopy(place?: string | null): string {
   return `You don’t look close enough to ${placeLabel({ label: place ?? '' })}. Move closer and try again.`;
 }

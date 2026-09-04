@@ -11,6 +11,7 @@ const AUTO_CAPTION = [
   /^started check-in\.?$/i,
   /^.+ is .+!$/,
   /^.+ checked in for .+\.?$/i,
+  /^.+ was exercising\b/i,
   /^added (a |an |the )?(photo|video|pre-workout selfie|post-workout selfie|heart-rate proof|check-in note)\.?$/i,
 ];
 

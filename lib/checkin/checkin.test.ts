@@ -15,8 +15,7 @@ import {
   boardProgressLabel,
   canSendCheckin,
   shouldAutoOpenCheckinCamera,
-  checkinAutoNotes,
-  checkinBeginCaption,
+  checkinPostBody,
   checkinSendWhyNot,
   checkinStageLabel,
   checkinUploadStayCopy,
@@ -121,25 +120,10 @@ describe('official weekly proofs', () => {
     );
     expect(canSendCheckin(false, false, 'in_progress', false)).toBe(false);
     expect(canSendCheckin(false, true, 'in_progress', false)).toBe(true);
-    expect(checkinBeginCaption('Sam', 'laundry')).toBe('Sam is laundry!');
-    expect(
-      checkinAutoNotes({
-        complete: false,
-        caption: '',
-        name: 'Sam',
-        task: 'laundry',
-        challengeTitle: 'Kids chores',
-      }),
-    ).toBe('Sam is laundry!');
-    expect(
-      checkinAutoNotes({
-        complete: true,
-        caption: '',
-        name: 'Sam',
-        task: 'laundry',
-        challengeTitle: 'Kids chores',
-      }),
-    ).toBe('Sam checked in for Kids chores.');
+    expect(checkinPostBody('')).toBe('Check-in Complete');
+    expect(checkinPostBody('  ')).toBe('Check-in Complete');
+    expect(checkinPostBody('legs day')).toBe('legs day');
+    expect(checkinPostBody(' legs day ')).toBe('legs day');
     expect(canSendCheckin(true, false, 'none', false)).toBe(true);
     expect(canSendCheckin(true, true, 'submitted', false)).toBe(true);
     expect(canSendCheckin(false, true, 'ready', true)).toBe(false);

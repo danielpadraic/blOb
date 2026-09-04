@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clampLocationRadius,
   locationAccuracyOk,
-  locationCompleteCaption,
   locationPartSatisfies,
-  locationStartCaption,
   locationTooFarCopy,
   pointInLocationFence,
   publicLocationPlace,
@@ -42,9 +40,7 @@ describe('location proof', () => {
     ).toBe(false);
   });
 
-  it('uses the product captions and fence copy', () => {
-    expect(locationStartCaption('Sam', 'Home')).toBe('Sam is at Home!');
-    expect(locationCompleteCaption('Sam', 'Kids chores')).toBe('Sam checked in for Kids chores.');
+  it('uses the fence copy', () => {
     expect(locationTooFarCopy('Home')).toBe('You don’t look close enough to Home. Move closer and try again.');
     expect(locationPartSatisfies({ in_fence: true })).toBe(true);
     expect(locationPartSatisfies({ in_fence: false })).toBe(false);

@@ -24,12 +24,7 @@ export {
   type SaveCheckinProofInput,
   type UploadCheckinProofFn,
 } from './rpc';
-export {
-  checkinAutoNotes,
-  checkinBeginCaption,
-  checkinCompleteCaption,
-  checkinTaskLabel,
-} from './captions';
+export { checkinPostBody, checkinTaskLabel } from './captions';
 export {
   CHECKIN_SAVE_PERMISSION,
   CHECKIN_UPLOAD_SAVED_NATIVE,

@@ -32,9 +32,8 @@ import {
   CHECKIN_BOB,
   canSendCheckin,
   shouldAutoOpenCheckinCamera,
-  checkinAutoNotes,
+  checkinPostBody,
   checkinSendWhyNot,
-  checkinTaskLabel,
   checkinUploadStayCopy,
   classifyCheckinError,
   isLikelyOffline,
@@ -70,7 +69,7 @@ import {
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
 import { safeUserId, sessionAuthor } from '@/lib/safeIds';
-import { attachClipPostId, createStory, personDisplayName } from '@/lib/social';
+import { attachClipPostId, createStory } from '@/lib/social';
 import {
   applyCheckinShareLock,
   checkinHidesHomeShare,
@@ -90,9 +89,9 @@ import {
   openAppSettings,
   permissionCopy,
 } from '@/lib/mediaPermissions';
+import { checkinExtraCaption } from '@/lib/checkinPost';
 import { copy, interpolateCopy } from '@/lib/copy';
 import {
-  composeCheckinNotes,
   proofPrefersHealthAttach,
   stripHealthSummaryFromNotes,
   toCheckinHealthProof,
@@ -133,6 +132,10 @@ type SlotDraft = {
   durationMs?: number | null;
   caption?: string | null;
 };
+
+function shareFieldFromNotes(notes?: string | null, snapshot?: CheckinHealthProof | null): string {
+  return checkinExtraCaption(stripHealthSummaryFromNotes(notes ?? '', snapshot));
+}
 
 function slotPart(
   proof: ChallengeProof,
@@ -422,7 +425,7 @@ function SubmitWorkoutInner() {
     });
     if (checkinQuery.data?.notes) {
       const snapshot = Object.values(parts).map((part) => part.health).find(Boolean) ?? null;
-      const text = stripHealthSummaryFromNotes(String(checkinQuery.data.notes), snapshot);
+      const text = shareFieldFromNotes(checkinQuery.data.notes, snapshot);
       setCaption((current) => {
         if (current.text.trim() || text === current.text) {
           return current;
@@ -746,16 +749,7 @@ function SubmitWorkoutInner() {
       return;
     }
     try {
-      const notes = composeCheckinNotes(
-        checkinAutoNotes({
-          complete: readyNow,
-          caption: caption.text,
-          name: personDisplayName(profile),
-          task: checkinTaskLabel(challenge),
-          challengeTitle: challengeDisplayTitle(challenge),
-        }),
-        attachedHealth(),
-      );
+      const body = checkinPostBody(caption.text);
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       for (const proof of proofSteps) {
         if (proof.method === 'honor') {
@@ -775,7 +769,7 @@ function SubmitWorkoutInner() {
         if (!partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance })) {
           continue;
         }
-        const row = await persistProof(proof, draft, notes);
+        const row = await persistProof(proof, draft, body);
         if (row?.proof_parts) {
           savedParts = row.proof_parts;
         }
@@ -817,7 +811,7 @@ function SubmitWorkoutInner() {
       }
       const saved = await saveProof.mutateAsync({
         challengeId: id,
-        notes,
+        notes: body,
         extraMedia: extraUrls,
       });
       // Extra photos/videos/GIFs never block Send. Board counts required proof.
@@ -867,7 +861,7 @@ function SubmitWorkoutInner() {
                 author_id: author.id,
                 author,
                 challenge_id: id,
-                content: caption.text || null,
+                content: body,
                 media_urls: mediaUrls,
                 source: 'checkin',
                 checkin_id: checkinId,
@@ -1313,7 +1307,7 @@ function SubmitWorkoutInner() {
         drafts={drafts}
         extras={extras}
         audienceUserIds={mentionAudienceIds}
-        initialCaption={stripHealthSummaryFromNotes(checkinQuery.data?.notes ?? '', attachedHealth())}
+        initialCaption={shareFieldFromNotes(checkinQuery.data?.notes, attachedHealth())}
         allReady={allReady}
         busy={busy}
         canSend={canSend}

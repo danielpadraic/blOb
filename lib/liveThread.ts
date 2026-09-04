@@ -43,23 +43,9 @@ export function liveCheckinLabel(post: CheckinPostLike): 'Check-in' | 'Check-in 
   return isCheckinCompleteStage(post.checkin_stage) ? 'Check-in Complete' : 'Check-in';
 }
 
-/** checkinBeginCaption shape: “{Name} is {task}!”. composeCheckinNotes may add lines under it. */
-const BEGIN_NOTE = /^.+\sis\s.+!$/;
-
-/** Live copy for the check-in receipt: the Begin line while it is partial, Complete when it is done. */
+/** Stage chip on the proof thumb. Never an invented activity sentence. */
 export function liveCheckinHeadline(post: CheckinPostLike & { content?: string | null }): string {
-  if (isCheckinCompleteStage(post.checkin_stage)) {
-    return 'Check-in Complete';
-  }
-  const first =
-    String(post.content ?? '')
-      .split('\n')
-      .map((line) => line.trim())
-      .find(Boolean) ?? '';
-  if (first.length <= 90 && BEGIN_NOTE.test(first)) {
-    return first;
-  }
-  return 'Check-in';
+  return liveCheckinLabel(post);
 }
 
 /** Per-proof caption for the maximized proof. Slot caption first, then the receipt line. */

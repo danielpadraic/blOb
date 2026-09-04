@@ -41,14 +41,21 @@ describe('formatLiveClock', () => {
 });
 
 describe('liveCheckinHeadline', () => {
-  it('keeps the Begin line on the first required proof', () => {
+  it('never shows an invented activity sentence', () => {
     expect(
       liveCheckinHeadline({
         source: 'checkin',
         checkin_stage: 'started',
         content: 'Daniel is working out!',
       }),
-    ).toBe('Daniel is working out!');
+    ).toBe('Check-in');
+    expect(
+      liveCheckinHeadline({
+        source: 'checkin',
+        checkin_stage: 'started',
+        content: 'Daniel Harder was exercising for 30-minutes.',
+      }),
+    ).toBe('Check-in');
   });
 
   it('reads Check-in Complete once every required slot is in', () => {
@@ -56,26 +63,26 @@ describe('liveCheckinHeadline', () => {
       liveCheckinHeadline({
         source: 'checkin',
         checkin_stage: 'complete',
-        content: 'Daniel is working out!',
+        content: 'legs day',
       }),
     ).toBe('Check-in Complete');
   });
 
-  it('falls back to Check-in when the caption is the athlete’s own words', () => {
+  it('keeps the stage chip when the caption is the athlete’s own words', () => {
     expect(
       liveCheckinHeadline({ source: 'checkin', checkin_stage: 'started', content: 'leg day' }),
     ).toBe('Check-in');
     expect(liveCheckinHeadline({ source: 'checkin', checkin_stage: 'started' })).toBe('Check-in');
   });
 
-  it('ignores the health lines composeCheckinNotes appends under the Begin line', () => {
+  it('does not treat health lines as the Live headline', () => {
     expect(
       liveCheckinHeadline({
         source: 'checkin',
         checkin_stage: 'started',
-        content: 'Daniel is working out!\nApple Watch · 42 min · 138 bpm',
+        content: 'Check-in Complete\nApple Watch · 42 min · 138 bpm',
       }),
-    ).toBe('Daniel is working out!');
+    ).toBe('Check-in');
   });
 });
 

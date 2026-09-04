@@ -92,6 +92,9 @@ describe('post edit lock', () => {
     expect(checkinCardCaption('Sam is laundry!', 'Laundry', '2026-08-27T12:00:00.000Z')).toBe(
       'Sam is laundry!',
     );
+    expect(checkinCardCaption('Check-in Complete', null, null)).toBe('');
+    expect(checkinCardCaption('legs day', null, null)).toBe('legs day');
+    expect(checkinCardCaption('Daniel Harder was exercising for 30-minutes.', null, null)).toBe('');
   });
 
   it('reads owner edit history captions', () => {

@@ -1,14 +1,8 @@
 import { challengeTaskTitles } from '@/lib/challengeRuleCopy';
-import { locationCompleteCaption } from '@/lib/locationProof';
 
-export function checkinBeginCaption(name: string, task: string): string {
-  const who = name.trim() || 'Someone';
-  const activity = task.trim() || 'checking in';
-  return `${who} is ${activity}!`;
-}
-
-export function checkinCompleteCaption(name: string, challengeTitle: string): string {
-  return locationCompleteCaption(name, challengeTitle);
+/** Feed post body: the share field, or Check-in Complete when that field is empty. */
+export function checkinPostBody(userCaption?: string | null): string {
+  return (userCaption ?? '').trim() || 'Check-in Complete';
 }
 
 export function checkinTaskLabel(challenge: {
@@ -25,21 +19,4 @@ export function checkinTaskLabel(challenge: {
     return first;
   }
   return 'checking in';
-}
-
-export function checkinAutoNotes(input: {
-  complete: boolean;
-  caption?: string | null;
-  name: string;
-  task: string;
-  challengeTitle: string;
-}): string {
-  const written = input.caption?.trim() ?? '';
-  if (written) {
-    return written;
-  }
-  if (input.complete) {
-    return checkinCompleteCaption(input.name, input.challengeTitle);
-  }
-  return checkinBeginCaption(input.name, input.task);
 }
