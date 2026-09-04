@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { reportBadgeActivity } from '@/lib/badgeActivity';
+import { isCreatorAccount } from '@/lib/creator';
+import { isOfficialAccount } from '@/lib/official';
 import { supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
@@ -68,14 +70,14 @@ export function useToggleFollow(userId?: string | null) {
       if (nextFollowing) {
         const { data: target, error: profileError } = await supabase
           .from('profiles')
-          .select('is_creator')
+          .select('id, username, is_creator, is_official')
           .eq('id', userId)
           .maybeSingle();
         if (profileError) {
           throw new Error(getErrorMessage(profileError));
         }
-        if (!target?.is_creator) {
-          throw new Error('You can only follow Creators.');
+        if (!isCreatorAccount(target) && !isOfficialAccount(target)) {
+          throw new Error('You can only follow Creators or Official.');
         }
         const { error } = await supabase.from('follows').insert({
           follower_id: user.id,

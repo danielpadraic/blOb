@@ -173,6 +173,9 @@ describe('circle invite copy', () => {
     expect(circleNotificationPath('circle_post', 'circ-1', 'p9')).toBe(
       '/circles/circ-1?tab=chat&postId=p9',
     );
+    expect(circleNotificationPath('circle_post', 'circ-1', 'p9', 'c-4')).toBe(
+      '/circles/circ-1?tab=chat&postId=p9&comments=1&commentId=c-4',
+    );
     expect(circleNotificationPath('circle_challenge_share', 'circ-1', 'p2')).toBe(
       '/circles/circ-1?tab=chat&postId=p2',
     );

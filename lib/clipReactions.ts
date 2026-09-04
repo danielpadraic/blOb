@@ -54,9 +54,9 @@ export async function saveLastClipReaction(type: ReactionType): Promise<void> {
 /** Frosted comments overlay — ~40% of the video, ~48% with the keyboard. */
 export function commentsDrawerHeight(viewportHeight: number, keyboardVisible = false): number {
   if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) {
-    return keyboardVisible ? 220 : 180;
+    return keyboardVisible ? 260 : 180;
   }
-  return Math.round(viewportHeight * (keyboardVisible ? 0.48 : 0.4));
+  return Math.round(viewportHeight * (keyboardVisible ? 0.56 : 0.4));
 }
 
 /** Lift the drawer only when the watch shell did not already follow visualViewport. */

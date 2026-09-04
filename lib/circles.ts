@@ -4,6 +4,7 @@ import {
   fetchJoinedLobbyChallenges,
 } from '@/lib/challenges';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { withCommentQuery } from '@/lib/commentDeepLink';
 import { copy, type CopyTone } from '@/lib/copy';
 import { isPrivateCorporate } from '@/lib/privacyMode';
 import { circleDetailHref } from '@/lib/routes';
@@ -167,6 +168,7 @@ export function circleNotificationPath(
   type: string,
   circleId?: string | null,
   postId?: string | null,
+  commentId?: string | null,
 ): string | null {
   const id = String(circleId ?? '').trim();
   if (!id) {
@@ -177,7 +179,8 @@ export function circleNotificationPath(
   }
   if (type === 'circle_post' || type === 'circle_challenge_share') {
     const post = String(postId ?? '').trim();
-    return post ? `/circles/${id}?tab=chat&postId=${post}` : `/circles/${id}?tab=chat`;
+    const path = post ? `/circles/${id}?tab=chat&postId=${post}` : `/circles/${id}?tab=chat`;
+    return commentId ? withCommentQuery(path, commentId) : path;
   }
   if (type === 'circle_invite_accepted' || type === 'circle_join') {
     return `/circles/${id}`;

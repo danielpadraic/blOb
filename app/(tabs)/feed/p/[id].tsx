@@ -32,6 +32,7 @@ export default function PostThreadScreen() {
           commenting={createComment.isPending}
           highlightCommentId={commentId}
           startThreadOpen
+          commentsReady={!post.isLoading && post.isFetched}
           onReact={(type, commentIdArg) =>
             toggleReaction.mutate({ post: post.data!, type, commentId: commentIdArg })
           }

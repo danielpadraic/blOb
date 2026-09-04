@@ -362,7 +362,7 @@ export default function PublicProfileScreen() {
                   }
                   onPress={friendAction}
                 />
-                {isCreatorAccount(profile) ? (
+                {isCreatorAccount(profile) || isOfficialAccount(profile) ? (
                   <Button
                     title={follow.isFollowing ? 'Following' : 'Follow'}
                     size="sm"

@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { challengeInviteMessage } from '@/lib/challengeFeedPost';
 import {
   fetchNotifications,
+  fetchUnreadNotificationCount,
   inviteToChallenge,
   markNotificationsRead,
 } from '@/lib/notifications';
@@ -15,16 +16,6 @@ import type { AppNotification } from '@/lib/types';
 
 const NOTIFICATIONS_STALE_MS = 30_000;
 const REALTIME_INVALIDATE_MIN_MS = 2_000;
-
-function unreadCountFromList(items: AppNotification[]) {
-  let count = 0;
-  for (const item of items) {
-    if (!item.read_at) {
-      count += 1;
-    }
-  }
-  return count;
-}
 
 function notificationChannelName(userId: string) {
   return `notifications:${userId}`;
@@ -60,12 +51,11 @@ export function useUnreadNotificationCount() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['notifications', user?.id],
+    queryKey: ['notifications', user?.id, 'unread'],
     enabled: Boolean(user?.id),
     staleTime: NOTIFICATIONS_STALE_MS,
     refetchOnMount: false,
-    queryFn: fetchNotifications,
-    select: unreadCountFromList,
+    queryFn: fetchUnreadNotificationCount,
   });
 }
 
@@ -157,6 +147,9 @@ export function useMarkNotificationsRead() {
       if (context?.previous) {
         queryClient.setQueryData(['notifications', user?.id], context.previous);
       }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['notifications', user?.id, 'unread'] });
     },
   });
 }

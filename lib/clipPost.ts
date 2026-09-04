@@ -1,3 +1,5 @@
+import { visibleCommentCount } from '@/lib/commentEdit';
+
 export type ClipKind = 'story' | 'reel';
 
 export type ClipSocialCounts = {
@@ -31,7 +33,7 @@ export function clipSocialCounts(post: {
 } | null | undefined): ClipSocialCounts {
   return {
     reactions: post?.reactions?.length ?? 0,
-    comments: post?.comments?.length ?? 0,
+    comments: visibleCommentCount(post?.comments as Array<{ deleted_at?: string | null }> | null),
   };
 }
 

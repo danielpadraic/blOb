@@ -14,6 +14,7 @@ import {
   type HomeRoundsContext,
 } from '@/lib/homeRounds';
 import { isEndedPrizeStatus } from '@/lib/challengePot';
+import { isCreatorAccount } from '@/lib/creator';
 import { isOfficialAccount, OFFICIAL_BOB_ID } from '@/lib/official';
 import { fetchSettledPrizePools } from '@/lib/settlement';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
@@ -492,12 +493,12 @@ export async function followUser(followerId: string, followingId: string): Promi
   }
   const { data: target, error: profileError } = await supabase
     .from('profiles')
-    .select('is_creator')
+    .select('id, username, is_creator, is_official')
     .eq('id', followingId)
     .maybeSingle();
   throwIfError(profileError);
-  if (!target?.is_creator) {
-    throw new Error('You can only follow Creators.');
+  if (!isCreatorAccount(target) && !isOfficialAccount(target)) {
+    throw new Error('You can only follow Creators or Official.');
   }
   const { data, error } = await supabase
     .from('follows')

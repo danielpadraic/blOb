@@ -443,7 +443,12 @@ export function notificationHref(item: AppNotification): Href | null {
   if (data.reel_id) {
     return reelHref(data.reel_id, commentId ? { comments: true, commentId } : undefined);
   }
-  const circlePath = circleNotificationPath(item.type, notificationCircleId(data), notificationPostId(data));
+  const circlePath = circleNotificationPath(
+    item.type,
+    notificationCircleId(data),
+    notificationPostId(data),
+    commentId,
+  );
   if (circlePath) {
     return circlePath as Href;
   }

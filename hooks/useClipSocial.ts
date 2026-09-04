@@ -83,6 +83,7 @@ export function useClipSocial(input: ClipSocialInput) {
 
   return {
     post,
+    postReady: Boolean(linkedId) ? postQuery.isFetched : true,
     shares,
     shareCount: shares.length,
     commenting: createComment.isPending,

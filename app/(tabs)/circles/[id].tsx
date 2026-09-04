@@ -55,10 +55,11 @@ function CircleStackTitle({ name }: { name: string }) {
 }
 
 export default function CirclePageScreen() {
-  const params = useLocalSearchParams<{ id?: string; tab?: string; postId?: string }>();
+  const params = useLocalSearchParams<{ id?: string; tab?: string; postId?: string; commentId?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const highlightPostId = Array.isArray(params.postId) ? params.postId[0] : params.postId;
+  const highlightCommentId = Array.isArray(params.commentId) ? params.commentId[0] : params.commentId;
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -67,7 +68,9 @@ export default function CirclePageScreen() {
   const circle = circleQuery.data;
   const isMember = Boolean(circle?.my_role);
   const isHost = circle?.my_role === 'host';
-  const [pageTab, setPageTab] = useState<CirclePageTab>(() => asCirclePageTab(tabParam));
+  const [pageTab, setPageTab] = useState<CirclePageTab>(() =>
+    highlightPostId || highlightCommentId ? 'chat' : asCirclePageTab(tabParam),
+  );
   const [inviteOpen, setInviteOpen] = useState(false);
   const displayTab = asCirclePageTab(pageTab, circle ? isMember : null);
   const roster = useCircleMembers(id, isMember);
@@ -84,8 +87,12 @@ export default function CirclePageScreen() {
   const setVisibility = useUpdateCircleVisibility(id);
 
   useEffect(() => {
+    if (highlightPostId || highlightCommentId) {
+      setPageTab('chat');
+      return;
+    }
     setPageTab(asCirclePageTab(tabParam, circle ? isMember : null));
-  }, [circle, isMember, tabParam]);
+  }, [circle, highlightCommentId, highlightPostId, isMember, tabParam]);
 
   const title = circleDisplayName(circle);
   const memberLabel =
@@ -206,6 +213,7 @@ export default function CirclePageScreen() {
           canCompose
           composing={createPost.isPending}
           highlightPostId={highlightPostId}
+          highlightCommentId={highlightCommentId}
           memberIds={mentionMemberIds}
           placeholder={copy('circles.chatComposer')}
           loadingTitle="Loading"

@@ -27,7 +27,7 @@ describe('clip reactions', () => {
 
   it('sizes the frosted comments drawer at ~40%, ~48% with the keyboard', () => {
     expect(commentsDrawerHeight(700)).toBe(280);
-    expect(commentsDrawerHeight(700, true)).toBe(336);
+    expect(commentsDrawerHeight(700, true)).toBe(392);
     expect(commentsDrawerHeight(0)).toBe(180);
   });
 
