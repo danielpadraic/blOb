@@ -1050,6 +1050,7 @@ export default function ChallengeDetailScreen() {
           }
           canCompose={(isCalloutObserver || isJoined) && !participation?.eliminated_at}
           composing={createPost.isPending}
+          dayBreakChallenge={challenge ?? null}
           memberIds={mentionMemberIds}
           placeholder={isCalloutObserver ? CALLOUT_CHEER_PLACEHOLDER : undefined}
           footerReserve={stickyJoin ? stickyBlock : 0}

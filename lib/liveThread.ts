@@ -260,6 +260,15 @@ export type LiveThreadRow =
       kind: 'comment';
       comment: CommentWithAuthor;
       parent: PostWithMeta;
+    }
+  /** Full-width separator, not a bubble. Built by insertLiveDayBreaks. */
+  | {
+      id: string;
+      createdAt: string;
+      kind: 'day';
+      periodKey: string;
+      dateLine: string;
+      dayLine: string | null;
     };
 
 export function isLiveSystemPost(post: { type?: string | null } | null | undefined): boolean {

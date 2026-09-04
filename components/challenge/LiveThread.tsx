@@ -12,6 +12,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useEditPost } from '@/hooks/usePostEdit';
 import { copy } from '@/lib/copy';
+import { insertLiveDayBreaks, type LiveDayBreakChallenge } from '@/lib/liveDayBreak';
 import {
   buildLiveThreadRows,
   findLiveHighlightIndex,
@@ -61,6 +62,8 @@ type LiveThreadProps = {
   loadingTitle?: string;
   composeSource?: PostSource;
   composeAudience?: PostAudience;
+  /** Pass the challenge to get period day separators. Omit it and the thread has none. */
+  dayBreakChallenge?: LiveDayBreakChallenge | null;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose: (input: ComposeInput) => Promise<unknown> | void;
@@ -86,6 +89,7 @@ export function LiveThread({
   loadingTitle,
   composeSource = 'challenge',
   composeAudience = 'public',
+  dayBreakChallenge,
   onRefresh,
   onRetry,
   onCompose,
@@ -101,10 +105,10 @@ export function LiveThread({
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
   const [editing, setEditing] = useState<PostWithMeta | null>(null);
   const [missingComment, setMissingComment] = useState(false);
-  const rows = useMemo(
-    () => buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id))),
-    [posts],
-  );
+  const rows = useMemo(() => {
+    const built = buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id)));
+    return dayBreakChallenge ? insertLiveDayBreaks(built, dayBreakChallenge) : built;
+  }, [dayBreakChallenge, posts]);
   const commentsReady = !isLoading;
   const highlightKey = highlightCommentId
     ? `comment:${highlightCommentId}`
@@ -219,6 +223,9 @@ export function LiveThread({
 
   const renderItem = useCallback(
     ({ item }: { item: LiveThreadRow }) => {
+      if (item.kind === 'day') {
+        return <LiveDayBreakRow dateLine={item.dateLine} dayLine={item.dayLine} />;
+      }
       if (item.kind === 'comment') {
         const display = commentAsLivePost(item.comment, item.parent);
         const parentAuthor = resolveLiveAuthor(item.parent);
@@ -465,6 +472,25 @@ export function LiveThread({
       ) : (
         <View style={{ height: composerPad }} />
       )}
+    </View>
+  );
+}
+
+/** Two centered lines at the timestamp's size. Full width, never a bubble. */
+function LiveDayBreakRow({ dateLine, dayLine }: { dateLine: string; dayLine: string | null }) {
+  return (
+    <View
+      accessibilityRole="header"
+      accessibilityLabel={dayLine ? `${dateLine}. ${dayLine}` : dateLine}
+      style={{ paddingHorizontal: 16, paddingVertical: 2, alignItems: 'center' }}>
+      <AppText className="text-[11px]" style={{ color: THEME.textMuted, textAlign: 'center' }}>
+        {dateLine}
+      </AppText>
+      {dayLine ? (
+        <AppText className="text-[11px]" style={{ color: THEME.textMuted, textAlign: 'center' }}>
+          {dayLine}
+        </AppText>
+      ) : null}
     </View>
   );
 }
