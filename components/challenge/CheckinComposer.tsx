@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   FlatList,
@@ -158,6 +158,15 @@ export function CheckinComposer({
   const [gifOpen, setGifOpen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const chromePad = tabBarLift(insets.bottom, 'sticky');
+  /**
+   * Read through refs so this callback keeps one identity. Closing over footerH meant a growing
+   * multiline field rebuilt it mid-keystroke, and the effect below then scrolled while the user
+   * was typing, which dismisses the iOS keyboard.
+   */
+  const footerRef = useRef(footerH);
+  footerRef.current = footerH;
+  const windowHeightRef = useRef(windowHeight);
+  windowHeightRef.current = windowHeight;
   const scrollFieldIntoView = useCallback((node: View) => {
     if (Platform.OS === 'web') {
       return;
@@ -165,8 +174,8 @@ export function CheckinComposer({
     lastFieldNode.current = node;
     const run = () => {
       node.measureInWindow((_x, y, _w, h) => {
-        const windowH = windowHeight;
-        const reserved = footerH + overlapRef.current + 24;
+        const windowH = windowHeightRef.current;
+        const reserved = footerRef.current + overlapRef.current + 24;
         const visibleBottom = windowH - reserved;
         const fieldBottom = y + h;
         let delta = 0;
@@ -186,8 +195,9 @@ export function CheckinComposer({
     requestAnimationFrame(() => {
       setTimeout(run, Platform.OS === 'android' ? 80 : 40);
     });
-  }, [footerH, windowHeight]);
+  }, []);
 
+  // Only the keyboard opening or closing may scroll. Typing must never move the list.
   useEffect(() => {
     if (Platform.OS === 'web' || keyboardOverlap <= 0 || !lastFieldNode.current) {
       return;
@@ -514,10 +524,14 @@ export function CheckinComposer({
     onSend();
   }
 
-  const formApi = {
-    scrollToTop: () => scrollRef.current?.scrollTo({ y: 0, animated: true }),
-    scrollFieldIntoView,
-  };
+  // A fresh object here re-rendered every keyboard-aware field on each keystroke.
+  const formApi = useMemo(
+    () => ({
+      scrollToTop: () => scrollRef.current?.scrollTo({ y: 0, animated: true }),
+      scrollFieldIntoView,
+    }),
+    [scrollFieldIntoView],
+  );
 
   return (
     <KeyboardFormContext.Provider value={formApi}>
