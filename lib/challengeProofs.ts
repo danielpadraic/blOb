@@ -874,6 +874,10 @@ export function proofRequirementsFrom(proofs: ChallengeProof[]): Array<{ type: P
     .map((type) => ({ type, required: true as const }));
 }
 
+/**
+ * Synthesized slots need an id that survives a re-render and a reopen, because drafts and saved
+ * proof_parts are keyed by it. A random id per call remounted the field and orphaned the draft.
+ */
 export function stableProofIdForLegacyType(type: string): string | null {
   const key = type.trim().toLowerCase();
   if (key === 'pre_selfie' || key === 'pre') {
@@ -885,16 +889,48 @@ export function stableProofIdForLegacyType(type: string): string | null {
   if (key === 'hr_monitor' || key === 'hr') {
     return 'hr';
   }
+  if (key === 'photo') {
+    return 'photo';
+  }
+  if (key === 'screenshot') {
+    return 'screenshot';
+  }
+  if (key === 'video') {
+    return 'video';
+  }
+  if (key === 'text_note' || key === 'check_in' || key === 'checkin') {
+    return 'note';
+  }
+  if (key === 'link') {
+    return 'link';
+  }
+  if (key === 'distance') {
+    return 'distance';
+  }
+  if (key === 'location' || key === 'place') {
+    return 'location';
+  }
+  if (key === 'honor') {
+    return 'honor';
+  }
   return null;
 }
 
 export function namedProofsFromLegacyTypes(types: string[]): ChallengeProof[] {
+  const used = new Set<string>();
   const list = types.filter(Boolean).map((type) => {
     const proof = makeProof(nameFromLegacyType(type), methodFromLegacyType(type));
     const stable = stableProofIdForLegacyType(type);
-    return stable ? { ...proof, id: stable } : proof;
+    // Two slots of the same type would collide, so only the first claims the stable id.
+    if (!stable || used.has(stable)) {
+      return proof;
+    }
+    used.add(stable);
+    return { ...proof, id: stable };
   });
-  return list.length > 0 ? list : [makeProof(defaultSentenceForMethod('honor'), 'honor')];
+  return list.length > 0
+    ? list
+    : [{ ...makeProof(defaultSentenceForMethod('honor'), 'honor'), id: 'honor' }];
 }
 
 export function parseChallengeProofs(value: unknown): ChallengeProof[] {

@@ -264,3 +264,46 @@ describe('points task proofs beat leftover photo type', () => {
     expect(proofs.map((proof) => proof.method)).toEqual(['checkin']);
   });
 });
+
+describe('synthesized proof ids survive a re-render', () => {
+  const prayer = {
+    challenge_type: 'points' as const,
+    scoring_method: 'consistency',
+    proofs: [],
+    proof_type: 'photo',
+    proof_requirements: [],
+    tasks: [
+      {
+        id: 'task-1',
+        title: 'Pray for somebody',
+        points: 10,
+        once: false,
+        proof_required: true,
+        proof_types: ['photo', 'text_note'],
+      },
+    ],
+  };
+
+  it('gives Prayer a photo slot and a note slot', () => {
+    expect(requiredChallengeProofs(prayer as never).map((proof) => proof.method)).toEqual([
+      'photo',
+      'checkin',
+    ]);
+  });
+
+  it('returns the same ids every resolve so the note field never remounts', () => {
+    const first = requiredChallengeProofs(prayer as never).map((proof) => proof.id);
+    const second = requiredChallengeProofs(prayer as never).map((proof) => proof.id);
+    expect(first).toEqual(['photo', 'note']);
+    expect(second).toEqual(first);
+  });
+
+  it('keeps ids unique when a type repeats', () => {
+    const ids = namedProofsFromLegacyTypes(['photo', 'photo']).map((proof) => proof.id);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it('keeps the honor fallback stable', () => {
+    expect(namedProofsFromLegacyTypes([])[0]?.id).toBe('honor');
+  });
+});

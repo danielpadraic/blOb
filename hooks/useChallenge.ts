@@ -43,6 +43,7 @@ import {
   minMinutesForPublish,
   namedProofsForPublish,
   persistTasksForPublish,
+  pointsProofTypeForPublish,
 } from '@/lib/challengeCreatePublish';
 import {
   fetchChallengeSettlement,
@@ -899,9 +900,9 @@ export function useCreateChallenge() {
           isPoints || values.challenge_type === 'cumulative'
             ? 0
             : Math.max(Number(values.misses_allowed) || 0, 0),
-        proof_type:
-          values.proof_type ??
-          proofTypeFromMethod(firstProofMethod(namedProofs)),
+        proof_type: isPoints
+          ? pointsProofTypeForPublish(tasks)
+          : values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),
         proof_review: values.proof_review ?? 'auto',
         payout_mode: payout.payout_mode,
         timezone: challengeScheduleTimezone(profile.timezone),
@@ -1105,6 +1106,7 @@ export function useUpdateUserChallenge() {
           }
         : publishPayoutFields(values);
       const namedProofs = namedProofsForPublish(values);
+      const draftTasks = persistTasksForPublish(values, isPoints);
       const placeError = proofsReadyToPublish(namedProofs);
       if (placeError) {
         throw new Error(placeError);
@@ -1129,7 +1131,7 @@ export function useUpdateUserChallenge() {
           namedProofs.length > 0
             ? proofRequirementsFrom(namedProofs)
             : [],
-        tasks: persistTasksForPublish(values, isPoints),
+        tasks: draftTasks,
         rules_list: buildRulesStructured(values),
         visibility: values.visibility,
         discoverability: values.discoverability ?? null,
@@ -1141,7 +1143,9 @@ export function useUpdateUserChallenge() {
           isPoints || values.challenge_type === 'cumulative'
             ? 0
             : Math.max(Number(values.misses_allowed) || 0, 0),
-        proof_type: values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),
+        proof_type: isPoints
+          ? pointsProofTypeForPublish(draftTasks)
+          : values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),
         cover_image_url: values.cover_image_url?.trim() || null,
         rules_video_url: values.rules_video_url?.trim() || null,
         format: unlimited ? 'lms' : values.format ?? values.challenge_type,

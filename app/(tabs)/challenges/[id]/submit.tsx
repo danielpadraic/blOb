@@ -250,7 +250,34 @@ function SubmitWorkoutInner() {
   }, []);
 
   const challenge = challengeQuery.data;
-  const proofSteps = challenge ? requiredChallengeProofs(challenge) : [];
+  /**
+   * Challenges with no stored proofs get theirs synthesized, and makeProof mints a fresh id each
+   * call. Recomputing per render changed every proof.id, remounting the note field on each
+   * keystroke and orphaning drafts keyed by the old id. Ids must outlive the render.
+   */
+  const proofShape = challenge
+    ? JSON.stringify([
+        challenge.id,
+        challenge.proofs ?? null,
+        challenge.proof_type ?? null,
+        challenge.proof_requirements ?? null,
+        challenge.tasks ?? null,
+        challenge.challenge_type ?? null,
+        challenge.scoring_method ?? null,
+        challenge.scoring_config ?? null,
+        challenge.comparable_points_config ?? null,
+        challenge.privacy_mode ?? null,
+        challenge.is_official ?? null,
+        challenge.series_id ?? null,
+        challenge.category ?? null,
+      ])
+    : '';
+  const proofSteps = useMemo(
+    () => (challenge ? requiredChallengeProofs(challenge) : []),
+    // Keyed on the proof shape so a refetch returning an equal challenge keeps the same proof ids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [proofShape],
+  );
   const totalCount = usesTotalCountCheckins(challenge);
   const rawPhase = checkinQuery.data?.phase ?? 'none';
   const phase = totalCount && rawPhase === 'submitted' ? 'none' : rawPhase;
@@ -366,7 +393,8 @@ function SubmitWorkoutInner() {
     }
     hydrateServerRef.current = hydrateKey;
     const parts = checkinQuery.data.proof_parts ?? {};
-    const steps = requiredChallengeProofs(challenge);
+    // Reuse the rendered slots: a second resolve would key drafts to ids the UI never reads.
+    const steps = proofSteps;
     const legacy = {
       pre_selfie_url: checkinQuery.data.pre_selfie_url,
       post_selfie_url: checkinQuery.data.post_selfie_url,
@@ -458,6 +486,7 @@ function SubmitWorkoutInner() {
     }
   }, [
     challenge,
+    proofSteps,
     checkinQuery.data,
     checkinQuery.data?.id,
     checkinQuery.data?.notes,

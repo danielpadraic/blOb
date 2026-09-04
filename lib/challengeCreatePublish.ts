@@ -6,6 +6,7 @@ import {
   proofHeartRateMinutes,
   proofRequirementsFrom,
   methodFromProofType,
+  proofTypeFromMethod,
   type ChallengeProof,
 } from '@/lib/challengeProofs';
 import { extraHasMinMinutes } from '@/lib/consistencyRules';
@@ -88,6 +89,37 @@ export function namedProofsForPublish(values: CreateChallengeValues): ChallengeP
   const withPlace = (proof: ChallengeProof) =>
     proof.method === 'location' ? { ...proof, place: proof.place ?? place } : proof;
   return [...base.map(withPlace), ...extraTaskNamedProofs(filledExtraTasks(values)).map(withPlace)];
+}
+
+/**
+ * Points keeps the host's proof on each task, so the legacy proof_type column must echo that.
+ * Writing the wizard default made Overview promise a camera the check-in never asked for.
+ */
+export function pointsProofTypeForPublish(tasks: ChallengeTask[]): string {
+  const picked = tasks
+    .filter((task) => task.proof_required)
+    .flatMap((task) => task.proof_types ?? [])
+    .map((type) => String(type ?? '').trim().toLowerCase())
+    .filter(Boolean);
+  if (picked.length === 0) {
+    return 'honor';
+  }
+  const strongestFirst = [
+    'photo',
+    'pre_selfie',
+    'post_selfie',
+    'screenshot',
+    'video',
+    'hr_monitor',
+    'hr',
+    'distance',
+    'location',
+    'text_note',
+    'link',
+    'honor',
+  ];
+  const winner = strongestFirst.find((type) => picked.includes(type)) ?? picked[0];
+  return proofTypeFromMethod(methodFromProofType(winner));
 }
 
 export function persistTasksForPublish(values: CreateChallengeValues, isPoints: boolean): ChallengeTask[] {

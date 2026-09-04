@@ -766,14 +766,15 @@ export function CheckinComposer({
               </Pressable>
             ) : null}
           </ScrollView>
+          {/* Required proof must stay readable: the list wraps instead of clipping to one line. */}
           {stillNeeded ? (
-            <AppText className="mt-1 text-[12px] leading-4 text-muted" numberOfLines={1}>
+            <AppText className="mt-1 text-[12px] leading-4 text-muted">
               Still needed: {stillNeeded}
             </AppText>
           ) : null}
         </View>
       ) : stillNeeded ? (
-        <AppText className="px-4 pt-2 text-[12px] leading-4 text-muted" numberOfLines={1}>
+        <AppText className="px-4 pt-2 text-[12px] leading-4 text-muted">
           Still needed: {stillNeeded}
         </AppText>
       ) : null}
