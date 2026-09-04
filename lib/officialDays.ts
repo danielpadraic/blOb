@@ -67,18 +67,22 @@ function addDaysYmd(ymd: string, days: number): string {
 }
 
 function wallClockInZone(date: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
-  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? '00';
-  return `${pick('year')}-${pick('month')}-${pick('day')}T${pick('hour')}:${pick('minute')}:${pick('second')}`;
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+    const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? '00';
+    return `${pick('year')}-${pick('month')}-${pick('day')}T${pick('hour')}:${pick('minute')}:${pick('second')}`;
+  } catch {
+    return date.toISOString().slice(0, 19);
+  }
 }
 
 /** UTC instant for a wall clock in `timeZone`. */

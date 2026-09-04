@@ -44,10 +44,16 @@ export function firstRouteParam(value: unknown): string {
   if (typeof value === 'string') {
     return value.trim();
   }
-  if (value == null) {
-    return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
   }
-  return String(value).trim();
+  if (value && typeof value === 'object' && 'id' in value) {
+    const nested = (value as { id?: unknown }).id;
+    if (nested !== value) {
+      return firstRouteParam(nested);
+    }
+  }
+  return '';
 }
 
 export function challengeLoadMessage(kind: ChallengeLoadKind): string {

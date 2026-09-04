@@ -36,7 +36,7 @@ import {
 } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import { capHaptic } from '@/lib/haptics';
-import { cameraAskLine, resolveCameraAsk, type CameraAsk } from '@/lib/cameraAsk';
+import { cameraAskLine, checkinCameraFocused, resolveCameraAsk, type CameraAsk } from '@/lib/cameraAsk';
 import {
   ensureMicrophonePermission,
   openAppSettings,
@@ -124,8 +124,7 @@ export function InAppCamera({
   const navFocused = useIsFocused();
   const pathname = usePathname();
   const web = Platform.OS === 'web';
-  const pathLive = String(pathname ?? '').includes('/submit');
-  const focused = Boolean(navFocused || (checkin && web && pathLive));
+  const focused = Boolean(navFocused || (checkin && checkinCameraFocused({ navFocused, pathname })));
   const cameraRef = useRef<CameraView>(null);
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
@@ -301,6 +300,9 @@ export function InAppCamera({
   }, []);
 
   useEffect(() => {
+    if (!web) {
+      return;
+    }
     let cancelled = false;
     setReady(false);
     setAsk('prompt');
@@ -309,65 +311,84 @@ export function InAppCamera({
       if (parentBlocked || !focused || !sessionOn) {
         return;
       }
-      if (web) {
-        const queried = webCameraGrantedThisSession()
-          ? 'granted'
-          : await queryWebCameraPermission();
+      const queried = webCameraGrantedThisSession()
+        ? 'granted'
+        : await queryWebCameraPermission();
+      if (cancelled) {
+        return;
+      }
+      setAsk(resolveCameraAsk({ queried }));
+      if (queried === 'denied') {
+        return;
+      }
+      try {
+        stopMedia({
+          stream: webStreamRef.current,
+          video: webVideoRef.current,
+          recorder: recorderRef.current,
+        });
+        webStreamRef.current = null;
+        recorderRef.current = null;
+        const primed = video ? takePrimedCameraStream() : null;
+        if (!video) {
+          stopPrimedCameraStream();
+        }
+        const stream = await openWebCameraStream({
+          facing: facing === 'front' ? 'front' : 'back',
+          audio: video,
+          existing: primed,
+          kind: fovKind,
+        });
+        if (cancelled || !focusedRef.current) {
+          stopMedia({ stream });
+          return;
+        }
+        markWebCameraGranted();
+        webStreamRef.current = stream;
+        watchLiveMedia({ stream });
+        const node = webVideoRef.current;
+        if (node) {
+          node.srcObject = stream;
+          watchLiveMedia({ video: node });
+          void node.play().catch((error) => logCameraError(error, 'video.play'));
+        }
+        setReady(true);
+        setAsk('ready');
+        setSwitchToast(null);
+      } catch (error) {
+        logCameraError(error, 'web stream');
         if (cancelled) {
           return;
         }
-        setAsk(resolveCameraAsk({ queried }));
-        if (queried === 'denied') {
+        if (facing === 'front') {
+          stayOnRear();
           return;
         }
-        try {
-          stopMedia({
-            stream: webStreamRef.current,
-            video: webVideoRef.current,
-            recorder: recorderRef.current,
-          });
-          webStreamRef.current = null;
-          recorderRef.current = null;
-          const primed = video ? takePrimedCameraStream() : null;
-          if (!video) {
-            stopPrimedCameraStream();
-          }
-          const stream = await openWebCameraStream({
-            facing: facing === 'front' ? 'front' : 'back',
-            audio: video,
-            existing: primed,
-            kind: fovKind,
-          });
-          if (cancelled || !focusedRef.current) {
-            stopMedia({ stream });
-            return;
-          }
-          markWebCameraGranted();
-          webStreamRef.current = stream;
-          watchLiveMedia({ stream });
-          const node = webVideoRef.current;
-          if (node) {
-            node.srcObject = stream;
-            watchLiveMedia({ video: node });
-            void node.play().catch((error) => logCameraError(error, 'video.play'));
-          }
-          setReady(true);
-          setAsk('ready');
-          setSwitchToast(null);
-        } catch (error) {
-          logCameraError(error, 'web stream');
-          if (cancelled) {
-            return;
-          }
-          if (facing === 'front') {
-            stayOnRear();
-            return;
-          }
-          setAsk(resolveCameraAsk({ queried, errorKind: cameraErrorKind(error) }));
-        }
+        setAsk(resolveCameraAsk({ queried, errorKind: cameraErrorKind(error) }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopMedia({
+        stream: webStreamRef.current,
+        video: webVideoRef.current,
+        recorder: recorderRef.current,
+      });
+      webStreamRef.current = null;
+      recorderRef.current = null;
+    };
+  }, [facing, focused, parentBlocked, retry, sessionOn, video, web]);
+
+  useEffect(() => {
+    if (web) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      if (parentBlocked || !focused || !sessionOn) {
         return;
       }
-
       const current = await Camera.getCameraPermissionsAsync();
       if (cancelled) {
         return;
@@ -399,18 +420,10 @@ export function InAppCamera({
       setReady(true);
       setAsk('ready');
     })();
-
     return () => {
       cancelled = true;
-      stopMedia({
-        stream: webStreamRef.current,
-        video: webVideoRef.current,
-        recorder: recorderRef.current,
-      });
-      webStreamRef.current = null;
-      recorderRef.current = null;
     };
-  }, [facing, focused, parentBlocked, retry, sessionOn, video, web]);
+  }, [focused, parentBlocked, retry, sessionOn, video, web]);
 
   useEffect(() => {
     if (parentBlocked || ask !== 'ready') {
@@ -552,9 +565,12 @@ export function InAppCamera({
           mimeType: next.mimeType ?? 'image/jpeg',
           blob: next.blob ?? null,
         });
+        return;
       }
+      setAsk('error');
     } catch (error) {
       logCameraError(error, 'takePhoto');
+      setAsk('error');
     } finally {
       setBusy(false);
     }
@@ -781,7 +797,6 @@ export function InAppCamera({
         />
       ) : showFrame && ask === 'ready' ? (
         <NativeCameraPreview
-          key={facing}
           cameraRef={cameraRef}
           facing={facing}
           video={video}
@@ -1006,13 +1021,15 @@ export function InAppCamera({
             disabled={showDenied}
             onPress={() => {
               const next = facing === 'back' ? 'front' : 'back';
-              stopMedia({
-                stream: webStreamRef.current,
-                video: webVideoRef.current,
-                recorder: recorderRef.current,
-              });
-              webStreamRef.current = null;
-              recorderRef.current = null;
+              if (web) {
+                stopMedia({
+                  stream: webStreamRef.current,
+                  video: webVideoRef.current,
+                  recorder: recorderRef.current,
+                });
+                webStreamRef.current = null;
+                recorderRef.current = null;
+              }
               rememberCameraFacing(next, resolvedFacingKind);
               setFacing(next);
             }}
@@ -1161,7 +1178,6 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   return (
     <View style={{ flex: 1, overflow: 'hidden' }}>
       <CameraView
-        key={facing}
         ref={cameraRef}
         style={
           rotate && box

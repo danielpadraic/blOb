@@ -131,6 +131,21 @@ describe('currentRequiredPeriodWindow', () => {
 });
 
 describe('consistencyPeriodAt', () => {
+  it('does not throw on the submit first paint before the challenge row is loaded', () => {
+    expect(() => checkinPeriodKey(undefined)).not.toThrow();
+    expect(() => consistencyPeriodAt(undefined)).not.toThrow();
+    expect(checkinPeriodKey(undefined)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('does not throw on a garbage timezone', () => {
+    expect(() =>
+      consistencyPeriodAt(
+        { starts_at: '2026-09-01T06:00:00.000Z', timezone: 'Not/AZone' },
+        new Date('2026-09-02T19:00:00-06:00'),
+      ),
+    ).not.toThrow();
+  });
+
   it('does not open Sep 3 at 7pm MDT when the day boundary is midnight MDT', () => {
     const slice = consistencyPeriodAt(
       {

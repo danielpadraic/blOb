@@ -54,7 +54,14 @@ export type ChallengeCheckinView = ChallengeCheckin & {
 };
 
 function periodKeyFor(challenge?: PeriodChallenge | null): string {
-  return checkinPeriodKey(challenge);
+  if (!challenge) {
+    return '';
+  }
+  try {
+    return checkinPeriodKey(challenge);
+  } catch {
+    return normalizePeriodKey(dateStampInZone(new Date(), 'UTC'));
+  }
 }
 
 function checkinQueryKey(challengeId: string | undefined, userId: string | undefined) {

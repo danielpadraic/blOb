@@ -20,6 +20,17 @@ export function resolveCameraAsk(input: {
   return 'prompt';
 }
 
+/** Check-in stills: Expo can report the nested `/submit` screen as unfocused on iOS. Path is enough. */
+export function checkinCameraFocused(input: {
+  navFocused: boolean;
+  pathname?: string | null;
+}): boolean {
+  if (input.navFocused) {
+    return true;
+  }
+  return String(input.pathname ?? '').includes('/submit');
+}
+
 export function cameraAskLine(ask: CameraAsk, checkin: boolean): string | null {
   if (ask === 'prompt') {
     return checkin ? 'Allow camera to check in.' : 'Allow camera.';

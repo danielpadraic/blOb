@@ -40,6 +40,7 @@ import {
   isLikelyOffline,
   saveCapturedProofLocally,
 } from '@/lib/checkin';
+import { checkinCameraFocused } from '@/lib/cameraAsk';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import {
   beginCameraProof,
@@ -98,7 +99,7 @@ import {
   type CheckinHealthProof,
 } from '@/lib/health/attachProof';
 import { upsertHealthWorkout } from '@/lib/health/remote';
-import { getHealthProvider } from '@/services/health';
+import { getHealthProvider, healthProviderAvailable } from '@/services/health';
 import {
   distanceProofIsSessionLog,
   usesTotalCountCheckins,
@@ -108,9 +109,10 @@ import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { firstRouteParam } from '@/lib/challengeLoad';
+import { isChallengeRouteId } from '@/lib/challengeTimezone';
 import { parseDoneIds } from '@/lib/multiCheckin';
 import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
-import { challengeDetailHref, checkinSubmitHref, multiCheckinHref, publishedRowId, TABS_HREF } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref, LOBBY_HREF, multiCheckinHref, publishedRowId } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
@@ -177,9 +179,15 @@ export default function SubmitWorkoutScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const id = firstRouteParam(params.id);
   const router = useRouter();
+  const pathname = usePathname();
+  const navFocused = useIsFocused();
   return (
     <View key={id || 'submit'} style={{ flex: 1 }}>
-      <CheckinSafeBoundary onBack={() => router.back()}>
+      <CheckinSafeBoundary
+        onBack={() => router.back()}
+        href={id ? String(checkinSubmitHref(id)) : pathname}
+        id={id || null}
+        focused={checkinCameraFocused({ navFocused, pathname })}>
         <SubmitWorkoutInner />
       </CheckinSafeBoundary>
     </View>
@@ -188,7 +196,8 @@ export default function SubmitWorkoutScreen() {
 
 function SubmitWorkoutInner() {
   const params = useLocalSearchParams<{ id: string; from?: string; done?: string }>();
-  const id = firstRouteParam(params.id);
+  const rawId = firstRouteParam(params.id);
+  const id = isChallengeRouteId(rawId) ? rawId : '';
   const router = useRouter();
   const pathname = usePathname();
   const navFocused = useIsFocused();
@@ -197,7 +206,7 @@ function SubmitWorkoutInner() {
 
   useEffect(() => {
     if (!id) {
-      router.replace(TABS_HREF);
+      router.replace(LOBBY_HREF);
     }
   }, [id, router]);
   const challengeQuery = useChallenge(id);
@@ -238,7 +247,7 @@ function SubmitWorkoutInner() {
   }, []);
 
   const challenge = challengeQuery.data;
-  const proofSteps = requiredChallengeProofs(challenge);
+  const proofSteps = challenge ? requiredChallengeProofs(challenge) : [];
   const totalCount = usesTotalCountCheckins(challenge);
   const rawPhase = checkinQuery.data?.phase ?? 'none';
   const phase = totalCount && rawPhase === 'submitted' ? 'none' : rawPhase;
@@ -308,7 +317,8 @@ function SubmitWorkoutInner() {
       nextId: next?.id ?? null,
       href: String(checkinSubmitHref(id)),
       id,
-      focused: navFocused,
+      focused: checkinCameraFocused({ navFocused, pathname }),
+      ask: null,
       shouldAutoOpen: shouldAutoOpenCheckinCamera({
         skippedAuto,
         honorOnly,
@@ -800,11 +810,13 @@ function SubmitWorkoutInner() {
         extraMedia: extraUrls,
       });
       if (failedExtras.length > 0) {
+        setFailKind('upload');
         setError(
           failedExtras.length === 1
             ? 'One photo didn’t upload. The rest are ready to send.'
             : `${failedExtras.length} photos didn’t upload. The rest are ready to send.`,
         );
+        return;
       }
       const checkinId = honorOnly || readyNow ? (await submitCheckin.mutateAsync())?.id : saved?.id;
       let postId: string | undefined;
@@ -993,18 +1005,20 @@ function SubmitWorkoutInner() {
   if (!id) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <MascotState
-          kind="error"
-          title={copy('challenge.joinFirst')}
-          body="Join this challenge before you check in."
-          actionLabel="Back"
-          onAction={() => router.back()}
-        />
+        <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
       </Screen>
     );
   }
 
   if (challengeQuery.isLoading || participationLoading || checkinQuery.isLoading) {
+    return (
+      <Screen padded={false} edges={['left', 'right', 'bottom']}>
+        <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
+      </Screen>
+    );
+  }
+
+  if (!totalCount && checkinQuery.isFetched && checkinQuery.data?.phase === 'submitted') {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
@@ -1108,7 +1122,7 @@ function SubmitWorkoutInner() {
   const missing = proofSteps.filter(
     (proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
   );
-  const iosHealthReady = Platform.OS === 'ios' && Boolean(getHealthProvider()?.isAvailable());
+  const iosHealthReady = Platform.OS === 'ios' && healthProviderAvailable();
   const firstEmptyMedia =
     missing.find(
       (proof) =>
@@ -1354,7 +1368,7 @@ function SubmitWorkoutInner() {
                 const attached = partDistanceMeters(part, distanceUnit);
                 const required = proofDistanceMeters(proof);
                 const short = !sessionDistance && attached != null && attached < required;
-                const healthReady = Platform.OS !== 'web' && Boolean(getHealthProvider()?.isAvailable());
+                const healthReady = Platform.OS !== 'web' && healthProviderAvailable();
                 return (
                   <View key={proof.id} className="mb-2" style={{ gap: 6 }}>
                     <View className="flex-row items-end" style={{ gap: 8 }}>

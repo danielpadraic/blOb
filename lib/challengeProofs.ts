@@ -646,7 +646,7 @@ function isHeartRateNamed(proof: Pick<ChallengeProof, 'method' | 'name'>): boole
   if (proof.method === 'hr') {
     return true;
   }
-  const lower = proof.name.trim().toLowerCase();
+  const lower = String(proof.name ?? '').trim().toLowerCase();
   return /\bhr\b/.test(lower) || lower.includes('heart rate') || lower.includes('heart-rate');
 }
 
@@ -672,7 +672,7 @@ function isGenericGuidedLabel(name: string): boolean {
 }
 
 function guidedImperativeFromLabel(proof: ChallengeProof): string {
-  const raw = proof.name.trim().replace(/\.+$/, '');
+  const raw = String(proof.name ?? '').trim().replace(/\.+$/, '');
   const lower = raw.toLowerCase();
   if (/^(take|log|upload|share|post|write|confirm|attach)\b/.test(lower)) {
     return raw;
@@ -857,7 +857,7 @@ export function legacyTypeForProof(proof: ChallengeProof): ProofType | null {
   if (proof.method === 'location') {
     return 'location';
   }
-  const named = proof.name.trim().toLowerCase();
+  const named = String(proof.name ?? '').trim().toLowerCase();
   if (isCheckoutProofName(named) || proof.id === 'post') {
     return 'post_selfie';
   }

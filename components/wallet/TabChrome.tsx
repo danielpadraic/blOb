@@ -33,12 +33,14 @@ const TAB_CHROME_ROOTS = new Set([
 ]);
 
 export function isInsideTabChrome(segments: string[]): boolean {
-  const parts = segments.filter((segment) => !segment.startsWith('('));
+  const list = Array.isArray(segments) ? segments : [];
+  const parts = list.filter((segment) => !String(segment).startsWith('('));
   return TAB_CHROME_ROOTS.has(parts[0] ?? '');
 }
 
 export function isMainTabRoute(segments: string[]): boolean {
-  const parts = segments.filter((segment) => !segment.startsWith('('));
+  const list = Array.isArray(segments) ? segments : [];
+  const parts = list.filter((segment) => !String(segment).startsWith('('));
   if (parts.length === 0) {
     return false;
   }
@@ -50,7 +52,8 @@ export function isMainTabRoute(segments: string[]): boolean {
 }
 
 export function isAlertsTab(segments: string[]): boolean {
-  const parts = segments.filter((segment) => !segment.startsWith('('));
+  const list = Array.isArray(segments) ? segments : [];
+  const parts = list.filter((segment) => !String(segment).startsWith('('));
   return parts[0] === 'notifications' && (!parts[1] || parts[1] === 'index');
 }
 

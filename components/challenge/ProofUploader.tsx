@@ -22,7 +22,7 @@ import { localUriFromPickerAsset } from '@/utils/media';
 import type { ProofType } from '@/lib/types';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { challengeAcceptsWorkoutProof } from '@/lib/health/acceptsWorkout';
-import { getHealthProvider, type HealthWorkout } from '@/services/health';
+import { healthProviderAvailable, type HealthWorkout } from '@/services/health';
 import type { Challenge } from '@/lib/types';
 
 type ProofUploaderProps = {
@@ -97,7 +97,7 @@ export function ProofUploader({
   const healthChip = Boolean(
     Platform.OS === 'ios' &&
       health &&
-      getHealthProvider()?.isAvailable() &&
+      healthProviderAvailable() &&
       (type === 'hr_monitor' || challengeAcceptsWorkoutProof(health.challenge)),
   );
   const faceHint =
@@ -133,8 +133,10 @@ export function ProofUploader({
     setBlocked(false);
     setBlockedReason(undefined);
     setOpen(true);
-    const available = await cameraIsAvailable();
-    setWebFallback(!available);
+    if (Platform.OS === 'web') {
+      const available = await cameraIsAvailable();
+      setWebFallback(!available);
+    }
   }
 
   async function openLibrary() {

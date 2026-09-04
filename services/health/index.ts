@@ -38,3 +38,12 @@ export function getHealthProvider(): HealthProvider | null {
   }
   return null;
 }
+
+/** Render-safe. Missing HealthKit / a thrown native probe must not crash Check In. */
+export function healthProviderAvailable(): boolean {
+  try {
+    return Boolean(getHealthProvider()?.isAvailable());
+  } catch {
+    return false;
+  }
+}

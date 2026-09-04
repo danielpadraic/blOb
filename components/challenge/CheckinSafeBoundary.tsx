@@ -4,8 +4,35 @@ import { router, usePathname, type ErrorBoundaryProps, type Href } from 'expo-ro
 import { MascotState } from '@/components/mascot/MascotState';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
+import { reportAppError } from '@/lib/appErrors';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { errorRetryHref } from '@/lib/routes';
+
+function checkinIdFromHref(href?: string | null): string | null {
+  const match = String(href ?? '').match(/\/challenges\/([^/?#]+)\/submit/);
+  return match?.[1] ?? null;
+}
+
+function logCheckinOpenFailure(
+  error: unknown,
+  extra: { href?: string | null; id?: string | null; focused?: boolean | null; stack?: string | null },
+) {
+  const err = error instanceof Error ? error : new Error(String(error ?? 'checkin open failed'));
+  const payload = {
+    href: extra.href ?? null,
+    id: extra.id ?? checkinIdFromHref(extra.href),
+    focused: extra.focused ?? null,
+    message: err.message,
+    stack: extra.stack || err.stack || null,
+  };
+  console.log('[blob:checkin]', payload);
+  reportAppError({
+    route: 'checkin_open',
+    error: err,
+    message: err.message,
+    payload,
+  });
+}
 
 function CheckinFail({ onBack }: { onBack: () => void }) {
   return (
@@ -27,6 +54,9 @@ function CheckinFail({ onBack }: { onBack: () => void }) {
 type Props = {
   children: ReactNode;
   onBack: () => void;
+  href?: string | null;
+  id?: string | null;
+  focused?: boolean | null;
 };
 
 type State = { failed: boolean };
@@ -39,8 +69,14 @@ export class CheckinSafeBoundary extends Component<Props, State> {
     return { failed: true };
   }
 
-  componentDidCatch(_error: Error, _info: ErrorInfo) {
+  componentDidCatch(error: Error, info: ErrorInfo) {
     stopAllLiveMedia();
+    logCheckinOpenFailure(error, {
+      href: this.props.href,
+      id: this.props.id,
+      focused: this.props.focused,
+      stack: [error.stack, info.componentStack].filter(Boolean).join('\n') || null,
+    });
   }
 
   componentWillUnmount() {
@@ -56,11 +92,12 @@ export class CheckinSafeBoundary extends Component<Props, State> {
 }
 
 /** Expo Router route boundary for submit — not the tab “Something went wrong” Bob. */
-export function CheckinRouteErrorBoundary({ retry }: ErrorBoundaryProps) {
+export function CheckinRouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const pathname = usePathname();
   useEffect(() => {
     stopAllLiveMedia();
-  }, []);
+    logCheckinOpenFailure(error, { href: pathname, id: checkinIdFromHref(pathname), focused: null });
+  }, [error, pathname]);
   return (
     <CheckinFail
       onBack={() => {

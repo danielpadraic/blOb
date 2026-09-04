@@ -26,6 +26,9 @@ describe('firstRouteParam', () => {
     expect(firstRouteParam([undefined, 'nope'])).toBe('');
     expect(firstRouteParam(undefined)).toBe('');
     expect(firstRouteParam(null)).toBe('');
+    expect(firstRouteParam({ id: '  abc-1  ' })).toBe('abc-1');
+    expect(firstRouteParam({ id: ['  xyz  '] })).toBe('xyz');
+    expect(firstRouteParam({})).toBe('');
   });
 });
 
