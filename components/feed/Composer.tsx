@@ -138,15 +138,17 @@ export function Composer({
     },
     [scope],
   );
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
 
   const onDocChange = useCallback(
     (doc: MentionDoc) => {
       docRef.current = doc;
       const next = doc.text.trim().length > 0;
       setHasText((current) => (current === next ? current : next));
-      persistDraft(doc, attachments);
+      persistDraft(doc, attachmentsRef.current);
     },
-    [attachments, persistDraft],
+    [persistDraft],
   );
 
   useEffect(() => {

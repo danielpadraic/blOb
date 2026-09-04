@@ -59,13 +59,11 @@ export default function FeedScreen() {
     void queryClient.invalidateQueries({ queryKey: ['callouts'] });
   }, [feed, queryClient]);
 
+  // Pinned under the top menu: Waves only. Official, Pulse, Callout, Rounds, and Composer scroll.
   const stickyAbove = useMemo(
     () => (
-      <View style={{ marginBottom: 6, gap: 8 }}>
-        <FeaturedOfficialStrip />
+      <View style={{ marginBottom: 6, backgroundColor: THEME.background }}>
         <StoryTray />
-        <PulseRail />
-        <CalloutHomePin />
       </View>
     ),
     [],
@@ -74,10 +72,34 @@ export default function FeedScreen() {
   const headerExtra = useMemo(
     () => (
       <View style={{ gap: 8 }}>
+        <FeaturedOfficialStrip />
+        <PulseRail />
+        <CalloutHomePin />
         <ReelsRow />
       </View>
     ),
     [],
+  );
+
+  const headerTop = useMemo(
+    () =>
+      showFeedBanner && posts.length > 0 ? (
+        <View className="flex-row items-center" style={{ marginBottom: 8, gap: 10, minHeight: 44 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry"
+            onPress={() => void feed.refetch()}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+              Retry
+            </AppText>
+          </Pressable>
+        </View>
+      ) : undefined,
+    [feed, posts.length, showFeedBanner],
   );
 
   const onCompose = useCallback(
@@ -134,24 +156,7 @@ export default function FeedScreen() {
         draftKey="home"
         composing={createPost.isPending}
         stickyAbove={stickyAbove}
-        headerTop={
-          showFeedBanner && posts.length > 0 ? (
-            <View className="flex-row items-center" style={{ marginBottom: 8, gap: 10, minHeight: 44 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Retry"
-                onPress={() => void feed.refetch()}
-                style={{ minHeight: 44, justifyContent: 'center' }}>
-                <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-                  Retry
-                </AppText>
-              </Pressable>
-            </View>
-          ) : undefined
-        }
+        headerTop={headerTop}
         headerExtra={headerExtra}
         empty={<FeedEmptyState compact />}
         onRefresh={onRefresh}

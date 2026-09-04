@@ -83,6 +83,43 @@ type FeedRowProps = {
   onComment?: FeedListProps['onComment'];
 };
 
+/** Home: Official, Pulse, Rounds, and Composer scroll with posts. Waves stay pinned above the list. */
+const HomeScrollHeader = memo(function HomeScrollHeader({
+  homeChrome,
+  embedded,
+  headerTop,
+  headerExtra,
+  composer,
+  tourLocked,
+}: {
+  homeChrome?: boolean;
+  embedded?: boolean;
+  headerTop?: ReactNode;
+  headerExtra?: ReactNode;
+  composer?: ReactNode;
+  tourLocked?: boolean;
+}) {
+  return (
+    <View className={homeChrome ? 'gap-2' : 'gap-3'}>
+      {headerTop}
+      {headerExtra}
+      {composer ? (
+        <View
+          pointerEvents={tourLocked ? 'none' : 'auto'}
+          style={{ marginBottom: homeChrome ? 8 : 12 }}>
+          {composer}
+        </View>
+      ) : null}
+      {!embedded && !homeChrome ? (
+        <View className="flex-row items-end justify-between pt-1">
+          <AppText className="text-[18px] font-extrabold text-charcoal">Feed</AppText>
+          <AppText className="text-[12px] text-muted">Latest</AppText>
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
 const FeedRow = memo(function FeedRow({
   post,
   currentUserId,
@@ -303,18 +340,16 @@ export function FeedList({
 
   const listHeader = useMemo(
     () => (
-      <View className={homeChrome ? 'gap-2' : 'gap-3'}>
-        {headerTop}
-        {headerExtra}
-        {!embedded && !homeChrome ? (
-          <View className="flex-row items-end justify-between pt-1">
-            <AppText className="text-[18px] font-extrabold text-charcoal">Feed</AppText>
-            <AppText className="text-[12px] text-muted">Latest</AppText>
-          </View>
-        ) : null}
-      </View>
+      <HomeScrollHeader
+        homeChrome={homeChrome}
+        embedded={embedded}
+        headerTop={headerTop}
+        headerExtra={headerExtra}
+        composer={homeChrome ? composer : null}
+        tourLocked={tourLocked}
+      />
     ),
-    [embedded, headerExtra, headerTop, homeChrome],
+    [composer, embedded, headerExtra, headerTop, homeChrome, tourLocked],
   );
 
   const renderItem = useCallback(
@@ -416,11 +451,13 @@ export function FeedList({
 
   return (
     <View style={[{ flex: 1 }, webColumn]}>
-      {stickyAbove}
-      {composer ? (
-        <View
-          pointerEvents={tourLocked ? 'none' : 'auto'}
-          style={{ marginBottom: homeChrome ? 8 : 12 }}>
+      {stickyAbove ? (
+        <View style={homeChrome ? { backgroundColor: THEME.background, zIndex: 1 } : undefined}>
+          {stickyAbove}
+        </View>
+      ) : null}
+      {composer && !homeChrome ? (
+        <View pointerEvents={tourLocked ? 'none' : 'auto'} style={{ marginBottom: 12 }}>
           {composer}
         </View>
       ) : null}
@@ -428,7 +465,9 @@ export function FeedList({
         <FlatList
         ref={(node) => {
           listRef.current = node;
-          tour?.setHomeScroll(node as unknown as ScrollView);
+          if (homeChrome) {
+            tour?.setHomeScroll(node as unknown as ScrollView);
+          }
         }}
         scrollEnabled={!tourLocked}
         data={feedRows}
