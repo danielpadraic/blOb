@@ -19,19 +19,29 @@ const LIVE_REACTION_GLYPH: Record<PostReactionType, GlyphId> = {
 type LiveReactionsProps = {
   reactions?: Reaction[];
   currentUserId?: string;
+  align?: 'start' | 'end';
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
   onEdit?: () => void;
   onOverflow?: () => void;
 };
 
-export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEdit, onOverflow }: LiveReactionsProps) {
+export function LiveReactions({
+  reactions,
+  currentUserId,
+  align = 'start',
+  onReact,
+  onReply,
+  onEdit,
+  onOverflow,
+}: LiveReactionsProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const counts = liveReactionCounts(reactions, currentUserId);
   const mineTypes = new Set(counts.filter((row) => row.mine).map((row) => row.type));
+  const justify = align === 'end' ? ('flex-end' as const) : ('flex-start' as const);
 
   return (
-    <View style={{ position: 'relative', zIndex: pickerOpen ? 42 : 1 }}>
+    <View style={{ position: 'relative', zIndex: pickerOpen ? 42 : 1, maxWidth: '100%' }}>
       {pickerOpen ? (
         <Pressable
           accessibilityRole="button"
@@ -70,7 +80,7 @@ export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEd
             bottom: '100%',
             marginBottom: 4,
             zIndex: 41,
-            alignItems: 'flex-start',
+            alignItems: justify,
           }}>
           <View
             className="flex-row items-center"
@@ -112,70 +122,96 @@ export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEd
         </View>
       ) : null}
 
-      <View className="flex-row flex-wrap items-center" style={{ gap: 4, minHeight: 28, zIndex: 41 }}>
-        {counts.map((row) => (
+      {/* Chips wrap. The controls group never gets evicted, so Reply stays tappable at 1 or 8 reactions. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: justify,
+          gap: 4,
+          minHeight: 28,
+          maxWidth: '100%',
+          zIndex: 41,
+        }}>
+        {counts.length > 0 ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: justify,
+              gap: 4,
+              flexShrink: 1,
+              minWidth: 0,
+            }}>
+            {counts.map((row) => (
+              <Pressable
+                key={row.type}
+                accessibilityRole="button"
+                accessibilityLabel={`${row.type} ${row.count}`}
+                delayLongPress={280}
+                onPress={() => onReact(row.type)}
+                onLongPress={() => setPickerOpen((open) => !open)}
+                {...keepFocusProps()}
+                style={{
+                  minHeight: 26,
+                  paddingHorizontal: 8,
+                  borderRadius: 999,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: row.mine ? THEME.accentSoft : THEME.surface,
+                  borderWidth: 1,
+                  borderColor: row.mine ? THEME.accent : THEME.border,
+                }}>
+                <Glyph name={LIVE_REACTION_GLYPH[row.type]} color={POST_REACTION_COLORS[row.type]} size={13} />
+                <AppText className="text-[11px] font-semibold" style={{ color: THEME.textPrimary }}>
+                  {row.count}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <Pressable
-            key={row.type}
             accessibilityRole="button"
-            accessibilityLabel={`${row.type} ${row.count}`}
+            accessibilityLabel="Add a reaction"
             delayLongPress={280}
-            onPress={() => onReact(row.type)}
+            onPress={() => setPickerOpen((open) => !open)}
             onLongPress={() => setPickerOpen((open) => !open)}
             {...keepFocusProps()}
-            style={{
-              minHeight: 26,
-              paddingHorizontal: 8,
-              borderRadius: 999,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              backgroundColor: row.mine ? THEME.accentSoft : THEME.surface,
-              borderWidth: 1,
-              borderColor: row.mine ? THEME.accent : THEME.border,
-            }}>
-            <Glyph name={LIVE_REACTION_GLYPH[row.type]} color={POST_REACTION_COLORS[row.type]} size={13} />
-            <AppText className="text-[11px] font-semibold" style={{ color: THEME.textPrimary }}>
-              {row.count}
-            </AppText>
-          </Pressable>
-        ))}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add a reaction"
-          delayLongPress={280}
-          onPress={() => setPickerOpen((open) => !open)}
-          onLongPress={() => setPickerOpen((open) => !open)}
-          {...keepFocusProps()}
-          style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
-          <Glyph name={GLYPH.plus} color={THEME.textMuted} size={14} />
-        </Pressable>
-        {onEdit ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Edit"
-            onPress={onEdit}
             style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
-            <Glyph name={GLYPH.pencil} color={THEME.textMuted} size={14} />
+            <Glyph name={GLYPH.plus} color={THEME.textMuted} size={14} />
           </Pressable>
-        ) : null}
-        {onOverflow ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Comment menu"
-            onPress={onOverflow}
-            style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
-            <Glyph name={GLYPH.more} color={THEME.textMuted} size={14} />
-          </Pressable>
-        ) : null}
-        {onReply ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Reply"
-            onPress={onReply}
-            style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
-            <Glyph name={GLYPH.replyArrow} color={THEME.textMuted} size={14} />
-          </Pressable>
-        ) : null}
+          {onEdit ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit"
+              onPress={onEdit}
+              style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.pencil} color={THEME.textMuted} size={14} />
+            </Pressable>
+          ) : null}
+          {onOverflow ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Comment menu"
+              onPress={onOverflow}
+              style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.more} color={THEME.textMuted} size={14} />
+            </Pressable>
+          ) : null}
+          {onReply ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reply"
+              onPress={onReply}
+              style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.replyArrow} color={THEME.textMuted} size={14} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );

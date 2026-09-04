@@ -43,6 +43,47 @@ export function liveCheckinLabel(post: CheckinPostLike): 'Check-in' | 'Check-in 
   return isCheckinCompleteStage(post.checkin_stage) ? 'Check-in Complete' : 'Check-in';
 }
 
+/** checkinBeginCaption shape: “{Name} is {task}!”. composeCheckinNotes may add lines under it. */
+const BEGIN_NOTE = /^.+\sis\s.+!$/;
+
+/** Live copy for the check-in receipt: the Begin line while it is partial, Complete when it is done. */
+export function liveCheckinHeadline(post: CheckinPostLike & { content?: string | null }): string {
+  if (isCheckinCompleteStage(post.checkin_stage)) {
+    return 'Check-in Complete';
+  }
+  const first =
+    String(post.content ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean) ?? '';
+  if (first.length <= 90 && BEGIN_NOTE.test(first)) {
+    return first;
+  }
+  return 'Check-in';
+}
+
+/** Per-proof caption for the maximized proof. Slot caption first, then the receipt line. */
+export function liveProofCaption(
+  post: { media_urls?: string[] | null; media_captions?: Array<string | null> | null },
+  uri: string,
+  fallback: string,
+): string {
+  const at = (post.media_urls ?? []).findIndex((url) => url === uri);
+  const slot = at >= 0 ? (post.media_captions?.[at] ?? '').trim() : '';
+  return slot || fallback;
+}
+
+const REPLY_SWIPE_SLOP = 14;
+
+/** Swipe right to reply. Vertical scroll wins unless the drag is clearly sideways. */
+export function liveSwipeClaimsReply(dx: number, dy: number): boolean {
+  return dx > REPLY_SWIPE_SLOP && dx > Math.abs(dy) * 1.6;
+}
+
+/** iMessage feel: past this the release fires Reply. */
+export const REPLY_SWIPE_TRIGGER = 52;
+export const REPLY_SWIPE_MAX = 72;
+
 export function isLiveCheckinPost(post: CheckinPostLike): boolean {
   return isCheckinPost(post);
 }

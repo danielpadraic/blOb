@@ -7,8 +7,11 @@ import {
   formatLiveClock,
   isLiveSystemPost,
   liveChatText,
+  liveCheckinHeadline,
   liveCheckinLabel,
+  liveProofCaption,
   liveQuoteLine,
+  liveSwipeClaimsReply,
   liveQuotePreview,
   liveReactionCounts,
   liveComposeFromInline,
@@ -34,6 +37,70 @@ describe('formatLiveClock', () => {
   it('prints a simple clock like 9:44', () => {
     expect(formatLiveClock('2026-09-01T15:44:00.000Z')).toMatch(/^\d{1,2}:\d{2}$/);
     expect(formatLiveClock('not-a-date')).toBe('');
+  });
+});
+
+describe('liveCheckinHeadline', () => {
+  it('keeps the Begin line on the first required proof', () => {
+    expect(
+      liveCheckinHeadline({
+        source: 'checkin',
+        checkin_stage: 'started',
+        content: 'Daniel is working out!',
+      }),
+    ).toBe('Daniel is working out!');
+  });
+
+  it('reads Check-in Complete once every required slot is in', () => {
+    expect(
+      liveCheckinHeadline({
+        source: 'checkin',
+        checkin_stage: 'complete',
+        content: 'Daniel is working out!',
+      }),
+    ).toBe('Check-in Complete');
+  });
+
+  it('falls back to Check-in when the caption is the athlete’s own words', () => {
+    expect(
+      liveCheckinHeadline({ source: 'checkin', checkin_stage: 'started', content: 'leg day' }),
+    ).toBe('Check-in');
+    expect(liveCheckinHeadline({ source: 'checkin', checkin_stage: 'started' })).toBe('Check-in');
+  });
+
+  it('ignores the health lines composeCheckinNotes appends under the Begin line', () => {
+    expect(
+      liveCheckinHeadline({
+        source: 'checkin',
+        checkin_stage: 'started',
+        content: 'Daniel is working out!\nApple Watch · 42 min · 138 bpm',
+      }),
+    ).toBe('Daniel is working out!');
+  });
+});
+
+describe('liveProofCaption', () => {
+  it('prefers that slot’s caption over the receipt line', () => {
+    const post = {
+      media_urls: ['https://x/pre.jpg', 'https://x/post.jpg'],
+      media_captions: ['Warm up', null],
+    };
+    expect(liveProofCaption(post, 'https://x/pre.jpg', 'Check-in Complete')).toBe('Warm up');
+    expect(liveProofCaption(post, 'https://x/post.jpg', 'Check-in Complete')).toBe(
+      'Check-in Complete',
+    );
+    expect(liveProofCaption(post, 'https://x/other.jpg', 'Check-in Complete')).toBe(
+      'Check-in Complete',
+    );
+  });
+});
+
+describe('liveSwipeClaimsReply', () => {
+  it('needs a clear rightward drag so vertical scroll still wins', () => {
+    expect(liveSwipeClaimsReply(30, 4)).toBe(true);
+    expect(liveSwipeClaimsReply(6, 0)).toBe(false);
+    expect(liveSwipeClaimsReply(-40, 2)).toBe(false);
+    expect(liveSwipeClaimsReply(20, 40)).toBe(false);
   });
 });
 

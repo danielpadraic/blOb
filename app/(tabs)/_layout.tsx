@@ -338,6 +338,8 @@ function TabLayoutInner() {
         pushCheckinSubmit(router, list[0].id, 'plus-checkin', undefined, pathname);
         return;
       }
+      // Nothing loggable explains itself on the hub. Never a silent close, never the Wave camera.
+      go(MULTI_CHECKIN_HREF);
       return;
     }
     if (id === 'create') {

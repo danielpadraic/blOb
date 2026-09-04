@@ -314,7 +314,12 @@ export function CheckinComposer({
         quality: 0.9,
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
-      if (result.canceled || result.assets.length === 0) {
+      if (result.canceled) {
+        return;
+      }
+      // Lock: an empty gallery pick says so. It is never a silent no-op.
+      if (result.assets.length === 0) {
+        Alert.alert(copy('checkin.pickEmpty'));
         return;
       }
       const next: Omit<CheckinExtra, 'id'>[] = [];
@@ -445,7 +450,12 @@ export function CheckinComposer({
         quality: 0.9,
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
-      if (result.canceled || !result.assets[0]?.uri) {
+      if (result.canceled) {
+        return;
+      }
+      // Lock: an empty gallery pick says so. It is never a silent no-op.
+      if (!result.assets[0]?.uri) {
+        Alert.alert(copy('checkin.pickEmpty'));
         return;
       }
       const asset = result.assets[0];

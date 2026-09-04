@@ -33,7 +33,10 @@ import { mediaKind } from '@/utils/media';
 
 export type LightboxItem = {
   uri: string;
+  /** Caption for this proof. Renders under the image, never over it. */
   label?: string;
+  /** Small line above the caption: time, or slot name. */
+  meta?: string;
 };
 
 type LightboxState = {
@@ -193,6 +196,11 @@ function MediaLightboxOverlay({
   const items = state?.items ?? [];
   const current = items[page];
   const columnW = Math.min(pageWidth, FEED_COLUMN_MAX);
+  const bottomInset = Math.max(insets.bottom, 12);
+  const captioned = items.some((item) => Boolean(item.label?.trim() || item.meta?.trim()));
+  /* Proof stays full-bleed: the caption and dots get their own band under the image. */
+  const band = (captioned ? 64 : 0) + (items.length > 1 ? 22 : 0);
+  const mediaHeight = band > 0 ? Math.max(pageHeight - band - bottomInset, 160) : pageHeight;
 
   if (!open || !state) {
     return null;
@@ -224,6 +232,7 @@ function MediaLightboxOverlay({
                 width={pageWidth}
                 mediaWidth={columnW}
                 height={pageHeight}
+                mediaHeight={mediaHeight}
                 onClose={onClose}
               />
             ))}
@@ -233,29 +242,31 @@ function MediaLightboxOverlay({
             <PlayerCloseButton accessibilityLabel="Close" onPress={onClose} />
           </View>
 
-          {items.length > 1 ? (
-            <View
-              pointerEvents="box-none"
-              style={[styles.dots, { bottom: Math.max(insets.bottom, 12) + (current?.label ? 28 : 8) }]}>
-              {items.map((item, index) => (
-                <Pressable
-                  key={`${item.uri}-dot-${index}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Photo ${index + 1} of ${items.length}`}
-                  accessibilityState={{ selected: index === page }}
-                  hitSlop={8}
-                  onPress={() => goTo(index)}
-                  style={[styles.dot, index === page ? styles.dotOn : null]}
-                />
-              ))}
-            </View>
-          ) : null}
-
-          {current?.label ? (
-            <View
-              pointerEvents="none"
-              style={[styles.captionWrap, { bottom: Math.max(insets.bottom, 12) + 6 }]}>
-              <AppText style={styles.caption}>{current.label}</AppText>
+          {items.length > 1 || captioned ? (
+            <View pointerEvents="box-none" style={[styles.bottomBand, { bottom: bottomInset }]}>
+              {items.length > 1 ? (
+                <View pointerEvents="box-none" style={styles.dots}>
+                  {items.map((item, index) => (
+                    <Pressable
+                      key={`${item.uri}-dot-${index}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Photo ${index + 1} of ${items.length}`}
+                      accessibilityState={{ selected: index === page }}
+                      hitSlop={8}
+                      onPress={() => goTo(index)}
+                      style={[styles.dot, index === page ? styles.dotOn : null]}
+                    />
+                  ))}
+                </View>
+              ) : null}
+              {current?.meta?.trim() ? (
+                <AppText style={styles.captionMeta}>{current.meta}</AppText>
+              ) : null}
+              {current?.label?.trim() ? (
+                <AppText style={styles.caption} numberOfLines={3}>
+                  {current.label}
+                </AppText>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -267,18 +278,20 @@ function LightboxPage({
   width,
   mediaWidth,
   height,
+  mediaHeight,
   onClose,
 }: {
   item: LightboxItem;
   width: number;
   mediaWidth: number;
   height: number;
+  mediaHeight: number;
   onClose: () => void;
 }) {
   const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
   const zoomable = Platform.OS === 'ios' && kind !== 'video';
-  const mediaStyle = { width: mediaWidth, height };
+  const mediaStyle = { width: mediaWidth, height: mediaHeight };
 
   const media =
     kind === 'video' ? (
@@ -305,7 +318,7 @@ function LightboxPage({
       />
       <View
         pointerEvents={kind === 'video' || zoomable ? 'auto' : 'none'}
-        style={[styles.mediaSlot, { width, height }]}>
+        style={[styles.mediaSlot, { width, height: mediaHeight }]}>
         {zoomable ? (
           <ScrollView
             style={mediaStyle}
@@ -422,11 +435,15 @@ const styles = StyleSheet.create({
     left: 12,
     zIndex: 4,
   },
-  dots: {
+  bottomBand: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 16,
+    right: 16,
     zIndex: 2,
+    alignItems: 'center',
+    gap: 6,
+  },
+  dots: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -441,19 +458,17 @@ const styles = StyleSheet.create({
   dotOn: {
     backgroundColor: THEME.accent,
   },
-  captionWrap: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    alignItems: 'center',
+  captionMeta: {
+    color: 'rgba(247, 247, 245, 0.62)',
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   caption: {
     color: THEME.primaryForeground,
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: '600',
     textAlign: 'center',
-    textShadowColor: 'rgba(16, 19, 18, 0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
 });

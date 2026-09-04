@@ -18,7 +18,7 @@ import {
   type MultiCheckinState,
 } from '@/lib/multiCheckin';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
-import { TABS_HREF } from '@/lib/routes';
+import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 const STATE_COPY: Record<MultiCheckinState, string> = {
@@ -80,11 +80,37 @@ export default function MultiCheckinScreen() {
           </AppText>
         </View>
       ) : null}
-      <View style={{ gap: 10 }}>
-        {rows.map((row) => (
-          <HubRow key={row.id} row={row} onPress={() => openSubmit(row.id)} />
-        ))}
-      </View>
+      {rows.length === 0 && !loggable.isLoading ? (
+        /* + Check In with nothing loggable explains itself instead of closing the menu. */
+        <View
+          style={{
+            gap: 10,
+            padding: 16,
+            borderRadius: THEME.radius,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.surface,
+            ...themeShadow(),
+          }}>
+          <AppText className="text-[16px] font-extrabold text-charcoal">
+            {copy('checkin.noneTitle')}
+          </AppText>
+          <AppText className="text-[14px] leading-5" style={{ color: THEME.textMuted }}>
+            {copy('checkin.noneBody')}
+          </AppText>
+          <Button
+            title={copy('checkin.noneBrowse')}
+            variant="primary"
+            onPress={() => router.replace(LOBBY_HREF)}
+          />
+        </View>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {rows.map((row) => (
+            <HubRow key={row.id} row={row} onPress={() => openSubmit(row.id)} />
+          ))}
+        </View>
+      )}
       <View
         style={{
           marginTop: 20,

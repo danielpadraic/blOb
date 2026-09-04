@@ -1,5 +1,5 @@
-import { memo, useRef } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { memo, useMemo, useRef } from 'react';
+import { Alert, Animated, PanResponder, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { LiveReactions } from '@/components/challenge/LiveReactions';
@@ -24,8 +24,12 @@ import {
   isLiveCheckinPost,
   isLiveSystemPost,
   liveChatText,
-  liveCheckinLabel,
+  liveCheckinHeadline,
+  liveProofCaption,
   liveQuoteLine,
+  liveSwipeClaimsReply,
+  REPLY_SWIPE_MAX,
+  REPLY_SWIPE_TRIGGER,
 } from '@/lib/liveThread';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
@@ -83,11 +87,45 @@ export const LiveBubble = memo(function LiveBubble({
   const caption = checkin
     ? checkinCardCaption(post.content, null, post.edited_at)
     : liveChatText(post.content, post.media_urls);
+  const headline = liveCheckinHeadline(post);
   const items: LightboxItem[] = visuals.map((uri) => ({
     uri,
-    label: mediaKind(uri) === 'video' ? 'Video' : 'Photo',
+    label: liveProofCaption(post, uri, checkin ? headline : caption),
+    meta: time,
   }));
   const alignEnd = mine && !system;
+  const canSwipeReply = Boolean(onReply) && !removed && !editing && Platform.OS !== 'web';
+  const swipe = useRef(new Animated.Value(0)).current;
+  const swipeLive = useRef(false);
+  const replyRef = useRef(onReply);
+  replyRef.current = onReply;
+  swipeLive.current = canSwipeReply;
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          swipeLive.current && liveSwipeClaimsReply(gesture.dx, gesture.dy),
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          swipeLive.current && liveSwipeClaimsReply(gesture.dx, gesture.dy),
+        onPanResponderMove: (_, gesture) => {
+          swipe.setValue(Math.max(0, Math.min(gesture.dx, REPLY_SWIPE_MAX)));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const fire = gesture.dx >= REPLY_SWIPE_TRIGGER;
+          Animated.spring(swipe, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 4 }).start();
+          if (fire) {
+            replyRef.current?.();
+          }
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(swipe, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 4 }).start();
+        },
+      }),
+    [swipe],
+  );
 
   function openProof(index = 0) {
     if (!lightbox || items.length === 0) {
@@ -119,19 +157,47 @@ export const LiveBubble = memo(function LiveBubble({
         padding: highlighted ? 4 : 0,
         overflow: 'visible',
       }}>
-      <View
-        className="flex-row items-end"
+      {/* iMessage: a clear right drag reveals Reply. Vertical scroll still wins. */}
+      {canSwipeReply ? (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            justifyContent: 'center',
+            opacity: swipe.interpolate({
+              inputRange: [0, REPLY_SWIPE_TRIGGER],
+              outputRange: [0, 1],
+              extrapolate: 'clamp',
+            }),
+          }}>
+          <Glyph name={GLYPH.replyArrow} color={THEME.textMuted} size={16} />
+        </Animated.View>
+      ) : null}
+      <Animated.View
+        {...(canSwipeReply ? pan.panHandlers : null)}
         style={{
+          flexDirection: 'row',
+          alignItems: 'flex-end',
           gap: 8,
           maxWidth: '86%',
           alignSelf: alignEnd ? 'flex-end' : 'flex-start',
+          transform: [{ translateX: swipe }],
         }}>
         {alignEnd ? null : (
           <ProfileLink username={post.author?.username} userId={uid}>
             <Avatar uri={post.author?.avatar_url} name={name} size={28} />
           </ProfileLink>
         )}
-        <View style={{ flexShrink: 1, minWidth: 0, alignItems: alignEnd ? 'flex-end' : 'flex-start' }}>
+        <View
+          style={{
+            flexShrink: 1,
+            minWidth: 0,
+            maxWidth: '100%',
+            alignItems: alignEnd ? 'flex-end' : 'flex-start',
+          }}>
           {checkin ? null : (
             <View
               style={{
@@ -244,12 +310,12 @@ export const LiveBubble = memo(function LiveBubble({
               {visuals[0] ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Open check-in proof"
+                  accessibilityLabel={`Open check-in proof. ${headline}`}
                   onPress={() => openProof(0)}
                   style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 12,
+                    width: CHECKIN_THUMB,
+                    height: CHECKIN_THUMB,
+                    borderRadius: 14,
                     overflow: 'hidden',
                     backgroundColor: THEME.surface2,
                   }}>
@@ -270,12 +336,51 @@ export const LiveBubble = memo(function LiveBubble({
                       <Glyph name={GLYPH.play} color="#fff" size={16} />
                     </View>
                   ) : null}
+                  {visuals.length > 1 ? (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 999,
+                        backgroundColor: 'rgba(16,19,18,0.82)',
+                      }}>
+                      <AppText className="text-[10px] font-bold" style={{ color: THEME.primaryForeground }}>
+                        {visuals.length}
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {/* Receipt line rides in a solid chip, never raw white text on the proof. */}
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      paddingHorizontal: 5,
+                      paddingVertical: 4,
+                      backgroundColor: 'rgba(16,19,18,0.92)',
+                    }}>
+                    <AppText
+                      className="text-[10px] font-bold"
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={{ color: THEME.primaryForeground, letterSpacing: -0.1 }}>
+                      {headline}
+                    </AppText>
+                  </View>
                 </Pressable>
               ) : null}
               <View style={{ flexShrink: 1, minWidth: 0 }}>
-                <AppText className="text-[14px] font-semibold" style={{ color: THEME.textPrimary }}>
-                  {liveCheckinLabel(post)}
-                </AppText>
+                {visuals[0] ? null : (
+                  <AppText className="text-[14px] font-semibold" style={{ color: THEME.textPrimary }}>
+                    {headline}
+                  </AppText>
+                )}
                 {caption ? (
                   <AppText className="mt-0.5 text-[13px]" style={{ color: THEME.textMuted }} numberOfLines={2}>
                     {caption}
@@ -342,11 +447,13 @@ export const LiveBubble = memo(function LiveBubble({
               ) : null}
             </View>
           )}
+          {/* stretch, not flex-end: a content-sized row cannot wrap, so chips used to push Reply off screen. */}
           {removed || editing ? null : (
-          <View style={{ marginTop: 2, alignSelf: alignEnd ? 'flex-end' : 'flex-start' }}>
+          <View style={{ marginTop: 2, maxWidth: '100%', alignSelf: 'stretch' }}>
             <LiveReactions
               reactions={reactions ?? post.reactions}
               currentUserId={currentUserId}
+              align={alignEnd ? 'end' : 'start'}
               onReact={onReact}
               onReply={onReply}
               onEdit={onEdit}
@@ -354,7 +461,7 @@ export const LiveBubble = memo(function LiveBubble({
           </View>
           )}
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 });
@@ -408,6 +515,9 @@ function LiveQuoteChip({ quote, mine }: { quote: LiveQuote; mine?: boolean }) {
     </View>
   );
 }
+
+/** Dense Live stays one thumb, but big enough for the caption chip and the clock to read. */
+const CHECKIN_THUMB = 96;
 
 const absoluteFill = {
   position: 'absolute' as const,

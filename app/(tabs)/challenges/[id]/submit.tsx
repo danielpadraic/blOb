@@ -604,6 +604,12 @@ function SubmitWorkoutInner() {
     setCaptureId(target.id);
   }
 
+  /** Alert.alert is a no-op on react-native-web, so the coral line carries it on Web. */
+  function warnPickEmpty() {
+    setError(copy('checkin.pickEmpty'));
+    Alert.alert(copy('checkin.pickEmpty'));
+  }
+
   async function pickCurrentFromGallery(proof?: ChallengeProof) {
     const target = reviewPhotoProof(proof);
     if (!target || busy) {
@@ -625,13 +631,18 @@ function SubmitWorkoutInner() {
         quality: 0.9,
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
-      if (result.canceled || !result.assets[0]) {
+      if (result.canceled) {
+        return;
+      }
+      // Lock: an empty gallery pick says so. It is never a silent no-op.
+      if (!result.assets[0]) {
+        warnPickEmpty();
         return;
       }
       const asset = result.assets[0];
       const uri = localUriFromPickerAsset(asset);
       if (!uri) {
-        Alert.alert('Couldn’t attach that', 'Pick a photo from the gallery.');
+        warnPickEmpty();
         return;
       }
       const mime = asset.mimeType ?? asset.file?.type;

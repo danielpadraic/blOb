@@ -75,11 +75,7 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
             <>
               <BarButton
                 label="Check In"
-                disabled={loggables.length === 0}
                 onPress={() => {
-                  if (loggables.length === 0) {
-                    return;
-                  }
                   if (loggables.length === 1) {
                     pickLog(loggables[0]);
                     return;
