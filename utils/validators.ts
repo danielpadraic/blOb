@@ -60,11 +60,11 @@ export const profileSetupSchema = z.object({
     }),
   display_name: z.string().trim().min(2, 'Enter a display name').max(48),
   bio: z.string().max(160, 'Keep it to 160 characters').optional(),
-  gender: z.enum(['male', 'female'], { message: 'Pick Male or Female' }),
+  gender: z.union([z.enum(['male', 'female']), z.literal('')]),
   height_cm: z.string().optional(),
   height_ft: z.string().optional(),
   height_in: z.string().optional(),
-  current_weight: z.string().min(1, 'Add your current weight'),
+  current_weight: z.string(),
   goal_weight: z.string().optional(),
   weight_unit: z.enum(['kg', 'lb']),
   body_fat_pct: z.number(),
@@ -76,16 +76,11 @@ export const profileSetupSchema = z.object({
     .min(1, 'Pick at least one activity'),
   show_fitness_stats_publicly: z.boolean(),
 }).superRefine((values, ctx) => {
+  // Physical Details are optional in first-run. Every range below only applies
+  // to a field the user actually filled in.
   if (values.weight_unit === 'lb') {
-    if (!values.height_ft?.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['height_ft'],
-        message: 'Add your height',
-      });
-    } else {
+    if (values.height_ft?.trim()) {
       const feet = Number(values.height_ft);
-      const inches = Number(values.height_in || '0');
       if (!Number.isFinite(feet) || feet < 4 || feet > 7) {
         ctx.addIssue({
           code: 'custom',
@@ -93,6 +88,9 @@ export const profileSetupSchema = z.object({
           message: 'Height is usually between 4 and 7 feet',
         });
       }
+    }
+    if (values.height_in?.trim()) {
+      const inches = Number(values.height_in);
       if (!Number.isFinite(inches) || inches < 0 || inches >= 12) {
         ctx.addIssue({
           code: 'custom',
@@ -100,14 +98,23 @@ export const profileSetupSchema = z.object({
           message: 'Inches should be 0–11',
         });
       }
+      if (!values.height_ft?.trim()) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['height_ft'],
+          message: 'Add feet too',
+        });
+      }
     }
-    const pounds = Number(values.current_weight);
-    if (!Number.isFinite(pounds) || pounds < 70 || pounds > 500) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['current_weight'],
-        message: 'That weight looks off',
-      });
+    if (values.current_weight.trim()) {
+      const pounds = Number(values.current_weight);
+      if (!Number.isFinite(pounds) || pounds < 70 || pounds > 500) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['current_weight'],
+          message: 'That weight looks off',
+        });
+      }
     }
     if (values.goal_weight?.trim()) {
       const goal = Number(values.goal_weight);
@@ -122,27 +129,25 @@ export const profileSetupSchema = z.object({
     return;
   }
 
-  const cm = Number(values.height_cm);
-  if (!values.height_cm?.trim()) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['height_cm'],
-      message: 'Add your height',
-    });
-  } else if (!Number.isFinite(cm) || cm < 100 || cm > 250) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['height_cm'],
-      message: 'Height should be between 100 and 250 cm',
-    });
+  if (values.height_cm?.trim()) {
+    const cm = Number(values.height_cm);
+    if (!Number.isFinite(cm) || cm < 100 || cm > 250) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['height_cm'],
+        message: 'Height should be between 100 and 250 cm',
+      });
+    }
   }
-  const kilos = Number(values.current_weight);
-  if (!Number.isFinite(kilos) || kilos < 30 || kilos > 250) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['current_weight'],
-      message: 'That weight looks off',
-    });
+  if (values.current_weight.trim()) {
+    const kilos = Number(values.current_weight);
+    if (!Number.isFinite(kilos) || kilos < 30 || kilos > 250) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['current_weight'],
+        message: 'That weight looks off',
+      });
+    }
   }
   if (values.goal_weight?.trim()) {
     const goal = Number(values.goal_weight);

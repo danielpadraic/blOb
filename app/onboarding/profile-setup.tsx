@@ -11,6 +11,7 @@ import { UnitToggle } from '@/components/profile/UnitToggle';
 import { BfpSliderCopy, MotivationToneChips } from '@/components/profile/MotivationToneChips';
 import { MorphingBlob, preloadBodyFatFrames } from '@/components/profile/MorphingBlob';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
+import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -43,11 +44,10 @@ import {
   profileWeightKg,
 } from '@/lib/bodyMetrics';
 import { PROFILE_SETUP_TONE_OPTIONS, copy, profileSetupTone, type CopyTone } from '@/lib/copy';
-import { fitnessProfileFromUser, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
+import { fitnessProfileFromUser } from '@/lib/fitnessProfile';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import type { PostAudience } from '@/lib/postAudience';
-import { FITNESS_HISTORY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -75,7 +75,7 @@ const GENDER_OPTIONS = [
 const STEP_COPY = [
   {
     title: 'Join the lobby',
-    body: 'We’ll set your name, training, and a starting wallet of 100 Coins.',
+    body: 'We’ll set your name, your training, and your starting wallet.',
   },
   {
     title: 'Training',
@@ -83,7 +83,7 @@ const STEP_COPY = [
   },
   {
     title: 'Physical Details',
-    body: 'Always private. Used for Challenge recommendations and competition placement.',
+    body: 'Always private. Used for Challenge recommendations and competition placement. You can skip this and add it later.',
   },
 ] as const;
 
@@ -271,19 +271,44 @@ export function ProfileSetupWizard() {
         ? inputWeightToKg(goal, values.weight_unit === 'kg' ? 'metric' : 'imperial')
         : null;
 
+    // Physical Details are optional. Only claim body metrics when the user
+    // actually gave us gender, height, and weight — otherwise keep whatever is
+    // already stored (null on a new account) and leave the stamp alone.
+    const enteredHeight =
+      values.weight_unit === 'lb'
+        ? Boolean(values.height_ft?.trim())
+        : Boolean(values.height_cm?.trim());
+    const enteredGender =
+      values.gender === 'male' || values.gender === 'female' ? values.gender : null;
+    const enteredMetrics =
+      enteredGender != null && enteredHeight && Boolean(values.current_weight.trim());
+
+    const metrics = enteredMetrics
+      ? {
+          gender: enteredGender,
+          height_cm: Number.isFinite(heightCm) ? heightCm : null,
+          current_weight: Number.isFinite(weightKg) ? weightKg : null,
+          goal_weight: goalKg,
+          body_fat_pct: clampBodyFat(values.body_fat_pct),
+          body_metrics_completed_at: new Date().toISOString(),
+        }
+      : {
+          gender: profile?.gender ?? null,
+          height_cm: profile?.height_cm ?? null,
+          current_weight: profile?.current_weight ?? null,
+          goal_weight: profile?.goal_weight ?? null,
+          body_fat_pct: profile?.body_fat_pct ?? null,
+          body_metrics_completed_at: profile?.body_metrics_completed_at ?? null,
+        };
+
     try {
       await completeProfile.mutateAsync({
         username: normalizeUsername(values.username),
         display_name: values.display_name,
         avatar_url: profile?.avatar_url,
         bio: values.bio || null,
-        gender: values.gender,
-        height_cm: Number.isFinite(heightCm) ? heightCm : null,
-        current_weight: Number.isFinite(weightKg) ? weightKg : null,
-        goal_weight: goalKg,
         weight_unit: values.weight_unit,
-        body_fat_pct: clampBodyFat(values.body_fat_pct),
-        body_metrics_completed_at: new Date().toISOString(),
+        ...metrics,
         fitness_profile: {
           ...fitnessProfileFromUser(profile),
           preferred_units: values.weight_unit === 'kg' ? 'metric' : 'imperial',
@@ -295,15 +320,32 @@ export function ProfileSetupWizard() {
         show_fitness_stats_publicly: false,
         motivation_tone: tone,
       });
-      if (!hasCompletedFitnessHistory(profile)) {
-        router.replace(FITNESS_HISTORY_HREF);
-        return;
-      }
       router.replace('/feed');
     } catch (error) {
       setFormError(getErrorMessage(error));
     }
   });
+
+  // "Set this up later" keeps anything valid the user already typed, but must
+  // never dead-end on a malformed half-entry — if it cannot be saved, drop it.
+  async function skipPhysicalDetails() {
+    const valid = await trigger([...PROFILE_STEP_FIELDS[2]]);
+    if (!valid) {
+      const metricFields = [
+        'gender',
+        'height_cm',
+        'height_ft',
+        'height_in',
+        'current_weight',
+        'goal_weight',
+      ] as const;
+      for (const field of metricFields) {
+        setValue(field, '', { shouldValidate: false });
+      }
+    }
+    setFormError(null);
+    await onSubmit();
+  }
 
   const handleLabel = usernameHandleLabel(username);
   const usernameHint = availability.isChecking
@@ -344,12 +386,21 @@ export function ProfileSetupWizard() {
               }
             />
           ) : (
-            <Button
-              title="Finish"
-              size="lg"
-              onPress={onSubmit}
-              loading={isSubmitting || completeProfile.isPending}
-            />
+            <>
+              <Button
+                title="Finish"
+                size="lg"
+                onPress={onSubmit}
+                loading={isSubmitting || completeProfile.isPending}
+              />
+              <Button
+                title="Set this up later"
+                variant="ghost"
+                size="lg"
+                onPress={() => void skipPhysicalDetails()}
+                disabled={isSubmitting || completeProfile.isPending}
+              />
+            </>
           )}
           {step > 0 ? (
             <Button title="Back" variant="ghost" size="lg" onPress={() => setStep((current) => current - 1)} />
@@ -360,6 +411,20 @@ export function ProfileSetupWizard() {
         <BlobMascot size={132} motion="float" />
         <AppText className="mt-5 text-3xl font-bold text-charcoal">{stepCopy.title}</AppText>
         <AppText className="mt-2 px-2 text-center leading-6 text-muted">{stepCopy.body}</AppText>
+        {step === 0 ? (
+          <View
+            className="mt-3 flex-row items-center"
+            style={{ gap: 6 }}
+            accessible
+            accessibilityLabel="Starting wallet: 100 Blob Coins">
+            <CurrencyMark currency="coins" size={18} />
+            <AppText
+              className="text-base font-extrabold text-charcoal"
+              style={{ fontVariant: ['tabular-nums'] }}>
+              100
+            </AppText>
+          </View>
+        ) : null}
       </View>
 
       <View className="mt-7">
@@ -534,66 +599,70 @@ export function ProfileSetupWizard() {
           </View>
 
           {unit === 'lb' ? (
-            <View className="gap-2">
-              <AppText className="text-sm font-semibold text-charcoal">Height</AppText>
-              <View className="flex-row gap-3">
-                <View className="flex-1">
-                  <Controller
-                    control={control}
-                    name="height_ft"
-                    render={({ field: { onChange, onBlur, value } }) => (
-                      <Input
-                        label="Feet"
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={value}
-                        onChangeText={onChange}
-                        onBlur={onBlur}
-                        placeholder="5"
-                        error={errors.height_ft?.message}
-                      />
-                    )}
-                  />
-                </View>
-                <View className="flex-1">
-                  <Controller
-                    control={control}
-                    name="height_in"
-                    render={({ field: { onChange, onBlur, value } }) => (
-                      <Input
-                        label="Inches"
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        maxLength={2}
-                        value={value}
-                        onChangeText={onChange}
-                        onBlur={onBlur}
-                        placeholder="10"
-                        error={errors.height_in?.message}
-                      />
-                    )}
-                  />
+            <KeyboardField>
+              <View className="gap-2">
+                <AppText className="text-sm font-semibold text-charcoal">Height</AppText>
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Controller
+                      control={control}
+                      name="height_ft"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <Input
+                          label="Feet"
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder="5"
+                          error={errors.height_ft?.message}
+                        />
+                      )}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Controller
+                      control={control}
+                      name="height_in"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <Input
+                          label="Inches"
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          maxLength={2}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder="10"
+                          error={errors.height_in?.message}
+                        />
+                      )}
+                    />
+                  </View>
                 </View>
               </View>
-            </View>
+            </KeyboardField>
           ) : (
-            <Controller
-              control={control}
-              name="height_cm"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Height"
-                  keyboardType="decimal-pad"
-                  inputMode="decimal"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  placeholder="178"
-                  error={errors.height_cm?.message}
-                />
-              )}
-            />
+            <KeyboardField>
+              <Controller
+                control={control}
+                name="height_cm"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <Input
+                    label="Height"
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    value={value}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    placeholder="178"
+                    error={errors.height_cm?.message}
+                  />
+                )}
+              />
+            </KeyboardField>
           )}
 
           <KeyboardField>
