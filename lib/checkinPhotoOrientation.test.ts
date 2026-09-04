@@ -5,6 +5,8 @@ vi.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'jpeg' },
 }));
 
+import { Platform } from 'react-native';
+
 import {
   checkinDeviceOrientation,
   checkinPreviewRotateDeg,
@@ -96,6 +98,28 @@ describe('readWebOrientationSnapshot', () => {
       });
     } finally {
       (globalThis as { window?: unknown }).window = previous;
+    }
+  });
+
+  it('never reads screen.orientation on native, even if window looks like a browser', () => {
+    const previousOs = Platform.OS;
+    const previousWindow = globalThis.window;
+    Platform.OS = 'ios';
+    (globalThis as { window?: unknown }).window = {
+      get screen() {
+        throw new Error('native has no screen');
+      },
+    };
+    try {
+      expect(readWebOrientationSnapshot()).toEqual({
+        screenType: null,
+        screenAngle: null,
+        windowWidth: 0,
+        windowHeight: 0,
+      });
+    } finally {
+      Platform.OS = previousOs;
+      (globalThis as { window?: unknown }).window = previousWindow;
     }
   });
 });

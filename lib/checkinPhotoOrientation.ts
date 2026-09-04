@@ -246,20 +246,27 @@ export async function normalizeCheckinStill(
   }
 }
 
+export const EMPTY_WEB_ORIENTATION = {
+  screenType: null as string | null,
+  screenAngle: null as number | null,
+  windowWidth: 0,
+  windowHeight: 0,
+};
+
+/** Web only. Native `window` exists but has no `screen.orientation` — never read it on iOS. */
 export function readWebOrientationSnapshot(): {
   screenType: string | null;
   screenAngle: number | null;
   windowWidth: number;
   windowHeight: number;
 } {
-  const empty = { screenType: null, screenAngle: null, windowWidth: 0, windowHeight: 0 };
-  if (typeof window === 'undefined') {
-    return empty;
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return EMPTY_WEB_ORIENTATION;
   }
   try {
     const screen = (window as { screen?: { orientation?: { type?: string; angle?: number } } }).screen;
     const type = screen?.orientation?.type ?? null;
-    const windowAngle = (window as { orientation?: number }).orientation;
+    const windowAngle = (window as { orientation?: number | null }).orientation;
     const angle =
       typeof screen?.orientation?.angle === 'number'
         ? screen.orientation.angle
@@ -273,6 +280,6 @@ export function readWebOrientationSnapshot(): {
       windowHeight: typeof window.innerHeight === 'number' ? window.innerHeight : 0,
     };
   } catch {
-    return empty;
+    return EMPTY_WEB_ORIENTATION;
   }
 }

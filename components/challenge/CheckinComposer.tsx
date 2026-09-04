@@ -152,11 +152,16 @@ export function CheckinComposer({
   const [footerH, setFooterH] = useState(64);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const pageWidth = Math.max(windowWidth, 1);
-  const heroHeight = Math.max(Math.min(Math.round(windowHeight * 0.42), 360), 220);
+  // Keyboard on web shrinks window height. If the hero resizes, the Note field blurs and the keyboard loops.
+  const [shellHeight] = useState(() => Math.max(windowHeight, 1));
+  const heroHeight = Math.max(Math.min(Math.round(shellHeight * 0.42), 360), 220);
   const [gifOpen, setGifOpen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const chromePad = tabBarLift(insets.bottom, 'sticky');
   const scrollFieldIntoView = useCallback((node: View) => {
+    if (Platform.OS === 'web') {
+      return;
+    }
     lastFieldNode.current = node;
     const run = () => {
       node.measureInWindow((_x, y, _w, h) => {
@@ -184,7 +189,7 @@ export function CheckinComposer({
   }, [footerH, windowHeight]);
 
   useEffect(() => {
-    if (keyboardOverlap <= 0 || !lastFieldNode.current) {
+    if (Platform.OS === 'web' || keyboardOverlap <= 0 || !lastFieldNode.current) {
       return;
     }
     scrollFieldIntoView(lastFieldNode.current);
@@ -521,7 +526,6 @@ export function CheckinComposer({
       style={{
         flex: 1,
         backgroundColor: THEME.background,
-        marginBottom: Platform.OS === 'web' ? keyboardOverlap : 0,
       }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}>
@@ -553,9 +557,9 @@ export function CheckinComposer({
           flexGrow: 1,
           paddingBottom: footerH + 16,
         }}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
         keyboardDismissMode="none"
-        automaticallyAdjustKeyboardInsets
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         showsVerticalScrollIndicator={false}
         onScroll={(event) => {
           scrollY.current = event.nativeEvent.contentOffset.y;

@@ -1368,6 +1368,7 @@ function SubmitWorkoutInner() {
                     value={drafts[proof.id]?.text ?? ''}
                     onChangeText={(value) => onText(proof.id, value)}
                     editable={!busy && phase !== 'submitted'}
+                    blurOnSubmit={false}
                     grow
                   />
                 </View>

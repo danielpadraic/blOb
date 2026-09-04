@@ -46,6 +46,7 @@ import {
 import { clipShutterReleaseStopsRecording } from '@/lib/clipShutter';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
 import {
+  EMPTY_WEB_ORIENTATION,
   checkinDeviceOrientation,
   checkinPreviewRotateDeg,
   checkinWebSnapRotateDegrees,
@@ -120,11 +121,7 @@ export function InAppCamera({
   const insets = useSafeAreaInsets();
   const windowSize = useWindowDimensions();
   const [previewBox, setPreviewBox] = useState({ width: windowSize.width, height: windowSize.height });
-  const [webOrient, setWebOrient] = useState(() =>
-    Platform.OS === 'web'
-      ? readWebOrientationSnapshot()
-      : { screenType: null as string | null, screenAngle: null as number | null, windowWidth: 0, windowHeight: 0 },
-  );
+  const [webOrient, setWebOrient] = useState(EMPTY_WEB_ORIENTATION);
   const navFocused = useIsFocused();
   const pathname = usePathname();
   const web = Platform.OS === 'web';
