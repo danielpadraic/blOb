@@ -119,6 +119,7 @@ type ClipPlayerProps = {
   startIndex?: number;
   autoAdvance?: boolean;
   openComments?: boolean;
+  highlightCommentId?: string | null;
   challenges?: Map<string, FeedChallengePreview>;
   sharePrompt?: boolean;
   viewedIds?: Set<string>;
@@ -131,6 +132,7 @@ export function ClipPlayer({
   startIndex = 0,
   autoAdvance = true,
   openComments = false,
+  highlightCommentId,
   challenges,
   sharePrompt = false,
   viewedIds,
@@ -560,6 +562,23 @@ export function ClipPlayer({
             />
           )}
 
+          {pickerOpen ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss reactions"
+              onPress={() => setPickerOpen(false)}
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                backgroundColor: 'rgba(16,19,18,0.28)',
+                zIndex: 7,
+              }}
+            />
+          ) : null}
+
           {commentsMode ? (
             <Pressable
               accessibilityRole="button"
@@ -908,6 +927,7 @@ export function ClipPlayer({
                   avatarUrl={profile?.avatar_url}
                   displayName={profile?.display_name ?? profile?.username}
                   keyboardInset={Math.max(0, keyboardPad - drawerLift)}
+                  highlightCommentId={index === startIndex ? highlightCommentId : undefined}
                   onClose={closeComments}
                   onScrollOffset={(offset) => {
                     commentsScrollY.current = offset;
@@ -1070,10 +1090,22 @@ function ClipSocialRail({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Reaction"
-          onPress={() => fire(mineType ?? lastReaction)}
+          onPress={() => {
+            if (pickerOpen) {
+              onClosePicker();
+              return;
+            }
+            fire(mineType ?? lastReaction);
+          }}
           onPressIn={() => onRailHot(true)}
           onPressOut={() => onRailHot(false)}
-          onLongPress={onLongReact}
+          onLongPress={() => {
+            if (pickerOpen) {
+              onClosePicker();
+              return;
+            }
+            onLongReact();
+          }}
           delayLongPress={280}
           style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
           <AppText className="text-[28px]">{mineType ? clipReactionEmoji(mineType) : '♡'}</AppText>
@@ -1149,6 +1181,7 @@ function ClipCommentsPane({
   avatarUrl,
   displayName,
   keyboardInset = 0,
+  highlightCommentId,
   onClose,
   onScrollOffset,
   onCloseFromTop,
@@ -1158,6 +1191,7 @@ function ClipCommentsPane({
   avatarUrl?: string | null;
   displayName?: string | null;
   keyboardInset?: number;
+  highlightCommentId?: string | null;
   onClose?: () => void;
   onScrollOffset?: (offset: number) => void;
   onCloseFromTop?: () => void;
@@ -1177,6 +1211,7 @@ function ClipCommentsPane({
     <>
     <WaveRoundCommentsFeed
       comments={social.post?.comments ?? []}
+      commentsReady={social.postReady}
       currentUserId={currentUserId}
       avatarUrl={avatarUrl}
       displayName={displayName}
@@ -1184,6 +1219,7 @@ function ClipCommentsPane({
       audience={clip.audience ?? 'public'}
       audienceUserIds={clip.audienceUserIds ?? []}
       keyboardInset={keyboardInset}
+      highlightCommentId={highlightCommentId}
       onSend={(content, parentId, mentionedUserIds) =>
         social.onComment(content, parentId, mentionedUserIds)
       }

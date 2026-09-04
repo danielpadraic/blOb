@@ -20,6 +20,7 @@ type CheckinStackCardProps = {
   highlighted?: boolean;
   startExpanded?: boolean;
   highlightCommentId?: string | null;
+  commentsReady?: boolean;
   onReact: (post: PostWithMeta, type: ReactionType, commentId?: string | null) => void;
   onComment?: (
     post: PostWithMeta,
@@ -37,6 +38,7 @@ export function CheckinStackCard({
   highlighted,
   startExpanded,
   highlightCommentId,
+  commentsReady,
   onReact,
   onComment,
 }: CheckinStackCardProps) {
@@ -93,6 +95,7 @@ export function CheckinStackCard({
                     : undefined
                 }
                 startThreadOpen={Boolean(highlightCommentId && post.comments?.some((row) => row.id === highlightCommentId))}
+                commentsReady={commentsReady}
                 onReact={(type, commentId) => onReact(post, type, commentId)}
                 onComment={
                   onComment

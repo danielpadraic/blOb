@@ -555,10 +555,26 @@ async function fetchReactions(input: {
   };
 }
 
+const COMMENT_COLUMNS =
+  'id, post_id, author_id, parent_id, content, created_at, edited_at, deleted_at';
+const COMMENT_COLUMNS_NESTED = 'id, post_id, author_id, parent_id, content, created_at';
+const COMMENT_COLUMNS_FLAT = 'id, post_id, author_id, content, created_at';
+
 async function fetchComments(postIds: string[]) {
+  const edited = await supabase
+    .from('comments')
+    .select(COMMENT_COLUMNS)
+    .in('post_id', postIds)
+    .order('created_at', { ascending: true });
+  if (!edited.error) {
+    return edited;
+  }
+  if (!isUnknownColumnError(edited.error) && !edited.error.message.toLowerCase().includes('column')) {
+    return edited;
+  }
   const nested = await supabase
     .from('comments')
-    .select('id, post_id, author_id, parent_id, content, created_at')
+    .select(COMMENT_COLUMNS_NESTED)
     .in('post_id', postIds)
     .order('created_at', { ascending: true });
   if (!nested.error) {
@@ -572,7 +588,7 @@ async function fetchComments(postIds: string[]) {
   }
   return supabase
     .from('comments')
-    .select('id, post_id, author_id, content, created_at')
+    .select(COMMENT_COLUMNS_FLAT)
     .in('post_id', postIds)
     .order('created_at', { ascending: true });
 }
@@ -1770,9 +1786,11 @@ export function useCreatePost(challengeId?: string | null) {
         queryClient.setQueryData(context.listKey, context.previous);
       }
     },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['feed-events'] });
+    onSettled: (_data, _error, input, context) => {
+      const listKey =
+        context?.listKey ??
+        feedListKey(input.circleId ? `circle:${input.circleId}` : key, user?.id);
+      void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
       void reportBadgeActivity();
     },
   });
@@ -2011,7 +2029,7 @@ function mapInfiniteHomePages(
   };
 }
 
-function mapFeedCache(current: unknown, mapPosts: (posts: PostWithMeta[]) => PostWithMeta[]): unknown {
+export function mapFeedCache(current: unknown, mapPosts: (posts: PostWithMeta[]) => PostWithMeta[]): unknown {
   if (!current) {
     return current;
   }
@@ -2092,6 +2110,35 @@ export function patchFeedPosts(
         }
         changed = true;
         return updater(post);
+      });
+      return changed ? next : posts;
+    }),
+  );
+}
+
+export function patchFeedComments(
+  queryClient: QueryClient,
+  commentId: string,
+  updater: (comment: CommentWithAuthor, post: PostWithMeta) => CommentWithAuthor | null,
+) {
+  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) =>
+    mapFeedCache(current, (posts) => {
+      let changed = false;
+      const next = posts.map((post) => {
+        if (!post?.comments?.some((comment) => comment.id === commentId)) {
+          return post;
+        }
+        changed = true;
+        return {
+          ...post,
+          comments: post.comments.flatMap((comment) => {
+            if (comment.id !== commentId) {
+              return [comment];
+            }
+            const updated = updater(comment, post);
+            return updated ? [updated] : [];
+          }),
+        };
       });
       return changed ? next : posts;
     }),

@@ -7,6 +7,7 @@ import { ReactionBar } from '@/components/feed/ReactionBar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { clipSocialCounts } from '@/lib/clipPost';
+import { commentsForThread, visibleCommentCount } from '@/lib/commentEdit';
 import { THEME } from '@/lib/theme';
 import type { PostAudience } from '@/lib/postAudience';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
@@ -80,7 +81,7 @@ export function ClipSocial({
         createdAt={compact ? undefined : post?.created_at}
         reactions={post?.reactions}
         currentUserId={currentUserId}
-        commentCount={comments.length}
+        commentCount={visibleCommentCount(comments)}
         onReact={(type) => onReact(type)}
         onReply={
           onComment
@@ -132,7 +133,7 @@ export function ClipSocial({
         />
       ) : null}
 
-      {showThread && comments.length > 0 ? (
+      {showThread && commentsForThread(comments).length > 0 ? (
         <CommentThread
           comments={comments}
           currentUserId={currentUserId}

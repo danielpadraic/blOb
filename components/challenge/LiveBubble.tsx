@@ -1,19 +1,28 @@
-import { memo } from 'react';
-import { Pressable, View } from 'react-native';
+import { memo, useRef } from 'react';
+import { Alert, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { LiveReactions } from '@/components/challenge/LiveReactions';
+import { InlineComposer } from '@/components/feed/InlineComposer';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
 import { MentionText } from '@/components/feed/MentionText';
 import { ProfileLink } from '@/components/profile/ProfileLink';
+import {
+  useCommentEditing,
+  useSocialSheetsOptional,
+  type WindowRect,
+} from '@/components/social/SocialSheets';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { useUpdateComment } from '@/hooks/useCommentEdit';
+import { isLiveComment } from '@/lib/commentEdit';
 import { checkinCardCaption } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
 import {
   formatLiveClock,
   isLiveCheckinPost,
+  isLiveSystemPost,
   liveChatText,
   liveCheckinLabel,
   liveQuoteLine,
@@ -21,8 +30,9 @@ import {
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
 import { THEME } from '@/lib/theme';
-import type { PostWithMeta, Reaction, ReactionType } from '@/lib/types';
-import { commentMediaUrls, mediaKind } from '@/utils/media';
+import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
+import { commentMediaUrls, commentTextWithoutMedia, mediaKind } from '@/utils/media';
+import { getErrorMessage } from '@/utils/errors';
 
 export type LiveQuote = {
   name: string;
@@ -36,6 +46,7 @@ type LiveBubbleProps = {
   highlighted?: boolean;
   quote?: LiveQuote | null;
   reactions?: Reaction[];
+  comment?: CommentWithAuthor | null;
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
   onEdit?: () => void;
@@ -48,18 +59,25 @@ export const LiveBubble = memo(function LiveBubble({
   highlighted,
   quote,
   reactions,
+  comment,
   onReact,
   onReply,
   onEdit,
   onHistory,
 }: LiveBubbleProps) {
   const lightbox = useMediaLightboxOptional();
+  const social = useSocialSheetsOptional();
+  const moreRef = useRef<View>(null);
+  const editing = useCommentEditing(comment?.id ?? '');
+  const updateComment = useUpdateComment();
+  const removed = Boolean(comment) && !isLiveComment(comment);
   const { authorId: uid, name } = resolveLiveAuthor({
     ...post,
     user_id: (post as { user_id?: string | null }).user_id,
   });
   const mine = Boolean(currentUserId && uid && currentUserId === uid);
   const checkin = isLiveCheckinPost(post);
+  const system = isLiveSystemPost(post);
   const visuals = liveVisualUrls(post, mine);
   const time = formatLiveClock(post.created_at);
   const caption = checkin
@@ -69,7 +87,7 @@ export const LiveBubble = memo(function LiveBubble({
     uri,
     label: mediaKind(uri) === 'video' ? 'Video' : 'Photo',
   }));
-  const alignEnd = mine && !checkin;
+  const alignEnd = mine && !system;
 
   function openProof(index = 0) {
     if (!lightbox || items.length === 0) {
@@ -77,6 +95,18 @@ export const LiveBubble = memo(function LiveBubble({
     }
     lightbox.openLightbox(items, index);
   }
+
+  function openCommentMenu() {
+    if (!comment || !social) {
+      return;
+    }
+    moreRef.current?.measureInWindow((x, y, width, height) => {
+      social.toggleCommentOverflow(comment, { x, y, width, height } as WindowRect);
+    });
+  }
+
+  const commentBody = comment ? commentTextWithoutMedia(comment.content) : '';
+  const commentMedia = comment ? commentMediaUrls(comment.content) : [];
 
   return (
     <View
@@ -93,7 +123,7 @@ export const LiveBubble = memo(function LiveBubble({
         className="flex-row items-end"
         style={{
           gap: 8,
-          maxWidth: checkin ? '100%' : '86%',
+          maxWidth: '86%',
           alignSelf: alignEnd ? 'flex-end' : 'flex-start',
         }}>
         {alignEnd ? null : (
@@ -102,13 +132,103 @@ export const LiveBubble = memo(function LiveBubble({
           </ProfileLink>
         )}
         <View style={{ flexShrink: 1, minWidth: 0, alignItems: alignEnd ? 'flex-end' : 'flex-start' }}>
-          {alignEnd || checkin ? null : (
-            <AppText className="mb-0.5 text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
-              {name}
-            </AppText>
+          {checkin ? null : (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                minHeight: 28,
+                gap: 6,
+                marginBottom: 4,
+                maxWidth: '100%',
+                alignSelf: alignEnd ? 'flex-end' : 'stretch',
+              }}>
+              {alignEnd ? null : (
+                <AppText
+                  className="text-[13px] font-semibold"
+                  numberOfLines={1}
+                  style={{ color: THEME.textMuted, flexShrink: 1, minWidth: 0 }}>
+                  {name}
+                </AppText>
+              )}
+              {removed ? null : time ? (
+                <AppText className="text-[11px]" numberOfLines={1} style={{ color: THEME.textMuted, flexShrink: 0 }}>
+                  {time}
+                  {post.edited_at || comment?.edited_at ? ` · ${copy('comment.edited')}` : ''}
+                </AppText>
+              ) : null}
+              <View style={{ flex: 1, minWidth: 8 }} />
+              {comment && social ? (
+                <Pressable
+                  ref={moreRef}
+                  collapsable={false}
+                  accessibilityRole="button"
+                  accessibilityLabel="Comment menu"
+                  onPress={openCommentMenu}
+                  hitSlop={8}
+                  style={{
+                    flexShrink: 0,
+                    minWidth: 32,
+                    minHeight: 32,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Glyph name={GLYPH.more} color={THEME.textMuted} size={14} />
+                </Pressable>
+              ) : null}
+            </View>
           )}
-          {quote && !checkin ? <LiveQuoteChip quote={quote} mine={alignEnd} /> : null}
-          {checkin ? (
+          {quote && !checkin && !removed ? <LiveQuoteChip quote={quote} mine={alignEnd} /> : null}
+          {removed ? (
+            <View
+              style={{
+                backgroundColor: THEME.surface,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: THEME.border,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+              }}>
+              <AppText className="text-[14px]" style={{ color: THEME.textMuted }}>
+                {copy('comment.removed')}
+              </AppText>
+            </View>
+          ) : editing && comment ? (
+            <View style={{ minWidth: 220, maxWidth: '100%' }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                onPress={() => social?.clearCommentEdit()}
+                style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
+                <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }}>
+                  Cancel
+                </AppText>
+              </Pressable>
+              <InlineComposer
+                placeholder="Edit comment…"
+                submitLabel="Save"
+                submitting={updateComment.isPending}
+                bar
+                pinned
+                autoFocus
+                initialText={commentBody}
+                initialMediaUrls={commentMedia}
+                onSubmit={async (text, mentionedUserIds, chips) => {
+                  try {
+                    await updateComment.mutateAsync({
+                      commentId: comment.id,
+                      content: text,
+                      mentionedUserIds,
+                      mentionChips: chips,
+                    });
+                    social?.clearCommentEdit();
+                  } catch (error) {
+                    Alert.alert(copy('comment.saveFailed'), getErrorMessage(error));
+                  }
+                }}
+              />
+            </View>
+          ) : checkin ? (
             <View
               className="flex-row items-center"
               style={{
@@ -222,16 +342,7 @@ export const LiveBubble = memo(function LiveBubble({
               ) : null}
             </View>
           )}
-          {checkin ? null : time || post.edited_at ? (
-            <View className="mt-1 flex-row items-center" style={{ gap: 6 }}>
-              {time ? (
-                <AppText className="text-[11px]" style={{ color: THEME.textMuted }}>
-                  {time}
-                </AppText>
-              ) : null}
-              <EditedMark editedAt={post.edited_at} onPress={onHistory} />
-            </View>
-          ) : null}
+          {removed || editing ? null : (
           <View style={{ marginTop: 2, alignSelf: alignEnd ? 'flex-end' : 'flex-start' }}>
             <LiveReactions
               reactions={reactions ?? post.reactions}
@@ -241,6 +352,7 @@ export const LiveBubble = memo(function LiveBubble({
               onEdit={onEdit}
             />
           </View>
+          )}
         </View>
       </View>
     </View>

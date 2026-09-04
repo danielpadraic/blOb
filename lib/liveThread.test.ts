@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   applyLiveReaction,
   buildLiveThreadRows,
+  findLiveHighlightIndex,
   formatLiveClock,
+  isLiveSystemPost,
   liveChatText,
   liveCheckinLabel,
   liveQuoteLine,
@@ -161,6 +163,72 @@ describe('buildLiveThreadRows', () => {
     ]);
     expect(rows.map((row) => row.id)).toEqual(['p1', 'comment:n1']);
     expect(rows[1]?.kind).toBe('comment');
+  });
+
+  it('keeps a deleted parent comment so its reply stays in the lobby', () => {
+    const rows = buildLiveThreadRows([
+      {
+        id: 'p1',
+        author_id: 'a',
+        challenge_id: 'c',
+        content: 'Started',
+        media_urls: [],
+        created_at: '2026-09-01T12:00:00.000Z',
+        comments: [
+          {
+            id: 'n1',
+            post_id: 'p1',
+            author_id: 'me',
+            content: 'Hi',
+            created_at: '2026-09-01T12:01:00.000Z',
+            deleted_at: '2026-09-01T12:03:00.000Z',
+          },
+          {
+            id: 'n2',
+            post_id: 'p1',
+            author_id: 'you',
+            parent_id: 'n1',
+            content: 'Hey',
+            created_at: '2026-09-01T12:02:00.000Z',
+          },
+        ],
+      },
+    ]);
+    expect(rows.map((row) => row.id)).toEqual(['p1', 'comment:n1', 'comment:n2']);
+  });
+
+  it('scrolls to the reply row by comments.id, not only the parent post', () => {
+    const rows = buildLiveThreadRows([
+      {
+        id: 'p1',
+        author_id: 'a',
+        challenge_id: 'c',
+        content: 'Started',
+        media_urls: [],
+        created_at: '2026-09-01T12:00:00.000Z',
+        comments: [
+          {
+            id: 'n1',
+            post_id: 'p1',
+            author_id: 'b',
+            content: 'Hi',
+            created_at: '2026-09-01T12:01:00.000Z',
+          },
+          {
+            id: 'n2',
+            post_id: 'p1',
+            author_id: 'c',
+            parent_id: 'n1',
+            content: 'Reply',
+            created_at: '2026-09-01T12:02:00.000Z',
+          },
+        ],
+      },
+    ]);
+    expect(findLiveHighlightIndex(rows, 'p1', 'n2')).toBe(2);
+    expect(rows[2]?.id).toBe('comment:n2');
+    expect(isLiveSystemPost({ type: 'circle_join' })).toBe(true);
+    expect(isLiveSystemPost({ type: 'feed' })).toBe(false);
   });
 });
 

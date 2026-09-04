@@ -28,6 +28,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { Button } from '@/components/ui/Button';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -41,6 +42,7 @@ import {
   useToggleMute,
 } from '@/hooks/usePostModeration';
 import { useHidePostFromHome, usePostEdits } from '@/hooks/usePostEdit';
+import { useCommentEdits, useDeleteComment } from '@/hooks/useCommentEdit';
 import { submitBugReport } from '@/lib/bugReports';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
 import {
@@ -55,7 +57,7 @@ import { postShareUrl } from '@/lib/postShare';
 import { snapshotFromPost } from '@/lib/quotePost';
 import { personDisplayName } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
-import type { PostWithMeta } from '@/lib/types';
+import type { CommentWithAuthor, PostWithMeta } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 import { useBugReport } from '@/components/bug/BugReportHost';
 
@@ -74,9 +76,12 @@ export type WindowRect = {
 };
 
 type OverflowPanel = 'menu' | 'share' | 'report' | 'send';
+type CommentOverflowPanel = 'menu' | 'confirm' | 'report';
 
 type Sheet =
   | { kind: 'overflow'; post: PostWithMeta; anchor: WindowRect; panel: OverflowPanel }
+  | { kind: 'comment-overflow'; comment: CommentWithAuthor; anchor: WindowRect; panel: CommentOverflowPanel }
+  | { kind: 'comment-history'; comment: CommentWithAuthor }
   | { kind: 'quote'; post: PostWithMeta }
   | { kind: 'edit'; post: PostWithMeta }
   | { kind: 'history'; post: PostWithMeta }
@@ -85,11 +90,14 @@ type Sheet =
 
 type SocialSheetsValue = {
   toggleOverflow: (post: PostWithMeta, anchor: WindowRect) => void;
+  toggleCommentOverflow: (comment: CommentWithAuthor, anchor: WindowRect) => void;
   toggleProfileMenu: (userId: string, anchor: WindowRect) => void;
   openShare: (post: PostWithMeta, anchor: WindowRect) => void;
   openAudience: (draft: AudienceDraft) => void;
   openEdit: (post: PostWithMeta) => void;
   openHistory: (post: PostWithMeta) => void;
+  openCommentHistory: (comment: CommentWithAuthor) => void;
+  clearCommentEdit: () => void;
 };
 
 type OverflowOpenStore = {
@@ -100,6 +108,8 @@ type OverflowOpenStore = {
 
 const SocialSheetsContext = createContext<SocialSheetsValue | null>(null);
 const OverflowOpenStoreContext = createContext<OverflowOpenStore | null>(null);
+const CommentOverflowStoreContext = createContext<OverflowOpenStore | null>(null);
+const CommentEditStoreContext = createContext<OverflowOpenStore | null>(null);
 
 function createOverflowOpenStore(): OverflowOpenStore {
   let id: string | null = null;
@@ -154,6 +164,24 @@ export function useOverflowMenuOpen(postId: string) {
   );
 }
 
+export function useCommentOverflowOpen(commentId: string) {
+  const store = useContext(CommentOverflowStoreContext);
+  return useSyncExternalStore(
+    store ? store.subscribe : subscribeNever,
+    () => (store ? store.getId() === commentId : false),
+    () => false,
+  );
+}
+
+export function useCommentEditing(commentId: string) {
+  const store = useContext(CommentEditStoreContext);
+  return useSyncExternalStore(
+    store ? store.subscribe : subscribeNever,
+    () => (store ? store.getId() === commentId : false),
+    () => false,
+  );
+}
+
 export function SocialSheetsHost({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [sheet, setSheet] = useState<Sheet | null>(null);
@@ -168,6 +196,10 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
 
   const close = useCallback(() => setSheet(null), []);
 
+  const overflowStore = useMemo(createOverflowOpenStore, []);
+  const commentOverflowStore = useMemo(createOverflowOpenStore, []);
+  const commentEditStore = useMemo(createOverflowOpenStore, []);
+
   useEffect(() => {
     closeSocialSheetsFn = close;
     return () => {
@@ -178,12 +210,22 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
   }, [close]);
 
   const toggleOverflow = useCallback((post: PostWithMeta, anchor: WindowRect) => {
+    commentOverflowStore.setId(null);
     setSheet((current) =>
       current?.kind === 'overflow' && current.post.id === post.id
         ? null
         : { kind: 'overflow', post, anchor, panel: 'menu' },
     );
-  }, []);
+  }, [commentOverflowStore]);
+
+  const toggleCommentOverflow = useCallback((comment: CommentWithAuthor, anchor: WindowRect) => {
+    overflowStore.setId(null);
+    setSheet((current) =>
+      current?.kind === 'comment-overflow' && current.comment.id === comment.id
+        ? null
+        : { kind: 'comment-overflow', comment, anchor, panel: 'menu' },
+    );
+  }, [overflowStore]);
 
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
@@ -197,8 +239,9 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
   }, []);
 
   const openShare = useCallback((post: PostWithMeta, anchor: WindowRect) => {
+    commentOverflowStore.setId(null);
     setSheet({ kind: 'overflow', post, anchor, panel: 'share' });
-  }, []);
+  }, [commentOverflowStore]);
 
   const openAudience = useCallback((draft: AudienceDraft) => {
     setSheet({ kind: 'audience', draft });
@@ -212,27 +255,49 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
     setSheet({ kind: 'history', post });
   }, []);
 
-  const overflowStore = useMemo(createOverflowOpenStore, []);
+  const openCommentHistory = useCallback((comment: CommentWithAuthor) => {
+    setSheet({ kind: 'comment-history', comment });
+  }, []);
+
+  const clearCommentEdit = useCallback(() => {
+    commentEditStore.setId(null);
+  }, [commentEditStore]);
 
   useEffect(() => {
     overflowStore.setId(sheet?.kind === 'overflow' ? sheet.post.id : null);
-  }, [overflowStore, sheet]);
+    commentOverflowStore.setId(sheet?.kind === 'comment-overflow' ? sheet.comment.id : null);
+  }, [commentOverflowStore, overflowStore, sheet]);
 
   const value = useMemo<SocialSheetsValue>(
     () => ({
       toggleOverflow,
+      toggleCommentOverflow,
       toggleProfileMenu,
       openShare,
       openAudience,
       openEdit,
       openHistory,
+      openCommentHistory,
+      clearCommentEdit,
     }),
-    [openAudience, openEdit, openHistory, openShare, toggleOverflow, toggleProfileMenu],
+    [
+      clearCommentEdit,
+      openAudience,
+      openCommentHistory,
+      openEdit,
+      openHistory,
+      openShare,
+      toggleCommentOverflow,
+      toggleOverflow,
+      toggleProfileMenu,
+    ],
   );
 
   return (
     <SocialSheetsContext.Provider value={value}>
       <OverflowOpenStoreContext.Provider value={overflowStore}>
+      <CommentOverflowStoreContext.Provider value={commentOverflowStore}>
+      <CommentEditStoreContext.Provider value={commentEditStore}>
       {children}
       <SheetView
         sheet={sheet}
@@ -240,6 +305,10 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
         onClose={close}
         onToast={showToast}
         onOpen={(next) => setSheet(next)}
+        onStartCommentEdit={(commentId) => {
+          commentEditStore.setId(commentId);
+          close();
+        }}
       />
       {toast ? (
         <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 16, zIndex: 60 }}>
@@ -256,6 +325,8 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
           </View>
         </View>
       ) : null}
+      </CommentEditStoreContext.Provider>
+      </CommentOverflowStoreContext.Provider>
       </OverflowOpenStoreContext.Provider>
     </SocialSheetsContext.Provider>
   );
@@ -287,12 +358,14 @@ function SheetView({
   onClose,
   onToast,
   onOpen,
+  onStartCommentEdit,
 }: {
   sheet: Sheet | null;
   userId?: string;
   onClose: () => void;
   onToast: (message: string) => void;
   onOpen: (sheet: Sheet) => void;
+  onStartCommentEdit: (commentId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const post = sheet && 'post' in sheet ? liveFeedPost(queryClient, sheet.post) : null;
@@ -314,6 +387,20 @@ function SheetView({
       />
     );
   }
+  if (sheet.kind === 'comment-overflow') {
+    return (
+      <CommentOverflowPopover
+        comment={sheet.comment}
+        userId={userId}
+        anchor={sheet.anchor}
+        panel={sheet.panel}
+        onClose={onClose}
+        onToast={onToast}
+        onPanel={(panel) => onOpen({ ...sheet, panel })}
+        onEdit={() => onStartCommentEdit(sheet.comment.id)}
+      />
+    );
+  }
   if (sheet.kind === 'quote') {
     return <QuoteSheet post={sheet.post} onClose={onClose} />;
   }
@@ -329,6 +416,9 @@ function SheetView({
   }
   if (sheet.kind === 'history') {
     return <HistorySheet post={sheet.post} onClose={onClose} />;
+  }
+  if (sheet.kind === 'comment-history') {
+    return <CommentHistorySheet comment={sheet.comment} onClose={onClose} />;
   }
   if (sheet.kind === 'audience') {
     return <AudienceSheet draft={sheet.draft} onClose={onClose} />;
@@ -624,6 +714,173 @@ function HistorySheet({ post, onClose }: { post: PostWithMeta; onClose: () => vo
   return <PostEditHistory rows={edits.data ?? []} onClose={onClose} />;
 }
 
+function CommentHistorySheet({ comment, onClose }: { comment: CommentWithAuthor; onClose: () => void }) {
+  const edits = useCommentEdits(comment.id);
+  return (
+    <ChromeOverlay visible onClose={onClose} align="end" zIndex={70}>
+      <View
+        style={{
+          backgroundColor: THEME.surface,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+          maxHeight: '70%',
+          paddingHorizontal: 20,
+          paddingTop: 16,
+          paddingBottom: 24,
+          ...themeShadow('card'),
+        }}>
+        <AppText className="mb-3 text-[16px] font-extrabold text-charcoal">{copy('comment.editHistory')}</AppText>
+        <ScrollView>
+          {(edits.data ?? []).length === 0 ? (
+            <AppText className="text-[14px]" style={{ color: THEME.textMuted }}>
+              No earlier comments.
+            </AppText>
+          ) : (
+            (edits.data ?? []).map((row) => (
+              <View
+                key={row.created_at}
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: THEME.border,
+                  paddingVertical: 12,
+                }}>
+                <AppText className="text-[12px]" style={{ color: THEME.textMuted }}>
+                  {new Date(row.created_at).toLocaleString()}
+                </AppText>
+                <AppText className="mt-1 text-[15px] text-charcoal">
+                  {row.body.trim() || '(empty)'}
+                </AppText>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </ChromeOverlay>
+  );
+}
+
+function CommentOverflowPopover({
+  comment,
+  userId,
+  anchor,
+  panel,
+  onClose,
+  onPanel,
+  onEdit,
+}: {
+  comment: CommentWithAuthor;
+  userId?: string;
+  anchor: WindowRect;
+  panel: CommentOverflowPanel;
+  onClose: () => void;
+  onToast?: (message: string) => void;
+  onPanel: (panel: CommentOverflowPanel) => void;
+  onEdit: () => void;
+}) {
+  const remove = useDeleteComment();
+  const report = useReportPost();
+  const [busy, setBusy] = useState(false);
+  const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
+    null,
+  );
+  const mine = Boolean(userId && userId === comment.author_id && !comment.deleted_at);
+
+  async function onRemove() {
+    if (remove.isPending) {
+      return;
+    }
+    try {
+      await remove.mutateAsync({ commentId: comment.id, postId: comment.post_id });
+      onClose();
+    } catch (error) {
+      Alert.alert(copy('comment.removeFailed'), getErrorMessage(error));
+    }
+  }
+
+  async function sendCommentReport() {
+    if (!reportReason || busy) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await report.mutateAsync({ postId: comment.post_id, reason: reportReason });
+      onClose();
+    } catch (error) {
+      Alert.alert('Couldn’t report that', getErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <AnchoredPopover anchor={anchor} onClose={onClose}>
+      {panel === 'menu' ? (
+        <View style={{ minWidth: 140 }}>
+          {mine ? <ListRow label={copy('comment.edit')} onPress={onEdit} /> : null}
+          {mine ? (
+            <ListRow
+              label={copy('comment.delete')}
+              danger
+              onPress={() => onPanel('confirm')}
+            />
+          ) : null}
+          <ListRow label={copy('comment.report')} onPress={() => onPanel('report')} />
+        </View>
+      ) : panel === 'report' ? (
+        <View style={{ minWidth: 220, maxWidth: 280, paddingHorizontal: 6, paddingVertical: 4 }}>
+          <AppText className="px-1 pb-2 text-[13px] font-extrabold text-charcoal">
+            Report this comment to blOb.
+          </AppText>
+          <ChipRow>
+            {REPORT_REASONS.map((reason) => (
+              <Chip
+                key={reason.value}
+                label={reason.label}
+                selected={reportReason === reason.value}
+                onPress={() => setReportReason(reason.value)}
+              />
+            ))}
+          </ChipRow>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            accessibilityState={{ disabled: !reportReason || busy, busy }}
+            disabled={!reportReason || busy}
+            onPress={() => void sendCommentReport()}
+            style={{
+              marginTop: 10,
+              minHeight: 40,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: !reportReason || busy ? THEME.surface2 : THEME.primary,
+            }}>
+            <AppText
+              className="text-[14px] font-extrabold"
+              style={{ color: !reportReason || busy ? THEME.textMuted : '#fff' }}>
+              Send
+            </AppText>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={{ minWidth: 200, maxWidth: 260, paddingHorizontal: 8, paddingVertical: 8 }}>
+          <AppText className="px-1 pb-3 text-[14px] font-semibold text-charcoal">
+            {copy('comment.removeConfirm')}
+          </AppText>
+          <Button
+            title={copy('comment.remove')}
+            size="sm"
+            loading={remove.isPending}
+            onPress={() => void onRemove()}
+          />
+          <View style={{ height: 8 }} />
+          <Button title="Cancel" variant="ghost" size="sm" onPress={onClose} />
+        </View>
+      )}
+    </AnchoredPopover>
+  );
+}
+
 function QuoteSheet({ post, onClose }: { post: PostWithMeta; onClose: () => void }) {
   const createPost = useCreatePost();
   const snapshot = snapshotFromPost(post);
@@ -835,14 +1092,26 @@ function IconAction({
   );
 }
 
-function ListRow({ label, onPress }: { label: string; onPress: () => void }) {
+function ListRow({
+  label,
+  onPress,
+  danger,
+}: {
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       className="justify-center px-3"
       style={{ minHeight: 44 }}>
-      <AppText className="text-[14px] font-semibold text-charcoal">{label}</AppText>
+      <AppText
+        className="text-[14px] font-semibold"
+        style={{ color: danger ? THEME.danger : THEME.textPrimary }}>
+        {label}
+      </AppText>
     </Pressable>
   );
 }

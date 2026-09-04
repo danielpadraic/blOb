@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { Alert, Keyboard, Linking, Pressable, View } from 'react-native';
+import { Alert, Keyboard, Linking, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
@@ -27,10 +27,12 @@ import { useChallengeFeedPreview, useChallengeShareState } from '@/hooks/useChal
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { usePost, useUpdatePostAudience } from '@/hooks/useFeed';
 import { checkinCardCaption, isCheckinPost, postLocality } from '@/lib/checkinPost';
+import { COMMENT_UNAVAILABLE, commentTargetMissing, scrollCommentNodeIntoView } from '@/lib/commentHighlight';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { PROOF_META } from '@/lib/constants';
 import { useHidePostFromHome } from '@/hooks/usePostEdit';
 import { WebTapButton } from '@/components/ui/WebTapButton';
+import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
@@ -49,6 +51,7 @@ import { circleDetailHref } from '@/lib/routes';
 import { circleDisplayName, circleIdFromPost } from '@/lib/circles';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
+import { visibleCommentCount } from '@/lib/commentEdit';
 import { mentionChipFromAuthor, type MentionChip } from '@/lib/mentions';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
@@ -80,6 +83,7 @@ type PostCardProps = {
   homeFeed?: boolean;
   highlightCommentId?: string | null;
   startThreadOpen?: boolean;
+  commentsReady?: boolean;
 };
 
 function PostCardInner({
@@ -94,8 +98,11 @@ function PostCardInner({
   homeFeed,
   highlightCommentId,
   startThreadOpen,
+  commentsReady = true,
 }: PostCardProps) {
   const tone = useCopyTone();
+  const keyboardOverlap = useKeyboardOverlap();
+  const composerWrapRef = useRef<View>(null);
   const [threadOpen, setThreadOpen] = useState(() => Boolean(startThreadOpen || highlightCommentId));
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [replyTarget, setReplyTarget] = useState<{
@@ -127,9 +134,18 @@ function PostCardInner({
       setMissingComment(false);
       return;
     }
-    const found = comments.some((comment) => comment.id === highlightCommentId);
-    setMissingComment(!found);
-  }, [comments, highlightCommentId, threadOpen]);
+    setMissingComment(commentTargetMissing(post.comments, highlightCommentId, commentsReady));
+  }, [commentsReady, highlightCommentId, post.comments, threadOpen]);
+
+  useEffect(() => {
+    if (!replyTarget && !composerExpanded) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      scrollCommentNodeIntoView(composerWrapRef.current);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [composerExpanded, replyTarget]);
   const content = post.content?.trim() ?? '';
   const quote = asQuoteSnapshot(post.quote_snapshot);
   const shareParentId = isClipSharePost(post) ? post.parent_id ?? post.quoted_post_id : null;
@@ -203,7 +219,7 @@ function PostCardInner({
       }}>
       <View className="flex-row items-center" style={{ gap: homeFeed ? 6 : 10 }}>
         {uid ? (
-          <ProfileLink username={post.author?.username} userId={uid}>
+          <ProfileLink username={post.author?.username} userId={uid} style={{ flexGrow: 0, flexShrink: 0 }}>
             <Avatar uri={post.author?.avatar_url} name={name} size={homeFeed ? 32 : 42} />
           </ProfileLink>
         ) : (
@@ -216,7 +232,7 @@ function PostCardInner({
             <ProfileLink
               username={post.author?.username}
               userId={uid}
-              style={[flexChildMin(), { maxWidth: '100%' }]}>
+              style={[flexChildMin(), { maxWidth: '70%' }]}>
               <AppText
                 className="font-semibold text-charcoal"
                 style={{
@@ -503,7 +519,7 @@ function PostCardInner({
           createdAt={homeFeed ? undefined : post.created_at}
           reactions={post.reactions}
           currentUserId={currentUserId}
-          commentCount={comments.length}
+          commentCount={visibleCommentCount(comments)}
           onReact={(type) => onReact(type)}
           onShare={(anchor) => social?.openShare(post, anchor)}
           onReply={
@@ -527,7 +543,7 @@ function PostCardInner({
         {homeRoundShare || !threadOpen || !onComment ? null : (
           <View style={{ zIndex: 1, gap: 8 }}>
             {missingComment ? (
-              <AppText className="text-[13px] text-muted">That comment isn’t available.</AppText>
+              <AppText className="text-[13px] text-muted">{COMMENT_UNAVAILABLE}</AppText>
             ) : null}
             <CommentThread
               comments={comments}
@@ -536,6 +552,7 @@ function PostCardInner({
               audience={audience}
               audienceUserIds={post.audience_user_ids ?? []}
               highlightCommentId={highlightCommentId}
+              ensureVisibleId={replyTarget?.parentId}
               replyMode="callback"
               showEmpty
               showAll
@@ -553,8 +570,12 @@ function PostCardInner({
               }}
               onReact={(commentId, type) => onReact(type, commentId)}
             />
+            <View
+              ref={composerWrapRef}
+              collapsable={false}
+              style={{ paddingBottom: Platform.OS === 'web' && (composerExpanded || replyTarget) ? keyboardOverlap : 0 }}>
             <InlineComposer
-              key={replyTarget ? `reply-${replyTarget.parentId}` : `top-${post.id}`}
+              key={`comment-${post.id}`}
               placeholder="Write a comment…"
               submitLabel="Send"
               submitting={commenting}
@@ -577,6 +598,7 @@ function PostCardInner({
                 }
               }}
             />
+            </View>
           </View>
         )}
       </View>

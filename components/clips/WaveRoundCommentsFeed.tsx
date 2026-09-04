@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -9,13 +9,26 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 
+import { CommentBodyBlock, CommentNameRow } from '@/components/feed/CommentNameRow';
 import { MentionField } from '@/components/feed/MentionField';
 import { MentionText } from '@/components/feed/MentionText';
-import { OfficialMark } from '@/components/profile/OfficialMark';
-import { ProfileLink } from '@/components/profile/ProfileLink';
-import { Avatar } from '@/components/ui/Avatar';
+import { CommentScrollProvider, useCommentScroll } from '@/components/feed/CommentThread';
+import { InlineComposer } from '@/components/feed/InlineComposer';
+import {
+  useCommentEditing,
+  useSocialSheetsOptional,
+  type WindowRect,
+} from '@/components/social/SocialSheets';
 import { AppText } from '@/components/ui/AppText';
+import { useUpdateComment } from '@/hooks/useCommentEdit';
 import { CLIP_REACTIONS, DEFAULT_CLIP_REACTION, clipReactionEmoji } from '@/lib/clipReactions';
+import { commentsForThread, isLiveComment } from '@/lib/commentEdit';
+import {
+  COMMENT_HIGHLIGHT_MS,
+  COMMENT_UNAVAILABLE,
+  commentTargetMissing,
+  scrollCommentNodeIntoView,
+} from '@/lib/commentHighlight';
 import { copy } from '@/lib/copy';
 import type { MentionChip, MentionDoc } from '@/lib/mentions';
 import { THEME } from '@/lib/theme';
@@ -24,6 +37,7 @@ import { nestComments } from '@/utils/comments';
 import { getErrorMessage } from '@/utils/errors';
 import { formatFeedTime } from '@/utils/format';
 import { userReaction } from '@/lib/reactions';
+import { commentMediaUrls, commentTextWithoutMedia } from '@/utils/media';
 
 const NAME = 'rgba(255,255,255,0.72)';
 const TIME = 'rgba(255,255,255,0.5)';
@@ -39,6 +53,7 @@ type ReplyTarget = {
 
 type WaveRoundCommentsFeedProps = {
   comments: CommentWithAuthor[];
+  commentsReady?: boolean;
   currentUserId?: string;
   avatarUrl?: string | null;
   displayName?: string | null;
@@ -46,6 +61,7 @@ type WaveRoundCommentsFeedProps = {
   audience?: string;
   audienceUserIds?: string[];
   keyboardInset?: number;
+  highlightCommentId?: string | null;
   onSend: (
     content: string,
     parentId?: string | null,
@@ -60,15 +76,17 @@ type WaveRoundCommentsFeedProps = {
 
 export function WaveRoundCommentsFeed({
   comments,
+  commentsReady = true,
   currentUserId,
   displayName,
   submitting,
   audience = 'public',
   audienceUserIds = [],
   keyboardInset = 0,
+  highlightCommentId,
   onSend,
   onReact,
-  onReport,
+  onReport: _onReport,
   onClose,
   onScrollOffset,
   onCloseFromTop,
@@ -83,7 +101,14 @@ export function WaveRoundCommentsFeed({
   const sentCount = useRef(0);
 
   const thread = [...comments];
+  const seen = useRef(new Set<string>());
+  for (const comment of comments) {
+    seen.current.add(`${comment.author_id}:${comment.content}`);
+  }
   for (const row of local) {
+    if (seen.current.has(`${row.author_id}:${row.content}`)) {
+      continue;
+    }
     if (
       !thread.some(
         (comment) =>
@@ -96,10 +121,18 @@ export function WaveRoundCommentsFeed({
       thread.push(row);
     }
   }
-  const roots = nestComments(thread);
+  const roots = nestComments(commentsForThread(thread));
   const slot = replyTo?.id ?? FOOTER;
+  const missingComment = commentTargetMissing(thread, highlightCommentId, commentsReady);
+  const hostRef = useRef<{
+    scrollToOffset?: (opts: { offset: number; animated?: boolean }) => void;
+    scrollTo?: (opts: { y: number; animated?: boolean }) => void;
+  } | null>(null);
 
   useEffect(() => {
+    if (highlightCommentId) {
+      return;
+    }
     if (thread.length <= sentCount.current) {
       return undefined;
     }
@@ -108,14 +141,19 @@ export function WaveRoundCommentsFeed({
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 80);
     return () => clearTimeout(handle);
-  }, [thread.length]);
+  }, [highlightCommentId, thread.length]);
 
   useEffect(() => {
-    if (!replyTo || Platform.OS !== 'web' || typeof document === 'undefined') {
+    if (!replyTo) {
       return undefined;
     }
     const handle = requestAnimationFrame(() => {
-      document.getElementById('blob-reply-composer')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.getElementById(`blob-comment-${replyTo.id}`)?.scrollIntoView({
+          block: 'center',
+          inline: 'nearest',
+        });
+      }
     });
     return () => cancelAnimationFrame(handle);
   }, [replyTo?.id]);
@@ -207,6 +245,7 @@ export function WaveRoundCommentsFeed({
 
   const composer = (
     <FrostComposer
+      key={slot}
       slot={slot}
       doc={docs[slot] ?? { text: '', chips: [] }}
       onDoc={(doc) => setSlotDoc(slot, doc)}
@@ -246,8 +285,17 @@ export function WaveRoundCommentsFeed({
           </Pressable>
         ) : null}
       </Pressable>
+      {missingComment ? (
+        <AppText className="px-4 pb-1 text-[13px]" style={{ color: TIME }}>
+          {COMMENT_UNAVAILABLE}
+        </AppText>
+      ) : null}
+      <CommentScrollProvider hostRef={hostRef} scrollY={scrollTop} bottomSafe={220}>
       <ScrollView
-        ref={scrollRef}
+        ref={(node) => {
+          scrollRef.current = node;
+          hostRef.current = node;
+        }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         style={{ flex: 1 }}
@@ -267,16 +315,18 @@ export function WaveRoundCommentsFeed({
               comment={comment}
               nested={false}
               currentUserId={currentUserId}
-              replyTo={replyTo}
-              composer={replyTo?.id === comment.id ? composer : null}
+              audience={audience}
+              audienceUserIds={audienceUserIds}
+              highlightCommentId={highlightCommentId}
+              ensureVisibleId={replyTo?.id}
               onReply={openReply}
               onReact={onReact}
-              onReport={onReport}
             />
           ))
         )}
       </ScrollView>
-      {!replyTo ? composer : null}
+      </CommentScrollProvider>
+      {composer}
     </View>
   );
 }
@@ -285,117 +335,224 @@ function FeedItem({
   comment,
   nested,
   currentUserId,
-  replyTo,
-  composer,
+  audience,
+  audienceUserIds,
+  highlightCommentId,
+  ensureVisibleId,
   onReply,
   onReact,
-  onReport,
 }: {
   comment: CommentWithAuthor;
   nested: boolean;
   currentUserId?: string;
-  replyTo: ReplyTarget | null;
-  composer: ReactNode;
+  audience: string;
+  audienceUserIds: string[];
+  highlightCommentId?: string | null;
+  ensureVisibleId?: string | null;
   onReply: (target: ReplyTarget) => void;
   onReact?: (commentId: string, type: ReactionType) => void;
-  onReport?: (commentId: string) => Promise<unknown> | void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(false);
+  const nodeRef = useRef<View>(null);
+  const moreRef = useRef<View>(null);
+  const social = useSocialSheetsOptional();
+  const scroll = useCommentScroll();
+  const editing = useCommentEditing(comment.id);
+  const updateComment = useUpdateComment();
+  const removed = !isLiveComment(comment);
   const name = comment.author?.display_name ?? comment.author?.username ?? 'blob';
   const handle = comment.author?.username ?? '';
   const replies = comment.replies ?? [];
   const mine = userReaction(comment.reactions, currentUserId);
   const count = comment.reactions?.length ?? 0;
+  const body = commentTextWithoutMedia(comment.content);
+  const mediaUrls = commentMediaUrls(comment.content);
+  const time = formatFeedTime(comment.created_at);
+
+  useEffect(() => {
+    const isHighlight = highlightCommentId === comment.id;
+    const isEnsure = ensureVisibleId === comment.id;
+    if (!isHighlight && !isEnsure) {
+      return;
+    }
+    if (isHighlight && !removed) {
+      setHighlighted(true);
+    }
+    const frame = requestAnimationFrame(() => {
+      scrollCommentNodeIntoView(
+        nodeRef.current,
+        scroll?.hostRef.current,
+        scroll?.scrollY.current ?? 0,
+        { bottomSafe: scroll?.bottomSafe },
+      );
+    });
+    const timer = isHighlight ? setTimeout(() => setHighlighted(false), COMMENT_HIGHLIGHT_MS) : null;
+    return () => {
+      cancelAnimationFrame(frame);
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [comment.id, ensureVisibleId, highlightCommentId, removed, scroll]);
 
   return (
     <View
+      nativeID={`blob-comment-${comment.id}`}
+      ref={nodeRef}
+      collapsable={false}
       style={{
-        marginBottom: 7,
+        marginBottom: 6,
         marginLeft: nested ? 14 : 0,
         paddingLeft: nested ? 8 : 0,
         borderLeftWidth: nested ? 1.5 : 0,
         borderLeftColor: nested ? 'rgba(255,255,255,0.18)' : 'transparent',
+        backgroundColor: highlighted ? 'rgba(231,247,243,0.18)' : 'transparent',
+        borderRadius: highlighted ? 12 : 0,
+        paddingVertical: highlighted ? 4 : 0,
+        paddingHorizontal: highlighted ? 4 : 0,
       }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-        <ProfileLink username={comment.author?.username} userId={comment.author_id}>
-          <Avatar uri={comment.author?.avatar_url} name={name} size={22} />
-        </ProfileLink>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-            <ProfileLink username={comment.author?.username} userId={comment.author_id}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, minWidth: 0, flexShrink: 1 }}>
-                <AppText
-                  className="text-[13px] font-semibold"
-                  style={{ color: NAME }}
-                  numberOfLines={1}>
-                  {name}
-                </AppText>
-                <OfficialMark profile={comment.author} compact />
-              </View>
-            </ProfileLink>
-            <AppText className="text-[10px]" style={{ color: TIME }} numberOfLines={1}>
-              {formatFeedTime(comment.created_at)}
+      <CommentNameRow
+        author={comment.author}
+        authorId={comment.author_id}
+        name={name}
+        handle={handle}
+        time={removed ? null : time}
+        edited={Boolean(!removed && comment.edited_at)}
+        moreRef={moreRef}
+        onMenu={
+          social
+            ? () => {
+                moreRef.current?.measureInWindow((x, y, width, height) => {
+                  social.toggleCommentOverflow(comment, { x, y, width, height } as WindowRect);
+                });
+              }
+            : undefined
+        }
+        nameColor={NAME}
+        metaColor={TIME}
+        moreColor={ICON}
+      />
+      <CommentBodyBlock>
+          {removed ? (
+            <AppText className="text-[13px]" style={{ color: TIME }}>
+              {copy('comment.removed')}
             </AppText>
-          </View>
-          <View style={{ marginTop: 4 }}>
+          ) : editing ? (
+            <View
+              style={{
+                borderRadius: 14,
+                backgroundColor: THEME.surface,
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+              }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                onPress={() => social?.clearCommentEdit()}
+                style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
+                <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }}>
+                  Cancel
+                </AppText>
+              </Pressable>
+              <InlineComposer
+                placeholder="Edit comment…"
+                submitLabel="Save"
+                submitting={updateComment.isPending}
+                audience={audience}
+                audienceUserIds={audienceUserIds}
+                pinned
+                autoFocus
+                initialText={body}
+                initialMediaUrls={mediaUrls}
+                onSubmit={async (text, mentionedUserIds, chips) => {
+                  try {
+                    await updateComment.mutateAsync({
+                      commentId: comment.id,
+                      content: text,
+                      mentionedUserIds,
+                      mentionChips: chips,
+                    });
+                    social?.clearCommentEdit();
+                  } catch (error) {
+                    Alert.alert(copy('comment.saveFailed'), getErrorMessage(error));
+                  }
+                }}
+              />
+            </View>
+          ) : (
             <MentionText
               content={comment.content}
               mentions={comment.mentions}
               color={BODY}
               className="text-[13px] leading-[18px] font-normal"
             />
-          </View>
+          )}
+          {removed || editing ? null : (
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30, marginTop: 2, gap: 4 }}>
             {onReact ? (
               <View style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center' }}>
                 {pickerOpen ? (
-                  <View
-                    pointerEvents="auto"
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      bottom: 32,
-                      backgroundColor: 'rgba(16,19,18,0.28)',
-                      borderRadius: 18,
-                      paddingVertical: 4,
-                      zIndex: 6,
-                    }}>
-                    {CLIP_REACTIONS.map((row) => (
-                      <Pressable
-                        key={row.type}
-                        accessibilityRole="button"
-                        accessibilityLabel={row.label}
-                        onPress={() => {
-                          onReact(comment.id, row.type);
-                          setPickerOpen(false);
-                        }}
-                        style={{
-                          minWidth: 30,
-                          minHeight: 30,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                        <AppText className="text-[18px]">{row.emoji}</AppText>
-                      </Pressable>
-                    ))}
+                  <>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Close reactions"
+                      accessibilityLabel="Dismiss reactions"
                       onPress={() => setPickerOpen(false)}
-                      style={{ minHeight: 28, alignItems: 'center', justifyContent: 'center' }}>
-                      <AppText className="text-[11px] font-bold" style={{ color: ICON }}>
-                        ×
-                      </AppText>
-                    </Pressable>
-                  </View>
+                      style={{
+                        position: 'absolute',
+                        top: -800,
+                        right: -800,
+                        bottom: -800,
+                        left: -800,
+                        backgroundColor: 'rgba(16,19,18,0.28)',
+                        zIndex: 5,
+                      }}
+                    />
+                    <View
+                      pointerEvents="auto"
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        bottom: 32,
+                        backgroundColor: 'rgba(16,19,18,0.28)',
+                        borderRadius: 18,
+                        paddingVertical: 4,
+                        zIndex: 6,
+                      }}>
+                      {CLIP_REACTIONS.map((row) => (
+                        <Pressable
+                          key={row.type}
+                          accessibilityRole="button"
+                          accessibilityLabel={row.label}
+                          onPress={() => {
+                            onReact(comment.id, row.type);
+                            setPickerOpen(false);
+                          }}
+                          style={{
+                            minWidth: 30,
+                            minHeight: 30,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                          <AppText className="text-[18px]">{row.emoji}</AppText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
                 ) : null}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Love comment"
-                  onPress={() => onReact(comment.id, mine?.reaction_type ?? DEFAULT_CLIP_REACTION)}
-                  onLongPress={() => setPickerOpen(true)}
+                  onPress={() => {
+                    if (pickerOpen) {
+                      setPickerOpen(false);
+                      return;
+                    }
+                    onReact(comment.id, mine?.reaction_type ?? DEFAULT_CLIP_REACTION);
+                  }}
+                  onLongPress={() => setPickerOpen((open) => !open)}
                   delayLongPress={280}
-                  style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center' }}>
+                  style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center', zIndex: 7 }}>
                   <AppText className="text-[16px]" style={{ color: mine ? '#fff' : ICON }}>
                     {mine ? clipReactionEmoji(mine.reaction_type) : '♡'}
                   </AppText>
@@ -429,40 +586,21 @@ function FeedItem({
                 </AppText>
               ) : null}
             </Pressable>
-            {onReport ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Report comment"
-                onPress={() => {
-                  void Promise.resolve(onReport(comment.id)).catch((error: unknown) =>
-                    Alert.alert('Couldn’t report that', getErrorMessage(error)),
-                  );
-                }}
-                style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center' }}>
-                <AppText className="text-[14px]" style={{ color: ICON }}>
-                  ⚑
-                </AppText>
-              </Pressable>
-            ) : null}
           </View>
-        </View>
-      </View>
-      {replyTo?.id === comment.id ? (
-        <View nativeID="blob-reply-composer" style={{ marginLeft: 30, marginTop: 4 }}>
-          {composer}
-        </View>
-      ) : null}
+          )}
+      </CommentBodyBlock>
       {replies.map((reply) => (
         <FeedItem
           key={reply.id}
           comment={reply}
           nested
           currentUserId={currentUserId}
-          replyTo={replyTo}
-          composer={replyTo?.id === reply.id ? composer : null}
+          audience={audience}
+          audienceUserIds={audienceUserIds}
+          highlightCommentId={highlightCommentId}
+          ensureVisibleId={ensureVisibleId}
           onReply={onReply}
           onReact={onReact}
-          onReport={onReport}
         />
       ))}
     </View>
@@ -520,7 +658,7 @@ function FrostComposer({
           }}>
           <MentionField
             compact
-            autoFocus={slot !== FOOTER}
+            autoFocus={Boolean(onCancel)}
             pickerPlacement="above"
             tone="frost"
             initialText={doc.text}

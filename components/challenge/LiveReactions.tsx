@@ -22,15 +22,44 @@ type LiveReactionsProps = {
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
   onEdit?: () => void;
+  onOverflow?: () => void;
 };
 
-export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEdit }: LiveReactionsProps) {
+export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEdit, onOverflow }: LiveReactionsProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const counts = liveReactionCounts(reactions, currentUserId);
   const mineTypes = new Set(counts.filter((row) => row.mine).map((row) => row.type));
 
   return (
-    <View style={{ position: 'relative', zIndex: pickerOpen ? 8 : 1 }}>
+    <View style={{ position: 'relative', zIndex: pickerOpen ? 42 : 1 }}>
+      {pickerOpen ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss reactions"
+          onPress={() => setPickerOpen(false)}
+          style={
+            Platform.OS === 'web'
+              ? ({
+                  position: 'fixed',
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  backgroundColor: 'rgba(16, 19, 18, 0.28)',
+                  zIndex: 40,
+                } as object)
+              : {
+                  position: 'absolute',
+                  top: -4000,
+                  right: -400,
+                  bottom: -4000,
+                  left: -400,
+                  backgroundColor: 'rgba(16, 19, 18, 0.28)',
+                  zIndex: 40,
+                }
+          }
+        />
+      ) : null}
       {pickerOpen ? (
         <View
           pointerEvents="box-none"
@@ -40,12 +69,13 @@ export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEd
             right: 0,
             bottom: '100%',
             marginBottom: 4,
-            zIndex: 20,
+            zIndex: 41,
             alignItems: 'flex-start',
           }}>
           <View
             className="flex-row items-center"
             style={{
+              zIndex: 41,
               backgroundColor: THEME.surface,
               borderWidth: 1,
               borderColor: THEME.border,
@@ -82,7 +112,7 @@ export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEd
         </View>
       ) : null}
 
-      <View className="flex-row flex-wrap items-center" style={{ gap: 4, minHeight: 28 }}>
+      <View className="flex-row flex-wrap items-center" style={{ gap: 4, minHeight: 28, zIndex: 41 }}>
         {counts.map((row) => (
           <Pressable
             key={row.type}
@@ -114,7 +144,7 @@ export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEd
           accessibilityLabel="Add a reaction"
           delayLongPress={280}
           onPress={() => setPickerOpen((open) => !open)}
-          onLongPress={() => setPickerOpen(true)}
+          onLongPress={() => setPickerOpen((open) => !open)}
           {...keepFocusProps()}
           style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
           <Glyph name={GLYPH.plus} color={THEME.textMuted} size={14} />
@@ -126,6 +156,15 @@ export function LiveReactions({ reactions, currentUserId, onReact, onReply, onEd
             onPress={onEdit}
             style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
             <Glyph name={GLYPH.pencil} color={THEME.textMuted} size={14} />
+          </Pressable>
+        ) : null}
+        {onOverflow ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Comment menu"
+            onPress={onOverflow}
+            style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
+            <Glyph name={GLYPH.more} color={THEME.textMuted} size={14} />
           </Pressable>
         ) : null}
         {onReply ? (

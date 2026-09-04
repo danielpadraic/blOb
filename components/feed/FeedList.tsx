@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { CheckinStackCard } from '@/components/feed/CheckinStackCard';
+import { CommentScrollProvider } from '@/components/feed/CommentThread';
 import { Composer } from '@/components/feed/Composer';
 import { PostCard } from '@/components/feed/PostCard';
 import { VisiblePostsProvider } from '@/components/feed/PostMediaCarousel';
@@ -79,6 +80,7 @@ type FeedRowProps = {
   highlighted?: boolean;
   highlightCommentId?: string | null;
   homeChrome?: boolean;
+  commentsReady?: boolean;
   onReact: FeedListProps['onReact'];
   onComment?: FeedListProps['onComment'];
 };
@@ -128,6 +130,7 @@ const FeedRow = memo(function FeedRow({
   highlighted,
   highlightCommentId,
   homeChrome,
+  commentsReady,
   onReact,
   onComment,
 }: FeedRowProps) {
@@ -158,6 +161,7 @@ const FeedRow = memo(function FeedRow({
       highlighted={highlighted}
       highlightCommentId={highlightCommentId}
       startThreadOpen={Boolean(highlightCommentId)}
+      commentsReady={commentsReady}
       homeFeed={homeChrome}
       onReact={handleReact}
       onComment={handleComment}
@@ -201,6 +205,8 @@ export function FeedList({
   onComment,
 }: FeedListProps) {
   const listRef = useRef<FlatList<HomeFeedRow>>(null);
+  const listHostRef = useRef<FlatList<HomeFeedRow> | null>(null);
+  const scrollY = useRef(0);
   const [visibleIds, setVisibleIds] = useState<ReadonlySet<string>>(() => new Set());
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const ids = new Set<string>();
@@ -363,6 +369,7 @@ export function FeedList({
             highlighted={Boolean(highlightPostId && item.stack.postIds.includes(highlightPostId))}
             startExpanded={Boolean(highlightPostId && item.stack.postIds.includes(highlightPostId))}
             highlightCommentId={highlightPostId && item.stack.postIds.includes(highlightPostId) ? highlightCommentId : undefined}
+            commentsReady={!isLoading}
             onReact={onReact}
             onComment={onComment}
           />
@@ -375,6 +382,7 @@ export function FeedList({
             highlighted={highlightPostId === item.post.id}
             highlightCommentId={highlightPostId === item.post.id ? highlightCommentId : undefined}
             homeChrome={homeChrome}
+            commentsReady={!isLoading}
             onReact={onReact}
             onComment={onComment}
           />
@@ -384,7 +392,7 @@ export function FeedList({
         ) : null}
       </View>
     ),
-    [challengeFeed, currentUserId, hideAudience, highlightCommentId, highlightPostId, homeChrome, midFeedRail, onComment, onReact],
+    [challengeFeed, currentUserId, hideAudience, highlightCommentId, highlightPostId, homeChrome, isLoading, midFeedRail, onComment, onReact],
   );
 
   if (error && !homeChrome && !headerTop && !stickyAbove) {
@@ -439,6 +447,7 @@ export function FeedList({
                 challengeFeed={challengeFeed}
                 highlighted={highlightPostId === post.id}
                 highlightCommentId={highlightPostId === post.id ? highlightCommentId : undefined}
+                commentsReady={!isLoading}
                 onReact={onReact}
                 onComment={onComment}
               />
@@ -462,9 +471,11 @@ export function FeedList({
         </View>
       ) : null}
       <VisiblePostsProvider ids={visibleIds}>
+        <CommentScrollProvider hostRef={listHostRef} scrollY={scrollY}>
         <FlatList
         ref={(node) => {
           listRef.current = node;
+          listHostRef.current = node;
           if (homeChrome) {
             tour?.setHomeScroll(node as unknown as ScrollView);
           }
@@ -510,6 +521,10 @@ export function FeedList({
         keyboardShouldPersistTaps="always"
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
+        onScroll={(event) => {
+          scrollY.current = event.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         windowSize={7}
         maxToRenderPerBatch={5}
@@ -532,6 +547,7 @@ export function FeedList({
             : { flex: 1 }
         }
         />
+        </CommentScrollProvider>
       </VisiblePostsProvider>
     </View>
   );

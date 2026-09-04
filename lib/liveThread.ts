@@ -5,6 +5,7 @@ import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/l
 import { asReactionType, POST_REACTION_TYPES, type PostReactionType } from '@/lib/reactions';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia } from '@/utils/media';
+import { commentsForThread } from '@/lib/commentEdit';
 
 export type LivePostLike = CheckinPostLike & {
   id?: string | null;
@@ -220,6 +221,32 @@ export type LiveThreadRow =
       parent: PostWithMeta;
     };
 
+export function isLiveSystemPost(post: { type?: string | null } | null | undefined): boolean {
+  const type = post?.type;
+  return type === 'circle_join' || type === 'circle_invite';
+}
+
+export function findLiveHighlightIndex(
+  rows: LiveThreadRow[],
+  highlightPostId?: string | null,
+  highlightCommentId?: string | null,
+): number {
+  const commentId = String(highlightCommentId ?? '').trim();
+  if (commentId) {
+    const commentAt = rows.findIndex(
+      (row) => row.kind === 'comment' && row.comment.id === commentId,
+    );
+    if (commentAt >= 0) {
+      return commentAt;
+    }
+  }
+  const postId = String(highlightPostId ?? '').trim();
+  if (!postId) {
+    return -1;
+  }
+  return rows.findIndex((row) => row.kind === 'post' && row.post.id === postId);
+}
+
 /** Posts plus existing comments, oldest first. New replies are posts with parent_id. */
 export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
   const rows: LiveThreadRow[] = [];
@@ -228,7 +255,7 @@ export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
     if (isCheckinPost(post)) {
       continue;
     }
-    for (const comment of post.comments ?? []) {
+    for (const comment of commentsForThread(post.comments ?? [])) {
       if (!comment?.id) {
         continue;
       }

@@ -12,6 +12,7 @@ import { useStory, useStoryChallengePreviews, useStoryGroups } from '@/hooks/use
 import { flattenWaveStories } from '@/lib/clipRail';
 import { waveWatchName } from '@/lib/clipWatch';
 import { copy } from '@/lib/copy';
+import { firstSearchParam } from '@/lib/commentDeepLink';
 import { authorLabel, logMissingPublishAuthor, safeUserId } from '@/lib/safeIds';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
@@ -29,6 +30,7 @@ export function WavePlayerScreen() {
     commentId?: string;
   }>();
   const storyId = clipRouteId(id);
+  const highlightCommentId = firstSearchParam(commentId);
   const fromSurface = Array.isArray(from) ? from[0] : from;
   const { user } = useAuth();
   const { profile } = useMyProfile();
@@ -177,8 +179,9 @@ export function WavePlayerScreen() {
       openComments={
         comments === '1' ||
         (Array.isArray(comments) && comments[0] === '1') ||
-        Boolean(commentId)
+        Boolean(highlightCommentId)
       }
+      highlightCommentId={highlightCommentId}
       challenges={challenges}
       viewedIds={viewedIds}
       onClose={close}

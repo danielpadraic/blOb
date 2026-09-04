@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { usePathname, useRouter, type Href } from 'expo-router';
-import { Pressable, type PressableProps } from 'react-native';
+import { Platform, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 type ProfileLinkProps = Omit<PressableProps, 'onPress'> & {
   username?: string | null;
@@ -8,7 +8,9 @@ type ProfileLinkProps = Omit<PressableProps, 'onPress'> & {
   children: ReactNode;
 };
 
-export function ProfileLink({ username, userId, children, ...props }: ProfileLinkProps) {
+const WEB_LINK = Platform.OS === 'web' ? ({ display: 'inline-flex' } as unknown as ViewStyle) : undefined;
+
+export function ProfileLink({ username, userId, children, style, ...props }: ProfileLinkProps) {
   const router = useRouter();
   const pathname = usePathname();
   const handle = username?.trim() || userId?.trim();
@@ -21,6 +23,11 @@ export function ProfileLink({ username, userId, children, ...props }: ProfileLin
     <Pressable
       accessibilityRole="link"
       onPress={() => router.push(profileHref(pathname, handle))}
+      style={
+        typeof style === 'function'
+          ? (state) => [{ flexGrow: 0 }, WEB_LINK, style(state)]
+          : ([{ flexGrow: 0 }, WEB_LINK, style] as StyleProp<ViewStyle>)
+      }
       {...props}>
       {children}
     </Pressable>

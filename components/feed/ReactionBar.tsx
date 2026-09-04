@@ -56,6 +56,41 @@ function webNoSelectProps() {
   };
 }
 
+function dismissScrimStyle() {
+  if (Platform.OS === 'web') {
+    return {
+      position: 'fixed' as const,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      backgroundColor: 'rgba(16, 19, 18, 0.28)',
+      zIndex: 40,
+    };
+  }
+  return {
+    position: 'absolute' as const,
+    top: -4000,
+    right: -400,
+    bottom: -4000,
+    left: -400,
+    backgroundColor: 'rgba(16, 19, 18, 0.28)',
+    zIndex: 40,
+  };
+}
+
+function ReactionDismissScrim({ onClose }: { onClose: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Dismiss reactions"
+      onPress={onClose}
+      {...webNoSelectProps()}
+      style={dismissScrimStyle()}
+    />
+  );
+}
+
 function openReactionTray(setOpen: (next: boolean) => void) {
   if (Platform.OS !== 'web') {
     Vibration.vibrate(10);
@@ -93,8 +128,10 @@ export function ReactionBar({
 
   if (compact) {
     return (
-      <View>
+      <View style={{ zIndex: trayOpen ? 42 : undefined }}>
+        {trayOpen ? <ReactionDismissScrim onClose={() => setTrayOpen(false)} /> : null}
         {trayOpen ? (
+          <View style={{ zIndex: 41 }}>
           <ReactionTray
             selected={mineType}
             onPick={(type) => {
@@ -102,8 +139,9 @@ export function ReactionBar({
               onReact(type);
             }}
           />
+          </View>
         ) : null}
-      <View className="flex-row items-center" style={{ columnGap: 2 }}>
+      <View className="flex-row items-center" style={{ columnGap: 2, zIndex: 41 }}>
         <Action
           compact
           icon={mineType ? REACTION_GLYPH[mineType] : GLYPH.strongOutline}
@@ -117,7 +155,13 @@ export function ReactionBar({
             }
             onReact('like');
           }}
-          onLongPress={() => openReactionTray(setTrayOpen)}
+          onLongPress={() => {
+            if (trayOpen) {
+              setTrayOpen(false);
+              return;
+            }
+            openReactionTray(setTrayOpen);
+          }}
         />
         {onReply ? (
           <Action
@@ -143,8 +187,10 @@ export function ReactionBar({
     commentCount === 1 ? '1 comment' : commentCount > 1 ? `${commentCount} comments` : 'Comment';
 
   return (
-    <View>
+    <View style={{ zIndex: trayOpen ? 42 : undefined }}>
+      {trayOpen ? <ReactionDismissScrim onClose={() => setTrayOpen(false)} /> : null}
       {trayOpen ? (
+        <View style={{ zIndex: 41 }}>
         <ReactionTray
           selected={mineType}
           onPick={(type) => {
@@ -152,8 +198,9 @@ export function ReactionBar({
             onReact(type);
           }}
         />
+        </View>
       ) : null}
-      <View className="flex-row items-center justify-end" style={{ minHeight: 32 }}>
+      <View className="flex-row items-center justify-end" style={{ minHeight: 32, zIndex: 41 }}>
         {createdAt ? (
           <AppText className="flex-1 text-[11px]" style={{ color: THEME.textMuted }}>
             {footerTime(createdAt)}
@@ -173,7 +220,13 @@ export function ReactionBar({
             }
             onReact('like');
           }}
-          onLongPress={() => openReactionTray(setTrayOpen)}
+          onLongPress={() => {
+            if (trayOpen) {
+              setTrayOpen(false);
+              return;
+            }
+            openReactionTray(setTrayOpen);
+          }}
           {...webNoSelectProps()}
           className="h-8 flex-row items-center px-1.5"
           style={noSelectStyle}>

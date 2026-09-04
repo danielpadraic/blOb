@@ -14,6 +14,7 @@ import { useEditPost } from '@/hooks/usePostEdit';
 import { copy } from '@/lib/copy';
 import {
   buildLiveThreadRows,
+  findLiveHighlightIndex,
   findLiveParent,
   liveChatText,
   isLiveCheckinPost,
@@ -24,12 +25,14 @@ import {
   liveQuotePreview,
   type LiveThreadRow,
 } from '@/lib/liveThread';
+import { COMMENT_UNAVAILABLE, commentTargetMissing } from '@/lib/commentHighlight';
 import type { MentionChip } from '@/lib/mentions';
 import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
 import { tabBarLift, THEME } from '@/lib/theme';
 import type { PostAudience } from '@/lib/postAudience';
 import type { CommentWithAuthor, ComposeInput, PostSource, PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
+import { commentMediaUrls } from '@/utils/media';
 
 type LiveReplyTarget = {
   postId: string;
@@ -50,6 +53,7 @@ type LiveThreadProps = {
   canCompose?: boolean;
   composing?: boolean;
   highlightPostId?: string;
+  highlightCommentId?: string | null;
   footerReserve?: number;
   memberIds?: string[];
   placeholder?: string;
@@ -74,6 +78,7 @@ export function LiveThread({
   canCompose = true,
   composing,
   highlightPostId,
+  highlightCommentId,
   footerReserve = 0,
   memberIds,
   placeholder,
@@ -95,11 +100,17 @@ export function LiveThread({
   const highlightedOnce = useRef<string | null>(null);
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
   const [editing, setEditing] = useState<PostWithMeta | null>(null);
+  const [missingComment, setMissingComment] = useState(false);
   const rows = useMemo(
     () => buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id))),
     [posts],
   );
-  const lastId = rows.at(-1)?.id;
+  const commentsReady = !isLoading;
+  const highlightKey = highlightCommentId
+    ? `comment:${highlightCommentId}`
+    : highlightPostId
+      ? `post:${highlightPostId}`
+      : null;
 
   const pinToLiveEdge = useCallback((animated: boolean) => {
     requestAnimationFrame(() => {
@@ -108,29 +119,39 @@ export function LiveThread({
   }, []);
 
   useEffect(() => {
+    if (!highlightCommentId) {
+      setMissingComment(false);
+      return;
+    }
+    const comments = (posts ?? []).flatMap((post) => post.comments ?? []);
+    setMissingComment(commentTargetMissing(comments, highlightCommentId, commentsReady));
+  }, [commentsReady, highlightCommentId, posts]);
+
+  useEffect(() => {
     if (rows.length === 0) {
       return;
     }
-    if (
-      highlightPostId &&
-      highlightPostId !== lastId &&
-      highlightedOnce.current !== highlightPostId
-    ) {
-      const index = rows.findIndex((row) => row.id === highlightPostId);
+    if (highlightKey && highlightedOnce.current !== highlightKey) {
+      const index = findLiveHighlightIndex(rows, highlightPostId, highlightCommentId);
       if (index >= 0) {
-        highlightedOnce.current = highlightPostId;
+        highlightedOnce.current = highlightKey;
         const timer = setTimeout(() => {
           try {
-            listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.85 });
+            listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.35 });
           } catch {
             pinToLiveEdge(false);
           }
         }, 80);
         return () => clearTimeout(timer);
       }
+      if (!commentsReady) {
+        return;
+      }
     }
-    pinToLiveEdge(false);
-  }, [highlightPostId, lastId, pinToLiveEdge, rows]);
+    if (!highlightKey) {
+      pinToLiveEdge(false);
+    }
+  }, [commentsReady, highlightCommentId, highlightKey, highlightPostId, pinToLiveEdge, rows]);
 
   const submitLine = useCallback(
     async (content: string, mentionedUserIds: string[] = [], parentId?: string | null) => {
@@ -175,7 +196,21 @@ export function LiveThread({
   const startReply = useCallback((target: LiveReplyTarget) => {
     setEditing(null);
     setReplyTo(target);
-  }, []);
+    const index = rows.findIndex(
+      (row) =>
+        (row.kind === 'comment' && row.comment.id === target.postId) ||
+        (row.kind === 'post' && row.post.id === target.postId),
+    );
+    if (index >= 0) {
+      requestAnimationFrame(() => {
+        try {
+          listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.2 });
+        } catch {
+          /* keep typing */
+        }
+      });
+    }
+  }, [rows]);
 
   const startEdit = useCallback((post: PostWithMeta) => {
     setReplyTo(null);
@@ -197,15 +232,17 @@ export function LiveThread({
             <LiveBubble
               post={display}
               currentUserId={currentUserId}
+              comment={item.comment}
+              highlighted={highlightCommentId === item.comment.id && !item.comment.deleted_at}
               quote={{
                 name: parentAuthor.name,
                 text: liveQuotePreview(item.parent) || liveChatText(item.parent.content, item.parent.media_urls),
                 avatarUrl: parentAuthor.avatarUrl,
               }}
-              reactions={item.comment.reactions}
+              reactions={item.comment.deleted_at ? [] : item.comment.reactions}
               onReact={(type) => onReact(item.parent, type, item.comment.id)}
               onReply={
-                canCompose
+                canCompose && !item.comment.deleted_at
                   ? () =>
                       startReply({
                         postId: item.parent.id,
@@ -237,7 +274,7 @@ export function LiveThread({
           <LiveBubble
             post={item.post}
             currentUserId={currentUserId}
-            highlighted={highlightPostId === item.post.id}
+            highlighted={highlightPostId === item.post.id && !highlightCommentId}
             quote={quote}
             onReact={(type) => onReact(item.post, type)}
             onEdit={
@@ -266,7 +303,7 @@ export function LiveThread({
         </View>
       );
     },
-    [canCompose, currentUserId, highlightPostId, onReact, posts, social, startEdit, startReply],
+    [canCompose, currentUserId, highlightCommentId, highlightPostId, onReact, posts, social, startEdit, startReply],
   );
 
   const composerPad = createStickyFooterPad(
@@ -301,11 +338,7 @@ export function LiveThread({
           keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => {
-            if (
-              highlightPostId &&
-              highlightPostId !== lastId &&
-              highlightedOnce.current === highlightPostId
-            ) {
+            if (highlightKey && highlightedOnce.current === highlightKey) {
               return;
             }
             listRef.current?.scrollToEnd({ animated: false });
@@ -321,6 +354,15 @@ export function LiveThread({
           }}
           ListEmptyComponent={
             <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
+          }
+          ListHeaderComponent={
+            missingComment ? (
+              <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 }}>
+                <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
+                  {COMMENT_UNAVAILABLE}
+                </AppText>
+              </View>
+            ) : null
           }
           refreshControl={
             onRefresh ? (
@@ -394,7 +436,7 @@ export function LiveThread({
             </View>
           ) : null}
           <InlineComposer
-            key={editing ? `edit-${editing.id}` : replyTo ? `reply-${replyTo.postId}` : 'live'}
+            key={editing ? `edit-${editing.id}` : 'live'}
             bar
             autoFocus={Boolean(replyTo || editing)}
             placeholder={placeholder ?? copy('live.placeholder')}
@@ -402,10 +444,11 @@ export function LiveThread({
             submitting={Boolean(composing || editPost.isPending)}
             audience={composeAudience}
             memberIds={memberIds}
+            draftKey={`live:${composeSource}`}
             initialText={editing ? liveEditPrefill(editing) : undefined}
             replyTo={editing ? null : replyTo?.mention}
             onExpandedChange={(open) => {
-              if (open) {
+              if (open && !replyTo) {
                 pinToLiveEdge(false);
               }
             }}
@@ -451,8 +494,10 @@ function commentAsLivePost(comment: CommentWithAuthor, parent: PostWithMeta): Po
     author: comment.author,
     challenge_id: parent.challenge_id,
     content: comment.content,
-    media_urls: [],
+    media_urls: commentMediaUrls(comment.content),
     created_at: comment.created_at,
+    edited_at: comment.edited_at,
+    deleted_at: comment.deleted_at,
     mentions: comment.mentions,
     reactions: comment.reactions,
     comments: [],

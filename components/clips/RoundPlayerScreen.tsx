@@ -12,6 +12,7 @@ import { usePost } from '@/hooks/useFeed';
 import { useReel, useReels, useStoryChallengePreviews } from '@/hooks/useSocial';
 import { buildRoundPlayList } from '@/lib/clipRail';
 import { copy } from '@/lib/copy';
+import { firstSearchParam } from '@/lib/commentDeepLink';
 import { authorLabel, logMissingPublishAuthor, safeUserId } from '@/lib/safeIds';
 import { personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +32,7 @@ export function RoundPlayerScreen() {
     commentId?: string;
   }>();
   const reelId = clipRouteId(id);
+  const highlightCommentId = firstSearchParam(commentId);
   const fromSurface = Array.isArray(from) ? from[0] : from;
   const promptShare =
     sharePrompt === '1' || (Array.isArray(sharePrompt) && sharePrompt[0] === '1');
@@ -175,8 +177,9 @@ export function RoundPlayerScreen() {
       openComments={
         comments === '1' ||
         (Array.isArray(comments) && comments[0] === '1') ||
-        Boolean(commentId)
+        Boolean(highlightCommentId)
       }
+      highlightCommentId={highlightCommentId}
       challenges={challenges}
       sharePrompt={promptShare}
       onClose={close}

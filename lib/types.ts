@@ -667,6 +667,8 @@ export interface Comment {
   parent_id?: string | null;
   content: string;
   created_at: string;
+  edited_at?: string | null;
+  deleted_at?: string | null;
   mentions?: PostMention[];
 }
 
@@ -1476,6 +1478,30 @@ export type Database = {
           Relationship<'comments_author_id_fkey', 'author_id', 'profiles', 'id'>,
           Relationship<'comments_parent_id_fkey', 'parent_id', 'comments', 'id'>,
         ]
+      >;
+      comment_edits: TableDef<
+        {
+          id: string;
+          comment_id: string;
+          author_id: string;
+          body: string;
+          created_at: string;
+        },
+        Partial<{
+          id: string;
+          comment_id: string;
+          author_id: string;
+          body: string;
+          created_at: string;
+        }>,
+        Partial<{
+          id: string;
+          comment_id: string;
+          author_id: string;
+          body: string;
+          created_at: string;
+        }>,
+        [Relationship<'comment_edits_comment_id_fkey', 'comment_id', 'comments', 'id'>]
       >;
       post_mentions: TableDef<
         {

@@ -26,7 +26,7 @@ import {
 import type { PostAudience } from '@/lib/postAudience';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
-import { asGalleryMedia } from '@/utils/media';
+import { asGalleryMedia, isHttpUrl, mediaKind } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -59,6 +59,7 @@ type InlineComposerProps = {
   draftKey?: string;
   memberIds?: string[];
   initialText?: string;
+  initialMediaUrls?: string[];
   onSubmit: (content: string, mentionedUserIds: string[], chips: MentionChip[]) => Promise<unknown> | void;
 };
 
@@ -78,6 +79,7 @@ export function InlineComposer({
   draftKey,
   memberIds,
   initialText,
+  initialMediaUrls,
   onSubmit,
 }: InlineComposerProps) {
   const { user } = useAuth();
@@ -93,7 +95,9 @@ export function InlineComposer({
     Boolean((stored?.doc.text ?? initialText)?.trim()),
   );
   const [attachments, setAttachments] = useState<Attachment[]>(() =>
-    (stored?.attachments ?? []).map((row) => ({ ...row })),
+    stored?.attachments?.length
+      ? stored.attachments.map((row) => ({ ...row }))
+      : attachmentsFromUrls(initialMediaUrls),
   );
   const [gifOpen, setGifOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -173,6 +177,17 @@ export function InlineComposer({
     }
     wasExpanded.current = expanded;
   }, [autoFocus, expanded]);
+
+  useEffect(() => {
+    if (!replyTo?.userId) {
+      return;
+    }
+    fieldRef.current?.seedMention(replyTo);
+    if (autoFocus) {
+      setExpanded(true);
+      requestAnimationFrame(() => fieldRef.current?.focus());
+    }
+  }, [autoFocus, replyTo?.userId]);
 
   useEffect(() => () => cancelCollapse(), []);
 
@@ -299,7 +314,7 @@ export function InlineComposer({
     try {
       const mediaUrls: string[] = [];
       for (const [index, attachment] of attachments.entries()) {
-        if (attachment.kind === 'gif') {
+        if (attachment.kind === 'gif' || isHttpUrl(attachment.uri)) {
           mediaUrls.push(attachment.uri);
           continue;
         }
@@ -520,6 +535,18 @@ export function InlineComposer({
       ) : null}
     </View>
   );
+}
+
+function attachmentsFromUrls(urls?: string[]): Attachment[] {
+  return (urls ?? []).filter(Boolean).map((url) => {
+    const kind =
+      mediaKind(url) === 'video'
+        ? 'video'
+        : /tenor\.com|giphy\.com|\.gif(\?|$)/i.test(url)
+          ? 'gif'
+          : 'photo';
+    return { id: url, uri: url, kind };
+  });
 }
 
 function keepFocusProps() {
