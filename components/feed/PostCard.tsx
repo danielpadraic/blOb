@@ -34,6 +34,7 @@ import { PROOF_META } from '@/lib/constants';
 import { useHidePostFromHome } from '@/hooks/usePostEdit';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
+import { LiftPostCard } from '@/components/lift/LiftPostCard';
 import { postHref } from '@/lib/postShare';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { asPostAudience } from '@/lib/postAudience';
@@ -173,6 +174,7 @@ function PostCardInner({
   const circleShare = post.type === 'circle_challenge_share';
   const circleJoin = post.type === 'circle_join';
   const circleInvite = post.type === 'circle_invite';
+  const liftSessionId = post.lift_session_id ? String(post.lift_session_id) : null;
   const hidePromoCard =
     (Boolean(challengeFeed) && !circleShare) ||
     checkin ||
@@ -420,7 +422,17 @@ function PostCardInner({
       ) : null}
 
       <View style={{ gap: homeFeed ? 6 : 10, marginTop: homeFeed ? 2 : 6, opacity: mutedOwnerHome ? 0.45 : 1 }}>
-        {caption ? (
+        {/* A lift recap owns its own caption, because an empty one is stored as a text copy of the
+            card and must not be printed above it. */}
+        {liftSessionId ? (
+          <LiftPostCard
+            sessionId={liftSessionId}
+            authorId={post.author_id}
+            caption={content}
+            compact={homeFeed}
+          />
+        ) : null}
+        {caption && !liftSessionId ? (
           <PostBody
             content={caption}
             mentions={circleJoin || circleInvite ? undefined : post.mentions}

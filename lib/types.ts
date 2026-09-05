@@ -699,6 +699,8 @@ export interface Post {
   overlays?: unknown[] | null;
   hidden_from_rail?: boolean | null;
   parent_id?: string | null;
+  /** The lift session this post's recap card renders from, and what makes that session readable. */
+  lift_session_id?: string | null;
   created_at: string;
 }
 
@@ -715,7 +717,8 @@ export type PostType =
   | 'wave_share'
   | 'circle_invite'
   | 'circle_join'
-  | 'circle_challenge_share';
+  | 'circle_challenge_share'
+  | 'lift_session';
 
 export type ComposeInput = {
   content: string;
@@ -1834,8 +1837,15 @@ export type Database = {
           p_unit: string;
           p_completed: boolean;
           p_exercises: unknown;
+          p_source_session_id?: string | null;
+          p_overload_from_session_id?: string | null;
+          p_overload_summary?: unknown;
         };
         Returns: string;
+      };
+      set_lift_session_post: {
+        Args: { p_session_id: string; p_post_id: string | null };
+        Returns: null;
       };
       get_my_profile: {
         Args: Record<string, never>;

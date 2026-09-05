@@ -40,6 +40,33 @@ export type LiftSessionDraft = {
   muscleKeys: MuscleKey[];
   unit: WeightUnit;
   exercises: LiftExerciseDraft[];
+  /** The session this was copied from — repeat, overload, or an import from a friend's card. */
+  sourceSessionId?: string | null;
+  /** Set only when the copy went through the Overload sheet. */
+  overloadFromSessionId?: string | null;
+  overloadSummary?: LiftOverloadSummary | null;
+  /** The post carrying this session's recap card, once it has been shared. */
+  sharedPostId?: string | null;
+};
+
+/** How one field moves: a flat amount, a percentage, or not at all. */
+export type LiftOverloadMode = 'off' | 'amount' | 'percent';
+
+export type LiftOverloadStep = {
+  mode: LiftOverloadMode;
+  amount: number;
+};
+
+/** What the Overload sheet collects. Never persisted — a bump is chosen per session. */
+export type LiftOverloadPlan = {
+  weight: LiftOverloadStep;
+  reps: LiftOverloadStep;
+};
+
+/** What is stored on the bumped session, and what the recap chip prints. */
+export type LiftOverloadSummary = {
+  weightDelta: { mode: 'amount' | 'percent'; amount: number; unit: WeightUnit } | null;
+  repsDelta: { mode: 'amount' | 'percent'; amount: number } | null;
 };
 
 /** Row shapes as they come back from Supabase. */
@@ -53,6 +80,10 @@ export type LiftSessionRow = {
   unit: WeightUnit;
   created_at: string;
   updated_at: string;
+  source_session_id?: string | null;
+  shared_post_id?: string | null;
+  overload_from_session_id?: string | null;
+  overload_summary?: unknown;
 };
 
 export type LiftSessionExerciseRow = {
@@ -97,6 +128,9 @@ export type LiftSessionSummary = {
   setCount: number;
   /** Up to two lines of "Incline BB Bench Press · 3 sets". */
   preview: string[];
+  /** Set once the session has been shared, so History can offer the link instead of a new post. */
+  sharedPostId?: string | null;
+  overloadSummary?: LiftOverloadSummary | null;
 };
 
 /** The jsonb the save RPC expects. Field names are camelCase on purpose; the RPC reads them. */

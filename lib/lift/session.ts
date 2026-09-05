@@ -1,5 +1,6 @@
 import { newId, newLocalKey } from '@/lib/lift/ids';
 import { isMuscleKey, muscleShortLabel, orderMuscles, type MuscleKey } from '@/lib/lift/muscles';
+import { parseOverloadSummary } from '@/lib/lift/overload';
 import type {
   LiftExerciseDraft,
   LiftSavePayloadExercise,
@@ -495,6 +496,52 @@ export function rowsToDraft(
     muscleKeys: orderMuscles(session.muscle_keys),
     unit: session.unit === 'kg' ? 'kg' : 'lb',
     exercises,
+    sourceSessionId: session.source_session_id ?? null,
+    overloadFromSessionId: session.overload_from_session_id ?? null,
+    overloadSummary: parseOverloadSummary(session.overload_summary),
+    sharedPostId: session.shared_post_id ?? null,
+  };
+}
+
+/**
+ * Copies a session's shape into a new one.
+ *
+ * `numbers: 'keep'` is your own history — last time's loads are the sensible starting point.
+ * `numbers: 'empty'` is somebody else's card: a friend's 225 must never become your next log by
+ * default, so the structure arrives and the weights do not.
+ */
+export function copySession(
+  source: LiftSessionDraft,
+  options?: { numbers?: 'keep' | 'empty'; unit?: WeightUnit },
+): LiftSessionDraft {
+  const keep = options?.numbers !== 'empty';
+  return {
+    id: newId(),
+    title: null,
+    performedAt: new Date().toISOString(),
+    completedAt: null,
+    muscleKeys: source.muscleKeys,
+    unit: options?.unit ?? source.unit,
+    sourceSessionId: source.id,
+    overloadFromSessionId: null,
+    overloadSummary: null,
+    exercises: source.exercises.map((row) => ({
+      key: newLocalKey('ex'),
+      exerciseId: row.exerciseId,
+      // A custom belongs to whoever created it. An import re-resolves this against the viewer's own
+      // customs before saving; until then the name snapshot carries the exercise.
+      customExerciseId: keep ? row.customExerciseId : null,
+      name: row.name,
+      muscleKey: row.muscleKey,
+      supersetGroup: row.supersetGroup,
+      sets: row.sets.map((set) => ({
+        key: newLocalKey('set'),
+        kind: set.kind,
+        weight: keep ? set.weight : null,
+        reps: keep ? set.reps : null,
+        completedAt: null,
+      })),
+    })),
   };
 }
 
@@ -503,29 +550,7 @@ export function rowsToDraft(
  * values. Nothing is pre-checked — they still have to do the work.
  */
 export function repeatSession(source: LiftSessionDraft): LiftSessionDraft {
-  return {
-    id: newId(),
-    title: null,
-    performedAt: new Date().toISOString(),
-    completedAt: null,
-    muscleKeys: source.muscleKeys,
-    unit: source.unit,
-    exercises: source.exercises.map((row) => ({
-      key: newLocalKey('ex'),
-      exerciseId: row.exerciseId,
-      customExerciseId: row.customExerciseId,
-      name: row.name,
-      muscleKey: row.muscleKey,
-      supersetGroup: row.supersetGroup,
-      sets: row.sets.map((set) => ({
-        key: newLocalKey('set'),
-        kind: set.kind,
-        weight: set.weight,
-        reps: set.reps,
-        completedAt: null,
-      })),
-    })),
-  };
+  return copySession(source, { numbers: 'keep' });
 }
 
 export function summarize(draft: LiftSessionDraft): LiftSessionSummary {
@@ -539,5 +564,7 @@ export function summarize(draft: LiftSessionDraft): LiftSessionSummary {
     exerciseCount: draft.exercises.length,
     setCount: countWorkSets(draft),
     preview: sessionPreview(draft.exercises),
+    sharedPostId: draft.sharedPostId ?? null,
+    overloadSummary: draft.overloadSummary ?? null,
   };
 }

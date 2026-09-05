@@ -1,17 +1,24 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useLoggableChallenges, type LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
   createCustomExercise,
   deleteLiftSession,
   fetchCustomExercises,
   fetchLastSessionForMuscles,
+  fetchLastSessionWithExercises,
   fetchLiftHistory,
   fetchLiftSession,
+  importLiftSession,
   saveLiftSession,
   unitFor,
 } from '@/lib/lift/api';
+import { attachLiftToCheckin } from '@/lib/lift/attach';
+import { liftingChallenges } from '@/lib/lift/liftingChallenge';
+import { shareLiftSession, type LiftShareInput } from '@/lib/lift/share';
 import type { ExerciseOption } from '@/lib/lift/catalog';
 import type { MuscleKey } from '@/lib/lift/muscles';
 import type { LiftSessionDraft } from '@/lib/lift/types';
@@ -84,6 +91,67 @@ export function useDeleteLiftSession() {
     mutationFn: (id: string) => deleteLiftSession(id),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: [LIFT_KEY] });
+    },
+  });
+}
+
+/** The live challenges a finished lift can be attached to. Empty means no attach row is shown. */
+export function useLiftingChallenges(): LoggableChallenge[] {
+  const { data } = useLoggableChallenges();
+  return useMemo(() => liftingChallenges(data ?? []), [data]);
+}
+
+/** The viewer's own last session sharing a catalog exercise with the one they are importing. */
+export function useLastSessionWithExercises(exerciseIds: readonly string[]) {
+  const { user } = useAuth();
+  const key = [...exerciseIds].sort().join(',');
+  return useQuery({
+    queryKey: [LIFT_KEY, 'last-matching', key, user?.id],
+    enabled: Boolean(user?.id && exerciseIds.length),
+    queryFn: () => fetchLastSessionWithExercises(exerciseIds),
+  });
+}
+
+export function useShareLiftSession() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LiftShareInput) => shareLiftSession(input),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: [LIFT_KEY] });
+      void client.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useAttachLiftToCheckin() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      draft: LiftSessionDraft;
+      challengeId: string;
+      caption?: string | null;
+      home: boolean;
+    }) => attachLiftToCheckin(input),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: [LIFT_KEY] });
+      void client.invalidateQueries({ queryKey: ['feed'] });
+      void client.invalidateQueries({ queryKey: ['loggable-challenge'] });
+      void client.invalidateQueries({ queryKey: ['challenge-checkin'] });
+    },
+  });
+}
+
+/** Copies a session the viewer can see into a new one of their own. */
+export function useImportLiftSession() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      source: LiftSessionDraft;
+      numbers: 'keep' | 'empty';
+      unit: WeightUnit;
+    }) => importLiftSession(input.source, { numbers: input.numbers, unit: input.unit }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: [LIFT_KEY, 'customs'] });
     },
   });
 }

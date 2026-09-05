@@ -108,7 +108,6 @@ as $$
         from public.posts p
         where p.lift_session_id = p_session_id
           and p.deleted_at is null
-          and coalesce(p.moderation_status, 'visible') <> 'removed'
           and public.can_read_post(p.author_id, p.audience, p.audience_user_ids, p.challenge_id)
       )
     );
@@ -182,6 +181,8 @@ declare
   v_row_id uuid;
   v_exercise_id text;
   v_custom_id uuid;
+  v_source_id uuid;
+  v_overload_id uuid;
 begin
   if v_user is null then
     raise exception 'You need to be signed in.' using errcode = '42501';
@@ -191,15 +192,20 @@ begin
     raise exception 'Unknown muscle group.' using errcode = '22023';
   end if;
 
-  -- A copy may only name a source the caller is allowed to read, so provenance cannot be used to
-  -- probe for the existence of someone else's private session.
+  -- Provenance the caller cannot back up is dropped rather than rejected. Every autosave re-sends
+  -- these ids, so raising here would break logging; and silently storing an unreadable id would let
+  -- the column be used to probe for sessions that are none of the caller's business.
+  --
+  -- A source must be something they can actually read.
   if p_source_session_id is not null
     and not exists (
       select 1 from public.lift_sessions s
       where s.id = p_source_session_id
         and public.lift_session_readable(s.id, s.user_id)
     ) then
-    raise exception 'That source lift is not available.' using errcode = '42501';
+    v_source_id := null;
+  else
+    v_source_id := p_source_session_id;
   end if;
 
   -- Overload bumps your own numbers. A friend's card can supply structure, never a starting load.
@@ -208,7 +214,9 @@ begin
       select 1 from public.lift_sessions s
       where s.id = p_overload_from_session_id and s.user_id = v_user
     ) then
-    raise exception 'Overload can only build on your own lift.' using errcode = '42501';
+    v_overload_id := null;
+  else
+    v_overload_id := p_overload_from_session_id;
   end if;
 
   insert into public.lift_sessions (
@@ -223,8 +231,8 @@ begin
     case when p_completed then now() else null end,
     coalesce(p_muscle_keys, '{}'),
     case when p_unit = 'kg' then 'kg' else 'lb' end,
-    p_source_session_id,
-    p_overload_from_session_id,
+    v_source_id,
+    v_overload_id,
     p_overload_summary
   )
   on conflict (id) do update set

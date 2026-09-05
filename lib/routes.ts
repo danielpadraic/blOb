@@ -327,6 +327,14 @@ export const LIFTS_HISTORY_HREF = '/profile/lifts' as Href;
 export function liftSessionHref(id: string): Href {
   return `/lift/${String(id ?? '').trim()}` as Href;
 }
+
+/**
+ * "Use this workout" on somebody's shared card. `new` is a real screen, so it wins over `[id]`.
+ * Visibility is decided when the source session is read, not by who holds the link.
+ */
+export function liftImportHref(sourceSessionId: string): Href {
+  return `/lift/new?fromSession=${encodeURIComponent(String(sourceSessionId ?? '').trim())}` as Href;
+}
 export const INTERESTS_HREF = '/profile/interests' as Href;
 
 export function conversationHref(

@@ -34,6 +34,7 @@ import {
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
 import { CheckinProofStatsRow } from '@/components/challenge/CheckinProofStats';
+import { LiftPostCard } from '@/components/lift/LiftPostCard';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia, mediaKind } from '@/utils/media';
@@ -89,6 +90,7 @@ export const LiveBubble = memo(function LiveBubble({
     ? checkinCardCaption(post.content, null, post.edited_at)
     : liveChatText(post.content, post.media_urls);
   const headline = liveCheckinHeadline(post);
+  const liftSessionId = post.lift_session_id ? String(post.lift_session_id) : null;
   const items: LightboxItem[] = visuals.map((uri) => ({
     uri,
     label: liveProofCaption(post, uri, checkin ? headline : caption),
@@ -385,10 +387,21 @@ export const LiveBubble = memo(function LiveBubble({
                     {headline}
                   </AppText>
                 )}
-                {caption ? (
+                {caption && !liftSessionId ? (
                   <AppText className="mt-0.5 text-[13px]" style={{ color: THEME.textMuted }} numberOfLines={2}>
                     {caption}
                   </AppText>
+                ) : null}
+                {/* A lift attached to this check-in reads as its own card, not as a wall of text. */}
+                {liftSessionId ? (
+                  <View className="mt-1.5">
+                    <LiftPostCard
+                      sessionId={liftSessionId}
+                      authorId={uid}
+                      caption={post.content}
+                      compact
+                    />
+                  </View>
                 ) : null}
                 {/* Fitness stats only. The caption above stays whatever the user typed. */}
                 <View className="mt-1">
@@ -443,7 +456,16 @@ export const LiveBubble = memo(function LiveBubble({
                   ) : null}
                 </Pressable>
               ) : null}
-              {caption ? (
+              {liftSessionId ? (
+                <View className="px-3 py-2">
+                  <LiftPostCard
+                    sessionId={liftSessionId}
+                    authorId={uid}
+                    caption={post.content}
+                    compact
+                  />
+                </View>
+              ) : caption ? (
                 <View className="px-3 py-2">
                   <MentionText
                     content={caption}

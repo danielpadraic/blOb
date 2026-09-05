@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AddExerciseSheet, type AddExerciseResult } from '@/components/lift/AddExerciseSheet';
 import { ExerciseCard } from '@/components/lift/ExerciseCard';
+import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
+import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
@@ -12,12 +14,19 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import {
+  useAttachLiftToCheckin,
   useCreateCustomExercise,
   useCustomExercises,
   useDeleteLiftSession,
+  useLiftingChallenges,
   useLiftSession,
   useSaveLiftSession,
+  useShareLiftSession,
 } from '@/hooks/useLift';
+import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
+import { hasShareableWork } from '@/lib/lift/recap';
+import { fetchChallengeShareLocks } from '@/lib/lift/share';
+import { challengeDetailHref } from '@/lib/routes';
 import { muscleLabel, type MuscleKey } from '@/lib/lift/muscles';
 import {
   addExercise,
@@ -35,7 +44,7 @@ import {
   toggleSetComplete,
   updateSet,
 } from '@/lib/lift/session';
-import type { LiftSessionDraft, LiftSetKind } from '@/lib/lift/types';
+import type { LiftOverloadPlan, LiftSessionDraft, LiftSetKind } from '@/lib/lift/types';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { LIFT_START_HREF, LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
@@ -81,8 +90,15 @@ function LiftSessionInner({ id }: { id: string }) {
   const save = useSaveLiftSession();
   const createCustom = useCreateCustomExercise();
   const remove = useDeleteLiftSession();
+  const share = useShareLiftSession();
+  const attach = useAttachLiftToCheckin();
+  const liftingChallenges = useLiftingChallenges();
 
   const [draft, setDraft] = useState<LiftSessionDraft | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharedPostId, setSharedPostId] = useState<string | null>(null);
+  const [overloadOpen, setOverloadOpen] = useState(false);
+  const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
   const [collapsedMuscles, setCollapsedMuscles] = useState<Set<string>>(new Set());
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
@@ -106,6 +122,25 @@ function LiftSessionInner({ id }: { id: string }) {
   }, [loaded.data]);
 
   const readOnly = Boolean(draft?.completedAt);
+
+  // Which of those challenges keep check-ins inside their own lobby. Asked for once, because
+  // `LoggableChallenge` does not carry `privacy_mode`.
+  useEffect(() => {
+    const ids = liftingChallenges.map((challenge) => challenge.id);
+    if (!ids.length) {
+      setLockedChallengeIds([]);
+      return;
+    }
+    let live = true;
+    void fetchChallengeShareLocks(ids).then((locked) => {
+      if (live) {
+        setLockedChallengeIds(locked);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [liftingChallenges]);
 
   const persist = useCallback(
     async (next: LiftSessionDraft, completed?: boolean) => {
@@ -231,12 +266,76 @@ function LiftSessionInner({ id }: { id: string }) {
     }
     dirty.current = false;
     const ok = await persist(draft, true);
-    if (ok) {
-      // Mark it complete locally first: this route is already `draft.id`, so navigating here would
-      // not remount, and the unmount autosave would otherwise write the session back as unfinished.
-      setDraft((current) => (current ? { ...current, completedAt: new Date().toISOString() } : current));
+    if (!ok) {
+      return;
+    }
+    // Mark it complete locally first: this route is already `draft.id`, so navigating here would
+    // not remount, and the unmount autosave would otherwise write the session back as unfinished.
+    const done = { ...draft, completedAt: new Date().toISOString() };
+    setDraft(done);
+
+    // A session with no finished working sets has nothing to put on a card, so it goes straight to
+    // History rather than opening a share sheet with an empty brag in it.
+    if (hasShareableWork(done)) {
+      setShareOpen(true);
+      return;
+    }
+    router.replace(LIFTS_HISTORY_HREF);
+  }
+
+  async function onShare(choice: LiftShareChoice) {
+    if (!draft) {
+      return;
+    }
+    setError(null);
+    try {
+      if (choice.challengeId) {
+        const result = await attach.mutateAsync({
+          draft,
+          challengeId: choice.challengeId,
+          caption: choice.caption,
+          // A locked lobby never announces to Home, and the sheet hides the toggle in that case.
+          home: choice.home && !lockedChallengeIds.includes(choice.challengeId),
+        });
+        setShareOpen(false);
+        router.replace(
+          challengeDetailHref(choice.challengeId, 'lobby', result.postId ?? undefined, {
+            tab: 'feed',
+          }),
+        );
+        return;
+      }
+      const posted = await share.mutateAsync({
+        draft,
+        caption: choice.caption,
+        challengeId: null,
+        home: true,
+        audience: choice.audience,
+      });
+      setSharedPostId(posted.postId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not share that lift.');
+    }
+  }
+
+  function closeShare() {
+    setShareOpen(false);
+    if (readOnly) {
       router.replace(LIFTS_HISTORY_HREF);
     }
+  }
+
+  async function onApplyOverload(plan: LiftOverloadPlan) {
+    if (!draft) {
+      return;
+    }
+    setOverloadOpen(false);
+    // They are already looking at last time's numbers, so the bump lands on this session rather
+    // than opening a second one.
+    const bumped = bumpSessionInPlace(draft, plan);
+    setDraft(bumped);
+    dirty.current = false;
+    await persist(bumped);
   }
 
   async function onStartAgain() {
@@ -382,6 +481,40 @@ function LiftSessionInner({ id }: { id: string }) {
               {readOnly ? ' · Saved' : ''}
             </AppText>
           </View>
+
+          {/* Only on a session copied from an earlier one, and only before the first working set is
+              checked off — after that, bumping would rewrite numbers they already lifted. */}
+          {!readOnly && draft.sourceSessionId && canOverloadSession(draft) ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go heavier than last time"
+              onPress={() => setOverloadOpen(true)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 52,
+                paddingHorizontal: 14,
+                marginBottom: 14,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: THEME.accentBright,
+                backgroundColor: pressed ? THEME.surface : THEME.accentSoft,
+              })}>
+              <Glyph name={GLYPH.trendUp} color={THEME.accent} size={16} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <AppText style={{ fontSize: 14, fontWeight: '800', color: THEME.accent }}>
+                  Go heavier than last time
+                </AppText>
+                <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
+                  {draft.overloadSummary
+                    ? `Bumped ${overloadChipLabel(draft.overloadSummary)} — tap to change`
+                    : 'Add weight or reps to every working set'}
+                </AppText>
+              </View>
+              <Glyph name={GLYPH.chevronRight} color={THEME.accent} size={13} />
+            </Pressable>
+          ) : null}
 
           {sections.map((section) => {
             const collapsed = collapsedMuscles.has(section.muscle);
@@ -530,8 +663,18 @@ function LiftSessionInner({ id }: { id: string }) {
 
           {readOnly ? (
             <>
+              {hasShareableWork(draft) ? (
+                <Button
+                  title={draft.sharedPostId ? 'Share again' : 'Share this lift'}
+                  onPress={() => {
+                    setSharedPostId(null);
+                    setShareOpen(true);
+                  }}
+                />
+              ) : null}
               <Button
                 title="Start this again"
+                variant={hasShareableWork(draft) ? 'outline' : 'primary'}
                 loading={save.isPending}
                 onPress={() => void onStartAgain()}
               />
@@ -579,6 +722,30 @@ function LiftSessionInner({ id }: { id: string }) {
         busy={createCustom.isPending}
         onClose={() => setSheetMuscle(null)}
         onSubmit={(result) => void onAddExercise(result)}
+      />
+
+      <OverloadSheet
+        visible={overloadOpen}
+        source={draft}
+        busy={save.isPending}
+        onClose={() => setOverloadOpen(false)}
+        onApply={(plan) => void onApplyOverload(plan)}
+      />
+
+      <LiftShareSheet
+        visible={shareOpen}
+        draft={draft}
+        challenges={liftingChallenges}
+        lockedChallengeIds={lockedChallengeIds}
+        busy={share.isPending || attach.isPending}
+        error={error}
+        sharedPostId={sharedPostId}
+        onClose={closeShare}
+        onShare={(choice) => void onShare(choice)}
+        onSkip={() => {
+          setShareOpen(false);
+          router.replace(LIFTS_HISTORY_HREF);
+        }}
       />
     </Screen>
   );

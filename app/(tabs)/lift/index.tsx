@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -11,12 +12,15 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import {
   useLastSessionForMuscles,
   useLiftHistory,
+  useLiftSession,
   useLiftUnit,
   useSaveLiftSession,
 } from '@/hooks/useLift';
 import { fetchLiftSession } from '@/lib/lift/api';
 import { MUSCLE_KEYS, muscleLabel, muscleSummary, type MuscleKey } from '@/lib/lift/muscles';
+import { applyOverload } from '@/lib/lift/overload';
 import { newSessionDraft, repeatSession, shortDate } from '@/lib/lift/session';
+import type { LiftOverloadPlan } from '@/lib/lift/types';
 import { LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
@@ -34,6 +38,7 @@ export default function LiftStartScreen() {
   const save = useSaveLiftSession();
   const [selected, setSelected] = useState<MuscleKey[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [overloadOpen, setOverloadOpen] = useState(false);
   const last = useLastSessionForMuscles(selected);
 
   const picked = selected.length > 0;
@@ -58,7 +63,8 @@ export default function LiftStartScreen() {
     }
   }
 
-  async function repeatLast() {
+  /** Copies the last matching session, optionally bumped by the Overload sheet first. */
+  async function repeatLast(plan?: LiftOverloadPlan) {
     setError(null);
     const sourceId = last.data?.id;
     if (!sourceId) {
@@ -70,13 +76,17 @@ export default function LiftStartScreen() {
         setError('That session is no longer there. Start new instead.');
         return;
       }
-      const draft = repeatSession(source);
+      const draft = plan ? applyOverload(source, plan) : repeatSession(source);
       await save.mutateAsync({ draft });
       router.replace(liftSessionHref(draft.id));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not copy that lift.');
     }
   }
+
+  // The sheet previews "52.5 → 55" against real sets, so the source session is read in full rather
+  // than stubbed from the history summary.
+  const overloadSource = useLiftSession(last.data?.id);
 
   const openSessions = (history.data ?? []).filter(
     (row) => !row.completedAt && row.exerciseCount > 0,
@@ -244,6 +254,31 @@ export default function LiftStartScreen() {
                   </AppText>
                 </Pressable>
               ) : null}
+
+              {/* Only offered next to a real previous session — there is nothing to bump otherwise. */}
+              {last.data ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Go heavier than last time"
+                  accessibilityState={{ disabled: busy }}
+                  disabled={busy}
+                  onPress={() => setOverloadOpen(true)}
+                  style={({ pressed }) => ({
+                    minHeight: 48,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderRadius: 14,
+                    backgroundColor: pressed ? THEME.accentSoft : 'transparent',
+                    opacity: busy ? 0.5 : 1,
+                  })}>
+                  <Glyph name={GLYPH.trendUp} color={THEME.accent} size={14} />
+                  <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
+                    Go heavier than last time
+                  </AppText>
+                </Pressable>
+              ) : null}
               <Button
                 title={busy ? 'Starting…' : 'Start new'}
                 loading={busy}
@@ -263,6 +298,17 @@ export default function LiftStartScreen() {
           )}
         </View>
       </View>
+
+      <OverloadSheet
+        visible={overloadOpen}
+        source={overloadSource.data ?? null}
+        busy={busy}
+        onClose={() => setOverloadOpen(false)}
+        onApply={(plan) => {
+          setOverloadOpen(false);
+          void repeatLast(plan);
+        }}
+      />
     </Screen>
   );
 }
