@@ -27,11 +27,8 @@ export function WalletBar({ userId }: { userId: string }) {
   const shownBucks = useRef<number | null>(null);
 
   async function load() {
-    const { data } = await supabase
-      .from('profiles')
-      .select('coins, bucks, last_shown_coin_balance, last_shown_bucks_balance')
-      .eq('id', userId)
-      .maybeSingle();
+    // Balances are not readable off the profiles table; they come back through the owner-only RPC.
+    const { data } = await supabase.rpc('get_my_profile');
     if (!data) {
       return;
     }

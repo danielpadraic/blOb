@@ -383,7 +383,7 @@ function CreateScreen({ userId }: { userId: string }) {
     if (publishError) {
       const raw = publishError.message.toLowerCase();
       if (raw.includes('insufficient')) {
-        const profile = await supabase.from('profiles').select('bucks').eq('id', userId).maybeSingle();
+        const profile = await supabase.rpc('get_my_profile');
         const have = Number((profile.data as { bucks?: number } | null)?.bucks ?? 0);
         const need = Math.max(entryFee, 0) + Math.max(hostAdd, 0);
         requestWebTopUp({ amount: Math.max(joinShortfall(have, need), 1), returnCreate: true });
@@ -647,7 +647,7 @@ function ChallengeScreen({ challengeId, userId }: { challengeId: string; userId:
         ),
       ],
     );
-    const wallet = await supabase.from('profiles').select('bucks').eq('id', userId).maybeSingle();
+    const wallet = await supabase.rpc('get_my_profile');
     setWalletBucks(Number((wallet.data as { bucks?: number } | null)?.bucks ?? 0));
     const receipt = await getChallengeSettlementWithClient(supabase, challengeId);
     setSettlement(receipt);

@@ -24,11 +24,8 @@ export function WalletSheetHost({ userId }: { userId: string }) {
   const [rows, setRows] = useState<LedgerRow[]>([]);
 
   async function load() {
-    const profile = await supabase
-      .from('profiles')
-      .select('coins, bucks')
-      .eq('id', userId)
-      .maybeSingle();
+    // Balances are owner-only, so they come back through the RPC rather than a profiles select.
+    const profile = await supabase.rpc('get_my_profile');
     if (profile.data) {
       setCoins(Number((profile.data as { coins?: number }).coins ?? 0));
       setBucks(Number((profile.data as { bucks?: number }).bucks ?? 0));
