@@ -1,3 +1,4 @@
+import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import type { PostAudience } from '@/lib/postAudience';
 import type {
   Conversation,
@@ -596,6 +597,8 @@ export interface Post {
   media_urls: string[];
   /** Per-media captions aligned with media_urls. Check-in proof captions. */
   media_captions?: Array<string | null> | null;
+  /** Display-safe fitness stats for the check-in chip row. Null for non-fitness and honor. */
+  checkin_stats?: CheckinProofStats | null;
   audience?: PostAudience;
   audience_user_ids?: string[];
   moderation_status?: 'visible' | 'under_review' | 'removed' | string | null;

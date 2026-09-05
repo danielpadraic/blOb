@@ -135,6 +135,8 @@ export async function upsertHealthWorkout(userId: string, workout: HealthWorkout
         hr_max: workout.hrMax ?? null,
         source_bundle: workout.sourceBundle ?? null,
         confidence: workout.confidence,
+        // Private session summary. This table is owner-only plus official review, and is never
+        // on the public profile. Aggregates only — never the heart-rate sample series.
         raw_summary: {
           activityLabel: workout.activityLabel,
           activityType: workout.activityType,
@@ -142,6 +144,19 @@ export async function upsertHealthWorkout(userId: string, workout: HealthWorkout
           confidence: workout.confidence,
           sourceBundle: workout.sourceBundle ?? null,
           hasHr: Boolean(workout.hrAvg || workout.hrMax),
+          activity: workout.activityLabel,
+          start: workout.startedAt,
+          end: workout.endedAt,
+          duration_sec: workout.durationSec,
+          active_cal: workout.caloriesKcal ?? null,
+          total_cal: null,
+          distance: workout.distanceM ?? null,
+          distance_unit: workout.distanceM == null ? null : 'm',
+          hr_min: workout.hrMin ?? null,
+          hr_avg: workout.hrAvg ?? null,
+          hr_max: workout.hrMax ?? null,
+          source: 'healthkit',
+          vendor_workout_id: workout.providerWorkoutId,
         },
       },
       { onConflict: 'user_id,provider,provider_workout_id' },

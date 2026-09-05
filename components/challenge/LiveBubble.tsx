@@ -33,6 +33,7 @@ import {
 } from '@/lib/liveThread';
 import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
+import { CheckinProofStatsRow } from '@/components/challenge/CheckinProofStats';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia, mediaKind } from '@/utils/media';
@@ -389,6 +390,10 @@ export const LiveBubble = memo(function LiveBubble({
                     {caption}
                   </AppText>
                 ) : null}
+                {/* Fitness stats only. The caption above stays whatever the user typed. */}
+                <View className="mt-1">
+                  <CheckinProofStatsRow stats={post.checkin_stats} />
+                </View>
                 {time || post.edited_at ? (
                   <View className="mt-0.5 flex-row items-center" style={{ gap: 6 }}>
                     {time ? (

@@ -18,6 +18,8 @@ export type HealthWorkout = {
   distanceM?: number;
   hrAvg?: number;
   hrMax?: number;
+  /** Only set once the HR sample series has been read for the window. */
+  hrMin?: number;
   sourceBundle?: string;
   confidence: HealthConfidence;
 };

@@ -160,7 +160,10 @@ async function loadPostsSchema(): Promise<PostsSchema> {
   working = circle.ok ? withCircle : working;
   const withCaptions = `${working}, media_captions`;
   const captions = await trySelect(withCaptions);
-  return schemaFromSelect(captions.ok ? withCaptions : working);
+  working = captions.ok ? withCaptions : working;
+  const withStats = `${working}, checkin_stats`;
+  const stats = await trySelect(withStats);
+  return schemaFromSelect(stats.ok ? withStats : working);
 }
 
 /** No RPC. Probe with limit 0, then cache the working select list. */

@@ -7,7 +7,10 @@ export type CheckinHealthProof = {
   sourceName: string;
   avgHrBpm?: number;
   maxHrBpm?: number;
+  /** From the HR sample series, so it is only present when samples were read. */
+  minHrBpm?: number;
   activeEnergyKcal?: number;
+  totalEnergyKcal?: number;
   distanceMeters?: number;
 };
 

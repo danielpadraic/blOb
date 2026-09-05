@@ -104,6 +104,7 @@ import {
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import {
   buildWorkoutProofCard,
+  withHeartRateFloor,
   type HeartRateSample,
 } from '@/lib/health/workoutProofCard';
 import { challengeClockTz } from '@/lib/checkinPeriod';
@@ -1054,9 +1055,12 @@ function SubmitWorkoutInner() {
     }
     try {
       const provider = getHealthProvider();
-      const enriched = provider?.enrichHeartRate
+      const enrichedHr = provider?.enrichHeartRate
         ? await provider.enrichHeartRate(workout)
         : workout;
+      // Read the series once: it gives the card its graph and the summary its hr_min.
+      const samples = await readHeartRateSeries(enrichedHr);
+      const enriched = withHeartRateFloor(enrichedHr, samples);
       const snapshot = toCheckinHealthProof(enriched);
       const healthWorkoutId = await upsertHealthWorkout(uid, enriched);
       const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
@@ -1067,9 +1071,26 @@ function SubmitWorkoutInner() {
       await persistProof(target, draft);
       // The attach already counts. Turning it into a real image is a follow-up that must not
       // strand the slot if rasterizing fails.
-      void buildWorkoutCard(target, enriched, healthWorkoutId);
+      void buildWorkoutCard(target, enriched, healthWorkoutId, samples);
     } catch (caught) {
       setError(getErrorMessage(caught));
+    }
+  }
+
+  async function readHeartRateSeries(workout: HealthWorkout): Promise<HeartRateSample[]> {
+    if (Platform.OS === 'web') {
+      return [];
+    }
+    try {
+      const provider = getHealthProvider();
+      return provider?.fetchHeartRateSeries
+        ? await provider.fetchHeartRateSeries({
+            startedAt: workout.startedAt,
+            endedAt: workout.endedAt,
+          })
+        : [];
+    } catch {
+      return [];
     }
   }
 
@@ -1077,6 +1098,7 @@ function SubmitWorkoutInner() {
     target: ChallengeProof,
     workout: HealthWorkout,
     healthWorkoutId: string,
+    samples: HeartRateSample[],
   ) {
     // The card is workout/device proof only. A required selfie slot keeps asking for a selfie.
     if (Platform.OS === 'web' || !challenge) {
@@ -1089,18 +1111,6 @@ function SubmitWorkoutInner() {
       ...current,
       [target.id]: { ...current[target.id], building: true },
     }));
-    let samples: HeartRateSample[] = [];
-    try {
-      const provider = getHealthProvider();
-      samples = provider?.fetchHeartRateSeries
-        ? await provider.fetchHeartRateSeries({
-            startedAt: workout.startedAt,
-            endedAt: workout.endedAt,
-          })
-        : [];
-    } catch {
-      samples = [];
-    }
     const card = buildWorkoutProofCard({
       workout,
       samples,

@@ -138,6 +138,9 @@ export function toCheckinHealthProof(workout: HealthWorkout): CheckinHealthProof
   if (Number(workout.hrMax) > 0) {
     snapshot.maxHrBpm = Math.round(Number(workout.hrMax));
   }
+  if (Number(workout.hrMin) > 0) {
+    snapshot.minHrBpm = Math.round(Number(workout.hrMin));
+  }
   if (Number(workout.caloriesKcal) > 0) {
     snapshot.activeEnergyKcal = Math.round(Number(workout.caloriesKcal));
   }

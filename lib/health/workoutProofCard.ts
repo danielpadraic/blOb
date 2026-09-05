@@ -150,6 +150,26 @@ export function workoutCardSparkline(
   return { path, min, max, points: clean.length };
 }
 
+/**
+ * Fill hrMin (and hrAvg when the summary lacked it) from the sample series. HealthKit's workout
+ * summary carries no minimum, so it can only come from the samples.
+ */
+export function withHeartRateFloor(workout: HealthWorkout, samples: HeartRateSample[]): HealthWorkout {
+  const clean = cleanSamples(samples);
+  if (clean.length === 0) {
+    return workout;
+  }
+  const values = clean.map((sample) => sample.bpm);
+  const next: HealthWorkout = { ...workout, hrMin: Math.min(...values) };
+  if (!(Number(next.hrAvg) > 0)) {
+    next.hrAvg = Math.round(values.reduce((total, bpm) => total + bpm, 0) / values.length);
+  }
+  if (!(Number(next.hrMax) > 0)) {
+    next.hrMax = Math.max(...values);
+  }
+  return next;
+}
+
 export function workoutCardHeartRateAverage(samples: HeartRateSample[], fallback?: number | null): number | null {
   const clean = cleanSamples(samples);
   if (clean.length > 0) {

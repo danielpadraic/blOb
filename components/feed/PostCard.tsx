@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { ChallengeInviteCard } from '@/components/challenge/ChallengeInviteCard';
+import { CheckinProofStatsRow } from '@/components/challenge/CheckinProofStats';
 import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
@@ -435,6 +436,12 @@ function PostCardInner({
             }
             onToggle={() => setExpanded((value) => !value)}
           />
+        ) : null}
+        {/* Fitness stats only, from the stored numbers. The caption above stays user text. */}
+        {checkin ? (
+          <View className="mt-1.5">
+            <CheckinProofStatsRow stats={post.checkin_stats} showProse displayName={name} />
+          </View>
         ) : null}
         {circleInvite && !circleJoin && content && !inCircleRoom ? (
           <AppText className="text-[13px] text-muted" numberOfLines={1}>
