@@ -176,39 +176,44 @@ export function LiftShareSheet({
                 </>
               ) : null}
 
-              <SectionLabel text="WHO SEES IT" />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {POST_AUDIENCE_OPTIONS.map((option) => {
-                  const active = audience === option.value;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      accessibilityRole="button"
-                      accessibilityLabel={option.label}
-                      accessibilityState={{ selected: active }}
-                      onPress={() => setAudience(option.value as PostAudience)}
-                      style={{
-                        flex: 1,
-                        minHeight: 44,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: active ? THEME.accent : THEME.background,
-                        borderWidth: 1,
-                        borderColor: active ? THEME.accent : THEME.border,
-                      }}>
-                      <AppText
-                        style={{
-                          fontSize: 14,
-                          fontWeight: '700',
-                          color: active ? THEME.accentForeground : THEME.textPrimary,
-                        }}>
-                        {option.label}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {/* A check-in's audience belongs to the lobby, so only a Home-only card asks. */}
+              {challengeId ? null : (
+                <>
+                  <SectionLabel text="WHO SEES IT" />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {POST_AUDIENCE_OPTIONS.map((option) => {
+                      const active = audience === option.value;
+                      return (
+                        <Pressable
+                          key={option.value}
+                          accessibilityRole="button"
+                          accessibilityLabel={option.label}
+                          accessibilityState={{ selected: active }}
+                          onPress={() => setAudience(option.value as PostAudience)}
+                          style={{
+                            flex: 1,
+                            minHeight: 44,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: active ? THEME.accent : THEME.background,
+                            borderWidth: 1,
+                            borderColor: active ? THEME.accent : THEME.border,
+                          }}>
+                          <AppText
+                            style={{
+                              fontSize: 14,
+                              fontWeight: '700',
+                              color: active ? THEME.accentForeground : THEME.textPrimary,
+                            }}>
+                            {option.label}
+                          </AppText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
 
               {challengeId && !locked ? (
                 <Pressable
