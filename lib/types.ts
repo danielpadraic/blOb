@@ -328,8 +328,26 @@ export interface Profile {
   interests_dismissed_home_at?: string | null;
   interests_skipped_all_at?: string | null;
   interests_nudge_at?: string | null;
+  /** PRIVATE USPS region. Ops/eligibility only — not a public badge. */
+  declared_region?: string | null;
+  last_precise_region?: string | null;
+  last_precise_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface GeoDecision {
+  id: string;
+  user_id: string;
+  action: string;
+  challenge_id: string | null;
+  declared_region: string | null;
+  precise_region: string | null;
+  ip_region: string | null;
+  effective_bucket: string;
+  allowed: boolean;
+  reason: string;
+  created_at: string;
 }
 
 export interface PublicProfile {
@@ -1699,6 +1717,7 @@ export type Database = {
         normalized_slug: string | null;
         created_at: string;
       }>;
+      geo_decisions: TableDef<GeoDecision>;
     };
     Views: {
       profiles_public: {
@@ -1790,6 +1809,14 @@ export type Database = {
       join_challenge: {
         Args: { p_challenge_id: string };
         Returns: { ok: boolean; challenge_id: string; prize_pool: number };
+      };
+      geo_cash_gate: {
+        Args: {
+          p_action: string;
+          p_challenge_id?: string | null;
+          p_precise_region?: string | null;
+        };
+        Returns: { allowed: boolean; bucket: string; reason: string; copy: string };
       };
       leave_challenge: {
         Args: { p_challenge_id: string };

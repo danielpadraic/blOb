@@ -11,6 +11,8 @@ import {
 import { isEndedPrizeStatus } from '@/lib/challengePot';
 import { asWalletCurrency } from '@/lib/currency';
 import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
+import { copy } from '@/lib/copy';
+import { isGeoGateDeny } from '@/lib/geo/eligibility';
 import { challengeDetailHref } from '@/lib/routes';
 import { fetchBlockedPeerIds, fetchFriends, otherFriendshipUserId } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -572,7 +574,7 @@ export async function createCallout(input: {
     p_format: calloutFormatOf(input.format),
   });
   if (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(isGeoGateDeny(error) ? copy('geo.unavailable') : getErrorMessage(error));
   }
   return asCalloutResult(data);
 }
@@ -580,7 +582,7 @@ export async function createCallout(input: {
 export async function acceptCallout(id: string): Promise<Callout> {
   const { data, error } = await supabase.rpc('accept_callout', { p_callout_id: id });
   if (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(isGeoGateDeny(error) ? copy('geo.unavailable') : getErrorMessage(error));
   }
   return asCalloutResult(data);
 }

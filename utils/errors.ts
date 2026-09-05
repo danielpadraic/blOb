@@ -1,4 +1,5 @@
 import { copy } from '@/lib/copy';
+import { isGeoGateDeny } from '@/lib/geo/eligibility';
 import { dmOpenUserMessage } from '@/lib/dmOpen';
 import {
   GOOGLE_SIGN_IN_RETRY,
@@ -211,11 +212,17 @@ const CREATE_RPC_MESSAGES: Record<string, string> = {
     'Points challenges can’t use Even split remaining. Pick Winner take all or top places.',
   CUMULATIVE_NO_LAST_STANDING:
     'Cumulative challenges can’t use Last standing. Pick Anyone who hits the goal, Top #, or Top %.',
+  GEO_BLOCKED: copy('geo.unavailable'),
+  NEED_REGION: copy('geo.unavailable'),
+  PRODUCT_OFF: copy('geo.unavailable'),
 };
 
 export function getCreateChallengeMessage(error: unknown): string {
   logPostgrestError('create', error);
   const raw = extractRawMessage(error);
+  if (isGeoGateDeny(error) || isGeoGateDeny(raw)) {
+    return copy('geo.unavailable');
+  }
   if (raw.startsWith('Couldn’t create this challenge')) {
     return raw;
   }
@@ -578,6 +585,9 @@ function humanize(raw: string): string {
 
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
+  }
+  if (isGeoGateDeny(raw)) {
+    return copy('geo.unavailable');
   }
   if (message.includes('proof_already_counts') || message.includes('already counts on')) {
     const match = raw.match(/PROOF_ALREADY_COUNTS[:\s]+(.+)/i);

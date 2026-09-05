@@ -1,4 +1,6 @@
 import { FUNDING_COPY } from './copy';
+import { isGeoGateDeny } from '@/lib/geo/eligibility';
+import { copy } from '@/lib/copy';
 
 export type FundingRpcClient = {
   rpc: (
@@ -16,23 +18,27 @@ export type TopUpPrizeResult = {
 };
 
 function rpcMessage(error: { message?: string } | null | undefined): string {
-  const raw = String(error?.message ?? '').toLowerCase();
-  if (raw.includes('not_authenticated')) {
+  const raw = String(error?.message ?? '');
+  if (isGeoGateDeny(raw)) {
+    return copy('geo.unavailable');
+  }
+  const lower = raw.toLowerCase();
+  if (lower.includes('not_authenticated')) {
     return 'Sign in to continue.';
   }
-  if (raw.includes('not_host') || raw.includes('not_creator')) {
+  if (lower.includes('not_host') || lower.includes('not_creator')) {
     return 'Only the host can add to the prize.';
   }
-  if (raw.includes('already_settled') || raw.includes('too_late')) {
+  if (lower.includes('already_settled') || lower.includes('too_late')) {
     return FUNDING_COPY.alreadySettled;
   }
-  if (raw.includes('insufficient')) {
+  if (lower.includes('insufficient')) {
     return FUNDING_COPY.insufficient;
   }
-  if (raw.includes('offline') || raw.includes('failed to fetch') || raw.includes('network')) {
+  if (lower.includes('offline') || lower.includes('failed to fetch') || lower.includes('network')) {
     return 'You’re offline. Try again when you’re back.';
   }
-  if (raw.includes('negative') || raw.includes('invalid_amount')) {
+  if (lower.includes('negative') || lower.includes('invalid_amount')) {
     return 'Enter an amount to add.';
   }
   return 'Couldn’t add to the prize. Try again.';

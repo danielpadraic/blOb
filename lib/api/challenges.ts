@@ -1,5 +1,6 @@
 import { copy } from '@/lib/copy';
 import { reportAppError } from '@/lib/appErrors';
+import { isGeoGateDeny } from '@/lib/geo/eligibility';
 import { supabase } from '@/lib/supabase';
 import type {
   CloseChallengeForJudgingResult,
@@ -62,6 +63,8 @@ const RPC_MESSAGES: Record<string, string> = {
   JOIN_CLOSED: 'Join closed when this challenge started.',
   FRIENDS_ONLY: 'This challenge is for friends of the host.',
   GEO_BLOCKED: copy('geo.unavailable'),
+  NEED_REGION: copy('geo.unavailable'),
+  PRODUCT_OFF: copy('geo.unavailable'),
   POST_NOT_FOUND: 'That post is gone.',
   NOT_A_CHALLENGE_PROOF: 'Only challenge proofs can be flagged.',
   CANNOT_FLAG_OWN: 'You can’t flag your own proof.',
@@ -88,6 +91,9 @@ function rpcMessage(error: unknown): string {
       ? String((error as { message?: unknown }).message ?? '')
       : String(error ?? '');
   const trimmed = raw.trim();
+  if (isGeoGateDeny(error) || isGeoGateDeny(trimmed)) {
+    return copy('geo.unavailable');
+  }
   if (RPC_MESSAGES[trimmed]) {
     return RPC_MESSAGES[trimmed];
   }

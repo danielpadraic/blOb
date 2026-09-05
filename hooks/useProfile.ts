@@ -71,6 +71,9 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     interests_dismissed_home_at: (profile as Profile).interests_dismissed_home_at ?? null,
     interests_skipped_all_at: (profile as Profile).interests_skipped_all_at ?? null,
     interests_nudge_at: (profile as Profile).interests_nudge_at ?? null,
+    declared_region: (profile as Profile).declared_region ?? null,
+    last_precise_region: (profile as Profile).last_precise_region ?? null,
+    last_precise_at: (profile as Profile).last_precise_at ?? null,
   };
 }
 

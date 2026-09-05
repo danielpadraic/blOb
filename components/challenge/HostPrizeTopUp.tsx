@@ -9,6 +9,9 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { FUNDING_COPY, canHostTopUp, joinShortfall } from '@/lib/funding';
+import { bucketForRegion } from '@/lib/geo/regions';
+import { canSeeCashCta } from '@/lib/geo/eligibility';
+import { copy } from '@/lib/copy';
 import type { Challenge } from '@/lib/types';
 
 export function HostPrizeTopUp({
@@ -36,6 +39,14 @@ export function HostPrizeTopUp({
   }
 
   const cash = isBucksChallenge(challenge);
+  if (cash && !canSeeCashCta(bucketForRegion(profile?.declared_region), 'host')) {
+    return (
+      <View className="gap-2">
+        <AppText className="text-sm font-semibold text-charcoal">{FUNDING_COPY.addToPrize}</AppText>
+        <AppText className="text-[13px] leading-5 text-muted">{copy('geo.unavailable')}</AppText>
+      </View>
+    );
+  }
   const wallet = walletBalance(profile, challenge.currency);
   const shortfall = joinShortfall(wallet, amount);
 

@@ -157,6 +157,8 @@ import {
 } from '@/lib/challengeGoal';
 import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
+import { bucketForRegion } from '@/lib/geo/regions';
+import { canSeeCashCta, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { isSubmittedCheckin } from '@/lib/challengeCheckin';
 import { buildBoard, yourStandingLine } from '@/lib/board';
 import { tabBarLift, THEME } from '@/lib/theme';
@@ -503,6 +505,14 @@ export default function ChallengeDetailScreen() {
     if (requiresOfficialBodyMetrics(challenge) && !hasCompletedBodyMetrics(profile)) {
       return BODY_METRICS_JOIN_COPY;
     }
+    if (
+      !canSeeCashCta(
+        bucketForRegion(profile?.declared_region),
+        challengeMoneyShape(challenge),
+      )
+    ) {
+      return copy('geo.unavailable');
+    }
     const buyIn = Number(challenge.buy_in_amount) || 0;
     const held = walletBalance(profile, challenge.currency);
     if (buyIn > 0 && profile && held < buyIn && !isBucksChallenge(challenge)) {
@@ -513,6 +523,7 @@ export default function ChallengeDetailScreen() {
 
   const canJoinBase = Boolean(challenge) && !isJoined && !isHost && !joinBlocked;
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
+  const geoJoinBlocked = joinBlocked === copy('geo.unavailable');
   const joinCta = bucksJoinCta({
     currency: challenge?.currency,
     buyIn: Math.max(Number(challenge?.buy_in_amount) || 0, 0),
@@ -975,7 +986,7 @@ export default function ChallengeDetailScreen() {
         startNeeded ??
         copy('challenge.waitingToStart')
       : null;
-  const stickyJoin = !isCalloutObserver && !isJoined && (needsBodyMetrics || canJoin || needsTopUp);
+  const stickyJoin = !isCalloutObserver && !isJoined && (needsBodyMetrics || canJoin || needsTopUp || geoJoinBlocked);
   const stickyCheckin =
     isJoined &&
     !isCalloutObserver &&
@@ -1548,6 +1559,10 @@ export default function ChallengeDetailScreen() {
                 size="md"
                 onPress={() => router.push(BODY_METRICS_HREF)}
               />
+            ) : geoJoinBlocked ? (
+              <AppText className="text-center text-sm leading-5 text-coral-dark">
+                {copy('geo.unavailable')}
+              </AppText>
             ) : (
               <JoinCtaButton
                 currency={challenge.currency}
