@@ -98,11 +98,11 @@ export type OcrWorkoutResponse = {
   parsed?: ParsedWorkoutOcr;
 };
 
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== 'POST') {
-    return json({ ok: false, reason: 'method_not_allowed' }, 405);
-  }
-
+/**
+ * Exported as a named method so Vercel hands us a web-standard `Request`. A default export would be
+ * invoked with Node's `IncomingMessage` instead, which has no `headers.get`.
+ */
+export async function POST(request: Request): Promise<Response> {
   const userId = await resolveUserId(request.headers.get('authorization'));
   if (!userId) {
     return json({ ok: false, reason: 'unauthorized' }, 401);
