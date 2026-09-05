@@ -13,6 +13,11 @@ import {
   type CheckinHealthProof,
 } from '@/lib/health/checkinHealthProof';
 import { meetsMinMinutes } from '@/lib/health/period';
+import {
+  ELEVATED_HR_NEEDS_AGE,
+  elevatedHrThreshold,
+  type ElevatedHrInput,
+} from '@/lib/health/workoutProofGate';
 import { formatHealthDuration, healthSourceLabel } from '@/lib/health/proofSummary';
 import type { Challenge } from '@/lib/types';
 import type { HealthWorkout } from '@/services/health/types';
@@ -24,6 +29,13 @@ export type HealthAttachRules = {
   minMinutes?: number | null;
   hrRequired?: boolean;
   minDistanceMeters?: number | null;
+  /**
+   * Average heart rate this person must reach for the workout to count, derived from their age and
+   * resting rate. Null when the challenge does not ask for heart rate, or when we cannot work it out.
+   */
+  elevatedHrBpm?: number | null;
+  /** The challenge needs intensity but we do not know their age, so it cannot be judged. */
+  elevatedHrUnknownAge?: boolean;
 };
 
 export function proofPrefersHealthAttach(
@@ -92,15 +104,27 @@ function challengeNeedsHealthProof(
 export function healthAttachRulesFor(
   proof: ChallengeProof | null | undefined,
   challenge?: Pick<Challenge, 'min_minutes'> | { min_minutes?: number | null } | null,
+  /** The person's age and resting rate. Without it an HR challenge can only check that HR exists. */
+  hr?: ElevatedHrInput | null,
 ): HealthAttachRules {
   const challengeMin = Number(challenge?.min_minutes);
   const proofMin = Number(proof?.minutes);
   const mins = [challengeMin, proofMin].filter((value) => Number.isFinite(value) && value > 1);
-  return {
+  const hrRequired = proof?.method === 'hr';
+  const rules: HealthAttachRules = {
     minMinutes: mins.length > 0 ? Math.max(...mins) : null,
-    hrRequired: proof?.method === 'hr',
+    hrRequired,
     minDistanceMeters: proof?.method === 'distance' ? proofDistanceMeters(proof) : null,
   };
+  if (hrRequired && hr) {
+    const threshold = elevatedHrThreshold(hr);
+    if (threshold.kind === 'unknown-age') {
+      rules.elevatedHrUnknownAge = true;
+    } else {
+      rules.elevatedHrBpm = threshold.bpm;
+    }
+  }
+  return rules;
 }
 
 export function workoutAttachBlockReason(
@@ -118,8 +142,20 @@ export function workoutAttachBlockReason(
     const min = Math.round(Number(rules.minMinutes));
     return `Needs at least ${min} min`;
   }
-  if (rules.hrRequired && !(Number(workout.hrAvg) > 0 || Number(workout.hrMax) > 0)) {
-    return 'No heart rate on this workout';
+  if (rules.hrRequired) {
+    const avg = Number(workout.hrAvg);
+    if (!(avg > 0 || Number(workout.hrMax) > 0)) {
+      return 'No heart rate on this workout';
+    }
+    if (rules.elevatedHrUnknownAge) {
+      return ELEVATED_HR_NEEDS_AGE;
+    }
+    // Intensity is measured against this person rather than a flat bump, so the same workout can
+    // qualify for one member and not another.
+    const need = Number(rules.elevatedHrBpm);
+    if (Number.isFinite(need) && need > 0 && !(avg >= need)) {
+      return `Needs average heart rate ${Math.round(need)}+`;
+    }
   }
   return null;
 }

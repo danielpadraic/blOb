@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
+import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { copy } from '@/lib/copy';
@@ -20,6 +22,15 @@ import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeProof } from '@/lib/challengeProofs';
 import { getHealthProvider, type HealthWorkout } from '@/services/health';
 import { getErrorMessage } from '@/utils/errors';
+
+/** Only the owner's own profile carries a birth date; a public profile row does not. */
+function birthDateOf(profile: unknown): string | null {
+  if (!profile || typeof profile !== 'object' || !('date_of_birth' in profile)) {
+    return null;
+  }
+  const value = (profile as { date_of_birth?: unknown }).date_of_birth;
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
 
 export type HealthWorkoutPickerChallenge = {
   title?: string | null;
@@ -106,9 +117,14 @@ export function HealthWorkoutPicker({
   const [error, setError] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
 
-  const rules: HealthAttachRules = healthAttachRulesFor(proof, {
-    min_minutes: challenge?.min_minutes ?? minMinutes,
-  });
+  // The intensity bar is personal, so an HR challenge is judged against this member's own age.
+  const { user } = useAuth();
+  const profile = useProfile(user?.id);
+  const rules: HealthAttachRules = healthAttachRulesFor(
+    proof,
+    { min_minutes: challenge?.min_minutes ?? minMinutes },
+    { birthDate: birthDateOf(profile.data) },
+  );
 
   const load = useCallback(
     async (mode: 'open' | 'refresh') => {
