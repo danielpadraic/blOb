@@ -437,13 +437,14 @@ function SubmitWorkoutInner() {
           continue;
         }
         const merged: SlotDraft = {
-          uri: part?.healthWorkoutId
-            ? `health:${part.healthWorkoutId}`
-            : remoteUrl || localUri,
+          // A generated workout card has an image AND Health provenance. Prefer the image so the
+          // slot rehydrates as a thumb, not a "Health" chip with no preview.
+          uri: remoteUrl || (part?.healthWorkoutId ? `health:${part.healthWorkoutId}` : localUri),
           mimeType: current[proof.id]?.mimeType,
           text: part?.text ?? current[proof.id]?.text,
           fromLibrary: part?.fromLibrary ?? current[proof.id]?.fromLibrary,
           health: part?.health ?? current[proof.id]?.health ?? null,
+          healthWorkoutId: part?.healthWorkoutId ?? current[proof.id]?.healthWorkoutId ?? null,
           inFence: part?.in_fence ?? current[proof.id]?.inFence,
           durationMs: current[proof.id]?.durationMs,
           caption: part?.caption ?? current[proof.id]?.caption,
@@ -455,6 +456,7 @@ function SubmitWorkoutInner() {
           prior?.text === merged.text &&
           prior?.fromLibrary === merged.fromLibrary &&
           prior?.health === merged.health &&
+          prior?.healthWorkoutId === merged.healthWorkoutId &&
           prior?.inFence === merged.inFence &&
           prior?.durationMs === merged.durationMs &&
           prior?.caption === merged.caption;
