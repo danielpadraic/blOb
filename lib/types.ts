@@ -586,6 +586,14 @@ export interface HealthWorkoutRecord {
  * numbers. Clocks are nullable because a screenshot often shows no wall-clock range, and inventing
  * one would put a fabricated window on a proof artifact.
  */
+/** Per-user read cursor for a challenge Live thread. Owner-only; see live_thread_reads. */
+export interface LiveThreadReadRecord {
+  user_id: string;
+  challenge_id: string;
+  last_read_at: string;
+  updated_at: string;
+}
+
 export interface WorkoutSessionRecord {
   id: string;
   user_id: string;
@@ -1212,6 +1220,12 @@ export type Database = {
         Partial<HealthWorkoutRecord>,
         Partial<HealthWorkoutRecord>,
         [Relationship<'health_workouts_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      live_thread_reads: TableDef<
+        LiveThreadReadRecord,
+        Partial<LiveThreadReadRecord>,
+        Partial<LiveThreadReadRecord>,
+        [Relationship<'live_thread_reads_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>]
       >;
       workout_sessions: TableDef<
         WorkoutSessionRecord,
