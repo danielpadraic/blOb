@@ -1,5 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 
+import { buildWorkoutRoute, type WorkoutRoute } from '@/lib/health/route';
+
 import {
   clearLocalHealthStatus,
   readLocalHealthStatus,
@@ -46,6 +48,13 @@ type NativeKit = {
       results: Array<{ value?: number; startDate?: string; endDate?: string }>,
     ) => void,
   ) => void;
+  getWorkoutRouteSamples?: (
+    options: { id: string },
+    callback: (
+      error: string | { message?: string } | null,
+      results: { data?: { locations?: unknown[] } } | null,
+    ) => void,
+  ) => void;
   setObserver?: (options: { type: string }) => void;
 };
 
@@ -65,6 +74,9 @@ type NativeWorkout = {
 };
 
 const SharingDenied = 1;
+
+/** A route read that has not answered by now is treated as "no route". */
+const ROUTE_TIMEOUT_MS = 8000;
 
 function loadKit(): NativeKit | null {
   if (Platform.OS !== 'ios') {
@@ -104,6 +116,10 @@ function loadKit(): NativeKit | null {
         typeof native.getHeartRateSamples === 'function'
           ? native.getHeartRateSamples.bind(native)
           : ((_options, callback) => callback('', [])),
+      getWorkoutRouteSamples:
+        typeof native.getWorkoutRouteSamples === 'function'
+          ? native.getWorkoutRouteSamples.bind(native)
+          : undefined,
       setObserver: typeof native.setObserver === 'function' ? native.setObserver.bind(native) : undefined,
     };
   } catch {
@@ -118,6 +134,9 @@ function readPermissions(kit: NativeKit): string[] {
     p.HeartRate,
     p.ActiveEnergyBurned,
     p.DistanceWalkingRunning,
+    // Route is a separate HealthKit series type. Without it an outdoor workout still attaches, it
+    // just arrives with no map.
+    p.WorkoutRoute,
   ].filter(Boolean);
 }
 
@@ -504,6 +523,43 @@ class AppleHealthProvider implements HealthProvider {
       return [];
     }
     return heartRateSamplesFor(kit, window.startedAt, window.endedAt);
+  }
+
+  /**
+   * Reads the GPS track for one workout.
+   *
+   * Returns null for indoor workouts, for a binary without the route reader, and when the user
+   * declined route access. Callers show the card with no map rather than a placeholder line, and
+   * this never asks for ongoing location — the track already belongs to the saved workout.
+   */
+  async fetchWorkoutRoute(
+    workout: Pick<HealthWorkout, 'providerWorkoutId' | 'activityType'>,
+  ): Promise<WorkoutRoute | null> {
+    const kit = loadKit();
+    const id = String(workout?.providerWorkoutId ?? '').trim();
+    if (!kit?.getWorkoutRouteSamples || !id) {
+      return null;
+    }
+    try {
+      const locations = await new Promise<unknown[]>((resolve) => {
+        // Route reads can hang when HealthKit has nothing to hand back. The card must not wait.
+        const timer = setTimeout(() => resolve([]), ROUTE_TIMEOUT_MS);
+        kit.getWorkoutRouteSamples?.({ id }, (error, results) => {
+          clearTimeout(timer);
+          if (error || !results?.data?.locations || !Array.isArray(results.data.locations)) {
+            resolve([]);
+            return;
+          }
+          resolve(results.data.locations);
+        });
+      });
+      if (locations.length === 0) {
+        return null;
+      }
+      return buildWorkoutRoute({ locations, activityType: workout.activityType });
+    } catch {
+      return null;
+    }
   }
 
   async enableBackgroundSync(): Promise<void> {

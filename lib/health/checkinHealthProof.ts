@@ -1,3 +1,5 @@
+import { parseWorkoutRoute, type WorkoutRoute } from '@/lib/health/route';
+
 /** Structured Health proof stored on the check-in (`proof_parts`), not a profile field. */
 
 /**
@@ -33,6 +35,11 @@ export type CheckinHealthProof = {
   activeEnergyKcal?: number;
   totalEnergyKcal?: number;
   distanceMeters?: number;
+  /**
+   * The GPS track, when the workout had one. Absent means indoor, location denied, or too few
+   * fixes — never a placeholder line. OCR and hand-entered sessions never set this.
+   */
+  route?: WorkoutRoute | null;
 };
 
 function positiveInt(value: unknown): number | undefined {
@@ -106,6 +113,15 @@ export function parseCheckinHealthProof(value: unknown): CheckinHealthProof | nu
   }
   if (distance != null) {
     snapshot.distanceMeters = distance;
+  }
+
+  // Only a vendor attach can carry coordinates. A screenshot read never invents a location, so a
+  // route on an ocr or manual row is discarded rather than trusted.
+  if (sourceRequiresClocks(source)) {
+    const route = parseWorkoutRoute(row.route);
+    if (route) {
+      snapshot.route = route;
+    }
   }
 
   // A screenshot read that produced no numbers at all is not proof of anything.

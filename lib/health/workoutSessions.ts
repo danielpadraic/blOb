@@ -42,6 +42,8 @@ function payloadFor(input: WorkoutSessionInput): Partial<WorkoutSessionRecord> {
     hr_avg: health.avgHrBpm ?? null,
     hr_max: health.maxHrBpm ?? null,
     proof_url: input.proofUrl ?? null,
+    // Only a vendor attach reaches here with coordinates; the DB check enforces the same rule.
+    route: health.route ?? null,
     ocr_confidence: input.ocrConfidence ?? null,
     updated_at: new Date().toISOString(),
   };

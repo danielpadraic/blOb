@@ -1,3 +1,4 @@
+import { routeActivityFor, type RouteActivity, type WorkoutRoute } from '@/lib/health/route';
 import type { HealthHeartRateSample, HealthWorkout } from '@/services/health/types';
 
 /** One HealthKit BPM reading inside the workout window. */
@@ -13,6 +14,33 @@ export type WorkoutProofSparkline = {
   points: number;
 };
 
+/**
+ * Card-local accent per activity. The theme palette is one teal, which makes every recap look like
+ * the same grey receipt; a run and a ride should not be the same colour. These live here rather than
+ * in lib/theme.ts because they belong to this artifact only and must not become app chrome.
+ */
+export type WorkoutCardAccent = {
+  /** Line, glyph and headline tint. */
+  accent: string;
+  /** Deeper end of the field gradient. */
+  fieldTop: string;
+  fieldBottom: string;
+  /** Wash behind the map / stats hero. */
+  panel: string;
+};
+
+const ACCENTS: Record<RouteActivity, WorkoutCardAccent> = {
+  run: { accent: '#FF7A4D', fieldTop: '#1A1310', fieldBottom: '#0D0B0A', panel: 'rgba(255, 122, 77, 0.10)' },
+  ride: { accent: '#8B7BFF', fieldTop: '#14121D', fieldBottom: '#0B0A10', panel: 'rgba(139, 123, 255, 0.10)' },
+  walk: { accent: '#72D9CB', fieldTop: '#101817', fieldBottom: '#0A0F0E', panel: 'rgba(114, 217, 203, 0.10)' },
+  hike: { accent: '#8FD14F', fieldTop: '#121711', fieldBottom: '#0A0E09', panel: 'rgba(143, 209, 79, 0.10)' },
+  other: { accent: '#72D9CB', fieldTop: '#111414', fieldBottom: '#0A0C0C', panel: 'rgba(114, 217, 203, 0.10)' },
+};
+
+export function workoutCardAccent(activityType?: string | null): WorkoutCardAccent {
+  return ACCENTS[routeActivityFor(activityType)];
+}
+
 export type WorkoutProofCardModel = {
   dateLine: string;
   activityLabel: string;
@@ -20,6 +48,11 @@ export type WorkoutProofCardModel = {
   placeLine: string | null;
   stats: WorkoutProofStat[];
   distanceLine: string | null;
+  /** The headline number: distance for outdoor work, elapsed time otherwise. */
+  headline: { value: string; label: string };
+  /** The GPS track to draw, or null for indoor / unavailable. Never a placeholder. */
+  route: WorkoutRoute | null;
+  accent: WorkoutCardAccent;
   heartRate: {
     avgLine: string | null;
     minLabel: string | null;
@@ -199,15 +232,27 @@ export function buildWorkoutProofCard(input: {
   timeZone: string;
   challengeTitle: string;
   placeLabel?: string | null;
+  /** Stored GPS track. Omit or pass null for indoor work — the card then leads with the numbers. */
+  route?: WorkoutRoute | null;
 }): WorkoutProofCardModel {
   const samples = input.samples ?? [];
   const sparkline = workoutCardSparkline(samples);
   const avg = workoutCardHeartRateAverage(samples, input.workout.hrAvg);
+  const max = Number(input.workout.hrMax);
   const distance = workoutCardDistance(input.workout.distanceM);
+  const duration = workoutCardDuration(input.workout.durationSec);
+  const route = input.route ?? null;
 
-  const stats: WorkoutProofStat[] = [
-    { key: 'duration', label: 'Workout time', value: workoutCardDuration(input.workout.durationSec) },
-  ];
+  // Distance leads when the workout covered ground; otherwise elapsed time is the achievement.
+  const headline = distance
+    ? { value: distance, label: 'Distance' }
+    : { value: duration, label: 'Workout time' };
+
+  // The headline number is not repeated in the strip below it.
+  const stats: WorkoutProofStat[] = [];
+  if (distance) {
+    stats.push({ key: 'duration', label: 'Time', value: duration });
+  }
   const active = Number(input.workout.caloriesKcal);
   if (Number.isFinite(active) && active > 0) {
     stats.push({ key: 'active', label: 'Active cal', value: `${Math.round(active)}` });
@@ -215,11 +260,14 @@ export function buildWorkoutProofCard(input: {
   if (avg != null) {
     stats.push({ key: 'hr', label: 'Avg HR', value: `${avg}` });
   }
-  if (distance) {
-    stats.push({ key: 'distance', label: 'Distance', value: distance });
+  if (Number.isFinite(max) && max > 0) {
+    stats.push({ key: 'hrmax', label: 'Max HR', value: `${Math.round(max)}` });
   }
 
   return {
+    headline,
+    route,
+    accent: workoutCardAccent(input.workout.activityType),
     dateLine: workoutCardDateLine(input.workout.startedAt, input.timeZone),
     activityLabel: input.workout.activityLabel?.trim() || 'Workout',
     timeRange: workoutCardTimeRange(input.workout.startedAt, input.workout.endedAt, input.timeZone),

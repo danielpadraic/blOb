@@ -139,8 +139,9 @@ describe('buildWorkoutProofCard', () => {
     expect(card.heartRate.emptyLine).toBeNull();
     expect(card.sourceLine).toBe('Recorded on Apple Watch');
     expect(card.proofLine).toBe('Proof for 30-Day Consistency');
-    expect(card.stats.map((stat) => stat.label)).toEqual(['Workout time', 'Active cal', 'Avg HR']);
-    expect(card.stats[0]?.value).toBe('0:41:10');
+    expect(card.headline).toEqual({ value: '0:41:10', label: 'Workout time' });
+    expect(card.route).toBeNull();
+    expect(card.stats.map((stat) => stat.label)).toEqual(['Active cal', 'Avg HR', 'Max HR']);
   });
 
   it('says heart rate is missing instead of drawing a fake graph', () => {
@@ -153,8 +154,8 @@ describe('buildWorkoutProofCard', () => {
     expect(card.heartRate.sparkline).toBeNull();
     expect(card.heartRate.emptyLine).toBe('Heart rate not on this workout');
     expect(card.heartRate.avgLine).toBeNull();
-    // The card still carries the rest of the workout.
-    expect(card.stats.map((stat) => stat.label)).toEqual(['Workout time', 'Active cal']);
+    expect(card.headline.label).toBe('Workout time');
+    expect(card.stats.map((stat) => stat.label)).toEqual(['Active cal']);
   });
 
   it('omits calories and distance rather than printing zero', () => {
@@ -164,7 +165,8 @@ describe('buildWorkoutProofCard', () => {
       timeZone: TZ,
       challengeTitle: 'Prayer Challenge',
     });
-    expect(card.stats.map((stat) => stat.key)).toEqual(['duration', 'hr']);
+    expect(card.headline.label).toBe('Workout time');
+    expect(card.stats.map((stat) => stat.key)).toEqual(['hr', 'hrmax']);
     expect(card.distanceLine).toBeNull();
   });
 
@@ -176,7 +178,8 @@ describe('buildWorkoutProofCard', () => {
       challengeTitle: 'Run 128 Miles by January 1',
     });
     expect(card.distanceLine).toBe('5.00 mi');
-    expect(card.stats.map((stat) => stat.key)).toEqual(['duration', 'active', 'hr', 'distance']);
+    expect(card.headline).toEqual({ value: '5.00 mi', label: 'Distance' });
+    expect(card.stats.map((stat) => stat.key)).toEqual(['duration', 'active', 'hr', 'hrmax']);
   });
 
   it('hides the pin row when no place is known', () => {

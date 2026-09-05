@@ -1,3 +1,5 @@
+import type { WorkoutRoute } from '@/lib/health/route';
+
 export type HealthSource = 'apple_health' | 'health_connect';
 export type HealthConfidence = 'watch' | 'phone' | 'manual' | 'unknown';
 export type HealthAuthStatus = 'unknown' | 'connected' | 'denied';
@@ -47,5 +49,12 @@ export interface HealthProvider {
   enrichHeartRate?(workout: HealthWorkout): Promise<HealthWorkout>;
   /** Full BPM series inside a workout window. Empty array means the workout carried no HR. */
   fetchHeartRateSeries?(window: { startedAt: string; endedAt: string }): Promise<HealthHeartRateSample[]>;
+  /**
+   * GPS track for one saved workout. Null for indoor workouts, denied route access, or a provider
+   * that cannot read routes — callers draw no map rather than a placeholder line.
+   */
+  fetchWorkoutRoute?(
+    workout: Pick<HealthWorkout, 'providerWorkoutId' | 'activityType'>,
+  ): Promise<WorkoutRoute | null>;
   enableBackgroundSync?(): Promise<void>;
 }

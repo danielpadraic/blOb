@@ -1,4 +1,5 @@
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
+import type { WorkoutRoute } from '@/lib/health/route';
 import type { PostAudience } from '@/lib/postAudience';
 import type {
   Conversation,
@@ -605,6 +606,8 @@ export interface WorkoutSessionRecord {
   hr_max: number | null;
   vendor_workout_id: string | null;
   proof_url: string | null;
+  /** Simplified GPS track, or null for indoor / unavailable. Vendor attaches only. */
+  route: WorkoutRoute | null;
   ocr_confidence: number | null;
   ocr_raw: string | null;
   ocr_skip_reason: string | null;
