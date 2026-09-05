@@ -72,7 +72,6 @@ export const GLYPH = {
     web: 'fitness_center',
   },
   trendUp: { ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' },
-  more: { ios: 'ellipsis', android: 'more_horiz', web: 'more_horiz' },
 } as const satisfies Record<string, GlyphName>;
 
 export type GlyphId = (typeof GLYPH)[keyof typeof GLYPH];
