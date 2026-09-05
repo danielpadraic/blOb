@@ -71,6 +71,7 @@ export type CheckinSlotDraft = {
   fromLibrary?: boolean;
   /** The blOb workout card is rasterizing for this slot. */
   building?: boolean;
+  addingRoute?: boolean;
 };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -110,6 +111,11 @@ type CheckinComposerProps = {
   accessory?: ReactNode;
   /** Per-slot content rendered under the hero, keyed by proof id. Used for read workout stats. */
   proofAccessories?: Record<string, ReactNode>;
+  /**
+   * Replaces the hero image for one slot. The generated workout card uses this to draw itself live,
+   * so the route and the headline animate once on first paint. The uploaded proof stays a still.
+   */
+  proofHero?: Record<string, (size: { width: number; height: number }) => ReactNode>;
   dueLine?: ReactNode;
 };
 
@@ -133,6 +139,7 @@ export function CheckinComposer({
   onCaptionChange,
   proofCaptions = {},
   proofAccessories,
+  proofHero,
   onProofCaptionChange,
   lobbyName: _lobbyName,
   lobbyLocked,
@@ -602,12 +609,19 @@ export function CheckinComposer({
             }}
             renderItem={({ item }) => (
               <View style={{ width: pageWidth, height: heroHeight }}>
-                <Image
-                  source={{ uri: item.uri }}
-                  style={{ width: pageWidth, height: heroHeight }}
-                  contentFit="contain"
-                  accessibilityLabel={item.label}
-                />
+                {item.kind === 'proof' && proofHero?.[item.proof.id] ? (
+                  <View
+                    style={{ width: pageWidth, height: heroHeight, alignItems: 'center', justifyContent: 'center' }}>
+                    {proofHero[item.proof.id]({ width: pageWidth, height: heroHeight })}
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: item.uri }}
+                    style={{ width: pageWidth, height: heroHeight }}
+                    contentFit="contain"
+                    accessibilityLabel={item.label}
+                  />
+                )}
                 {item.kind === 'proof' && proofCaptions[item.proof.id]?.trim() ? (
                   <View
                     pointerEvents="none"
@@ -730,11 +744,13 @@ export function CheckinComposer({
                   ) : (
                     <AppText className="px-0.5 text-center text-[9px] font-bold text-muted" numberOfLines={2}>
                       {/* Never a bare tile: say the card is rendering. */}
-                      {drafts[proof.id]?.building
-                        ? 'Building proof…'
-                        : health
-                          ? 'Health'
-                          : proofDisplayName(proof)}
+                      {drafts[proof.id]?.addingRoute
+                        ? 'Adding route…'
+                        : drafts[proof.id]?.building
+                          ? 'Building proof…'
+                          : health
+                            ? 'Health'
+                            : proofDisplayName(proof)}
                     </AppText>
                   )}
                 </Pressable>

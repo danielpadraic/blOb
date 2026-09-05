@@ -116,8 +116,9 @@ export function parseCheckinHealthProof(value: unknown): CheckinHealthProof | nu
   }
 
   // Only a vendor attach can carry coordinates. A screenshot read never invents a location, so a
-  // route on an ocr or manual row is discarded rather than trusted.
-  if (sourceRequiresClocks(source)) {
+  // route on an ocr or manual row is discarded rather than trusted. This is deliberately its own
+  // check rather than reusing the clock rule, which happens to cover the same two sources today.
+  if (source === 'healthkit' || source === 'health_connect') {
     const route = parseWorkoutRoute(row.route);
     if (route) {
       snapshot.route = route;

@@ -12,6 +12,8 @@ import {
   type HeartRateSample,
 } from '@/lib/health/workoutProofCard';
 import type { HealthWorkout } from '@/services/health/types';
+import { buildWorkoutRoute, projectRoute } from '@/lib/health/route';
+import { parseCheckinHealthProof } from '@/lib/health/checkinHealthProof';
 
 const WORKOUT: HealthWorkout = {
   providerWorkoutId: 'hw-1',
@@ -217,3 +219,107 @@ describe('heart rate average precedence', () => {
     expect(workoutCardHeartRateAverage(samples, null)).toBe(150);
   });
 });
+
+describe('route on the card', () => {
+  const locations = Array.from({ length: 80 }, (_, index) => {
+    const angle = (index / 80) * Math.PI * 2;
+    return {
+      latitude: 43.6955 + Math.sin(angle) * 0.009,
+      longitude: -116.3539 + Math.cos(angle) * 0.012,
+      timestamp: new Date(Date.parse('2026-09-04T13:33:00.000Z') + index * 30_000).toISOString(),
+    };
+  });
+
+  const workout: HealthWorkout = {
+    id: 'w-route',
+    providerWorkoutId: 'hk-route',
+    source: 'apple_health',
+    activityType: 'running',
+    activityLabel: 'Outdoor Run',
+    startedAt: '2026-09-04T13:33:00.000Z',
+    endedAt: '2026-09-04T14:14:10.000Z',
+    durationSec: 2470,
+    caloriesKcal: 612,
+    distanceM: 8450,
+    hrAvg: 152,
+    hrMax: 178,
+    confidence: 'watch',
+  };
+
+  it('leads with distance and carries the route when one exists', () => {
+    const route = buildWorkoutRoute({ locations, activityType: 'running' });
+    const card = buildWorkoutProofCard({
+      workout,
+      timeZone: 'America/Denver',
+      challengeTitle: '30-Day Consistency',
+      route,
+    });
+    expect(card.headline).toEqual({ value: '5.25 mi', label: 'Distance' });
+    expect(card.route?.polyline.length).toBe(80);
+    expect(card.accent.accent).toBe('#FF7A4D');
+    // Duration moves into the strip so the headline number is never printed twice.
+    expect(card.stats.map((stat) => stat.key)).toEqual(['duration', 'active', 'hr', 'hrmax']);
+  });
+
+  it('has no route and leads with time for an indoor workout', () => {
+    const card = buildWorkoutProofCard({
+      workout: { ...workout, activityType: 'strength', activityLabel: 'Traditional Strength Training', distanceM: undefined },
+      timeZone: 'America/Denver',
+      challengeTitle: '30-Day Consistency',
+    });
+    expect(card.route).toBeNull();
+    expect(card.headline).toEqual({ value: '0:41:10', label: 'Workout time' });
+    expect(card.accent.accent).toBe('#72D9CB');
+  });
+
+  /**
+   * The web renderer never talks to HealthKit. This is the path it relies on: a route captured on a
+   * device, stored as jsonb, read back and projected into a drawable line.
+   */
+  it('redraws a stored route after a round trip through jsonb', () => {
+    const route = buildWorkoutRoute({ locations, activityType: 'running' });
+    const storedJson = JSON.parse(JSON.stringify({ ...toStoredProof(workout), route }));
+    const parsed = parseCheckinHealthProof(storedJson);
+    expect(parsed?.route?.kind).toBe('gps');
+
+    const card = buildWorkoutProofCard({
+      workout,
+      timeZone: 'America/Denver',
+      challengeTitle: '30-Day Consistency',
+      route: parsed?.route ?? null,
+    });
+    const projected = projectRoute(card.route!, { width: 872, height: 520 });
+    expect(projected.path.startsWith('M')).toBe(true);
+    expect(projected.points.length).toBe(80);
+  });
+
+  it('drops a route that arrived on a screenshot read, because OCR cannot know a location', () => {
+    const route = buildWorkoutRoute({ locations, activityType: 'running' });
+    const parsed = parseCheckinHealthProof({
+      source: 'ocr',
+      activityType: 'running',
+      sourceName: 'Screenshot',
+      durationSec: 2470,
+      activeEnergyKcal: 612,
+      route,
+    });
+    expect(parsed?.source).toBe('ocr');
+    expect(parsed?.route).toBeUndefined();
+  });
+});
+
+/** Minimal stored shape for the round-trip test, mirroring what the attach path writes. */
+function toStoredProof(workout: HealthWorkout) {
+  return {
+    source: 'healthkit',
+    activityType: workout.activityType,
+    sourceName: 'Apple Watch',
+    startedAt: workout.startedAt,
+    endedAt: workout.endedAt,
+    durationSec: workout.durationSec,
+    activeEnergyKcal: workout.caloriesKcal,
+    distanceMeters: workout.distanceM,
+    avgHrBpm: workout.hrAvg,
+    maxHrBpm: workout.hrMax,
+  };
+}

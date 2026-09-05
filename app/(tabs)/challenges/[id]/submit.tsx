@@ -4,6 +4,7 @@ import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { WorkoutStatChips } from '@/components/challenge/WorkoutStatChips';
 import { isOcrEligibleProof, shouldReadWorkoutStill, useWorkoutOcr } from '@/hooks/useWorkoutOcr';
 import { saveWorkoutSession } from '@/lib/health/workoutSessions';
@@ -105,10 +106,14 @@ import {
   type CheckinHealthProof,
 } from '@/lib/health/attachProof';
 import { upsertHealthWorkout } from '@/lib/health/remote';
+import type { WorkoutRoute } from '@/lib/health/route';
 import {
   buildWorkoutProofCard,
   withHeartRateFloor,
+  WORKOUT_CARD_HEIGHT,
+  WORKOUT_CARD_WIDTH,
   type HeartRateSample,
+  type WorkoutProofCardModel,
 } from '@/lib/health/workoutProofCard';
 import { challengeClockTz, checkinPeriodKey } from '@/lib/checkinPeriod';
 import { getHealthProvider, healthProviderAvailable } from '@/services/health';
@@ -145,6 +150,8 @@ type SlotDraft = {
   healthWorkoutId?: string | null;
   /** True while the workout card rasterizes, so the slot shows progress instead of a black tile. */
   building?: boolean;
+  /** True only while HealthKit route samples are in flight. Never blocks Send. */
+  addingRoute?: boolean;
   inFence?: boolean;
   durationMs?: number | null;
   caption?: string | null;
@@ -249,6 +256,13 @@ function SubmitWorkoutInner() {
   const [error, setError] = useState<string | null>(null);
   const [failKind, setFailKind] = useState<'offline' | 'permission' | 'upload' | null>(null);
   const [cardRequest, setCardRequest] = useState<WorkoutCardRequest | null>(null);
+  /**
+   * The finished card model for the slot that just generated one, so the hero can draw it live and
+   * play its one-shot reveal. The uploaded proof file is still a flattened frame.
+   */
+  const [cardPreview, setCardPreview] = useState<
+    { proofId: string; card: WorkoutProofCardModel; activityType: HealthWorkout['activityType'] } | null
+  >(null);
   const cardTargetRef = useRef<{
     proofId: string;
     healthWorkoutId: string;
@@ -663,6 +677,33 @@ function SubmitWorkoutInner() {
     return map;
   }, [distanceUnit, drafts, proofSteps, workoutOcr]);
 
+  /**
+   * Draws the generated workout card live in the hero for the slot that produced it, so the route and
+   * the headline number animate once. Falls back to the flattened still for every other slot, and the
+   * uploaded proof file is always the finished frame.
+   */
+  const proofHero = useMemo(() => {
+    if (!cardPreview) {
+      return undefined;
+    }
+    const preview = cardPreview;
+    return {
+      [preview.proofId]: ({ width, height }: { width: number; height: number }) => {
+        // Contain the 1080x1350 card inside the hero without distorting it.
+        const scaled = Math.min(width, height * (WORKOUT_CARD_WIDTH / WORKOUT_CARD_HEIGHT));
+        return (
+          <WorkoutProofCard
+            card={preview.card}
+            activityType={preview.activityType}
+            width={scaled}
+            height={scaled * (WORKOUT_CARD_HEIGHT / WORKOUT_CARD_WIDTH)}
+            animate
+          />
+        );
+      },
+    };
+  }, [cardPreview]);
+
   async function persistLocation(proof: ChallengeProof) {
     if (!id) {
       return;
@@ -734,6 +775,8 @@ function SubmitWorkoutInner() {
       return;
     }
     onMedia(proof.id, uri, mimeType, fromLibrary === true);
+    // Replacing the attach drops the generated card for this slot instead of leaving it on screen.
+    setCardPreview((current) => (current?.proofId === proof.id ? null : current));
     setCaptureId(null);
     setSkippedAuto(true);
     setPreferCamera(false);
@@ -828,6 +871,7 @@ function SubmitWorkoutInner() {
   }
 
   async function onRemoveProof(proof: ChallengeProof) {
+    setCardPreview((current) => (current?.proofId === proof.id ? null : current));
     setDrafts((current) => {
       const next = { ...current };
       delete next[proof.id];
@@ -1197,6 +1241,22 @@ function SubmitWorkoutInner() {
     }
   }
 
+  /**
+   * The GPS track for this workout, when it has one. Web never reaches HealthKit, and an indoor
+   * workout returns null — in both cases the card draws no map rather than a placeholder line.
+   */
+  async function readWorkoutRoute(workout: HealthWorkout): Promise<WorkoutRoute | null> {
+    if (Platform.OS !== 'ios') {
+      return null;
+    }
+    try {
+      const provider = getHealthProvider();
+      return provider?.fetchWorkoutRoute ? await provider.fetchWorkoutRoute(workout) : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function buildWorkoutCard(
     target: ChallengeProof,
     workout: HealthWorkout,
@@ -1212,20 +1272,47 @@ function SubmitWorkoutInner() {
     }
     setDrafts((current) => ({
       ...current,
-      [target.id]: { ...current[target.id], building: true },
+      [target.id]: { ...current[target.id], addingRoute: true },
     }));
+    const route = await readWorkoutRoute(workout);
+    // The snapshot is updated as soon as the track is known, so a failed rasterize still leaves the
+    // route on the check-in for the ledger and for Web to redraw.
+    if (route) {
+      const withRoute: SlotDraft = { health: { ...toCheckinHealthProof(workout), route } };
+      setDrafts((current) => ({
+        ...current,
+        [target.id]: { ...current[target.id], ...withRoute, addingRoute: false, building: true },
+      }));
+      await persistProof(target, { ...withRoute, uri: `health:${healthWorkoutId}` }).catch(() => {
+        // The attach already counts; a failed re-persist must not strand the slot.
+      });
+    } else {
+      setDrafts((current) => ({
+        ...current,
+        [target.id]: { ...current[target.id], addingRoute: false, building: true },
+      }));
+    }
     const card = buildWorkoutProofCard({
       workout,
       samples,
       timeZone: challengeClockTz(challenge),
       challengeTitle: challengeDisplayTitle(challenge),
+      route,
     });
-    cardTargetRef.current = { proofId: target.id, healthWorkoutId, health: toCheckinHealthProof(workout) };
+    // The route travels with the snapshot so the ledger keeps it and Web can redraw the same line.
+    const health = toCheckinHealthProof(workout);
+    cardTargetRef.current = {
+      proofId: target.id,
+      healthWorkoutId,
+      health: route ? { ...health, route } : health,
+    };
     setCardRequest({
       key: `${target.id}-${healthWorkoutId}`,
       card,
       activityType: workout.activityType,
     });
+    // Replacing an attach regenerates this slot's card; it never stacks a second one.
+    setCardPreview({ proofId: target.id, card, activityType: workout.activityType });
   }
 
   const onCardRendered = useCallback(
@@ -1592,6 +1679,7 @@ function SubmitWorkoutInner() {
         onExtrasChange={handleExtrasChange}
         onCaptionChange={setCaption}
         proofAccessories={proofAccessories}
+        proofHero={proofHero}
         proofCaptions={proofCaptions}
         onProofCaptionChange={(proofId, text) =>
           setProofCaptions((current) => ({ ...current, [proofId]: text }))
