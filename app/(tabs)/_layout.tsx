@@ -36,7 +36,13 @@ import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
 import { clearLastOpenChallenge, goHome, pushCheckinSubmit } from '@/lib/challengeNav';
-import { CIRCLES_CREATE_HREF, isWatchSurfacePath, LOBBY_HREF, MULTI_CHECKIN_HREF } from '@/lib/routes';
+import {
+  CIRCLES_CREATE_HREF,
+  isWatchSurfacePath,
+  LIFT_START_HREF,
+  LOBBY_HREF,
+  MULTI_CHECKIN_HREF,
+} from '@/lib/routes';
 import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
@@ -345,6 +351,10 @@ function TabLayoutInner() {
       go(MULTI_CHECKIN_HREF);
       return;
     }
+    if (id === 'lift') {
+      go(LIFT_START_HREF);
+      return;
+    }
     if (id === 'create') {
       const root = (segments as string[]).filter((segment) => !segment.startsWith('('))[0];
       go(root === 'feed' ? '/challenges/create?returnTo=feed' : '/challenges/create');
@@ -445,6 +455,7 @@ function TabLayoutInner() {
           <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
           <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />
           <Tabs.Screen name="checkin" options={{ href: null, title: 'Multi Check-In' }} />
+          <Tabs.Screen name="lift" options={{ href: null, title: 'Lift' }} />
           <Tabs.Screen
             name="profile"
             options={{

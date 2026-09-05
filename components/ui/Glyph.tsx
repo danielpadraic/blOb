@@ -60,6 +60,17 @@ export const GLYPH = {
   unmute: { ios: 'speaker.wave.2.fill', android: 'volume_up', web: 'volume_up' },
   lock: { ios: 'lock.fill', android: 'lock', web: 'lock' },
   pin: { ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' },
+  checkmark: { ios: 'checkmark', android: 'check', web: 'check' },
+  close: { ios: 'xmark', android: 'close', web: 'close' },
+  minus: { ios: 'minus', android: 'remove', web: 'remove' },
+  chevronDown: { ios: 'chevron.down', android: 'expand_more', web: 'expand_more' },
+  chevronUp: { ios: 'chevron.up', android: 'expand_less', web: 'expand_less' },
+  chevronRight: { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' },
+  lift: {
+    ios: 'figure.strengthtraining.traditional',
+    android: 'fitness_center',
+    web: 'fitness_center',
+  },
 } as const satisfies Record<string, GlyphName>;
 
 export type GlyphId = (typeof GLYPH)[keyof typeof GLYPH];

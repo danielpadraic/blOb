@@ -318,6 +318,15 @@ export function isWatchSurfacePath(pathname?: string | null): boolean {
 export const MESSAGES_HREF = '/messages' as const;
 export const BODY_METRICS_HREF = '/profile/body-metrics' as const;
 export const FITNESS_HISTORY_HREF = '/profile/fitness-history' as const;
+
+/** Lift: pick muscles, then log. Private to the owner — never a public profile surface. */
+export const LIFT_START_HREF = '/lift' as Href;
+export const LIFTS_HISTORY_HREF = '/profile/lifts' as Href;
+
+/** Literal path, like the check-in hrefs: an object `{ pathname, params }` breaks Safari. */
+export function liftSessionHref(id: string): Href {
+  return `/lift/${String(id ?? '').trim()}` as Href;
+}
 export const INTERESTS_HREF = '/profile/interests' as Href;
 
 export function conversationHref(

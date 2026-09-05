@@ -1,5 +1,11 @@
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import type { WorkoutRoute } from '@/lib/health/route';
+import type {
+  LiftCustomExerciseRow,
+  LiftSessionExerciseRow,
+  LiftSessionRow,
+  LiftSetRow,
+} from '@/lib/lift/types';
 import type { PostAudience } from '@/lib/postAudience';
 import type {
   Conversation,
@@ -34,6 +40,18 @@ export type {
   StoryReactionType,
   StoryView,
 } from '@/types/social';
+
+export type {
+  LiftCustomExerciseRow,
+  LiftExerciseDraft,
+  LiftSessionDraft,
+  LiftSessionExerciseRow,
+  LiftSessionRow,
+  LiftSessionSummary,
+  LiftSetDraft,
+  LiftSetKind,
+  LiftSetRow,
+} from '@/lib/lift/types';
 
 export type {
   ActivityConfig,
@@ -1237,6 +1255,57 @@ export type Database = {
           Relationship<'workout_sessions_checkin_id_fkey', 'checkin_id', 'challenge_checkins', 'id'>,
         ]
       >;
+      lift_exercises: TableDef<
+        {
+          id: string;
+          name: string;
+          primary_muscle: string;
+          secondary_muscles: string[];
+          aliases: string[];
+          is_official: boolean;
+          created_at: string;
+        },
+        never,
+        never
+      >;
+      lift_custom_exercises: TableDef<
+        LiftCustomExerciseRow,
+        Omit<LiftCustomExerciseRow, 'id' | 'created_at'> & { id?: string; created_at?: string },
+        Partial<LiftCustomExerciseRow>,
+        [Relationship<'lift_custom_exercises_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      lift_sessions: TableDef<
+        LiftSessionRow,
+        Partial<LiftSessionRow>,
+        Partial<LiftSessionRow>,
+        [Relationship<'lift_sessions_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      lift_session_exercises: TableDef<
+        LiftSessionExerciseRow,
+        Partial<LiftSessionExerciseRow>,
+        Partial<LiftSessionExerciseRow>,
+        [
+          Relationship<
+            'lift_session_exercises_session_id_fkey',
+            'session_id',
+            'lift_sessions',
+            'id'
+          >,
+        ]
+      >;
+      lift_sets: TableDef<
+        LiftSetRow,
+        Partial<LiftSetRow>,
+        Partial<LiftSetRow>,
+        [
+          Relationship<
+            'lift_sets_exercise_row_id_fkey',
+            'exercise_row_id',
+            'lift_session_exercises',
+            'id'
+          >,
+        ]
+      >;
       health_workout_starts: TableDef<
         HealthWorkoutStart,
         Partial<HealthWorkoutStart>,
@@ -1756,6 +1825,18 @@ export type Database = {
       };
     };
     Functions: {
+      save_lift_session: {
+        Args: {
+          p_id: string;
+          p_title: string | null;
+          p_performed_at: string;
+          p_muscle_keys: string[];
+          p_unit: string;
+          p_completed: boolean;
+          p_exercises: unknown;
+        };
+        Returns: string;
+      };
       get_my_profile: {
         Args: Record<string, never>;
         Returns: Profile | null;

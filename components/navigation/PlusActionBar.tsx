@@ -9,7 +9,16 @@ import { asLoggableList } from '@/lib/loggable';
 import { copy } from '@/lib/copy';
 import { TAB_BAR_GUTTER, TAB_BAR_HEIGHT, THEME, themeShadow } from '@/lib/theme';
 
-export type QuickActionId = 'log' | 'create' | 'join' | 'post' | 'story' | 'reel' | 'coins' | 'callout';
+export type QuickActionId =
+  | 'log'
+  | 'lift'
+  | 'create'
+  | 'join'
+  | 'post'
+  | 'story'
+  | 'reel'
+  | 'coins'
+  | 'callout';
 
 type PlusActionBarProps = {
   visible: boolean;
@@ -85,6 +94,8 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
               />
               <BarDivider />
               <BarButton label="Post" onPress={() => setStep('post')} />
+              <BarDivider />
+              <BarButton label="Lift" onPress={() => onAction('lift')} />
             </>
           )}
         </View>

@@ -30,6 +30,7 @@ const TAB_CHROME_ROOTS = new Set([
   'capture',
   'checkin',
   'circles',
+  'lift',
 ]);
 
 export function isInsideTabChrome(segments: string[]): boolean {
@@ -45,7 +46,14 @@ export function isMainTabRoute(segments: string[]): boolean {
     return false;
   }
   const [root, nested] = parts;
-  if (!TAB_CHROME_ROOTS.has(root) || root === 'messages' || root === 'capture' || root === 'checkin' || root === 'circles') {
+  if (
+    !TAB_CHROME_ROOTS.has(root) ||
+    root === 'messages' ||
+    root === 'capture' ||
+    root === 'checkin' ||
+    root === 'circles' ||
+    root === 'lift'
+  ) {
     return false;
   }
   return !nested || nested === 'index';

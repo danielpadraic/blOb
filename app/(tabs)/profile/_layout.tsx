@@ -13,6 +13,7 @@ export default function YouStackLayout() {
       <Stack.Screen name="body-metrics" options={{ title: 'Body metrics' }} />
       <Stack.Screen name="interests" options={HIDDEN_STACK_HEADER} />
       <Stack.Screen name="fitness-history" options={{ title: 'Fitness history' }} />
+      <Stack.Screen name="lifts" options={{ title: 'Lifts' }} />
       <Stack.Screen name="u/[username]" options={PROFILE_STACK_TITLE} />
     </Stack>
   );

@@ -25,7 +25,8 @@ import {
   profileWeightKg,
 } from '@/lib/bodyMetrics';
 import { experienceLabel, goalsLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
-import { FITNESS_HISTORY_HREF } from '@/lib/routes';
+import { useLiftHistory } from '@/hooks/useLift';
+import { FITNESS_HISTORY_HREF, LIFTS_HISTORY_HREF } from '@/lib/routes';
 import { isAdminViewer } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
@@ -130,6 +131,8 @@ export default function ProfileScreen() {
           <WalletBalances profile={profile} />
         </Pressable>
         <SendWalletButton onPress={() => wallet?.openSend()} />
+
+        <LiftsRow />
 
         <PrivacySettingsCard />
 
@@ -238,6 +241,46 @@ export default function ProfileScreen() {
         </View>
       </View>
     </Screen>
+  );
+}
+
+/** Entry to the private strength log. Counts come from the same query the Lifts screen reads. */
+function LiftsRow() {
+  const router = useRouter();
+  const { data } = useLiftHistory();
+  const rows = (data ?? []).filter((row) => row.exerciseCount > 0 || row.completedAt);
+  const latest = rows[0];
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Lifts"
+      onPress={() => router.push(LIFTS_HISTORY_HREF)}>
+      <Card padded={false}>
+        <View className="flex-row items-center gap-3 px-4 py-3.5">
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: THEME.accentSoft,
+            }}>
+            <Glyph name={GLYPH.lift} color={THEME.accent} size={18} />
+          </View>
+          <View className="flex-1" style={{ minWidth: 0 }}>
+            <AppText className="text-[15px] font-extrabold text-charcoal">Lifts</AppText>
+            <AppText numberOfLines={1} className="text-[12px] text-muted">
+              {latest
+                ? `${rows.length} ${rows.length === 1 ? 'session' : 'sessions'} · last ${latest.title}`
+                : 'Log sets and reps. Only you can see these.'}
+            </AppText>
+          </View>
+          <Glyph name={GLYPH.chevronRight} color={THEME.textMuted} size={14} />
+        </View>
+      </Card>
+    </Pressable>
   );
 }
 
