@@ -28,6 +28,9 @@ export type HealthSyncResult = {
   deletedIds: string[];
 };
 
+/** One BPM reading. The series is what the workout proof card graphs. */
+export type HealthHeartRateSample = { at: string; bpm: number };
+
 export interface HealthProvider {
   isAvailable(): boolean;
   getAvailabilityDetail?(): Promise<HealthAvailabilityDetail>;
@@ -40,5 +43,7 @@ export interface HealthProvider {
   /** Incremental HealthKit sync. Optional — Android Health Connect ignores this. */
   syncNewWorkouts?(anchor?: string | null): Promise<HealthSyncResult>;
   enrichHeartRate?(workout: HealthWorkout): Promise<HealthWorkout>;
+  /** Full BPM series inside a workout window. Empty array means the workout carried no HR. */
+  fetchHeartRateSeries?(window: { startedAt: string; endedAt: string }): Promise<HealthHeartRateSample[]>;
   enableBackgroundSync?(): Promise<void>;
 }

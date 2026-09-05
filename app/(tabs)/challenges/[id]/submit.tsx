@@ -1,5 +1,5 @@
 import { useIsFocused, useLocalSearchParams, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -11,6 +11,10 @@ import {
 } from '@/components/challenge/CheckinSafeBoundary';
 import { LocationProofRow } from '@/components/challenge/LocationProofRow';
 import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
+import {
+  WorkoutProofCardRenderer,
+  type WorkoutCardRequest,
+} from '@/components/challenge/WorkoutProofCardRenderer';
 import { ProofUploader } from '@/components/challenge/ProofUploader';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Input } from '@/components/ui/Input';
@@ -98,6 +102,11 @@ import {
   type CheckinHealthProof,
 } from '@/lib/health/attachProof';
 import { upsertHealthWorkout } from '@/lib/health/remote';
+import {
+  buildWorkoutProofCard,
+  type HeartRateSample,
+} from '@/lib/health/workoutProofCard';
+import { challengeClockTz } from '@/lib/checkinPeriod';
 import { getHealthProvider, healthProviderAvailable } from '@/services/health';
 import {
   distanceProofIsSessionLog,
@@ -128,6 +137,10 @@ type SlotDraft = {
   text?: string;
   fromLibrary?: boolean;
   health?: CheckinHealthProof | null;
+  /** Set when the still in this slot is the generated blOb workout card. */
+  healthWorkoutId?: string | null;
+  /** True while the workout card rasterizes, so the slot shows progress instead of a black tile. */
+  building?: boolean;
   inFence?: boolean;
   durationMs?: number | null;
   caption?: string | null;
@@ -231,6 +244,12 @@ function SubmitWorkoutInner() {
   const [drafts, setDrafts] = useState<Record<string, SlotDraft>>({});
   const [error, setError] = useState<string | null>(null);
   const [failKind, setFailKind] = useState<'offline' | 'permission' | 'upload' | null>(null);
+  const [cardRequest, setCardRequest] = useState<WorkoutCardRequest | null>(null);
+  const cardTargetRef = useRef<{
+    proofId: string;
+    healthWorkoutId: string;
+    health: CheckinHealthProof;
+  } | null>(null);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
   const [preferCamera, setPreferCamera] = useState(false);
@@ -597,6 +616,7 @@ function SubmitWorkoutInner() {
         text: draft?.text,
         fromLibrary: draft?.fromLibrary,
         health: draft?.health ?? null,
+        healthWorkoutId: draft?.healthWorkoutId ?? null,
         caption: clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? ''),
         notes,
         extraMedia: uniqueProofUrls(
@@ -1043,10 +1063,97 @@ function SubmitWorkoutInner() {
       setSkippedAuto(true);
       setPreferCamera(false);
       await persistProof(target, draft);
+      // The attach already counts. Turning it into a real image is a follow-up that must not
+      // strand the slot if rasterizing fails.
+      void buildWorkoutCard(target, enriched, healthWorkoutId);
     } catch (caught) {
       setError(getErrorMessage(caught));
     }
   }
+
+  async function buildWorkoutCard(
+    target: ChallengeProof,
+    workout: HealthWorkout,
+    healthWorkoutId: string,
+  ) {
+    // The card is workout/device proof only. A required selfie slot keeps asking for a selfie.
+    if (Platform.OS === 'web' || !challenge) {
+      return;
+    }
+    if (target.method !== 'hr' && target.method !== 'distance') {
+      return;
+    }
+    setDrafts((current) => ({
+      ...current,
+      [target.id]: { ...current[target.id], building: true },
+    }));
+    let samples: HeartRateSample[] = [];
+    try {
+      const provider = getHealthProvider();
+      samples = provider?.fetchHeartRateSeries
+        ? await provider.fetchHeartRateSeries({
+            startedAt: workout.startedAt,
+            endedAt: workout.endedAt,
+          })
+        : [];
+    } catch {
+      samples = [];
+    }
+    const card = buildWorkoutProofCard({
+      workout,
+      samples,
+      timeZone: challengeClockTz(challenge),
+      challengeTitle: challengeDisplayTitle(challenge),
+    });
+    cardTargetRef.current = { proofId: target.id, healthWorkoutId, health: toCheckinHealthProof(workout) };
+    setCardRequest({
+      key: `${target.id}-${healthWorkoutId}`,
+      card,
+      activityType: workout.activityType,
+    });
+  }
+
+  const onCardRendered = useCallback(
+    (key: string, fileUri: string) => {
+      const pending = cardTargetRef.current;
+      setCardRequest(null);
+      if (!pending || !key.startsWith(pending.proofId)) {
+        return;
+      }
+      const proof = proofSteps.find((item) => item.id === pending.proofId);
+      const draft: SlotDraft = {
+        uri: fileUri,
+        mimeType: 'image/png',
+        health: pending.health,
+        healthWorkoutId: pending.healthWorkoutId,
+        building: false,
+        fromLibrary: false,
+      };
+      setDrafts((current) => ({ ...current, [pending.proofId]: { ...current[pending.proofId], ...draft } }));
+      if (!proof) {
+        return;
+      }
+      void persistProof(proof, draft).catch((caught) => {
+        setError(getErrorMessage(caught));
+      });
+    },
+    // persistProof and proofSteps are stable enough for this callback; drafts are set functionally.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [proofSteps],
+  );
+
+  const onCardFailed = useCallback((key: string) => {
+    const pending = cardTargetRef.current;
+    setCardRequest(null);
+    if (!pending || !key.startsWith(pending.proofId)) {
+      return;
+    }
+    // The Health attach already satisfied the slot, so drop the card quietly.
+    setDrafts((current) => ({
+      ...current,
+      [pending.proofId]: { ...current[pending.proofId], building: false },
+    }));
+  }, []);
 
   if (!id) {
     return (
@@ -1340,6 +1447,12 @@ function SubmitWorkoutInner() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
+      {/* Off-screen rasterizer. The user only ever sees the finished card in the slot. */}
+      <WorkoutProofCardRenderer
+        request={cardRequest}
+        onRendered={onCardRendered}
+        onFailed={onCardFailed}
+      />
       <CheckinComposer
         proofs={composerProofs}
         drafts={drafts}

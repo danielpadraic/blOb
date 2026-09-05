@@ -69,6 +69,8 @@ export type CheckinSlotDraft = {
   mimeType?: string | null;
   text?: string;
   fromLibrary?: boolean;
+  /** The blOb workout card is rasterizing for this slot. */
+  building?: boolean;
 };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -717,7 +719,12 @@ export function CheckinComposer({
                     <Image source={{ uri }} style={{ width: STRIP, height: STRIP }} contentFit="cover" />
                   ) : (
                     <AppText className="px-0.5 text-center text-[9px] font-bold text-muted" numberOfLines={2}>
-                      {health ? 'Health' : proofDisplayName(proof)}
+                      {/* Never a bare tile: say the card is rendering. */}
+                      {drafts[proof.id]?.building
+                        ? 'Building proof…'
+                        : health
+                          ? 'Health'
+                          : proofDisplayName(proof)}
                     </AppText>
                   )}
                 </Pressable>

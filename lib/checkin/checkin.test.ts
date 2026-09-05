@@ -394,4 +394,60 @@ describe('check-in composer save', () => {
       }),
     );
   });
+
+  it('keeps Health provenance when the generated workout card is the image', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    const health = {
+      startedAt: '2026-09-05T13:33:00.000Z',
+      endedAt: '2026-09-05T14:14:10.000Z',
+      durationSec: 2470,
+      activityType: 'strength',
+      sourceName: 'Apple Watch',
+      avgHrBpm: 108,
+    };
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'hr', name: 'Heart rate', method: 'hr' },
+        uri: 'file:///tmp/blob-workout-proof-hr.png',
+        mimeType: 'image/png',
+        health,
+        healthWorkoutId: 'hw-1',
+      },
+      async () => 'u1/c1/hr_monitor-1.jpg',
+      async () => 'https://example.com/hr_monitor-1.jpg',
+    );
+    const call = rpc.mock.calls[0]?.[1] as Record<string, unknown>;
+    const part = call.p_proof_part as Record<string, unknown>;
+    // The card is a real image on the post AND the Health receipt for the slot.
+    expect(part.url).toBe('https://example.com/hr_monitor-1.jpg');
+    expect(part.urls).toEqual(['https://example.com/hr_monitor-1.jpg']);
+    expect(part.healthWorkoutId).toBe('hw-1');
+    expect(part.health).toEqual(health);
+    expect(call.p_health_workout_id).toBe('hw-1');
+  });
+
+  it('leaves a plain camera still with no Health fields', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'photo', name: 'Photo', method: 'photo' },
+        uri: 'file:///tmp/shot.jpg',
+      },
+      async () => 'u1/c1/photo-1.jpg',
+      async () => 'https://example.com/photo-1.jpg',
+    );
+    const part = (rpc.mock.calls[0]?.[1] as Record<string, unknown>).p_proof_part as Record<string, unknown>;
+    expect(part.healthWorkoutId).toBeUndefined();
+    expect(part.health).toBeUndefined();
+  });
 });

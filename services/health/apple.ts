@@ -11,6 +11,7 @@ import type {
   HealthAuthStatus,
   HealthAvailabilityDetail,
   HealthConfidence,
+  HealthHeartRateSample,
   HealthProvider,
   HealthSyncResult,
   HealthWorkout,
@@ -40,7 +41,10 @@ type NativeKit = {
   ) => void;
   getHeartRateSamples: (
     options: { startDate: string; endDate: string; ascending?: boolean; limit?: number; unit?: string },
-    callback: (error: string, results: Array<{ value?: number }>) => void,
+    callback: (
+      error: string,
+      results: Array<{ value?: number; startDate?: string; endDate?: string }>,
+    ) => void,
   ) => void;
   setObserver?: (options: { type: string }) => void;
 };
@@ -226,6 +230,42 @@ function mapWorkout(workout: NativeWorkout): HealthWorkout | null {
     sourceBundle: workout.sourceId ?? workout.sourceName ?? undefined,
     confidence: mapConfidence(workout),
   };
+}
+
+/** Raw BPM rows for a window. Ascending so the proof card graphs left to right. */
+async function heartRateSamplesFor(
+  kit: NativeKit,
+  startedAt: string,
+  endedAt: string,
+): Promise<HealthHeartRateSample[]> {
+  try {
+    const rows = await new Promise<Array<{ value?: number; startDate?: string; endDate?: string }>>(
+      (resolve) => {
+        kit.getHeartRateSamples(
+          { startDate: startedAt, endDate: endedAt, ascending: true, limit: 400, unit: 'bpm' },
+          (error, results) => {
+            if (error || !Array.isArray(results)) {
+              resolve([]);
+              return;
+            }
+            resolve(results);
+          },
+        );
+      },
+    );
+    const samples: HealthHeartRateSample[] = [];
+    for (const row of rows) {
+      const bpm = Number(row.value);
+      if (!Number.isFinite(bpm) || bpm <= 0) {
+        continue;
+      }
+      const at = String(row.startDate ?? row.endDate ?? '').trim();
+      samples.push({ at: at || startedAt, bpm: Math.round(bpm) });
+    }
+    return samples;
+  } catch {
+    return [];
+  }
 }
 
 async function heartRateFor(
@@ -428,6 +468,17 @@ class AppleHealthProvider implements HealthProvider {
     }
     const hr = await heartRateFor(kit, workout.startedAt, workout.endedAt);
     return { ...workout, ...hr };
+  }
+
+  async fetchHeartRateSeries(window: {
+    startedAt: string;
+    endedAt: string;
+  }): Promise<HealthHeartRateSample[]> {
+    const kit = loadKit();
+    if (!kit) {
+      return [];
+    }
+    return heartRateSamplesFor(kit, window.startedAt, window.endedAt);
   }
 
   async enableBackgroundSync(): Promise<void> {

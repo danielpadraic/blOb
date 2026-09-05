@@ -44,6 +44,11 @@ export type SaveCheckinProofInput = {
   urls?: string[] | null;
   clearProof?: boolean;
   health?: CheckinHealthProof | null;
+  /**
+   * Set when the uploaded still IS the workout proof (the generated blOb workout card), so the slot
+   * keeps its Health provenance alongside a real image URL.
+   */
+  healthWorkoutId?: string | null;
   caption?: string | null;
 };
 
@@ -199,6 +204,7 @@ async function proofPartFor(
         }),
       );
   const urlOnly = uniqueProofUrls([url]);
+  const healthWorkoutId = input.healthWorkoutId?.trim() || null;
   const contentHash = await hashCheckinProof({
     uri,
     blob: input.blob,
@@ -212,11 +218,15 @@ async function proofPartFor(
         url: urlOnly[0] ?? url,
         urls: urlOnly,
         fromLibrary: input.fromLibrary === true,
+        // A generated workout card is an image AND the Health receipt for this slot. A plain
+        // camera still carries neither key.
+        ...(healthWorkoutId ? { healthWorkoutId } : null),
+        ...(input.health ? { health: input.health } : null),
         contentHash: contentHash || null,
       },
       input.caption,
     ),
-    healthWorkoutId: null,
+    healthWorkoutId,
   };
 }
 
