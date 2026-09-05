@@ -150,10 +150,15 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Public-safe projection. Credits are never included. Fitness stats are
--- visible only to the owner or when the owner opted in.
+-- Public-safe projection. Balances are never included. Fitness stats are visible only to the owner
+-- or when the owner opted in.
+--
+-- Owner-rights on purpose. The base table no longer grants the fitness columns to the client role,
+-- so an invoker-rights view could not read them and would fail for everyone. Because this bypasses
+-- row level security, it is granted to signed-in members only and never to anon.
+-- Later migrations add the remaining profile-card columns to this view.
 create or replace view public.profiles_public
-with (security_invoker = true) as
+with (security_invoker = false) as
 select
   p.id,
   p.username,
@@ -161,9 +166,12 @@ select
   p.avatar_url,
   p.bio,
   p.skill_tags,
-  p.primary_activities,
-  p.show_fitness_stats_publicly,
   p.created_at,
+  p.is_official,
+  p.is_creator,
+  p.allow_profile_posts,
+  p.profile_visibility,
+  p.show_fitness_stats_publicly,
   case
     when p.id = auth.uid() or p.show_fitness_stats_publicly then p.height_cm
   end as height_cm,
@@ -179,10 +187,13 @@ select
   case
     when p.id = auth.uid() or p.show_fitness_stats_publicly then p.typical_weekly_workout_frequency
   end as typical_weekly_workout_frequency,
-  p.is_official
-from public.profiles p;
+  case
+    when p.id = auth.uid() or p.show_fitness_stats_publicly then p.primary_activities
+  end as primary_activities
+from public.profiles p
+where auth.uid() is not null;
 
-comment on view public.profiles_public is 'Redacted profile projection for feeds, challenge cards, and public profiles.';
+comment on view public.profiles_public is 'Redacted profile projection for feeds, challenge cards, and public profiles. Owner-rights; signed-in members only.';
 
 -- Exact email/phone people search without exposing those fields.
 create or replace function public.search_people(p_query text)
@@ -2613,10 +2624,11 @@ alter table public.reactions enable row level security;
 alter table public.challenge_invites enable row level security;
 alter table public.notifications enable row level security;
 
--- profiles: public read of non-sensitive columns, owner write
--- Credits column is revoked below so SELECT * will not leak wallets.
-create policy "Profiles are readable"
+-- profiles: signed-in read of identity columns, owner write.
+-- Which columns anyone may read is decided by the grants further down, not by this policy.
+create policy "Profiles are viewable by signed-in members"
   on public.profiles for select
+  to authenticated
   using (true);
 
 create policy "Users insert their own profile"
@@ -2861,16 +2873,63 @@ create policy "Users can remove their reactions"
 
 grant usage on schema public to anon, authenticated;
 
-grant select (
-  id, username, display_name, avatar_url, bio,
-  height_cm, current_weight, goal_weight, weight_unit,
-  typical_weekly_workout_frequency, primary_activities, skill_tags,
-  show_fitness_stats_publicly, created_at, updated_at, is_official
-) on public.profiles to anon, authenticated;
+-- Everything about a profile is private unless it is named here. That is deliberate: a column added
+-- to this table later stays unreadable and unwritable by the client until someone opts it in.
+--
+-- These must be column lists, never `grant select on public.profiles`. Postgres ignores a
+-- column-level REVOKE while a table-wide grant exists, so a table-wide grant here would silently
+-- undo every restriction below it -- which is exactly how balances once became self-editable.
 
-grant insert, update on public.profiles to authenticated;
+-- Both lists are intersected with the columns that actually exist, so this file stays runnable as
+-- the baseline while later migrations add columns and re-run the same shape.
+do $$
+declare
+  -- Readable by any signed-in member. Fitness stats are deliberately absent: they reach other
+  -- members only through profiles_public, which honours show_fitness_stats_publicly.
+  identity constant text[] := array[
+    'id', 'username', 'display_name', 'avatar_url', 'cover_url', 'bio',
+    'skill_tags', 'created_at',
+    'is_official', 'is_creator', 'is_admin',
+    'allow_profile_posts', 'profile_visibility', 'show_fitness_stats_publicly'
+  ];
+  -- Never writable by the client. Balances move only through SECURITY DEFINER RPCs, and these
+  -- three flags decide who is an admin, who is verified, and whose posts reach everyone.
+  server_owned constant text[] := array[
+    'coins', 'bucks', 'credits',
+    'last_shown_coin_balance', 'last_shown_bucks_balance',
+    'is_admin', 'is_official', 'is_creator'
+  ];
+  readable text;
+  updatable text;
+  insertable text;
+begin
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position)
+    into readable
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'profiles'
+    and column_name = any (identity);
 
-grant select on public.profiles_public to anon, authenticated;
+  -- Everything else about your own row stays editable, so this keeps working as columns are added
+  -- without ever handing the client a balance or an admin switch.
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position)
+    into updatable
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'profiles'
+    and column_name <> 'id'
+    and not (column_name = any (server_owned));
+
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position)
+    into insertable
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'profiles'
+    and not (column_name = any (server_owned));
+
+  execute format('grant select (%s) on public.profiles to authenticated', readable);
+  execute format('grant update (%s) on public.profiles to authenticated', updatable);
+  execute format('grant insert (%s) on public.profiles to authenticated', insertable);
+end $$;
+
+grant select on public.profiles_public to authenticated;
 
 grant select on public.challenges to anon, authenticated;
 grant insert, update on public.challenges to authenticated;
