@@ -9,6 +9,7 @@ import { pushChallengeHref, pushNotificationHref } from '@/lib/challengeNav';
 import { markNotificationRead, notificationHrefFromPushData } from '@/lib/notifications';
 import {
   getPushPermissionState,
+  maybeRequestPushPermission,
   notificationDataFromResponse,
   registerPushToken,
   syncDeviceTimezone,
@@ -16,7 +17,7 @@ import {
 } from '@/lib/push';
 import { BODY_METRICS_HREF, INTERESTS_HREF, challengeDetailHref, storyHref } from '@/lib/routes';
 
-/** Registers an existing grant and opens tapped alerts. Does not prompt. */
+/** Registers the token, asks once after first login, and opens tapped alerts. */
 export function usePushNotifications() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
@@ -29,11 +30,7 @@ export function usePushNotifications() {
       return;
     }
     void syncDeviceTimezone(profile?.timezone);
-    void (async () => {
-      if ((await getPushPermissionState()) === 'granted') {
-        await registerPushToken();
-      }
-    })();
+    void maybeRequestPushPermission();
   }, [profile?.timezone, userId]);
 
   useEffect(() => {

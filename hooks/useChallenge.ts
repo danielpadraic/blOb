@@ -6,6 +6,7 @@ import { notifyFriendsOfCreatedChallenge } from '@/lib/notifications';
 import { applyLaneForPublish } from '@/lib/challengeLane';
 import { parseComparablePointsConfig } from '@/lib/comparablePoints';
 import { asPrivacyMode } from '@/lib/privacyMode';
+import { asLiveMute } from '@/lib/livePush';
 import { challengeScheduleTimezone, durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
   fetchChallengeShareState,
@@ -307,7 +308,7 @@ export function useChallenge(id: string | undefined) {
 }
 
 const PARTICIPANT_COLUMNS =
-  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals';
+  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute';
 const PARTICIPANT_COLUMNS_NO_POINTS =
   'id, challenge_id, user_id, status, days_completed, joined_at, completed_at, eliminated_at';
 const PARTICIPANT_COLUMNS_LEGACY =
@@ -327,6 +328,7 @@ function asParticipant(row: ChallengeParticipant, extras?: Partial<ChallengePart
       row.metric_totals && typeof row.metric_totals === 'object'
         ? (row.metric_totals as Record<string, number>)
         : extras?.metric_totals ?? null,
+    live_mute: asLiveMute(row.live_mute ?? extras?.live_mute),
   };
 }
 

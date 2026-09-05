@@ -154,9 +154,27 @@ export async function maybeRequestPushPermission(): Promise<PushPermissionState>
   }
 }
 
-/** Friend request, invite, join, or check-in Send. Never Home mount. Web is a no-op. */
+/** Friend request, invite, join, check-in Send, or Live mute toggle. Never Home mount. Web is a no-op. */
 export function requestPushAfterValue(): void {
   void maybeRequestPushPermission();
+}
+
+/** Remove this device token so the next account on the phone does not get the old user's alerts. */
+export async function unregisterPushToken(): Promise<void> {
+  if (Platform.OS === 'web') {
+    return;
+  }
+  try {
+    const projectId = expoProjectId();
+    const token = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+    const value = token.data?.trim();
+    if (!value) {
+      return;
+    }
+    await supabase.rpc('clear_push_token', { p_token: value });
+  } catch (error) {
+    console.log('[blob:push] clear skipped', error);
+  }
 }
 
 export async function syncDeviceTimezone(current?: string | null): Promise<void> {
@@ -179,9 +197,12 @@ export type NotificationNavData = {
   type?: string;
   challenge_id?: string;
   post_id?: string;
+  comment_id?: string;
+  parent_comment_id?: string;
   story_id?: string;
   username?: string;
   href?: string;
+  url?: string;
   callout_id?: string;
   notification_id?: string;
   actor_id?: string;
@@ -197,13 +218,17 @@ export function notificationDataFromResponse(
   if (!data) {
     return {};
   }
+  const href = asString(data.href) ?? asString(data.url);
   return {
     type: asString(data.type),
     challenge_id: asString(data.challenge_id) ?? asString(data.challengeId),
     post_id: asString(data.post_id) ?? asString(data.postId),
+    comment_id: asString(data.comment_id) ?? asString(data.commentId),
+    parent_comment_id: asString(data.parent_comment_id) ?? asString(data.parentCommentId),
     story_id: asString(data.story_id) ?? asString(data.storyId),
     username: asString(data.username),
-    href: asString(data.href),
+    href,
+    url: asString(data.url) ?? href,
     callout_id: asString(data.callout_id) ?? asString(data.calloutId),
     notification_id: asString(data.notification_id) ?? asString(data.notificationId),
     actor_id: asString(data.actor_id) ?? asString(data.actorId),

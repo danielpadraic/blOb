@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
 import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
 import { LeaveChallengeSheet } from '@/components/challenge/LeaveChallengeSheet';
+import { LiveMuteSheet } from '@/components/challenge/LiveMuteSheet';
 import { StartRollSheet } from '@/components/challenge/StartRollSheet';
 import {
   ChallengeMenuPopover,
@@ -28,9 +30,12 @@ import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHostQuickEdit } from '@/lib/challengeStart';
 import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
+import { asLiveMute, type LiveMute } from '@/lib/livePush';
 import { isOfficialAccount } from '@/lib/official';
 import { canEditOfficialDetails, canOpenOfficialTools } from '@/lib/officialScoring';
-import { getCancelChallengeMessage, getLeaveChallengeMessage, getStartUpdateMessage } from '@/utils/errors';
+import { requestPushAfterValue } from '@/lib/push';
+import { supabase } from '@/lib/supabase';
+import { getCancelChallengeMessage, getErrorMessage, getLeaveChallengeMessage, getStartUpdateMessage } from '@/utils/errors';
 
 let overflowVisible = false;
 let openOverflowMenu = (_anchor: MenuAnchor) => {};
@@ -50,6 +55,7 @@ export function useChallengeDetailOverflow() {
   const { profile } = useMyProfile();
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
+  const queryClient = useQueryClient();
   const cancel = useCancelChallenge();
   const leave = useLeaveChallenge();
   const nudge = useNudgeChallengeStart();
@@ -58,6 +64,7 @@ export function useChallengeDetailOverflow() {
   const [menu, setMenu] = useState<MenuAnchor | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [muteOpen, setMuteOpen] = useState(false);
   const [rollDismissed, setRollDismissed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +73,9 @@ export function useChallengeDetailOverflow() {
   const joined = Boolean(
     user?.id && roster.data?.some((row) => row.user_id === user.id && isLiveCompetitor(row)),
   );
+  const myRow = roster.data?.find((row) => row.user_id === user?.id);
+  const liveMute = asLiveMute(myRow?.live_mute);
+  const canMute = Boolean(user?.id && myRow && isLiveCompetitor(myRow));
   const canEdit = canHostQuickEdit({ challenge, viewerId: user?.id });
   const canDetails = canEditOfficialDetails({ challenge, viewerId: user?.id, profile }) && !canEdit;
   const canTools = canOpenOfficialTools({ challenge, viewerId: user?.id, profile });
@@ -77,7 +87,7 @@ export function useChallengeDetailOverflow() {
     rosterReady: roster.data != null,
   });
   const canLeave = canParticipantLeave({ challenge, joined });
-  const showOverflow = canEdit || canDetails || canTools || canCancel || canLeave;
+  const showOverflow = canEdit || canDetails || canTools || canCancel || canLeave || canMute;
   const rollPending = Boolean(challenge?.start_roll_pending) && canEdit;
   const rollOpen = rollPending && !rollDismissed;
 
@@ -128,6 +138,16 @@ export function useChallengeDetailOverflow() {
   }
 
   const actions: ChallengeOverflowAction[] = [];
+  if (canMute) {
+    actions.push({
+      key: 'live-alerts',
+      label: 'Live alerts',
+      onPress: () => {
+        setError(null);
+        setMuteOpen(true);
+      },
+    });
+  }
   if (canTools) {
     actions.push({
       key: 'official',
@@ -218,6 +238,27 @@ export function useChallengeDetailOverflow() {
     closeCancel: () => setCancelOpen(false),
     leaveOpen,
     closeLeave: () => setLeaveOpen(false),
+    muteOpen,
+    closeMute: () => setMuteOpen(false),
+    liveMute,
+    saveMute: (next: LiveMute) => {
+      if (!id) {
+        return;
+      }
+      void (async () => {
+        const { error: muteError } = await supabase.rpc('set_challenge_live_mute', {
+          p_challenge_id: id,
+          p_mute: next,
+        });
+        if (muteError) {
+          setError(getErrorMessage(muteError));
+          return;
+        }
+        requestPushAfterValue();
+        void queryClient.invalidateQueries({ queryKey: ['challenge-participants', id] });
+        void queryClient.invalidateQueries({ queryKey: ['my-participation', id] });
+      })();
+    },
     challenge,
     loading: cancel.isPending || leave.isPending || nudge.isPending || resolveRoll.isPending,
     error,
@@ -323,6 +364,12 @@ export function ChallengeDetailOverflowHost({
           onApply={overflow.applyStart}
         />
       ) : null}
+      <LiveMuteSheet
+        visible={overflow.muteOpen}
+        value={overflow.liveMute}
+        onClose={overflow.closeMute}
+        onSave={overflow.saveMute}
+      />
     </>
   );
 }
