@@ -35,7 +35,7 @@ export const WORKOUT_CARD_WIDTH = 1080;
 export const WORKOUT_CARD_HEIGHT = 1350;
 
 /** Chart box inside the card. Sparkline geometry is built against these numbers. */
-export const WORKOUT_CARD_CHART = { width: 872, height: 210 } as const;
+export const WORKOUT_CARD_CHART = { width: 872, height: 176 } as const;
 
 function safeFormat(value: Date, options: Intl.DateTimeFormatOptions, timeZone: string): string {
   try {
@@ -170,13 +170,22 @@ export function withHeartRateFloor(workout: HealthWorkout, samples: HeartRateSam
   return next;
 }
 
-export function workoutCardHeartRateAverage(samples: HeartRateSample[], fallback?: number | null): number | null {
+/**
+ * HealthKit's own workout average wins over the mean of the series. The series is capped, so its
+ * mean can drift a few BPM from what the user sees in Fitness — and this card is a proof artifact,
+ * so it must not disagree with Apple's number.
+ */
+export function workoutCardHeartRateAverage(samples: HeartRateSample[], reported?: number | null): number | null {
+  const stated = Number(reported);
+  if (Number.isFinite(stated) && stated > 0) {
+    return Math.round(stated);
+  }
   const clean = cleanSamples(samples);
   if (clean.length > 0) {
     const sum = clean.reduce((total, sample) => total + sample.bpm, 0);
     return Math.round(sum / clean.length);
   }
-  const avg = Number(fallback);
+  const avg = Number(reported);
   return Number.isFinite(avg) && avg > 0 ? Math.round(avg) : null;
 }
 

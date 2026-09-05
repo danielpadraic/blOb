@@ -7,7 +7,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['lib/**/*.test.ts', 'utils/**/*.test.ts'],
+    include: ['lib/**/*.test.ts', 'utils/**/*.test.ts', 'api/**/*.test.ts', 'hooks/**/*.test.ts'],
     setupFiles: [path.resolve(__dirname, 'lib/testStubs/setup.ts')],
   },
   resolve: {

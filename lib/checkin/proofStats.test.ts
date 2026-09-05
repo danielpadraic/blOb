@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   hasProofStats,
   proofStatChips,
+  THEY_THEM,
+  pronounFromStats,
   proofStatsProse,
   type CheckinProofStats,
 } from '@/lib/checkin/proofStats';
@@ -79,13 +81,13 @@ describe('proof stat chips', () => {
 describe('proof stats prose', () => {
   it('states only the numbers, with a they/them fallback', () => {
     expect(proofStatsProse({ stats: STRENGTH, displayName: 'Daniel' })).toBe(
-      'Daniel logged 41 minutes and 412 calories. Their average heart rate was 108 bpm.',
+      'Daniel burned 412 calories in 41 minutes. Average heart rate 108 bpm.',
     );
   });
 
   it('includes miles for a run and uses an Oxford list', () => {
     expect(proofStatsProse({ stats: RUN, displayName: 'Silas' })).toBe(
-      'Silas logged 30 minutes, 5.00 mi, and 305 calories. Their average heart rate was 152 bpm.',
+      'Silas burned 305 calories in 30 minutes. Average heart rate 152 bpm. Traveled 5.00 mi.',
     );
   });
 
@@ -105,7 +107,7 @@ describe('proof stats prose', () => {
 
   it('drops to the pronoun when there is no display name', () => {
     expect(proofStatsProse({ stats: STRENGTH })).toBe(
-      'They logged 41 minutes and 412 calories. Their average heart rate was 108 bpm.',
+      'They burned 412 calories in 41 minutes. Average heart rate 108 bpm.',
     );
   });
 
@@ -116,12 +118,72 @@ describe('proof stats prose', () => {
         displayName: 'Courtney',
         pronoun: { subject: 'she', possessive: 'her' },
       }),
-    ).toBe('Courtney logged 41 minutes and 412 calories. Her average heart rate was 108 bpm.');
+    ).toBe('Courtney burned 412 calories in 41 minutes. Average heart rate 108 bpm.');
   });
 
   it('says minute in the singular', () => {
     expect(
-      proofStatsProse({ stats: { activity: 'strength', duration_sec: 45, active_cal: 12 }, displayName: 'Bob' }),
-    ).toBe('Bob logged 1 minute and 12 calories.');
+      proofStatsProse({
+        stats: { activity: 'strength', duration_sec: 45, active_cal: 12, hr_avg: 96 },
+        displayName: 'Bob',
+      }),
+    ).toBe('Bob burned 12 calories in 1 minute. Average heart rate 96 bpm.');
+  });
+});
+
+describe('pronoun stamped on the stats payload', () => {
+  const NUMBERS = { activity: 'strength', duration_sec: 3002, active_cal: 275, hr_avg: 137 };
+
+  it('opens with the pronoun the server derived from the author profile', () => {
+    // The renderer cannot read profiles.gender, so the pronoun arrives on the stats payload.
+    expect(proofStatsProse({ stats: { ...NUMBERS, pronoun: 'she' } })).toBe(
+      'She burned 275 calories in 50 minutes. Average heart rate 137 bpm.',
+    );
+  });
+
+  it('falls back to they/them when no pronoun was stamped', () => {
+    expect(proofStatsProse({ stats: NUMBERS })).toBe(
+      'They burned 275 calories in 50 minutes. Average heart rate 137 bpm.',
+    );
+  });
+
+  it('prefers a real display name over the pronoun', () => {
+    expect(proofStatsProse({ stats: { ...NUMBERS, pronoun: 'she' }, displayName: 'Courtney' })).toBe(
+      'Courtney burned 275 calories in 50 minutes. Average heart rate 137 bpm.',
+    );
+  });
+
+  it('maps a stamped subject pronoun onto its possessive', () => {
+    expect(pronounFromStats({ pronoun: 'she' })).toEqual({ subject: 'she', possessive: 'her' });
+    expect(pronounFromStats({ pronoun: 'he' })).toEqual({ subject: 'he', possessive: 'his' });
+    expect(pronounFromStats({ pronoun: 'nonsense' })).toEqual(THEY_THEM);
+    expect(pronounFromStats(null)).toEqual(THEY_THEM);
+  });
+});
+
+describe('prose requires all three headline numbers', () => {
+  it('stays quiet without average heart rate', () => {
+    expect(
+      proofStatsProse({ stats: { activity: 'strength', duration_sec: 2470, active_cal: 412 }, displayName: 'Daniel' }),
+    ).toBeNull();
+  });
+
+  it('stays quiet without calories', () => {
+    expect(
+      proofStatsProse({ stats: { activity: 'strength', duration_sec: 2470, hr_avg: 108 }, displayName: 'Daniel' }),
+    ).toBeNull();
+  });
+
+  it('stays quiet without duration', () => {
+    expect(
+      proofStatsProse({ stats: { activity: 'strength', active_cal: 412, hr_avg: 108 }, displayName: 'Daniel' }),
+    ).toBeNull();
+  });
+
+  it('never prints a clock, even for a session that has a window', () => {
+    const prose = proofStatsProse({ stats: RUN, displayName: 'Silas' }) ?? '';
+    expect(prose).not.toMatch(/\d{1,2}:\d{2}/);
+    // Word-bounded so it does not trip on the "pm" inside "bpm".
+    expect(prose).not.toMatch(/\b(am|pm)\b/i);
   });
 });

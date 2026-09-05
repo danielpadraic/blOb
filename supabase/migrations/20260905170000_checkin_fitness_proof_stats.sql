@@ -50,8 +50,10 @@ set search_path = public
 as $$
 declare
   v_challenge_id uuid;
+  v_user_id uuid;
   v_category text;
   v_health jsonb;
+  v_pronoun text;
   v_stats jsonb := '{}'::jsonb;
   v_value numeric;
 begin
@@ -59,7 +61,7 @@ begin
     return null;
   end if;
 
-  select c.challenge_id into v_challenge_id
+  select c.challenge_id, c.user_id into v_challenge_id, v_user_id
   from public.challenge_checkins c
   where c.id = p_checkin_id;
 
@@ -88,6 +90,24 @@ begin
 
   if coalesce(btrim(v_health ->> 'activityType'), '') <> '' then
     v_stats := v_stats || jsonb_build_object('activity', btrim(v_health ->> 'activityType'));
+  end if;
+
+  -- Subject pronoun for the prose, from the author's own profile. pronoun wins over gender.
+  -- Only the pronoun travels onto the post; gender itself never leaves the profile.
+  select case
+    when lower(btrim(coalesce(pr.pronoun, ''))) in ('he', 'him', 'he/him') then 'he'
+    when lower(btrim(coalesce(pr.pronoun, ''))) in ('she', 'her', 'she/her') then 'she'
+    when lower(btrim(coalesce(pr.pronoun, ''))) in ('they', 'them', 'they/them') then 'they'
+    when lower(btrim(coalesce(pr.gender, ''))) = 'male' then 'he'
+    when lower(btrim(coalesce(pr.gender, ''))) = 'female' then 'she'
+    else null
+  end
+  into v_pronoun
+  from public.profiles pr
+  where pr.id = v_user_id;
+
+  if v_pronoun is not null then
+    v_stats := v_stats || jsonb_build_object('pronoun', v_pronoun);
   end if;
 
   v_value := public.checkin_stat_number(v_health, 'durationSec');
@@ -125,8 +145,8 @@ begin
     v_stats := v_stats || jsonb_build_object('distance_m', round(v_value));
   end if;
 
-  -- Activity alone is not a stats line.
-  if v_stats - 'activity' = '{}'::jsonb then
+  -- Activity and pronoun alone are not a stats line.
+  if v_stats - 'activity' - 'pronoun' = '{}'::jsonb then
     return null;
   end if;
 

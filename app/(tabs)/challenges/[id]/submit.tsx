@@ -1,9 +1,12 @@
 import { useIsFocused, useLocalSearchParams, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import { WorkoutStatChips } from '@/components/challenge/WorkoutStatChips';
+import { isOcrEligibleProof, shouldReadWorkoutStill, useWorkoutOcr } from '@/hooks/useWorkoutOcr';
+import { saveWorkoutSession } from '@/lib/health/workoutSessions';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
 import {
   CheckinRouteErrorBoundary,
@@ -107,7 +110,7 @@ import {
   withHeartRateFloor,
   type HeartRateSample,
 } from '@/lib/health/workoutProofCard';
-import { challengeClockTz } from '@/lib/checkinPeriod';
+import { challengeClockTz, checkinPeriodKey } from '@/lib/checkinPeriod';
 import { getHealthProvider, healthProviderAvailable } from '@/services/health';
 import {
   distanceProofIsSessionLog,
@@ -578,6 +581,88 @@ function SubmitWorkoutInner() {
     return null;
   }
 
+  // Reads the numbers off a tracker screenshot in the background. Advisory only: it never gates Send.
+  const workoutOcr = useWorkoutOcr({
+    periodKey: checkinPeriodKey(challenge),
+    timeZone: challengeClockTz(challenge),
+  });
+
+  useEffect(() => {
+    for (const proof of proofSteps) {
+      const draft = drafts[proof.id];
+      if (
+        shouldReadWorkoutStill({
+          proof,
+          uri: draft?.uri,
+          mimeType: draft?.mimeType,
+          health: draft?.health,
+          healthWorkoutId: draft?.healthWorkoutId,
+          building: draft?.building,
+        })
+      ) {
+        void workoutOcr.read(proof.id, String(draft?.uri));
+      }
+    }
+  }, [drafts, proofSteps, workoutOcr]);
+
+  /**
+   * Carries the read numbers onto the slot at Send. A vendor attach already on the draft wins:
+   * a screenshot never overwrites what the watch reported.
+   */
+  function draftWithReadStats(proof: ChallengeProof, draft?: SlotDraft): SlotDraft | undefined {
+    if (!isOcrEligibleProof(proof) || draft?.health?.source === 'healthkit') {
+      return draft;
+    }
+    if (draft?.health?.source === 'health_connect') {
+      return draft;
+    }
+    const health = workoutOcr.healthFor(proof.id);
+    if (!health) {
+      return draft;
+    }
+    return { ...(draft ?? {}), health };
+  }
+
+  /** Chips under the photo, or one honest line when the screen could not be read. */
+  const proofAccessories = useMemo(() => {
+    const map: Record<string, ReactNode> = {};
+    for (const proof of proofSteps) {
+      if (!isOcrEligibleProof(proof)) {
+        continue;
+      }
+      const draft = drafts[proof.id];
+      // A vendor attach and our own card already show exact numbers on the card itself.
+      if (!draft?.uri || draft.healthWorkoutId || draft.health?.source === 'healthkit') {
+        continue;
+      }
+      const entry = workoutOcr.entries[proof.id];
+      if (!entry) {
+        continue;
+      }
+      if (entry.status === 'reading') {
+        map[proof.id] = (
+          <AppText className="text-[12px] text-muted">Reading workout…</AppText>
+        );
+        continue;
+      }
+      if (entry.status === 'ready') {
+        map[proof.id] = (
+          <WorkoutStatChips
+            fields={entry.fields}
+            distanceUnit={distanceUnit}
+            onChange={(fields) => workoutOcr.edit(proof.id, fields)}
+          />
+        );
+        continue;
+      }
+      // Send still works: the photo is the proof and the numbers were only a bonus.
+      map[proof.id] = (
+        <AppText className="text-[12px] text-muted">Couldn’t read numbers. You can still send.</AppText>
+      );
+    }
+    return map;
+  }, [distanceUnit, drafts, proofSteps, workoutOcr]);
+
   async function persistLocation(proof: ChallengeProof) {
     if (!id) {
       return;
@@ -828,7 +913,7 @@ function SubmitWorkoutInner() {
         if (!partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance })) {
           continue;
         }
-        const row = await persistProof(proof, draft, body);
+        const row = await persistProof(proof, draftWithReadStats(proof, draft), body);
         if (row?.proof_parts) {
           savedParts = row.proof_parts;
         }
@@ -881,6 +966,24 @@ function SubmitWorkoutInner() {
             ? copy('checkin.extraFailed')
             : interpolateCopy(copy('checkin.extraFailedMany'), { n: failedExtras.length });
       const checkinId = honorOnly || readyNow ? (await submitCheckin.mutateAsync())?.id : saved?.id;
+      // Ledger row for the workout, keyed to this check-in. Best-effort: the check-in already landed.
+      if (checkinId && uid) {
+        for (const proof of proofSteps) {
+          const health = draftWithReadStats(proof, drafts[proof.id])?.health;
+          if (!health) {
+            continue;
+          }
+          await saveWorkoutSession({
+            userId: uid,
+            challengeId: id,
+            checkinId,
+            health,
+            proofUrl: savedParts[proof.id]?.url ?? null,
+            activityLabel: workoutOcr.entries[proof.id]?.activityLabel ?? null,
+          });
+          break;
+        }
+      }
       let postId: string | undefined;
       if (checkinId) {
         try {
@@ -1488,6 +1591,7 @@ function SubmitWorkoutInner() {
         onRemoveProof={(proof) => void onRemoveProof(proof)}
         onExtrasChange={handleExtrasChange}
         onCaptionChange={setCaption}
+        proofAccessories={proofAccessories}
         proofCaptions={proofCaptions}
         onProofCaptionChange={(proofId, text) =>
           setProofCaptions((current) => ({ ...current, [proofId]: text }))

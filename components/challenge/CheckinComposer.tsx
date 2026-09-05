@@ -108,6 +108,8 @@ type CheckinComposerProps = {
   onShareWaveChange?: (value: boolean) => void;
   onSend: () => void;
   accessory?: ReactNode;
+  /** Per-slot content rendered under the hero, keyed by proof id. Used for read workout stats. */
+  proofAccessories?: Record<string, ReactNode>;
   dueLine?: ReactNode;
 };
 
@@ -130,6 +132,7 @@ export function CheckinComposer({
   onExtrasChange,
   onCaptionChange,
   proofCaptions = {},
+  proofAccessories,
   onProofCaptionChange,
   lobbyName: _lobbyName,
   lobbyLocked,
@@ -682,6 +685,13 @@ export function CheckinComposer({
           </View>
         ) : null}
       </View>
+
+      {/* Read numbers for the slot on screen, directly under its photo. */}
+      {current?.kind === 'proof' && proofAccessories?.[current.proof.id] ? (
+        <View style={{ paddingTop: 8, paddingHorizontal: 12, backgroundColor: THEME.background }}>
+          {proofAccessories[current.proof.id]}
+        </View>
+      ) : null}
 
       {pages.length > 1 || nextProof || extras.length > 0 ? (
         <View style={{ paddingTop: 8, paddingHorizontal: 12, backgroundColor: THEME.background }}>

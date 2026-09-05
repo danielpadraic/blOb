@@ -12,6 +12,11 @@ export type CheckinProofStats = {
   hr_avg?: number | null;
   hr_max?: number | null;
   distance_m?: number | null;
+  /**
+   * Subject pronoun for the check-in author, stamped server-side from their own profile.
+   * The author's pronoun rides along with their own post; it is never queryable per profile.
+   */
+  pronoun?: string | null;
 };
 
 export type ProofStatChip = { key: string; label: string };
@@ -82,21 +87,26 @@ export function hasProofStats(stats?: CheckinProofStats | null): boolean {
 
 export type ProofStatsPronoun = { subject: string; possessive: string };
 
-/** they/them is the fallback because pronouns are never on the public profile. */
+/** they/them is the fallback whenever the author has not set a gender or pronoun. */
 export const THEY_THEM: ProofStatsPronoun = { subject: 'they', possessive: 'their' };
+
+const PRONOUNS: Record<string, ProofStatsPronoun> = {
+  he: { subject: 'he', possessive: 'his' },
+  him: { subject: 'he', possessive: 'his' },
+  she: { subject: 'she', possessive: 'her' },
+  her: { subject: 'she', possessive: 'her' },
+  they: THEY_THEM,
+  them: THEY_THEM,
+};
+
+/** Maps the stamped subject pronoun onto its possessive. Unknown values fall back to they/them. */
+export function pronounFromStats(stats?: CheckinProofStats | null): ProofStatsPronoun {
+  const raw = String(stats?.pronoun ?? '').trim().toLowerCase();
+  return PRONOUNS[raw] ?? THEY_THEM;
+}
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function joinList(parts: string[]): string {
-  if (parts.length <= 1) {
-    return parts[0] ?? '';
-  }
-  if (parts.length === 2) {
-    return `${parts[0]} and ${parts[1]}`;
-  }
-  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
 }
 
 /**
@@ -113,31 +123,26 @@ export function proofStatsProse(input: {
     return null;
   }
   const name = (input.displayName ?? '').trim();
-  const pronoun = input.pronoun ?? THEY_THEM;
+  const pronoun = input.pronoun ?? pronounFromStats(stats);
   const minutes = proofStatsMinutes(stats.duration_sec);
   const calories = positive(stats.active_cal) ?? positive(stats.total_cal);
   const miles = wantsDistance(stats.activity) ? proofStatsMiles(stats.distance_m) : null;
   const avg = positive(stats.hr_avg);
 
-  const efforts: string[] = [];
-  if (minutes != null) {
-    efforts.push(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
-  }
-  if (miles != null) {
-    efforts.push(milesLabel(miles));
-  }
-  if (calories != null) {
-    efforts.push(`${Math.round(calories)} calories`);
-  }
-  // One number alone is already the chip; prose only earns its place with more than one.
-  if (efforts.length + (avg != null ? 1 : 0) < 2) {
+  // Prose needs all three of calories, duration and average heart rate. With fewer than that the
+  // chips above already say everything, and a partial sentence reads like missing data.
+  if (calories == null || minutes == null || avg == null) {
     return null;
   }
 
   const subject = name || capitalize(pronoun.subject);
-  const sentences = [`${subject} logged ${joinList(efforts)}.`];
-  if (avg != null) {
-    sentences.push(`${capitalize(pronoun.possessive)} average heart rate was ${Math.round(avg)} bpm.`);
+  const sentences = [
+    `${subject} burned ${Math.round(calories)} calories in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`,
+    `Average heart rate ${Math.round(avg)} bpm.`,
+  ];
+  // No clocks here even when the session has a window: the prose is numbers only.
+  if (miles != null) {
+    sentences.push(`Traveled ${milesLabel(miles)}.`);
   }
   return sentences.join(' ');
 }

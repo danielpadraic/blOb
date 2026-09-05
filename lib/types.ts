@@ -562,6 +562,39 @@ export interface HealthWorkoutRecord {
   created_at: string;
 }
 
+/**
+ * One workout per check-in, from any source: a vendor attach, a screenshot read, or hand-entered
+ * numbers. Clocks are nullable because a screenshot often shows no wall-clock range, and inventing
+ * one would put a fabricated window on a proof artifact.
+ */
+export interface WorkoutSessionRecord {
+  id: string;
+  user_id: string;
+  challenge_id: string | null;
+  checkin_id: string | null;
+  post_id: string | null;
+  source: 'healthkit' | 'health_connect' | 'ocr' | 'manual';
+  activity_type: string | null;
+  activity_label: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_sec: number | null;
+  active_kcal: number | null;
+  total_kcal: number | null;
+  distance_m: number | null;
+  hr_min: number | null;
+  hr_avg: number | null;
+  hr_max: number | null;
+  vendor_workout_id: string | null;
+  proof_url: string | null;
+  ocr_confidence: number | null;
+  ocr_raw: string | null;
+  ocr_skip_reason: string | null;
+  backfilled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface HealthWorkoutStart {
   id: string;
   user_id: string;
@@ -1157,6 +1190,16 @@ export type Database = {
         Partial<HealthWorkoutRecord>,
         Partial<HealthWorkoutRecord>,
         [Relationship<'health_workouts_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      workout_sessions: TableDef<
+        WorkoutSessionRecord,
+        Partial<WorkoutSessionRecord>,
+        Partial<WorkoutSessionRecord>,
+        [
+          Relationship<'workout_sessions_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'workout_sessions_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+          Relationship<'workout_sessions_checkin_id_fkey', 'checkin_id', 'challenge_checkins', 'id'>,
+        ]
       >;
       health_workout_starts: TableDef<
         HealthWorkoutStart,

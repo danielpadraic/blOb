@@ -38,6 +38,7 @@
     "expo-system-ui": "~57.0.2",
     "expo-video": "~57.0.2",
     "expo-web-browser": "~57.0.2",
+    "jimp": "1.6.1",
     "nativewind": "^4.2.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -52,6 +53,7 @@
     "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.10.1",
+    "tesseract.js": "7.0.0",
     "ws": "^8.21.3",
     "zod": "^4.4.3"
   },

@@ -195,3 +195,22 @@ describe('buildWorkoutProofCard', () => {
     expect(withPlace.placeLine).toBe('Eagle, ID');
   });
 });
+
+describe('heart rate average precedence', () => {
+  it("uses HealthKit's stated average over the sample mean", () => {
+    // The card is a proof artifact: it must match what Apple Fitness shows.
+    const samples = [
+      { at: '2026-09-04T13:30:00.000Z', bpm: 100 },
+      { at: '2026-09-04T13:40:00.000Z', bpm: 200 },
+    ];
+    expect(workoutCardHeartRateAverage(samples, 137)).toBe(137);
+  });
+
+  it('falls back to the sample mean when the workout carried no average', () => {
+    const samples = [
+      { at: '2026-09-04T13:30:00.000Z', bpm: 100 },
+      { at: '2026-09-04T13:40:00.000Z', bpm: 200 },
+    ];
+    expect(workoutCardHeartRateAverage(samples, null)).toBe(150);
+  });
+});

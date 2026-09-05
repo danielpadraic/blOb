@@ -144,6 +144,29 @@ function asErrorMessage(error: unknown): string {
   return '';
 }
 
+/**
+ * react-native-health returns the raw HKWorkoutActivityType name, e.g.
+ * "HighIntensityIntervalTraining" or "TraditionalStrengthTraining". Split it into words so the
+ * proof card and the challenge list read like English instead of a symbol name.
+ */
+export function humanizeActivityLabel(raw: string): string {
+  const name = String(raw ?? '').trim();
+  if (!name) {
+    return 'Workout';
+  }
+  // Already spaced (or already human) labels are left alone.
+  if (name.includes(' ')) {
+    return name;
+  }
+  const spaced = name
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return spaced || 'Workout';
+}
+
 function mapActivity(label: string): HealthActivityType {
   const name = label.toLowerCase();
   if (name.includes('run')) {
@@ -160,7 +183,9 @@ function mapActivity(label: string): HealthActivityType {
     name.includes('weight') ||
     name.includes('core') ||
     name.includes('functional') ||
-    name.includes('hiit')
+    name.includes('hiit') ||
+    name.includes('interval') ||
+    name.includes('cross training')
   ) {
     return 'strength';
   }
@@ -213,7 +238,7 @@ function mapWorkout(workout: NativeWorkout): HealthWorkout | null {
   if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime()) || endedAt <= startedAt) {
     return null;
   }
-  const label = String(workout.activityName ?? '').trim() || 'Workout';
+  const label = humanizeActivityLabel(String(workout.activityName ?? ''));
   const providerWorkoutId =
     String(workout.id ?? '').trim() ||
     `${startedAt.toISOString()}-${endedAt.toISOString()}-${label}`;

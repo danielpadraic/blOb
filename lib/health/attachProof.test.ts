@@ -72,6 +72,7 @@ describe('check-in health snapshot', () => {
   it('stores allowed fields only and builds the complete-post line', () => {
     const snapshot = toCheckinHealthProof(run);
     expect(snapshot).toEqual({
+      source: 'healthkit',
       startedAt: run.startedAt,
       endedAt: run.endedAt,
       durationSec: 39 * 60,

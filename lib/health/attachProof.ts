@@ -125,7 +125,9 @@ export function workoutAttachBlockReason(
 }
 
 export function toCheckinHealthProof(workout: HealthWorkout): CheckinHealthProof {
+  // A vendor attach always knows its own window, so this path keeps requiring one.
   const snapshot: CheckinHealthProof = {
+    source: workout.source === 'health_connect' ? 'health_connect' : 'healthkit',
     startedAt: workout.startedAt,
     endedAt: workout.endedAt,
     durationSec: workout.durationSec,
@@ -150,7 +152,10 @@ export function toCheckinHealthProof(workout: HealthWorkout): CheckinHealthProof
   return snapshot;
 }
 
-function formatLocalClock(iso: string): string {
+function formatLocalClock(iso?: string): string {
+  if (!iso) {
+    return '';
+  }
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return '';
@@ -163,9 +168,10 @@ export function healthCompleteSummaryLine(snapshot: CheckinHealthProof): string 
   const start = formatLocalClock(snapshot.startedAt);
   const end = formatLocalClock(snapshot.endedAt);
   const window = start && end ? `${start}–${end}` : start || end;
+  // A screenshot often has no clock range, so the window is simply absent rather than invented.
   const bits = [
     window,
-    formatHealthDuration(snapshot.durationSec),
+    snapshot.durationSec != null ? formatHealthDuration(snapshot.durationSec) : null,
     snapshot.avgHrBpm && snapshot.avgHrBpm > 0 ? `Average heart rate ${Math.round(snapshot.avgHrBpm)}` : null,
   ].filter(Boolean);
   return bits.join(' · ');

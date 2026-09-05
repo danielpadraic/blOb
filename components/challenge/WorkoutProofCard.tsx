@@ -8,6 +8,7 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 
+import { MASCOT_STAMP } from '@/lib/mascotAssets';
 import { THEME } from '@/lib/theme';
 import {
   WORKOUT_CARD_CHART,
@@ -17,11 +18,19 @@ import {
 } from '@/lib/health/workoutProofCard';
 import type { HealthActivityType } from '@/services/health/types';
 
-const BOB = require('@/assets/mascot/blob-icon.png');
+// Stamp comes from the shared helper only, with no fallback to another mascot file.
+const BOB = MASCOT_STAMP;
 
 const PAD = 104;
 const CHART_X = PAD;
-const CHART_Y = 968;
+const CHART_Y = 920;
+/**
+ * Corner mark, tucked under the wordmark and to the right of the short time / place lines. The
+ * stats grid, the opaque heart-rate panel and the footer all stay clear of this box.
+ */
+const STAMP = 160;
+/** Clears the activity label's descenders above and the stats hairline at y=478 below. */
+const STAMP_Y = 306;
 
 /** Card-only inks. Dark field from the theme primary, with lifted text on top of it. */
 const INK = {
@@ -130,14 +139,18 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
       viewBox={`0 0 ${WORKOUT_CARD_WIDTH} ${WORKOUT_CARD_HEIGHT}`}>
       <Rect x={0} y={0} width={WORKOUT_CARD_WIDTH} height={WORKOUT_CARD_HEIGHT} fill={INK.field} />
 
-      {/* Bob sits low and faint. If the asset has not decoded yet the card still rasterizes. */}
+      {/*
+        Bob is a corner mark, not a second hero. Kept out of the stats grid and clear of the opaque
+        heart-rate panel, which would otherwise clip him into a visible grey slab.
+        If the asset has not decoded yet the card still rasterizes.
+      */}
       <SvgImage
         href={BOB}
-        x={WORKOUT_CARD_WIDTH - 430}
-        y={WORKOUT_CARD_HEIGHT - 430}
-        width={360}
-        height={360}
-        opacity={0.07}
+        x={WORKOUT_CARD_WIDTH - PAD - STAMP}
+        y={STAMP_Y}
+        width={STAMP}
+        height={STAMP}
+        opacity={0.5}
         preserveAspectRatio="xMidYMid meet"
       />
 
@@ -188,7 +201,7 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
         );
       })}
 
-      <SvgText x={PAD} y={926} fill={INK.muted} fontSize={30} fontWeight="600">
+      <SvgText x={PAD} y={894} fill={INK.muted} fontSize={30} fontWeight="600">
         Heart rate
       </SvgText>
 
@@ -212,12 +225,12 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
               fill="none"
             />
           </G>
-          <SvgText x={CHART_X} y={CHART_Y + WORKOUT_CARD_CHART.height + 46} fill={INK.muted} fontSize={28}>
+          <SvgText x={CHART_X} y={CHART_Y + WORKOUT_CARD_CHART.height + 38} fill={INK.muted} fontSize={28}>
             {`MIN ${card.heartRate.minLabel}`}
           </SvgText>
           <SvgText
             x={CHART_X + WORKOUT_CARD_CHART.width}
-            y={CHART_Y + WORKOUT_CARD_CHART.height + 46}
+            y={CHART_Y + WORKOUT_CARD_CHART.height + 38}
             fill={INK.muted}
             fontSize={28}
             textAnchor="end">
@@ -226,7 +239,7 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
           {card.heartRate.avgLine ? (
             <SvgText
               x={PAD}
-              y={CHART_Y + WORKOUT_CARD_CHART.height + 108}
+              y={CHART_Y + WORKOUT_CARD_CHART.height + 94}
               fill={INK.text}
               fontSize={40}
               fontWeight="700">
