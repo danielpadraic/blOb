@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeImageBase64 } from '../api/ocr-workout';
+import { decodeImageBase64 } from '../ocr-workout';
 
 describe('base64 image intake', () => {
   it('accepts a data URL', () => {

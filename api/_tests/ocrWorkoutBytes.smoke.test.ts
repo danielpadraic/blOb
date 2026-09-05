@@ -2,10 +2,10 @@ import { Jimp, loadFont } from 'jimp';
 import { SANS_32_WHITE, SANS_64_WHITE } from 'jimp/fonts';
 import { describe, expect, it } from 'vitest';
 
-import { buildOcrHealthProof, ocrFieldsFromParse } from '../lib/health/ocrSession';
-import { classifyWorkoutScreen, parseWorkoutOcrText } from '../lib/health/workoutOcr';
-import { ocrImageBuffer } from './_lib/ocrRunner';
-import { decodeImageBase64 } from './ocr-workout';
+import { buildOcrHealthProof, ocrFieldsFromParse } from '../../lib/health/ocrSession';
+import { classifyWorkoutScreen, parseWorkoutOcrText } from '../../lib/health/workoutOcr';
+import { ocrImageBuffer } from '../_lib/ocrRunner';
+import { decodeImageBase64 } from '../ocr-workout';
 
 /**
  * Full submit path for a screenshot on the hero: base64 bytes in, chips and a stored snapshot out.

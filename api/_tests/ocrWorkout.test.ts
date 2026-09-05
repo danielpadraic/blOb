@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isAllowedImageUrl } from './ocr-workout';
+import { isAllowedImageUrl } from '../ocr-workout';
 
 const PROJECT = 'https://tguzdtwsajnnczdxjqyq.supabase.co';
 
