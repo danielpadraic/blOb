@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -11,6 +11,7 @@ import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
+import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
@@ -26,8 +27,10 @@ export function WalletSheet() {
   const router = useRouter();
   const { profile } = useMyProfile();
   const { sheetOpen, scrollToLatest, closeWallet, openSend, openTopUp } = useWallet();
+  const geo = useGeoCashOptional();
   const scrollRef = useRef<ScrollView>(null);
   const receiptsY = useRef(0);
+  const [cashOutNote, setCashOutNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sheetOpen || !scrollToLatest) {
@@ -103,6 +106,24 @@ export function WalletSheet() {
                   openTopUp({ amount: 1 });
                 }}
               />
+              <Button
+                title="Cash out"
+                variant="outline"
+                loading={geo?.busy}
+                onPress={() => {
+                  setCashOutNote(null);
+                  void (async () => {
+                    const allowed = geo ? await geo.ensure({ action: 'cashout' }) : false;
+                    if (!allowed) {
+                      return;
+                    }
+                    setCashOutNote(copy('geo.cashOutSoon'));
+                  })();
+                }}
+              />
+              {cashOutNote ? (
+                <AppText className="text-[13px] leading-5 text-muted">{cashOutNote}</AppText>
+              ) : null}
               <Button title="Browse challenges" onPress={() => go('/challenges')} />
               <SendWalletButton
                 onPress={() => {

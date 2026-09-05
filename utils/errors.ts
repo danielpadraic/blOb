@@ -589,6 +589,12 @@ function humanize(raw: string): string {
   if (isGeoGateDeny(raw)) {
     return copy('geo.unavailable');
   }
+  if (
+    (message.includes('400') || message.includes('status code')) &&
+    isMediaStorageError(message)
+  ) {
+    return 'We couldn’t upload that photo. Try another JPEG or PNG.';
+  }
   if (message.includes('proof_already_counts') || message.includes('already counts on')) {
     const match = raw.match(/PROOF_ALREADY_COUNTS[:\s]+(.+)/i);
     const title = match?.[1]?.replace(/\.+$/g, '').trim();
@@ -882,13 +888,6 @@ function humanize(raw: string): string {
   }
   if (message.includes('maximum size') || message.includes('payload too large') || message.includes('file size')) {
     return 'That photo is too large. Try a smaller one.';
-  }
-  if (
-    message.includes('status code 400') ||
-    (message.includes('400') &&
-      (message.includes('storage') || message.includes('bucket') || message.includes('upload')))
-  ) {
-    return 'We couldn’t upload that photo. Try another JPEG or PNG.';
   }
   if (isMediaStorageError(message)) {
     return 'We couldn’t save that photo. Check your connection and try again.';

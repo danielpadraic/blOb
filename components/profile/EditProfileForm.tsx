@@ -19,6 +19,7 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
+import { HomeStateField } from '@/components/geo/HomeStateField';
 import { useMyProfile, useUpdateProfile, useUploadAvatar, useUploadCover, useUsernameAvailability } from '@/hooks/useProfile';
 import {
   BODY_FAT_DEFAULT,
@@ -542,6 +543,10 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
                   error={fieldError.bio}
                 />
               )}
+            />
+            <HomeStateField
+              value={profile?.declared_region}
+              onSaved={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
             />
             <MotivationToneChips
               value={tone}

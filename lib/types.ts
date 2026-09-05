@@ -968,6 +968,7 @@ export type ProfileUpdate = Partial<
     | 'interests_dismissed_home_at'
     | 'interests_skipped_all_at'
     | 'interests_nudge_at'
+    | 'declared_region'
   >
 >;
 

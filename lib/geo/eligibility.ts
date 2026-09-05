@@ -124,6 +124,26 @@ export function createActionForShape(shape: MoneyShape): CashAction | null {
   return null;
 }
 
+export type CashJoinUi = 'open' | 'need_region' | 'blocked';
+
+/** Join CTA for a known declared region. Missing state is need_region, not the error. */
+export function cashJoinUi(input: {
+  declaredRegion?: string | null;
+  shape: MoneyShape;
+}): CashJoinUi {
+  const action = joinActionForShape(input.shape);
+  if (!action) {
+    return 'open';
+  }
+  if (!normalizeRegion(input.declaredRegion)) {
+    return 'need_region';
+  }
+  if (!canSeeCashCta(bucketForRegion(input.declaredRegion), input.shape)) {
+    return 'blocked';
+  }
+  return 'open';
+}
+
 export function canSeeCashCta(bucket: GeoBucket, shape: MoneyShape): boolean {
   if (shape === 'free') {
     return true;

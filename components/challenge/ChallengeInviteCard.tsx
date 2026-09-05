@@ -44,6 +44,7 @@ import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine'
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { copy } from '@/lib/copy';
+import { cashJoinUi, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { isOfficialChallenge } from '@/lib/official';
 import { armingCountdownLabel, officialContestantsNeeded, officialGuaranteeAmount } from '@/lib/officialSeries';
 import { isClosedForLogs, isJoinWindowOpen } from '@/lib/settlement';
@@ -322,7 +323,12 @@ export function ChallengeInviteCard({
   }, [ticking]);
 
   const status = inviteCardStatus(challenge, nowMs);
-  const canJoin = inviteCardCanJoin({ challenge, joined, hosting });
+  const canJoin =
+    inviteCardCanJoin({ challenge, joined, hosting }) &&
+    cashJoinUi({
+      declaredRegion: profile?.declared_region,
+      shape: challengeMoneyShape(challenge),
+    }) !== 'blocked';
   const checkinEnabled =
     joined && !eliminated && (context === 'lobby' || section === 'active');
   const periodCheckin = usePeriodCheckin(

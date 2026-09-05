@@ -55,4 +55,10 @@ describe('humanize storage vs photo', () => {
     expect(getErrorMessage(new Error('Supabase storage could not upload image jpeg'))).toBe(PHOTO_SAVE);
     expect(getErrorMessage(new Error('bucket photo write failed'))).toBe(PHOTO_SAVE);
   });
+
+  it('never maps a geo 400 or a bare PostgREST 400 to photo-save copy', () => {
+    expect(getErrorMessage(new Error('NEED_REGION'))).toBe(copy('geo.unavailable'));
+    expect(getErrorMessage({ message: 'GEO_BLOCKED', code: 'P0001' })).toBe(copy('geo.unavailable'));
+    expect(getErrorMessage(new Error('status code 400'))).not.toContain('photo');
+  });
 });

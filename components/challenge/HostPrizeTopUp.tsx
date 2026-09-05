@@ -4,14 +4,13 @@ import { View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { Stepper } from '@/components/ui/Stepper';
+import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { useTopUpChallengePrize } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { formatCash, formatWallet, isBucksChallenge, walletBalance } from '@/lib/currency';
 import { FUNDING_COPY, canHostTopUp, joinShortfall } from '@/lib/funding';
-import { bucketForRegion } from '@/lib/geo/regions';
-import { canSeeCashCta } from '@/lib/geo/eligibility';
-import { copy } from '@/lib/copy';
+import { isGeoGateDeny } from '@/lib/geo/eligibility';
 import type { Challenge } from '@/lib/types';
 
 export function HostPrizeTopUp({
@@ -23,6 +22,7 @@ export function HostPrizeTopUp({
 }) {
   const { profile } = useMyProfile();
   const walletSheet = useWalletOptional();
+  const geo = useGeoCashOptional();
   const topUp = useTopUpChallengePrize();
   const [amount, setAmount] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -39,20 +39,18 @@ export function HostPrizeTopUp({
   }
 
   const cash = isBucksChallenge(challenge);
-  if (cash && !canSeeCashCta(bucketForRegion(profile?.declared_region), 'host')) {
-    return (
-      <View className="gap-2">
-        <AppText className="text-sm font-semibold text-charcoal">{FUNDING_COPY.addToPrize}</AppText>
-        <AppText className="text-[13px] leading-5 text-muted">{copy('geo.unavailable')}</AppText>
-      </View>
-    );
-  }
   const wallet = walletBalance(profile, challenge.currency);
   const shortfall = joinShortfall(wallet, amount);
 
   async function submit() {
     setError(null);
     setDone(false);
+    if (cash && geo) {
+      const allowed = await geo.ensure({ action: 'create_host', challengeId: challenge.id });
+      if (!allowed) {
+        return;
+      }
+    }
     if (shortfall > 0) {
       walletSheet?.openTopUp({ amount: shortfall, returnChallengeId: challenge.id });
       return;
@@ -61,6 +59,10 @@ export function HostPrizeTopUp({
       await topUp.mutateAsync({ challengeId: challenge.id, amount });
       setDone(true);
     } catch (err) {
+      if (isGeoGateDeny(err)) {
+        geo?.showUnavailable();
+        return;
+      }
       setError(err instanceof Error ? err.message : FUNDING_COPY.insufficient);
     }
   }
@@ -89,7 +91,7 @@ export function HostPrizeTopUp({
               ? `${FUNDING_COPY.addToPrize} ${formatCash(amount)}`
               : `${FUNDING_COPY.addToPrize} ${formatWallet(amount, challenge.currency)}`
         }
-        loading={topUp.isPending}
+        loading={topUp.isPending || Boolean(geo?.busy)}
         onPress={() => void submit()}
       />
     </View>

@@ -13,6 +13,7 @@ import { InviteHost } from '@/components/challenge/InviteHost';
 import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { InterestsHomeHost } from '@/components/interests/InterestsHomeHost';
 import { OfficialDobProvider } from '@/components/interests/OfficialDobHost';
+import { GeoCashProvider } from '@/components/geo/GeoCashHost';
 import { BugReportHost } from '@/components/bug/BugReportHost';
 import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { TourHost } from '@/components/tour/TourHost';
@@ -52,11 +53,13 @@ export default function TabLayout() {
   return (
     <TourProvider>
       <OfficialDobProvider>
+        <GeoCashProvider>
         <JoinConfirmProvider>
         <BugReportHost>
           <TabLayoutInner />
         </BugReportHost>
         </JoinConfirmProvider>
+        </GeoCashProvider>
       </OfficialDobProvider>
     </TourProvider>
   );

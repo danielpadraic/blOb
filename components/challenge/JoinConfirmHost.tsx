@@ -2,11 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { StyleSheet, View } from 'react-native';
 
 import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
+import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { useOfficialDobOptional } from '@/components/interests/OfficialDobHost';
 import { useJoinChallenge } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { walletBalance } from '@/lib/currency';
+import { joinActionForShape, challengeMoneyShape, isGeoGateDeny } from '@/lib/geo/eligibility';
 import { bucksJoinCta } from '@/lib/joinCta';
 import type { Challenge } from '@/lib/types';
 import { getJoinChallengeMessage } from '@/utils/errors';
@@ -27,6 +29,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
   const { profile } = useMyProfile();
   const wallet = useWalletOptional();
   const officialDob = useOfficialDobOptional();
+  const geo = useGeoCashOptional();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pendingRef = useRef<Challenge | null>(null);
@@ -47,8 +50,17 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     }
     pendingRef.current = null;
     setError(null);
+    const action = joinActionForShape(challengeMoneyShape(next));
+    if (action && geo) {
+      void geo.ensure({ action, challengeId: next.id }).then((ok) => {
+        if (ok) {
+          setChallenge(next);
+        }
+      });
+      return;
+    }
     setChallenge(next);
-  }, [officialDob]);
+  }, [geo, officialDob]);
 
   const confirm = useCallback(async () => {
     if (!challenge || join.isPending) {
@@ -73,6 +85,11 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       pendingRef.current = null;
       setChallenge(null);
     } catch (caught) {
+      if (isGeoGateDeny(caught)) {
+        geo?.showUnavailable();
+        setChallenge(null);
+        return;
+      }
       const message = getJoinChallengeMessage(caught);
       if (
         challenge.is_official &&
@@ -85,7 +102,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       }
       setError(message);
     }
-  }, [challenge, join, officialDob, profile, wallet]);
+  }, [challenge, geo, join, officialDob, profile, wallet]);
 
   useEffect(() => {
     if (topUpOpen || !pendingRef.current) {
@@ -93,8 +110,8 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     }
     const next = pendingRef.current;
     pendingRef.current = null;
-    setChallenge(next);
-  }, [topUpOpen]);
+    open(next);
+  }, [open, topUpOpen]);
 
   const value = useMemo<JoinConfirmContextValue>(
     () => ({
@@ -103,11 +120,11 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       confirm: () => {
         void confirm();
       },
-      loading: join.isPending,
+      loading: join.isPending || Boolean(geo?.busy),
       challenge,
       error,
     }),
-    [challenge, close, confirm, error, join.isPending, open],
+    [challenge, close, confirm, error, geo?.busy, join.isPending, open],
   );
 
   return <JoinConfirmContext.Provider value={value}>{children}</JoinConfirmContext.Provider>;

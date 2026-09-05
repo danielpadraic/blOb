@@ -4,14 +4,22 @@ import { copy } from '@/lib/copy';
 import {
   canPerformCashAction,
   canSeeCashCta,
+  cashJoinUi,
   challengeMoneyShape,
   createActionForShape,
   joinActionForShape,
 } from '@/lib/geo/eligibility';
+import { regionFromGeocode } from '@/lib/geo/preciseLocation';
+import { parseCashGateResult } from '@/lib/geo/cashGate';
 import {
   bucketForRegion,
   GEO_BUCKET_BY_REGION,
   GEO_UNAVAILABLE_COPY,
+  isPreciseFresh,
+  parseUspsRegion,
+  PRECISE_MAX_AGE_MS,
+  regionLabel,
+  USPS_REGION_LABELS,
   USPS_REGIONS,
 } from '@/lib/geo/regions';
 
@@ -170,5 +178,59 @@ describe('cash CTAs and actions', () => {
     expect(canSeeCashCta(bucketForRegion(null), 'host')).toBe(false);
     expect(canSeeCashCta(bucketForRegion(null), 'hybrid')).toBe(false);
     expect(canSeeCashCta(bucketForRegion(null), 'free')).toBe(true);
+  });
+
+  it('keeps Join for missing home state and View when the bucket cannot join', () => {
+    expect(cashJoinUi({ shape: 'hybrid' })).toBe('need_region');
+    expect(cashJoinUi({ declaredRegion: 'CO', shape: 'hybrid' })).toBe('blocked');
+    expect(cashJoinUi({ declaredRegion: 'NV', shape: 'hybrid' })).toBe('blocked');
+    expect(cashJoinUi({ declaredRegion: 'ID', shape: 'hybrid' })).toBe('open');
+    expect(cashJoinUi({ declaredRegion: 'CO', shape: 'host' })).toBe('open');
+    expect(cashJoinUi({ declaredRegion: 'NV', shape: 'host' })).toBe('blocked');
+    expect(cashJoinUi({ declaredRegion: 'ID', shape: 'free' })).toBe('open');
+  });
+});
+
+describe('home state labels and reverse geocode', () => {
+  it('covers every USPS region plus DC and PR with a searchable name', () => {
+    expect(Object.keys(USPS_REGION_LABELS)).toHaveLength(52);
+    expect(regionLabel('ID')).toBe('Idaho');
+    expect(parseUspsRegion('Idaho')).toBe('ID');
+    expect(parseUspsRegion('d.c.')).toBe('DC');
+    expect(parseUspsRegion('Puerto Rico')).toBe('PR');
+  });
+
+  it('maps a US GPS reading to USPS and fails closed outside the US', () => {
+    expect(regionFromGeocode({ isoCountryCode: 'US', region: 'Idaho' })).toBe('ID');
+    expect(regionFromGeocode({ isoCountryCode: 'US', region: 'NV' })).toBe('NV');
+    expect(regionFromGeocode({ isoCountryCode: 'US', region: 'District of Columbia' })).toBe('DC');
+    expect(regionFromGeocode({ isoCountryCode: 'PR', region: 'Puerto Rico' })).toBe('PR');
+    expect(regionFromGeocode({ isoCountryCode: 'CA', region: 'Ontario', country: 'Canada' })).toBe(
+      'outside_us',
+    );
+  });
+
+  it('treats precise GPS as stale after 15 minutes', () => {
+    const now = Date.parse('2026-09-05T18:00:00.000Z');
+    expect(isPreciseFresh(new Date(now - PRECISE_MAX_AGE_MS + 1).toISOString(), now)).toBe(true);
+    expect(isPreciseFresh(new Date(now - PRECISE_MAX_AGE_MS).toISOString(), now)).toBe(false);
+    expect(isPreciseFresh(null, now)).toBe(false);
+  });
+
+  it('never treats a geo_cash_gate deny payload as allowed', () => {
+    expect(
+      parseCashGateResult({
+        allowed: false,
+        bucket: 'blocked',
+        reason: 'blocked',
+        copy: 'nope',
+      }),
+    ).toEqual({
+      allowed: false,
+      bucket: 'blocked',
+      reason: 'blocked',
+      copy: GEO_UNAVAILABLE_COPY,
+    });
+    expect(parseCashGateResult({ allowed: true, bucket: 'allow', reason: 'ok' }).allowed).toBe(true);
   });
 });

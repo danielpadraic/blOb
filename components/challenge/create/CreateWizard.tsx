@@ -49,6 +49,7 @@ import {
   useSaveChallengeDraft,
 } from '@/hooks/useChallengeDraft';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import {
   clampDraftStep,
   createHrefForDraft,
@@ -128,6 +129,7 @@ import { useComparablePointsForm } from '@/hooks/useComparablePointsForm';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { copy } from '@/lib/copy';
+import { createActionForShape, challengeMoneyShape } from '@/lib/geo/eligibility';
 import {
   canRoundTripToSimple,
   stageSimpleFromAdvanced,
@@ -179,6 +181,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const fromSimple = (Array.isArray(params.from) ? params.from[0] : params.from) === 'simple';
   const dismissFallback = returnTo === 'feed' ? TABS_HREF : LOBBY_HREF;
   const { profile } = useMyProfile();
+  const geo = useGeoCashOptional();
   const create = useCreateChallenge();
   const update = useUpdateUserChallenge();
   const editing = useChallenge(editId);
@@ -1445,6 +1448,23 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       setError(name, { type: 'validate', message });
       revealPublishIssue({ field: root, step: wizardStepForField(root, formValues) }, message);
       return;
+    }
+    if (!editId) {
+      const createAction = createActionForShape(
+        challengeMoneyShape({
+          currency: formValues.currency,
+          buy_in_amount: Number(formValues.buy_in) || 0,
+          host_budget: Number(formValues.creator_contribution) || 0,
+          prize_pool: Number(formValues.creator_contribution) || 0,
+          funding_model: formValues.funding_model,
+        }),
+      );
+      if (createAction && geo) {
+        const allowed = await geo.ensure({ action: createAction });
+        if (!allowed) {
+          return;
+        }
+      }
     }
     try {
       skipSaveRef.current = true;

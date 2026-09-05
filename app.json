@@ -22,7 +22,7 @@
         "NSMicrophoneUsageDescription": "blOb needs the microphone so you can record check-in or Story videos for Skill Tournaments.",
         "NSPhotoLibraryUsageDescription": "blOb needs photo access so you can attach proof for Skill Tournaments.",
         "NSPhotoLibraryAddUsageDescription": "blOb saves videos and photos you record so you can keep them.",
-        "NSLocationWhenInUseUsageDescription": "blOb uses your location only when you tap I’m here to check in at a place.",
+        "NSLocationWhenInUseUsageDescription": "blOb uses your location when you tap I’m here to check in at a place, or to confirm you’re in a state where a cash Challenge runs.",
         "NSUserNotificationsUsageDescription": "Alerts for friend requests, Skill Tournament invites, and check-ins.",
         "NSHealthShareUsageDescription": "blOb reads workouts and heart rate only to verify effort in Skill Tournaments.",
         "NSHealthUpdateUsageDescription": "blOb starts or updates a workout session only to verify effort in Skill Tournaments.",
@@ -117,7 +117,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "blOb uses your location only when you tap I’m here to check in at a place."
+          "locationWhenInUsePermission": "blOb uses your location when you tap I’m here to check in at a place, or to confirm you’re in a state where a cash Challenge runs."
         }
       ],
       "expo-image",

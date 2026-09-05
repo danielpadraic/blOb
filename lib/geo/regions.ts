@@ -71,6 +71,130 @@ export const USPS_REGIONS = [
 
 export type UspsRegion = (typeof USPS_REGIONS)[number];
 
+export const PRECISE_MAX_AGE_MS = 15 * 60 * 1000;
+
+export const USPS_REGION_LABELS: Record<UspsRegion, string> = {
+  AL: 'Alabama',
+  AK: 'Alaska',
+  AZ: 'Arizona',
+  AR: 'Arkansas',
+  CA: 'California',
+  CO: 'Colorado',
+  CT: 'Connecticut',
+  DE: 'Delaware',
+  FL: 'Florida',
+  GA: 'Georgia',
+  HI: 'Hawaii',
+  ID: 'Idaho',
+  IL: 'Illinois',
+  IN: 'Indiana',
+  IA: 'Iowa',
+  KS: 'Kansas',
+  KY: 'Kentucky',
+  LA: 'Louisiana',
+  ME: 'Maine',
+  MD: 'Maryland',
+  MA: 'Massachusetts',
+  MI: 'Michigan',
+  MN: 'Minnesota',
+  MS: 'Mississippi',
+  MO: 'Missouri',
+  MT: 'Montana',
+  NE: 'Nebraska',
+  NV: 'Nevada',
+  NH: 'New Hampshire',
+  NJ: 'New Jersey',
+  NM: 'New Mexico',
+  NY: 'New York',
+  NC: 'North Carolina',
+  ND: 'North Dakota',
+  OH: 'Ohio',
+  OK: 'Oklahoma',
+  OR: 'Oregon',
+  PA: 'Pennsylvania',
+  RI: 'Rhode Island',
+  SC: 'South Carolina',
+  SD: 'South Dakota',
+  TN: 'Tennessee',
+  TX: 'Texas',
+  UT: 'Utah',
+  VT: 'Vermont',
+  VA: 'Virginia',
+  WA: 'Washington',
+  WV: 'West Virginia',
+  WI: 'Wisconsin',
+  WY: 'Wyoming',
+  DC: 'District of Columbia',
+  PR: 'Puerto Rico',
+};
+
+const REGION_ALIASES: Record<string, UspsRegion> = {
+  'WASHINGTON DC': 'DC',
+  'WASHINGTON D.C.': 'DC',
+  'WASHINGTON D C': 'DC',
+  'DISTRICT OF COLUMBIA': 'DC',
+  'D.C.': 'DC',
+  'D.C': 'DC',
+  'PUERTO RICO': 'PR',
+};
+
+function aliasKey(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[.,]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+export function isUspsRegion(value: string | null | undefined): value is UspsRegion {
+  const code = normalizeRegion(value);
+  return Boolean(code && (USPS_REGIONS as readonly string[]).includes(code));
+}
+
+export function regionLabel(value: string | null | undefined): string | null {
+  const code = normalizeRegion(value);
+  if (!code || !isUspsRegion(code)) {
+    return null;
+  }
+  return USPS_REGION_LABELS[code];
+}
+
+export function parseUspsRegion(value: string | null | undefined): UspsRegion | null {
+  const code = normalizeRegion(value);
+  if (!code) {
+    return null;
+  }
+  if (isUspsRegion(code)) {
+    return code;
+  }
+  const compact = aliasKey(value ?? '');
+  if (isUspsRegion(compact)) {
+    return compact;
+  }
+  const alias = REGION_ALIASES[compact];
+  if (alias) {
+    return alias;
+  }
+  const name = aliasKey(value ?? '');
+  for (const [usps, label] of Object.entries(USPS_REGION_LABELS) as Array<[UspsRegion, string]>) {
+    if (aliasKey(label) === name) {
+      return usps;
+    }
+  }
+  return null;
+}
+
+export function isPreciseFresh(lastPreciseAt: string | null | undefined, nowMs = Date.now()): boolean {
+  if (!lastPreciseAt) {
+    return false;
+  }
+  const at = Date.parse(lastPreciseAt);
+  if (!Number.isFinite(at)) {
+    return false;
+  }
+  return nowMs - at < PRECISE_MAX_AGE_MS;
+}
+
 export const GEO_BUCKET_BY_REGION: Record<UspsRegion, GeoBucket> = {
   AL: 'allow',
   AK: 'allow',

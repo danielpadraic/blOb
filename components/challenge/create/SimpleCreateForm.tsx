@@ -35,6 +35,7 @@ import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useCreateChallenge, useChallenge, useUpdateUserChallenge } from '@/hooks/useChallenge';
+import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { useCircle, useCircleMembers, useCirclePins, usePinChallengeToCircle, useShareChallengeToCircle } from '@/hooks/useCircles';
 import { useCreateChallengeTour } from '@/hooks/useCreateChallengeTour';
 import { useAuth } from '@/hooks/useAuth';
@@ -99,6 +100,7 @@ import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { CIRCLE_PIN_CAP } from '@/lib/circles';
 import { copy } from '@/lib/copy';
 import { descriptionGrowMaxLines } from '@/lib/composerField';
+import { createActionForShape, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { PRIVACY_MODE_LOCKED_MESSAGE } from '@/lib/privacyMode';
 import { circleDetailHref, LOBBY_HREF, publishedRowId, TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME } from '@/lib/theme';
@@ -150,6 +152,7 @@ export function SimpleCreateForm() {
   const { user } = useAuth();
   const { profile, refetch, isFetched } = useMyProfile();
   const walletSheet = useWalletOptional();
+  const geo = useGeoCashOptional();
   const create = useCreateChallenge();
   const update = useUpdateUserChallenge();
   const sourceCircle = useCircle(circleId);
@@ -478,6 +481,20 @@ export function SimpleCreateForm() {
       setError(copy('create.signIn'));
       return;
     }
+    const createAction = createActionForShape(
+      challengeMoneyShape({
+        currency: draft.currency === 'bucks' ? 'bucks' : 'coins',
+        buy_in_amount: cash ? 0 : draft.buy_in,
+        host_budget: draft.host_budget,
+        prize_pool: draft.host_budget,
+      }),
+    );
+    if (!editId && createAction && geo) {
+      const allowed = await geo.ensure({ action: createAction });
+      if (!allowed) {
+        return;
+      }
+    }
     try {
       if (editId) {
         const challenge = await update.mutateAsync({
@@ -706,6 +723,11 @@ export function SimpleCreateForm() {
             <AppText className="text-[13px] leading-5 text-muted">
               {cash ? copy('create.youFundPrize') : copy('create.realMoneyFund')}
             </AppText>
+            {cash ? (
+              <AppText className="text-[13px] leading-5 text-muted">
+                {copy('geo.cashBuyInOfficials')}
+              </AppText>
+            ) : null}
             <AppText className="text-[13px] leading-5 text-muted">{copy('create.hostContributionHelp')}</AppText>
             {draft.currency === 'bucks' ? (
               <Pressable

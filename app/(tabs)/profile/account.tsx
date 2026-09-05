@@ -3,6 +3,7 @@ import { Alert, AppState, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 
+import { HomeStateField } from '@/components/geo/HomeStateField';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -158,6 +159,10 @@ export default function AccountScreen() {
         </AppText>
       ) : null}
       <View className="gap-5">
+        <HomeStateField
+          value={profile?.declared_region}
+          onSaved={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        />
         {health.showRow ? (
         <View className="gap-2">
           <AppText className="text-sm font-semibold text-charcoal">{health.title}</AppText>
