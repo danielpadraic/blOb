@@ -147,9 +147,8 @@ export function workoutAttachBlockReason(
     if (!(avg > 0 || Number(workout.hrMax) > 0)) {
       return 'No heart rate on this workout';
     }
-    if (rules.elevatedHrUnknownAge) {
-      return ELEVATED_HR_NEEDS_AGE;
-    }
+    // A missing birth year is a nudge, not a block — see workoutAttachNote. Without an age there is
+    // no threshold to test, so having recorded a heart rate is enough.
     // Intensity is measured against this person rather than a flat bump, so the same workout can
     // qualify for one member and not another.
     const need = Number(rules.elevatedHrBpm);
@@ -158,6 +157,23 @@ export function workoutAttachBlockReason(
     }
   }
   return null;
+}
+
+/**
+ * Something to mention next to a workout that is still attachable.
+ *
+ * Separate from workoutAttachBlockReason on purpose: this line explains why intensity could not be
+ * verified, and must never read as a refusal.
+ */
+export function workoutAttachNote(
+  workout: Pick<HealthWorkout, 'hrAvg' | 'hrMax'>,
+  rules: HealthAttachRules,
+): string | null {
+  if (!rules.hrRequired || !rules.elevatedHrUnknownAge) {
+    return null;
+  }
+  const hasHr = Number(workout.hrAvg) > 0 || Number(workout.hrMax) > 0;
+  return hasHr ? ELEVATED_HR_NEEDS_AGE : null;
 }
 
 export function toCheckinHealthProof(workout: HealthWorkout): CheckinHealthProof {

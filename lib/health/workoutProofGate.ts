@@ -30,7 +30,14 @@ export const STACK_GAP_MAX_SEC = 600;
 /** The floor for proof when a challenge does not ask for more. */
 export const PROOF_MIN_MINUTES = 30;
 
-/** Shown when intensity cannot be judged because we do not know how old they are. */
+/**
+ * Shown when intensity cannot be judged because we do not know how old they are.
+ *
+ * This is a nudge, not a refusal. Almost nobody has filled in a birth year yet, so blocking on it
+ * would lock most members out of heart rate challenges entirely. Without an age the rule falls back
+ * to requiring that the workout recorded a heart rate at all, and asks for the birth year that would
+ * let us judge intensity properly.
+ */
 export const ELEVATED_HR_NEEDS_AGE = 'Add your birth year in You to verify intensity.';
 
 export type WorkoutRejection = {
@@ -198,6 +205,11 @@ export type ProofGateResult = {
   rejected: WorkoutRejection[];
   /** How intensity was judged, for copy and for showing our work. Null when not required. */
   threshold: ElevatedHrThreshold | null;
+  /**
+   * Something worth telling them that did not stop the attach — today only the missing birth year.
+   * Never a reason for failure; `reason` carries those.
+   */
+  nudge: string | null;
 };
 
 export function proofMinutesFloor(minMinutes?: number | null): number {
@@ -249,25 +261,21 @@ export function evaluateWorkoutProof(input: {
       requiredSec,
       rejected,
       threshold: null,
+      nudge: null,
     };
   }
 
   let eligible = vendor;
   let threshold: ElevatedHrThreshold | null = null;
+  let nudge: string | null = null;
   if (input.rules.requiresElevatedHr) {
     threshold = elevatedHrThreshold(input.hr ?? {}, input.now);
+    // Unknown age means no threshold to test against, so the bar drops to "this workout recorded a
+    // heart rate" and we ask for a birth year rather than refusing the check-in.
+    const floor = threshold.kind === 'unknown-age' ? 1 : threshold.bpm;
     if (threshold.kind === 'unknown-age') {
-      return {
-        ok: false,
-        reason: ELEVATED_HR_NEEDS_AGE,
-        countedIds: [],
-        countedSec: 0,
-        requiredSec,
-        rejected,
-        threshold,
-      };
+      nudge = ELEVATED_HR_NEEDS_AGE;
     }
-    const floor = threshold.bpm;
     const intense: GateWorkout[] = [];
     for (const workout of eligible) {
       const avg = Number(workout.avgHrBpm);
@@ -294,6 +302,7 @@ export function evaluateWorkoutProof(input: {
     requiredSec,
     rejected,
     threshold,
+    nudge,
   };
 }
 

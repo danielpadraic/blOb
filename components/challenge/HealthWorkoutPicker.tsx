@@ -11,6 +11,7 @@ import { copy } from '@/lib/copy';
 import {
   healthAttachRulesFor,
   workoutAttachBlockReason,
+  workoutAttachNote,
   type HealthAttachRules,
 } from '@/lib/health/attachProof';
 import { rankHealthWorkouts } from '@/lib/health/match';
@@ -322,6 +323,8 @@ export function HealthWorkoutPicker({
           showsVerticalScrollIndicator={false}>
           {workouts.map((row) => {
             const blocked = workoutAttachBlockReason(row, rules);
+            // Attachable, but we could not check intensity. Reads as a hint, not a refusal.
+            const note = blocked ? null : workoutAttachNote(row, rules);
             const busy = attaching || attachingId === row.providerWorkoutId;
             return (
               <View
@@ -349,6 +352,10 @@ export function HealthWorkoutPicker({
                 {blocked ? (
                   <AppText className="mt-1 text-[12px] font-semibold" style={{ color: THEME.danger }}>
                     {blocked}
+                  </AppText>
+                ) : note ? (
+                  <AppText className="mt-1 text-[12px]" style={{ color: THEME.textMuted }}>
+                    {note}
                   </AppText>
                 ) : row.confidence === 'manual' ? (
                   <AppText className="mt-1 text-[12px] font-semibold" style={{ color: THEME.accent }}>

@@ -304,16 +304,44 @@ describe('the proof gate', () => {
       expect(result.rejected).toEqual([{ id: 'no-hr', reason: 'hr' }]);
     });
 
-    it('asks for a birth year instead of guessing intensity', () => {
+    /**
+     * Almost no member has filled in a birth year, so refusing them would empty out heart rate
+     * challenges. Without an age the bar drops to "this workout recorded a heart rate" and the birth
+     * year is asked for alongside, not instead.
+     */
+    it('still counts the workout without a birth year, and asks for one', () => {
       const result = evaluateWorkoutProof({
         workouts: [workout('run', { minutes: 40, avgHr: 150 })],
         rules,
         hr: {},
         now: NOW,
       });
-      expect(result.ok).toBe(false);
-      expect(result.reason).toBe(ELEVATED_HR_NEEDS_AGE);
+      expect(result.ok).toBe(true);
+      expect(result.reason).toBeNull();
+      expect(result.nudge).toBe(ELEVATED_HR_NEEDS_AGE);
       expect(result.threshold).toEqual({ kind: 'unknown-age' });
+    });
+
+    it('without a birth year still refuses a workout that recorded no heart rate at all', () => {
+      const result = evaluateWorkoutProof({
+        workouts: [workout('no-hr', { minutes: 40, avgHr: null })],
+        rules,
+        hr: {},
+        now: NOW,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.rejected).toEqual([{ id: 'no-hr', reason: 'hr' }]);
+    });
+
+    it('says nothing about a birth year once one is known', () => {
+      const result = evaluateWorkoutProof({
+        workouts: [workout('run', { minutes: 40, avgHr: 150 })],
+        rules,
+        hr,
+        now: NOW,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.nudge).toBeNull();
     });
 
     it('uses the personal reserve threshold when resting heart rate is known', () => {
