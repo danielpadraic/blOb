@@ -71,6 +71,7 @@ import {
 } from '@/lib/challengeProofs';
 import {
   athleteDistanceUnit,
+  displayDistance,
   distanceShortHint,
   parseSessionDistanceText,
   type DistanceUnit,
@@ -174,6 +175,27 @@ function logHealthAttach(workout: HealthWorkout, route: WorkoutRoute | null): vo
     hasRoute: Boolean(route),
     avgHr: workout.hrAvg ?? null,
   });
+}
+
+/**
+ * The vendor distance as the Distance field would show it — a bare number in the athlete's unit, no
+ * suffix, so it reads as a value they can edit. Empty when this slot is not a distance slot or the
+ * workout carried no distance, which is the one case the field should stay blank.
+ */
+function vendorDistanceText(
+  proof: ChallengeProof,
+  distanceMeters: number | undefined,
+  unit: DistanceUnit,
+): string | null {
+  if (proof.method !== 'distance') {
+    return null;
+  }
+  const meters = Number(distanceMeters);
+  if (!Number.isFinite(meters) || meters <= 0) {
+    return null;
+  }
+  const amount = displayDistance(meters, unit);
+  return amount > 0 ? String(amount) : null;
 }
 
 function slotPart(
@@ -1244,6 +1266,13 @@ function SubmitWorkoutInner() {
       const snapshot = toCheckinHealthProof(enriched);
       const healthWorkoutId = await upsertHealthWorkout(uid, enriched);
       const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
+      // A cumulative distance challenge shows a Distance field. Filling it in from the workout is
+      // what puts 6.23 in front of them instead of an empty box they have to guess at; it stays
+      // editable, so a vendor number is offered rather than forced.
+      const vendorMiles = vendorDistanceText(target, snapshot.distanceMeters, distanceUnit);
+      if (vendorMiles) {
+        draft.text = vendorMiles;
+      }
       setDrafts((current) => ({ ...current, [target.id]: { ...current[target.id], ...draft } }));
       setCaptureId(null);
       setSkippedAuto(true);
@@ -1769,6 +1798,10 @@ function SubmitWorkoutInner() {
                 const required = proofDistanceMeters(proof);
                 const short = !sessionDistance && attached != null && attached < required;
                 const healthReady = Platform.OS !== 'web' && healthProviderAvailable();
+                // Once a workout is attached its own distance is what counts, on the client and in
+                // the SQL that feeds the goal ring. Locking the field says so, instead of accepting
+                // a typed number that would be quietly ignored.
+                const fromWorkout = Number(draft?.health?.distanceMeters) > 0;
                 return (
                   <View key={proof.id} className="mb-2" style={{ gap: 6 }}>
                     <View className="flex-row items-end" style={{ gap: 8 }}>
@@ -1779,7 +1812,7 @@ function SubmitWorkoutInner() {
                           keyboardType="decimal-pad"
                           value={draft?.text ?? ''}
                           onChangeText={(value) => onText(proof.id, value)}
-                          editable={!busy && phase !== 'submitted'}
+                          editable={!busy && phase !== 'submitted' && !fromWorkout}
                         />
                       </View>
                       <AppText className="mb-3 text-[15px] font-semibold" style={{ color: THEME.textMuted, minWidth: 28 }}>
@@ -1799,6 +1832,11 @@ function SubmitWorkoutInner() {
                           Attach from Health
                         </AppText>
                       </Pressable>
+                    ) : null}
+                    {fromWorkout ? (
+                      <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
+                        From your workout. Attach a different one to change it.
+                      </AppText>
                     ) : null}
                     {short ? (
                       <AppText className="text-[12px] leading-4 text-coral-dark">
