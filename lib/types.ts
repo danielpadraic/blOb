@@ -648,6 +648,11 @@ export interface WorkoutSessionRecord {
   ocr_raw: string | null;
   ocr_skip_reason: string | null;
   backfilled: boolean;
+  /**
+   * True when the stored proof card image shows numbers this row no longer agrees with. The card is a
+   * JPEG, so repairing the row cannot repair the picture — the app redraws it and clears this.
+   */
+  card_needs_redraw: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -909,6 +914,7 @@ export type NotificationData = {
   from_user_id?: string;
   notification_id?: string;
   comment_id?: string;
+  commentId?: string;
   parent_comment_id?: string;
   story_id?: string;
   reel_id?: string;

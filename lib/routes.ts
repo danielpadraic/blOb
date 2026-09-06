@@ -118,7 +118,7 @@ export function challengeDetailHref(
   returnTo: 'lobby' | 'feed' = 'lobby',
   postId?: string | null,
   extra?: {
-    tab?: 'overview' | 'board' | 'feed';
+    tab?: 'overview' | 'board' | 'feed' | 'live';
     receipt?: boolean;
     commentId?: string | null;
     notice?: string | null;

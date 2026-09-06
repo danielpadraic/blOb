@@ -2,6 +2,7 @@ import { calloutObserverInviteHref } from '@/lib/callouts';
 import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { circleNotificationPath } from '@/lib/circles';
 import { withCommentQuery } from '@/lib/commentDeepLink';
+import { liveNotificationHref } from '@/lib/livePush';
 import { collapseChallengeDigests } from '@/lib/notifyDigest';
 import { postHref } from '@/lib/postShare';
 import { challengeDetailHref, conversationHref, feedHref, INTERESTS_HREF, reelHref, storyHref } from '@/lib/routes';
@@ -21,7 +22,8 @@ export function notificationPostId(data?: NotificationData | null): string | und
 
 export function notificationCommentId(data?: NotificationData | null): string | undefined {
   const id = typeof data?.comment_id === 'string' ? data.comment_id.trim() : '';
-  return id || undefined;
+  const camel = typeof data?.commentId === 'string' ? data.commentId.trim() : '';
+  return id || camel || undefined;
 }
 
 export function notificationCircleId(data?: NotificationData | null): string | undefined {
@@ -352,10 +354,13 @@ function commentAwareHref(href: string | null | undefined, data?: NotificationDa
 export function notificationHrefFromPushData(data: {
   type?: string;
   challenge_id?: string;
+  challengeId?: string;
   href?: string;
   url?: string;
   post_id?: string;
+  postId?: string;
   comment_id?: string;
+  commentId?: string;
   parent_comment_id?: string;
   story_id?: string;
   reel_id?: string;
@@ -369,9 +374,14 @@ export function notificationHrefFromPushData(data: {
     data.type === 'health_begin' ||
     data.type === 'health_checkout'
   ) {
-    if (data.challenge_id) {
-      return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
+    const reminderId = data.challenge_id || data.challengeId;
+    if (reminderId) {
+      return challengeDetailHref(reminderId, 'lobby', null, { tab: 'overview' });
     }
+  }
+  const liveHref = liveNotificationHref(data);
+  if (liveHref) {
+    return liveHref;
   }
   const href = data.href || data.url;
   if (href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(href) && data.challenge_id) {
@@ -418,6 +428,17 @@ export function notificationHref(item: AppNotification): Href | null {
     if (reminderChallengeId) {
       return challengeDetailHref(reminderChallengeId, 'lobby', null, { tab: 'overview' });
     }
+  }
+  const liveHref = liveNotificationHref({
+    type: item.type,
+    challenge_id: notificationChallengeId(data),
+    post_id: notificationPostId(data),
+    comment_id: notificationCommentId(data),
+    href: typeof data.href === 'string' ? data.href : undefined,
+    url: typeof data.url === 'string' ? data.url : undefined,
+  });
+  if (liveHref) {
+    return liveHref;
   }
   if (item.type === 'bob_encouragement') {
     if (data.href) {
@@ -514,9 +535,6 @@ export function notificationHref(item: AppNotification): Href | null {
     postId &&
     challengeId &&
     (item.type === 'challenge_checkin' ||
-      item.type === 'live_message' ||
-      item.type === 'live_checkin' ||
-      item.type === 'live_reply' ||
       item.type === 'tagged' ||
       item.type === 'mentioned' ||
       item.type === 'post_comment' ||
@@ -526,14 +544,6 @@ export function notificationHref(item: AppNotification): Href | null {
       tab: 'feed',
       commentId,
     });
-  }
-  if (item.type === 'live_message' || item.type === 'live_checkin' || item.type === 'live_reply') {
-    if (challengeId) {
-      return challengeDetailHref(challengeId, 'feed', postId, {
-        tab: 'feed',
-        commentId,
-      });
-    }
   }
   if (challengeId) {
     return challengeDetailHref(challengeId, 'lobby');
