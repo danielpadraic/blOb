@@ -190,7 +190,10 @@ export function getCheckinSubmitMessage(error: unknown): string {
   if (raw.includes('not authenticated') || raw.includes('sign in')) {
     return 'You need to be signed in.';
   }
-  return CHECKIN_SUBMIT_FAIL;
+  // Anything unmapped still has to say what went wrong. "Try again" on its own reads like a dead
+  // button and leaves nothing to report, so the underlying reason rides along.
+  const detail = extractRawMessage(error).trim();
+  return detail ? `${CHECKIN_SUBMIT_FAIL} (${detail})` : CHECKIN_SUBMIT_FAIL;
 }
 
 const CREATE_RPC_MESSAGES: Record<string, string> = {

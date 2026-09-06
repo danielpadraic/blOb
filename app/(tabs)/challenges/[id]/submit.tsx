@@ -854,6 +854,7 @@ function SubmitWorkoutInner() {
       const next = await normalizeCheckinStill({ uri, mimeType: mime });
       onCaptured(target, next.uri, next.mimeType ?? mime, true);
     } catch (caught) {
+      setError(getErrorMessage(caught));
       Alert.alert('Couldn’t attach that', getErrorMessage(caught));
     }
   }
@@ -907,6 +908,11 @@ function SubmitWorkoutInner() {
       .filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }))
       .map((proof) => proofDisplayName(proof));
     const names = checkinSendWhyNot(remaining);
+    const reason = names ? `Still needed: ${names}.` : copy('checkin.emptyBob');
+    // The banner is the part that works everywhere. Alert.alert does nothing on react-native-web, so
+    // on Web this was a Send button that looked broken instead of one that said what was missing.
+    setFailKind(null);
+    setError(reason);
     Alert.alert('Still needed', names ? `${names}.` : copy('checkin.emptyBob'));
   }
 
@@ -925,6 +931,8 @@ function SubmitWorkoutInner() {
         try {
           await persistLocation(proof);
         } catch (caught) {
+          setFailKind(null);
+          setError(getErrorMessage(caught));
           Alert.alert('Couldn’t check in here', getErrorMessage(caught));
           return;
         }
@@ -1032,14 +1040,20 @@ function SubmitWorkoutInner() {
           if (!health) {
             continue;
           }
-          await saveWorkoutSession({
-            userId: uid,
-            challengeId: id,
-            checkinId,
-            health,
-            proofUrl: savedParts[proof.id]?.url ?? null,
-            activityLabel: workoutOcr.entries[proof.id]?.activityLabel ?? null,
-          });
+          try {
+            await saveWorkoutSession({
+              userId: uid,
+              challengeId: id,
+              checkinId,
+              health,
+              proofUrl: savedParts[proof.id]?.url ?? null,
+              activityLabel: workoutOcr.entries[proof.id]?.activityLabel ?? null,
+            });
+          } catch (caught) {
+            // The check-in has already landed. Losing the ledger row must not strand them on this
+            // screen with an error about work that succeeded.
+            console.log('[blob:workout-session]', getErrorMessage(caught));
+          }
           break;
         }
       }
