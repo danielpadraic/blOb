@@ -4,6 +4,7 @@ import {
   canAutoCyclePager,
   carouselClaimsHorizontal,
   clearPagerIndexMemory,
+  snapLightboxIndex,
   nextAutoCycleIndex,
   snapCarouselIndex,
   orientationFromSize,
@@ -76,6 +77,12 @@ describe('post media carousel', () => {
     expect(snapCarouselIndex({ from: 0, dx: -90, vx: 0, pageWidth: 390, length: 3 })).toBe(1);
     expect(snapCarouselIndex({ from: 1, dx: 90, vx: 0, pageWidth: 390, length: 3 })).toBe(0);
     expect(snapCarouselIndex({ from: 0, dx: -20, vx: 0, pageWidth: 390, length: 3 })).toBe(0);
+    expect(
+      snapLightboxIndex({ from: 0, dx: -90, velocityX: 0, pageWidth: 390, length: 3 }),
+    ).toBe(1);
+    expect(
+      snapLightboxIndex({ from: 1, dx: 10, velocityX: 800, pageWidth: 390, length: 3 }),
+    ).toBe(0);
   });
 
   it('auto-cycles only 2+ stills in view, never after a swipe or while a video plays', () => {

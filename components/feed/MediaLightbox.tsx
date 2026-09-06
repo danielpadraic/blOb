@@ -42,6 +42,7 @@ import {
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
+import { snapLightboxIndex } from '@/lib/postMediaCarousel';
 import type { HealthActivityType } from '@/services/health/types';
 import { mediaKind } from '@/utils/media';
 
@@ -194,20 +195,21 @@ function MediaLightboxOverlay({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const pager = useRef<ScrollView>(null);
+  const pageRef = useRef(0);
+  const dragOriginRef = useRef(0);
+  const draggingRef = useRef(false);
   const [page, setPage] = useState(0);
-  const [pageScale, setPageScale] = useState(1);
   const pageWidth = Math.max(width, 1);
   const pageHeight = Math.max(height, 1);
   const open = Boolean(state);
-  const zoomed = pageScale > 1.01;
-  const pagerNative = useMemo(() => Gesture.Native(), []);
+  pageRef.current = page;
 
   useEffect(() => {
     if (!state) {
       return;
     }
+    draggingRef.current = false;
     setPage(state.index);
-    setPageScale(1);
     const x = state.index * pageWidth;
     requestAnimationFrame(() => {
       pager.current?.scrollTo({ x, animated: false });
@@ -273,17 +275,48 @@ function MediaLightboxOverlay({
     });
   }
 
-  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    pageFromOffset(event.nativeEvent.contentOffset.x);
-  }
-
-  function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    pageFromOffset(event.nativeEvent.contentOffset.x);
-  }
-
-  function goTo(index: number) {
+  const goTo = useCallback((index: number, animated = true) => {
     setPage(index);
-    pager.current?.scrollTo({ x: index * pageWidth, animated: true });
+    pager.current?.scrollTo({ x: index * pageWidth, animated });
+  }, [pageWidth]);
+
+  const onPageDragStart = useCallback(() => {
+    draggingRef.current = true;
+    dragOriginRef.current = pageRef.current;
+  }, []);
+
+  const onPageDrag = useCallback((dx: number) => {
+    pager.current?.scrollTo({
+      x: dragOriginRef.current * pageWidth - dx,
+      animated: false,
+    });
+  }, [pageWidth]);
+
+  const onPageDragEnd = useCallback((dx: number, velocityX: number) => {
+    draggingRef.current = false;
+    const next = snapLightboxIndex({
+      from: dragOriginRef.current,
+      dx,
+      velocityX,
+      pageWidth,
+      length: state?.items.length ?? 1,
+    });
+    goTo(next, true);
+  }, [goTo, pageWidth, state?.items.length]);
+
+  const onPageDragCancel = useCallback(() => {
+    if (!draggingRef.current) {
+      return;
+    }
+    draggingRef.current = false;
+    goTo(dragOriginRef.current, false);
+  }, [goTo]);
+
+  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (draggingRef.current) {
+      return;
+    }
+    pageFromOffset(event.nativeEvent.contentOffset.x);
   }
 
   const items = state?.items ?? [];
@@ -294,6 +327,7 @@ function MediaLightboxOverlay({
   /* Proof stays full-bleed: the caption and dots get their own band under the image. */
   const band = (captioned ? 64 : 0) + (items.length > 1 ? 22 : 0);
   const mediaHeight = band > 0 ? Math.max(pageHeight - band - bottomInset, 160) : pageHeight;
+  const pageEnabled = items.length > 1;
 
   if (!open || !state) {
     return null;
@@ -303,23 +337,20 @@ function MediaLightboxOverlay({
         <View
           pointerEvents="auto"
           style={[styles.layer, { width: pageWidth, height: pageHeight }]}>
-          <GestureDetector gesture={pagerNative} touchAction={zoomed ? 'none' : 'pan-x'}>
           <ScrollView
             ref={pager}
             horizontal
-            pagingEnabled={!zoomed}
-            scrollEnabled={!zoomed}
+            pagingEnabled={false}
+            scrollEnabled={false}
             nestedScrollEnabled={false}
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             decelerationRate="fast"
             style={{ width: pageWidth, height: pageHeight }}
             contentContainerStyle={{ height: pageHeight }}
-            contentOffset={{ x: state.index * pageWidth, y: 0 }}
             scrollEventThrottle={16}
             onScroll={onScroll}
-            onMomentumScrollEnd={onScrollEnd}
-            onScrollEndDrag={onScrollEnd}>
+            onMomentumScrollEnd={onScroll}>
             {items.map((item, itemIndex) => (
               <LightboxPage
                 key={`${item.uri}-${itemIndex}`}
@@ -329,13 +360,15 @@ function MediaLightboxOverlay({
                 height={pageHeight}
                 mediaHeight={mediaHeight}
                 active={itemIndex === page}
+                pageEnabled={pageEnabled}
                 onClose={onClose}
-                onScaleChange={itemIndex === page ? setPageScale : undefined}
-                pagerNative={itemIndex === page ? pagerNative : undefined}
+                onPageDragStart={onPageDragStart}
+                onPageDrag={onPageDrag}
+                onPageDragEnd={onPageDragEnd}
+                onPageDragCancel={onPageDragCancel}
               />
             ))}
           </ScrollView>
-          </GestureDetector>
 
           <View style={[styles.close, { top: Math.max(insets.top, 8) }]}>
             <PlayerCloseButton accessibilityLabel="Close" onPress={onClose} />
@@ -372,6 +405,66 @@ function MediaLightboxOverlay({
   );
 }
 
+function useOneFingerPageGestures(input: {
+  enabled: boolean;
+  onClose: () => void;
+  onPageDragStart?: () => void;
+  onPageDrag?: (dx: number) => void;
+  onPageDragEnd?: (dx: number, velocityX: number) => void;
+  onPageDragCancel?: () => void;
+}) {
+  const settled = useSharedValue(0);
+  const start = input.onPageDragStart;
+  const drag = input.onPageDrag;
+  const end = input.onPageDragEnd;
+  const cancel = input.onPageDragCancel;
+  const close = input.onClose;
+  const enabled = input.enabled;
+
+  return useMemo(() => {
+    const pagePan = Gesture.Pan()
+      .enabled(enabled)
+      .minPointers(1)
+      .maxPointers(1)
+      .activeOffsetX([-12, 12])
+      .failOffsetY([-36, 36])
+      .onStart(() => {
+        settled.value = 0;
+        if (start) {
+          runOnJS(start)();
+        }
+      })
+      .onUpdate((event) => {
+        if (drag) {
+          runOnJS(drag)(event.translationX);
+        }
+      })
+      .onEnd((event) => {
+        settled.value = 1;
+        if (end) {
+          runOnJS(end)(event.translationX, event.velocityX);
+        }
+      })
+      .onFinalize((_event, success) => {
+        if (!success && settled.value === 0 && cancel) {
+          settled.value = 1;
+          runOnJS(cancel)();
+        }
+      });
+    const dismiss = Gesture.Pan()
+      .enabled(enabled)
+      .maxPointers(1)
+      .activeOffsetY(24)
+      .failOffsetX([-28, 28])
+      .onEnd((event) => {
+        if (event.translationY > 72 && event.velocityY > 0) {
+          runOnJS(close)();
+        }
+      });
+    return Gesture.Race(pagePan, dismiss);
+  }, [cancel, close, drag, enabled, end, settled, start]);
+}
+
 function LightboxPage({
   item,
   width,
@@ -379,9 +472,12 @@ function LightboxPage({
   height,
   mediaHeight,
   active,
+  pageEnabled,
   onClose,
-  onScaleChange,
-  pagerNative,
+  onPageDragStart,
+  onPageDrag,
+  onPageDragEnd,
+  onPageDragCancel,
 }: {
   item: LightboxItem;
   width: number;
@@ -389,9 +485,12 @@ function LightboxPage({
   height: number;
   mediaHeight: number;
   active: boolean;
+  pageEnabled: boolean;
   onClose: () => void;
-  onScaleChange?: (scale: number) => void;
-  pagerNative?: ReturnType<typeof Gesture.Native>;
+  onPageDragStart?: () => void;
+  onPageDrag?: (dx: number) => void;
+  onPageDragEnd?: (dx: number, velocityX: number) => void;
+  onPageDragCancel?: () => void;
 }) {
   const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
@@ -428,21 +527,70 @@ function LightboxPage({
       <View
         pointerEvents={kind === 'video' || zoomable ? 'auto' : 'none'}
         style={[styles.mediaSlot, { width, height: mediaHeight }]}>
-        {zoomable && active ? (
+        {zoomable ? (
           <ZoomableStill
             width={mediaWidth}
             height={mediaHeight}
             active={active}
+            pageEnabled={pageEnabled}
             onClose={onClose}
-            onScaleChange={onScaleChange}
-            pagerNative={pagerNative}>
+            onPageDragStart={onPageDragStart}
+            onPageDrag={onPageDrag}
+            onPageDragEnd={onPageDragEnd}
+            onPageDragCancel={onPageDragCancel}>
             {media}
           </ZoomableStill>
         ) : (
-          media
+          <PagerSwipe
+            width={mediaWidth}
+            height={mediaHeight}
+            enabled={pageEnabled}
+            onClose={onClose}
+            onPageDragStart={onPageDragStart}
+            onPageDrag={onPageDrag}
+            onPageDragEnd={onPageDragEnd}
+            onPageDragCancel={onPageDragCancel}>
+            {media}
+          </PagerSwipe>
         )}
       </View>
     </View>
+  );
+}
+
+function PagerSwipe({
+  width,
+  height,
+  enabled,
+  onClose,
+  onPageDragStart,
+  onPageDrag,
+  onPageDragEnd,
+  onPageDragCancel,
+  children,
+}: {
+  width: number;
+  height: number;
+  enabled: boolean;
+  onClose: () => void;
+  onPageDragStart?: () => void;
+  onPageDrag?: (dx: number) => void;
+  onPageDragEnd?: (dx: number, velocityX: number) => void;
+  onPageDragCancel?: () => void;
+  children: ReactNode;
+}) {
+  const composed = useOneFingerPageGestures({
+    enabled,
+    onClose,
+    onPageDragStart,
+    onPageDrag,
+    onPageDragEnd,
+    onPageDragCancel,
+  });
+  return (
+    <GestureDetector gesture={composed} touchAction="none">
+      <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>{children}</View>
+    </GestureDetector>
   );
 }
 
@@ -450,17 +598,23 @@ function ZoomableStill({
   width,
   height,
   active,
+  pageEnabled,
   onClose,
-  onScaleChange,
-  pagerNative,
+  onPageDragStart,
+  onPageDrag,
+  onPageDragEnd,
+  onPageDragCancel,
   children,
 }: {
   width: number;
   height: number;
   active: boolean;
+  pageEnabled: boolean;
   onClose: () => void;
-  onScaleChange?: (scale: number) => void;
-  pagerNative?: ReturnType<typeof Gesture.Native>;
+  onPageDragStart?: () => void;
+  onPageDrag?: (dx: number) => void;
+  onPageDragEnd?: (dx: number, velocityX: number) => void;
+  onPageDragCancel?: () => void;
   children: ReactNode;
 }) {
   const scale = useSharedValue(1);
@@ -469,23 +623,13 @@ function ZoomableStill({
   const startScale = useSharedValue(1);
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
-  const [zoomed, setZoomed] = useState(false);
-  const report = onScaleChange;
-
-  const reportScale = useCallback(
-    (next: number) => {
-      setZoomed(next > 1.01);
-      report?.(next);
-    },
-    [report],
-  );
+  const pageSettled = useSharedValue(1);
 
   const resetZoom = useCallback(() => {
     scale.value = withTiming(1);
     translateX.value = withTiming(0);
     translateY.value = withTiming(0);
-    reportScale(1);
-  }, [reportScale, scale, translateX, translateY]);
+  }, [scale, translateX, translateY]);
 
   useEffect(() => {
     if (!active) {
@@ -493,71 +637,131 @@ function ZoomableStill({
     }
   }, [active, resetZoom]);
 
-  const pinch = Gesture.Pinch()
-    .cancelsTouchesInView(false)
-    .onBegin(() => {
-      startScale.value = scale.value;
-    })
-    .onUpdate((event) => {
-      const next = Math.min(4, Math.max(1, startScale.value * event.scale));
-      scale.value = next;
-      runOnJS(reportScale)(next);
-    })
-    .onEnd(() => {
-      if (scale.value <= 1.02) {
-        scale.value = withTiming(1);
-        translateX.value = withTiming(0);
-        translateY.value = withTiming(0);
-        runOnJS(reportScale)(1);
-      }
-    });
+  const start = onPageDragStart;
+  const drag = onPageDrag;
+  const end = onPageDragEnd;
+  const cancel = onPageDragCancel;
 
-  const imagePan = Gesture.Pan()
-    .maxPointers(1)
-    .onBegin(() => {
-      startX.value = translateX.value;
-      startY.value = translateY.value;
-    })
-    .onUpdate((event) => {
-      translateX.value = startX.value + event.translationX;
-      translateY.value = startY.value + event.translationY;
-    });
+  const composed = useMemo(() => {
+    const pinch = Gesture.Pinch()
+      .onTouchesDown((event) => {
+        if (event.numberOfTouches >= 2 && cancel) {
+          runOnJS(cancel)();
+        }
+      })
+      .onBegin(() => {
+        startScale.value = scale.value;
+        if (cancel) {
+          runOnJS(cancel)();
+        }
+      })
+      .onUpdate((event) => {
+        scale.value = Math.min(4, Math.max(1, startScale.value * event.scale));
+      })
+      .onEnd(() => {
+        if (scale.value <= 1.02) {
+          scale.value = withTiming(1);
+          translateX.value = withTiming(0);
+          translateY.value = withTiming(0);
+        }
+      });
 
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .maxDistance(24)
-    .cancelsTouchesInView(false)
-    .onEnd(() => {
-      if (scale.value > 1.01) {
-        scale.value = withTiming(1);
-        translateX.value = withTiming(0);
-        translateY.value = withTiming(0);
-        runOnJS(reportScale)(1);
-        return;
-      }
-      scale.value = withTiming(2.4);
-      runOnJS(reportScale)(2.4);
-    });
+    const imagePan = Gesture.Pan()
+      .maxPointers(1)
+      .onTouchesDown((_event, state) => {
+        if (scale.value <= 1.01) {
+          state.fail();
+        }
+      })
+      .onBegin(() => {
+        startX.value = translateX.value;
+        startY.value = translateY.value;
+      })
+      .onUpdate((event) => {
+        translateX.value = startX.value + event.translationX;
+        translateY.value = startY.value + event.translationY;
+      });
 
-  const dismiss = Gesture.Pan()
-    .maxPointers(1)
-    .activeOffsetY(24)
-    .failOffsetX([-28, 28])
-    .onEnd((event) => {
-      if (event.translationY > 72 && event.velocityY > 0) {
-        runOnJS(onClose)();
-      }
-    });
+    const doubleTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDistance(24)
+      .onEnd(() => {
+        if (scale.value > 1.01) {
+          scale.value = withTiming(1);
+          translateX.value = withTiming(0);
+          translateY.value = withTiming(0);
+          return;
+        }
+        scale.value = withTiming(2.4);
+      });
 
-  if (pagerNative && !zoomed) {
-    pinch.simultaneousWithExternalGesture(pagerNative);
-    doubleTap.simultaneousWithExternalGesture(pagerNative);
-    dismiss.simultaneousWithExternalGesture(pagerNative);
-  }
+    const pagePan = Gesture.Pan()
+      .enabled(pageEnabled)
+      .minPointers(1)
+      .maxPointers(1)
+      .activeOffsetX([-12, 12])
+      .failOffsetY([-36, 36])
+      .onTouchesDown((event, state) => {
+        if (event.numberOfTouches >= 2 || scale.value > 1.01) {
+          state.fail();
+        }
+      })
+      .onStart(() => {
+        pageSettled.value = 0;
+        if (start) {
+          runOnJS(start)();
+        }
+      })
+      .onUpdate((event) => {
+        if (drag) {
+          runOnJS(drag)(event.translationX);
+        }
+      })
+      .onEnd((event) => {
+        pageSettled.value = 1;
+        if (end) {
+          runOnJS(end)(event.translationX, event.velocityX);
+        }
+      })
+      .onFinalize((_event, success) => {
+        if (!success && pageSettled.value === 0 && cancel) {
+          pageSettled.value = 1;
+          runOnJS(cancel)();
+        }
+      });
 
-  const composed = zoomed
-    ? Gesture.Simultaneous(pinch, Gesture.Exclusive(doubleTap, imagePan))
-    : Gesture.Simultaneous(pinch, doubleTap, dismiss);
+    const dismiss = Gesture.Pan()
+      .enabled(pageEnabled)
+      .maxPointers(1)
+      .activeOffsetY(24)
+      .failOffsetX([-28, 28])
+      .onTouchesDown((event, state) => {
+        if (event.numberOfTouches >= 2 || scale.value > 1.01) {
+          state.fail();
+        }
+      })
+      .onEnd((event) => {
+        if (event.translationY > 72 && event.velocityY > 0) {
+          runOnJS(onClose)();
+        }
+      });
+
+    return Gesture.Simultaneous(pinch, doubleTap, Gesture.Race(pagePan, dismiss, imagePan));
+  }, [
+    cancel,
+    drag,
+    end,
+    onClose,
+    pageEnabled,
+    pageSettled,
+    scale,
+    start,
+    startScale,
+    startX,
+    startY,
+    translateX,
+    translateY,
+  ]);
 
   const style = useAnimatedStyle(() => ({
     transform: [
@@ -568,7 +772,7 @@ function ZoomableStill({
   }));
 
   return (
-    <GestureDetector gesture={composed} touchAction={zoomed ? 'none' : 'pan-x'}>
+    <GestureDetector gesture={composed} touchAction="none">
       <Animated.View style={[{ width, height, alignItems: 'center', justifyContent: 'center' }, style]}>
         {children}
       </Animated.View>

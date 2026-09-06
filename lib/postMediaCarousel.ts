@@ -32,6 +32,23 @@ export function snapCarouselIndex(input: {
   return Math.min(Math.max(next, 0), last);
 }
 
+/** Lightbox pan uses Gesture Handler velocity (px/s). Same snap as the in-feed pager. */
+export function snapLightboxIndex(input: {
+  from: number;
+  dx: number;
+  velocityX: number;
+  pageWidth: number;
+  length: number;
+}): number {
+  return snapCarouselIndex({
+    from: input.from,
+    dx: input.dx,
+    vx: input.velocityX / 1000,
+    pageWidth: input.pageWidth,
+    length: input.length,
+  });
+}
+
 export type PagerOrientation = 'portrait' | 'landscape';
 
 export type MediaSize = {
