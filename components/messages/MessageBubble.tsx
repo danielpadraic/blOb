@@ -7,6 +7,8 @@ import { AppText } from '@/components/ui/AppText';
 import { useChallengeShareState } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
 import { challengeIdFromShareText, textWithoutChallengeLinks } from '@/lib/challengeLink';
+import { postIdFromShareText, textWithoutPostLink } from '@/lib/postLink';
+import { postHref } from '@/lib/postShare';
 import { storyHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { storyIdFromShareText } from '@/lib/waveShare';
@@ -24,8 +26,12 @@ export function MessageBubble({ message, mine }: MessageBubbleProps) {
   const photo = message.media_url?.trim() || null;
   const raw = message.body?.trim() || '';
   const challengeId = raw ? challengeIdFromShareText(raw) : null;
-  const text = challengeId ? textWithoutChallengeLinks(raw) : raw;
-  const storyId = !challengeId && text ? storyIdFromShareText(text) : null;
+  const linked = challengeId ? textWithoutChallengeLinks(raw) : raw;
+  const storyId = !challengeId && linked ? storyIdFromShareText(linked) : null;
+  // A shared post — a lift card, a check-in — arrives as a link. Showing the raw URL would leave
+  // the reader with something to squint at rather than something to open.
+  const postId = !challengeId && !storyId && linked ? postIdFromShareText(linked) : null;
+  const text = postId ? textWithoutPostLink(linked) : linked;
   if (!raw && !photo) {
     return null;
   }
@@ -71,6 +77,14 @@ export function MessageBubble({ message, mine }: MessageBubbleProps) {
             {storyId ? 'Open this Wave' : text}
           </AppText>
         </View>
+      ) : postId ? (
+        <View className="px-3.5 py-2.5">
+          <AppText
+            className="text-[15px] leading-5"
+            style={{ color: mine ? THEME.primaryForeground : THEME.textPrimary }}>
+            Open this post
+          </AppText>
+        </View>
       ) : null}
     </View>
   );
@@ -82,6 +96,13 @@ export function MessageBubble({ message, mine }: MessageBubbleProps) {
           accessibilityRole="link"
           accessibilityLabel="Open Wave"
           onPress={() => router.push(storyHref(storyId))}>
+          {bubble}
+        </Pressable>
+      ) : postId ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Open post"
+          onPress={() => router.push(postHref(postId))}>
           {bubble}
         </Pressable>
       ) : (
