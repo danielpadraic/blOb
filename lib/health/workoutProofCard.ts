@@ -67,8 +67,48 @@ export type WorkoutProofCardModel = {
 export const WORKOUT_CARD_WIDTH = 1080;
 export const WORKOUT_CARD_HEIGHT = 1350;
 
+/**
+ * The renderer generation that drew a stored card.
+ *
+ * A card is a JPEG, so fixing the renderer or the numbers behind it does nothing to the picture
+ * already sitting on someone's post. Stamping the generation on the proof slot is what lets the app
+ * find those cards later and draw them again.
+ *
+ * Generation 1 cards were rasterized at quarter scale into the corner of an otherwise empty image,
+ * could print `0.00 mi` for a walk that covered ground, and overprinted their own stat columns.
+ * Bump this whenever a change would make an already-posted card wrong.
+ */
+export const WORKOUT_CARD_VERSION = 2;
+
 /** Chart box inside the card. Sparkline geometry is built against these numbers. */
 export const WORKOUT_CARD_CHART = { width: 872, height: 176 } as const;
+
+/** Keeps neighbouring stat columns apart, and the floor below which the strip stops being readable. */
+const STAT_GUTTER = 16;
+const STAT_MIN_FONT = 34;
+/** Bold digits and colons in the card face run a shade under 0.6em. */
+const STAT_GLYPH_EM = 0.6;
+
+/**
+ * The type size for the stat strip, shrunk until the widest value fits its column.
+ *
+ * The strip divides the hero into equal columns, so a long value overflows into its neighbour rather
+ * than wrapping — a 7-character "2:24:58" printed straight through the calories beside it. One size is
+ * chosen for the whole row on purpose: per-column sizes would read as different kinds of number.
+ */
+export function workoutCardStatFontSize(
+  values: string[],
+  columnWidth: number,
+  preferred: number,
+): number {
+  const longest = values.reduce((most, value) => Math.max(most, value.trim().length), 0);
+  const available = columnWidth - STAT_GUTTER;
+  if (longest <= 0 || available <= 0) {
+    return preferred;
+  }
+  const fits = Math.floor(available / (longest * STAT_GLYPH_EM));
+  return Math.max(Math.min(preferred, fits), STAT_MIN_FONT);
+}
 
 function safeFormat(value: Date, options: Intl.DateTimeFormatOptions, timeZone: string): string {
   try {
@@ -279,7 +319,10 @@ export function buildWorkoutProofCard(input: {
       minLabel: sparkline ? `${sparkline.min}` : null,
       maxLabel: sparkline ? `${sparkline.max}` : null,
       sparkline,
-      emptyLine: sparkline ? null : 'Heart rate not on this workout',
+      // Only claim the workout has no heart rate when it really has none. A card rebuilt from the
+      // stored summary has the average but not the sample series, and printing "not on this workout"
+      // above a stat strip reading "AVG HR 137" would call the card a liar.
+      emptyLine: sparkline || avg != null ? null : 'Heart rate not on this workout',
     },
     sourceLine: workoutCardSourceLine(input.workout.confidence),
     proofLine: `Proof for ${input.challengeTitle}`.trim(),

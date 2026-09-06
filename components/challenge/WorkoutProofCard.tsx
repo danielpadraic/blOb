@@ -16,6 +16,7 @@ import { projectRoute } from '@/lib/health/route';
 import {
   WORKOUT_CARD_HEIGHT,
   WORKOUT_CARD_WIDTH,
+  workoutCardStatFontSize,
   type WorkoutProofCardModel,
 } from '@/lib/health/workoutProofCard';
 import type { HealthActivityType } from '@/services/health/types';
@@ -227,6 +228,13 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
   const lineLength = projected ? pathLength(projected.points) : 0;
   const dashOffset = projected ? lineLength * (1 - progress) : 0;
 
+  // One size for the whole stat row, small enough that the widest value stays inside its column.
+  const statFontSize = workoutCardStatFontSize(
+    card.stats.map((stat) => stat.value),
+    (HERO.width - 80) / Math.max(card.stats.length, 1),
+    projected ? 44 : 64,
+  );
+
   return (
     <Svg
       ref={ref}
@@ -399,7 +407,7 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
               x={x}
               y={labelY + (projected ? 46 : 72)}
               fill={INK.text}
-              fontSize={projected ? 44 : 64}
+              fontSize={statFontSize}
               fontWeight="700">
               {stat.value}
             </SvgText>

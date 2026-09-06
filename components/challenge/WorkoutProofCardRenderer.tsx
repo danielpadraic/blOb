@@ -30,6 +30,11 @@ const SETTLE_MS = 220;
 /**
  * Mounts the proof card off-screen and rasterizes it through Svg.toDataURL. Kept out of the visible
  * tree so the user never sees a second editor — they only see the finished thumb in the slot.
+ *
+ * The mount is the full card size on purpose. `toDataURL` allocates a bitmap of the size it is given
+ * but draws the view at whatever size the view actually is, anchored top-left — so mounting a
+ * quarter-scale card and asking for a full-size bitmap produced a small card in the corner of a
+ * mostly empty image. Both numbers have to agree.
  */
 export function WorkoutProofCardRenderer({ request, onRendered, onFailed }: Props) {
   const svgRef = useRef<Svg | null>(null);
@@ -90,10 +95,12 @@ export function WorkoutProofCardRenderer({ request, onRendered, onFailed }: Prop
       collapsable={false}
       style={{
         position: 'absolute',
-        left: 0,
-        top: 0,
-        width: WORKOUT_CARD_WIDTH / 4,
-        height: WORKOUT_CARD_HEIGHT / 4,
+        // Parked past the bottom-left corner rather than at 0,0. The card is wider than a phone, and
+        // a transparent view that big sitting over the screen invites stray layout and touch bugs.
+        left: -WORKOUT_CARD_WIDTH,
+        top: -WORKOUT_CARD_HEIGHT,
+        width: WORKOUT_CARD_WIDTH,
+        height: WORKOUT_CARD_HEIGHT,
         opacity: 0,
         zIndex: -1,
       }}>
@@ -101,8 +108,8 @@ export function WorkoutProofCardRenderer({ request, onRendered, onFailed }: Prop
         ref={svgRef}
         card={request.card}
         activityType={request.activityType}
-        width={WORKOUT_CARD_WIDTH / 4}
-        height={WORKOUT_CARD_HEIGHT / 4}
+        width={WORKOUT_CARD_WIDTH}
+        height={WORKOUT_CARD_HEIGHT}
       />
     </View>
   );

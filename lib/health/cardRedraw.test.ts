@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cardIsCurrent,
+  cardRepairFor,
   confidenceFromSourceName,
-  redrawFor,
-  redrawWouldLoseHeartRate,
+  isVendorHealthProof,
   workoutFromStoredSession,
 } from '@/lib/health/cardRedraw';
-import { buildWorkoutProofCard } from '@/lib/health/workoutProofCard';
+import { buildWorkoutProofCard, WORKOUT_CARD_VERSION } from '@/lib/health/workoutProofCard';
 
 /**
  * The Eagle walk as the check-in stored it, with the distance the repair migration recovered. The
@@ -26,29 +27,44 @@ const WALK = {
   distanceMeters: 10042,
 };
 
-const SESSION = {
-  id: 'session-1',
-  checkin_id: 'checkin-1',
-  challenge_id: 'challenge-1',
-  activity_label: 'Outdoor Walking',
-  vendor_workout_id: '3C8F0994-8BF8-45AB-A4B0-033EEF3339D9',
+/**
+ * Courtney's session from the day before. It predates the `source` field and its card never
+ * rasterized, so the slot carries a Health receipt and an empty url.
+ */
+const LEGACY = {
+  startedAt: '2026-09-04T13:25:43.056Z',
+  endedAt: '2026-09-04T14:15:44.562Z',
+  durationSec: 3002,
+  activityType: 'other',
+  sourceName: 'Apple Watch',
+  avgHrBpm: 137,
+  maxHrBpm: 174,
+  activeEnergyKcal: 275,
 };
+
+const WORKOUT_ID = '7bf86cb2-e26d-467f-9b3b-44bc4a0808e5';
+const LABELS = { [WORKOUT_ID]: 'Outdoor Walking' };
 
 const CARD_SLOT = {
   method: 'hr',
   url: 'https://example.supabase.co/storage/v1/object/sign/challenge-proofs/hr_monitor-1.jpg',
-  healthWorkoutId: '7bf86cb2-e26d-467f-9b3b-44bc4a0808e5',
+  healthWorkoutId: WORKOUT_ID,
   health: WALK,
+};
+
+const CHECKIN = {
+  id: 'checkin-1',
+  challenge_id: 'challenge-1',
+  proof_parts: { p_hr: CARD_SLOT, p_photo: { method: 'photo', url: 'https://example.com/a.jpg' } },
 };
 
 describe('rebuilding the workout a stored card was drawn from', () => {
   it('recovers the distance the old card could not show', () => {
-    const workout = workoutFromStoredSession(WALK, SESSION);
-    expect(workout?.distanceM).toBe(10042);
+    expect(workoutFromStoredSession(WALK, 'Outdoor Walking', WORKOUT_ID)?.distanceM).toBe(10042);
   });
 
-  it('redraws as 6.24 mi where the card on the post says 0.00 mi', () => {
-    const workout = workoutFromStoredSession(WALK, SESSION);
+  it('draws as 6.24 mi where the card on the post says 0.00 mi', () => {
+    const workout = workoutFromStoredSession(WALK, 'Outdoor Walking', WORKOUT_ID);
     const card = buildWorkoutProofCard({
       workout: workout!,
       samples: [],
@@ -60,8 +76,7 @@ describe('rebuilding the workout a stored card was drawn from', () => {
   });
 
   it('keeps the rest of what the card prints', () => {
-    const workout = workoutFromStoredSession(WALK, SESSION);
-    expect(workout).toMatchObject({
+    expect(workoutFromStoredSession(WALK, 'Outdoor Walking', WORKOUT_ID)).toMatchObject({
       activityLabel: 'Outdoor Walking',
       activityType: 'walking',
       durationSec: 8617,
@@ -73,8 +88,7 @@ describe('rebuilding the workout a stored card was drawn from', () => {
   });
 
   it('falls back to the humanized type when no label was stored', () => {
-    const workout = workoutFromStoredSession(WALK, { ...SESSION, activity_label: null });
-    expect(workout?.activityLabel).toBe('Walking');
+    expect(workoutFromStoredSession(WALK, null, WORKOUT_ID)?.activityLabel).toBe('Walking');
   });
 
   it('refuses a snapshot with no workout window, since the card prints one', () => {
@@ -91,6 +105,20 @@ describe('rebuilding the workout a stored card was drawn from', () => {
     expect(workout?.distanceM).toBeUndefined();
     expect(workout?.caloriesKcal).toBeUndefined();
   });
+
+  it('rebuilds a session that never carried a source field', () => {
+    const workout = workoutFromStoredSession(LEGACY, null, 'df434ddb-730a-48ae-bf6e-31a5bda49da0');
+    expect(workout).toMatchObject({ durationSec: 3002, hrAvg: 137, confidence: 'watch' });
+    // No distance on that workout, so elapsed time is the achievement rather than a printed 0.00.
+    const card = buildWorkoutProofCard({
+      workout: workout!,
+      samples: [],
+      timeZone: 'America/Denver',
+      challengeTitle: '30-Day Consistency',
+    });
+    expect(card.headline).toEqual({ value: '0:50:02', label: 'Workout time' });
+    expect(card.distanceLine).toBeNull();
+  });
 });
 
 describe('reading the recorder back off the stored label', () => {
@@ -102,51 +130,101 @@ describe('reading the recorder back off the stored label', () => {
   });
 });
 
-describe('which stored cards get redrawn', () => {
-  const checkin = {
-    id: 'checkin-1',
-    challenge_id: 'challenge-1',
-    proof_parts: { p_hr: CARD_SLOT, p_photo: { method: 'photo', url: 'https://example.com/a.jpg' } },
-  };
-
-  it('picks the slot holding the workout card, not the selfie beside it', () => {
-    const work = redrawFor(SESSION, checkin);
-    expect(work?.proofId).toBe('p_hr');
-    expect(work?.healthWorkoutId).toBe('7bf86cb2-e26d-467f-9b3b-44bc4a0808e5');
-    expect(work?.workout.distanceM).toBe(10042);
+describe('telling a vendor session from a screenshot', () => {
+  it('accepts what the watch recorded', () => {
+    expect(isVendorHealthProof(WALK, { healthWorkoutId: WORKOUT_ID })).toBe(true);
   });
 
-  it('leaves a slot alone when no card was ever uploaded, rather than adding media', () => {
-    const work = redrawFor(SESSION, {
-      ...checkin,
-      proof_parts: { p_hr: { ...CARD_SLOT, url: '' } },
+  it('accepts an early attach that predates the source field', () => {
+    expect(isVendorHealthProof(LEGACY, { healthWorkoutId: 'df434ddb' })).toBe(true);
+  });
+
+  it('refuses numbers read off a screenshot or typed by hand', () => {
+    expect(isVendorHealthProof({ ...WALK, source: 'ocr' }, { healthWorkoutId: WORKOUT_ID })).toBe(false);
+    expect(isVendorHealthProof({ ...WALK, source: 'manual' }, { healthWorkoutId: WORKOUT_ID })).toBe(false);
+  });
+
+  it('refuses an unsourced snapshot with no vendor id behind it', () => {
+    expect(isVendorHealthProof(LEGACY, { healthWorkoutId: null })).toBe(false);
+    expect(isVendorHealthProof({ ...LEGACY, sourceName: undefined }, { healthWorkoutId: 'x' })).toBe(false);
+  });
+});
+
+describe('which posted cards get drawn again', () => {
+  it('picks the slot holding the workout card, not the selfie beside it', () => {
+    const work = cardRepairFor(CHECKIN, LABELS);
+    expect(work?.proofId).toBe('p_hr');
+    expect(work?.healthWorkoutId).toBe(WORKOUT_ID);
+    expect(work?.workout.distanceM).toBe(10042);
+    expect(work?.workout.activityLabel).toBe('Outdoor Walking');
+    expect(work?.hadCard).toBe(true);
+  });
+
+  // The whole point of the pass: a card the current renderer already drew is finished work.
+  it('leaves a card alone once it carries the current stamp', () => {
+    const work = cardRepairFor({
+      ...CHECKIN,
+      proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION } },
     });
     expect(work).toBeNull();
   });
 
+  it('still picks up a card stamped by an older renderer', () => {
+    const work = cardRepairFor({
+      ...CHECKIN,
+      proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION - 1 } },
+    });
+    expect(work?.proofId).toBe('p_hr');
+  });
+
+  // Courtney's check-in posted with two selfies and no recap, because the card never rasterized.
+  it('gives a card to a Health attach that never got one', () => {
+    const work = cardRepairFor({
+      id: 'checkin-2',
+      challenge_id: 'challenge-1',
+      proof_parts: {
+        p_hr: { method: 'hr', url: '', healthWorkoutId: 'df434ddb', health: LEGACY },
+      },
+    });
+    expect(work?.proofId).toBe('p_hr');
+    expect(work?.hadCard).toBe(false);
+    expect(work?.workout.durationSec).toBe(3002);
+  });
+
   it('ignores a screenshot read, which never had a generated card', () => {
-    const work = redrawFor(SESSION, {
-      ...checkin,
+    const work = cardRepairFor({
+      ...CHECKIN,
       proof_parts: { p_hr: { ...CARD_SLOT, health: { ...WALK, source: 'ocr' } } },
     });
     expect(work).toBeNull();
   });
 
-  it('will not touch a check-in the session does not belong to', () => {
-    expect(redrawFor(SESSION, { ...checkin, id: 'someone-else' })).toBeNull();
-    expect(redrawFor({ ...SESSION, checkin_id: null }, checkin)).toBeNull();
+  it('ignores a check-in with no health proof at all', () => {
+    const work = cardRepairFor({
+      ...CHECKIN,
+      proof_parts: { p_photo: { method: 'photo', url: 'https://example.com/a.jpg' } },
+    });
+    expect(work).toBeNull();
+  });
+
+  // Losing someone's words to a picture repair would be a strange trade.
+  it('carries the slot caption through, since the save rebuilds the slot', () => {
+    const work = cardRepairFor({
+      ...CHECKIN,
+      proof_parts: { p_hr: { ...CARD_SLOT, caption: 'Went for a walk with the cutie!' } },
+    });
+    expect(work?.caption).toBe('Went for a walk with the cutie!');
   });
 });
 
-describe('not trading a wrong number for a missing graph', () => {
-  it('waits when the workout had a heart rate but no samples came back', () => {
-    const workout = workoutFromStoredSession(WALK, SESSION)!;
-    expect(redrawWouldLoseHeartRate(workout, 0)).toBe(true);
-    expect(redrawWouldLoseHeartRate(workout, 120)).toBe(false);
+describe('the stamp that stops the pass repeating itself', () => {
+  it('treats an unstamped slot as stale, because the stamp came after those cards', () => {
+    expect(cardIsCurrent({ cardVersion: null })).toBe(false);
+    expect(cardIsCurrent({})).toBe(false);
   });
 
-  it('goes ahead for a workout that never had a heart rate to lose', () => {
-    const workout = workoutFromStoredSession({ ...WALK, avgHrBpm: undefined }, SESSION)!;
-    expect(redrawWouldLoseHeartRate(workout, 0)).toBe(false);
+  it('treats the current generation, or a later one, as done', () => {
+    expect(cardIsCurrent({ cardVersion: WORKOUT_CARD_VERSION })).toBe(true);
+    expect(cardIsCurrent({ cardVersion: WORKOUT_CARD_VERSION + 1 })).toBe(true);
   });
 });

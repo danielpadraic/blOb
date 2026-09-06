@@ -1,5 +1,10 @@
 import { parseCheckinHealthProof, type CheckinHealthProof } from '@/lib/health/checkinHealthProof';
-import { parseProofParts, type ChallengeProofMethod } from '@/lib/challengeProofs';
+import {
+  parseProofParts,
+  type ChallengeProofMethod,
+  type ChallengeProofPart,
+} from '@/lib/challengeProofs';
+import { WORKOUT_CARD_VERSION } from '@/lib/health/workoutProofCard';
 import { humanizeActivityLabel } from '@/services/health/apple';
 import type {
   HealthActivityType,
@@ -9,37 +14,36 @@ import type {
 } from '@/services/health/types';
 
 /**
- * Redrawing a workout proof card that was rendered with wrong numbers.
+ * Drawing a workout proof card again for a check-in that has already been posted.
  *
- * The card is a JPEG, so its stats are pixels — repairing the row behind it does not change the
- * picture on the post. `workout_sessions.card_needs_redraw` marks the rows whose card no longer
- * agrees with them, and everything here answers one question: can this card be drawn again from what
- * is already stored, without asking the vendor for anything?
+ * The card is a JPEG, so its stats are pixels: repairing the row behind it changes nothing about the
+ * picture on the post, and neither does fixing the renderer. Everything here answers one question —
+ * can this card be drawn again from what is already stored, without asking the vendor for anything?
  *
  * It can. The check-in keeps the whole session summary in `proof_parts[slot].health`, which is what
- * the card was built from in the first place.
+ * the card was built from in the first place. That matters for two reasons: a check-in that never got
+ * a `workout_sessions` ledger row is still repairable, and so is one whose workout has since aged out
+ * of Apple Health.
  */
 
-/** A card that has to be drawn again, with everything the renderer needs to do it. */
-export type CardRedraw = {
-  sessionId: string;
+/** A card that has to be drawn, with everything the renderer and the save need to do it. */
+export type CardRepair = {
   checkinId: string;
   challengeId: string;
-  /** The proof slot holding the card. Replacing it keeps the check-in's other media untouched. */
+  /** The proof slot the card belongs to. Saving it leaves the check-in's other media untouched. */
   proofId: string;
   method: ChallengeProofMethod;
-  /** Carried through the replace so the redrawn still stays workout proof, not a loose photo. */
-  healthWorkoutId: string;
+  /** Carried through the save so the new image stays workout proof, not a loose photo. */
+  healthWorkoutId: string | null;
+  /**
+   * Whether the slot already shows a card. When false the post gains an image it never had, which is
+   * the case for a Health attach whose card never rasterized.
+   */
+  hadCard: boolean;
+  /** The slot's own caption, which the save rebuilds the part from and would otherwise drop. */
+  caption: string | null;
   health: CheckinHealthProof;
   workout: HealthWorkout;
-};
-
-export type StoredSessionRow = {
-  id: string;
-  checkin_id: string | null;
-  challenge_id: string | null;
-  activity_label?: string | null;
-  vendor_workout_id?: string | null;
 };
 
 export type StoredCheckinRow = {
@@ -47,6 +51,9 @@ export type StoredCheckinRow = {
   challenge_id: string;
   proof_parts: unknown;
 };
+
+/** Apple's own wording for the activity, when a ledger row kept it. */
+export type StoredActivityLabels = Record<string, string | null | undefined>;
 
 const ACTIVITY_TYPES: HealthActivityType[] = ['running', 'walking', 'cycling', 'strength', 'other'];
 
@@ -81,25 +88,47 @@ function labelFromActivityType(activityType: string): string {
 }
 
 /**
- * Rebuild the workout the card was drawn from. Only the fields the card actually renders are
+ * Whether this slot's snapshot came off a watch or phone rather than a screenshot or a typed number.
+ *
+ * A card is only honest for a vendor session. `source` is the reliable signal, but it was added after
+ * the first Health attaches shipped, so a snapshot with no source still counts when it carries a
+ * vendor workout id and the device name it was recorded on. OCR and hand-entered rows are refused
+ * outright — reading numbers off a screenshot does not earn a blOb-branded recap.
+ */
+export function isVendorHealthProof(
+  health: CheckinHealthProof,
+  part: Pick<ChallengeProofPart, 'healthWorkoutId'>,
+): boolean {
+  if (health.source === 'healthkit' || health.source === 'health_connect') {
+    return true;
+  }
+  if (health.source === 'ocr' || health.source === 'manual') {
+    return false;
+  }
+  return Boolean(part.healthWorkoutId && String(health.sourceName ?? '').trim());
+}
+
+/**
+ * Rebuild the workout the card is drawn from. Only the fields the card actually renders are
  * recovered — this is not a general-purpose HealthWorkout, and it deliberately carries no body
  * metrics, because none were ever on the card.
  */
 export function workoutFromStoredSession(
   health: CheckinHealthProof,
-  session?: Pick<StoredSessionRow, 'activity_label' | 'vendor_workout_id'> | null,
+  activityLabel?: string | null,
+  vendorWorkoutId?: string | null,
 ): HealthWorkout | null {
   if (!health.startedAt || !health.endedAt || !(Number(health.durationSec) > 0)) {
     return null;
   }
   const source: HealthSource = health.source === 'health_connect' ? 'health_connect' : 'apple_health';
   const workout: HealthWorkout = {
-    providerWorkoutId: session?.vendor_workout_id?.trim() || `session:${health.startedAt}`,
+    providerWorkoutId: vendorWorkoutId?.trim() || `session:${health.startedAt}`,
     source,
     activityType: activityTypeOf(health.activityType),
     // The label is what the card prints. A session row that kept Apple's own wording wins; otherwise
     // the stored type is humanized, which is what the original card fell back to as well.
-    activityLabel: session?.activity_label?.trim() || labelFromActivityType(health.activityType),
+    activityLabel: activityLabel?.trim() || labelFromActivityType(health.activityType),
     startedAt: health.startedAt,
     endedAt: health.endedAt,
     durationSec: Number(health.durationSec),
@@ -124,53 +153,51 @@ export function workoutFromStoredSession(
 }
 
 /**
- * The one slot on this check-in whose card is redrawable.
+ * Whether a slot's card was drawn by the current renderer.
  *
- * A slot qualifies only when it already holds an uploaded image: this replaces a card that is
- * showing the wrong number, and must never add media to a post that did not have it. Slots whose
- * card never rasterized keep their Health attach and stay as they are.
+ * An unstamped slot is treated as stale rather than as fine, because the stamp arrived after the
+ * cards it is meant to find.
  */
-export function redrawFor(session: StoredSessionRow, checkin: StoredCheckinRow): CardRedraw | null {
-  if (!session.checkin_id || session.checkin_id !== checkin.id) {
-    return null;
-  }
+export function cardIsCurrent(part: Pick<ChallengeProofPart, 'cardVersion'>): boolean {
+  return Number(part.cardVersion) >= WORKOUT_CARD_VERSION;
+}
+
+/**
+ * The one slot on this check-in whose card needs drawing, or null when none does.
+ *
+ * A slot qualifies whether or not it already holds an image: a stale card is replaced, and a Health
+ * attach whose card never rasterized finally gets one. Cards already drawn by the current renderer
+ * are left alone, which is what stops this from running forever.
+ */
+export function cardRepairFor(
+  checkin: StoredCheckinRow,
+  labels?: StoredActivityLabels,
+): CardRepair | null {
   const parts = parseProofParts(checkin.proof_parts);
   for (const [proofId, part] of Object.entries(parts)) {
-    if (!part.healthWorkoutId || !/^https?:\/\//i.test(String(part.url ?? ''))) {
-      continue;
-    }
     const health = parseCheckinHealthProof(part.health);
-    if (!health || (health.source !== 'healthkit' && health.source !== 'health_connect')) {
+    if (!health || !isVendorHealthProof(health, part) || cardIsCurrent(part)) {
       continue;
     }
-    const workout = workoutFromStoredSession(health, session);
+    const workout = workoutFromStoredSession(
+      health,
+      labels?.[part.healthWorkoutId ?? ''] ?? null,
+      part.healthWorkoutId,
+    );
     if (!workout) {
       continue;
     }
     return {
-      sessionId: session.id,
       checkinId: checkin.id,
-      challengeId: session.challenge_id || checkin.challenge_id,
+      challengeId: checkin.challenge_id,
       proofId,
       method: part.method,
-      healthWorkoutId: part.healthWorkoutId,
+      healthWorkoutId: part.healthWorkoutId ?? null,
+      hadCard: /^https?:\/\//i.test(String(part.url ?? '')),
+      caption: part.caption ?? null,
       health,
       workout,
     };
   }
   return null;
-}
-
-/**
- * Whether the redrawn card would lose the heart-rate graph it used to show.
- *
- * The sparkline comes from the sample series, which lives on the device rather than in the row. If
- * the workout reports an average but no samples came back, redrawing now would trade a wrong
- * distance for a missing graph. The flag stays set instead, and the next open tries again.
- */
-export function redrawWouldLoseHeartRate(
-  workout: HealthWorkout,
-  sampleCount: number,
-): boolean {
-  return Number(workout.hrAvg) > 0 && sampleCount === 0;
 }

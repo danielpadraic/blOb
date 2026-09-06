@@ -1876,6 +1876,16 @@ export type Database = {
         Args: { p_session_id: string; p_post_id: string | null };
         Returns: null;
       };
+      /** Swaps the picture on an already-posted workout proof card. Owner-scoped, names the check-in. */
+      repair_checkin_workout_card: {
+        Args: {
+          p_checkin_id: string;
+          p_proof_id: string;
+          p_url: string;
+          p_card_version: number;
+        };
+        Returns: unknown;
+      };
       get_my_profile: {
         Args: Record<string, never>;
         Returns: Profile | null;

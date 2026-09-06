@@ -58,6 +58,11 @@ export type ChallengeProofPart = {
   caption?: string | null;
   /** SHA-256 of file bytes, or object:/health: fingerprint when bytes are unavailable. */
   contentHash?: string | null;
+  /**
+   * Which renderer generation drew the workout card in this slot (`WORKOUT_CARD_VERSION`). Absent on
+   * slots whose card predates the stamp, which is how the repair pass finds them.
+   */
+  cardVersion?: number | null;
 };
 
 /** Extra photos on top of required proofs. Extras are optional and never unlock Send. */
@@ -1093,6 +1098,10 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
           : typeof row.content_hash === 'string'
             ? row.content_hash
             : null,
+      cardVersion:
+        Number(row.cardVersion ?? row.card_version) > 0
+          ? Math.round(Number(row.cardVersion ?? row.card_version))
+          : null,
     };
   }
   return parts;

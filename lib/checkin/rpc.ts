@@ -50,6 +50,11 @@ export type SaveCheckinProofInput = {
    */
   healthWorkoutId?: string | null;
   caption?: string | null;
+  /**
+   * Stamps the renderer generation on the slot when the uploaded image is a generated workout card.
+   * Left unset for camera stills, which no renderer owns.
+   */
+  cardVersion?: number | null;
 };
 
 function partWithCaption(part: ChallengeProofPart, caption?: string | null): ChallengeProofPart {
@@ -238,10 +243,16 @@ export async function saveCheckinProofWithClient(
 ): Promise<ChallengeCheckin> {
   const userId = await currentUserId(client);
   const packed = await proofPartFor(input, userId, upload, resolveUrl);
+  // The RPC replaces the whole slot object with what it is handed, so the stamp has to travel with
+  // the part rather than being written separately afterwards.
+  const part =
+    packed && input.cardVersion != null
+      ? { ...packed.part, cardVersion: input.cardVersion }
+      : packed?.part ?? null;
   const { data, error } = (await client.rpc('save_checkin_proof', {
     p_challenge_id: input.challengeId,
     p_proof_id: input.clearProof ? input.proof?.id ?? packed?.id ?? null : packed?.id ?? null,
-    p_proof_part: input.clearProof ? null : packed?.part ?? null,
+    p_proof_part: input.clearProof ? null : part,
     p_health_workout_id: input.clearProof ? null : packed?.healthWorkoutId ?? null,
     p_notes: input.notes ?? null,
     p_extra_media: input.extraMedia ?? null,

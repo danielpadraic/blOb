@@ -10,8 +10,8 @@ import { parseChallengeProofs, type ChallengeProof } from '@/lib/challengeProofs
 import { saveCheckinProof } from '@/lib/challenges/stagedCheckin';
 import { challengeClockTz } from '@/lib/checkinPeriod';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
-import { redrawWouldLoseHeartRate, type CardRedraw } from '@/lib/health/cardRedraw';
-import { clearCardRedraw, pendingCardRedraws } from '@/lib/health/cardRedrawQueue';
+import { type CardRepair } from '@/lib/health/cardRedraw';
+import { pendingCardRepairs, putRepairedCard } from '@/lib/health/cardRedrawQueue';
 import {
   buildWorkoutProofCard,
   withHeartRateFloor,
@@ -21,22 +21,26 @@ import { supabase } from '@/lib/supabase';
 import { getHealthProvider } from '@/services/health';
 
 /**
- * Draws a stored workout proof card again when its numbers went stale.
+ * Draws a posted workout proof card again when the stored picture no longer tells the truth.
  *
- * The distance on those cards is baked into a JPEG, so the repair that fixed the rows could not fix
- * the pictures. This mounts the same off-screen renderer the check-in screen uses, redraws each
- * flagged card from the summary already on the check-in, and replaces it through the ordinary
- * check-in proof path — so the Live post and the Home post both pick up the new image and the
- * check-in keeps its submitted status.
+ * A card's stats are pixels in a JPEG, so neither the repair that fixed the distances nor the fix to
+ * the renderer itself could change a card already sitting on someone's post. This mounts the same
+ * off-screen renderer the check-in screen uses, draws each stale card from the summary already on the
+ * check-in, and saves it through the ordinary check-in proof path — so the Live post and the Home post
+ * both pick up the new image and the check-in keeps its submitted status.
+ *
+ * A slot whose card never rasterized gets one here for the first time, which is why a Health attach
+ * that posted with only selfies ends up with its recap.
  *
  * Rasterizing an SVG to a file is native-only, so Web renders nothing here. Web already reads the
- * repaired numbers for its chips and its own on-screen card; only the stored JPEG waits for a phone.
+ * repaired numbers for its chips; only the stored JPEG waits for a phone. And because check-ins are
+ * owner-scoped, each person's cards are drawn on their own device — nobody repairs anybody else's.
  */
 export function WorkoutCardRedrawHost() {
   const { user } = useAuth();
-  const [queue, setQueue] = useState<CardRedraw[]>([]);
+  const [queue, setQueue] = useState<CardRepair[]>([]);
   const [request, setRequest] = useState<WorkoutCardRequest | null>(null);
-  const activeRef = useRef<{ item: CardRedraw; proof: ChallengeProof } | null>(null);
+  const activeRef = useRef<{ item: CardRepair; proof: ChallengeProof } | null>(null);
   const loadedForRef = useRef<string | null>(null);
 
   const userId = user?.id;
@@ -49,7 +53,7 @@ export function WorkoutCardRedrawHost() {
     let cancelled = false;
     void (async () => {
       try {
-        const work = await pendingCardRedraws(userId);
+        const work = await pendingCardRepairs(userId);
         if (!cancelled && work.length > 0) {
           setQueue(work);
         }
@@ -62,7 +66,7 @@ export function WorkoutCardRedrawHost() {
     };
   }, [userId]);
 
-  /** Drop the head of the queue, leaving its flag alone so a skipped card is retried later. */
+  /** Drop the head of the queue without stamping it, so a skipped card is retried on a later open. */
   const skipHead = useCallback(() => {
     activeRef.current = null;
     setRequest(null);
@@ -92,14 +96,12 @@ export function WorkoutCardRedrawHost() {
         }
         const row = challenge.data as ChallengeCardRow;
 
+        // The sample series lives on the device, not in the row, and it only feeds the sparkline.
+        // Health is asked for it so the graph survives, but a card is drawn either way: a stated
+        // average with no graph is a smaller loss than leaving a wrong distance on a proof artifact,
+        // and waiting for samples that may never come would mean never fixing the number.
         const samples = await readHeartRateSeries(item);
         if (cancelled) {
-          return;
-        }
-        // Trading a wrong distance for a missing heart-rate graph is not a repair. The flag stays
-        // set, so the next open tries again once Health hands the samples over.
-        if (redrawWouldLoseHeartRate(item.workout, samples.length)) {
-          skipHead();
           return;
         }
 
@@ -117,7 +119,7 @@ export function WorkoutCardRedrawHost() {
           ({ id: item.proofId, name: '', method: item.method } satisfies ChallengeProof);
         activeRef.current = { item: { ...item, workout }, proof };
         setRequest({
-          key: `${item.proofId}-${item.sessionId}`,
+          key: `${item.proofId}-${item.checkinId}`,
           card,
           activityType: workout.activityType,
         });
@@ -143,21 +145,13 @@ export function WorkoutCardRedrawHost() {
       const { item, proof } = active;
       void (async () => {
         try {
-          // The ordinary check-in proof path: it uploads the still, overwrites this one slot, and
-          // rebuilds the post's media, so Live and Home both show the redrawn card. An already
-          // submitted check-in stays submitted, because the slot is still satisfied.
-          await saveCheckinProof({
-            challengeId: item.challengeId,
-            proof,
-            uri: fileUri,
-            mimeType: 'image/png',
-            fromLibrary: false,
-            health: item.health,
-            healthWorkoutId: item.healthWorkoutId,
-          });
-          await clearCardRedraw(item.sessionId);
+          // Uploads the card and swaps it onto this one slot of this one check-in, rebuilding the
+          // post's media so Live and Home both show it. The check-in keeps its status, its health
+          // snapshot and its caption, and the version stamp is what stops the card being picked up
+          // again on the next open.
+          await putRepairedCard(item, fileUri);
         } catch {
-          // Leave the flag set. The old card stays on the post rather than the slot going empty.
+          // Unstamped, so it is tried again. The old card stays on the post rather than going empty.
         } finally {
           activeRef.current = null;
           setQueue((current) => current.slice(1));
@@ -191,7 +185,7 @@ const CHALLENGE_COLUMNS =
 type ChallengeCardRow = Parameters<typeof challengeDisplayTitle>[0] &
   Parameters<typeof challengeClockTz>[0] & { proofs?: unknown };
 
-async function readHeartRateSeries(item: CardRedraw): Promise<HeartRateSample[]> {
+async function readHeartRateSeries(item: CardRepair): Promise<HeartRateSample[]> {
   if (!item.health.startedAt || !item.health.endedAt) {
     return [];
   }

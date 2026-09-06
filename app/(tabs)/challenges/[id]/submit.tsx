@@ -112,6 +112,7 @@ import {
   buildWorkoutProofCard,
   withHeartRateFloor,
   WORKOUT_CARD_HEIGHT,
+  WORKOUT_CARD_VERSION,
   WORKOUT_CARD_WIDTH,
   type HeartRateSample,
   type WorkoutProofCardModel,
@@ -175,6 +176,15 @@ function logHealthAttach(workout: HealthWorkout, route: WorkoutRoute | null): vo
     hasRoute: Boolean(route),
     avgHr: workout.hrAvg ?? null,
   });
+}
+
+/**
+ * Whether this slot holds a finished workout card rather than a Health attach still waiting on one.
+ * `health:` is the placeholder the slot carries while the card rasterizes.
+ */
+function isRenderedWorkoutCard(draft?: SlotDraft | null): boolean {
+  const uri = String(draft?.uri ?? '');
+  return Boolean(draft?.healthWorkoutId) && uri.length > 0 && !uri.startsWith('health:');
 }
 
 /**
@@ -783,6 +793,10 @@ function SubmitWorkoutInner() {
         fromLibrary: draft?.fromLibrary,
         health: draft?.health ?? null,
         healthWorkoutId: draft?.healthWorkoutId ?? null,
+        // Stamped only once the slot holds the rasterized card rather than the `health:` placeholder
+        // that stands in while it renders. Without the stamp the repair pass would redraw a card the
+        // current renderer had just drawn.
+        cardVersion: isRenderedWorkoutCard(draft) ? WORKOUT_CARD_VERSION : null,
         caption: clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? ''),
         notes,
         extraMedia: uniqueProofUrls(

@@ -8,6 +8,7 @@ import {
   workoutCardHeartRateAverage,
   workoutCardSourceLine,
   workoutCardSparkline,
+  workoutCardStatFontSize,
   workoutCardTimeRange,
   type HeartRateSample,
 } from '@/lib/health/workoutProofCard';
@@ -305,6 +306,34 @@ describe('route on the card', () => {
     });
     expect(parsed?.source).toBe('ocr');
     expect(parsed?.route).toBeUndefined();
+  });
+});
+
+describe('sizing the stat strip so columns do not collide', () => {
+  // The indoor card divides the hero into four 208px columns. At the old fixed 64, a "2:24:58" clock
+  // needed about 260px and printed straight through the calories column beside it.
+  const COLUMN = (912 - 80) / 4;
+
+  it('shrinks the row until the widest value fits its column', () => {
+    const size = workoutCardStatFontSize(['2:24:58', '442', '120', '136'], COLUMN, 64);
+    expect(size).toBeLessThan(64);
+    expect('2:24:58'.length * 0.6 * size).toBeLessThanOrEqual(COLUMN);
+  });
+
+  it('leaves short values at the size the design asked for', () => {
+    expect(workoutCardStatFontSize(['442', '120', '136'], COLUMN, 64)).toBe(64);
+  });
+
+  it('keeps the route card at its own smaller size, which already fit', () => {
+    expect(workoutCardStatFontSize(['2:23:37', '672', '103', '112'], COLUMN, 44)).toBe(44);
+  });
+
+  it('never shrinks below the readable floor, even for an absurd value', () => {
+    expect(workoutCardStatFontSize(['1234567890123456789012345'], COLUMN, 64)).toBe(34);
+  });
+
+  it('is unbothered by an empty strip', () => {
+    expect(workoutCardStatFontSize([], COLUMN, 64)).toBe(64);
   });
 });
 
