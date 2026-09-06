@@ -262,6 +262,18 @@ export type LiftPlayBlock = {
 };
 
 /**
+ * Everything the timer needs to run, and nothing about where it came from.
+ *
+ * A cardio row inside a lift and the standalone timer off the plus menu both reduce to this, so
+ * the countdown, the cues, and the screen lock have exactly one implementation between them.
+ */
+export type LiftPlaySpec = {
+  /** The line under the round label — an exercise on a lift row, a preset name standalone. */
+  title: string;
+  blocks: LiftPlayBlock[];
+};
+
+/**
  * What Play actually counts down.
  *
  * An Interval row plays its rounds. Every other cardio type keeps its single duration block and
@@ -273,7 +285,6 @@ export function playBlocks(row: LiftExerciseDraft): LiftPlayBlock[] {
   if (row.kind !== 'cardio') {
     return [];
   }
-  const rounds = row.rounds ?? [];
   const blocks: LiftPlayBlock[] = [];
 
   if (row.cardioType !== 'interval') {
@@ -290,6 +301,18 @@ export function playBlocks(row: LiftExerciseDraft): LiftPlayBlock[] {
     }
   }
 
+  return [...blocks, ...blocksFromRounds(row.rounds ?? [])];
+}
+
+/**
+ * Turns a bare rounds list into a play sequence.
+ *
+ * The standalone timer has no exercise behind it — just rounds — so it builds its sequence from
+ * here while a cardio row goes through `playBlocks`. Both end up running the identical engine,
+ * which is the point: there is one countdown in the app, not two that drift apart.
+ */
+export function blocksFromRounds(rounds: readonly LiftRound[]): LiftPlayBlock[] {
+  const blocks: LiftPlayBlock[] = [];
   rounds.forEach((round, index) => {
     const seconds = roundSeconds(round);
     if (seconds <= 0) {
@@ -303,7 +326,6 @@ export function playBlocks(row: LiftExerciseDraft): LiftPlayBlock[] {
       work: isWorkRound(round.kind),
     });
   });
-
   return blocks;
 }
 

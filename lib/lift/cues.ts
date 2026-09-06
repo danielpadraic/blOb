@@ -1,4 +1,5 @@
 import { Asset } from 'expo-asset';
+import type { AudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 
 /**
@@ -13,29 +14,31 @@ import { Platform } from 'react-native';
  * mixable instead, so a decoded AudioBuffer fired through an AudioContext plays over music
  * untouched. That is why this goes through `decodeAudioData` rather than the simpler element API.
  *
+ * Native goes through `expo-audio` with the session opened `mixWithOthers`, which is the same
+ * bargain by a different mechanism. That session does double duty: it also keeps the countdown
+ * running once the screen locks, because iOS suspends an app that stops producing audio and a
+ * frozen timer is a useless one. See `primeNative`.
+ *
  * Cues are always best-effort. Every path is wrapped, and haptics fire whether or not sound does,
  * so a missing file, a locked audio context, or a muted switch still leaves a usable timer with an
  * on-screen countdown.
- *
- * TODO(native-audio): iOS and Android currently get haptics only — the repo has no audio module.
- * Adding `expo-audio` and calling `setAudioModeAsync({ interruptionMode: 'mixWithOthers',
- * playsInSilentMode: true })` before the first cue would light up `playNative` below without
- * touching any caller. Do not activate a session that interrupts other apps.
  */
 
-export type LiftCue = 'whistle' | 'bell' | 'tick';
+export type LiftCue = 'whistle' | 'bell';
 
 /** Loud enough to hear over a fan bike, quiet enough not to startle. */
 const CUE_GAIN: Record<LiftCue, number> = {
   whistle: 0.55,
   bell: 0.5,
-  tick: 0.28,
 };
 
-const SOURCES: Partial<Record<LiftCue, number>> = {
+const SOURCES: Record<LiftCue, number> = {
   whistle: require('@/assets/audio/whistle.wav'),
   bell: require('@/assets/audio/bell.wav'),
 };
+
+/** One second of digital silence, looped. The reason a locked phone keeps counting down. */
+const SILENCE: number = require('@/assets/audio/silence.wav');
 
 // -------------------------------------------------------------------------------------- mute flag
 
@@ -63,8 +66,8 @@ export function cuesMuted(): boolean {
 /**
  * Persists the choice so someone who lifts at 6am in a quiet gym is not re-muting every session.
  *
- * Native has no store here yet, so the flag holds for the life of the process. That is the same
- * gap as native playback and closes with it.
+ * Web storage only; on native the flag holds for the life of the process, which covers muting for
+ * the duration of a workout but not across app launches.
  */
 export function setCuesMuted(next: boolean): void {
   muted = next;
@@ -123,6 +126,17 @@ async function loadBuffers(ctx: WebAudioContext): Promise<void> {
  * why it is called from the press handler rather than from an effect on mount.
  */
 export async function primeCues(): Promise<void> {
+  if (Platform.OS !== 'web') {
+    // Once per Play. Re-entering would open a second session and a second silent loop.
+    if (!nativeLoading) {
+      nativeLoading = primeNative().catch(() => {
+        // Haptics and the on-screen countdown still carry the timer.
+      });
+    }
+    await nativeLoading;
+    return;
+  }
+
   const Ctor = audioContextClass();
   if (!Ctor) {
     return;
@@ -174,44 +188,163 @@ function playWeb(cue: LiftCue): void {
   }
 }
 
-async function playNative(_cue: LiftCue): Promise<void> {
-  // See TODO(native-audio) above. Haptics carry the cue until an audio module lands.
+// ---------------------------------------------------------------------------------- native audio
+
+let nativePlayers: Partial<Record<LiftCue, AudioPlayer>> = {};
+/** The silent looping player that holds the audio session open. */
+let keepAlive: AudioPlayer | null = null;
+let nativeLoading: Promise<void> | null = null;
+
+/**
+ * Opens the native audio session and loads both cues.
+ *
+ * Two things are load-bearing here.
+ *
+ * `interruptionMode: 'mixWithOthers'` is what lets a whistle land on top of Spotify instead of
+ * stopping it. Requesting exclusive focus, or ducking, would be a worse timer than a silent one —
+ * nobody wants their music killed eight times in four minutes.
+ *
+ * The silent looping player is what keeps the clock running when the screen goes off. iOS only
+ * lets an app keep executing in the background while it is actually playing audio (that is what
+ * the `audio` entry in UIBackgroundModes buys), so a timer that goes quiet between rounds gets
+ * suspended and stops counting. Holding a silent loop open for the life of the timer keeps the
+ * session — and the JavaScript interval — alive through a lock. It plays nothing audible and, being
+ * mixed rather than exclusive, never takes the audio route from the music over the top of it.
+ *
+ * Android grants this for roughly three minutes and then reclaims it, because sustained background
+ * playback there wants lock screen controls, which in turn require exclusive focus. Trading the
+ * user's music for a longer background window is the wrong trade, so the wake lock carries it
+ * instead and the wall-clock catch-up in the overlay covers whatever is lost.
+ */
+async function primeNative(): Promise<void> {
+  const mod = await import('expo-audio');
+
+  await mod.setAudioModeAsync({
+    // A gym phone is usually on silent, and a cue nobody can hear is not a cue.
+    playsInSilentMode: true,
+    shouldPlayInBackground: true,
+    interruptionMode: 'mixWithOthers',
+  });
+
+  const cues = Object.keys(SOURCES) as LiftCue[];
+  for (const cue of cues) {
+    try {
+      const player = mod.createAudioPlayer(SOURCES[cue]);
+      player.volume = CUE_GAIN[cue];
+      nativePlayers[cue] = player;
+    } catch {
+      // One cue failing to load must not take the other down with it.
+    }
+  }
+
+  try {
+    keepAlive = mod.createAudioPlayer(SILENCE);
+    keepAlive.loop = true;
+    // The file is silent, so this is inaudible either way. Left just above zero rather than at it,
+    // so there is no question the player counts as playing.
+    keepAlive.volume = 0.01;
+    keepAlive.play();
+  } catch {
+    // Without it the timer still runs on screen and under the wake lock; it just will not survive
+    // a lock on iOS.
+    keepAlive = null;
+  }
+}
+
+function playNative(cue: LiftCue): void {
+  const player = nativePlayers[cue];
+  if (!player) {
+    return;
+  }
+  void (async () => {
+    try {
+      // Cues repeat, and a finished player sits at the end of its buffer, so rewind before every
+      // hit or the second whistle is silence.
+      await player.seekTo(0);
+    } catch {
+      // Seeking is a nicety; playing is the point.
+    }
+    try {
+      player.play();
+    } catch {
+      // Best effort.
+    }
+  })();
+}
+
+function releaseNative(): void {
+  const players = Object.values(nativePlayers);
+  const alive = keepAlive;
+  nativePlayers = {};
+  keepAlive = null;
+  nativeLoading = null;
+  try {
+    alive?.pause();
+    alive?.remove();
+  } catch {
+    // Already torn down.
+  }
+  for (const player of players) {
+    try {
+      player?.remove();
+    } catch {
+      // Already torn down.
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------- haptics
 
-async function buzz(cue: LiftCue): Promise<void> {
-  try {
-    if (Platform.OS === 'web') {
-      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-        // A whistle starting work is worth a firmer buzz than a tick counting down.
-        navigator.vibrate(cue === 'tick' ? 12 : cue === 'bell' ? [30, 40, 30] : 45);
-      }
-      return;
-    }
-    const Haptics = await import('expo-haptics');
-    if (cue === 'tick') {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      return;
-    }
-    await Haptics.notificationAsync(
-      cue === 'bell'
-        ? Haptics.NotificationFeedbackType.Success
-        : Haptics.NotificationFeedbackType.Warning,
-    );
-  } catch {
-    // Haptics are optional everywhere.
-  }
-}
+/**
+ * How hard a buzz should land.
+ *
+ * `work` starts an effort block, `recovery` starts a rest, and `end` marks the last round. Sound
+ * and vibration are deliberately separate: the timer buzzes exactly once per round change, so
+ * pairing a haptic with every sound as well would double up at an ON-to-OFF handover, where a
+ * bell and a transition land in the same instant.
+ */
+export type LiftBuzz = 'work' | 'recovery' | 'end';
+
+const WEB_PATTERN: Record<LiftBuzz, number | number[]> = {
+  work: 45,
+  recovery: 18,
+  end: [30, 40, 30],
+};
 
 /**
- * Fires one cue.
+ * Vibrates for a round change.
  *
- * Haptics run even when muted — a mute is about not making noise in a quiet room, not about
- * giving up the signal. The on-screen countdown is unaffected either way.
+ * This ignores the mute toggle. Mute is about not making noise in a quiet gym, not about giving
+ * up the signal — and a buzz is the only cue that still reaches someone whose phone is face down
+ * on the floor.
  */
+export function buzz(kind: LiftBuzz): void {
+  void (async () => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(WEB_PATTERN[kind]);
+        }
+        return;
+      }
+      const Haptics = await import('expo-haptics');
+      if (kind === 'recovery') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        return;
+      }
+      await Haptics.notificationAsync(
+        kind === 'end'
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Warning,
+      );
+    } catch {
+      // Haptics are optional everywhere.
+    }
+  })();
+}
+
+/** Plays one cue's sound. Silent when muted; the buzz carries the signal instead. */
 export function playCue(cue: LiftCue): void {
-  void buzz(cue);
   if (muted) {
     return;
   }
@@ -219,11 +352,20 @@ export function playCue(cue: LiftCue): void {
     playWeb(cue);
     return;
   }
-  void playNative(cue);
+  playNative(cue);
 }
 
-/** Lets the context go when Play closes so the tab is not holding an audio session open. */
+/**
+ * Lets the audio session go when Play closes.
+ *
+ * On native this is what stops the silent keep-alive. Leaving it running would hold a background
+ * audio assertion — and the battery drain that comes with it — long after the workout ended.
+ */
 export function releaseCues(): void {
+  if (Platform.OS !== 'web') {
+    releaseNative();
+    return;
+  }
   const ctx = context;
   context = null;
   buffers = {};

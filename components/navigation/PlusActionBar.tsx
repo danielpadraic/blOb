@@ -12,6 +12,7 @@ import { TAB_BAR_GUTTER, TAB_BAR_HEIGHT, THEME, themeShadow } from '@/lib/theme'
 export type QuickActionId =
   | 'log'
   | 'lift'
+  | 'timer'
   | 'create'
   | 'join'
   | 'post'
@@ -96,6 +97,8 @@ export function PlusActionBar({ visible, loggable, onClose, onAction }: PlusActi
               <BarButton label="Post" onPress={() => setStep('post')} />
               <BarDivider />
               <BarButton label="Lift" onPress={() => onAction('lift')} />
+              <BarDivider />
+              <BarButton label="Timer" onPress={() => onAction('timer')} />
             </>
           )}
         </View>
@@ -129,10 +132,14 @@ function BarButton({
         minHeight: 44,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 8,
+        // Four actions share this row on a phone, so the label truncates rather than wrapping —
+        // a second line would push the bar taller than the tab bar it floats above.
+        paddingHorizontal: 6,
         opacity: disabled ? 0.38 : 1,
       }}>
-      <AppText className="text-[15px] font-extrabold text-charcoal">{label}</AppText>
+      <AppText numberOfLines={1} className="text-[15px] font-extrabold text-charcoal">
+        {label}
+      </AppText>
     </Pressable>
   );
 }

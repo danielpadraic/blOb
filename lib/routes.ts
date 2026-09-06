@@ -324,6 +324,14 @@ export const FITNESS_HISTORY_HREF = '/profile/fitness-history' as const;
 export const LIFT_START_HREF = '/lift' as Href;
 export const LIFTS_HISTORY_HREF = '/profile/lifts' as Href;
 
+/**
+ * The interval timer with no session behind it.
+ *
+ * A static segment, so it wins over `[id]` the same way `new` does. It sits under `/lift` because
+ * it shares that feature's rounds model and countdown, not because it logs anything.
+ */
+export const LIFT_TIMER_HREF = '/lift/timer' as Href;
+
 /** Literal path, like the check-in hrefs: an object `{ pathname, params }` breaks Safari. */
 export function liftSessionHref(id: string): Href {
   return `/lift/${String(id ?? '').trim()}` as Href;

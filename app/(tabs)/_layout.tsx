@@ -7,6 +7,7 @@ import { PlusActionBar, type QuickActionId } from '@/components/navigation/PlusA
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
 import { closeMediaLightbox, MediaLightboxHost } from '@/components/feed/MediaLightbox';
+import { LiftPlayHost } from '@/components/lift/LiftPlayHost';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
 import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
 import { InviteHost } from '@/components/challenge/InviteHost';
@@ -41,6 +42,7 @@ import {
   CIRCLES_CREATE_HREF,
   isWatchSurfacePath,
   LIFT_START_HREF,
+  LIFT_TIMER_HREF,
   LOBBY_HREF,
   MULTI_CHECKIN_HREF,
 } from '@/lib/routes';
@@ -356,6 +358,10 @@ function TabLayoutInner() {
       go(LIFT_START_HREF);
       return;
     }
+    if (id === 'timer') {
+      go(LIFT_TIMER_HREF);
+      return;
+    }
     if (id === 'create') {
       const root = (segments as string[]).filter((segment) => !segment.startsWith('('))[0];
       go(root === 'feed' ? '/challenges/create?returnTo=feed' : '/challenges/create');
@@ -400,6 +406,9 @@ function TabLayoutInner() {
 
   return (
     <MediaLightboxHost>
+    {/* Outside the header and the tab bar on purpose: the Lift Play timer has to cover both, and
+        the tab navigator below clips anything absolutely positioned inside a screen. */}
+    <LiftPlayHost>
     <View className="flex-1" style={{ backgroundColor: THEME.background }}>
       {watchOpen || isChallengeIdRoute(segments as string[]) || isCircleIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
         <TabChromeHeader
@@ -507,6 +516,7 @@ function TabLayoutInner() {
         </>
       )}
     </View>
+    </LiftPlayHost>
     </MediaLightboxHost>
   );
 }

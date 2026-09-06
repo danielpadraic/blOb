@@ -96,6 +96,30 @@ def bell(duration=0.85, freq=784.0):
     return samples
 
 
+def write_silence(name, duration=1.0, rate=8000):
+    """
+    A silent loop, which is what keeps the timer alive on a locked native screen.
+
+    iOS suspends an app that stops producing audio, so the countdown would freeze the moment the
+    screen went dark. Holding a silent looping player open keeps the audio session active and the
+    JavaScript timer with it. The session is opened `mixWithOthers`, so this never takes the audio
+    route away from the music it plays alongside.
+
+    Written at 8 kHz because nothing about silence needs 44.1 — it is 16 KB instead of 88 KB, and
+    it loops seamlessly regardless since every sample is zero.
+    """
+    os.makedirs(OUT, exist_ok=True)
+    path = os.path.join(OUT, name)
+    frames = b"\x00\x00" * int(rate * duration)
+    with wave.open(path, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(frames)
+    print(f"{name}: {duration:.2f}s, {len(frames) + 44} bytes")
+
+
 if __name__ == "__main__":
     write_wav("whistle.wav", whistle())
     write_wav("bell.wav", bell())
+    write_silence("silence.wav")

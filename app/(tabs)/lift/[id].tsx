@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddExerciseSheet, type AddExerciseResult } from '@/components/lift/AddExerciseSheet';
 import { AddTimedRowSheet, type TimedRowResult } from '@/components/lift/AddTimedRowSheet';
 import { ExerciseCard } from '@/components/lift/ExerciseCard';
-import { LiftPlayOverlay } from '@/components/lift/LiftPlayOverlay';
+import { rowPlaySpec, useLiftPlay } from '@/components/lift/LiftPlayHost';
 import { TimedRowCard } from '@/components/lift/TimedRowCard';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
@@ -120,6 +120,8 @@ function LiftSessionInner({ id }: { id: string }) {
   const startGroup = useCreateGroupConversation();
   const createPost = useCreatePost();
   const sendMessage = useSendMessage();
+  // The timer renders from the root of the tab layout, above the header and the tab bar.
+  const { startPlay } = useLiftPlay();
 
   const [draft, setDraft] = useState<LiftSessionDraft | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -139,8 +141,6 @@ function LiftSessionInner({ id }: { id: string }) {
   // True only for the explicit Save press. Autosave must never touch the button, or it blinks
   // between "Save session" and "Saving…" on every keystroke.
   const [finishing, setFinishing] = useState(false);
-  /** The cardio row whose timer is on screen, by draft key. Null means the editor is showing. */
-  const [playKey, setPlayKey] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [titleText, setTitleText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -531,10 +531,6 @@ function LiftSessionInner({ id }: { id: string }) {
     () => draft?.exercises.find((row) => canPlay(row)) ?? null,
     [draft],
   );
-  const playRow = useMemo(
-    () => (playKey ? (draft?.exercises.find((row) => row.key === playKey) ?? null) : null),
-    [draft, playKey],
-  );
 
   if (loaded.isLoading || (!draft && !loaded.isFetched)) {
     return (
@@ -825,7 +821,7 @@ function LiftSessionInner({ id }: { id: string }) {
                                 updateTimedRow(current, exercise.key, { rounds }),
                               )
                             }
-                            onPlay={() => setPlayKey(exercise.key)}
+                            onPlay={() => startPlay(rowPlaySpec(exercise))}
                             onRemove={() => edit((current) => removeExercise(current, exercise.key))}
                             onDuplicate={() =>
                               edit((current) => duplicateExercise(current, exercise.key))
@@ -978,7 +974,7 @@ function LiftSessionInner({ id }: { id: string }) {
                 <Button
                   title="Play"
                   variant="secondary"
-                  onPress={() => setPlayKey(playableRow.key)}
+                  onPress={() => startPlay(rowPlaySpec(playableRow))}
                 />
               ) : null}
               <Button title="Save session" loading={finishing} onPress={() => void onSave()} />
@@ -1027,12 +1023,6 @@ function LiftSessionInner({ id }: { id: string }) {
         onClose={() => setOverloadOpen(false)}
         onApply={(plan) => void onApplyOverload(plan)}
       />
-
-      {/* Last child so it paints over the header wallet and bell and the floating tab bar. Play is
-          a gym timer at arm's length — nothing else on the screen should be reachable mid-sprint. */}
-      {playRow ? (
-        <LiftPlayOverlay row={playRow} onClose={() => setPlayKey(null)} />
-      ) : null}
 
       <LiftShareSheet
         visible={shareOpen}

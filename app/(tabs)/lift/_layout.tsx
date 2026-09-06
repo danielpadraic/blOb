@@ -8,6 +8,8 @@ export default function LiftStackLayout() {
       <Stack.Screen name="index" options={{ title: 'Lift' }} />
       {/* A static segment, so "Use this workout" resolves here rather than to a session id. */}
       <Stack.Screen name="new" options={{ title: 'Use this workout' }} />
+      {/* Also static, and also not a session: the interval timer logs nothing. */}
+      <Stack.Screen name="timer" options={{ title: 'Timer' }} />
       {/* The session screen sets its own header so the title can be the session name. */}
       <Stack.Screen name="[id]" options={HIDDEN_STACK_HEADER} />
     </Stack>

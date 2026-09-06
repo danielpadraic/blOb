@@ -27,7 +27,8 @@
         "NSHealthShareUsageDescription": "blOb reads your workouts, heart rate, and workout route only to verify effort in Skill Tournaments and to draw the map on your check-in card.",
         "NSHealthUpdateUsageDescription": "blOb starts or updates a workout session only to verify effort in Skill Tournaments.",
         "UIBackgroundModes": [
-          "remote-notification"
+          "remote-notification",
+          "audio"
         ],
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -121,6 +122,14 @@
         }
       ],
       "expo-image",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "blOb needs the microphone so you can record check-in or Story videos for Skill Tournaments.",
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false
+        }
+      ],
       [
         "expo-media-library",
         {
