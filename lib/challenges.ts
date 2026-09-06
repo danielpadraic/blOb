@@ -1590,7 +1590,9 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     cumulative_target: input.cumulative_target ?? null,
     cumulative_window: input.cumulative_window ?? input.win_window ?? null,
     win_window: input.win_window ?? input.cumulative_window ?? null,
-    metrics: input.metrics ?? null,
+    metrics: Array.isArray(input.metrics)
+      ? (input.metrics as Challenge['metrics'])
+      : null,
     distance_meters_required: input.distance_meters_required ?? null,
   }, input.draft_id);
   if (
@@ -1612,7 +1614,7 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
         cumulative_target: input.cumulative_target ?? null,
         cumulative_window: input.win_window ?? input.cumulative_window ?? null,
         win_window: input.win_window ?? input.cumulative_window ?? null,
-        metrics: input.metrics ?? null,
+        metrics: Array.isArray(input.metrics) ? (input.metrics as Challenge['metrics']) : null,
         distance_meters_required: input.distance_meters_required ?? null,
       })
       .eq('id', result.challenge_id);
@@ -1859,14 +1861,28 @@ export async function updateUserChallenge(
     await supabase
       .from('challenges')
       .update({
-        format: payload.format ?? undefined,
-        payout_mode: payload.payout_mode ?? undefined,
-        cumulative_window: payload.win_window ?? payload.cumulative_window ?? undefined,
-        win_window: payload.win_window ?? payload.cumulative_window ?? undefined,
-        metrics: payload.metrics ?? undefined,
-        cumulative_metric: payload.cumulative_metric ?? undefined,
-        cumulative_target: payload.cumulative_target ?? undefined,
-      })
+        format: typeof payload.format === 'string' ? payload.format : undefined,
+        payout_mode: typeof payload.payout_mode === 'string' ? payload.payout_mode : undefined,
+        cumulative_window:
+          typeof payload.win_window === 'string'
+            ? payload.win_window
+            : typeof payload.cumulative_window === 'string'
+              ? payload.cumulative_window
+              : undefined,
+        win_window:
+          typeof payload.win_window === 'string'
+            ? payload.win_window
+            : typeof payload.cumulative_window === 'string'
+              ? payload.cumulative_window
+              : undefined,
+        metrics: Array.isArray(payload.metrics)
+          ? (payload.metrics as Challenge['metrics'])
+          : undefined,
+        cumulative_metric:
+          typeof payload.cumulative_metric === 'string' ? payload.cumulative_metric : undefined,
+        cumulative_target:
+          typeof payload.cumulative_target === 'number' ? payload.cumulative_target : undefined,
+      } satisfies Partial<Challenge>)
       .eq('id', challengeId);
   }
   return fetchChallengeById(challengeId);

@@ -468,6 +468,16 @@ const STRINGS = {
   'create.pointsInAdvanced': 'Points boards are in Advanced.',
   'create.cumulative': 'Cumulative',
   'create.cumulativeTarget': 'Target',
+  'create.metricName': 'Name',
+  'create.metricNamePlaceholder': 'Miles, pages, workouts',
+  'create.mustHitEvery': 'Must hit every metric.',
+  'create.addMetric': 'Add metric',
+  'create.anyoneHits': 'Anyone who hits it',
+  'create.topPercent': 'Top %',
+  'create.topCount': 'Top N',
+  'create.rankedByFinish': 'Ranked by who finishes first.',
+  'create.whatPercent': 'What percent',
+  'create.howManyPeople': 'How many people',
   'create.cumulativeWindow': 'Window',
   'create.windowChallenge': 'This challenge',
   'create.windowWeek': 'Each week',
@@ -783,7 +793,7 @@ function interpolate(template: string, vars?: Record<string, string | number>): 
   return interpolateCopy(template, vars);
 }
 
-export function asCopyTone(value: unknown): CopyTone {
+export function asCopyTone(value?: unknown): CopyTone {
   if (value === 'honest') {
     return 'honest';
   }

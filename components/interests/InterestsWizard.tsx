@@ -145,7 +145,7 @@ export function InterestsWizard({
       if (row.catalog?.room_slug !== step) {
         continue;
       }
-      const local = step === 'prompt' ? null : chipDef(step, row.catalog.slug);
+      const local = chipDef(step, row.catalog.slug);
       const score = stanceFromMarks(row.excel, row.level_up, row.stance_score == null ? null : Number(row.stance_score));
       next[row.catalog.slug] = stanceMarks(score);
       const follow = followUpFromRow(row);

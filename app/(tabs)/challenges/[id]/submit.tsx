@@ -1147,8 +1147,8 @@ function SubmitWorkoutInner() {
               await linkSessionToPost(attachedLift.id, postId);
             }
             const author = sessionAuthor(profile, uid);
-            if (author) {
-              seedChallengeLivePost(queryClient, id, uid, {
+            if (author && postId) {
+              seedChallengeLivePost(queryClient, id, uid ?? undefined, {
                 id: postId,
                 author_id: author.id,
                 author,
@@ -1161,7 +1161,7 @@ function SubmitWorkoutInner() {
                 created_at: new Date().toISOString(),
                 comments: [],
                 reactions: [],
-              } as PostWithMeta);
+              } as unknown as PostWithMeta);
             }
           }
         } catch {

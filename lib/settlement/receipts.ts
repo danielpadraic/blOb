@@ -53,17 +53,21 @@ export function voidReceiptCopy(kind: SettlementVoidKind): string {
   return FORFEIT_RECEIPT;
 }
 
-export function nobodyFinishedRuleCopy(input: {
+export function nobodyFinishedRuleCopy(input?: {
   buyInAmount?: number | null;
   hostFunded?: boolean | null;
   hostBudget?: number | null;
   creatorContribution?: number | null;
-}): string | null {
-  const buyIn = Math.max(Number(input.buyInAmount) || 0, 0) > 0;
+  buy_in_amount?: number | null;
+  host_funded?: boolean | null;
+  host_budget?: number | null;
+  creator_contribution?: number | null;
+} | null): string | null {
+  const buyIn = Math.max(Number(input?.buyInAmount ?? input?.buy_in_amount) || 0, 0) > 0;
   const host =
-    Boolean(input.hostFunded) ||
-    Math.max(Number(input.hostBudget) || 0, 0) > 0 ||
-    Math.max(Number(input.creatorContribution) || 0, 0) > 0;
+    Boolean(input?.hostFunded ?? input?.host_funded) ||
+    Math.max(Number(input?.hostBudget ?? input?.host_budget) || 0, 0) > 0 ||
+    Math.max(Number(input?.creatorContribution ?? input?.creator_contribution) || 0, 0) > 0;
   if (!buyIn && !host) {
     return null;
   }

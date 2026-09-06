@@ -29,6 +29,7 @@ import {
   getChallengeSettlementWithClient,
   settleEndedChallengeWithClient,
   tickSettlementsWithClient,
+  type SettlementRpcClient,
 } from '@/lib/settlement/rpc';
 
 export {
@@ -70,6 +71,10 @@ export {
   winnerSettledNotifyCopy,
 } from '@/lib/settlement/notify';
 export { trySettleIfEndedWithClient } from '@/lib/settlement/rpc';
+
+function settlementRpc(): SettlementRpcClient {
+  return supabase as unknown as SettlementRpcClient;
+}
 
 const JOINABLE_STATUSES: ChallengeStatus[] = [
   'upcoming',
@@ -647,7 +652,7 @@ async function viewFromDistributedPayouts(
 
 async function settleEvenSplitChallenge(challengeId: string): Promise<ChallengeSettlementView> {
   try {
-    return await settleEndedChallengeWithClient(supabase, challengeId);
+    return await settleEndedChallengeWithClient(settlementRpc(), challengeId);
   } catch (error) {
     const existing = await fetchChallengeSettlement(challengeId);
     if (existing) {
@@ -692,7 +697,7 @@ async function settleRankedChallenge(challengeId: string): Promise<ChallengeSett
   }
   const view =
     (await fetchChallengeSettlement(challengeId)) ??
-    (await getChallengeSettlementWithClient(supabase, challengeId)) ??
+    (await getChallengeSettlementWithClient(settlementRpc(), challengeId)) ??
     (await viewFromDistributedPayouts(challengeId));
   if (view) {
     return view;
@@ -715,9 +720,9 @@ export async function settleChallenge(
 }
 
 export async function trySettleIfEnded(challengeId: string): Promise<ChallengeSettlementView | null> {
-  await tickSettlementsWithClient(supabase);
+  await tickSettlementsWithClient(settlementRpc());
   return (
-    (await getChallengeSettlementWithClient(supabase, challengeId)) ??
+    (await getChallengeSettlementWithClient(settlementRpc(), challengeId)) ??
     (await fetchChallengeSettlement(challengeId))
   );
 }
@@ -772,7 +777,7 @@ export async function syncChallengeStatuses(): Promise<void> {
       }
     }
     try {
-      await tickSettlementsWithClient(supabase);
+      await tickSettlementsWithClient(settlementRpc());
     } catch (tickError) {
       console.log('[blob:status] settlement tick skipped', tickError);
     }

@@ -673,10 +673,7 @@ export function SimpleCreateForm() {
                 patch({
                   currency: value,
                   buy_in: 0,
-                  friends_of_friends:
-                    draft.privacy_mode === 'private_corporate'
-                      ? false
-                      : draft.visibility === 'invite' && value === 'coins',
+                  friends_of_friends: false,
                 });
                 return;
               }
@@ -812,8 +809,9 @@ export function SimpleCreateForm() {
                 onPress={() => {
                   patch({
                     scoring: item.value,
-                    cumulative_window: draft.cumulative_window ?? 'challenge',
-                    win_window: draft.win_window ?? draft.cumulative_window ?? 'challenge',
+                    cumulative_window:
+                      draft.cumulative_window === 'day' ? 'challenge' : (draft.cumulative_window ?? 'challenge'),
+                    win_window: draft.win_window ?? (draft.cumulative_window === 'week' ? 'week' : 'challenge'),
                     metrics:
                       item.value === 'cumulative'
                         ? draft.metrics?.length

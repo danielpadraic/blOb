@@ -229,10 +229,11 @@ export async function fetchHealthWorkoutById(id: string): Promise<{
   confidence: string;
   hr_avg: number | null;
   calories_kcal: number | null;
+  distance_m: number | null;
 } | null> {
   const { data, error } = await supabase
     .from('health_workouts')
-    .select('activity_label, duration_sec, confidence, hr_avg, calories_kcal')
+    .select('activity_label, duration_sec, confidence, hr_avg, calories_kcal, distance_m')
     .eq('id', id)
     .maybeSingle();
   if (error) {
@@ -247,6 +248,7 @@ export async function fetchHealthWorkoutById(id: string): Promise<{
     confidence: string;
     hr_avg: number | null;
     calories_kcal: number | null;
+    distance_m: number | null;
   } | null;
 }
 

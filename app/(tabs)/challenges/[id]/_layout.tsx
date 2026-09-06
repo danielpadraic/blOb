@@ -37,9 +37,6 @@ export default function ChallengeIdLayout() {
           options={{
             headerShown: true,
             title: '',
-            headerTitleContainerStyle: { flex: 1, minWidth: 0, maxWidth: '100%' },
-            headerRightContainerStyle: { flexGrow: 0, flexShrink: 0 },
-            headerLeftContainerStyle: { flexGrow: 0, flexShrink: 0 },
             headerBackVisible: false,
             headerLeft: () => <StackBackButton />,
             headerRight: () => <ChallengeDetailHeaderRight />,

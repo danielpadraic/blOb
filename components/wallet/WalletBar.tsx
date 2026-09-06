@@ -13,7 +13,7 @@ import { copy } from '@/lib/copy';
 import { formatCash } from '@/lib/currency';
 import { headerCoinsForTour } from '@/lib/homeTour';
 import { isOfficialAccount } from '@/lib/official';
-import { countUpValues } from '@/lib/topup';
+import { countUpValues } from '@/lib/topup/index';
 import {
   headerCountUpPlan,
   headerLastShown,

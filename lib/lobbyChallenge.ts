@@ -550,7 +550,7 @@ export function checkedInForCurrentPeriod(
   /** Callers that already have a clock pass it, so the answer does not shift at midnight mid-render. */
   now = new Date(),
 ): boolean {
-  if (!isSubmittedCheckin(row)) {
+  if (!row || !isSubmittedCheckin(row)) {
     return false;
   }
   const key = normalizePeriodKey(row.period_key);

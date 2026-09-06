@@ -127,7 +127,7 @@ export default function ProfileScreen() {
       </View>
 
       <View className="mt-4 gap-3">
-        <Pressable accessibilityRole="button" onPress={wallet?.openWallet}>
+        <Pressable accessibilityRole="button" onPress={() => wallet?.openWallet()}>
           <WalletBalances profile={profile} />
         </Pressable>
         <SendWalletButton onPress={() => wallet?.openSend()} />

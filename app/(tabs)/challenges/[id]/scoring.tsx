@@ -21,6 +21,7 @@ import {
 import { canEditOfficialScoring, scoringChangeEffectiveLine } from '@/lib/officialScoring';
 import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
+import type { ChallengeWithStats } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
 
 const AMBER_BG = '#FBF4DE';
@@ -93,7 +94,7 @@ export default function OfficialScoringScreen() {
       key={scoringFormKey(id, saved)}
       id={id}
       saved={saved}
-      challenge={mergedChallenge}
+      challenge={(mergedChallenge as ChallengeWithStats | undefined) ?? undefined}
     />
   );
 }

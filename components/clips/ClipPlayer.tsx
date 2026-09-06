@@ -1434,7 +1434,7 @@ function ClipSheets({
                     style={{ minHeight: 40, justifyContent: 'center' }}>
                     <AppText
                       className="text-[15px] font-semibold"
-                      style={{ color: selected ? THEME.accent : THEME.ink }}>
+                      style={{ color: selected ? THEME.accent : THEME.textPrimary }}>
                       {name}
                     </AppText>
                   </Pressable>
@@ -1446,15 +1446,15 @@ function ClipSheets({
             value={dmNote}
             onChangeText={setDmNote}
             placeholder={copy('clip.shareNote')}
-            placeholderTextColor={THEME.muted}
+            placeholderTextColor={THEME.textMuted}
             accessibilityLabel={copy('clip.shareNote')}
             style={{
               minHeight: 40,
               marginTop: 8,
               borderRadius: 14,
               paddingHorizontal: 12,
-              color: THEME.ink,
-              backgroundColor: THEME.bg,
+              color: THEME.textPrimary,
+              backgroundColor: THEME.background,
               fontSize: 14,
             }}
           />

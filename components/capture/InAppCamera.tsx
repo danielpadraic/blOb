@@ -197,7 +197,7 @@ export function InAppCamera({
           };
         })
       | undefined;
-    void screen?.orientation?.unlock?.().catch(() => undefined);
+    void Promise.resolve(screen?.orientation?.unlock?.()).catch(() => undefined);
     window.addEventListener('resize', sync);
     window.addEventListener('orientationchange', sync);
     screen?.orientation?.addEventListener?.('change', sync);

@@ -11,7 +11,7 @@ import { useWallet } from '@/hooks/useWallet';
 import { formatCash } from '@/lib/currency';
 import { challengeDetailHref } from '@/lib/routes';
 import { startCardTopUp } from '@/lib/topUp';
-import { TOPUP_COPY, classifyTopUpError, quoteTopUp, topUpErrorCopy } from '@/lib/topup';
+import { TOPUP_COPY, classifyTopUpError, quoteTopUp, topUpErrorCopy } from '@/lib/topup/index';
 import { THEME } from '@/lib/theme';
 
 export function TopUpSheet() {
@@ -27,15 +27,16 @@ export function TopUpSheet() {
     return null;
   }
 
-  const quote = quoteTopUp(topUp.amount);
-  const amountLabel = formatCash(quote?.creditAmount ?? topUp.amount);
+  const session = topUp;
+  const quote = quoteTopUp(session.amount);
+  const amountLabel = formatCash(quote?.creditAmount ?? session.amount);
 
   async function finish(next?: 'create' | string) {
     await refetch();
     void queryClient.invalidateQueries({ queryKey: ['profile'] });
     void queryClient.invalidateQueries({ queryKey: ['wallet-ledger'] });
     closeTopUp();
-    if (next === 'create' || topUp.returnCreate) {
+    if (next === 'create' || session.returnCreate) {
       return;
     }
     if (typeof next === 'string' && next) {
@@ -110,7 +111,7 @@ export function TopUpSheet() {
           {message ? (
             <AppText
               className="text-[13px] leading-5"
-              style={{ color: kind === 'error' ? '#9A3B3B' : THEME.ink }}>
+              style={{ color: kind === 'error' ? '#9A3B3B' : THEME.textPrimary }}>
               {message}
             </AppText>
           ) : null}

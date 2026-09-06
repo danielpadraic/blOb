@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 
 import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 import { AppText } from '@/components/ui/AppText';
@@ -40,7 +40,7 @@ export function CalloutHomePin() {
     try {
       const row = await action();
       if (openDetail) {
-        router.push(calloutActiveChallengeHref(row) ?? `/challenges/callout/${id}`);
+        router.push((calloutActiveChallengeHref(row) ?? `/challenges/callout/${id}`) as Href);
       }
     } catch {
       router.push(`/challenges/callout/${id}`);

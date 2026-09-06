@@ -438,7 +438,7 @@ export default function ChallengesScreen() {
   }
 
   async function onRefresh() {
-    const jobs = [
+    const jobs: Array<Promise<unknown>> = [
       officialQuery.refetch(),
       activeQuery.refetch(),
       mine.refetch(),

@@ -99,7 +99,7 @@ export function RecommendedProfiles({ compact = false }: { compact?: boolean }) 
                     </AppText>
                   </Pressable>
                 ) : (
-                  <AppText className="text-center text-[11px] font-semibold" style={{ color: THEME.muted }}>
+                  <AppText className="text-center text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
                     {copy('messages.blockedState')}
                   </AppText>
                 )}

@@ -129,6 +129,9 @@ export async function offerWebSaveCapture(input: SaveCaptureInput): Promise<{ ra
         }
         return response.blob();
       }));
+    if (!blob) {
+      return { ran: false };
+    }
     const name = filenameFor(input);
     const type = input.mimeType || blob.type || (input.mediaType === 'video' ? 'video/webm' : 'image/jpeg');
     const file = typeof File === 'function' ? new File([blob], name, { type }) : null;

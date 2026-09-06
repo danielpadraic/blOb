@@ -6,10 +6,11 @@ import { supabase } from '@/lib/supabase';
 import {
   createTopUpSessionWithClient,
   waitForTopUpCreditWithClient,
-  type TopUpResult,
-} from '@/lib/topup';
+  type TopUpFnClient,
+} from '@/lib/topup/rpc';
+import type { TopUpRequest, TopUpResult } from '@/lib/topup/model';
 
-export type { TopUpRequest } from '@/lib/topup';
+export type { TopUpRequest };
 
 export function topUpReturnUrl(challengeId?: string, returnCreate?: boolean): string {
   if (returnCreate || !challengeId) {
@@ -40,7 +41,7 @@ export async function startCardTopUp(input: {
 }): Promise<TopUpResult> {
   const successUrl = `${topUpReturnUrl(input.challengeId, input.returnCreate)}&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = topUpCancelUrl(input.challengeId, input.returnCreate);
-  const session = await createTopUpSessionWithClient(supabase, {
+  const session = await createTopUpSessionWithClient(supabase as unknown as TopUpFnClient, {
     amount: input.amount,
     successUrl,
     cancelUrl,
@@ -56,7 +57,7 @@ export async function startCardTopUp(input: {
   if (result.type !== 'success') {
     return { status: 'failed', code: 'network' };
   }
-  return waitForTopUpCreditWithClient(supabase, { sessionId: session.sessionId });
+  return waitForTopUpCreditWithClient(supabase as unknown as TopUpFnClient, { sessionId: session.sessionId });
 }
 
 /** @deprecated Use startCardTopUp */

@@ -994,7 +994,7 @@ export async function fetchActiveStories(): Promise<Story[]> {
       console.log('[blob:stories]', result.error.message ?? result.error.code ?? 'stories select failed');
       return [];
     }
-    const active = ((result.data ?? []) as Story[]).filter((story) => isActiveStory(story));
+    const active = ((result.data ?? []) as unknown as Story[]).filter((story) => isActiveStory(story));
     return clipsVisibleToViewer(active);
   } catch {
     return [];
@@ -1088,7 +1088,7 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
       clip_duration_ms: clip.durationMs || null,
     }),
   );
-  const { data, error } = await supabase.from('stories').insert(rows).select(schema.select);
+  const { data, error } = await supabase.from('stories').insert(rows as never).select(schema.select);
   if (error) {
     console.log('[blob:stories]', error.message ?? error.code ?? 'stories insert failed');
     const fallback = await supabase
@@ -1107,9 +1107,9 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     if (!publishedRowId(fallback.data)) {
       throw new Error('Couldn’t open that clip');
     }
-    return [fallback.data as Story];
+    return [fallback.data as unknown as Story];
   }
-  const created = asLoggableList((data ?? []) as Story[]).sort(
+  const created = asLoggableList((data ?? []) as unknown as Story[]).sort(
     (a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0),
   );
   if (created.length === 0) {
@@ -1269,14 +1269,16 @@ async function loadHomeRoundsContext(viewerId: string | null, reelChallengeIds: 
   const [active, following, hosted, joined, restrictedChallengeIds] = await Promise.all([
     fetchActiveChallenges(viewerId).catch(() => []),
     fetchFollowing(viewerId).catch(() => [] as FollowEdge[]),
-    supabase.from('challenges').select('id').eq('created_by', viewerId).catch(() => emptyRows),
-    supabase.from('challenge_participants').select('challenge_id').eq('user_id', viewerId).catch(() => emptyRows),
+    Promise.resolve(supabase.from('challenges').select('id').eq('created_by', viewerId)).catch(() => emptyRows),
+    Promise.resolve(supabase.from('challenge_participants').select('challenge_id').eq('user_id', viewerId)).catch(
+      () => emptyRows,
+    ),
     fetchRestrictedRoundChallengeIds(reelChallengeIds),
   ]);
   const liveOrUpcomingChallengeIds = new Set(
-    active.map((row) => String(row.id ?? '').trim()).filter(Boolean),
+    active.map((row: { id?: string }) => String(row.id ?? '').trim()).filter(Boolean),
   );
-  const memberChallengeIds = new Set<string>(liveOrUpcomingChallengeIds);
+  const memberChallengeIds = new Set<string>([...liveOrUpcomingChallengeIds]);
   for (const row of hosted.data ?? []) {
     const id = String((row as { id?: string }).id ?? '').trim();
     if (id) {
@@ -1290,8 +1292,8 @@ async function loadHomeRoundsContext(viewerId: string | null, reelChallengeIds: 
     }
   }
   const followedCoachIds = following
-    .filter((edge) => isHomeRoundsCoach(edge.profile))
-    .map((edge) => edge.following_id)
+    .filter((edge: FollowEdge) => isHomeRoundsCoach(edge.profile))
+    .map((edge: FollowEdge) => edge.following_id)
     .filter(Boolean);
   return {
     liveOrUpcomingChallengeIds,

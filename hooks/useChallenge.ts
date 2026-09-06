@@ -788,11 +788,11 @@ export function useCreateChallenge() {
       const targetCount = isPoints ? checkinTargetForStore(values, durationDays) : durationInt ?? 1;
       const payout = unlimited
         ? {
-            prize_structure: 'winner_take_all' as const,
-            payout_mode: 'winner_take_all' as const,
-            top_places_mode: null as const,
-            top_places_value: null as const,
-            top_places_distribution: null as const,
+            prize_structure: 'winner_take_all',
+            payout_mode: 'winner_take_all',
+            top_places_mode: null,
+            top_places_value: null,
+            top_places_distribution: null,
           }
         : publishPayoutFields(values);
       const rulesText = composeChallengeRules(values);
@@ -851,7 +851,7 @@ export function useCreateChallenge() {
           ? []
           : namedProofs.length > 0
             ? proofRequirementsFrom(namedProofs)
-            : values.proof_type === 'honor' || values.proofs.every((type) => type === 'honor')
+            : String(values.proof_type) === 'honor' || values.proofs.every((type) => String(type) === 'honor')
               ? []
               : values.proofs
                   .filter((type) => type !== 'pre_selfie' && type !== 'post_selfie' && type !== 'hr_monitor')
@@ -1100,11 +1100,11 @@ export function useUpdateUserChallenge() {
       const targetCount = isPoints ? checkinTargetForStore(values, durationDays) : durationInt ?? 1;
       const payout = unlimited
         ? {
-            prize_structure: 'winner_take_all' as const,
-            payout_mode: 'winner_take_all' as const,
-            top_places_mode: null as const,
-            top_places_value: null as const,
-            top_places_distribution: null as const,
+            prize_structure: 'winner_take_all',
+            payout_mode: 'winner_take_all',
+            top_places_mode: null,
+            top_places_value: null,
+            top_places_distribution: null,
           }
         : publishPayoutFields(values);
       const namedProofs = namedProofsForPublish(values);

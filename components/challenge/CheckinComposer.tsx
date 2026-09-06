@@ -534,6 +534,9 @@ export function CheckinComposer({
         text: 'Remove',
         style: 'destructive',
         onPress: () => {
+          if (page.kind !== 'extra') {
+            return;
+          }
           onExtrasChange(extras.filter((item) => item.id !== page.extra.id));
         },
       },

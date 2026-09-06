@@ -3,6 +3,7 @@ import { SANS_32_WHITE, SANS_64_WHITE } from 'jimp/fonts';
 import { describe, expect, it } from 'vitest';
 
 import { parseWorkoutOcrText } from '../../lib/health/workoutOcr';
+import { tesseractCouldNotDownload, tesseractLanguageReachable } from '../_tests/tesseractSmoke';
 import { meanBrightness, ocrImageBuffer, prepareImage } from './ocrRunner';
 
 /**
@@ -57,8 +58,21 @@ describe('preprocessing', () => {
 
 describe('tesseract on a dark workout summary', () => {
   it('reads the headline numbers off the screen', async () => {
+    if (!(await tesseractLanguageReachable())) {
+      return;
+    }
     const screen = await appleFitnessLikeScreen();
-    const { text, inverted } = await ocrImageBuffer(screen);
+    let ocr: { text: string; inverted: boolean };
+    try {
+      ocr = await ocrImageBuffer(screen);
+    } catch (error) {
+      if (tesseractCouldNotDownload(error)) {
+        console.warn('OCR smoke skipped: Tesseract language data could not download.');
+        return;
+      }
+      throw error;
+    }
+    const { text, inverted } = ocr;
     expect(inverted).toBe(true);
 
     const parsed = parseWorkoutOcrText(text);

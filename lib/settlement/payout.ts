@@ -60,7 +60,8 @@ export function settlementRpcForPayout(
   if (isLmsPayout(challenge ?? {})) {
     return 'distribute_challenge';
   }
-  if (isPointsBoard(challenge) || isRankedPrize(challenge) || isEvenSplitPayout(challenge)) {
+  const row = challenge ?? {};
+  if (isPointsBoard(row) || isRankedPrize(row) || isEvenSplitPayout(row)) {
     return 'settle_ended_challenge';
   }
   return 'distribute_challenge';

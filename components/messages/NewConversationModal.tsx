@@ -240,7 +240,7 @@ function PeopleList({
               </AppText>
             </View>
             {isBlocked ? (
-              <AppText className="text-[12px] font-semibold" style={{ color: THEME.muted }}>
+              <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }}>
                 {copy('messages.blockedState')}
               </AppText>
             ) : (

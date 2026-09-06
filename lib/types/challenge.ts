@@ -107,6 +107,12 @@ export type PublishChallengePayload = {
   privacy_mode?: string | null;
   scoring_method?: string | null;
   scoring_config?: unknown;
+  cumulative_metric?: string | null;
+  cumulative_target?: number | null;
+  cumulative_window?: string | null;
+  win_window?: string | null;
+  metrics?: Array<{ id: string; target: number; name: string; unit?: 'mi' | 'km' | null }> | null;
+  distance_meters_required?: number | null;
 };
 
 export type PublishChallengeResult = {

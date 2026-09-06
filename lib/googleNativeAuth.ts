@@ -238,7 +238,7 @@ export async function signInWithNativeGoogle(): Promise<void> {
 
   if (!isSuccessResponse(response)) {
     const detail: GoogleNativeAuthDetail = {
-      resultType: 'type' in response ? String(response.type) : 'unknown',
+      resultType: 'unknown',
       hasIdToken: false,
       hasCode: false,
     };

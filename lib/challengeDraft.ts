@@ -135,7 +135,7 @@ function asTemplateId(value: unknown): ChallengeTemplateId | null {
   return null;
 }
 
-function asString(value: unknown, fallback: string): string {
+function asString(value: unknown, fallback: string = ''): string {
   if (typeof value === 'string') {
     return value;
   }

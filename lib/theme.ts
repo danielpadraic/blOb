@@ -57,7 +57,7 @@ export const TAB_STICKY_PAD = 0;
 export const FEED_COLUMN_MAX = 430;
 
 /** Web flex children default to min-width:auto and ellipsis too early. Safe on native. */
-export function flexChildMin(): ViewStyle {
+export function flexChildMin(): { minWidth: 0; flexShrink: 1 } {
   return { minWidth: 0, flexShrink: 1 };
 }
 

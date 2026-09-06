@@ -271,9 +271,9 @@ export interface ChallengeProofPart {
   text?: string | null;
   healthWorkoutId?: string | null;
   health?: {
-    startedAt: string;
-    endedAt: string;
-    durationSec: number;
+    startedAt?: string;
+    endedAt?: string;
+    durationSec?: number;
     activityType: string;
     sourceName: string;
     avgHrBpm?: number;
@@ -509,6 +509,8 @@ export interface ChallengeParticipant {
   distance_meters_total?: number | null;
   metric_totals?: Record<string, number> | null;
   live_mute?: LiveMute | string | null;
+  place?: number | null;
+  result?: string | null;
 }
 
 export interface ChallengeParticipantWithProfile extends ChallengeParticipant {
@@ -1904,6 +1906,14 @@ export type Database = {
       get_my_profile: {
         Args: Record<string, never>;
         Returns: Profile | null;
+      };
+      friend_count: {
+        Args: { p_user_id: string };
+        Returns: number;
+      };
+      open_high_five_conversation: {
+        Args: { p_challenge_id: string; p_member_ids: string[] };
+        Returns: unknown;
       };
       tick_user_grants: {
         Args: Record<string, never>;

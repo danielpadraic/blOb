@@ -295,6 +295,9 @@ describe('even-split remaining', () => {
     expect(nobodyFinishedRuleCopy({ buyInAmount: 10 })).toBe(
       'If nobody finishes, entry coins are returned.',
     );
+    expect(nobodyFinishedRuleCopy({ buy_in_amount: 10 })).toBe(
+      'If nobody finishes, entry coins are returned.',
+    );
     expect(nobodyFinishedRuleCopy({ hostFunded: true, hostBudget: 25 })).toBe(
       'If nobody finishes, the prize is returned to the host.',
     );

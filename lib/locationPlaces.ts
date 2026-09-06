@@ -78,6 +78,9 @@ export async function persistChallengePlaces(challengeId: string, proofs: Challe
     if (!place || !locationPlaceIsSet(place)) {
       throw new Error('Drop a pin for the Location proof.');
     }
+    if (place.lat == null || place.lng == null) {
+      throw new Error('Drop a pin for the Location proof.');
+    }
     const { error } = await supabase.rpc('set_challenge_proof_place', {
       p_challenge_id: challengeId,
       p_proof_id: proof.id,

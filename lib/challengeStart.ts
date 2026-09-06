@@ -1,4 +1,5 @@
 import type { Challenge } from '@/lib/types';
+import { challengeClockTz } from '@/lib/checkinPeriod';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -111,7 +112,7 @@ export function formatStartMovedDate(iso: string | null | undefined, timeZone?: 
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
-      timeZone: timeZone || undefined,
+      timeZone: challengeClockTz({ timezone: timeZone }),
     }).format(date);
   } catch {
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);

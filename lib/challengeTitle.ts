@@ -6,11 +6,10 @@ export function isPlaceholderChallengeTitle(value: string | null | undefined): b
   return PLACEHOLDER_TITLES.has(String(value ?? '').trim().toLowerCase());
 }
 
-function firstTaskTitle(
-  items: Array<{ title?: string | null } | string | null | undefined> | null | undefined,
-): string {
-  for (const item of items ?? []) {
-    const label = typeof item === 'string' ? item.trim() : String(item?.title ?? '').trim();
+function firstTaskTitle(items: unknown): string {
+  const list = Array.isArray(items) ? items : [];
+  for (const item of list) {
+    const label = typeof item === 'string' ? item.trim() : String((item as { title?: string | null } | null)?.title ?? '').trim();
     if (label && !isPlaceholderChallengeTitle(label)) {
       return label;
     }
@@ -22,8 +21,8 @@ function firstTaskTitle(
 export function challengeDisplayTitle(row: {
   title?: string | null;
   task?: string | null;
-  tasks?: Array<{ title?: string | null } | string> | null;
-  extra_tasks?: Array<{ title?: string | null } | string> | null;
+  tasks?: Array<{ title?: string | null } | string> | unknown | null;
+  extra_tasks?: Array<{ title?: string | null } | string> | unknown | null;
   is_callout?: boolean | null;
   win_condition?: string | null;
 } | null | undefined): string {

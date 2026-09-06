@@ -6,6 +6,7 @@ import { buildOcrHealthProof, ocrFieldsFromParse } from '../../lib/health/ocrSes
 import { classifyWorkoutScreen, parseWorkoutOcrText } from '../../lib/health/workoutOcr';
 import { ocrImageBuffer } from '../_lib/ocrRunner';
 import { decodeImageBase64 } from '../ocr-workout';
+import { tesseractCouldNotDownload, tesseractLanguageReachable } from './tesseractSmoke';
 
 /**
  * Full submit path for a screenshot on the hero: base64 bytes in, chips and a stored snapshot out.
@@ -36,12 +37,25 @@ async function watchSummaryScreen(): Promise<Buffer> {
 
 describe('screenshot on the hero to stored session', () => {
   it('turns posted bytes into chips and an honest window', async () => {
+    if (!(await tesseractLanguageReachable())) {
+      return;
+    }
     const png = await watchSummaryScreen();
     // What the client posts for a still that has not been uploaded yet.
     const bytes = decodeImageBase64(`data:image/png;base64,${png.toString('base64')}`);
     expect(bytes).not.toBeNull();
 
-    const { text } = await ocrImageBuffer(bytes as Buffer);
+    let ocr: { text: string };
+    try {
+      ocr = await ocrImageBuffer(bytes as Buffer);
+    } catch (error) {
+      if (tesseractCouldNotDownload(error)) {
+        console.warn('OCR smoke skipped: Tesseract language data could not download.');
+        return;
+      }
+      throw error;
+    }
+    const { text } = ocr;
     expect(classifyWorkoutScreen(text).isWorkoutScreen).toBe(true);
 
     const parsed = parseWorkoutOcrText(text);
