@@ -59,7 +59,9 @@ export function workoutFromPostStats(stats?: CheckinProofStats | null): HealthWo
     providerWorkoutId: '',
     source: 'apple_health',
     activityType: activityTypeOf(activity),
-    activityLabel: labelFromActivityType(activity),
+    // The vendor's wording is the headline when the post carried it. Humanizing the type is the
+    // fallback, and a poor one: "other" is the type behind pickleball, tennis and every sport.
+    activityLabel: String(stats.activity_label ?? '').trim() || labelFromActivityType(activity),
     startedAt: '',
     endedAt: '',
     durationSec: hasDuration ? Math.round(durationSec) : 0,
@@ -164,7 +166,11 @@ export function workoutCardForPost(input: {
   timeZone: string;
 }): WorkoutProofCardModel | null {
   const fromSnapshot = input.health
-    ? workoutFromStoredSession(input.health, input.activityLabel, null)
+    ? workoutFromStoredSession(
+        input.health,
+        input.activityLabel ?? input.stats?.activity_label,
+        null,
+      )
     : null;
   const workout = fromSnapshot ?? workoutFromPostStats(input.stats);
   if (!workout) {

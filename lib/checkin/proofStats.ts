@@ -5,6 +5,12 @@
  */
 export type CheckinProofStats = {
   activity?: string | null;
+  /**
+   * The vendor's own wording for the activity ("Pickleball", "High Intensity Interval Training"),
+   * which is the card's headline. Stamped server-side from the owner-only workout row, because
+   * humanizing the stored type alone would call a game of pickleball "Other".
+   */
+  activity_label?: string | null;
   duration_sec?: number | null;
   active_cal?: number | null;
   total_cal?: number | null;

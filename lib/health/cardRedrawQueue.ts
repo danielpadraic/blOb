@@ -106,6 +106,17 @@ export async function putRepairedCard(item: CardRepair, fileUri: string): Promis
   }
 }
 
+/**
+ * Apple's own wording for each of these workouts, keyed the way the proof slot refers to them.
+ *
+ * A slot's `healthWorkoutId` is the `health_workouts` row id, not a vendor id — so that is the table
+ * asked and `id` is the column matched. This previously looked in `workout_sessions.vendor_workout_id`,
+ * which nothing writes, so every card fell back to humanizing the stored type and a game of pickleball
+ * came out as "Other".
+ *
+ * Owner-scoped by row-level security, which is the right shape: the repair pass only ever redraws the
+ * cards of the person whose device it is running on.
+ */
 async function activityLabelsFor(
   userId: string,
   ids: Array<string | null>,
@@ -114,18 +125,18 @@ async function activityLabelsFor(
   if (wanted.length === 0) {
     return null;
   }
-  const sessions = await supabase
-    .from('workout_sessions')
-    .select('vendor_workout_id, activity_label')
+  const rows = await supabase
+    .from('health_workouts')
+    .select('id, activity_label')
     .eq('user_id', userId)
-    .in('vendor_workout_id', wanted);
-  if (sessions.error || !sessions.data?.length) {
+    .in('id', wanted);
+  if (rows.error || !rows.data?.length) {
     return null;
   }
   const labels: StoredActivityLabels = {};
-  for (const row of sessions.data as Array<{ vendor_workout_id?: string | null; activity_label?: string | null }>) {
-    if (row.vendor_workout_id) {
-      labels[row.vendor_workout_id] = row.activity_label ?? null;
+  for (const row of rows.data as Array<{ id?: string | null; activity_label?: string | null }>) {
+    if (row.id) {
+      labels[row.id] = row.activity_label ?? null;
     }
   }
   return labels;

@@ -78,6 +78,21 @@ describe('the workout a post rebuilds from its own stats', () => {
     expect(workoutFromPostStats({ ...WALK_STATS, active_cal: null, total_cal: 810 })?.caloriesKcal).toBe(810);
   });
 
+  it('takes the vendor’s wording for the headline when the post carried it', () => {
+    const workout = workoutFromPostStats({
+      activity: 'other',
+      activity_label: 'Pickleball',
+      duration_sec: 3002,
+    });
+    expect(workout?.activityLabel).toBe('Pickleball');
+  });
+
+  it('falls back to the stored type, which is all a card had before', () => {
+    expect(workoutFromPostStats({ activity: 'other', duration_sec: 3002 })?.activityLabel).toBe(
+      'Other',
+    );
+  });
+
   it('still builds a workout for indoor work that covered no ground', () => {
     const workout = workoutFromPostStats({ activity: 'other', duration_sec: 3002, hr_avg: 137 });
     expect(workout?.durationSec).toBe(3002);
@@ -124,6 +139,16 @@ describe('the card a posted check-in draws', () => {
     expect(card?.route?.pointCount).toBe(4);
     expect(card?.distanceLine).toBe('6.24 mi');
     expect(card?.sourceLine).toBe('Recorded on Apple Watch');
+  });
+
+  it('keeps the vendor wording when the snapshot takes over the card', () => {
+    const card = workoutCardForPost({
+      stats: { ...WALK_STATS, activity_label: 'Outdoor Walk' },
+      health: WALK_SNAPSHOT,
+      challengeTitle: '30-Day Consistency',
+      timeZone: 'America/Denver',
+    });
+    expect(card?.activityLabel).toBe('Outdoor Walk');
   });
 
   it('never draws a map from post stats, so no viewer gets an empty frame', () => {
