@@ -43,9 +43,48 @@ export type LiftRecap = {
   moreCount: number;
   exerciseCount: number;
   setCount: number;
+  /** Weight times reps across every counted working set, or 0 when nothing carried numbers. */
+  totalVolume: number;
+  /** "12,480 lb moved", or empty when there is no volume to speak of. */
+  volumeLine: string;
+  /** Total cardio time in the session, or 0 when there was none. */
+  cardioSeconds: number;
   /** "+2.5 lb · +1 rep", or empty when this session was not bumped. */
   overloadChip: string;
 };
+
+/**
+ * Everything the session actually moved: weight times reps, summed over the counted working sets.
+ *
+ * This is the one number that grows when a session goes well but no single lift got heavier — five
+ * sets instead of four is real work that a "heaviest weight" line hides completely. Sets with no
+ * weight or no reps contribute nothing rather than guessing, and warm-ups stay out for the same
+ * reason they stay off the card.
+ */
+export function sessionVolume(draft: LiftSessionDraft): number {
+  let total = 0;
+  for (const exercise of draft.exercises) {
+    if (exercise.kind !== 'strength') {
+      continue;
+    }
+    for (const set of completedWorkSets(exercise)) {
+      if (set.weight != null && set.reps != null) {
+        total += set.weight * set.reps;
+      }
+    }
+  }
+  // Half-pound plates exist; half a pound of total volume is noise.
+  return Math.round(total);
+}
+
+/** Total seconds of cardio, so the card can speak for a session that was not about weight. */
+export function sessionCardioSeconds(draft: LiftSessionDraft): number {
+  return draft.exercises.reduce(
+    (total, exercise) =>
+      exercise.kind === 'cardio' ? total + Math.max(0, exercise.durationSeconds ?? 0) : total,
+    0,
+  );
+}
 
 /**
  * A card needs at least one finished working set; an abandoned session is not a brag.
@@ -174,6 +213,8 @@ export function buildRecap(draft: LiftSessionDraft, maxLines = RECAP_MAX_LINES):
     0,
   );
 
+  const totalVolume = sessionVolume(draft);
+
   return {
     sessionId: draft.id,
     title: sessionTitle(draft),
@@ -184,8 +225,16 @@ export function buildRecap(draft: LiftSessionDraft, maxLines = RECAP_MAX_LINES):
     moreCount: hidden,
     exerciseCount: draft.exercises.length,
     setCount,
+    totalVolume,
+    volumeLine: totalVolume > 0 ? `${formatVolume(totalVolume)} ${draft.unit} moved` : '',
+    cardioSeconds: sessionCardioSeconds(draft),
     overloadChip: overloadChipLabel(draft.overloadSummary),
   };
+}
+
+/** Thousands separators, because 12480 and 1248 are hard to tell apart at a glance. */
+export function formatVolume(total: number): string {
+  return Math.round(total).toLocaleString('en-US');
 }
 
 /**

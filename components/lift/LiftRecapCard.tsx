@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { formatDuration } from '@/lib/lift/session';
 import type { LiftRecap } from '@/lib/lift/recap';
 import { THEME } from '@/lib/theme';
 
@@ -123,6 +124,49 @@ export function LiftRecapCard({ recap, onImport, importing, compact }: LiftRecap
           </AppText>
         ) : null}
       </View>
+
+      {/* Total load is the honest headline for a session that went well without any single lift
+          going up — an extra set is real work that a "heaviest weight" line hides. */}
+      {recap.volumeLine || recap.cardioSeconds > 0 ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            borderTopWidth: 1,
+            borderTopColor: THEME.border,
+            backgroundColor: THEME.background,
+          }}>
+          {recap.volumeLine ? (
+            <>
+              <Glyph name={GLYPH.trendUp} color={THEME.accent} size={13} />
+              <AppText
+                style={{
+                  fontSize: 13,
+                  fontWeight: '800',
+                  color: THEME.textPrimary,
+                  fontVariant: ['tabular-nums'],
+                }}>
+                {recap.volumeLine}
+              </AppText>
+            </>
+          ) : null}
+          {recap.cardioSeconds > 0 ? (
+            <AppText
+              style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: THEME.textMuted,
+                fontVariant: ['tabular-nums'],
+              }}>
+              {recap.volumeLine ? '· ' : ''}
+              {formatDuration(recap.cardioSeconds)} cardio
+            </AppText>
+          ) : null}
+        </View>
+      ) : null}
 
       {onImport ? (
         <Pressable

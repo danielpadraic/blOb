@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRecap, exerciseDetail, hasShareableWork, recapFallbackText } from '@/lib/lift/recap';
-import { newSessionDraft } from '@/lib/lift/session';
+import {
+  buildRecap,
+  exerciseDetail,
+  hasShareableWork,
+  recapFallbackText,
+  sessionVolume,
+} from '@/lib/lift/recap';
+import { addExercise, addTimedRow, newSessionDraft } from '@/lib/lift/session';
 import type { LiftExerciseDraft, LiftSessionDraft, LiftSetDraft } from '@/lib/lift/types';
 
 const DONE = '2026-09-05T19:00:00Z';
@@ -164,5 +170,78 @@ describe('fallback text on the post', () => {
     expect(recapFallbackText(recap)).toBe(
       'Chest · Triceps · Sep 5\nFlat DB Bench · 1 × 52.5 lb × 10\nCable Fly · 1 × 25 lb × 15',
     );
+  });
+});
+
+describe('session volume', () => {
+  function volumeSession(): LiftSessionDraft {
+    let draft = newSessionDraft({ muscleKeys: ['chest'], unit: 'lb' });
+    draft = addExercise(draft, {
+      exerciseId: 'flat-bb-bench-press',
+      name: 'Flat BB Bench Press',
+      muscleKey: 'chest',
+    });
+    const key = draft.exercises[0].key;
+    return {
+      ...draft,
+      exercises: draft.exercises.map((row) =>
+        row.key === key
+          ? {
+              ...row,
+              sets: [
+                { key: 'w', kind: 'warmup', weight: 45, reps: 10, completedAt: '2026-09-06T10:00:00Z' },
+                { key: 's1', kind: 'work', weight: 135, reps: 10, completedAt: '2026-09-06T10:05:00Z' },
+                { key: 's2', kind: 'work', weight: 135, reps: 8, completedAt: '2026-09-06T10:10:00Z' },
+              ],
+            }
+          : row,
+      ),
+    };
+  }
+
+  it('multiplies weight by reps across the working sets', () => {
+    expect(sessionVolume(volumeSession())).toBe(135 * 10 + 135 * 8);
+  });
+
+  // A warm-up is not the workout, the same reason it never reaches a card line. Counting the
+  // 45 × 10 bar would put this at 2,880.
+  it('leaves warm-ups out', () => {
+    expect(sessionVolume(volumeSession())).toBe(2430);
+  });
+
+  it('skips sets with a number missing rather than guessing', () => {
+    const base = volumeSession();
+    const draft: LiftSessionDraft = {
+      ...base,
+      exercises: base.exercises.map((row) => ({
+        ...row,
+        sets: [...row.sets, { key: 's3', kind: 'work', weight: 135, reps: null, completedAt: null }],
+      })),
+    };
+    expect(sessionVolume(draft)).toBe(2430);
+  });
+
+  it('reads as a headline on the card, with separators', () => {
+    const recap = buildRecap(volumeSession());
+    expect(recap.totalVolume).toBe(2430);
+    expect(recap.volumeLine).toBe('2,430 lb moved');
+  });
+
+  it('says nothing when there is no volume to speak of', () => {
+    const draft = newSessionDraft({ muscleKeys: ['chest'], unit: 'lb' });
+    expect(buildRecap(draft).volumeLine).toBe('');
+  });
+
+  it('adds up cardio time separately from weight', () => {
+    const draft = addTimedRow(newSessionDraft({ muscleKeys: ['cardio'], unit: 'lb' }), {
+      kind: 'cardio',
+      muscleKey: 'cardio',
+      name: 'Air Bike',
+      cardioMethod: 'air_bike',
+      durationSeconds: 600,
+    });
+    const recap = buildRecap(draft);
+    expect(recap.cardioSeconds).toBe(600);
+    expect(recap.totalVolume).toBe(0);
   });
 });
