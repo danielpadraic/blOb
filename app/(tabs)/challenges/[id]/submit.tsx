@@ -133,7 +133,7 @@ import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
 import { challengeDetailHref, checkinSubmitHref, LOBBY_HREF, multiCheckinHref, publishedRowId } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
-import { getCheckinSubmitMessage, getErrorMessage } from '@/utils/errors';
+import { getCheckinSubmitMessage, getErrorMessage, withFailureReason } from '@/utils/errors';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
 
@@ -1054,7 +1054,17 @@ function SubmitWorkoutInner() {
           : failedExtras.length === 1
             ? copy('checkin.extraFailed')
             : interpolateCopy(copy('checkin.extraFailedMany'), { n: failedExtras.length });
-      const checkinId = honorOnly || readyNow ? (await submitCheckin.mutateAsync())?.id : saved?.id;
+      const sending = honorOnly || readyNow;
+      const submitted = sending ? await submitCheckin.mutateAsync() : null;
+      // submit_checkin answers with the check-in it wrote. Getting no check-in back means the send did
+      // not land even though nothing threw, so this stops short of the happy path — landing them on
+      // Live with a fresh receipt would report a success that never happened.
+      if (sending && !submitted?.id) {
+        setFailKind(null);
+        setError(copy('checkin.submitUnconfirmed'));
+        return;
+      }
+      const checkinId = sending ? submitted?.id : saved?.id;
       // Ledger row for the workout, keyed to this check-in. Best-effort: the check-in already landed.
       if (checkinId && uid) {
         for (const proof of proofSteps) {
@@ -1231,7 +1241,10 @@ function SubmitWorkoutInner() {
       }
       if (kind === 'upload' || kind === 'offline') {
         setFailKind(null);
-        setError(checkinUploadStayCopy());
+        // The reassurance is the useful half — their photo is not lost. But this branch also catches
+        // anything that merely looks like an upload or network fault, and on its own the line gave
+        // them nothing to report, so the underlying reason rides along.
+        setError(withFailureReason(checkinUploadStayCopy(), caught));
         return;
       }
       setFailKind(kind === 'permission' ? kind : null);
