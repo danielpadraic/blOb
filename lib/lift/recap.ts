@@ -1,5 +1,6 @@
 import { muscleSummary } from '@/lib/lift/muscles';
 import { overloadChipLabel } from '@/lib/lift/overload';
+import { cardioRowSeconds, roundsSummary } from '@/lib/lift/rounds';
 import {
   cardioTypeLabel,
   formatDuration,
@@ -80,8 +81,7 @@ export function sessionVolume(draft: LiftSessionDraft): number {
 /** Total seconds of cardio, so the card can speak for a session that was not about weight. */
 export function sessionCardioSeconds(draft: LiftSessionDraft): number {
   return draft.exercises.reduce(
-    (total, exercise) =>
-      exercise.kind === 'cardio' ? total + Math.max(0, exercise.durationSeconds ?? 0) : total,
+    (total, exercise) => (exercise.kind === 'cardio' ? total + cardioRowSeconds(exercise) : total),
     0,
   );
 }
@@ -99,7 +99,7 @@ export function hasShareableWork(draft: LiftSessionDraft | null | undefined): bo
   }
   return draft.exercises.some((exercise) => {
     if (exercise.kind === 'cardio') {
-      return (exercise.durationSeconds ?? 0) > 0;
+      return cardioRowSeconds(exercise) > 0;
     }
     if (exercise.kind === 'rest') {
       return false;
@@ -124,9 +124,15 @@ function completedWorkSets(exercise: LiftExerciseDraft): LiftSetDraft[] {
 export function exerciseDetail(exercise: LiftExerciseDraft, unit: WeightUnit): string | null {
   // A timed row has no sets to summarise — its clock is the whole story.
   if (exercise.kind === 'cardio') {
+    const rounds = exercise.rounds ?? [];
+    // An interval is described by its round count, not by one clock. "16 rounds · 4:00" tells
+    // someone what they did; "4:00" on its own hides the whole shape of it.
+    if (exercise.cardioType === 'interval' && rounds.length) {
+      return [cardioTypeLabel(exercise.cardioType), roundsSummary(rounds)].join(' · ');
+    }
     return [
       cardioTypeLabel(exercise.cardioType),
-      formatDuration(exercise.durationSeconds),
+      formatDuration(cardioRowSeconds(exercise)),
       exercise.intensity ? `${exercise.intensity}/10` : '',
     ]
       .filter(Boolean)

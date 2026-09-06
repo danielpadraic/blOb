@@ -65,6 +65,7 @@ export function AddTimedRowSheet({
   const [methodId, setMethodId] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
   const [type, setType] = useState<LiftCardioType>('steady');
+  const interval = !rest && type === 'interval';
   const [seconds, setSeconds] = useState(rest ? DEFAULT_REST_SECONDS : DEFAULT_CARDIO_SECONDS);
   const [intensity, setIntensity] = useState(DEFAULT_CARDIO_INTENSITY);
 
@@ -102,8 +103,10 @@ export function AddTimedRowSheet({
       cardioMethod: rest ? null : methodId,
       cardioCustomName: rest || !isOther ? null : customName.trim().slice(0, 60) || null,
       cardioType: rest ? null : type,
-      durationSeconds: seconds,
-      intensity: rest ? null : intensity,
+      // An interval's clock is the sum of its rounds. Carrying a duration as well would make the
+      // row report its own length twice, at two different numbers.
+      durationSeconds: interval ? 0 : seconds,
+      intensity: rest || interval ? null : intensity,
     });
   }
 
@@ -297,6 +300,18 @@ export function AddTimedRowSheet({
             </>
           )}
 
+          {/* An interval's time and effort live in its rounds, so a single clock here would be a
+              second, contradictory answer. The row lands as a Tabata and is edited on the card. */}
+          {interval ? (
+            <>
+              <SectionLabel>ROUNDS</SectionLabel>
+              <AppText style={{ fontSize: 13, lineHeight: 19, color: THEME.textMuted }}>
+                Starts as 8 × 0:20 on / 0:10 off at intensity 8. Edit, add, or delete rounds on the
+                card, then hit Play to run it.
+              </AppText>
+            </>
+          ) : (
+            <>
           <SectionLabel>{rest ? 'HOW LONG' : 'TIME'}</SectionLabel>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
             <View style={{ flex: rest ? 1 : 2, minWidth: 0 }}>
@@ -328,6 +343,8 @@ export function AddTimedRowSheet({
               </View>
             )}
           </View>
+            </>
+          )}
 
           {rest ? (
             <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>

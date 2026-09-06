@@ -2,15 +2,17 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { DurationField } from '@/components/lift/DurationField';
 import { NumberField } from '@/components/lift/NumberField';
+import { RoundsEditor } from '@/components/lift/RoundsEditor';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { canPlay, cardioRowSeconds } from '@/lib/lift/rounds';
 import {
   CARDIO_TYPES,
   cardioTypeLabel,
   formatDuration,
   timedRowLabel,
 } from '@/lib/lift/session';
-import type { LiftCardioType, LiftExerciseDraft } from '@/lib/lift/types';
+import type { LiftCardioType, LiftExerciseDraft, LiftRound } from '@/lib/lift/types';
 import { THEME, themeShadow } from '@/lib/theme';
 
 /**
@@ -30,6 +32,8 @@ type TimedRowCardProps = {
   onRemove: () => void;
   onDuplicate: () => void;
   onMove: (direction: -1 | 1) => void;
+  onChangeRounds?: (rounds: LiftRound[]) => void;
+  onPlay?: () => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
 };
@@ -44,11 +48,19 @@ export function TimedRowCard({
   onRemove,
   onDuplicate,
   onMove,
+  onChangeRounds,
+  onPlay,
   canMoveUp,
   canMoveDown,
 }: TimedRowCardProps) {
   const rest = row.kind === 'rest';
   const title = timedRowLabel(row);
+  const rounds = row.rounds ?? [];
+  const interval = !rest && row.cardioType === 'interval';
+  // An interval's time lives entirely in its rounds, so the single duration field would be a
+  // second, contradictory answer to "how long is this".
+  const showDuration = !interval;
+  const playable = !rest && canPlay(row);
 
   if (readOnly) {
     return (
@@ -65,16 +77,22 @@ export function TimedRowCard({
             {title}
           </AppText>
           <AppText style={{ fontSize: 15, fontWeight: '800', color: THEME.textPrimary }}>
-            {formatDuration(row.durationSeconds)}
+            {formatDuration(rest ? row.durationSeconds : cardioRowSeconds(row))}
           </AppText>
         </View>
         {rest ? null : (
           <AppText style={{ marginTop: 2, fontSize: 12, color: THEME.textMuted }}>
-            {[cardioTypeLabel(row.cardioType), row.intensity ? `Intensity ${row.intensity}/10` : '']
+            {[
+              cardioTypeLabel(row.cardioType),
+              rounds.length ? `${rounds.length} ${rounds.length === 1 ? 'round' : 'rounds'}` : '',
+              // Interval effort is per round, so one number for the row would be a fiction.
+              !interval && row.intensity ? `Intensity ${row.intensity}/10` : '',
+            ]
               .filter(Boolean)
               .join(' · ')}
           </AppText>
         )}
+        {rounds.length ? <RoundsEditor rounds={rounds} readOnly onChange={() => {}} /> : null}
       </View>
     );
   }
@@ -177,40 +195,71 @@ export function TimedRowCard({
         </ScrollView>
       )}
 
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-        <View style={{ flex: rest ? 1 : 2, minWidth: 0 }}>
-          <DurationField
-            seconds={row.durationSeconds}
-            onChange={onChangeDuration}
-            label={rest ? 'Rest' : 'Cardio'}
-          />
-        </View>
-        {rest ? null : (
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <NumberField
-              value={row.intensity ?? null}
-              label="Intensity out of 10"
-              placeholder="5"
-              onCommit={(text) => {
-                const typed = Number.parseInt(text.replace(/[^0-9]/g, ''), 10);
-                onChangeIntensity(clampIntensity(Number.isFinite(typed) ? typed : 5));
-              }}
-              onStep={(direction) => onChangeIntensity(clampIntensity((row.intensity ?? 5) + direction))}
+      {showDuration ? (
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+          <View style={{ flex: rest ? 1 : 2, minWidth: 0 }}>
+            <DurationField
+              seconds={row.durationSeconds}
+              onChange={onChangeDuration}
+              label={rest ? 'Rest' : 'Cardio'}
             />
-            <AppText
-              style={{
-                marginTop: 3,
-                fontSize: 10,
-                fontWeight: '800',
-                letterSpacing: 0.6,
-                textAlign: 'center',
-                color: THEME.textMuted,
-              }}>
-              INTENSITY
-            </AppText>
           </View>
-        )}
-      </View>
+          {rest ? null : (
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <NumberField
+                value={row.intensity ?? null}
+                label="Intensity out of 10"
+                placeholder="5"
+                onCommit={(text) => {
+                  const typed = Number.parseInt(text.replace(/[^0-9]/g, ''), 10);
+                  onChangeIntensity(clampIntensity(Number.isFinite(typed) ? typed : 5));
+                }}
+                onStep={(direction) => onChangeIntensity(clampIntensity((row.intensity ?? 5) + direction))}
+              />
+              <AppText
+                style={{
+                  marginTop: 3,
+                  fontSize: 10,
+                  fontWeight: '800',
+                  letterSpacing: 0.6,
+                  textAlign: 'center',
+                  color: THEME.textMuted,
+                }}>
+                INTENSITY
+              </AppText>
+            </View>
+          )}
+        </View>
+      ) : null}
+
+      {/* Interval shows the rounds list instead of a single clock. The other types keep their one
+          block, and any rounds someone adds play after it — which is how a warm-up picks up two
+          finishers without turning into an interval workout. */}
+      {rest || !onChangeRounds ? null : (
+        <RoundsEditor rounds={rounds} onChange={onChangeRounds} />
+      )}
+
+      {playable && onPlay ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Play ${title} timer`}
+          onPress={onPlay}
+          style={({ pressed }) => ({
+            minHeight: 44,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 7,
+            borderRadius: 12,
+            backgroundColor: THEME.textPrimary,
+            opacity: pressed ? 0.8 : 1,
+          })}>
+          <Glyph name={GLYPH.play} color={THEME.accentForeground} size={16} />
+          <AppText style={{ fontSize: 14, fontWeight: '800', color: THEME.accentForeground }}>
+            Play
+          </AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

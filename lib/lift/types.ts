@@ -51,6 +51,13 @@ export type LiftExerciseDraft = {
   /** 1–10, cardio only. */
   intensity?: number | null;
   /**
+   * Interval rounds on this one cardio row.
+   *
+   * Eight rounds of Air Bike is one exercise done eight times, not eight exercises, so the rounds
+   * hang off the row rather than multiplying it.
+   */
+  rounds?: LiftRound[] | null;
+  /**
    * This user's demo clip for this exercise, copied onto the row so a copy keeps the video.
    *
    * TODO(demo-round): the column, the per-user `lift_exercise_demos` table, and copy-on-Add all
@@ -140,6 +147,24 @@ export type LiftSessionExerciseRow = {
   duration_seconds?: number | null;
   intensity?: number | null;
   demo_url?: string | null;
+  rounds?: unknown;
+};
+
+/**
+ * One block of an interval.
+ *
+ * `on` is work and carries intensity. `off` is active recovery on the same machine. `rest` is
+ * standing still. The single-block kinds appear here only when someone appends extra blocks to a
+ * warm-up or cool down, which then play in order after the main one.
+ */
+export type LiftRoundKind = 'on' | 'off' | 'rest' | 'warmup' | 'steady' | 'sprint' | 'cooldown';
+
+export type LiftRound = {
+  kind: LiftRoundKind;
+  minutes: number;
+  seconds: number;
+  /** Interval ON only — recovery has no target effort. */
+  intensity?: number | null;
 };
 
 /** One row of the shared cardio catalog. */
@@ -208,4 +233,5 @@ export type LiftSavePayloadExercise = {
   durationSeconds: number | null;
   intensity: number | null;
   demoUrl: string | null;
+  rounds: LiftRound[];
 };

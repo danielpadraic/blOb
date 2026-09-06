@@ -28,10 +28,11 @@ import type { WeightUnit } from '@/lib/types';
 const SESSION_COLUMNS =
   'id, user_id, title, performed_at, completed_at, status, muscle_keys, unit, created_at, updated_at, source_session_id, source_user_id, shared_post_id, overload_from_session_id, overload_summary';
 const EXERCISE_COLUMNS =
-  'id, session_id, exercise_id, custom_exercise_id, name, muscle_key, sort, superset_group, kind, cardio_method, cardio_custom_name, cardio_type, duration_seconds, intensity, demo_url';
+  'id, session_id, exercise_id, custom_exercise_id, name, muscle_key, sort, superset_group, kind, cardio_method, cardio_custom_name, cardio_type, duration_seconds, intensity, demo_url, rounds';
 const SET_COLUMNS = 'id, exercise_row_id, kind, sort, weight, reps, completed_at';
 /** Enough of each row for a history card's two preview lines, including timed rows. */
-const PREVIEW_COLUMNS = 'id, name, sort, kind, duration_seconds, lift_sets(kind)';
+const PREVIEW_COLUMNS =
+  'id, name, sort, kind, duration_seconds, cardio_type, rounds, lift_sets(kind)';
 
 function fail(message: string, error: { message?: string } | null): never {
   throw new Error(error?.message ? `${message}: ${error.message}` : message);

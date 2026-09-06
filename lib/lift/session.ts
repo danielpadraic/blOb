@@ -1,6 +1,19 @@
+import {
+  clampDuration,
+  formatDuration,
+  joinDuration,
+  splitDuration,
+} from '@/lib/lift/duration';
 import { newId, newLocalKey } from '@/lib/lift/ids';
 import { isMuscleKey, muscleShortLabel, orderMuscles, type MuscleKey } from '@/lib/lift/muscles';
 import { parseOverloadSummary } from '@/lib/lift/overload';
+import {
+  cardioRowSeconds,
+  parseRounds,
+  roundsSummary,
+  roundsTotalSeconds,
+  tabataTemplate,
+} from '@/lib/lift/rounds';
 import type {
   LiftCardioType,
   LiftExerciseDraft,
@@ -143,8 +156,6 @@ export const DEFAULT_REST_SECONDS = 60;
 export const DEFAULT_CARDIO_SECONDS = 600;
 export const DEFAULT_CARDIO_INTENSITY = 5;
 
-const MAX_DURATION = 86400;
-
 export function newTimedDraft(input: {
   kind: 'cardio' | 'rest';
   muscleKey: MuscleKey;
@@ -171,6 +182,10 @@ export function newTimedDraft(input: {
     durationSeconds:
       input.durationSeconds ?? (rest ? DEFAULT_REST_SECONDS : DEFAULT_CARDIO_SECONDS),
     intensity: rest ? null : (input.intensity ?? DEFAULT_CARDIO_INTENSITY),
+    // Picking Interval up front means intervals, so the row arrives already shaped like a Tabata
+    // rather than as an empty list behind a plus button.
+    rounds:
+      !rest && (input.cardioType ?? 'steady') === 'interval' ? tabataTemplate() : [],
   };
 }
 
@@ -206,44 +221,33 @@ export function updateTimedRow(
   patch: Partial<
     Pick<
       LiftExerciseDraft,
-      'cardioMethod' | 'cardioCustomName' | 'cardioType' | 'durationSeconds' | 'intensity' | 'name'
+      | 'cardioMethod'
+      | 'cardioCustomName'
+      | 'cardioType'
+      | 'durationSeconds'
+      | 'intensity'
+      | 'name'
+      | 'rounds'
     >
   >,
 ): LiftSessionDraft {
-  return mapExercise(draft, key, (row) => ({ ...row, ...patch }));
+  return mapExercise(draft, key, (row) => {
+    const next = { ...row, ...patch };
+    // Switching a plain cardio row to Interval fills in the classic Tabata. Rounds someone has
+    // already built are never overwritten, and switching away keeps them so the change is
+    // reversible with one tap.
+    if (
+      patch.cardioType === 'interval' &&
+      row.cardioType !== 'interval' &&
+      !(next.rounds ?? []).length
+    ) {
+      next.rounds = tabataTemplate();
+    }
+    return next;
+  });
 }
 
-export function clampDuration(seconds: number | null | undefined): number {
-  if (seconds == null || !Number.isFinite(seconds)) {
-    return 0;
-  }
-  return Math.min(Math.max(Math.round(seconds), 0), MAX_DURATION);
-}
-
-/** Minutes and seconds are edited separately, so both directions of the conversion live here. */
-export function splitDuration(seconds: number | null | undefined): {
-  minutes: number;
-  seconds: number;
-} {
-  const total = clampDuration(seconds);
-  return { minutes: Math.floor(total / 60), seconds: total % 60 };
-}
-
-export function joinDuration(minutes: number, seconds: number): number {
-  const safeMinutes = Number.isFinite(minutes) ? Math.max(Math.round(minutes), 0) : 0;
-  const safeSeconds = Number.isFinite(seconds) ? Math.max(Math.round(seconds), 0) : 0;
-  return clampDuration(safeMinutes * 60 + safeSeconds);
-}
-
-/** "0:30", "10:00", "1:05:00". Always reads as a clock, never as "600s". */
-export function formatDuration(seconds: number | null | undefined): string {
-  const total = clampDuration(seconds);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const rest = total % 60;
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return hours ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${minutes}:${pad(rest)}`;
-}
+export { clampDuration, formatDuration, joinDuration, splitDuration };
 
 const CARDIO_TYPE_LABELS: Record<LiftCardioType, string> = {
   warmup: 'Warm-up',
@@ -314,16 +318,21 @@ export function timedRowLabel(row: LiftExerciseDraft): string {
   return row.name || 'Cardio';
 }
 
-/** "Air Bike · Sprint · 0:30 · 8/10", or "Rest · 0:45". */
+/** "Air Bike · Sprint · 0:30 · 8/10", "Air Bike · Interval · 16 rounds · 4:00", or "Rest · 0:45". */
 export function timedRowSummary(row: LiftExerciseDraft): string {
-  const duration = formatDuration(row.durationSeconds);
   if (row.kind === 'rest') {
-    return `Rest · ${duration}`;
+    return `Rest · ${formatDuration(row.durationSeconds)}`;
+  }
+  const rounds = row.rounds ?? [];
+  if (row.cardioType === 'interval' && rounds.length) {
+    return [timedRowLabel(row), cardioTypeLabel(row.cardioType), roundsSummary(rounds)]
+      .filter(Boolean)
+      .join(' · ');
   }
   return [
     timedRowLabel(row),
     cardioTypeLabel(row.cardioType),
-    duration,
+    formatDuration(cardioRowSeconds(row)),
     row.intensity ? `${row.intensity}/10` : '',
   ]
     .filter(Boolean)
@@ -748,14 +757,25 @@ export function sessionPreview(
     kind?: string | null;
     duration_seconds?: number | null;
     durationSeconds?: number | null;
+    cardio_type?: string | null;
+    cardioType?: string | null;
+    rounds?: unknown;
   }>,
   lines = 2,
 ): string[] {
   const rows = exercises.slice(0, lines).map((row) => {
     // A timed row has no sets, so "3 sets" would read as zero. It states its clock instead.
     if (row.kind === 'cardio' || row.kind === 'rest') {
-      const seconds = row.durationSeconds ?? row.duration_seconds ?? null;
-      return `${row.name} · ${formatDuration(seconds)}`;
+      // Mirrors what Play counts down: an interval's time is its rounds and its own duration
+      // field is unused, while every other type is one block plus any rounds appended after it.
+      const rounds = parseRounds(row.rounds);
+      const interval = (row.cardioType ?? row.cardio_type) === 'interval';
+      const block = interval ? 0 : clampDuration(row.durationSeconds ?? row.duration_seconds);
+      const seconds = block + roundsTotalSeconds(rounds);
+      const count = rounds.length
+        ? ` · ${rounds.length} ${rounds.length === 1 ? 'round' : 'rounds'}`
+        : '';
+      return `${row.name}${count} · ${formatDuration(seconds)}`;
     }
     const count = row.sets.filter((set) => set.kind === 'work').length;
     return count ? `${row.name} · ${count} ${count === 1 ? 'set' : 'sets'}` : row.name;
@@ -796,6 +816,7 @@ export function draftToPayload(draft: LiftSessionDraft): LiftSavePayloadExercise
       durationSeconds: timed ? clampDuration(row.durationSeconds) : null,
       intensity: row.kind === 'cardio' ? (row.intensity ?? null) : null,
       demoUrl: timed ? null : (row.demoUrl ?? null),
+      rounds: row.kind === 'cardio' ? (row.rounds ?? []) : [],
     };
   });
 }
@@ -836,6 +857,7 @@ export function rowsToDraft(
       durationSeconds: row.duration_seconds ?? null,
       intensity: row.intensity ?? null,
       demoUrl: row.demo_url ?? null,
+      rounds: parseRounds(row.rounds),
       sets: (setsByExercise.get(row.id) ?? [])
         .sort((a, b) => a.sort - b.sort)
         .map((set) => ({
@@ -908,6 +930,9 @@ export function copySession(
       durationSeconds: row.durationSeconds ?? null,
       intensity: row.intensity ?? null,
       demoUrl: row.demoUrl ?? null,
+      // The interval structure is the workout itself, so it copies whole. Clearing it would hand
+      // someone an Air Bike row with a Play button and nothing to count down.
+      rounds: (row.rounds ?? []).map((round) => ({ ...round })),
       sets: row.sets.map((set) => ({
         key: newLocalKey('set'),
         kind: set.kind,
