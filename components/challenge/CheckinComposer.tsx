@@ -21,6 +21,7 @@ import { GifPicker } from '@/components/feed/GifPicker';
 import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import type { LiftSessionSummary } from '@/lib/lift/types';
 import { Input } from '@/components/ui/Input';
 import {
   KeyboardField,
@@ -108,6 +109,13 @@ type CheckinComposerProps = {
   shareWave?: boolean;
   onShareWaveChange?: (value: boolean) => void;
   onSend: () => void;
+  /**
+   * A finished lift shown alongside the check-in. Context, never proof — the required photo, video,
+   * or heart rate still has to be filled in the normal way before this check-in can be sent.
+   */
+  attachedLift?: LiftSessionSummary | null;
+  onAttachLift?: () => void;
+  onRemoveLift?: () => void;
   accessory?: ReactNode;
   /** Per-slot content rendered under the hero, keyed by proof id. Used for read workout stats. */
   proofAccessories?: Record<string, ReactNode>;
@@ -148,6 +156,9 @@ export function CheckinComposer({
   shareWave = false,
   onShareWaveChange,
   onSend,
+  attachedLift,
+  onAttachLift,
+  onRemoveLift,
   accessory,
   dueLine,
 }: CheckinComposerProps) {
@@ -888,6 +899,46 @@ export function CheckinComposer({
         </View>
       ) : null}
 
+      {/* The wording matters: this rides along with the check-in, it does not stand in for the
+          proof the challenge asked for. */}
+      {attachedLift ? (
+        <View
+          style={{
+            marginTop: 8,
+            marginHorizontal: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            padding: 10,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.background,
+          }}>
+          <Glyph name={GLYPH.lift} color={THEME.accent} size={15} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText
+              numberOfLines={1}
+              style={{ fontSize: 14, fontWeight: '800', color: THEME.textPrimary }}>
+              {attachedLift.title}
+            </AppText>
+            <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
+              {attachedLift.exerciseCount} exercises · {attachedLift.setCount} sets · not proof
+            </AppText>
+          </View>
+          {onRemoveLift ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Remove the attached lift"
+              hitSlop={8}
+              onPress={onRemoveLift}
+              style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       <CheckinShareTo
         hideHome={lobbyLocked}
         shareHome={shareHome}
@@ -910,6 +961,13 @@ export function CheckinComposer({
           onPress={() => void pickGallery('photo')}
         />
         <ComposerIcon mark="GIF" label="GIF" onPress={() => setGifOpen((open) => !open)} />
+        {onAttachLift ? (
+          <ComposerIcon
+            glyph={GLYPH.lift}
+            label="Attach lift"
+            onPress={onAttachLift}
+          />
+        ) : null}
         <ComposerIcon
           mark="+"
           label="Add proof"

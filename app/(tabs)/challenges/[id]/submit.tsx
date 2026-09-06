@@ -4,6 +4,9 @@ import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
+import { linkSessionToPost } from '@/lib/lift/share';
+import type { LiftSessionSummary } from '@/lib/lift/types';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { WorkoutStatChips } from '@/components/challenge/WorkoutStatChips';
 import { isOcrEligibleProof, shouldReadWorkoutStill, useWorkoutOcr } from '@/hooks/useWorkoutOcr';
@@ -320,6 +323,9 @@ function SubmitWorkoutInner() {
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
   const [proofCaptions, setProofCaptions] = useState<Record<string, string>>({});
   const [sharePrefs, setSharePrefs] = useState<CheckinSharePrefs>(defaultCheckinSharePrefs);
+  /** Context on the check-in post. Never counted toward the proof this challenge requires. */
+  const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
+  const [liftPickerOpen, setLiftPickerOpen] = useState(false);
   const lobbyLocked = checkinHidesHomeShare(challengeQuery.data);
   const lockedShare = applyCheckinShareLock(sharePrefs, lobbyLocked);
   const shareHome = lockedShare.home;
@@ -1131,8 +1137,15 @@ function SubmitWorkoutInner() {
               .update({
                 hidden_from_home: !shareHome,
                 media_captions: captions,
+                // The lift rides on the check-in post as context. It is deliberately not written
+                // into proof_parts, so the challenge's photo or heart-rate requirement is decided
+                // by exactly the same check it always was.
+                ...(attachedLift ? { lift_session_id: attachedLift.id } : null),
               })
               .eq('id', postId);
+            if (attachedLift) {
+              await linkSessionToPost(attachedLift.id, postId);
+            }
             const author = sessionAuthor(profile, uid);
             if (author) {
               seedChallengeLivePost(queryClient, id, uid, {
@@ -1761,6 +1774,9 @@ function SubmitWorkoutInner() {
         shareWave={shareWave}
         onShareWaveChange={(wave) => setSharePrefs((current) => ({ ...current, wave }))}
         onSend={() => void onSubmit()}
+        attachedLift={attachedLift}
+        onAttachLift={() => setLiftPickerOpen(true)}
+        onRemoveLift={() => setAttachedLift(null)}
         dueLine={
           <PeriodCheckinDue
             challenge={challenge}
@@ -1857,6 +1873,15 @@ function SubmitWorkoutInner() {
             </>
           ) : null
         }
+      />
+
+      <LiftPickerSheet
+        visible={liftPickerOpen}
+        onClose={() => setLiftPickerOpen(false)}
+        onPick={(session) => {
+          setAttachedLift(session);
+          setLiftPickerOpen(false);
+        }}
       />
     </Screen>
   );
