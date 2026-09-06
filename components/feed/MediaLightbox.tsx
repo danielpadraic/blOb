@@ -25,10 +25,16 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
+import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { PlayerCloseButton } from '@/components/ui/PlayerCloseButton';
+import { useCheckinHealthSnapshot } from '@/hooks/useCheckinHealthSnapshot';
+import type { CheckinProofStats } from '@/lib/checkin/proofStats';
+import { workoutCardForPost } from '@/lib/health/postWorkoutCard';
+import { workoutCardFit, type WorkoutProofCardModel } from '@/lib/health/workoutProofCard';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
+import type { HealthActivityType } from '@/services/health/types';
 import { mediaKind } from '@/utils/media';
 
 export type LightboxItem = {
@@ -37,6 +43,30 @@ export type LightboxItem = {
   label?: string;
   /** Small line above the caption: time, or slot name. */
   meta?: string;
+  /**
+   * A workout proof draws its card here rather than showing the flattened file at `uri`.
+   *
+   * The file is a JPEG of the same card, so it can only ever be as right as it was on the day it was
+   * rasterized: cards drawn before the renderer was fixed are a quarter-size thumb in the corner of
+   * an empty frame, and cards drawn before the miles were repaired print "0.00 mi". Drawing the card
+   * from the stored numbers puts the current card on every post, old ones included. The file stays
+   * the stored proof artifact and the fallback when there are no numbers to draw from.
+   */
+  workout?: WorkoutSlide | null;
+};
+
+export type WorkoutSlide = {
+  /** Drawable immediately, from the numbers on the post. Shown while nothing better has arrived. */
+  card: WorkoutProofCardModel;
+  activityType: HealthActivityType;
+  /**
+   * What the card is rebuilt from once the participant-only session summary loads, which is the only
+   * source carrying the GPS track and the workout's real start and end.
+   */
+  checkinId?: string | null;
+  stats?: CheckinProofStats | null;
+  challengeTitle?: string | null;
+  timeZone: string;
 };
 
 type LightboxState = {
@@ -290,11 +320,15 @@ function LightboxPage({
 }) {
   const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
-  const zoomable = Platform.OS === 'ios' && kind !== 'video';
+  const workout = item.workout ?? null;
+  // A card is vector art sized to the slide, so it is already as sharp and as large as it can be.
+  // Pinch-zoom would only let the reader push the stats off their own screen.
+  const zoomable = Platform.OS === 'ios' && kind !== 'video' && !workout;
   const mediaStyle = { width: mediaWidth, height: mediaHeight };
 
-  const media =
-    kind === 'video' ? (
+  const media = workout ? (
+    <LightboxWorkoutCard slide={workout} width={mediaWidth} height={mediaHeight} />
+  ) : kind === 'video' ? (
       <LightboxVideo uri={playUri} style={mediaStyle} />
     ) : (
       <Image
@@ -337,6 +371,49 @@ function LightboxPage({
           media
         )}
       </View>
+    </View>
+  );
+}
+
+/**
+ * The workout card at slide size: full width on a phone, and as tall as 4:5 allows under the close
+ * chrome. Nothing is cropped, so every stat that is on the card is on the screen.
+ */
+function LightboxWorkoutCard({
+  slide,
+  width,
+  height,
+}: {
+  slide: WorkoutSlide;
+  width: number;
+  height: number;
+}) {
+  const snapshot = useCheckinHealthSnapshot(slide.checkinId);
+  const card = useMemo(() => {
+    if (!snapshot) {
+      return slide.card;
+    }
+    return (
+      workoutCardForPost({
+        stats: slide.stats,
+        health: snapshot,
+        challengeTitle: slide.challengeTitle,
+        timeZone: slide.timeZone,
+      }) ?? slide.card
+    );
+  }, [slide.card, slide.challengeTitle, slide.stats, slide.timeZone, snapshot]);
+  const fit = workoutCardFit(width, height);
+  if (fit.width <= 0) {
+    return null;
+  }
+  return (
+    <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
+      <WorkoutProofCard
+        card={card}
+        activityType={slide.activityType}
+        width={fit.width}
+        height={fit.height}
+      />
     </View>
   );
 }

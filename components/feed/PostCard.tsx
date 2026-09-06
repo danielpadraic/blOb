@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Keyboard, Linking, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -9,6 +9,8 @@ import { AudienceIconButton } from '@/components/feed/AudienceSheet';
 import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
+import type { WorkoutSlide } from '@/components/feed/MediaLightbox';
+import { workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import { MentionText } from '@/components/feed/MentionText';
 import { InChallengeChip, OriginChip } from '@/components/feed/OriginChip';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
@@ -182,6 +184,17 @@ function PostCardInner({
   const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
   const previewRow = preview.data?.id === post.challenge_id ? preview.data : null;
   const challengeTitle = previewRow ? challengeDisplayTitle(previewRow) : null;
+  // Built once per post rather than per frame: a feed scroll re-renders these constantly, and a card
+  // is a whole model. Posts that are not workout check-ins cost one absent-URL check.
+  const workoutSlide = useMemo(
+    () =>
+      workoutSlideForPost({
+        stats: post.checkin_stats,
+        challengeTitle,
+        checkinId: post.checkin_id,
+      }),
+    [challengeTitle, post.checkin_id, post.checkin_stats],
+  );
   const city = postLocality(post);
   const inCircleRoom = Boolean(challengeFeed && circleId);
   const caption = circleJoin
@@ -528,6 +541,7 @@ function PostCardInner({
             isOwner={mine}
             pauseCycle={threadOpen || menuOpen}
             homeInline={homeFeed}
+            workout={workoutSlide}
           />
         )}
 
@@ -928,6 +942,7 @@ function ProofMedia({
   isOwner,
   pauseCycle,
   homeInline,
+  workout,
 }: {
   postId: string;
   urls: string[];
@@ -936,6 +951,7 @@ function ProofMedia({
   isOwner?: boolean;
   pauseCycle?: boolean;
   homeInline?: boolean;
+  workout?: (WorkoutSlide & { url: string }) | null;
 }) {
   const visuals = pagerUrlsForViewer({ urls, hidden, isOwner });
   const others = urls.filter((url) => {
@@ -967,6 +983,7 @@ function ProofMedia({
         captions={alignedCaptions}
         pauseCycle={pauseCycle}
         homeInline={homeInline}
+        workout={workout}
       />
       {others.map((url) => (
         <MediaChip key={url} url={url} />

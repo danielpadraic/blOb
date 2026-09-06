@@ -23,8 +23,11 @@ import {
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
-import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
+import { useMediaLightboxOptional, type LightboxItem, type WorkoutSlide } from '@/components/feed/MediaLightbox';
 import { AppText } from '@/components/ui/AppText';
+import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
+import { isWorkoutCardUrl } from '@/lib/health/postWorkoutCard';
+import { workoutCardAccent, workoutCardFit } from '@/lib/health/workoutProofCard';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
 import {
@@ -218,6 +221,7 @@ export function PostMediaCarousel({
   urls,
   labels,
   captions,
+  workout,
   pauseCycle = false,
   homeInline = false,
 }: {
@@ -225,6 +229,11 @@ export function PostMediaCarousel({
   urls: string[];
   labels?: string[];
   captions?: Array<string | null | undefined>;
+  /**
+   * The workout card this post carries, and which of its media that card replaced. The slide at that
+   * URL draws the card from the post's stored numbers instead of showing the flattened file.
+   */
+  workout?: (WorkoutSlide & { url: string }) | null;
   pauseCycle?: boolean;
   /** Home list only: muted autoplay, speaker, phone-width player with X. */
   homeInline?: boolean;
@@ -265,9 +274,16 @@ export function PostMediaCarousel({
   urlsRef.current = urls;
   pageWidthRef.current = pageWidth;
 
+  const workoutSlide = useCallback(
+    (uri: string): WorkoutSlide | null =>
+      workout && isWorkoutCardUrl(uri, workout.url) ? workout : null,
+    [workout],
+  );
+
   const lightboxItems: LightboxItem[] = urls.map((uri, itemIndex) => ({
     uri,
     label: captions?.[itemIndex] || labels?.[itemIndex],
+    workout: workoutSlide(uri),
   }));
 
   const settleAt = useCallback(
@@ -417,6 +433,7 @@ export function PostMediaCarousel({
           homeInline={homeInline}
           lightboxOpen={Boolean(lightbox?.open)}
           caption={captions?.[0]}
+          workout={workoutSlide(urls[0])}
           onOpen={lightbox ? () => openAt(0) : undefined}
           onPlayingChange={setVideoPlaying}
         />
@@ -447,6 +464,7 @@ export function PostMediaCarousel({
                     homeInline={homeInline}
                     lightboxOpen={Boolean(lightbox?.open)}
                     caption={captions?.[itemIndex]}
+                    workout={workoutSlide(uri)}
                     onOpen={
                       lightbox && (homeInline || isStillPostMedia(uri))
                         ? () => openAt(itemIndex)
@@ -492,6 +510,7 @@ function MediaSlide({
   homeInline,
   lightboxOpen,
   caption,
+  workout,
   onOpen,
   onPlayingChange,
 }: {
@@ -504,6 +523,7 @@ function MediaSlide({
   homeInline?: boolean;
   lightboxOpen?: boolean;
   caption?: string | null;
+  workout?: WorkoutSlide | null;
   onOpen?: () => void;
   onPlayingChange?: (playing: boolean) => void;
 }) {
@@ -514,11 +534,19 @@ function MediaSlide({
     width,
     height,
     overflow: 'hidden' as const,
-    backgroundColor: kind === 'video' ? THEME.surface2 : LETTERBOX,
+    // A card is fitted rather than cropped, so a little of the frame shows above and below it. That
+    // band takes the card's own field colour, which reads as part of the card instead of as the grey
+    // slab a letterboxed photo leaves behind.
+    backgroundColor: workout
+      ? workoutCardAccent(workout.activityType).fieldBottom
+      : kind === 'video'
+        ? THEME.surface2
+        : LETTERBOX,
     borderRadius: 14,
   };
-  const body =
-    kind === 'video' ? (
+  const body = workout ? (
+    <WorkoutCardSlide slide={workout} width={width} height={height} />
+  ) : kind === 'video' ? (
       <PostVideo
         postId={postId}
         uri={uri}
@@ -585,6 +613,37 @@ function MediaSlide({
           </AppText>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The workout card as a feed tile: full width of the post, portrait weight, and drawn from the post's
+ * own numbers so the miles on it are the miles the row stores.
+ */
+function WorkoutCardSlide({
+  slide,
+  width,
+  height,
+}: {
+  slide: WorkoutSlide;
+  width: number;
+  height: number;
+}) {
+  const fit = workoutCardFit(width, height);
+  if (fit.width <= 0) {
+    return null;
+  }
+  return (
+    <View
+      pointerEvents="none"
+      style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
+      <WorkoutProofCard
+        card={slide.card}
+        activityType={slide.activityType}
+        width={fit.width}
+        height={fit.height}
+      />
     </View>
   );
 }

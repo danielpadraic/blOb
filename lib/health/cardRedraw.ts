@@ -57,7 +57,7 @@ export type StoredActivityLabels = Record<string, string | null | undefined>;
 
 const ACTIVITY_TYPES: HealthActivityType[] = ['running', 'walking', 'cycling', 'strength', 'other'];
 
-function activityTypeOf(value: string): HealthActivityType {
+export function activityTypeOf(value: string): HealthActivityType {
   return ACTIVITY_TYPES.includes(value as HealthActivityType)
     ? (value as HealthActivityType)
     : 'other';
@@ -82,7 +82,7 @@ export function confidenceFromSourceName(sourceName?: string | null): HealthConf
  * The stored activity type is lowercase ("walking"), and it is the card's headline label when no
  * vendor wording survived, so it is title-cased rather than printed as typed.
  */
-function labelFromActivityType(activityType: string): string {
+export function labelFromActivityType(activityType: string): string {
   const label = humanizeActivityLabel(activityType);
   return label ? label.charAt(0).toUpperCase() + label.slice(1) : 'Workout';
 }

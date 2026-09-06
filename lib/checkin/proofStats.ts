@@ -17,6 +17,12 @@ export type CheckinProofStats = {
    * The author's pronoun rides along with their own post; it is never queryable per profile.
    */
   pronoun?: string | null;
+  /**
+   * Which of the post's media is the generated workout card, named by the server because the client
+   * cannot tell: the file name follows the proof slot's method, and the slot itself is readable only
+   * by participants. The feed draws that slide from these numbers instead of showing the file.
+   */
+  card_url?: string | null;
 };
 
 export type ProofStatChip = { key: string; label: string };

@@ -3,6 +3,8 @@ import { Alert, Animated, PanResponder, Platform, Pressable, View } from 'react-
 import { Image } from 'expo-image';
 
 import { LiveReactions } from '@/components/challenge/LiveReactions';
+import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
+import { isWorkoutCardUrl, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
 import { MentionText } from '@/components/feed/MentionText';
@@ -91,10 +93,21 @@ export const LiveBubble = memo(function LiveBubble({
     : liveChatText(post.content, post.media_urls);
   const headline = liveCheckinHeadline(post);
   const liftSessionId = post.lift_session_id ? String(post.lift_session_id) : null;
+  const workout = useMemo(
+    () =>
+      workoutSlideForPost({
+        stats: post.checkin_stats,
+        challengeTitle: null,
+        checkinId: post.checkin_id,
+      }),
+    [post.checkin_id, post.checkin_stats],
+  );
+  const workoutTile = workout && isWorkoutCardUrl(visuals[0], workout.url) ? workout : null;
   const items: LightboxItem[] = visuals.map((uri) => ({
     uri,
     label: liveProofCaption(post, uri, checkin ? headline : caption),
     meta: time,
+    workout: workout && isWorkoutCardUrl(uri, workout.url) ? workout : null,
   }));
   const alignEnd = mine && !system;
   const canSwipeReply = Boolean(onReply) && !removed && !editing;
@@ -327,11 +340,26 @@ export const LiveBubble = memo(function LiveBubble({
                     overflow: 'hidden',
                     backgroundColor: THEME.surface2,
                   }}>
-                  <Image
-                    source={{ uri: visuals[0] }}
-                    style={{ width: '100%', height: '100%' }}
-                    contentFit="cover"
-                  />
+                  {/*
+                    The tile is already 4:5, so a card drawn from the post's own numbers fills it
+                    exactly. Showing the stored file instead would show whatever it looked like on the
+                    day it was flattened, including cards that print 0.00 mi for a walk that covered
+                    ground.
+                  */}
+                  {workoutTile ? (
+                    <WorkoutProofCard
+                      card={workoutTile.card}
+                      activityType={workoutTile.activityType}
+                      width="100%"
+                      height="100%"
+                    />
+                  ) : (
+                    <Image
+                      source={{ uri: visuals[0] }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                    />
+                  )}
                   {mediaKind(visuals[0]) === 'video' ? (
                     <View
                       pointerEvents="none"

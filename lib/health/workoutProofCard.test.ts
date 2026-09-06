@@ -5,6 +5,7 @@ import {
   workoutCardDateLine,
   workoutCardDistance,
   workoutCardDuration,
+  workoutCardFit,
   workoutCardHeartRateAverage,
   workoutCardSourceLine,
   workoutCardSparkline,
@@ -306,6 +307,30 @@ describe('route on the card', () => {
     });
     expect(parsed?.source).toBe('ocr');
     expect(parsed?.route).toBeUndefined();
+  });
+});
+
+describe('fitting the card into the box it is drawn in', () => {
+  it('reaches both edges of a phone, where width runs out first', () => {
+    const fit = workoutCardFit(390, 780);
+    expect(fit.width).toBe(390);
+    expect(fit.height).toBe(487);
+  });
+
+  it('is bounded by height in a short wide box, so nothing is cropped', () => {
+    const fit = workoutCardFit(900, 400);
+    expect(fit.height).toBe(400);
+    expect(fit.width).toBe(320);
+  });
+
+  it('keeps the card 4:5 whatever the box', () => {
+    const fit = workoutCardFit(1000, 1000);
+    expect(fit.width / fit.height).toBeCloseTo(0.8, 2);
+  });
+
+  it('draws nothing in a box with no size yet', () => {
+    expect(workoutCardFit(0, 800)).toEqual({ width: 0, height: 0 });
+    expect(workoutCardFit(Number.NaN, 800)).toEqual({ width: 0, height: 0 });
   });
 });
 

@@ -191,9 +191,13 @@ function countUp(value: string, progress: number): string {
 type Props = {
   card: WorkoutProofCardModel;
   activityType: HealthActivityType;
-  /** Rendered size. The viewBox keeps layout fixed, so this only scales the preview. */
-  width?: number;
-  height?: number;
+  /**
+   * Rendered size. The viewBox keeps layout fixed, so this only scales the preview. A percentage is
+   * allowed so the card can fill a box already shaped 4:5 by its parent, which is how the Live bubble
+   * sizes proof.
+   */
+  width?: number | string;
+  height?: number | string;
   /**
    * Animate the route draw and the headline count-up once. Left off for the offscreen rasterizer so
    * the saved JPEG is the finished frame.

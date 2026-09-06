@@ -80,6 +80,27 @@ export const WORKOUT_CARD_HEIGHT = 1350;
  */
 export const WORKOUT_CARD_VERSION = 2;
 
+/**
+ * The largest the card can be drawn inside a box without cropping it.
+ *
+ * The card is one fixed shape (4:5 portrait), and every number on it matters, so it is fitted rather
+ * than filled — cropping a proof artifact to square off a frame would cut a stat away. On a phone the
+ * width is what runs out first, which is why a card in the lightbox reaches both edges.
+ */
+export function workoutCardFit(
+  boxWidth: number,
+  boxHeight: number,
+): { width: number; height: number } {
+  const scale = Math.min(boxWidth / WORKOUT_CARD_WIDTH, boxHeight / WORKOUT_CARD_HEIGHT);
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return { width: 0, height: 0 };
+  }
+  return {
+    width: Math.floor(WORKOUT_CARD_WIDTH * scale),
+    height: Math.floor(WORKOUT_CARD_HEIGHT * scale),
+  };
+}
+
 /** Chart box inside the card. Sparkline geometry is built against these numbers. */
 export const WORKOUT_CARD_CHART = { width: 872, height: 176 } as const;
 
@@ -325,6 +346,10 @@ export function buildWorkoutProofCard(input: {
       emptyLine: sparkline || avg != null ? null : 'Heart rate not on this workout',
     },
     sourceLine: workoutCardSourceLine(input.workout.confidence),
-    proofLine: `Proof for ${input.challengeTitle}`.trim(),
+    // A card drawn for a feed post may not know the challenge it belongs to, and "Proof for" with
+    // nothing after it reads as a truncation bug.
+    proofLine: input.challengeTitle.trim()
+      ? `Proof for ${input.challengeTitle.trim()}`
+      : 'Check-in proof',
   };
 }
