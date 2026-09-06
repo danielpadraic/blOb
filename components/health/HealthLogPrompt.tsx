@@ -5,7 +5,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useHealthLogPrompt } from '@/hooks/useHealthLogPrompt';
 import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
-import { challengeDetailHref } from '@/lib/routes';
+import { checkinSubmitHref, MULTI_CHECKIN_HREF } from '@/lib/routes';
 import { formatHealthDuration } from '@/lib/health/proofSummary';
 import { THEME, themeShadow } from '@/lib/theme';
 
@@ -16,9 +16,10 @@ export function HealthLogPromptHost() {
   const prompt = useHealthLogPrompt();
 
   const onSubmit = (segments as string[]).includes('submit');
-  const visible = Boolean(prompt.workout && prompt.challenge && prompt.phase === 'none' && !onSubmit);
+  const targets = prompt.targets;
+  const visible = Boolean(prompt.workout && targets.length > 0 && !onSubmit);
 
-  if (!visible || !prompt.workout || !prompt.challenge) {
+  if (!visible || !prompt.workout) {
     return null;
   }
 
@@ -26,6 +27,11 @@ export function HealthLogPromptHost() {
     duration: formatHealthDuration(prompt.workout.durationSec),
     activity: prompt.workout.activityLabel,
   });
+  // Naming them is the point: the workout only counts for these. With more than one, the hub lets
+  // them pick rather than the prompt guessing — guessing is what offered Prayer a pickleball game.
+  const names = targets.map((target) => target.title).filter(Boolean).join(' · ');
+  const destination =
+    targets.length === 1 ? checkinSubmitHref(targets[0].id) : MULTI_CHECKIN_HREF;
 
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 45 }}>
@@ -42,12 +48,12 @@ export function HealthLogPromptHost() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={label}
-          onPress={() =>
-            router.push(challengeDetailHref(prompt.challenge!.id, 'lobby', null, { tab: 'overview' }))
-          }
+          onPress={() => router.push(destination)}
           style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}>
           <AppText className="text-[15px] font-bold text-charcoal">{label}</AppText>
-          <AppText className="mt-0.5 text-sm text-muted">{prompt.challenge.title}</AppText>
+          <AppText className="mt-0.5 text-sm text-muted" numberOfLines={2}>
+            {names}
+          </AppText>
         </Pressable>
         <Pressable
           accessibilityRole="button"

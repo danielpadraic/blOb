@@ -74,7 +74,8 @@ export async function notifyForgotToBegin(input: {
         data: {
           type: 'health_begin',
           challenge_id: input.challengeId,
-          href: `/challenges/${input.challengeId}`,
+          // Begin means begin: land on that challenge's check-in, not its lobby overview.
+          href: `/challenges/${input.challengeId}/submit`,
         },
       },
       trigger: null,
