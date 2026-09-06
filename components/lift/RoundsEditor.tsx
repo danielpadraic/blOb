@@ -179,7 +179,16 @@ function RoundRow({
           }}>
           {index + 1}
         </AppText>
-        <View style={{ flexDirection: 'row', gap: 4, flex: 1, minWidth: 0 }}>
+        {/* Five kinds do not fit beside the row actions on a phone, so they wrap rather than
+            squeezing every label down to an initial. */}
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 4,
+            flex: 1,
+            minWidth: 0,
+          }}>
           {EDITABLE_ROUND_KINDS.map((kind) => {
             const on = round.kind === kind;
             return (

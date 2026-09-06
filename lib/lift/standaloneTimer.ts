@@ -1,5 +1,11 @@
-import { formatDuration } from '@/lib/lift/duration';
-import { newRound, roundsTotalSeconds, tabataTemplate } from '@/lib/lift/rounds';
+import { newRound } from '@/lib/lift/rounds';
+import {
+  expandPlan,
+  newIntervalBlock,
+  newRestBlock,
+  parsePlan,
+  type TimerPlan,
+} from '@/lib/lift/timerPlan';
 import type { LiftRound } from '@/lib/lift/types';
 
 /**
@@ -14,57 +20,60 @@ import type { LiftRound } from '@/lib/lift/types';
 export type TimerPreset = {
   id: string;
   name: string;
-  detail: string;
-  build: () => LiftRound[];
+  build: () => TimerPlan;
 };
 
-/** `count` repeats of work-then-recover, the shape every interval preset below is made of. */
-function pairs(onSeconds: number, offSeconds: number, count: number): LiftRound[] {
-  const rounds: LiftRound[] = [];
-  for (let index = 0; index < count; index += 1) {
-    rounds.push(newRound('on', { seconds: onSeconds }));
-    rounds.push(newRound('off', { seconds: offSeconds }));
-  }
-  return rounds;
+/** One interval block and nothing around it, which is what most presets are. */
+function single(onSeconds: number, offSeconds: number, repeat: number): TimerPlan {
+  return {
+    warmupSeconds: 0,
+    blocks: [newIntervalBlock({ onSeconds, offSeconds, repeat })],
+    cooldownSeconds: 0,
+  };
 }
 
 /**
- * Four starting points, not a library.
+ * Five starting points, not a library.
  *
- * These cover most of what people set a gym timer to. Anything else is a few taps in the editor
- * underneath, so a longer list would cost more to read than it saves.
+ * Presets are plans rather than finished round lists, so picking one fills the builder in and can
+ * then be adjusted — a preset is a starting point, not a dead end. Anything else is a few taps
+ * from here, so a longer list would cost more to read than it saves.
  */
 export const TIMER_PRESETS: readonly TimerPreset[] = [
+  { id: 'tabata', name: 'Tabata', build: () => single(20, 10, 8) },
+  { id: 'forty-twenty', name: '40 / 20', build: () => single(40, 20, 8) },
+  { id: 'thirty-thirty', name: '30 / 30', build: () => single(30, 30, 10) },
+  { id: 'minute-rounds', name: 'Minute rounds', build: () => single(60, 30, 5) },
   {
-    id: 'tabata',
-    name: 'Tabata',
-    detail: '8 × 0:20 / 0:10 · 4:00',
-    build: () => tabataTemplate(),
-  },
-  {
-    id: 'forty-twenty',
-    name: '40 / 20',
-    detail: '8 × 0:40 / 0:20 · 8:00',
-    build: () => pairs(40, 20, 8),
-  },
-  {
-    id: 'thirty-thirty',
-    name: '30 / 30',
-    detail: '10 × 0:30 / 0:30 · 10:00',
-    build: () => pairs(30, 30, 10),
-  },
-  {
-    id: 'minute-rounds',
-    name: 'Minute rounds',
-    detail: '5 × 1:00 / 0:30 · 7:30',
-    build: () => pairs(60, 30, 5),
+    // The full shape: warm up, three sets of sprints with a real rest between them, long cool
+    // down. This is the one that shows what the builder is for.
+    id: 'sprint-sets',
+    name: 'Sprint sets',
+    build: () => ({
+      warmupSeconds: 120,
+      blocks: [
+        newIntervalBlock({ onSeconds: 30, offSeconds: 60, repeat: 4 }),
+        newRestBlock(120),
+        newIntervalBlock({ onSeconds: 30, offSeconds: 60, repeat: 4 }),
+        newRestBlock(120),
+        newIntervalBlock({ onSeconds: 30, offSeconds: 60, repeat: 4 }),
+      ],
+      cooldownSeconds: 300,
+    }),
   },
 ];
 
+/** What the builder and the clock open on before anyone has built anything. */
+export function defaultTimerPlan(): TimerPlan {
+  return { warmupSeconds: 0, blocks: [newIntervalBlock({ onSeconds: 20, offSeconds: 10, repeat: 8 })], cooldownSeconds: 0 };
+}
+
 const STORE_KEY = 'blob.timer.rounds';
+const PLAN_KEY = 'blob.timer.plan';
 
 /** Survives navigating away and back even where there is no web storage to fall back on. */
 let cached: LiftRound[] | null = null;
+let cachedPlan: TimerPlan | null = null;
 
 function storage(): Storage | null {
   try {
@@ -108,7 +117,47 @@ export function loadTimerRounds(): LiftRound[] {
       // Fall through to the default rather than opening on an empty timer.
     }
   }
-  return tabataTemplate();
+  return expandPlan(defaultTimerPlan());
+}
+
+/**
+ * The shape the builder opens on.
+ *
+ * Kept separately from the rounds because the two legitimately diverge: Generate produces rounds
+ * from the plan, and the rounds can then be hand-edited round by round. Storing only the plan
+ * would silently discard those edits on the next visit; storing only the rounds would leave the
+ * builder blank in front of a session it clearly built.
+ */
+export function loadTimerPlan(): TimerPlan {
+  if (cachedPlan) {
+    return clonePlan(cachedPlan);
+  }
+  try {
+    const raw = storage()?.getItem(PLAN_KEY) ?? null;
+    if (raw) {
+      const parsed = parsePlan(JSON.parse(raw));
+      if (parsed) {
+        cachedPlan = parsed;
+        return clonePlan(parsed);
+      }
+    }
+  } catch {
+    // Fall through to the default rather than opening on an empty builder.
+  }
+  return defaultTimerPlan();
+}
+
+export function saveTimerPlan(plan: TimerPlan): void {
+  cachedPlan = clonePlan(plan);
+  try {
+    storage()?.setItem(PLAN_KEY, JSON.stringify(plan));
+  } catch {
+    // A preference that cannot be written is not worth failing a workout over.
+  }
+}
+
+function clonePlan(plan: TimerPlan): TimerPlan {
+  return { ...plan, blocks: plan.blocks.map((block) => ({ ...block })) };
 }
 
 export function saveTimerRounds(rounds: readonly LiftRound[]): void {
@@ -136,11 +185,3 @@ function parseStored(raw: string): LiftRound[] {
     );
 }
 
-/** "8 rounds · 4:00" — the one line that says whether this is the timer they wanted. */
-export function timerSummary(rounds: readonly LiftRound[]): string {
-  if (!rounds.length) {
-    return 'No rounds yet';
-  }
-  const label = rounds.length === 1 ? 'round' : 'rounds';
-  return `${rounds.length} ${label} · ${formatDuration(roundsTotalSeconds(rounds))}`;
-}

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Generates the two Play timer cues in assets/audio.
+Generates the Play timer cues in assets/audio.
 
 These are synthesised rather than sourced so the repo owns them outright and Play never waits on a
 network fetch. Run this only to regenerate the committed .wav files:
 
     python3 scripts/make-cue-sounds.py
 
-Both are mono 16-bit at 44.1 kHz, which every browser and both native platforms decode without a
+All are mono 16-bit at 44.1 kHz, which every browser and both native platforms decode without a
 codec. Peaks sit near -3 dBFS so the Play surface can hold its own volume down and still cut
 through music.
 """
@@ -96,6 +96,29 @@ def bell(duration=0.85, freq=784.0):
     return samples
 
 
+def tick(duration=0.075, freq=1000.0):
+    """
+    The 3-2-1 count into a handover: a short, dry, mid-high blip.
+
+    Deliberately the least interesting sound of the three. It fires three times in a row, so
+    anything with a tail would smear into the next count, and anything as bright as the whistle
+    would compete with the cue that actually matters. A fast decay on a plain tone reads as a
+    countdown pip and gets out of the way.
+
+    1 kHz sits in the band that carries over a fan bike and gym music without being shrill.
+    """
+    total = int(RATE * duration)
+    samples = []
+    for index in range(total):
+        t = index / RATE
+        strike = min(1.0, t / 0.002)
+        # Steep decay so each pip is over well before the next second arrives.
+        envelope = strike * math.exp(-38.0 * t)
+        tone = math.sin(2 * math.pi * freq * t) + 0.22 * math.sin(4 * math.pi * freq * t)
+        samples.append(envelope * tone)
+    return samples
+
+
 def write_silence(name, duration=1.0, rate=8000):
     """
     A silent loop, which is what keeps the timer alive on a locked native screen.
@@ -122,4 +145,5 @@ def write_silence(name, duration=1.0, rate=8000):
 if __name__ == "__main__":
     write_wav("whistle.wav", whistle())
     write_wav("bell.wav", bell())
+    write_wav("tick.wav", tick())
     write_silence("silence.wav")

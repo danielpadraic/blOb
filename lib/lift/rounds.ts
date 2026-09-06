@@ -19,8 +19,20 @@ export const ROUND_KINDS: readonly LiftRoundKind[] = [
   'cooldown',
 ];
 
-/** The kinds offered in the editor. The rest only appear when appended to a single-block row. */
-export const EDITABLE_ROUND_KINDS: readonly LiftRoundKind[] = ['on', 'off', 'rest'];
+/**
+ * The kinds offered in the editor.
+ *
+ * A real interval session opens with a warm-up and closes with a cool down, so those are standard
+ * rounds rather than something only the cardio-type chips can produce. `steady` and `sprint` stay
+ * out: they describe a whole single-block row, not one round inside a list.
+ */
+export const EDITABLE_ROUND_KINDS: readonly LiftRoundKind[] = [
+  'warmup',
+  'on',
+  'off',
+  'rest',
+  'cooldown',
+];
 
 const LABELS: Record<LiftRoundKind, string> = {
   on: 'Interval ON',
@@ -32,15 +44,20 @@ const LABELS: Record<LiftRoundKind, string> = {
   cooldown: 'Cool down',
 };
 
-/** Short enough for a chip in a crowded row. */
+/**
+ * Short enough for a chip in a crowded row.
+ *
+ * Five kinds share one line in the rounds editor, so warm-up and cool down lose their second word
+ * here. They keep the full label on the Play surface, where there is room for it.
+ */
 const SHORT_LABELS: Record<LiftRoundKind, string> = {
   on: 'ON',
   off: 'OFF',
   rest: 'Rest',
-  warmup: 'Warm-up',
+  warmup: 'Warm',
   steady: 'Steady',
   sprint: 'Sprint',
-  cooldown: 'Cool down',
+  cooldown: 'Cool',
 };
 
 export function roundKindLabel(kind: LiftRoundKind): string {

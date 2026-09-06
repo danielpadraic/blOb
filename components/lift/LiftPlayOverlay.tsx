@@ -12,7 +12,15 @@ import Svg, { Circle, G } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
-import { buzz, cuesMuted, playCue, primeCues, releaseCues, setCuesMuted } from '@/lib/lift/cues';
+import {
+  buzz,
+  cuesMuted,
+  playCue,
+  primeCues,
+  releaseCues,
+  setCuesMuted,
+  type LiftCue,
+} from '@/lib/lift/cues';
 import { formatDuration } from '@/lib/lift/duration';
 import {
   roundKindLabel,
@@ -40,6 +48,8 @@ import { holdScreenAwake, reacquireScreenAwake, releaseScreenAwake } from '@/lib
  */
 
 const PREROLL_SECONDS = 3;
+/** How many seconds of a round get counted down out loud before it hands over. */
+const COUNT_IN_SECONDS = 3;
 /** Fast enough that the clock never visibly skips a second. */
 const FRAME_MS = 100;
 /**
@@ -74,6 +84,16 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
   const block = blocks[index] ?? null;
   const next = blocks[index + 1] ?? null;
+
+  /**
+   * Whether this round's last three seconds get counted down.
+   *
+   * A work round opens with its own three-second pre-roll, so counting the round before it down as
+   * well would run 3-2-1 twice back to back — six seconds of counting for one handover. The count
+   * therefore fills in exactly where the pre-roll does not: sprint into recovery, and the final
+   * round into the end of the session.
+   */
+  const countsIn = !next || !needsPreroll(next, index + 1);
 
   // Wall-clock anchors. `endsAt` is the only source of truth for how much time is left; the state
   // above is just what the screen is currently showing.
@@ -212,7 +232,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
     // The tick runs ten times a second, so every cue needs a one-shot token or the bell would
     // retrigger on every frame of the final second.
-    const fire = (cue: 'whistle' | 'bell', token: string) => {
+    const fire = (cue: LiftCue, token: string) => {
       if (cued.current.has(token)) {
         return;
       }
@@ -247,6 +267,16 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
       setRemaining(left);
       if (left > 0) {
+        // Count the handover in out loud. `Math.ceil` puts the pip for "3" on the moment the clock
+        // reads 0:03, and the token keeps it to one pip per second rather than one per frame. The
+        // buzz shares the token so a muted phone gets three taps, not thirty.
+        const pip = Math.ceil(left);
+        const token = `tick-${index}-${pip}`;
+        if (countsIn && pip <= COUNT_IN_SECONDS && !cued.current.has(token)) {
+          cued.current.add(token);
+          playCue('tick');
+          buzz('count');
+        }
         return;
       }
 
@@ -271,7 +301,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
     }, FRAME_MS);
 
     return () => clearInterval(handle);
-  }, [block, blocks, catchUp, index, phase, startBlock]);
+  }, [block, blocks, catchUp, countsIn, index, phase, startBlock]);
 
   const pause = useCallback(() => {
     pausedLeft.current = Math.max(0, (endsAt.current - Date.now()) / 1000);
@@ -314,8 +344,8 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
   }, [onClose]);
 
   const shown = Math.ceil(remaining);
-  const working = phase !== 'done' && Boolean(block?.work);
-  const finalCount = phase === 'running' && block?.work && shown <= 3 && shown > 0;
+  const working = phase !== 'done' && isHardBlock(block);
+  const finalCount = phase === 'running' && countsIn && shown <= COUNT_IN_SECONDS && shown > 0;
   const tint = phase === 'done' ? THEME.accentBright : kindTint(block);
 
   // The ring is the loudest thing on the screen, so it takes what room there is and then stops —
@@ -659,30 +689,59 @@ function UpcomingList({ blocks, index }: { blocks: LiftPlayBlock[]; index: numbe
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
+      // Without this the strip grows to fill the space between the ring and the controls, and the
+      // pills stretch into tall capsules with their labels stranded at the top.
+      style={{ flexGrow: 0, flexShrink: 0 }}
+      contentContainerStyle={{
+        gap: 8,
+        paddingVertical: 2,
+        alignItems: 'center',
+        // A two-round session sits in the middle rather than hugging the left edge; a long one
+        // still scrolls.
+        flexGrow: 1,
+        justifyContent: 'center',
+      }}>
       {blocks.map((block, at) => {
         const current = at === index;
         const past = at < index;
+        const color = current ? THEME.textPrimary : 'rgba(255,255,255,0.7)';
         return (
           <View
             key={block.key}
             style={{
-              paddingHorizontal: 11,
+              // Kind over time on two lines, centred, so every pill is the same size and the
+              // strip reads as a row of rounds instead of a row of ragged sentences.
+              minWidth: 68,
+              paddingHorizontal: 10,
               paddingVertical: 7,
-              borderRadius: 999,
+              borderRadius: 14,
               borderWidth: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
               borderColor: current ? kindTint(block) : 'rgba(255,255,255,0.16)',
               backgroundColor: current ? kindTint(block) : 'transparent',
               opacity: past ? 0.3 : 1,
             }}>
             <AppText
+              numberOfLines={1}
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: '800',
-                color: current ? THEME.textPrimary : 'rgba(255,255,255,0.7)',
+                textAlign: 'center',
+                color,
+              }}>
+              {roundKindShortLabel(block.kind)}
+            </AppText>
+            <AppText
+              numberOfLines={1}
+              style={{
+                fontSize: 13,
+                fontWeight: '800',
+                textAlign: 'center',
+                color,
                 fontVariant: ['tabular-nums'],
               }}>
-              {roundKindShortLabel(block.kind)} {formatDuration(block.seconds)}
+              {formatDuration(block.seconds)}
             </AppText>
           </View>
         );
@@ -733,9 +792,24 @@ function needsPreroll(block: LiftPlayBlock | undefined, at: number): boolean {
   return at === 0 || block.work;
 }
 
+/**
+ * Whether this is the part of the session the screen should shout about.
+ *
+ * A warm-up and a cool down are work — they earn a countdown in and a bell out — but they are not
+ * an all-out interval, and rendering a five minute cool down identically to a thirty second sprint
+ * tells the wrong story at a glance. The bright tint and the green backdrop stay reserved for the
+ * round you are actually emptying the tank on; the kind label names the rest precisely.
+ */
+function isHardBlock(block: LiftPlayBlock | null | undefined): boolean {
+  if (!block?.work) {
+    return false;
+  }
+  return block.kind !== 'warmup' && block.kind !== 'cooldown';
+}
+
 function kindTint(block: LiftPlayBlock | null): string {
   if (!block) {
     return THEME.accentForeground;
   }
-  return block.work ? THEME.accentBright : THEME.accent;
+  return isHardBlock(block) ? THEME.accentBright : THEME.accent;
 }

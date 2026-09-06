@@ -3,7 +3,7 @@ import type { AudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 
 /**
- * Whistle and bell cues for the Play timer.
+ * Whistle, bell, and tick cues for the Play timer.
  *
  * The hard requirement is that a cue never silences the user's music. Someone doing Tabata has
  * Spotify going; a timer that ducks or pauses it to blow a whistle is worse than a timer with no
@@ -24,17 +24,20 @@ import { Platform } from 'react-native';
  * on-screen countdown.
  */
 
-export type LiftCue = 'whistle' | 'bell';
+export type LiftCue = 'whistle' | 'bell' | 'tick';
 
 /** Loud enough to hear over a fan bike, quiet enough not to startle. */
 const CUE_GAIN: Record<LiftCue, number> = {
   whistle: 0.55,
   bell: 0.5,
+  // Three of these land in a row before the cue that matters, so they sit under both of the above.
+  tick: 0.34,
 };
 
 const SOURCES: Record<LiftCue, number> = {
   whistle: require('@/assets/audio/whistle.wav'),
   bell: require('@/assets/audio/bell.wav'),
+  tick: require('@/assets/audio/tick.wav'),
 };
 
 /** One second of digital silence, looped. The reason a locked phone keeps counting down. */
@@ -298,17 +301,23 @@ function releaseNative(): void {
 /**
  * How hard a buzz should land.
  *
- * `work` starts an effort block, `recovery` starts a rest, and `end` marks the last round. Sound
- * and vibration are deliberately separate: the timer buzzes exactly once per round change, so
- * pairing a haptic with every sound as well would double up at an ON-to-OFF handover, where a
- * bell and a transition land in the same instant.
+ * `work` starts an effort block, `recovery` starts a rest, `end` marks the last round, and `count`
+ * is one pip of the three-second count into a handover.
+ *
+ * Sound and vibration are otherwise deliberately separate: the timer buzzes exactly once per round
+ * change, so pairing a haptic with every sound as well would double up at an ON-to-OFF handover,
+ * where a bell and a transition land in the same instant. `count` is the exception because it is
+ * the one cue that has to reach someone mid-sprint who cannot look at the screen, and it lands
+ * three seconds, two seconds, and one second before the transition rather than on top of it.
  */
-export type LiftBuzz = 'work' | 'recovery' | 'end';
+export type LiftBuzz = 'work' | 'recovery' | 'end' | 'count';
 
 const WEB_PATTERN: Record<LiftBuzz, number | number[]> = {
   work: 45,
   recovery: 18,
   end: [30, 40, 30],
+  // Barely there. Three in a row at anything heavier reads as an alarm, not a countdown.
+  count: 10,
 };
 
 /**
@@ -328,6 +337,11 @@ export function buzz(kind: LiftBuzz): void {
         return;
       }
       const Haptics = await import('expo-haptics');
+      if (kind === 'count') {
+        // The lightest thing the platform offers, which is what a countdown pip should be.
+        await Haptics.selectionAsync();
+        return;
+      }
       if (kind === 'recovery') {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         return;
