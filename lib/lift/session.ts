@@ -720,6 +720,27 @@ export function countWorkSets(draft: LiftSessionDraft): number {
 }
 
 /** Two lines of "Incline BB Bench Press · 3 sets" for the history card. */
+/**
+ * The history-card view of a draft already in memory.
+ *
+ * Sharing to Home hands the session to the ordinary post composer, which speaks in summaries
+ * rather than drafts. Rebuilding one here avoids a round trip for a session we are already holding.
+ */
+export function draftSummary(draft: LiftSessionDraft): LiftSessionSummary {
+  return {
+    id: draft.id,
+    title: sessionTitle(draft),
+    performedAt: draft.performedAt,
+    completedAt: draft.completedAt ?? null,
+    muscleKeys: [...draft.muscleKeys],
+    unit: draft.unit,
+    exerciseCount: draft.exercises.length,
+    setCount: countWorkSets(draft),
+    preview: sessionPreview(draft.exercises),
+    overloadSummary: draft.overloadSummary ?? null,
+  };
+}
+
 export function sessionPreview(
   exercises: ReadonlyArray<{
     name: string;

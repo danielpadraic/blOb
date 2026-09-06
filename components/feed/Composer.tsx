@@ -65,6 +65,8 @@ type ComposerProps = {
   submitting?: boolean;
   autoFocus?: boolean;
   initialText?: string;
+  /** Opens with this lift already attached, for "share this session" rather than a blank post. */
+  initialLift?: LiftSessionSummary | null;
   attachedChallenge?: FeedChallengePreview | null;
   audienceOptions?: { value: PostAudience; label: string }[];
   defaultAudience?: PostAudience;
@@ -82,6 +84,7 @@ export function Composer({
   submitting,
   autoFocus,
   initialText,
+  initialLift,
   attachedChallenge,
   audienceOptions,
   defaultAudience,
@@ -111,7 +114,7 @@ export function Composer({
   const [uploading, setUploading] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
   const [liftOpen, setLiftOpen] = useState(false);
-  const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
+  const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(initialLift ?? null);
   const [expanded, setExpanded] = useState(
     () =>
       !idleUntilFocus ||
@@ -409,7 +412,7 @@ export function Composer({
         challengeId: attachedChallenge?.id ?? null,
         liftSessionId: attachedLift?.id ?? null,
       });
-      setAttachedLift(null);
+      setAttachedLift(initialLift ?? null);
       clearDraft();
       setAudience(hideAudience ? 'public' : wallHost ? 'public' : profileDefault);
       setAudienceUserIds([]);
@@ -653,14 +656,18 @@ export function Composer({
                 {attachedLift.exerciseCount} exercises · {attachedLift.setCount} sets
               </AppText>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Remove the attached lift"
-              hitSlop={8}
-              onPress={() => setAttachedLift(null)}
-              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-              <Glyph name={GLYPH.close} color={THEME.textMuted} size={14} />
-            </Pressable>
+            {/* When the lift is the reason this composer opened, removing it would leave a Share
+                that shares nothing. */}
+            {initialLift ? null : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Remove the attached lift"
+                hitSlop={8}
+                onPress={() => setAttachedLift(null)}
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Glyph name={GLYPH.close} color={THEME.textMuted} size={14} />
+              </Pressable>
+            )}
           </View>
         </View>
       ) : null}

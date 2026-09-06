@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
+import { Composer } from '@/components/feed/Composer';
 import { LiftRecapCard } from '@/components/lift/LiftRecapCard';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
@@ -13,9 +14,11 @@ import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useFriends, useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
 import { buildRecap } from '@/lib/lift/recap';
+import { draftSummary } from '@/lib/lift/session';
 import { postShareUrl } from '@/lib/postShare';
-import { DEFAULT_POST_AUDIENCE, POST_AUDIENCE_OPTIONS, type PostAudience } from '@/lib/postAudience';
+import { DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
 import type { LiftSessionDraft } from '@/lib/lift/types';
+import type { ComposeInput } from '@/lib/types';
 import { THEME } from '@/lib/theme';
 
 /**
@@ -61,6 +64,8 @@ type LiftShareSheetProps = {
   sharedPostId?: string | null;
   onClose: () => void;
   onShare: (choice: LiftShareChoice) => void;
+  /** Home posts go through the ordinary composer, so they arrive as a full ComposeInput. */
+  onComposeHome: (input: ComposeInput) => Promise<unknown> | void;
   onSkip: () => void;
 };
 
@@ -74,6 +79,7 @@ export function LiftShareSheet({
   sharedPostId,
   onClose,
   onShare,
+  onComposeHome,
   onSkip,
 }: LiftShareSheetProps) {
   const { user } = useAuth();
@@ -87,9 +93,9 @@ export function LiftShareSheet({
   const [recipientIds, setRecipientIds] = useState<string[]>([]);
   const [recipientQuery, setRecipientQuery] = useState('');
   const [home, setHome] = useState(true);
-  const [audience, setAudience] = useState<PostAudience>(DEFAULT_POST_AUDIENCE);
 
   const recap = useMemo(() => (draft ? buildRecap(draft) : null), [draft]);
+  const summary = useMemo(() => (draft ? draftSummary(draft) : null), [draft]);
   const locked = challengeId ? (lockedChallengeIds ?? []).includes(challengeId) : false;
 
   // A corporate lobby never announces to Home, so the toggle disappears rather than lying.
@@ -234,6 +240,18 @@ export function LiftShareSheet({
                 }
                 disabled={!challenges.length && !circles.length}
                 onPress={() => setDestination('live')}
+              />
+            </View>
+          ) : destination === 'home' ? (
+            // Home gets the real composer rather than a caption box, so a lift post can carry
+            // @mentions, a photo, or a GIF exactly like any other post. The lift rides along as an
+            // attachment; everything else about posting stays the thing people already know.
+            <View style={{ marginTop: 12 }}>
+              <Composer
+                placeholder="Say something about it"
+                initialLift={summary}
+                submitting={busy}
+                onSubmit={onComposeHome}
               />
             </View>
           ) : (
@@ -468,44 +486,6 @@ export function LiftShareSheet({
                 </>
               ) : null}
 
-              {destination === 'home' ? (
-                <>
-                  <SectionLabel text="WHO SEES IT" />
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {POST_AUDIENCE_OPTIONS.map((option) => {
-                      const active = audience === option.value;
-                      return (
-                        <Pressable
-                          key={option.value}
-                          accessibilityRole="button"
-                          accessibilityLabel={option.label}
-                          accessibilityState={{ selected: active }}
-                          onPress={() => setAudience(option.value as PostAudience)}
-                          style={{
-                            flex: 1,
-                            minHeight: 44,
-                            borderRadius: 12,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: active ? THEME.accent : THEME.background,
-                            borderWidth: 1,
-                            borderColor: active ? THEME.accent : THEME.border,
-                          }}>
-                          <AppText
-                            style={{
-                              fontSize: 14,
-                              fontWeight: '700',
-                              color: active ? THEME.accentForeground : THEME.textPrimary,
-                            }}>
-                            {option.label}
-                          </AppText>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </>
-              ) : null}
-
               {destination === 'live' && (challengeId || circleId) && !locked ? (
                 <Pressable
                   accessibilityRole="switch"
@@ -551,7 +531,7 @@ export function LiftShareSheet({
             <Button title="Done" onPress={onClose} />
           ) : destination == null ? (
             <Button title="Keep it to myself" variant="ghost" size="sm" onPress={onSkip} />
-          ) : (
+          ) : destination === 'home' ? null : (
             <Button
               title={primaryLabel}
               loading={busy}
@@ -562,8 +542,8 @@ export function LiftShareSheet({
                   caption: caption.trim(),
                   challengeId: destination === 'live' ? challengeId : null,
                   circleId: destination === 'live' ? circleId : null,
-                  home: destination === 'home' ? true : home,
-                  audience: destination === 'message' ? 'specific' : audience,
+                  home,
+                  audience: destination === 'message' ? 'specific' : DEFAULT_POST_AUDIENCE,
                   recipientIds: destination === 'message' ? recipientIds : [],
                 })
               }

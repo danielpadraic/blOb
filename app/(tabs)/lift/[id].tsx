@@ -28,7 +28,13 @@ import {
 } from '@/hooks/useLift';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork } from '@/lib/lift/recap';
-import { fetchChallengeShareLocks, sendLiftToRecipients } from '@/lib/lift/share';
+import {
+  fetchChallengeShareLocks,
+  linkSessionToPost,
+  sendLiftToRecipients,
+} from '@/lib/lift/share';
+import type { ComposeInput } from '@/lib/types';
+import { useCreatePost } from '@/hooks/useFeed';
 import {
   useCreateGroupConversation,
   useGetOrCreateConversation,
@@ -110,6 +116,7 @@ function LiftSessionInner({ id }: { id: string }) {
   const cardioMethods = useCardioMethods();
   const startChat = useGetOrCreateConversation();
   const startGroup = useCreateGroupConversation();
+  const createPost = useCreatePost();
   const sendMessage = useSendMessage();
 
   const [draft, setDraft] = useState<LiftSessionDraft | null>(null);
@@ -409,6 +416,23 @@ function LiftSessionInner({ id }: { id: string }) {
         return;
       }
       setSharedPostId(posted.postId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not share that lift.');
+    }
+  }
+
+  /**
+   * Home shares go through the ordinary post path, so a lift post gets mentions, photos, and GIFs
+   * for free and lands in the feed the same way everything else does.
+   */
+  async function onComposeHome(input: ComposeInput) {
+    setError(null);
+    try {
+      const post = await createPost.mutateAsync(input);
+      if (post?.id) {
+        await linkSessionToPost(String(input.liftSessionId ?? ''), String(post.id));
+        setSharedPostId(String(post.id));
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not share that lift.');
     }
@@ -979,6 +1003,7 @@ function LiftSessionInner({ id }: { id: string }) {
         sharedPostId={sharedPostId}
         onClose={closeShare}
         onShare={(choice) => void onShare(choice)}
+        onComposeHome={(input) => onComposeHome(input)}
         onSkip={() => {
           setShareOpen(false);
           router.replace(LIFTS_HISTORY_HREF);

@@ -21,13 +21,19 @@ import {
   useSaveLiftSession,
   useShareLiftSession,
 } from '@/hooks/useLift';
+import { useCreatePost } from '@/hooks/useFeed';
 import {
   useCreateGroupConversation,
   useGetOrCreateConversation,
   useSendMessage,
 } from '@/hooks/useSocial';
 import { fetchLiftSession } from '@/lib/lift/api';
-import { fetchChallengeShareLocks, sendLiftToRecipients } from '@/lib/lift/share';
+import {
+  fetchChallengeShareLocks,
+  linkSessionToPost,
+  sendLiftToRecipients,
+} from '@/lib/lift/share';
+import type { ComposeInput } from '@/lib/types';
 import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
 import {
   activeFilterCount,
@@ -58,6 +64,7 @@ export default function LiftsHistoryScreen() {
   const liftingChallenges = useLiftingChallenges();
   const startChat = useGetOrCreateConversation();
   const startGroup = useCreateGroupConversation();
+  const createPost = useCreatePost();
   const sendMessage = useSendMessage();
   const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<LiftHistoryFilter>(EMPTY_LIFT_FILTER);
@@ -117,6 +124,23 @@ export default function LiftsHistoryScreen() {
       router.push(liftSessionHref(draft.id));
     } catch (caught) {
       setMenuError(caught instanceof Error ? caught.message : 'Could not copy that lift.');
+    }
+  }
+
+  /**
+   * Home shares go through the ordinary post path, so a lift post gets mentions, photos, and GIFs
+   * for free and lands in the feed the same way everything else does.
+   */
+  async function onComposeHome(input: ComposeInput) {
+    setShareError(null);
+    try {
+      const post = await createPost.mutateAsync(input);
+      setShareFor(null);
+      if (post?.id) {
+        await linkSessionToPost(String(input.liftSessionId ?? ''), String(post.id));
+      }
+    } catch (caught) {
+      setShareError(caught instanceof Error ? caught.message : 'Could not share that lift.');
     }
   }
 
@@ -380,6 +404,7 @@ export default function LiftsHistoryScreen() {
         sharedPostId={sharedPostId}
         onClose={() => setShareFor(null)}
         onShare={(choice) => void onShare(choice)}
+        onComposeHome={(input) => onComposeHome(input)}
         onSkip={() => setShareFor(null)}
       />
 
