@@ -1,4 +1,4 @@
-import { amountToMeters, parseDistanceText, type DistanceUnit } from '@/lib/distance';
+import { amountToMeters, displayDistance, parseDistanceText, type DistanceUnit } from '@/lib/distance';
 
 export const CUMULATIVE_METRIC_CAP = 4;
 
@@ -182,7 +182,11 @@ export function resolveCumulativeMetrics(input: {
   if (fromConfig.length > 0) {
     return fromConfig;
   }
-  if (input.challenge_type === 'cumulative' || input.format === 'cumulative') {
+  if (
+    input.challenge_type === 'cumulative' ||
+    input.format === 'cumulative' ||
+    Math.max(Number(input.cumulative_target) || 0, 0) > 0
+  ) {
     return metricsFromLegacyTarget(input);
   }
   return [];
@@ -263,12 +267,42 @@ export function parseMetricTotals(raw: unknown): Record<string, number> {
   }
   const out: Record<string, number> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const amount = Number(value);
-    if (Number.isFinite(amount) && amount > 0) {
-      out[key] = amount;
+    const n = Number(value);
+    if (key && Number.isFinite(n) && n > 0) {
+      out[key] = n;
     }
   }
   return out;
+}
+
+/** Prefer saved metric totals; if empty, convert HealthKit / typed meters onto a distance metric. */
+export function loggedMetricAmount(
+  metric: Pick<CumulativeMetric, 'id' | 'name' | 'unit'>,
+  totals?: Record<string, number> | null,
+  distanceMeters = 0,
+): number {
+  const fromTotals = Number(totals?.[metric.id]) || 0;
+  if (fromTotals > 0) {
+    return fromTotals;
+  }
+  if (!metricAllowsDecimals(metric) || !(Number(distanceMeters) > 0)) {
+    return 0;
+  }
+  const unit = metricUnitLabel(metric) === 'km' ? 'km' : 'mi';
+  return displayDistance(distanceMeters, unit);
+}
+
+export function metricTotalsWithDistanceFallback(
+  metrics: CumulativeMetric[],
+  totals?: Record<string, number> | null,
+  distanceMeters = 0,
+): Record<string, number> {
+  const parsed = parseMetricTotals(totals);
+  const next = { ...parsed };
+  for (const metric of filledCumulativeMetrics(metrics)) {
+    next[metric.id] = loggedMetricAmount(metric, parsed, distanceMeters);
+  }
+  return next;
 }
 
 export function winWindowOf(value: unknown): CumulativeWinWindow {

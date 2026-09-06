@@ -15,6 +15,8 @@ export type BoardParticipant = {
   user_id: string;
   days_completed?: number | null;
   points?: number | null;
+  distance_meters_total?: number | null;
+  metric_totals?: Record<string, number> | null;
   status?: string | null;
   eliminated_at?: string | null;
   joined_at?: string | null;
@@ -37,6 +39,7 @@ export type BoardPerson = {
   bucket: BoardBucket;
   days: number;
   points: number;
+  quantity: number;
   payout: number | null;
   you: boolean;
   eliminatedAt: string | null;
@@ -168,6 +171,7 @@ export function buildBoard(input: {
         bucket,
         days: Number(row.days_completed) || 0,
         points: Math.max(Number(row.points) || 0, 0),
+        quantity: 0,
         payout: paidByUser.has(row.user_id) ? paidByUser.get(row.user_id) ?? 0 : null,
         you: Boolean(viewerId && row.user_id === viewerId),
         eliminatedAt: row.eliminated_at ?? null,
@@ -209,12 +213,15 @@ export function buildBoard(input: {
   };
 }
 
-export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days' | 'finish'): number {
+export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days' | 'finish' | 'quantity'): number {
   if (mode === 'finish') {
     return person.completedAt ? Date.parse(person.completedAt) : Number.POSITIVE_INFINITY;
   }
   if (mode === 'points') {
     return person.points;
+  }
+  if (mode === 'quantity') {
+    return person.quantity;
   }
   return person.days;
 }
@@ -222,7 +229,7 @@ export function boardScoreOf(person: BoardPerson, mode: 'points' | 'days' | 'fin
 export function yourStandingLine(
   people: BoardPerson[],
   viewerId?: string | null,
-  mode: 'points' | 'days' | 'finish' = 'days',
+  mode: 'points' | 'days' | 'finish' | 'quantity' = 'days',
 ): string | null {
   if (!viewerId) {
     return null;
@@ -241,8 +248,15 @@ export function boardCompletersCount(people: BoardPerson[]): number {
 
 export function boardScoreLabel(
   person: BoardPerson,
-  input: { pointsBoard: boolean; requiredDays: number },
+  input: {
+    pointsBoard: boolean;
+    requiredDays: number;
+    quantityLabel?: string | null;
+  },
 ): string {
+  if (input.quantityLabel) {
+    return input.quantityLabel;
+  }
   if (input.pointsBoard) {
     return String(person.points);
   }
@@ -251,7 +265,7 @@ export function boardScoreLabel(
 
 export function rankBoardRows(
   people: BoardPerson[],
-  mode: 'points' | 'days' | 'finish',
+  mode: 'points' | 'days' | 'finish' | 'quantity',
 ): BoardRankedRow[] {
   const inPlay = people.filter((row) => row.bucket !== 'dropped');
   const out = people.filter((row) => row.bucket === 'dropped');

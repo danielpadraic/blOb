@@ -5,6 +5,7 @@ import {
   applyMetricName,
   formatMetricProgress,
   isDistanceMetricName,
+  loggedMetricAmount,
   resolveCumulativeMetrics,
 } from '@/lib/cumulativeMetrics';
 
@@ -36,6 +37,24 @@ describe('Simple Cumulative metrics', () => {
       challenge_type: 'cumulative',
       format: 'cumulative',
       metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+    });
+    expect(rows[0]).toMatchObject({ target: 128, name: 'miles', unit: 'mi' });
+  });
+
+  it('turns HealthKit meters into 6.23 miles when metric_totals is empty', () => {
+    const metric = { id: 'm1', target: 128, name: 'miles', unit: 'mi' as const };
+    expect(loggedMetricAmount(metric, {}, 10026)).toBe(6.23);
+    expect(loggedMetricAmount(metric, {}, 0)).toBe(0);
+    expect(formatMetricProgress(6.23, metric)).toBe('6.23 / 128 mi');
+  });
+
+  it('reads a miles target on a consistency row from cumulative_target meters', () => {
+    const rows = resolveCumulativeMetrics({
+      challenge_type: 'consistency',
+      format: 'consistency',
+      cumulative_target: 205996,
+      cumulative_metric: 'distance_m',
+      title: 'Run 128 Miles by January 1',
     });
     expect(rows[0]).toMatchObject({ target: 128, name: 'miles', unit: 'mi' });
   });

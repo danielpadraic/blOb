@@ -1,4 +1,5 @@
-import { usesCumulativeScoring, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesQuantityScoring, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { boardQuantityProgress } from '@/lib/board/quantity';
 import { athleteDistanceUnit } from '@/lib/distance';
 import { challengeCumulativeProgress, cumulativeEligible, cumulativeTargetMeters } from '@/lib/cumulative';
 import { resolveChallengeProofs } from '@/lib/challengeProofs';
@@ -41,6 +42,9 @@ type RuleChallenge = {
   proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
   format?: string | null;
   cumulative_target?: number | null;
+  cumulative_metric?: string | null;
+  metrics?: unknown;
+  title?: string | null;
 };
 
 export type ChallengeRuleCopy = {
@@ -536,13 +540,23 @@ function compactCadence(count: number, period: ChallengeFrequency): string {
 export function joinedProgressCopy(
   challenge: RuleChallenge,
   daysCompleted = 0,
-  extras?: { distanceMetersCompleted?: number },
+  extras?: { distanceMetersCompleted?: number; metricTotals?: Record<string, number> | null },
 ): JoinedProgressCopy {
-  if (usesCumulativeScoring(challenge)) {
+  if (usesQuantityScoring(challenge)) {
+    const progress = boardQuantityProgress(challenge, {
+      distanceMeters: extras?.distanceMetersCompleted,
+      metricTotals: extras?.metricTotals,
+    });
+    if (progress) {
+      return {
+        label: progress.label,
+        ratio: progress.target > 0 ? Math.min(progress.logged / progress.target, 1) : 0,
+      };
+    }
     const done = Math.max(Number(extras?.distanceMetersCompleted) || 0, 0);
     const target = cumulativeTargetMeters(challenge);
     return {
-      label: challengeCumulativeProgress(challenge, done, athleteDistanceUnit()) ?? '0 / 0 mi',
+      label: challengeCumulativeProgress(challenge, done, athleteDistanceUnit()) ?? 'Distance',
       ratio: target > 0 && cumulativeEligible(done, target) ? 1 : target > 0 ? Math.min(done / target, 1) : 0,
     };
   }

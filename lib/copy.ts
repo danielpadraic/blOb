@@ -512,6 +512,7 @@ const STRINGS = {
   'board.remaining': 'Remaining',
   'board.caughtUp': 'Caught Up',
   'board.in': 'In',
+  'board.done': 'Done',
   'board.completers': 'Completers',
   'board.checkedIn': 'Checked in',
   'board.out': 'Out',
@@ -530,6 +531,9 @@ const STRINGS = {
   'note.boardPointsTitle': 'Board',
   'note.boardPoints':
     'Contestants are everyone in the challenge. Your Rank is your place by points. Challenge Leader is first place once someone has scored.',
+  'note.boardQuantityTitle': 'Board',
+  'note.boardQuantity':
+    'Ranked by how much you have logged toward the goal. In are still racing. Done have hit the target.',
   'note.contestantsTitle': 'Contestants',
   'note.contestants': 'How many people are in this challenge.',
   'note.yourRankTitle': 'Your Rank',

@@ -1,4 +1,5 @@
 import { comparablePointsFromChallenge } from '@/lib/comparablePoints';
+import { filledCumulativeMetrics, resolveCumulativeMetrics } from '@/lib/cumulativeMetrics';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { isPrivateCorporate } from '@/lib/privacyMode';
 
@@ -18,6 +19,11 @@ export type ExperienceChallenge = {
   target_count?: number | null;
   days_required?: number | null;
   length_value?: number | null;
+  metrics?: unknown;
+  cumulative_target?: number | string | null;
+  cumulative_metric?: string | null;
+  title?: string | null;
+  task?: string | null;
 };
 
 /** Advanced create/edit only — never open the Simple form for these. */
@@ -76,7 +82,12 @@ export function requiresOfficialBodyMetrics(challenge?: ExperienceChallenge | nu
  * Simple create “6 over the whole challenge” lands here (`once` or `custom`).
  */
 export function usesTotalCountCheckins(challenge?: ExperienceChallenge | null): boolean {
-  if (!challenge || usesPointsBoard(challenge) || isFitnessOfficialChallenge(challenge)) {
+  if (
+    !challenge ||
+    usesPointsBoard(challenge) ||
+    isFitnessOfficialChallenge(challenge) ||
+    usesQuantityScoring(challenge)
+  ) {
     return false;
   }
   const freq = String(challenge.frequency ?? '').toLowerCase();
@@ -97,6 +108,9 @@ export function usesTotalCountCheckins(challenge?: ExperienceChallenge | null): 
 /** Day / In-Done board and “don’t miss a day” language. */
 export function usesConsistencyExperience(challenge?: ExperienceChallenge | null): boolean {
   if (usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)) {
+    return false;
+  }
+  if (usesQuantityScoring(challenge)) {
     return false;
   }
   if (challenge?.challenge_type === 'points' || challenge?.challenge_type === 'cumulative') {
@@ -122,6 +136,23 @@ export function usesPointsBoard(challenge?: ExperienceChallenge | null): boolean
 
 export function usesCumulativeScoring(challenge?: ExperienceChallenge | null): boolean {
   return challenge?.challenge_type === 'cumulative' || challenge?.format === 'cumulative';
+}
+
+/**
+ * Distance / points races score logged quantity, not check-in presence.
+ * A consistency row that still has a miles/points target uses that target on the Board.
+ */
+export function usesQuantityScoring(challenge?: ExperienceChallenge | null): boolean {
+  if (!challenge || usesComparablePointsScoring(challenge)) {
+    return false;
+  }
+  if (usesCumulativeScoring(challenge)) {
+    return true;
+  }
+  if (filledCumulativeMetrics(resolveCumulativeMetrics(challenge)).some((row) => row.target > 0)) {
+    return true;
+  }
+  return Math.max(Number(challenge.cumulative_target) || 0, 0) > 0;
 }
 
 /**

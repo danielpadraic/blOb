@@ -14,13 +14,15 @@ import { Card } from '@/components/ui/Card';
 import {
   boardCompletersCount,
   boardEmptyCopy,
+  boardQuantityProgress,
   boardRowTag,
   boardScoreLabel,
   boardSettledCopy,
   buildBoard,
+  quantityBoardHeaderLine,
   rankBoardRows,
 } from '@/lib/board';
-import { usesCumulativeScoring, usesPointsBoard } from '@/lib/challengeExperience';
+import { usesQuantityScoring, usesPointsBoard } from '@/lib/challengeExperience';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
@@ -54,6 +56,7 @@ export function ChallengeBoard({
   missesUsed = 0,
 }: ChallengeBoardProps) {
   const [receiptOpen, setReceiptOpen] = useState(showReceipt);
+  const quantityBoard = usesQuantityScoring(challenge);
   const view = useMemo(
     () =>
       buildBoard({
@@ -63,6 +66,8 @@ export function ChallengeBoard({
           user_id: row.user_id,
           days_completed: row.days_completed,
           points: row.points,
+          distance_meters_total: row.distance_meters_total,
+          metric_totals: row.metric_totals,
           status: row.status,
           eliminated_at: row.eliminated_at,
           joined_at: row.joined_at,
@@ -71,7 +76,7 @@ export function ChallengeBoard({
           username: row.profile?.username,
           avatar_url: row.profile?.avatar_url,
         })),
-        completedUserIds,
+        completedUserIds: quantityBoard ? [] : completedUserIds,
         settlement: settlement
           ? {
               winner_count: settlement.settlement.winner_count,
@@ -89,6 +94,7 @@ export function ChallengeBoard({
       challenge.status,
       completedUserIds,
       joined,
+      quantityBoard,
       roster,
       settlement,
       viewerId,
@@ -97,21 +103,51 @@ export function ChallengeBoard({
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;
   const pointsBoard = usesPointsBoard(challenge);
-  const cumulativeBoard = usesCumulativeScoring(challenge);
   const requiredDays = challengeTargetCount(challenge);
-  const completersCount = boardCompletersCount(view.people);
-  const headerLine = pointsBoard
-    ? `${copy('board.in')} ${view.remainingCount} · ${copy('board.completers')} ${completersCount}${
-        view.droppedCount > 0 ? ` · ${copy('board.dropped')} ${view.droppedCount}` : ''
-      }`
-    : `${copy('board.remaining')} ${view.remainingCount} · ${copy('board.caughtUp')} ${view.caughtUpCount} · ${copy('board.dropped')} ${view.droppedCount}`;
+  const progressByUser = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof boardQuantityProgress>>();
+    if (!quantityBoard) {
+      return map;
+    }
+    for (const row of roster ?? []) {
+      map.set(
+        row.user_id,
+        boardQuantityProgress(challenge, {
+          distanceMeters: row.distance_meters_total,
+          metricTotals: row.metric_totals,
+          points: row.points,
+        }),
+      );
+    }
+    return map;
+  }, [challenge, quantityBoard, roster]);
+  const rankedPeople = useMemo(
+    () =>
+      view.people.map((row) => ({
+        ...row,
+        quantity: progressByUser.get(row.userId)?.logged ?? 0,
+      })),
+    [progressByUser, view.people],
+  );
+  const racing = rankedPeople.filter((row) => row.bucket !== 'dropped');
+  const doneCount = quantityBoard
+    ? racing.filter((row) => progressByUser.get(row.userId)?.done).length
+    : boardCompletersCount(view.people);
+  const inCount = quantityBoard ? racing.length - doneCount : view.remainingCount;
+  const headerLine = quantityBoard
+    ? quantityBoardHeaderLine(inCount, doneCount, view.droppedCount)
+    : pointsBoard
+      ? `${copy('board.in')} ${view.remainingCount} · ${copy('board.completers')} ${doneCount}${
+          view.droppedCount > 0 ? ` · ${copy('board.dropped')} ${view.droppedCount}` : ''
+        }`
+      : `${copy('board.remaining')} ${view.remainingCount} · ${copy('board.caughtUp')} ${view.caughtUpCount} · ${copy('board.dropped')} ${view.droppedCount}`;
   const rows = useMemo(
     () =>
       rankBoardRows(
-        view.people,
-        cumulativeBoard ? 'finish' : pointsBoard ? 'points' : 'days',
+        rankedPeople,
+        quantityBoard ? 'quantity' : pointsBoard ? 'points' : 'days',
       ),
-    [cumulativeBoard, pointsBoard, view.people],
+    [pointsBoard, quantityBoard, rankedPeople],
   );
 
   function toggleReceipt() {
@@ -142,7 +178,7 @@ export function ChallengeBoard({
     <Card className="gap-3">
       <View className="flex-row items-center justify-between">
         <FieldNoteLabel
-          note={pointsBoard ? 'boardPoints' : 'board'}
+          note={quantityBoard ? 'boardQuantity' : pointsBoard ? 'boardPoints' : 'board'}
           textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           Board
         </FieldNoteLabel>
@@ -152,7 +188,7 @@ export function ChallengeBoard({
       <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
         {headerLine}
       </AppText>
-      <MissBudgetLines challenge={challenge} used={missesUsed} />
+      {quantityBoard ? null : <MissBudgetLines challenge={challenge} used={missesUsed} />}
 
       {view.settled ? (
         <View className="gap-2">
@@ -211,8 +247,14 @@ export function ChallengeBoard({
               username={row.username}
               userId={row.userId}
               avatarUrl={row.avatarUrl}
-              score={boardScoreLabel(row, { pointsBoard, requiredDays })}
-              status={boardRowTag(row, view.settled)}
+              score={boardScoreLabel(row, {
+                pointsBoard,
+                requiredDays,
+                quantityLabel: quantityBoard ? progressByUser.get(row.userId)?.label : null,
+              })}
+              status={boardRowTag(row, view.settled, {
+                quantityDone: quantityBoard ? Boolean(progressByUser.get(row.userId)?.done) : false,
+              })}
               muted={row.bucket === 'dropped'}
               payout={view.settled ? row.payout : null}
               currency={challenge.currency}

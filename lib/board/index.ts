@@ -1,4 +1,11 @@
-export { BOARD_INFO, assertsNoBucksWord, boardEmptyCopy, boardRowTag, boardSettledCopy } from './copy';
+export {
+  BOARD_INFO,
+  assertsNoBucksWord,
+  boardEmptyCopy,
+  boardRowTag,
+  boardSettledCopy,
+  quantityBoardHeaderLine,
+} from './copy';
 export {
   boardCompletersCount,
   boardDisplayName,
@@ -18,3 +25,4 @@ export {
   type BoardRankedRow,
   type BoardView,
 } from './model';
+export { boardQuantityProgress } from './quantity';

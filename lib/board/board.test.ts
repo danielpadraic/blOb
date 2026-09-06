@@ -4,12 +4,15 @@ import {
   assertsNoBucksWord,
   boardCompletersCount,
   boardEmptyCopy,
+  boardQuantityProgress,
+  boardRowTag,
   boardScoreLabel,
   boardScoreOf,
   boardSettledCopy,
   buildBoard,
   pointsLeader,
   pointsRank,
+  quantityBoardHeaderLine,
   rankBoardRows,
 } from '@/lib/board';
 import { checkinPointValue } from '@/lib/challengePoints';
@@ -195,5 +198,88 @@ describe('points goal', () => {
         { daysCompleted: 1 },
       ),
     ).toBe('1 of 6 Check-Ins');
+  });
+});
+
+const RUN_128 = {
+  challenge_type: 'cumulative',
+  format: 'cumulative',
+  scoring_method: 'consistency',
+  target_count: 127,
+  days_required: 127,
+  length_value: 127,
+  cumulative_metric: 'distance_m',
+  cumulative_target: 205996,
+  metrics: [{ id: 'm1', name: 'miles', unit: 'mi', target: 128 }],
+  title: 'Run 128 Miles by January 1',
+};
+
+describe('quantity Board (Run 128 miles)', () => {
+  it('scores logged miles over the saved 128 target, not 1/127 Caught up', () => {
+    const view = buildBoard({
+      status: 'live',
+      prizePool: 20,
+      participants: [
+        {
+          user_id: 'daniel',
+          days_completed: 1,
+          distance_meters_total: 10026,
+          metric_totals: {},
+          status: 'joined',
+          display_name: 'Daniel Harder',
+        },
+        {
+          user_id: 'courtney',
+          days_completed: 0,
+          distance_meters_total: 0,
+          metric_totals: {},
+          status: 'joined',
+          display_name: 'Courtney',
+        },
+      ],
+      completedUserIds: [],
+      viewerId: 'daniel',
+      joined: true,
+    });
+    const people = view.people.map((row) => ({
+      ...row,
+      quantity:
+        boardQuantityProgress(RUN_128, {
+          distanceMeters: row.userId === 'daniel' ? 10026 : 0,
+          metricTotals: {},
+        })?.logged ?? 0,
+    }));
+    const rows = rankBoardRows(people, 'quantity');
+    const daniel = rows.find((row) => row.userId === 'daniel')!;
+    const courtney = rows.find((row) => row.userId === 'courtney')!;
+    const danielProgress = boardQuantityProgress(RUN_128, {
+      distanceMeters: 10026,
+      metricTotals: {},
+    });
+    const courtneyProgress = boardQuantityProgress(RUN_128, {
+      distanceMeters: 0,
+      metricTotals: {},
+    });
+    expect(danielProgress?.label).toBe('6.23 / 128 mi');
+    expect(courtneyProgress?.label).toBe('0 / 128 mi');
+    expect(boardScoreLabel(daniel, { pointsBoard: false, requiredDays: 127, quantityLabel: danielProgress?.label })).toBe(
+      '6.23 / 128 mi',
+    );
+    expect(boardScoreLabel(courtney, { pointsBoard: false, requiredDays: 127, quantityLabel: courtneyProgress?.label })).toBe(
+      '0 / 128 mi',
+    );
+    expect(daniel.rank).toBe(1);
+    expect(courtney.rank).toBe(2);
+    expect(boardRowTag(daniel, false, { quantityDone: Boolean(danielProgress?.done) })).toBe('In');
+    expect(boardRowTag(courtney, false, { quantityDone: Boolean(courtneyProgress?.done) })).toBe('In');
+    expect(quantityBoardHeaderLine(2, 0, 0)).toBe('In 2');
+    expect(quantityBoardHeaderLine(2, 0, 0)).not.toMatch(/Caught Up|Remaining|127/);
+    expect(danielProgress?.label).not.toMatch(/127/);
+    expect(challengeGoalLabel(RUN_128, { distanceMetersCompleted: 10026, metricTotals: {}, unit: 'mi' })).toBe(
+      '6.23 / 128 mi',
+    );
+    expect(challengeGoalLabel(RUN_128, { distanceMetersCompleted: 0, metricTotals: {}, unit: 'mi' })).toBe(
+      '0 / 128 mi',
+    );
   });
 });
