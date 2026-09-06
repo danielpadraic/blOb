@@ -302,9 +302,8 @@ export const LiveBubble = memo(function LiveBubble({
             </View>
           ) : checkin ? (
             <View
-              className="flex-row items-center"
               style={{
-                gap: 10,
+                gap: 8,
                 paddingVertical: 8,
                 paddingHorizontal: 10,
                 borderRadius: 16,
@@ -319,8 +318,11 @@ export const LiveBubble = memo(function LiveBubble({
                   accessibilityLabel={`Open check-in proof. ${headline}`}
                   onPress={() => openProof(0)}
                   style={{
-                    width: CHECKIN_THUMB,
-                    height: CHECKIN_THUMB,
+                    // A generated workout card is 4:5. Cropping it into a 96px square cut the stats
+                    // and the route off it, so proof gets a portrait tile the width of the bubble —
+                    // the same weight a portrait photo gets — and the receipt line sits under it.
+                    width: '100%',
+                    aspectRatio: CHECKIN_PROOF_RATIO,
                     borderRadius: 14,
                     overflow: 'hidden',
                     backgroundColor: THEME.surface2,
@@ -347,46 +349,24 @@ export const LiveBubble = memo(function LiveBubble({
                       pointerEvents="none"
                       style={{
                         position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
+                        top: 6,
+                        right: 6,
+                        paddingHorizontal: 7,
+                        paddingVertical: 3,
                         borderRadius: 999,
                         backgroundColor: 'rgba(16,19,18,0.82)',
                       }}>
-                      <AppText className="text-[10px] font-bold" style={{ color: THEME.primaryForeground }}>
+                      <AppText className="text-[11px] font-bold" style={{ color: THEME.primaryForeground }}>
                         {visuals.length}
                       </AppText>
                     </View>
                   ) : null}
-                  {/* Receipt line rides in a solid chip, never raw white text on the proof. */}
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      paddingHorizontal: 5,
-                      paddingVertical: 4,
-                      backgroundColor: 'rgba(16,19,18,0.92)',
-                    }}>
-                    <AppText
-                      className="text-[10px] font-bold"
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                      style={{ color: THEME.primaryForeground, letterSpacing: -0.1 }}>
-                      {headline}
-                    </AppText>
-                  </View>
                 </Pressable>
               ) : null}
               <View style={{ flexShrink: 1, minWidth: 0 }}>
-                {visuals[0] ? null : (
-                  <AppText className="text-[14px] font-semibold" style={{ color: THEME.textPrimary }}>
-                    {headline}
-                  </AppText>
-                )}
+                <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
+                  {headline}
+                </AppText>
                 {caption && !liftSessionId ? (
                   <AppText className="mt-0.5 text-[13px]" style={{ color: THEME.textMuted }} numberOfLines={2}>
                     {caption}
@@ -547,7 +527,8 @@ function LiveQuoteChip({ quote, mine }: { quote: LiveQuote; mine?: boolean }) {
 }
 
 /** Dense Live stays one thumb, but big enough for the caption chip and the clock to read. */
-const CHECKIN_THUMB = 96;
+/** Portrait, matching the generated workout card so it is never cropped. */
+const CHECKIN_PROOF_RATIO = 4 / 5;
 
 const absoluteFill = {
   position: 'absolute' as const,

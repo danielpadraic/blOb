@@ -30,7 +30,6 @@ import { usePost, useUpdatePostAudience } from '@/hooks/useFeed';
 import { checkinCardCaption, isCheckinPost, postLocality } from '@/lib/checkinPost';
 import { COMMENT_UNAVAILABLE, commentTargetMissing, scrollCommentNodeIntoView } from '@/lib/commentHighlight';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
-import { PROOF_META } from '@/lib/constants';
 import { useHidePostFromHome } from '@/hooks/usePostEdit';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
@@ -527,7 +526,6 @@ function PostCardInner({
             captions={post.media_captions}
             hidden={post.hidden_media_urls}
             isOwner={mine}
-            proof={checkin}
             pauseCycle={threadOpen || menuOpen}
             homeInline={homeFeed}
           />
@@ -862,13 +860,6 @@ function PostBody({
   );
 }
 
-const PROOF_LABELS = [
-  PROOF_META.pre_selfie.short,
-  PROOF_META.post_selfie.short,
-  PROOF_META.hr_monitor.short,
-  PROOF_META.distance.short,
-];
-
 function RoundShareEmbed({
   coverUrl,
   unavailable,
@@ -935,7 +926,6 @@ function ProofMedia({
   captions,
   hidden,
   isOwner,
-  proof,
   pauseCycle,
   homeInline,
 }: {
@@ -944,7 +934,6 @@ function ProofMedia({
   captions?: Array<string | null> | null;
   hidden?: string[] | null;
   isOwner?: boolean;
-  proof?: boolean;
   pauseCycle?: boolean;
   homeInline?: boolean;
 }) {
@@ -959,7 +948,6 @@ function ProofMedia({
   if (visuals.length === 0 && others.length === 0) {
     return null;
   }
-  const labels = proof || visuals.length === 3 ? PROOF_LABELS.slice(0, visuals.length) : undefined;
   const alignedCaptions = visuals.map((url) => {
     const at = urls.findIndex((item) => item === url);
     const text = at >= 0 ? captions?.[at] : null;
@@ -968,10 +956,14 @@ function ProofMedia({
 
   return (
     <View style={{ gap: 6 }}>
+      {/*
+        No slot labels here. They were assigned by position — first item "Pre-selfie", second
+        "Post-selfie" — which is only ever right by luck, and put "Pre-selfie" on a workout card
+        both on the tile and as the lightbox caption. Slot names belong to the check-in camera.
+      */}
       <PostMediaCarousel
         postId={postId}
         urls={visuals}
-        labels={labels}
         captions={alignedCaptions}
         pauseCycle={pauseCycle}
         homeInline={homeInline}
