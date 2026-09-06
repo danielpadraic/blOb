@@ -125,9 +125,11 @@ begin
     ) look;
   end if;
 
+  -- media_captions rejects nulls, and losing the repair to that would leave the wrong card on the post
+  -- with a new file already uploaded behind it. An empty array is the honest value for "no captions".
   update public.posts
   set media_urls = v_media,
-      media_captions = v_new_captions
+      media_captions = coalesce(v_new_captions, '{}'::text[])
   where checkin_id = c.id and deleted_at is null;
 
   return jsonb_build_object('checkin_id', c.id, 'media', to_jsonb(v_media));
