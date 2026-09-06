@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { NumberField } from '@/components/lift/NumberField';
@@ -45,7 +46,20 @@ export function SetRow({
 }: SetRowProps) {
   const done = Boolean(set.completedAt);
   const warmup = set.kind === 'warmup';
-  const removable = !readOnly && canRemove && isEmptySet(set);
+  // Any set can go. Only allowing empty ones to be deleted meant a set typed by mistake was stuck
+  // there for the rest of the session, which is the opposite of what a delete is for.
+  const removable = !readOnly && canRemove;
+  const filled = !isEmptySet(set);
+  const [confirming, setConfirming] = useState(false);
+
+  // An armed delete that stays armed is a trap the next time they reach for the row.
+  useEffect(() => {
+    if (!confirming) {
+      return undefined;
+    }
+    const handle = setTimeout(() => setConfirming(false), 3000);
+    return () => clearTimeout(handle);
+  }, [confirming]);
 
   return (
     <View
@@ -126,11 +140,22 @@ export function SetRow({
         {removable ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Delete empty ${label === 'W' ? 'warm-up' : `set ${label}`}`}
+            accessibilityLabel={`Delete ${label === 'W' ? 'warm-up' : `set ${label}`}`}
             hitSlop={10}
-            onPress={onRemove}
+            onPress={() => {
+              // A set with numbers in it is work worth one tap of hesitation. An empty one is not.
+              if (filled && !confirming) {
+                setConfirming(true);
+                return;
+              }
+              onRemove();
+            }}
             style={{ width: 28, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-            <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
+            <Glyph
+              name={confirming ? GLYPH.trash : GLYPH.close}
+              color={confirming ? THEME.danger : THEME.textMuted}
+              size={13}
+            />
           </Pressable>
         ) : null}
       </View>

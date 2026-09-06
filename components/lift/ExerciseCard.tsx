@@ -31,6 +31,12 @@ type ExerciseCardProps = {
   onRemoveSet: (setKey: string) => void;
   onAddSet: (kind: LiftSetKind) => void;
   onRemove: () => void;
+  onDuplicate: () => void;
+  /** Opens the picker to point this row at a different movement, keeping the sets. */
+  onSwap: () => void;
+  onMove: (direction: -1 | 1) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 };
 
 export function ExerciseCard({
@@ -47,7 +53,13 @@ export function ExerciseCard({
   onRemoveSet,
   onAddSet,
   onRemove,
+  onDuplicate,
+  onSwap,
+  onMove,
+  canMoveUp,
+  canMoveDown,
 }: ExerciseCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const workSets = exercise.sets.filter((set) => set.kind === 'work').length;
   const doneSets = exercise.sets.filter((set) => set.completedAt).length;
@@ -126,14 +138,70 @@ export function ExerciseCard({
             {readOnly ? null : (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Remove ${exercise.name}`}
+                accessibilityLabel={`Options for ${exercise.name}`}
+                accessibilityState={{ expanded: menuOpen }}
                 hitSlop={8}
-                onPress={() => setConfirmRemove((open) => !open)}
+                onPress={() => {
+                  setConfirmRemove(false);
+                  setMenuOpen((open) => !open);
+                }}
                 style={{ width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-                <Glyph name={GLYPH.trash} color={THEME.textMuted} size={15} />
+                <Glyph name={GLYPH.more} color={THEME.textMuted} size={15} />
               </Pressable>
             )}
           </View>
+
+          {/* Reordering is two arrows rather than a drag. A drag needs a long press to start, which
+              fights the scroll on a long session and has no keyboard equivalent; arrows work the
+              same on a phone, a trackpad, and a screen reader. */}
+          {menuOpen && !confirmRemove && !readOnly ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingBottom: 10,
+              }}>
+              <MenuAction
+                glyph={GLYPH.plus}
+                label="Duplicate"
+                onPress={() => {
+                  setMenuOpen(false);
+                  onDuplicate();
+                }}
+              />
+              <MenuAction
+                glyph={GLYPH.pencil}
+                label="Change"
+                onPress={() => {
+                  setMenuOpen(false);
+                  onSwap();
+                }}
+              />
+              <MenuAction
+                glyph={GLYPH.chevronUp}
+                label="Up"
+                disabled={!canMoveUp}
+                onPress={() => onMove(-1)}
+              />
+              <MenuAction
+                glyph={GLYPH.chevronDown}
+                label="Down"
+                disabled={!canMoveDown}
+                onPress={() => onMove(1)}
+              />
+              <MenuAction
+                glyph={GLYPH.trash}
+                label="Delete"
+                tone="danger"
+                onPress={() => {
+                  setMenuOpen(false);
+                  setConfirmRemove(true);
+                }}
+              />
+            </View>
+          ) : null}
 
           {confirmRemove && !readOnly ? (
             <View
@@ -185,6 +253,45 @@ export function ExerciseCard({
         </View>
       </View>
     </View>
+  );
+}
+
+/** One control in the exercise overflow row: an icon over a caption, sized for a thumb. */
+function MenuAction({
+  glyph,
+  label,
+  tone,
+  disabled,
+  onPress,
+}: {
+  glyph: Parameters<typeof Glyph>[0]['name'];
+  label: string;
+  tone?: 'danger';
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  const color = disabled ? THEME.border : tone === 'danger' ? THEME.danger : THEME.textPrimary;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        minHeight: 46,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        backgroundColor: pressed && !disabled ? THEME.accentSoft : THEME.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+      })}>
+      <Glyph name={glyph} color={color} size={13} />
+      <AppText style={{ fontSize: 10, fontWeight: '700', color }}>{label}</AppText>
+    </Pressable>
   );
 }
 

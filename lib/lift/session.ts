@@ -477,6 +477,106 @@ export function removeExercise(draft: LiftSessionDraft, key: string): LiftSessio
   return { ...draft, exercises: draft.exercises.filter((row) => row.key !== key) };
 }
 
+/**
+ * A copy of a row, dropped directly beneath the original.
+ *
+ * The numbers come along because that is the whole point: duplicating incline bench and swapping it
+ * to flat bench should leave you adjusting a few plates, not retyping five sets. The copy is not
+ * marked done, though — it is work you still owe.
+ *
+ * A duplicated superset partner leaves the group behind. Copying one half of a pair into a third
+ * member of it would silently change what A1/A2 means.
+ */
+export function duplicateExercise(draft: LiftSessionDraft, key: string): LiftSessionDraft {
+  const index = draft.exercises.findIndex((row) => row.key === key);
+  if (index < 0) {
+    return draft;
+  }
+  const source = draft.exercises[index];
+  const copy: LiftExerciseDraft = {
+    ...source,
+    key: newLocalKey('ex'),
+    supersetGroup: null,
+    sets: source.sets.map((set) => ({ ...set, key: newLocalKey('set'), completedAt: null })),
+  };
+  const exercises = draft.exercises.slice();
+  exercises.splice(index + 1, 0, copy);
+  return { ...draft, exercises };
+}
+
+/**
+ * Points a row at a different exercise while every set stays exactly where it is.
+ *
+ * Incline to flat bench is a change of name, not of effort, so the weights and reps are the part
+ * worth keeping. Only the identity moves.
+ */
+export function swapExercise(
+  draft: LiftSessionDraft,
+  key: string,
+  input: {
+    exerciseId?: string | null;
+    customExerciseId?: string | null;
+    name: string;
+    muscleKey?: MuscleKey;
+  },
+): LiftSessionDraft {
+  return mapExercise(draft, key, (row) => ({
+    ...row,
+    exerciseId: input.exerciseId ?? null,
+    customExerciseId: input.customExerciseId ?? null,
+    name: input.name,
+    muscleKey: input.muscleKey ?? row.muscleKey,
+    // The clip belonged to the old movement, so it does not describe this one any more.
+    demoUrl: null,
+  }));
+}
+
+/**
+ * Moves a row one place within its own muscle section.
+ *
+ * Order is what makes an interval readable — bench, rest, sprint, rest, bench — so this swaps with
+ * the neighbour in the same section rather than the neighbour in the flat list, which could belong
+ * to another muscle entirely.
+ */
+export function moveExercise(
+  draft: LiftSessionDraft,
+  key: string,
+  direction: -1 | 1,
+): LiftSessionDraft {
+  const index = draft.exercises.findIndex((row) => row.key === key);
+  if (index < 0) {
+    return draft;
+  }
+  const muscle = draft.exercises[index].muscleKey;
+  const siblings = draft.exercises
+    .map((row, at) => ({ row, at }))
+    .filter((entry) => entry.row.muscleKey === muscle);
+  const position = siblings.findIndex((entry) => entry.at === index);
+  const target = siblings[position + direction];
+  if (!target) {
+    return draft;
+  }
+  const exercises = draft.exercises.slice();
+  exercises[index] = target.row;
+  exercises[target.at] = draft.exercises[index];
+  return { ...draft, exercises };
+}
+
+/** Whether a row has anywhere to go in its section, so the arrows can be disabled honestly. */
+export function canMoveExercise(
+  draft: LiftSessionDraft,
+  key: string,
+  direction: -1 | 1,
+): boolean {
+  const row = draft.exercises.find((entry) => entry.key === key);
+  if (!row) {
+    return false;
+  }
+  const siblings = draft.exercises.filter((entry) => entry.muscleKey === row.muscleKey);
+  const position = siblings.findIndex((entry) => entry.key === key);
+  return position + direction >= 0 && position + direction < siblings.length;
+}
+
 export function renameSession(draft: LiftSessionDraft, title: string): LiftSessionDraft {
   const trimmed = String(title ?? '').trim();
   return { ...draft, title: trimmed ? trimmed.slice(0, 120) : null };

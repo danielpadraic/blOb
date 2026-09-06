@@ -28,6 +28,10 @@ type TimedRowCardProps = {
   onChangeIntensity: (value: number) => void;
   onChangeMethod: () => void;
   onRemove: () => void;
+  onDuplicate: () => void;
+  onMove: (direction: -1 | 1) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 };
 
 export function TimedRowCard({
@@ -38,6 +42,10 @@ export function TimedRowCard({
   onChangeIntensity,
   onChangeMethod,
   onRemove,
+  onDuplicate,
+  onMove,
+  canMoveUp,
+  canMoveDown,
 }: TimedRowCardProps) {
   const rest = row.kind === 'rest';
   const title = timedRowLabel(row);
@@ -108,14 +116,26 @@ export function TimedRowCard({
             <Glyph name={GLYPH.chevronDown} color={THEME.textMuted} size={12} />
           </Pressable>
         )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Remove ${title}`}
-          hitSlop={8}
-          onPress={onRemove}
-          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-          <Glyph name={GLYPH.close} color={THEME.textMuted} size={14} />
-        </Pressable>
+        {/* Duplicating a rest is how a set of intervals gets built: log one 45s rest, then drop a
+            copy between every pair of working sets. */}
+        <RowAction
+          glyph={GLYPH.plus}
+          label={`Duplicate ${title}`}
+          onPress={onDuplicate}
+        />
+        <RowAction
+          glyph={GLYPH.chevronUp}
+          label={`Move ${title} up`}
+          disabled={!canMoveUp}
+          onPress={() => onMove(-1)}
+        />
+        <RowAction
+          glyph={GLYPH.chevronDown}
+          label={`Move ${title} down`}
+          disabled={!canMoveDown}
+          onPress={() => onMove(1)}
+        />
+        <RowAction glyph={GLYPH.close} label={`Remove ${title}`} onPress={onRemove} />
       </View>
 
       {rest ? null : (
@@ -192,6 +212,38 @@ export function TimedRowCard({
         )}
       </View>
     </View>
+  );
+}
+
+/** A compact icon button in the timed row's header strip. */
+function RowAction({
+  glyph,
+  label,
+  disabled,
+  onPress,
+}: {
+  glyph: Parameters<typeof Glyph>[0]['name'];
+  label: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: 34,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: disabled ? 0.3 : pressed ? 0.6 : 1,
+      })}>
+      <Glyph name={glyph} color={THEME.textMuted} size={14} />
+    </Pressable>
   );
 }
 

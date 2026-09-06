@@ -14,6 +14,7 @@ import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import {
   useAttachLiftToCheckin,
+  useDeleteLiftSession,
   useLiftHistory,
   useLiftingChallenges,
   useSaveLiftSession,
@@ -38,6 +39,7 @@ export default function LiftsHistoryScreen() {
   const insets = useSafeAreaInsets();
   const { data, isLoading, error, refetch } = useLiftHistory();
   const save = useSaveLiftSession();
+  const remove = useDeleteLiftSession();
   const share = useShareLiftSession();
   const attach = useAttachLiftToCheckin();
   const liftingChallenges = useLiftingChallenges();
@@ -96,6 +98,19 @@ export default function LiftsHistoryScreen() {
       router.push(liftSessionHref(draft.id));
     } catch (caught) {
       setMenuError(caught instanceof Error ? caught.message : 'Could not copy that lift.');
+    }
+  }
+
+  async function deleteSession(target: LiftSessionSummary | null) {
+    if (!target) {
+      return;
+    }
+    setMenuError(null);
+    try {
+      await remove.mutateAsync(target.id);
+      setMenuFor(null);
+    } catch (caught) {
+      setMenuError(caught instanceof Error ? caught.message : 'Could not delete that lift.');
     }
   }
 
@@ -256,7 +271,7 @@ export default function LiftsHistoryScreen() {
 
       <LiftHistoryMenu
         session={menuFor}
-        busy={save.isPending}
+        busy={save.isPending || remove.isPending}
         error={menuError}
         onClose={() => {
           setMenuFor(null);
@@ -265,6 +280,7 @@ export default function LiftsHistoryScreen() {
         onStartAgain={() => void startAgain(menuFor)}
         onOverload={() => void openOverload(menuFor)}
         onShare={() => void openShare(menuFor)}
+        onDelete={() => void deleteSession(menuFor)}
       />
 
       <LiftShareSheet
@@ -305,6 +321,7 @@ function LiftHistoryMenu({
   onStartAgain,
   onOverload,
   onShare,
+  onDelete,
 }: {
   session: LiftSessionSummary | null;
   busy: boolean;
@@ -313,7 +330,15 @@ function LiftHistoryMenu({
   onStartAgain: () => void;
   onOverload: () => void;
   onShare: () => void;
+  onDelete: () => void;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // Reopening the menu on another session must not land with Delete already armed.
+  useEffect(() => {
+    setConfirmingDelete(false);
+  }, [session?.id]);
+
   if (!session) {
     return null;
   }
@@ -367,6 +392,38 @@ function LiftHistoryMenu({
             onPress={onShare}
           />
         ) : null}
+        {confirmingDelete ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              marginTop: 10,
+              paddingTop: 12,
+              borderTopWidth: 1,
+              borderTopColor: THEME.border,
+            }}>
+            <AppText style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>
+              Delete this lift for good?
+            </AppText>
+            <Button
+              title="Keep"
+              variant="outline"
+              size="sm"
+              onPress={() => setConfirmingDelete(false)}
+            />
+            <Button title="Delete" variant="danger" size="sm" loading={busy} onPress={onDelete} />
+          </View>
+        ) : (
+          <MenuRow
+            icon={GLYPH.trash}
+            label="Delete"
+            detail="Removes it from your history. Anything you already shared stays up."
+            disabled={busy}
+            tone="danger"
+            onPress={() => setConfirmingDelete(true)}
+          />
+        )}
       </View>
     </ChromeOverlay>
   );
@@ -377,14 +434,17 @@ function MenuRow({
   label,
   detail,
   disabled,
+  tone,
   onPress,
 }: {
   icon: GlyphId;
   label: string;
   detail: string;
   disabled?: boolean;
+  tone?: 'danger';
   onPress: () => void;
 }) {
+  const danger = tone === 'danger';
   return (
     <Pressable
       accessibilityRole="button"
@@ -409,12 +469,17 @@ function MenuRow({
           borderRadius: 11,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: THEME.accentSoft,
+          backgroundColor: danger ? THEME.background : THEME.accentSoft,
         }}>
-        <Glyph name={icon} color={THEME.accent} size={15} />
+        <Glyph name={icon} color={danger ? THEME.danger : THEME.accent} size={15} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <AppText style={{ fontSize: 15, fontWeight: '700', color: THEME.textPrimary }}>
+        <AppText
+          style={{
+            fontSize: 15,
+            fontWeight: '700',
+            color: danger ? THEME.danger : THEME.textPrimary,
+          }}>
           {label}
         </AppText>
         <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>

@@ -132,9 +132,22 @@ export function useDeleteLiftSession() {
 }
 
 /** The live challenges a finished lift can be attached to. Empty means no attach row is shown. */
+/**
+ * Every active challenge the viewer could put a lift on.
+ *
+ * This used to be filtered to challenges whose task *read* like lifting, which meant a challenge
+ * called "October Fitness" or "Summer Shred" silently offered nowhere to share and the sheet said
+ * there were no challenges at all. The person doing the lifting knows which of their challenges it
+ * belongs to better than a keyword list does, so the whole active set is offered and the ones that
+ * do read like lifting are simply sorted first.
+ */
 export function useLiftingChallenges(): LoggableChallenge[] {
   const { data } = useLoggableChallenges();
-  return useMemo(() => liftingChallenges(data ?? []), [data]);
+  return useMemo(() => {
+    const all = data ?? [];
+    const lifting = new Set(liftingChallenges(all).map((challenge) => challenge.id));
+    return [...all].sort((a, b) => Number(lifting.has(b.id)) - Number(lifting.has(a.id)));
+  }, [data]);
 }
 
 /** The viewer's own last session sharing a catalog exercise with the one they are importing. */

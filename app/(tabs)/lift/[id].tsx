@@ -37,8 +37,11 @@ import {
   addSet,
   addTimedRow,
   countWorkSets,
+  duplicateExercise,
   isTimedRow,
+  moveExercise,
   removeExercise,
+  swapExercise,
   removeSet,
   renameSession,
   repeatSession,
@@ -112,6 +115,8 @@ function LiftSessionInner({ id }: { id: string }) {
   const [collapsedMuscles, setCollapsedMuscles] = useState<Set<string>>(new Set());
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
+  /** The exercise being pointed at a different movement, keeping its sets. */
+  const [swapFor, setSwapFor] = useState<string | null>(null);
   const [timedSheet, setTimedSheet] = useState<{
     kind: 'cardio' | 'rest';
     muscle: MuscleKey;
@@ -140,6 +145,7 @@ function LiftSessionInner({ id }: { id: string }) {
   }, [loaded.data]);
 
   const readOnly = Boolean(draft?.completedAt);
+  const swapRow = swapFor ? (draft?.exercises.find((row) => row.key === swapFor) ?? null) : null;
 
   // Which of those challenges keep check-ins inside their own lobby. Asked for once, because
   // `LoggableChallenge` does not carry `privacy_mode`.
@@ -259,31 +265,42 @@ function LiftSessionInner({ id }: { id: string }) {
       return;
     }
     try {
+      // The same picker does double duty. Swapping keeps the sets and only changes what the row
+      // is called, which is what makes "incline today, flat next time" a two-tap edit.
+      const swapKey = swapFor;
+      let identity: {
+        exerciseId?: string | null;
+        customExerciseId?: string | null;
+        name: string;
+      } | null = null;
+
       if (result.createName) {
         const created = await createCustom.mutateAsync({
           name: result.createName,
           muscle: result.muscle,
         });
-        edit((current) =>
-          addExercise(current, {
-            customExerciseId: created.id,
-            name: created.name,
-            muscleKey: result.muscle,
-            superset: result.superset,
-          }),
-        );
+        identity = { customExerciseId: created.id, name: created.name };
       } else if (result.option) {
+        identity = {
+          exerciseId: result.option.official ? result.option.id : null,
+          customExerciseId: result.option.official ? null : result.option.id,
+          name: result.option.name,
+        };
+      }
+
+      if (identity) {
         edit((current) =>
-          addExercise(current, {
-            exerciseId: result.option?.official ? result.option.id : null,
-            customExerciseId: result.option?.official ? null : (result.option?.id ?? null),
-            name: result.option?.name ?? 'Exercise',
-            muscleKey: result.muscle,
-            superset: result.superset,
-          }),
+          swapKey
+            ? swapExercise(current, swapKey, { ...identity, muscleKey: result.muscle })
+            : addExercise(current, {
+                ...identity,
+                muscleKey: result.muscle,
+                superset: result.superset,
+              }),
         );
       }
       setSheetMuscle(null);
+      setSwapFor(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not add that exercise.');
     }
@@ -748,6 +765,14 @@ function LiftSessionInner({ id }: { id: string }) {
                               setTimedSheet({ kind: 'cardio', muscle: section.muscle })
                             }
                             onRemove={() => edit((current) => removeExercise(current, exercise.key))}
+                            onDuplicate={() =>
+                              edit((current) => duplicateExercise(current, exercise.key))
+                            }
+                            onMove={(direction) =>
+                              edit((current) => moveExercise(current, exercise.key, direction))
+                            }
+                            canMoveUp={index > 0}
+                            canMoveDown={index < section.exercises.length - 1}
                           />
                         );
                       }
@@ -781,6 +806,15 @@ function LiftSessionInner({ id }: { id: string }) {
                               edit((current) => addSet(current, exercise.key, kind))
                             }
                             onRemove={() => edit((current) => removeExercise(current, exercise.key))}
+                            onDuplicate={() =>
+                              edit((current) => duplicateExercise(current, exercise.key))
+                            }
+                            onSwap={() => setSwapFor(exercise.key)}
+                            onMove={(direction) =>
+                              edit((current) => moveExercise(current, exercise.key, direction))
+                            }
+                            canMoveUp={index > 0}
+                            canMoveDown={index < section.exercises.length - 1}
                           />
                         </View>
                       );
@@ -883,19 +917,24 @@ function LiftSessionInner({ id }: { id: string }) {
       </View>
 
       <AddExerciseSheet
-        visible={sheetMuscle != null}
-        muscle={sheetMuscle ?? draft.muscleKeys[0] ?? 'chest'}
+        visible={sheetMuscle != null || swapFor != null}
+        swapping={swapFor ? (swapRow?.name ?? null) : null}
+        muscle={swapRow?.muscleKey ?? sheetMuscle ?? draft.muscleKeys[0] ?? 'chest'}
         muscles={draft.muscleKeys.length ? draft.muscleKeys : [sheetMuscle ?? 'chest']}
         customs={customs.data ?? []}
         supersetPartnerName={
-          sheetMuscle ? (supersetPartner(draft, sheetMuscle)?.name ?? null) : null
+          swapFor || !sheetMuscle ? null : (supersetPartner(draft, sheetMuscle)?.name ?? null)
         }
         methods={cardioMethods.data ?? []}
         busy={createCustom.isPending}
-        onClose={() => setSheetMuscle(null)}
+        onClose={() => {
+          setSheetMuscle(null);
+          setSwapFor(null);
+        }}
         onSubmit={(result) => void onAddExercise(result)}
         onPickTimed={(result) => {
           setSheetMuscle(null);
+          setSwapFor(null);
           setTimedSheet(result);
         }}
       />

@@ -45,6 +45,8 @@ type AddExerciseSheetProps = {
   supersetPartnerName: string | null;
   /** The official cardio catalog, so Treadmill is findable from the same search box. */
   methods: readonly LiftCardioMethod[];
+  /** Name of the exercise being replaced, which turns this sheet into a swap. */
+  swapping?: string | null;
   busy?: boolean;
   onClose: () => void;
   onSubmit: (result: AddExerciseResult) => void;
@@ -59,6 +61,7 @@ export function AddExerciseSheet({
   customs,
   supersetPartnerName,
   methods,
+  swapping,
   busy,
   onClose,
   onSubmit,
@@ -123,9 +126,16 @@ export function AddExerciseSheet({
             paddingTop: 10,
             paddingBottom: 8,
           }}>
-          <AppText style={{ flex: 1, fontSize: 17, fontWeight: '800', color: THEME.textPrimary }}>
-            Add exercise
-          </AppText>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText style={{ fontSize: 17, fontWeight: '800', color: THEME.textPrimary }}>
+              {swapping ? 'Change exercise' : 'Add exercise'}
+            </AppText>
+            {swapping ? (
+              <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
+                Replaces {swapping}. Your sets stay as they are.
+              </AppText>
+            ) : null}
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"
