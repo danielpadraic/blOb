@@ -10,7 +10,12 @@ import {
   touchesMuscle,
   type ExerciseOption,
 } from '@/lib/lift/catalog';
-import { MUSCLE_KEYS, type MuscleKey } from '@/lib/lift/muscles';
+import {
+  isTimedMuscle,
+  MUSCLE_KEYS,
+  TIMED_MUSCLE_KEYS,
+  type MuscleKey,
+} from '@/lib/lift/muscles';
 
 const custom = (name: string, muscle: MuscleKey): ExerciseOption => ({
   id: `custom-${exerciseSlug(name)}`,
@@ -42,8 +47,13 @@ describe('the official catalog', () => {
     for (const muscle of ['chest', 'back', 'shoulders', 'quads'] as const) {
       expect(counts[muscle]).toBeGreaterThanOrEqual(80);
     }
-    for (const muscle of MUSCLE_KEYS) {
+    // Cardio and Rest are sections you can pick, but they hold timed rows rather than anything out
+    // of the strength library, so they are meant to be empty here.
+    for (const muscle of MUSCLE_KEYS.filter((key) => !isTimedMuscle(key))) {
       expect(counts[muscle]).toBeGreaterThanOrEqual(35);
+    }
+    for (const muscle of TIMED_MUSCLE_KEYS) {
+      expect(counts[muscle] ?? 0).toBe(0);
     }
   });
 });

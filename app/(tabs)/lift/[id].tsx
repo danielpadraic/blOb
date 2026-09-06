@@ -4,7 +4,9 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AddExerciseSheet, type AddExerciseResult } from '@/components/lift/AddExerciseSheet';
+import { AddTimedRowSheet, type TimedRowResult } from '@/components/lift/AddTimedRowSheet';
 import { ExerciseCard } from '@/components/lift/ExerciseCard';
+import { TimedRowCard } from '@/components/lift/TimedRowCard';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -15,6 +17,7 @@ import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import {
   useAttachLiftToCheckin,
+  useCardioMethods,
   useCreateCustomExercise,
   useCustomExercises,
   useDeleteLiftSession,
@@ -27,11 +30,13 @@ import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib
 import { hasShareableWork } from '@/lib/lift/recap';
 import { fetchChallengeShareLocks } from '@/lib/lift/share';
 import { challengeDetailHref } from '@/lib/routes';
-import { muscleLabel, type MuscleKey } from '@/lib/lift/muscles';
+import { isTimedMuscle, muscleLabel, type MuscleKey } from '@/lib/lift/muscles';
 import {
   addExercise,
   addSet,
+  addTimedRow,
   countWorkSets,
+  isTimedRow,
   removeExercise,
   removeSet,
   renameSession,
@@ -43,6 +48,7 @@ import {
   supersetPartner,
   toggleSetComplete,
   updateSet,
+  updateTimedRow,
 } from '@/lib/lift/session';
 import type { LiftOverloadPlan, LiftSessionDraft, LiftSetKind } from '@/lib/lift/types';
 import { firstRouteParam } from '@/lib/challengeLoad';
@@ -93,6 +99,7 @@ function LiftSessionInner({ id }: { id: string }) {
   const share = useShareLiftSession();
   const attach = useAttachLiftToCheckin();
   const liftingChallenges = useLiftingChallenges();
+  const cardioMethods = useCardioMethods();
 
   const [draft, setDraft] = useState<LiftSessionDraft | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -102,6 +109,12 @@ function LiftSessionInner({ id }: { id: string }) {
   const [collapsedMuscles, setCollapsedMuscles] = useState<Set<string>>(new Set());
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
+  const [timedSheet, setTimedSheet] = useState<{ kind: 'cardio' | 'rest'; muscle: MuscleKey } | null>(
+    null,
+  );
+  // True only for the explicit Save press. Autosave must never touch the button, or it blinks
+  // between "Save session" and "Saving…" on every keystroke.
+  const [finishing, setFinishing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [titleText, setTitleText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -260,12 +273,36 @@ function LiftSessionInner({ id }: { id: string }) {
     }
   }
 
+  function onAddTimedRow(result: TimedRowResult) {
+    setTimedSheet(null);
+    edit((current) =>
+      addTimedRow(current, {
+        kind: result.kind,
+        muscleKey: result.muscle,
+        // The catalog name is snapshotted onto the row so the card still reads "Air Bike" if the
+        // shared list is ever renamed underneath it.
+        name:
+          result.kind === 'rest'
+            ? 'Rest'
+            : ((cardioMethods.data ?? []).find((row) => row.id === result.cardioMethod)?.name ??
+              'Cardio'),
+        cardioMethod: result.cardioMethod,
+        cardioCustomName: result.cardioCustomName,
+        cardioType: result.cardioType,
+        durationSeconds: result.durationSeconds,
+        intensity: result.intensity,
+      }),
+    );
+  }
+
   async function onSave() {
     if (!draft) {
       return;
     }
     dirty.current = false;
+    setFinishing(true);
     const ok = await persist(draft, true);
+    setFinishing(false);
     if (!ok) {
       return;
     }
@@ -420,6 +457,8 @@ function LiftSessionInner({ id }: { id: string }) {
     );
   }
 
+  // The quiet background write, as opposed to the one they asked for by pressing Save.
+  const autosaving = save.isPending && !finishing;
   const workSets = countWorkSets(draft);
   const doneSets = draft.exercises.reduce(
     (total, row) => total + row.sets.filter((set) => set.completedAt).length,
@@ -592,8 +631,19 @@ function LiftSessionInner({ id }: { id: string }) {
                   {readOnly ? null : (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Add ${muscleLabel(section.muscle)} exercise`}
-                      onPress={() => setSheetMuscle(section.muscle)}
+                      accessibilityLabel={`Add ${muscleLabel(section.muscle)}`}
+                      onPress={() => {
+                        // A Cardio or Rest section holds timed rows, so its Add goes straight to
+                        // the logger rather than searching a catalog that has nothing for it.
+                        if (isTimedMuscle(section.muscle)) {
+                          setTimedSheet({
+                            kind: section.muscle === 'rest' ? 'rest' : 'cardio',
+                            muscle: section.muscle,
+                          });
+                          return;
+                        }
+                        setSheetMuscle(section.muscle);
+                      }}
                       style={({ pressed }) => ({
                         minHeight: 44,
                         paddingHorizontal: 12,
@@ -627,7 +677,9 @@ function LiftSessionInner({ id }: { id: string }) {
                         <AppText style={{ fontSize: 13, color: THEME.textMuted }}>
                           {readOnly
                             ? 'Nothing logged for this one.'
-                            : `No ${muscleLabel(section.muscle)} exercises yet. Tap Add to search the catalog.`}
+                            : isTimedMuscle(section.muscle)
+                              ? `Nothing here yet. Tap Add to log ${section.muscle === 'rest' ? 'a rest' : 'cardio'}.`
+                              : `No ${muscleLabel(section.muscle)} exercises yet. Tap Add to search the catalog.`}
                         </AppText>
                       </View>
                     ) : null}
@@ -635,6 +687,36 @@ function LiftSessionInner({ id }: { id: string }) {
                       const previous = section.exercises[index - 1];
                       const next = section.exercises[index + 1];
                       const grouped = exercise.supersetGroup;
+
+                      if (isTimedRow(exercise)) {
+                        return (
+                          <TimedRowCard
+                            key={exercise.key}
+                            row={exercise}
+                            readOnly={readOnly}
+                            onChangeDuration={(seconds) =>
+                              edit((current) =>
+                                updateTimedRow(current, exercise.key, { durationSeconds: seconds }),
+                              )
+                            }
+                            onChangeType={(type) =>
+                              edit((current) =>
+                                updateTimedRow(current, exercise.key, { cardioType: type }),
+                              )
+                            }
+                            onChangeIntensity={(value) =>
+                              edit((current) =>
+                                updateTimedRow(current, exercise.key, { intensity: value }),
+                              )
+                            }
+                            onChangeMethod={() =>
+                              setTimedSheet({ kind: 'cardio', muscle: section.muscle })
+                            }
+                            onRemove={() => edit((current) => removeExercise(current, exercise.key))}
+                          />
+                        );
+                      }
+
                       return (
                         <View
                           key={exercise.key}
@@ -668,6 +750,24 @@ function LiftSessionInner({ id }: { id: string }) {
                         </View>
                       );
                     })}
+
+                    {/* Cardio and rest belong in the running order, not on a screen of their own.
+                        Offering them at the foot of every section is what makes intervals possible:
+                        bench, rest, sprint, rest, bench — all inside Chest. */}
+                    {readOnly ? null : (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <InsertButton
+                          label="Cardio"
+                          glyph={GLYPH.anyExercise}
+                          onPress={() => setTimedSheet({ kind: 'cardio', muscle: section.muscle })}
+                        />
+                        <InsertButton
+                          label="Rest"
+                          glyph={GLYPH.clock}
+                          onPress={() => setTimedSheet({ kind: 'rest', muscle: section.muscle })}
+                        />
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
@@ -686,11 +786,17 @@ function LiftSessionInner({ id }: { id: string }) {
             paddingBottom: tabBarLift(insets.bottom, 'sticky') + 12,
             ...themeShadow('bar'),
           }}>
-          {error ? (
-            <AppText style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>
-              {error}
-            </AppText>
-          ) : null}
+          {/* One fixed-height line. Autosave and errors both land here, so the bar never grows or
+              shrinks under the user's thumb while they are typing a weight. */}
+          <View style={{ height: 16, justifyContent: 'center' }}>
+            {error ? (
+              <AppText numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>
+                {error}
+              </AppText>
+            ) : autosaving ? (
+              <AppText style={{ fontSize: 12, color: THEME.textMuted }}>Saving…</AppText>
+            ) : null}
+          </View>
 
           {readOnly ? (
             <>
@@ -735,11 +841,7 @@ function LiftSessionInner({ id }: { id: string }) {
           ) : (
             <>
               <Button title="Back" variant="outline" onPress={goBackToBuilder} />
-              <Button
-                title={save.isPending ? 'Saving…' : 'Save session'}
-                loading={save.isPending}
-                onPress={() => void onSave()}
-              />
+              <Button title="Save session" loading={finishing} onPress={() => void onSave()} />
             </>
           )}
         </View>
@@ -756,6 +858,15 @@ function LiftSessionInner({ id }: { id: string }) {
         busy={createCustom.isPending}
         onClose={() => setSheetMuscle(null)}
         onSubmit={(result) => void onAddExercise(result)}
+      />
+
+      <AddTimedRowSheet
+        visible={timedSheet != null}
+        kind={timedSheet?.kind ?? 'cardio'}
+        muscle={timedSheet?.muscle ?? draft.muscleKeys[0] ?? 'cardio'}
+        methods={cardioMethods.data ?? []}
+        onClose={() => setTimedSheet(null)}
+        onSubmit={onAddTimedRow}
       />
 
       <OverloadSheet
@@ -782,5 +893,39 @@ function LiftSessionInner({ id }: { id: string }) {
         }}
       />
     </Screen>
+  );
+}
+
+/** The quiet "+ Cardio" / "+ Rest" pair at the foot of a muscle section. */
+function InsertButton({
+  label,
+  glyph,
+  onPress,
+}: {
+  label: string;
+  glyph: Parameters<typeof Glyph>[0]['name'];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Add ${label.toLowerCase()} here`}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        minHeight: 44,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: THEME.border,
+        backgroundColor: pressed ? THEME.accentSoft : 'transparent',
+      })}>
+      <Glyph name={glyph} color={THEME.textMuted} size={13} />
+      <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.textMuted }}>{label}</AppText>
+    </Pressable>
   );
 }

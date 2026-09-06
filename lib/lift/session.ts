@@ -2,10 +2,12 @@ import { newId, newLocalKey } from '@/lib/lift/ids';
 import { isMuscleKey, muscleShortLabel, orderMuscles, type MuscleKey } from '@/lib/lift/muscles';
 import { parseOverloadSummary } from '@/lib/lift/overload';
 import type {
+  LiftCardioType,
   LiftExerciseDraft,
   LiftSavePayloadExercise,
   LiftSessionDraft,
   LiftSessionExerciseRow,
+  LiftRowKind,
   LiftSessionRow,
   LiftSessionSummary,
   LiftSetDraft,
@@ -118,9 +120,11 @@ export function newExerciseDraft(input: {
   muscleKey: MuscleKey;
   supersetGroup?: number | null;
   sets?: LiftSetDraft[];
+  demoUrl?: string | null;
 }): LiftExerciseDraft {
   return {
     key: newLocalKey('ex'),
+    kind: 'strength',
     exerciseId: input.exerciseId ?? null,
     customExerciseId: input.customExerciseId ?? null,
     name: input.name,
@@ -128,7 +132,172 @@ export function newExerciseDraft(input: {
     supersetGroup: input.supersetGroup ?? null,
     // A new exercise opens with one work set so there is something to log into.
     sets: input.sets ?? [newSetDraft('work')],
+    demoUrl: input.demoUrl ?? null,
   };
+}
+
+// -------------------------------------------------------------------------- cardio and rest
+
+/** A rest defaults to a minute, which is the gap most people actually take between working sets. */
+export const DEFAULT_REST_SECONDS = 60;
+export const DEFAULT_CARDIO_SECONDS = 600;
+export const DEFAULT_CARDIO_INTENSITY = 5;
+
+const MAX_DURATION = 86400;
+
+export function newTimedDraft(input: {
+  kind: 'cardio' | 'rest';
+  muscleKey: MuscleKey;
+  name?: string;
+  cardioMethod?: string | null;
+  cardioCustomName?: string | null;
+  cardioType?: LiftCardioType | null;
+  durationSeconds?: number | null;
+  intensity?: number | null;
+}): LiftExerciseDraft {
+  const rest = input.kind === 'rest';
+  return {
+    key: newLocalKey(rest ? 'rest' : 'cardio'),
+    kind: input.kind,
+    exerciseId: null,
+    customExerciseId: null,
+    name: input.name ?? (rest ? 'Rest' : 'Cardio'),
+    muscleKey: input.muscleKey,
+    supersetGroup: null,
+    sets: [],
+    cardioMethod: rest ? null : (input.cardioMethod ?? null),
+    cardioCustomName: rest ? null : (input.cardioCustomName ?? null),
+    cardioType: rest ? null : (input.cardioType ?? 'steady'),
+    durationSeconds:
+      input.durationSeconds ?? (rest ? DEFAULT_REST_SECONDS : DEFAULT_CARDIO_SECONDS),
+    intensity: rest ? null : (input.intensity ?? DEFAULT_CARDIO_INTENSITY),
+  };
+}
+
+/**
+ * Drops a cardio or rest row at the end of a muscle section.
+ *
+ * Appending is what makes the HIIT pattern work without a builder: log bench, add a rest, add a
+ * sprint, add another rest, and the section reads back in the order it happened.
+ */
+export function addTimedRow(
+  draft: LiftSessionDraft,
+  input: {
+    kind: 'cardio' | 'rest';
+    muscleKey: MuscleKey;
+    name?: string;
+    cardioMethod?: string | null;
+    cardioCustomName?: string | null;
+    cardioType?: LiftCardioType | null;
+    durationSeconds?: number | null;
+    intensity?: number | null;
+  },
+): LiftSessionDraft {
+  const added = newTimedDraft(input);
+  const next = draft.exercises.slice();
+  const lastIndex = lastIndexForMuscle(next, input.muscleKey);
+  next.splice(lastIndex + 1, 0, added);
+  return withMuscle({ ...draft, exercises: next }, input.muscleKey);
+}
+
+export function updateTimedRow(
+  draft: LiftSessionDraft,
+  key: string,
+  patch: Partial<
+    Pick<
+      LiftExerciseDraft,
+      'cardioMethod' | 'cardioCustomName' | 'cardioType' | 'durationSeconds' | 'intensity' | 'name'
+    >
+  >,
+): LiftSessionDraft {
+  return mapExercise(draft, key, (row) => ({ ...row, ...patch }));
+}
+
+export function clampDuration(seconds: number | null | undefined): number {
+  if (seconds == null || !Number.isFinite(seconds)) {
+    return 0;
+  }
+  return Math.min(Math.max(Math.round(seconds), 0), MAX_DURATION);
+}
+
+/** Minutes and seconds are edited separately, so both directions of the conversion live here. */
+export function splitDuration(seconds: number | null | undefined): {
+  minutes: number;
+  seconds: number;
+} {
+  const total = clampDuration(seconds);
+  return { minutes: Math.floor(total / 60), seconds: total % 60 };
+}
+
+export function joinDuration(minutes: number, seconds: number): number {
+  const safeMinutes = Number.isFinite(minutes) ? Math.max(Math.round(minutes), 0) : 0;
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(Math.round(seconds), 0) : 0;
+  return clampDuration(safeMinutes * 60 + safeSeconds);
+}
+
+/** "0:30", "10:00", "1:05:00". Always reads as a clock, never as "600s". */
+export function formatDuration(seconds: number | null | undefined): string {
+  const total = clampDuration(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const rest = total % 60;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return hours ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${minutes}:${pad(rest)}`;
+}
+
+const CARDIO_TYPE_LABELS: Record<LiftCardioType, string> = {
+  warmup: 'Warm-up',
+  steady: 'Steady',
+  sprint: 'Sprint',
+  interval: 'Interval',
+  cooldown: 'Cool down',
+};
+
+export const CARDIO_TYPES = [
+  'warmup',
+  'steady',
+  'sprint',
+  'interval',
+  'cooldown',
+] as const satisfies readonly LiftCardioType[];
+
+export function cardioTypeLabel(type: LiftCardioType | null | undefined): string {
+  return type ? CARDIO_TYPE_LABELS[type] : '';
+}
+
+/** What a cardio or rest row is called on a card and in the section list. */
+export function timedRowLabel(row: LiftExerciseDraft): string {
+  if (row.kind === 'rest') {
+    return 'Rest';
+  }
+  if (row.cardioMethod === 'other') {
+    return row.cardioCustomName?.trim() || 'Cardio';
+  }
+  return row.name || 'Cardio';
+}
+
+/** "Air Bike · Sprint · 0:30 · 8/10", or "Rest · 0:45". */
+export function timedRowSummary(row: LiftExerciseDraft): string {
+  const duration = formatDuration(row.durationSeconds);
+  if (row.kind === 'rest') {
+    return `Rest · ${duration}`;
+  }
+  return [
+    timedRowLabel(row),
+    cardioTypeLabel(row.cardioType),
+    duration,
+    row.intensity ? `${row.intensity}/10` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export function isTimedRow(row: LiftExerciseDraft): boolean {
+  return row.kind === 'cardio' || row.kind === 'rest';
+}
+
+export function isStrengthRow(row: LiftExerciseDraft): boolean {
+  return row.kind !== 'cardio' && row.kind !== 'rest';
 }
 
 // -------------------------------------------------------------------------- sections
@@ -414,10 +583,21 @@ export function countWorkSets(draft: LiftSessionDraft): number {
 
 /** Two lines of "Incline BB Bench Press · 3 sets" for the history card. */
 export function sessionPreview(
-  exercises: ReadonlyArray<{ name: string; sets: ReadonlyArray<{ kind: LiftSetKind }> }>,
+  exercises: ReadonlyArray<{
+    name: string;
+    sets: ReadonlyArray<{ kind: LiftSetKind }>;
+    kind?: string | null;
+    duration_seconds?: number | null;
+    durationSeconds?: number | null;
+  }>,
   lines = 2,
 ): string[] {
   const rows = exercises.slice(0, lines).map((row) => {
+    // A timed row has no sets, so "3 sets" would read as zero. It states its clock instead.
+    if (row.kind === 'cardio' || row.kind === 'rest') {
+      const seconds = row.durationSeconds ?? row.duration_seconds ?? null;
+      return `${row.name} · ${formatDuration(seconds)}`;
+    }
     const count = row.sets.filter((set) => set.kind === 'work').length;
     return count ? `${row.name} · ${count} ${count === 1 ? 'set' : 'sets'}` : row.name;
   });
@@ -431,21 +611,34 @@ export function sessionPreview(
 // -------------------------------------------------------------------------- save / load
 
 export function draftToPayload(draft: LiftSessionDraft): LiftSavePayloadExercise[] {
-  return draft.exercises.map((row, index) => ({
-    exerciseId: row.exerciseId,
-    customExerciseId: row.exerciseId ? null : row.customExerciseId,
-    name: row.name,
-    muscleKey: row.muscleKey,
-    sort: index,
-    supersetGroup: row.supersetGroup,
-    sets: row.sets.map((set, setIndex) => ({
-      kind: set.kind,
-      sort: setIndex,
-      weight: set.weight,
-      reps: set.reps,
-      completedAt: set.completedAt,
-    })),
-  }));
+  return draft.exercises.map((row, index) => {
+    const timed = isTimedRow(row);
+    return {
+      kind: row.kind ?? 'strength',
+      exerciseId: timed ? null : row.exerciseId,
+      customExerciseId: timed || row.exerciseId ? null : row.customExerciseId,
+      name: timed ? timedRowLabel(row) : row.name,
+      muscleKey: row.muscleKey,
+      sort: index,
+      supersetGroup: timed ? null : row.supersetGroup,
+      // A timed row is described entirely by its own columns, so it carries no sets.
+      sets: timed
+        ? []
+        : row.sets.map((set, setIndex) => ({
+            kind: set.kind,
+            sort: setIndex,
+            weight: set.weight,
+            reps: set.reps,
+            completedAt: set.completedAt,
+          })),
+      cardioMethod: row.kind === 'cardio' ? (row.cardioMethod ?? null) : null,
+      cardioCustomName: row.kind === 'cardio' ? (row.cardioCustomName ?? null) : null,
+      cardioType: row.kind === 'cardio' ? (row.cardioType ?? null) : null,
+      durationSeconds: timed ? clampDuration(row.durationSeconds) : null,
+      intensity: row.kind === 'cardio' ? (row.intensity ?? null) : null,
+      demoUrl: timed ? null : (row.demoUrl ?? null),
+    };
+  });
 }
 
 function toNumber(value: number | string | null): number | null {
@@ -472,11 +665,18 @@ export function rowsToDraft(
     .sort((a, b) => a.sort - b.sort)
     .map((row) => ({
       key: row.id,
+      kind: (row.kind === 'cardio' || row.kind === 'rest' ? row.kind : 'strength') as LiftRowKind,
       exerciseId: row.exercise_id,
       customExerciseId: row.custom_exercise_id,
       name: row.name,
       muscleKey: (isMuscleKey(row.muscle_key) ? row.muscle_key : 'core') as MuscleKey,
       supersetGroup: row.superset_group,
+      cardioMethod: row.cardio_method ?? null,
+      cardioCustomName: row.cardio_custom_name ?? null,
+      cardioType: (row.cardio_type ?? null) as LiftCardioType | null,
+      durationSeconds: row.duration_seconds ?? null,
+      intensity: row.intensity ?? null,
+      demoUrl: row.demo_url ?? null,
       sets: (setsByExercise.get(row.id) ?? [])
         .sort((a, b) => a.sort - b.sort)
         .map((set) => ({
@@ -497,6 +697,7 @@ export function rowsToDraft(
     unit: session.unit === 'kg' ? 'kg' : 'lb',
     exercises,
     sourceSessionId: session.source_session_id ?? null,
+    sourceUserId: session.source_user_id ?? null,
     overloadFromSessionId: session.overload_from_session_id ?? null,
     overloadSummary: parseOverloadSummary(session.overload_summary),
     sharedPostId: session.shared_post_id ?? null,
@@ -527,6 +728,7 @@ export function copySession(
     overloadSummary: null,
     exercises: source.exercises.map((row) => ({
       key: newLocalKey('ex'),
+      kind: row.kind ?? 'strength',
       exerciseId: row.exerciseId,
       // A custom belongs to whoever created it. An import re-resolves this against the viewer's own
       // customs before saving; until then the name snapshot carries the exercise.
@@ -534,6 +736,14 @@ export function copySession(
       name: row.name,
       muscleKey: row.muscleKey,
       supersetGroup: row.supersetGroup,
+      // Cardio and rest describe the shape of the workout, not someone else's achievement, so they
+      // copy intact even when the weights are cleared. A 45 second rest is 45 seconds for anyone.
+      cardioMethod: row.cardioMethod ?? null,
+      cardioCustomName: row.cardioCustomName ?? null,
+      cardioType: row.cardioType ?? null,
+      durationSeconds: row.durationSeconds ?? null,
+      intensity: row.intensity ?? null,
+      demoUrl: row.demoUrl ?? null,
       sets: row.sets.map((set) => ({
         key: newLocalKey('set'),
         kind: set.kind,

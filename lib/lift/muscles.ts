@@ -19,9 +19,21 @@ export const MUSCLE_KEYS = [
   'calves',
   'core',
   'olympic',
+  'cardio',
+  'rest',
 ] as const;
 
 export type MuscleKey = (typeof MUSCLE_KEYS)[number];
+
+/**
+ * Cardio and Rest are sections you can pick, but they hold timed rows rather than exercises out of
+ * the catalog. Anything that searches the strength library has to ask this first.
+ */
+export const TIMED_MUSCLE_KEYS = ['cardio', 'rest'] as const;
+
+export function isTimedMuscle(key: MuscleKey): boolean {
+  return key === 'cardio' || key === 'rest';
+}
 
 const LABELS: Record<MuscleKey, string> = {
   chest: 'Chest',
@@ -37,6 +49,8 @@ const LABELS: Record<MuscleKey, string> = {
   calves: 'Calves',
   core: 'Core',
   olympic: 'Olympic / Full body',
+  cardio: 'Cardio',
+  rest: 'Rest',
 };
 
 /** Short form for the session title and history cards, where the full label is too wide. */

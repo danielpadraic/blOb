@@ -11,15 +11,16 @@ import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import {
   useLastSessionForMuscles,
-  useLiftHistory,
   useLiftSession,
   useLiftUnit,
+  useOpenLiftSession,
   useSaveLiftSession,
+  useStartLiftSession,
 } from '@/hooks/useLift';
 import { fetchLiftSession } from '@/lib/lift/api';
 import { MUSCLE_KEYS, muscleLabel, muscleSummary, type MuscleKey } from '@/lib/lift/muscles';
 import { applyOverload } from '@/lib/lift/overload';
-import { newSessionDraft, repeatSession, shortDate } from '@/lib/lift/session';
+import { repeatSession, shortDate } from '@/lib/lift/session';
 import { recalledLiftMuscles, rememberLiftMuscles } from '@/lib/lift/startMemory';
 import type { LiftOverloadPlan } from '@/lib/lift/types';
 import { LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
@@ -29,13 +30,15 @@ import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
  * Start a lift: pick muscles, then either repeat the last session that covered them or start new.
  *
  * Both buttons create the session row up front, so a session survives a reload mid-workout and the
- * user never loses sets to a dropped connection.
+ * user never loses sets to a dropped connection. Only one session is ever open at a time — picking
+ * more muscles while one is in progress widens it rather than starting a rival.
  */
 export default function LiftStartScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const unit = useLiftUnit();
-  const history = useLiftHistory();
+  const open = useOpenLiftSession();
+  const start = useStartLiftSession();
   const save = useSaveLiftSession();
   const [selected, setSelected] = useState<MuscleKey[]>(() => recalledLiftMuscles());
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +47,7 @@ export default function LiftStartScreen() {
 
   const picked = selected.length > 0;
   const summary = muscleSummary(selected);
-  const busy = save.isPending;
+  const busy = save.isPending || start.isPending;
 
   function toggle(key: MuscleKey) {
     setError(null);
@@ -61,9 +64,10 @@ export default function LiftStartScreen() {
     setError(null);
     try {
       rememberLiftMuscles(selected);
-      const draft = newSessionDraft({ muscleKeys: selected, unit });
-      await save.mutateAsync({ draft });
-      router.push(liftSessionHref(draft.id));
+      // The server decides which session this is. Asking it, rather than inventing an id here, is
+      // what stops a second Continue from opening a session the first one's sets will never reach.
+      const id = await start.mutateAsync({ muscles: selected, unit });
+      router.push(liftSessionHref(id));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not start that lift.');
     }
@@ -95,9 +99,7 @@ export default function LiftStartScreen() {
   // than stubbed from the history summary.
   const overloadSource = useLiftSession(last.data?.id);
 
-  const openSessions = (history.data ?? []).filter(
-    (row) => !row.completedAt && row.exerciseCount > 0,
-  );
+  const openSession = open.data && open.data.exerciseCount > 0 ? open.data : null;
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
@@ -141,11 +143,11 @@ export default function LiftStartScreen() {
           </AppText>
         </View>
 
-        {openSessions.length ? (
+        {openSession ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Resume ${openSessions[0].title}`}
-            onPress={() => router.push(liftSessionHref(openSessions[0].id))}
+            accessibilityLabel={`Resume ${openSession.title}`}
+            onPress={() => router.push(liftSessionHref(openSession.id))}
             style={{
               marginHorizontal: 16,
               marginBottom: 12,
@@ -163,10 +165,10 @@ export default function LiftStartScreen() {
               <AppText
                 numberOfLines={1}
                 style={{ fontSize: 14, fontWeight: '800', color: THEME.accent }}>
-                Pick up {openSessions[0].title}
+                Pick up {openSession.title}
               </AppText>
               <AppText style={{ fontSize: 12, color: THEME.textMuted }}>
-                Still open · {openSessions[0].setCount} sets logged
+                Still open · {openSession.setCount} sets logged
               </AppText>
             </View>
             <Glyph name={GLYPH.chevronRight} color={THEME.accent} size={14} />

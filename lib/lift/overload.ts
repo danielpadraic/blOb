@@ -186,13 +186,14 @@ function bumpExercise(
   plan: LiftOverloadPlan,
   unit: WeightUnit,
 ): LiftSessionDraft['exercises'][number] {
+  // A cardio or rest row has no working sets, so a bump has nothing to act on. Copying it through
+  // untouched is what keeps "add 5 lb" from quietly turning a 45 second rest into something else.
+  if (exercise.kind === 'cardio' || exercise.kind === 'rest') {
+    return { ...exercise, key: newLocalKey('ex') };
+  }
   return {
+    ...exercise,
     key: newLocalKey('ex'),
-    exerciseId: exercise.exerciseId,
-    customExerciseId: exercise.customExerciseId,
-    name: exercise.name,
-    muscleKey: exercise.muscleKey,
-    supersetGroup: exercise.supersetGroup,
     sets: exercise.sets.map((set) => ({
       key: newLocalKey('set'),
       kind: set.kind,

@@ -9,6 +9,7 @@ import {
   sessionTitle,
 } from '@/lib/lift/session';
 import type {
+  LiftCardioMethod,
   LiftCustomExerciseRow,
   LiftSessionDraft,
   LiftSessionExerciseRow,
@@ -25,10 +26,12 @@ import type { WeightUnit } from '@/lib/types';
  */
 
 const SESSION_COLUMNS =
-  'id, user_id, title, performed_at, completed_at, muscle_keys, unit, created_at, updated_at, source_session_id, shared_post_id, overload_from_session_id, overload_summary';
+  'id, user_id, title, performed_at, completed_at, status, muscle_keys, unit, created_at, updated_at, source_session_id, source_user_id, shared_post_id, overload_from_session_id, overload_summary';
 const EXERCISE_COLUMNS =
-  'id, session_id, exercise_id, custom_exercise_id, name, muscle_key, sort, superset_group';
+  'id, session_id, exercise_id, custom_exercise_id, name, muscle_key, sort, superset_group, kind, cardio_method, cardio_custom_name, cardio_type, duration_seconds, intensity, demo_url';
 const SET_COLUMNS = 'id, exercise_row_id, kind, sort, weight, reps, completed_at';
+/** Enough of each row for a history card's two preview lines, including timed rows. */
+const PREVIEW_COLUMNS = 'id, name, sort, kind, duration_seconds, lift_sets(kind)';
 
 function fail(message: string, error: { message?: string } | null): never {
   throw new Error(error?.message ? `${message}: ${error.message}` : message);
@@ -162,7 +165,36 @@ export async function fetchLiftSession(id: string): Promise<LiftSessionDraft | n
     sets = (setRows ?? []) as LiftSetRow[];
   }
 
-  return rowsToDraft(session as LiftSessionRow, rows, sets);
+  const draft = rowsToDraft(session as LiftSessionRow, rows, sets);
+  return { ...draft, sourceUserName: await sourceCredit(draft.sourceUserId) };
+}
+
+/**
+ * The name a copied session is credited to.
+ *
+ * Reading it here rather than from the source session matters: the person who copied a workout
+ * keeps the credit even after the original post comes down, and they never need permission to open
+ * the session it came from.
+ */
+async function sourceCredit(sourceUserId: string | null | undefined): Promise<string | null> {
+  if (!sourceUserId) {
+    return null;
+  }
+  const { data: me } = await supabase.auth.getUser();
+  if (me.user?.id === sourceUserId) {
+    return null;
+  }
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name, username')
+    .eq('id', sourceUserId)
+    .maybeSingle();
+  if (!data) {
+    return null;
+  }
+  const name = String(data.display_name ?? '').trim();
+  const handle = String(data.username ?? '').trim();
+  return name || (handle ? `@${handle}` : null);
 }
 
 function titleFor(row: LiftSessionRow): string {
@@ -175,7 +207,7 @@ function titleFor(row: LiftSessionRow): string {
 
 type HistoryRow = LiftSessionRow & {
   lift_session_exercises: Array<
-    Pick<LiftSessionExerciseRow, 'id' | 'name' | 'sort'> & {
+    Pick<LiftSessionExerciseRow, 'id' | 'name' | 'sort' | 'kind' | 'duration_seconds'> & {
       lift_sets: Array<{ kind: 'warmup' | 'work' }>;
     }
   >;
@@ -194,21 +226,29 @@ function summaryFromHistoryRow(row: HistoryRow): LiftSessionSummary {
     exerciseCount: exercises.length,
     setCount: sets.filter((set) => set.kind === 'work').length,
     preview: sessionPreview(
-      exercises.map((exercise) => ({ name: exercise.name, sets: exercise.lift_sets ?? [] })),
+      exercises.map((exercise) => ({
+        name: exercise.name,
+        sets: exercise.lift_sets ?? [],
+        kind: exercise.kind,
+        duration_seconds: exercise.duration_seconds,
+      })),
     ),
     sharedPostId: row.shared_post_id ?? null,
     overloadSummary: parseOverloadSummary(row.overload_summary),
   };
 }
 
+/**
+ * History is finished sessions only. The one session still in progress belongs on the start screen
+ * as "Pick up where you left off", not as a card that looks like a workout you already did.
+ */
 export async function fetchLiftHistory(limit = 50): Promise<LiftSessionSummary[]> {
   const userId = await currentUserId();
   const { data, error } = await supabase
     .from('lift_sessions')
-    .select(
-      `${SESSION_COLUMNS}, lift_session_exercises(id, name, sort, lift_sets(kind))`,
-    )
+    .select(`${SESSION_COLUMNS}, lift_session_exercises(${PREVIEW_COLUMNS})`)
     .eq('user_id', userId)
+    .eq('status', 'saved')
     .order('performed_at', { ascending: false })
     .limit(limit);
   if (error) {
@@ -216,6 +256,54 @@ export async function fetchLiftHistory(limit = 50): Promise<LiftSessionSummary[]
   }
 
   return ((data ?? []) as unknown as HistoryRow[]).map(summaryFromHistoryRow);
+}
+
+/** The single session in progress, if there is one. The database allows at most one per user. */
+export async function fetchOpenLiftSession(): Promise<LiftSessionSummary | null> {
+  const userId = await currentUserId();
+  const { data, error } = await supabase
+    .from('lift_sessions')
+    .select(`${SESSION_COLUMNS}, lift_session_exercises(${PREVIEW_COLUMNS})`)
+    .eq('user_id', userId)
+    .eq('status', 'open')
+    .order('performed_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    fail('Could not check for an open lift', error);
+  }
+  const row = ((data ?? []) as unknown as HistoryRow[])[0];
+  return row ? summaryFromHistoryRow(row) : null;
+}
+
+/**
+ * Opens a session for these muscles. If one is already in progress this returns that one with the
+ * new muscles folded in, which is why pressing Continue twice can no longer leave a stray session
+ * behind.
+ */
+export async function startLiftSession(
+  muscles: readonly MuscleKey[],
+  unit: WeightUnit,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('start_lift_session', {
+    p_muscle_keys: orderMuscles(muscles),
+    p_unit: unit,
+  });
+  if (error) {
+    fail('Could not start that lift', error);
+  }
+  return String(data ?? '');
+}
+
+/** The shared cardio catalog. Rarely changes, so callers cache it hard. */
+export async function fetchCardioMethods(): Promise<LiftCardioMethod[]> {
+  const { data, error } = await supabase
+    .from('lift_cardio_methods')
+    .select('id, name, sort')
+    .order('sort', { ascending: true });
+  if (error) {
+    fail('Could not load cardio types', error);
+  }
+  return (data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) }));
 }
 
 /**
@@ -232,10 +320,10 @@ export async function fetchLastSessionForMuscles(
   const userId = await currentUserId();
   const { data, error } = await supabase
     .from('lift_sessions')
-    .select(`${SESSION_COLUMNS}, lift_session_exercises(id, name, sort, lift_sets(kind))`)
+    .select(`${SESSION_COLUMNS}, lift_session_exercises(${PREVIEW_COLUMNS})`)
     .eq('user_id', userId)
     .contains('muscle_keys', wanted)
-    .not('completed_at', 'is', null)
+    .eq('status', 'saved')
     .order('performed_at', { ascending: false })
     .limit(1);
   if (error) {
@@ -327,9 +415,11 @@ export async function fetchLastSessionWithExercises(
   const userId = await currentUserId();
   const { data, error } = await supabase
     .from('lift_sessions')
-    .select(`${SESSION_COLUMNS}, lift_session_exercises!inner(id, name, sort, exercise_id, lift_sets(kind))`)
+    .select(
+      `${SESSION_COLUMNS}, lift_session_exercises!inner(${PREVIEW_COLUMNS}, exercise_id)`,
+    )
     .eq('user_id', userId)
-    .not('completed_at', 'is', null)
+    .eq('status', 'saved')
     .in('lift_session_exercises.exercise_id', wanted)
     .order('performed_at', { ascending: false })
     .limit(1);

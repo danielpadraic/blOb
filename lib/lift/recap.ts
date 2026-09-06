@@ -1,6 +1,13 @@
 import { muscleSummary } from '@/lib/lift/muscles';
 import { overloadChipLabel } from '@/lib/lift/overload';
-import { formatLiftNumber, sessionTitle, shortDate } from '@/lib/lift/session';
+import {
+  cardioTypeLabel,
+  formatDuration,
+  formatLiftNumber,
+  sessionTitle,
+  shortDate,
+  timedRowLabel,
+} from '@/lib/lift/session';
 import type { LiftExerciseDraft, LiftSessionDraft, LiftSetDraft } from '@/lib/lift/types';
 import type { WeightUnit } from '@/lib/types';
 
@@ -40,14 +47,26 @@ export type LiftRecap = {
   overloadChip: string;
 };
 
-/** A card needs at least one finished working set; an abandoned session is not a brag. */
+/**
+ * A card needs at least one finished working set; an abandoned session is not a brag.
+ *
+ * Cardio counts too. A ten minute row is a session someone did, and refusing to let them share it
+ * because it has no reps would make the whole cardio feature a dead end. A rest on its own does
+ * not count — resting is not the workout.
+ */
 export function hasShareableWork(draft: LiftSessionDraft | null | undefined): boolean {
   if (!draft) {
     return false;
   }
-  return draft.exercises.some((exercise) =>
-    exercise.sets.some((set) => set.kind === 'work' && set.completedAt),
-  );
+  return draft.exercises.some((exercise) => {
+    if (exercise.kind === 'cardio') {
+      return (exercise.durationSeconds ?? 0) > 0;
+    }
+    if (exercise.kind === 'rest') {
+      return false;
+    }
+    return exercise.sets.some((set) => set.kind === 'work' && set.completedAt);
+  });
 }
 
 function completedWorkSets(exercise: LiftExerciseDraft): LiftSetDraft[] {
@@ -64,6 +83,20 @@ function completedWorkSets(exercise: LiftExerciseDraft): LiftSetDraft[] {
  * last completed set, because that is where the set actually landed.
  */
 export function exerciseDetail(exercise: LiftExerciseDraft, unit: WeightUnit): string | null {
+  // A timed row has no sets to summarise — its clock is the whole story.
+  if (exercise.kind === 'cardio') {
+    return [
+      cardioTypeLabel(exercise.cardioType),
+      formatDuration(exercise.durationSeconds),
+      exercise.intensity ? `${exercise.intensity}/10` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  if (exercise.kind === 'rest') {
+    return formatDuration(exercise.durationSeconds);
+  }
+
   const sets = completedWorkSets(exercise);
   if (!sets.length) {
     return null;
@@ -127,9 +160,10 @@ export function buildRecap(draft: LiftSessionDraft, maxLines = RECAP_MAX_LINES):
       };
     }
     const exercise = group[0];
+    const timed = exercise.kind === 'cardio' || exercise.kind === 'rest';
     return {
       key: exercise.key || `exercise-${index}`,
-      name: exercise.name,
+      name: timed ? timedRowLabel(exercise) : exercise.name,
       detail: exerciseDetail(exercise, draft.unit),
       superset: false,
     };

@@ -1306,6 +1306,12 @@ export type Database = {
         Partial<LiftCustomExerciseRow>,
         [Relationship<'lift_custom_exercises_user_id_fkey', 'user_id', 'profiles', 'id'>]
       >;
+      lift_cardio_methods: TableDef<
+        { id: string; name: string; sort: number; created_at: string },
+        { id: string; name: string; sort?: number },
+        Partial<{ id: string; name: string; sort: number }>,
+        []
+      >;
       lift_sessions: TableDef<
         LiftSessionRow,
         Partial<LiftSessionRow>,
@@ -1869,6 +1875,13 @@ export type Database = {
           p_source_session_id?: string | null;
           p_overload_from_session_id?: string | null;
           p_overload_summary?: unknown;
+        };
+        Returns: string;
+      };
+      start_lift_session: {
+        Args: {
+          p_muscle_keys: string[];
+          p_unit?: string;
         };
         Returns: string;
       };

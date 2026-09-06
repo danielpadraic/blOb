@@ -7,13 +7,16 @@ import { useMyProfile } from '@/hooks/useProfile';
 import {
   createCustomExercise,
   deleteLiftSession,
+  fetchCardioMethods,
   fetchCustomExercises,
   fetchLastSessionForMuscles,
   fetchLastSessionWithExercises,
   fetchLiftHistory,
   fetchLiftSession,
+  fetchOpenLiftSession,
   importLiftSession,
   saveLiftSession,
+  startLiftSession,
   unitFor,
 } from '@/lib/lift/api';
 import { attachLiftToCheckin } from '@/lib/lift/attach';
@@ -43,6 +46,39 @@ export function useLiftSession(id: string | null | undefined) {
     queryKey: [LIFT_KEY, 'session', sessionId, user?.id],
     enabled: Boolean(sessionId && user?.id),
     queryFn: () => fetchLiftSession(sessionId),
+  });
+}
+
+/** The one session still in progress, or null. Drives "Pick up where you left off". */
+export function useOpenLiftSession() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: [LIFT_KEY, 'open', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: () => fetchOpenLiftSession(),
+  });
+}
+
+/** Opens a session for these muscles, adopting the open one if there already is one. */
+export function useStartLiftSession() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ muscles, unit }: { muscles: readonly MuscleKey[]; unit: WeightUnit }) =>
+      startLiftSession(muscles, unit),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: [LIFT_KEY] });
+    },
+  });
+}
+
+/** The shared cardio catalog. It only changes when we ship a migration, so it is cached hard. */
+export function useCardioMethods() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: [LIFT_KEY, 'cardio-methods'],
+    enabled: Boolean(user?.id),
+    staleTime: 24 * 60 * 60 * 1000,
+    queryFn: () => fetchCardioMethods(),
   });
 }
 

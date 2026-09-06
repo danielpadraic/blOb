@@ -19,9 +19,21 @@ export type LiftSetDraft = {
   completedAt: string | null;
 };
 
+/**
+ * What a row in the session is.
+ *
+ * `strength` carries sets of weight and reps. `cardio` and `rest` are timed and hold no sets at
+ * all, which is what lets them sit between two bench sets instead of needing a screen of their own.
+ */
+export type LiftRowKind = 'strength' | 'cardio' | 'rest';
+
+/** How hard a cardio row was meant to be, which is not the same as how long it lasted. */
+export type LiftCardioType = 'warmup' | 'steady' | 'sprint' | 'interval' | 'cooldown';
+
 export type LiftExerciseDraft = {
   key: string;
-  /** Official catalog slug, or null for a custom. Exactly one of these is set. */
+  kind: LiftRowKind;
+  /** Official catalog slug, or null for a custom. Exactly one of these is set. Strength only. */
   exerciseId: string | null;
   customExerciseId: string | null;
   name: string;
@@ -29,6 +41,17 @@ export type LiftExerciseDraft = {
   /** Exercises sharing a number are a superset. Null means it stands alone. */
   supersetGroup: number | null;
   sets: LiftSetDraft[];
+  /** Cardio catalog id, or 'other' when they typed their own. */
+  cardioMethod?: string | null;
+  /** Their private label for an "other" method. Never joins the shared catalog. */
+  cardioCustomName?: string | null;
+  cardioType?: LiftCardioType | null;
+  /** Cardio and rest only. Rest uses nothing else. */
+  durationSeconds?: number | null;
+  /** 1–10, cardio only. */
+  intensity?: number | null;
+  /** This user's demo clip for this exercise, copied onto the row so a copy keeps the video. */
+  demoUrl?: string | null;
 };
 
 export type LiftSessionDraft = {
@@ -42,6 +65,9 @@ export type LiftSessionDraft = {
   exercises: LiftExerciseDraft[];
   /** The session this was copied from — repeat, overload, or an import from a friend's card. */
   sourceSessionId?: string | null;
+  /** Who owned the session it was copied from, so the copy can say "From Daniel". */
+  sourceUserId?: string | null;
+  sourceUserName?: string | null;
   /** Set only when the copy went through the Overload sheet. */
   overloadFromSessionId?: string | null;
   overloadSummary?: LiftOverloadSummary | null;
@@ -80,7 +106,9 @@ export type LiftSessionRow = {
   unit: WeightUnit;
   created_at: string;
   updated_at: string;
+  status?: string | null;
   source_session_id?: string | null;
+  source_user_id?: string | null;
   shared_post_id?: string | null;
   overload_from_session_id?: string | null;
   overload_summary?: unknown;
@@ -95,6 +123,19 @@ export type LiftSessionExerciseRow = {
   muscle_key: string;
   sort: number;
   superset_group: number | null;
+  kind?: string | null;
+  cardio_method?: string | null;
+  cardio_custom_name?: string | null;
+  cardio_type?: string | null;
+  duration_seconds?: number | null;
+  intensity?: number | null;
+  demo_url?: string | null;
+};
+
+/** One row of the shared cardio catalog. */
+export type LiftCardioMethod = {
+  id: string;
+  name: string;
 };
 
 export type LiftSetRow = {
@@ -143,6 +184,7 @@ export type LiftSavePayloadSet = {
 };
 
 export type LiftSavePayloadExercise = {
+  kind: LiftRowKind;
   exerciseId: string | null;
   customExerciseId: string | null;
   name: string;
@@ -150,4 +192,10 @@ export type LiftSavePayloadExercise = {
   sort: number;
   supersetGroup: number | null;
   sets: LiftSavePayloadSet[];
+  cardioMethod: string | null;
+  cardioCustomName: string | null;
+  cardioType: LiftCardioType | null;
+  durationSeconds: number | null;
+  intensity: number | null;
+  demoUrl: string | null;
 };
