@@ -47,6 +47,11 @@ export interface HealthProvider {
   /** Incremental HealthKit sync. Optional — Android Health Connect ignores this. */
   syncNewWorkouts?(anchor?: string | null): Promise<HealthSyncResult>;
   enrichHeartRate?(workout: HealthWorkout): Promise<HealthWorkout>;
+  /**
+   * Second chance at distance for a distance-shaped workout whose total came back empty. Returns the
+   * workout unchanged when the vendor genuinely recorded none, so 0.00 stays honest.
+   */
+  enrichDistance?(workout: HealthWorkout): Promise<HealthWorkout>;
   /** Full BPM series inside a workout window. Empty array means the workout carried no HR. */
   fetchHeartRateSeries?(window: { startedAt: string; endedAt: string }): Promise<HealthHeartRateSample[]>;
   /**

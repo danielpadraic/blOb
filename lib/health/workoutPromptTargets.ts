@@ -117,7 +117,7 @@ export function workoutPromptTargets(input: {
     }
     // Already done for this period: the incremental proof lock owns that post, and a second prompt
     // would invite them to redo work they have finished.
-    if (checkedInForCurrentPeriod(candidate.checkin ?? null, challenge as never)) {
+    if (checkedInForCurrentPeriod(candidate.checkin ?? null, challenge as never, now)) {
       continue;
     }
 

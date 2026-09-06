@@ -452,7 +452,7 @@ function PostCardInner({
         {/* Fitness stats only, from the stored numbers. The caption above stays user text. */}
         {checkin ? (
           <View className="mt-1.5">
-            <CheckinProofStatsRow stats={post.checkin_stats} showProse displayName={name} />
+            <CheckinProofStatsRow stats={post.checkin_stats} />
           </View>
         ) : null}
         {circleInvite && !circleJoin && content && !inCircleRoom ? (

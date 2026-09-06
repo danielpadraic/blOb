@@ -3,16 +3,12 @@ import { View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import {
   proofStatChips,
-  proofStatsProse,
   type CheckinProofStats as CheckinProofStatsPayload,
 } from '@/lib/checkin/proofStats';
 import { THEME } from '@/lib/theme';
 
 type Props = {
   stats?: CheckinProofStatsPayload | null;
-  /** Home and detail have room for the sentence; the dense Live bubble does not. */
-  showProse?: boolean;
-  displayName?: string | null;
   align?: 'left' | 'right';
 };
 
@@ -20,13 +16,14 @@ type Props = {
  * Compact stats chips for a fitness check-in post. Renders nothing when the payload is absent or
  * carries no numbers, which is how Prayer, honor and every non-fitness category stay clean.
  * Shared by Live and Home so iOS, Android and Web read the same.
+ *
+ * Chips only. The body text beside them is whatever the user typed, never a generated sentence.
  */
-export function CheckinProofStatsRow({ stats, showProse, displayName, align = 'left' }: Props) {
+export function CheckinProofStatsRow({ stats, align = 'left' }: Props) {
   const chips = proofStatChips(stats);
   if (chips.length === 0) {
     return null;
   }
-  const prose = showProse ? proofStatsProse({ stats, displayName }) : null;
   return (
     <View style={{ gap: 4, alignItems: 'stretch' }}>
       <View
@@ -54,13 +51,6 @@ export function CheckinProofStatsRow({ stats, showProse, displayName, align = 'l
           </View>
         ))}
       </View>
-      {prose ? (
-        <AppText
-          className="text-[12px]"
-          style={{ color: THEME.textMuted, textAlign: align === 'right' ? 'right' : 'left' }}>
-          {prose}
-        </AppText>
-      ) : null}
     </View>
   );
 }

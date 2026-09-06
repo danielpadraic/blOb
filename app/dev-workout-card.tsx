@@ -10,7 +10,7 @@ import {
   WORKOUT_CARD_WIDTH,
   type HeartRateSample,
 } from '@/lib/health/workoutProofCard';
-import { proofStatChips, proofStatsProse } from '@/lib/checkin/proofStats';
+import { proofStatChips } from '@/lib/checkin/proofStats';
 import { buildWorkoutRoute } from '@/lib/health/route';
 import type { OcrSessionFields } from '@/lib/health/ocrSession';
 import { THEME } from '@/lib/theme';
@@ -188,15 +188,12 @@ export default function DevWorkoutCardScreen() {
         />
       </View>
 
-      <Label>Post stats chips + prose</Label>
+      <Label>Post stats chips</Label>
       <View style={{ gap: 6 }}>
         <AppText className="text-[12px]" style={{ color: THEME.textMuted }}>
           {proofStatChips(stats)
             .map((chip) => chip.label)
             .join('  ·  ')}
-        </AppText>
-        <AppText className="text-[13px]" style={{ color: THEME.textPrimary }}>
-          {proofStatsProse({ stats, displayName: 'Courtney' }) ?? '(no prose)'}
         </AppText>
       </View>
       <Label>Read stat chips (tap to correct)</Label>

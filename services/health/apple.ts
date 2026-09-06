@@ -55,8 +55,24 @@ type NativeKit = {
       results: { data?: { locations?: unknown[] } } | null,
     ) => void,
   ) => void;
+  getDailyDistanceWalkingRunningSamples?: DistanceSampleReader;
+  getDailyDistanceCyclingSamples?: DistanceSampleReader;
+  getDailyDistanceSwimmingSamples?: DistanceSampleReader;
   setObserver?: (options: { type: string }) => void;
 };
+
+/**
+ * `getDaily*Samples` is a cumulative-sum statistics collection bucketed by `period` minutes, and it
+ * defaults to meters. Summing the buckets inside the workout window gives the distance HealthKit
+ * recorded when HKWorkout.totalDistance itself came back empty.
+ */
+type DistanceSampleReader = (
+  options: { startDate: string; endDate: string; unit?: string; period?: number; ascending?: boolean },
+  callback: (
+    error: string | { message?: string } | null,
+    results: Array<{ value?: number; startDate?: string; endDate?: string }> | null,
+  ) => void,
+) => void;
 
 type NativeWorkout = {
   id?: string;
@@ -70,13 +86,27 @@ type NativeWorkout = {
   start?: string;
   end?: string;
   duration?: number;
+  /** Miles. See METERS_PER_MILE. */
   distance?: number;
+  /** HealthKit workout metadata. `HKIndoorWorkout` is how Apple marks an indoor session. */
+  metadata?: Record<string, unknown> | null;
 };
 
 const SharingDenied = 1;
 
 /** A route read that has not answered by now is treated as "no route". */
 const ROUTE_TIMEOUT_MS = 8000;
+
+/**
+ * react-native-health 1.19 reads HKWorkout.totalDistance as `doubleValueForUnit:[HKUnit mileUnit]`
+ * and offers no unit option, so every anchored workout arrives in MILES. `HealthWorkout.distanceM`
+ * is meters — the Android provider already converts — so the miles have to be converted here.
+ * Storing the raw number is what made a 6.23 mi walk render as 0.00 mi.
+ */
+const METERS_PER_MILE = 1609.344;
+
+/** A distance read that has not answered by now is treated as "no distance". */
+const DISTANCE_TIMEOUT_MS = 6000;
 
 function loadKit(): NativeKit | null {
   if (Platform.OS !== 'ios') {
@@ -120,6 +150,18 @@ function loadKit(): NativeKit | null {
         typeof native.getWorkoutRouteSamples === 'function'
           ? native.getWorkoutRouteSamples.bind(native)
           : undefined,
+      getDailyDistanceWalkingRunningSamples:
+        typeof native.getDailyDistanceWalkingRunningSamples === 'function'
+          ? native.getDailyDistanceWalkingRunningSamples.bind(native)
+          : undefined,
+      getDailyDistanceCyclingSamples:
+        typeof native.getDailyDistanceCyclingSamples === 'function'
+          ? native.getDailyDistanceCyclingSamples.bind(native)
+          : undefined,
+      getDailyDistanceSwimmingSamples:
+        typeof native.getDailyDistanceSwimmingSamples === 'function'
+          ? native.getDailyDistanceSwimmingSamples.bind(native)
+          : undefined,
       setObserver: typeof native.setObserver === 'function' ? native.setObserver.bind(native) : undefined,
     };
   } catch {
@@ -134,6 +176,10 @@ function readPermissions(kit: NativeKit): string[] {
     p.HeartRate,
     p.ActiveEnergyBurned,
     p.DistanceWalkingRunning,
+    // The per-workout total can be absent even when the ride or swim recorded one, and these are
+    // what the fallback quantity read needs.
+    p.DistanceCycling,
+    p.DistanceSwimming,
     // Route is a separate HealthKit series type. Without it an outdoor workout still attaches, it
     // just arrives with no map.
     p.WorkoutRoute,
@@ -251,13 +297,55 @@ function asNumber(value: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+export function milesToMeters(value: unknown): number | undefined {
+  const miles = Number(value);
+  if (!Number.isFinite(miles) || miles <= 0) {
+    return undefined;
+  }
+  return Math.round(miles * METERS_PER_MILE);
+}
+
+/** Activities where Apple's own label says Indoor or Outdoor, so ours should too. */
+const INDOOR_OUTDOOR_ACTIVITIES = new Set<HealthActivityType>(['walking', 'running', 'cycling']);
+
+/** null when HealthKit did not say either way. */
+function indoorFlagOf(workout: NativeWorkout): boolean | null {
+  const raw = workout.metadata?.HKIndoorWorkout;
+  if (raw === true || raw === 1) {
+    return true;
+  }
+  if (raw === false || raw === 0) {
+    return false;
+  }
+  return null;
+}
+
+/**
+ * Apple uses one activity type for walking and marks the session indoor or outdoor in metadata, so
+ * an Outdoor Walk only reads as one when that flag is folded into the label.
+ */
+export function activityLabelOf(workout: {
+  activityName?: string;
+  metadata?: Record<string, unknown> | null;
+}): string {
+  const label = humanizeActivityLabel(String(workout.activityName ?? ''));
+  const indoor = indoorFlagOf(workout);
+  if (indoor == null || /indoor|outdoor/i.test(label)) {
+    return label;
+  }
+  if (!INDOOR_OUTDOOR_ACTIVITIES.has(mapActivity(label))) {
+    return label;
+  }
+  return `${indoor ? 'Indoor' : 'Outdoor'} ${label}`;
+}
+
 function mapWorkout(workout: NativeWorkout): HealthWorkout | null {
   const startedAt = new Date(workout.start ?? '');
   const endedAt = new Date(workout.end ?? '');
   if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime()) || endedAt <= startedAt) {
     return null;
   }
-  const label = humanizeActivityLabel(String(workout.activityName ?? ''));
+  const label = activityLabelOf(workout);
   const providerWorkoutId =
     String(workout.id ?? '').trim() ||
     `${startedAt.toISOString()}-${endedAt.toISOString()}-${label}`;
@@ -270,7 +358,7 @@ function mapWorkout(workout: NativeWorkout): HealthWorkout | null {
     endedAt: asIso(workout.end, endedAt),
     durationSec: durationSecOf(workout, startedAt, endedAt),
     caloriesKcal: asNumber(workout.calories),
-    distanceM: asNumber(workout.distance),
+    distanceM: milesToMeters(workout.distance),
     sourceBundle: workout.sourceId ?? workout.sourceName ?? undefined,
     confidence: mapConfidence(workout),
   };
@@ -309,6 +397,74 @@ async function heartRateSamplesFor(
     return samples;
   } catch {
     return [];
+  }
+}
+
+function distanceReaderFor(
+  kit: NativeKit,
+  workout: Pick<HealthWorkout, 'activityType' | 'activityLabel'>,
+): DistanceSampleReader | undefined {
+  if (/swim/i.test(workout.activityLabel ?? '')) {
+    return kit.getDailyDistanceSwimmingSamples;
+  }
+  if (workout.activityType === 'cycling') {
+    return kit.getDailyDistanceCyclingSamples;
+  }
+  if (workout.activityType === 'walking' || workout.activityType === 'running') {
+    return kit.getDailyDistanceWalkingRunningSamples;
+  }
+  return undefined;
+}
+
+/**
+ * Distance HealthKit recorded inside the workout window, for when HKWorkout.totalDistance came back
+ * empty. Only buckets anchored inside the window count, so a bucket straddling the edge cannot pull
+ * in a different session's miles.
+ */
+async function distanceFor(
+  kit: NativeKit,
+  workout: Pick<HealthWorkout, 'activityType' | 'activityLabel' | 'startedAt' | 'endedAt'>,
+): Promise<number | undefined> {
+  const read = distanceReaderFor(kit, workout);
+  const from = new Date(workout.startedAt).getTime();
+  const to = new Date(workout.endedAt).getTime();
+  if (!read || !Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
+    return undefined;
+  }
+  try {
+    const rows = await new Promise<Array<{ value?: number; startDate?: string; endDate?: string }>>(
+      (resolve) => {
+        const timer = setTimeout(() => resolve([]), DISTANCE_TIMEOUT_MS);
+        read(
+          {
+            startDate: workout.startedAt,
+            endDate: workout.endedAt,
+            unit: 'meter',
+            period: 5,
+            ascending: true,
+          },
+          (error, results) => {
+            clearTimeout(timer);
+            resolve(error || !Array.isArray(results) ? [] : results);
+          },
+        );
+      },
+    );
+    let meters = 0;
+    for (const row of rows) {
+      const value = Number(row.value);
+      if (!Number.isFinite(value) || value <= 0) {
+        continue;
+      }
+      const at = new Date(String(row.startDate ?? '')).getTime();
+      if (Number.isFinite(at) && (at < from || at >= to)) {
+        continue;
+      }
+      meters += value;
+    }
+    return meters > 0 ? Math.round(meters) : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -512,6 +668,23 @@ class AppleHealthProvider implements HealthProvider {
     }
     const hr = await heartRateFor(kit, workout.startedAt, workout.endedAt);
     return { ...workout, ...hr };
+  }
+
+  /**
+   * A walk, run, ride or swim that arrived without a total gets one more read from the quantity
+   * series before a card is allowed to say 0.00. A treadmill with no distance still returns nothing,
+   * which is the one case 0.00 is honest.
+   */
+  async enrichDistance(workout: HealthWorkout): Promise<HealthWorkout> {
+    if (Number(workout.distanceM) > 0) {
+      return workout;
+    }
+    const kit = loadKit();
+    if (!kit) {
+      return workout;
+    }
+    const distanceM = await distanceFor(kit, workout);
+    return distanceM ? { ...workout, distanceM } : workout;
   }
 
   async fetchHeartRateSeries(window: {

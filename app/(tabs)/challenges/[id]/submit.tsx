@@ -161,6 +161,21 @@ function shareFieldFromNotes(notes?: string | null, snapshot?: CheckinHealthProo
   return checkinExtraCaption(stripHealthSummaryFromNotes(notes ?? '', snapshot));
 }
 
+/**
+ * One line per attach, so a 0.00 mi card can be told apart from a workout that genuinely carried no
+ * distance while reading a TestFlight log. Deliberately never includes body metrics or date of
+ * birth, and is not gated on __DEV__ because release binaries are where this gets diagnosed.
+ */
+function logHealthAttach(workout: HealthWorkout, route: WorkoutRoute | null): void {
+  console.log('[blob:health]', {
+    workoutId: workout.providerWorkoutId,
+    activityType: workout.activityType,
+    distanceM: workout.distanceM ?? null,
+    hasRoute: Boolean(route),
+    avgHr: workout.hrAvg ?? null,
+  });
+}
+
 function slotPart(
   proof: ChallengeProof,
   draft: SlotDraft | undefined,
@@ -1205,9 +1220,13 @@ function SubmitWorkoutInner() {
       const enrichedHr = provider?.enrichHeartRate
         ? await provider.enrichHeartRate(workout)
         : workout;
+      // A walk or ride whose total came back empty gets one more read before a card says 0.00.
+      const enrichedDistance = provider?.enrichDistance
+        ? await provider.enrichDistance(enrichedHr)
+        : enrichedHr;
       // Read the series once: it gives the card its graph and the summary its hr_min.
-      const samples = await readHeartRateSeries(enrichedHr);
-      const enriched = withHeartRateFloor(enrichedHr, samples);
+      const samples = await readHeartRateSeries(enrichedDistance);
+      const enriched = withHeartRateFloor(enrichedDistance, samples);
       const snapshot = toCheckinHealthProof(enriched);
       const healthWorkoutId = await upsertHealthWorkout(uid, enriched);
       const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
@@ -1275,6 +1294,7 @@ function SubmitWorkoutInner() {
       [target.id]: { ...current[target.id], addingRoute: true },
     }));
     const route = await readWorkoutRoute(workout);
+    logHealthAttach(workout, route);
     // The snapshot is updated as soon as the track is known, so a failed rasterize still leaves the
     // route on the check-in for the ledger and for Web to redraw.
     if (route) {

@@ -547,12 +547,14 @@ export function scheduleNeedsTick(challenge: ScheduleChallenge, nowMs = Date.now
 export function checkedInForCurrentPeriod(
   row: { status?: string | null; submitted_at?: string | null; period_key?: unknown } | null | undefined,
   challenge?: CheckinPeriodChallenge | null,
+  /** Callers that already have a clock pass it, so the answer does not shift at midnight mid-render. */
+  now = new Date(),
 ): boolean {
   if (!isSubmittedCheckin(row)) {
     return false;
   }
   const key = normalizePeriodKey(row.period_key);
-  return Boolean(key && key === checkinPeriodKey(challenge));
+  return Boolean(key && key === checkinPeriodKey(challenge, now));
 }
 
 export async function loadLobbyLayout(): Promise<LobbyLayout> {

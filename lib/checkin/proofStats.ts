@@ -85,64 +85,9 @@ export function hasProofStats(stats?: CheckinProofStats | null): boolean {
   return proofStatChips(stats).length > 0;
 }
 
-export type ProofStatsPronoun = { subject: string; possessive: string };
-
-/** they/them is the fallback whenever the author has not set a gender or pronoun. */
-export const THEY_THEM: ProofStatsPronoun = { subject: 'they', possessive: 'their' };
-
-const PRONOUNS: Record<string, ProofStatsPronoun> = {
-  he: { subject: 'he', possessive: 'his' },
-  him: { subject: 'he', possessive: 'his' },
-  she: { subject: 'she', possessive: 'her' },
-  her: { subject: 'she', possessive: 'her' },
-  they: THEY_THEM,
-  them: THEY_THEM,
-};
-
-/** Maps the stamped subject pronoun onto its possessive. Unknown values fall back to they/them. */
-export function pronounFromStats(stats?: CheckinProofStats | null): ProofStatsPronoun {
-  const raw = String(stats?.pronoun ?? '').trim().toLowerCase();
-  return PRONOUNS[raw] ?? THEY_THEM;
-}
-
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 /**
- * Optional prose built only from the numbers above plus the display name and pronoun. It states
- * nothing the stats do not contain — no activity narration, no "{Name} is {task}!".
+ * There is deliberately no prose builder here. A check-in body is the user's own text or
+ * "Check-in Complete" — the app does not narrate their workout back at them. The chips above carry
+ * the numbers; a generated "{Name} burned N calories in M minutes." sentence is not a caption the
+ * user wrote, so Home and Live never show one.
  */
-export function proofStatsProse(input: {
-  stats?: CheckinProofStats | null;
-  displayName?: string | null;
-  pronoun?: ProofStatsPronoun;
-}): string | null {
-  const stats = input.stats;
-  if (!stats) {
-    return null;
-  }
-  const name = (input.displayName ?? '').trim();
-  const pronoun = input.pronoun ?? pronounFromStats(stats);
-  const minutes = proofStatsMinutes(stats.duration_sec);
-  const calories = positive(stats.active_cal) ?? positive(stats.total_cal);
-  const miles = wantsDistance(stats.activity) ? proofStatsMiles(stats.distance_m) : null;
-  const avg = positive(stats.hr_avg);
-
-  // Prose needs all three of calories, duration and average heart rate. With fewer than that the
-  // chips above already say everything, and a partial sentence reads like missing data.
-  if (calories == null || minutes == null || avg == null) {
-    return null;
-  }
-
-  const subject = name || capitalize(pronoun.subject);
-  const sentences = [
-    `${subject} burned ${Math.round(calories)} calories in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`,
-    `Average heart rate ${Math.round(avg)} bpm.`,
-  ];
-  // No clocks here even when the session has a window: the prose is numbers only.
-  if (miles != null) {
-    sentences.push(`Traveled ${milesLabel(miles)}.`);
-  }
-  return sentences.join(' ');
-}
