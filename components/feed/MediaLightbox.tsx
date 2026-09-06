@@ -13,7 +13,6 @@ import {
   BackHandler,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -23,7 +22,7 @@ import {
 import { Image } from 'expo-image';
 import { usePathname, useGlobalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -201,6 +200,7 @@ function MediaLightboxOverlay({
   const pageHeight = Math.max(height, 1);
   const open = Boolean(state);
   const zoomed = pageScale > 1.01;
+  const pagerNative = useMemo(() => Gesture.Native(), []);
 
   useEffect(() => {
     if (!state) {
@@ -303,6 +303,7 @@ function MediaLightboxOverlay({
         <View
           pointerEvents="auto"
           style={[styles.layer, { width: pageWidth, height: pageHeight }]}>
+          <GestureDetector gesture={pagerNative} touchAction={zoomed ? 'none' : 'pan-x'}>
           <ScrollView
             ref={pager}
             horizontal
@@ -330,9 +331,11 @@ function MediaLightboxOverlay({
                 active={itemIndex === page}
                 onClose={onClose}
                 onScaleChange={itemIndex === page ? setPageScale : undefined}
+                pagerNative={itemIndex === page ? pagerNative : undefined}
               />
             ))}
           </ScrollView>
+          </GestureDetector>
 
           <View style={[styles.close, { top: Math.max(insets.top, 8) }]}>
             <PlayerCloseButton accessibilityLabel="Close" onPress={onClose} />
@@ -378,6 +381,7 @@ function LightboxPage({
   active,
   onClose,
   onScaleChange,
+  pagerNative,
 }: {
   item: LightboxItem;
   width: number;
@@ -387,6 +391,7 @@ function LightboxPage({
   active: boolean;
   onClose: () => void;
   onScaleChange?: (scale: number) => void;
+  pagerNative?: ReturnType<typeof Gesture.Native>;
 }) {
   const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
@@ -423,13 +428,14 @@ function LightboxPage({
       <View
         pointerEvents={kind === 'video' || zoomable ? 'auto' : 'none'}
         style={[styles.mediaSlot, { width, height: mediaHeight }]}>
-        {zoomable ? (
+        {zoomable && active ? (
           <ZoomableStill
             width={mediaWidth}
             height={mediaHeight}
             active={active}
             onClose={onClose}
-            onScaleChange={onScaleChange}>
+            onScaleChange={onScaleChange}
+            pagerNative={pagerNative}>
             {media}
           </ZoomableStill>
         ) : (
@@ -446,6 +452,7 @@ function ZoomableStill({
   active,
   onClose,
   onScaleChange,
+  pagerNative,
   children,
 }: {
   width: number;
@@ -453,6 +460,7 @@ function ZoomableStill({
   active: boolean;
   onClose: () => void;
   onScaleChange?: (scale: number) => void;
+  pagerNative?: ReturnType<typeof Gesture.Native>;
   children: ReactNode;
 }) {
   const scale = useSharedValue(1);
@@ -486,15 +494,14 @@ function ZoomableStill({
   }, [active, resetZoom]);
 
   const pinch = Gesture.Pinch()
+    .cancelsTouchesInView(false)
     .onBegin(() => {
       startScale.value = scale.value;
     })
     .onUpdate((event) => {
       const next = Math.min(4, Math.max(1, startScale.value * event.scale));
       scale.value = next;
-      if (reportScale) {
-        runOnJS(reportScale)(next);
-      }
+      runOnJS(reportScale)(next);
     })
     .onEnd(() => {
       if (scale.value <= 1.02) {
@@ -505,8 +512,8 @@ function ZoomableStill({
       }
     });
 
-  const pan = Gesture.Pan()
-    .enabled(zoomed)
+  const imagePan = Gesture.Pan()
+    .maxPointers(1)
     .onBegin(() => {
       startX.value = translateX.value;
       startY.value = translateY.value;
@@ -518,6 +525,8 @@ function ZoomableStill({
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
+    .maxDistance(24)
+    .cancelsTouchesInView(false)
     .onEnd(() => {
       if (scale.value > 1.01) {
         scale.value = withTiming(1);
@@ -531,7 +540,7 @@ function ZoomableStill({
     });
 
   const dismiss = Gesture.Pan()
-    .enabled(active && !zoomed)
+    .maxPointers(1)
     .activeOffsetY(24)
     .failOffsetX([-28, 28])
     .onEnd((event) => {
@@ -540,7 +549,15 @@ function ZoomableStill({
       }
     });
 
-  const composed = Gesture.Simultaneous(pinch, Gesture.Exclusive(doubleTap, Gesture.Race(pan, dismiss)));
+  if (pagerNative && !zoomed) {
+    pinch.simultaneousWithExternalGesture(pagerNative);
+    doubleTap.simultaneousWithExternalGesture(pagerNative);
+    dismiss.simultaneousWithExternalGesture(pagerNative);
+  }
+
+  const composed = zoomed
+    ? Gesture.Simultaneous(pinch, Gesture.Exclusive(doubleTap, imagePan))
+    : Gesture.Simultaneous(pinch, doubleTap, dismiss);
 
   const style = useAnimatedStyle(() => ({
     transform: [
@@ -551,7 +568,7 @@ function ZoomableStill({
   }));
 
   return (
-    <GestureDetector gesture={composed}>
+    <GestureDetector gesture={composed} touchAction={zoomed ? 'none' : 'pan-x'}>
       <Animated.View style={[{ width, height, alignItems: 'center', justifyContent: 'center' }, style]}>
         {children}
       </Animated.View>
