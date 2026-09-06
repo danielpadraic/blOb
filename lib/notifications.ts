@@ -353,6 +353,7 @@ export function notificationHrefFromPushData(data: {
   type?: string;
   challenge_id?: string;
   href?: string;
+  url?: string;
   post_id?: string;
   comment_id?: string;
   parent_comment_id?: string;
@@ -372,11 +373,12 @@ export function notificationHrefFromPushData(data: {
       return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
     }
   }
-  if (data.href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(data.href) && data.challenge_id) {
+  const href = data.href || data.url;
+  if (href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(href) && data.challenge_id) {
     return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
   }
-  if (data.href && !/\/submit(?:\?|$)/.test(data.href)) {
-    return commentAwareHref(data.href, {
+  if (href && !/\/submit(?:\?|$)/.test(href)) {
+    return commentAwareHref(href, {
       comment_id: data.comment_id,
       parent_comment_id: data.parent_comment_id,
     });
@@ -512,6 +514,9 @@ export function notificationHref(item: AppNotification): Href | null {
     postId &&
     challengeId &&
     (item.type === 'challenge_checkin' ||
+      item.type === 'live_message' ||
+      item.type === 'live_checkin' ||
+      item.type === 'live_reply' ||
       item.type === 'tagged' ||
       item.type === 'mentioned' ||
       item.type === 'post_comment' ||
@@ -521,6 +526,14 @@ export function notificationHref(item: AppNotification): Href | null {
       tab: 'feed',
       commentId,
     });
+  }
+  if (item.type === 'live_message' || item.type === 'live_checkin' || item.type === 'live_reply') {
+    if (challengeId) {
+      return challengeDetailHref(challengeId, 'feed', postId, {
+        tab: 'feed',
+        commentId,
+      });
+    }
   }
   if (challengeId) {
     return challengeDetailHref(challengeId, 'lobby');
@@ -558,7 +571,11 @@ export function notificationGlyph(type: string, data?: NotificationData): string
     case 'challenge_checkin_reminder':
       return '⏰';
     case 'challenge_checkin':
+    case 'live_checkin':
       return '✅';
+    case 'live_message':
+    case 'live_reply':
+      return '💬';
     case 'challenge_new':
       return '✨';
     case 'tagged':

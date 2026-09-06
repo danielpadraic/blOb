@@ -748,6 +748,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     clearPasswordRecoveryPending();
     setPasswordRecovery(false);
+    try {
+      const { unregisterPushToken } = await import('@/lib/push');
+      await unregisterPushToken();
+    } catch {
+      /* still sign out */
+    }
     const { error } = await supabase.auth.signOut();
     if (error) {
       throw new Error(getErrorMessage(error));

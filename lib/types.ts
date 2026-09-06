@@ -115,6 +115,8 @@ export type ParticipantStatus =
   | 'withdrawn'
   | 'refunded_pre_start';
 
+export type LiveMute = 'all' | 'mentions' | 'off';
+
 export type SubmissionStatus = 'pending_review' | 'approved' | 'rejected';
 
 export type ProofType =
@@ -506,6 +508,7 @@ export interface ChallengeParticipant {
   currency?: WalletCurrency | string | null;
   distance_meters_total?: number | null;
   metric_totals?: Record<string, number> | null;
+  live_mute?: LiveMute | string | null;
 }
 
 export interface ChallengeParticipantWithProfile extends ChallengeParticipant {
@@ -610,6 +613,13 @@ export interface LiveThreadReadRecord {
   challenge_id: string;
   last_read_at: string;
   updated_at: string;
+}
+
+/** Heartbeat while this person is looking at that challenge's Live tab. Owner-only. */
+export interface LiveThreadFocusRecord {
+  user_id: string;
+  challenge_id: string;
+  focused_at: string;
 }
 
 export interface WorkoutSessionRecord {
@@ -882,7 +892,10 @@ export type NotificationType =
   | 'circle_invite_accepted'
   | 'circle_join'
   | 'circle_post'
-  | 'circle_challenge_share';
+  | 'circle_challenge_share'
+  | 'live_message'
+  | 'live_checkin'
+  | 'live_reply';
 
 export type NotificationData = {
   challenge_id?: string;
@@ -1247,6 +1260,15 @@ export type Database = {
         Partial<LiveThreadReadRecord>,
         Partial<LiveThreadReadRecord>,
         [Relationship<'live_thread_reads_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>]
+      >;
+      live_thread_focus: TableDef<
+        LiveThreadFocusRecord,
+        Partial<LiveThreadFocusRecord>,
+        Partial<LiveThreadFocusRecord>,
+        [
+          Relationship<'live_thread_focus_user_id_fkey', 'user_id', 'profiles', 'id'>,
+          Relationship<'live_thread_focus_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
+        ]
       >;
       workout_sessions: TableDef<
         WorkoutSessionRecord,
@@ -2257,6 +2279,10 @@ export type Database = {
       clear_push_token: {
         Args: { p_token: string };
         Returns: undefined;
+      };
+      set_challenge_live_mute: {
+        Args: { p_challenge_id: string; p_mute: string };
+        Returns: string;
       };
       notify_my_profile_gate: {
         Args: { p_missing?: string | null };

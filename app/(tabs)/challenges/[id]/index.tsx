@@ -47,6 +47,7 @@ import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { BODY_METRICS_HREF, captureHref, challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
 import { applyLiveBackGesture, liveScreenBackGesture } from '@/lib/liveThread';
+import { useLiveThreadFocus } from '@/hooks/useLiveThreadFocus';
 import {
   CALLOUT_CHEER_PLACEHOLDER,
   CALLOUT_WATCHING_LINE,
@@ -345,12 +346,18 @@ export default function ChallengeDetailScreen() {
   }, [highlightCommentId, highlightPostId, id, isCalloutObserver, tabParam]);
 
   const liveTabFocused = pageTab === 'feed';
+  const [screenFocused, setScreenFocused] = useState(false);
   useFocusEffect(
     useCallback(() => {
+      setScreenFocused(true);
       applyLiveBackGesture(navigation, liveTabFocused);
-      return () => applyLiveBackGesture(navigation, false);
+      return () => {
+        setScreenFocused(false);
+        applyLiveBackGesture(navigation, false);
+      };
     }, [liveTabFocused, navigation]),
   );
+  useLiveThreadFocus(id, liveTabFocused && screenFocused);
 
   useEffect(() => {
     if (noticeParam) {
