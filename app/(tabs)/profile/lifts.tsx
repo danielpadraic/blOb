@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LiftFilterSheet } from '@/components/lift/LiftFilterSheet';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -24,6 +25,14 @@ import { useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
 import { fetchLiftSession } from '@/lib/lift/api';
 import { fetchChallengeShareLocks, sendLiftToRecipients } from '@/lib/lift/share';
 import { challengeDetailHref } from '@/lib/routes';
+import {
+  activeFilterCount,
+  EMPTY_LIFT_FILTER,
+  filterLiftHistory,
+  isFilterActive,
+  musclesInHistory,
+  type LiftHistoryFilter,
+} from '@/lib/lift/historyFilter';
 import { muscleSummary } from '@/lib/lift/muscles';
 import { applyOverload, overloadChipLabel } from '@/lib/lift/overload';
 import { repeatSession, shortDate } from '@/lib/lift/session';
@@ -46,6 +55,8 @@ export default function LiftsHistoryScreen() {
   const startChat = useGetOrCreateConversation();
   const sendMessage = useSendMessage();
   const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
+  const [filter, setFilter] = useState<LiftHistoryFilter>(EMPTY_LIFT_FILTER);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [menuFor, setMenuFor] = useState<LiftSessionSummary | null>(null);
   const [overloadFor, setOverloadFor] = useState<LiftSessionDraft | null>(null);
@@ -55,7 +66,10 @@ export default function LiftsHistoryScreen() {
   const [menuError, setMenuError] = useState<string | null>(null);
 
   // An abandoned empty session is noise, not history.
-  const rows = (data ?? []).filter((row) => row.exerciseCount > 0 || row.completedAt);
+  const all = (data ?? []).filter((row) => row.exerciseCount > 0 || row.completedAt);
+  const rows = useMemo(() => filterLiftHistory(all, filter), [all, filter]);
+  const filterMuscles = useMemo(() => musclesInHistory(all), [all]);
+  const filtering = isFilterActive(filter);
 
   // Which of those challenges keep check-ins inside their own lobby, so the share sheet can hide
   // the Home toggle rather than offering something the lobby will refuse.
@@ -227,7 +241,7 @@ export default function LiftsHistoryScreen() {
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
       <View style={{ flex: 1, minHeight: 0 }}>
-        {rows.length === 0 ? (
+        {all.length === 0 ? (
           <MascotState
             kind="empty"
             title="No lifts yet"
@@ -237,21 +251,73 @@ export default function LiftsHistoryScreen() {
           <View style={{ flex: 1, minHeight: 0 }}>
             <View
               style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
                 paddingHorizontal: 16,
                 paddingTop: 4,
                 paddingBottom: 10,
               }}>
-              <AppText style={{ fontSize: 13, color: THEME.textMuted }}>
-                {rows.length} {rows.length === 1 ? 'session' : 'sessions'} · only you can see these
+              <AppText style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>
+                {filtering
+                  ? `${rows.length} of ${all.length} ${all.length === 1 ? 'session' : 'sessions'}`
+                  : `${all.length} ${all.length === 1 ? 'session' : 'sessions'} · only you can see these`}
               </AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={filtering ? 'Change filters' : 'Filter lifts'}
+                accessibilityState={{ expanded: filterOpen }}
+                onPress={() => setFilterOpen((open) => !open)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  minHeight: 36,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: filtering ? THEME.accent : THEME.border,
+                  backgroundColor: filtering
+                    ? THEME.accentSoft
+                    : pressed
+                      ? THEME.accentSoft
+                      : THEME.surface,
+                })}>
+                <Glyph
+                  name={GLYPH.search}
+                  color={filtering ? THEME.accent : THEME.textMuted}
+                  size={13}
+                />
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '700',
+                    color: filtering ? THEME.accent : THEME.textPrimary,
+                  }}>
+                  {filtering ? `Filters · ${activeFilterCount(filter)}` : 'Filter'}
+                </AppText>
+              </Pressable>
             </View>
-            <View style={{ flex: 1, minHeight: 0 }}>
-              <LiftList
-                rows={rows}
-                onOpen={(id) => router.push(liftSessionHref(id))}
-                onMenu={(session) => setMenuFor(session)}
-              />
-            </View>
+
+            {rows.length === 0 ? (
+              <View style={{ flex: 1, minHeight: 0 }}>
+                <MascotState
+                  kind="empty"
+                  title="Nothing matches those filters"
+                  body="Try a wider date range, or clear the muscles you picked."
+                  actionLabel="Clear filters"
+                  onAction={() => setFilter(EMPTY_LIFT_FILTER)}
+                />
+              </View>
+            ) : (
+              <View style={{ flex: 1, minHeight: 0 }}>
+                <LiftList
+                  rows={rows}
+                  onOpen={(id) => router.push(liftSessionHref(id))}
+                  onMenu={(session) => setMenuFor(session)}
+                />
+              </View>
+            )}
           </View>
         )}
 
@@ -281,6 +347,15 @@ export default function LiftsHistoryScreen() {
         onOverload={() => void openOverload(menuFor)}
         onShare={() => void openShare(menuFor)}
         onDelete={() => void deleteSession(menuFor)}
+      />
+
+      <LiftFilterSheet
+        visible={filterOpen}
+        filter={filter}
+        muscles={filterMuscles}
+        matchCount={rows.length}
+        onChange={setFilter}
+        onClose={() => setFilterOpen(false)}
       />
 
       <LiftShareSheet
