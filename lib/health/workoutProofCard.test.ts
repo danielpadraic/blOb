@@ -7,6 +7,7 @@ import {
   workoutCardDuration,
   workoutCardFit,
   workoutCardHeartRateAverage,
+  workoutCardLabelBaseline,
   workoutCardSourceLine,
   workoutCardSparkline,
   workoutCardStatFontSize,
@@ -359,6 +360,29 @@ describe('sizing the stat strip so columns do not collide', () => {
 
   it('is unbothered by an empty strip', () => {
     expect(workoutCardStatFontSize([], COLUMN, 64)).toBe(64);
+  });
+});
+
+describe('keeping the headline caption off the numerals', () => {
+  // The route card prints its hero at 96 with the numeral baseline 118 above the foot of a 780-tall
+  // hero starting at 396. At the old fixed 44px offset, DISTANCE was printed through "6.24 mi".
+  const ROUTE_BASELINE = 396 + 780 - 118;
+  const PLAIN_BASELINE = 396 + 230;
+
+  it('clears the cap height of a 96px hero over a map', () => {
+    const label = workoutCardLabelBaseline(ROUTE_BASELINE, 96);
+    expect(label).toBeLessThan(ROUTE_BASELINE - 96 * 0.72);
+    // The old hard-coded row sat inside the digits.
+    expect(label).toBeLessThan(ROUTE_BASELINE - 44);
+  });
+
+  it('clears the cap height of the 172px indoor hero', () => {
+    expect(workoutCardLabelBaseline(PLAIN_BASELINE, 172)).toBeLessThan(PLAIN_BASELINE - 172 * 0.72);
+  });
+
+  it('stays inside the hero band it labels', () => {
+    expect(workoutCardLabelBaseline(ROUTE_BASELINE, 96)).toBeGreaterThan(396);
+    expect(workoutCardLabelBaseline(PLAIN_BASELINE, 172)).toBeGreaterThan(396);
   });
 });
 

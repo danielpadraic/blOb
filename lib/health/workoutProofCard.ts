@@ -131,6 +131,23 @@ export function workoutCardStatFontSize(
   return Math.max(Math.min(preferred, fits), STAT_MIN_FONT);
 }
 
+/** Bold numerals in the card face stand a little under 0.72em above their own baseline. */
+const CAP_EM = 0.72;
+/** Air left between a caption and the number it names. */
+const LABEL_GAP = 20;
+
+/**
+ * The baseline for a caption sitting above a large number.
+ *
+ * SVG text grows upward from its baseline, so a caption pinned a fixed distance above a hero numeral
+ * gets printed through it once that numeral is 96px or 172px tall — which is how DISTANCE came to sit
+ * inside 6.24 mi. Measuring the gap from the numeral's cap height keeps the caption on its own row at
+ * every headline size.
+ */
+export function workoutCardLabelBaseline(valueBaseline: number, valueFontSize: number): number {
+  return Math.round(valueBaseline - valueFontSize * CAP_EM - LABEL_GAP);
+}
+
 function safeFormat(value: Date, options: Intl.DateTimeFormatOptions, timeZone: string): string {
   try {
     return new Intl.DateTimeFormat('en-US', { ...options, timeZone }).format(value);

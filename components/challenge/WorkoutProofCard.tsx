@@ -16,6 +16,7 @@ import { projectRoute } from '@/lib/health/route';
 import {
   WORKOUT_CARD_HEIGHT,
   WORKOUT_CARD_WIDTH,
+  workoutCardLabelBaseline,
   workoutCardStatFontSize,
   type WorkoutProofCardModel,
 } from '@/lib/health/workoutProofCard';
@@ -232,6 +233,12 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
   const lineLength = projected ? pathLength(projected.points) : 0;
   const dashOffset = projected ? lineLength * (1 - progress) : 0;
 
+  // The headline caption is placed off the numeral's cap height, so it keeps its own row whether the
+  // hero prints at 96px over a map or 172px on an indoor card.
+  const headlineFontSize = projected ? 96 : 172;
+  const headlineBaseline = projected ? HERO.y + HERO.height - 118 : HERO.y + 230;
+  const headlineLabelBaseline = workoutCardLabelBaseline(headlineBaseline, headlineFontSize);
+
   // One size for the whole stat row, small enough that the widest value stays inside its column.
   const statFontSize = workoutCardStatFontSize(
     card.stats.map((stat) => stat.value),
@@ -382,7 +389,7 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
       */}
       <SvgText
         x={HERO.x + 40}
-        y={projected ? HERO.y + HERO.height - 162 : HERO.y + 96}
+        y={headlineLabelBaseline}
         fill={INK.faint}
         fontSize={26}
         fontWeight="700">
@@ -390,9 +397,9 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
       </SvgText>
       <SvgText
         x={HERO.x + 40}
-        y={projected ? HERO.y + HERO.height - 118 : HERO.y + 230}
+        y={headlineBaseline}
         fill={INK.text}
-        fontSize={projected ? 96 : 172}
+        fontSize={headlineFontSize}
         fontWeight="700">
         {countUp(card.headline.value, progress)}
       </SvgText>
