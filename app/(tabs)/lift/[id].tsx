@@ -543,6 +543,11 @@ function LiftSessionInner({ id }: { id: string }) {
                 )}
               </View>
             )}
+            {draft.sourceUserName ? (
+              <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.accent }}>
+                From {draft.sourceUserName}
+              </AppText>
+            ) : null}
             <AppText style={{ fontSize: 13, color: THEME.textMuted }}>
               {shortDate(draft.performedAt)} · {draft.exercises.length}{' '}
               {draft.exercises.length === 1 ? 'exercise' : 'exercises'} · {workSets}{' '}

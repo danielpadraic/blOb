@@ -166,28 +166,32 @@ export async function fetchLiftSession(id: string): Promise<LiftSessionDraft | n
   }
 
   const draft = rowsToDraft(session as LiftSessionRow, rows, sets);
-  return { ...draft, sourceUserName: await sourceCredit(draft.sourceUserId) };
+  const [ownerName, sourceUserName] = await Promise.all([
+    displayNameFor(draft.ownerUserId),
+    displayNameFor(draft.sourceUserId),
+  ]);
+  return { ...draft, ownerName, sourceUserName };
 }
 
 /**
- * The name a copied session is credited to.
+ * The name a session is credited to.
  *
- * Reading it here rather than from the source session matters: the person who copied a workout
- * keeps the credit even after the original post comes down, and they never need permission to open
- * the session it came from.
+ * Reading the copy's own `source_user_id` rather than opening the original matters: the person who
+ * copied a workout keeps the credit after the post comes down, and they never need permission to
+ * read the session it came from. Your own name is never returned — "From you" is noise.
  */
-async function sourceCredit(sourceUserId: string | null | undefined): Promise<string | null> {
-  if (!sourceUserId) {
+async function displayNameFor(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) {
     return null;
   }
   const { data: me } = await supabase.auth.getUser();
-  if (me.user?.id === sourceUserId) {
+  if (me.user?.id === userId) {
     return null;
   }
   const { data } = await supabase
     .from('profiles')
     .select('display_name, username')
-    .eq('id', sourceUserId)
+    .eq('id', userId)
     .maybeSingle();
   if (!data) {
     return null;

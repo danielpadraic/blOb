@@ -56,6 +56,9 @@ export type LiftExerciseDraft = {
 
 export type LiftSessionDraft = {
   id: string;
+  /** Whose session this is. A viewer looking at a shared card is not the owner. */
+  ownerUserId?: string | null;
+  ownerName?: string | null;
   /** Null means the app titles it from the muscles and the date. */
   title: string | null;
   performedAt: string;

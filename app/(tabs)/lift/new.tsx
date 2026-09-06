@@ -27,11 +27,12 @@ import { LIFT_START_HREF, liftSessionHref } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 /**
- * "Use this workout": copying a session off somebody's shared card.
+ * "Add this session": copying a session off somebody's shared card.
  *
- * The structure comes across; the numbers do not, unless they ask. A friend's 225 must never become
- * your next log by accident, so "Empty numbers" is the default and every other option is a
- * deliberate tap.
+ * The copy is a copy. Nothing here joins the two sessions together — the author can edit theirs all
+ * they like and this one will not move, and the same in reverse. The structure comes across; the
+ * numbers do not, unless they ask. A friend's 225 must never become your next log by accident, so
+ * "Empty numbers" is the default and every other option is a deliberate tap.
  */
 
 type NumberChoice = 'empty' | 'theirs' | 'overload';
@@ -109,7 +110,7 @@ function LiftImportInner({ sourceId }: { sourceId: string }) {
   if (source.isLoading) {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
-        <Stack.Screen options={{ headerShown: true, title: 'Use this workout' }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Add this session' }} />
         <MascotState kind="loading" title="Loading that workout…" />
       </Screen>
     );
@@ -120,7 +121,7 @@ function LiftImportInner({ sourceId }: { sourceId: string }) {
   if (!draft || !recap) {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
-        <Stack.Screen options={{ headerShown: true, title: 'Use this workout' }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Add this session' }} />
         <MascotState
           kind="empty"
           title="This workout isn’t available"
@@ -134,13 +135,19 @@ function LiftImportInner({ sourceId }: { sourceId: string }) {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
-      <Stack.Screen options={{ headerShown: true, title: 'Use this workout' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Add this session' }} />
       <View style={{ flex: 1, minHeight: 0 }}>
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 20 }}>
           <LiftRecapCard recap={recap} />
+
+          {draft.ownerName ? (
+            <AppText style={{ marginTop: 8, fontSize: 13, color: THEME.textMuted }}>
+              From {draft.ownerName}. Your copy is yours — editing it never touches theirs.
+            </AppText>
+          ) : null}
 
           <AppText
             style={{
@@ -194,7 +201,7 @@ function LiftImportInner({ sourceId }: { sourceId: string }) {
             </AppText>
           ) : null}
           <Button
-            title={busy ? 'Setting it up…' : 'Start this workout'}
+            title={busy ? 'Setting it up…' : 'Add this session'}
             loading={busy}
             onPress={() => {
               if (choice === 'overload') {

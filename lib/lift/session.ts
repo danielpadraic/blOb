@@ -690,6 +690,7 @@ export function rowsToDraft(
 
   return {
     id: session.id,
+    ownerUserId: session.user_id,
     title: session.title,
     performedAt: session.performed_at,
     completedAt: session.completed_at,
@@ -724,6 +725,10 @@ export function copySession(
     muscleKeys: source.muscleKeys,
     unit: options?.unit ?? source.unit,
     sourceSessionId: source.id,
+    // Carried locally so the copy can say who it came from straight away. The save RPC works this
+    // out again from the source session, so a client cannot claim credit from someone it never saw.
+    sourceUserId: source.ownerUserId ?? null,
+    sourceUserName: source.ownerName ?? null,
     overloadFromSessionId: null,
     overloadSummary: null,
     exercises: source.exercises.map((row) => ({
