@@ -183,5 +183,8 @@ export function workoutCardForPost(input: {
     // Only the snapshot can carry coordinates. The post stats deliberately never did, so a viewer
     // outside the challenge sees the stats composition instead of an empty map frame.
     route: fromSnapshot ? input.health?.route ?? null : null,
+    // The trace, on the other hand, rides on the post as well as the snapshot: heart rate for the
+    // length of the workout is the proof, so every viewer of the post gets to see it.
+    series: input.health?.hrSeries ?? input.stats?.hr_series ?? null,
   });
 }

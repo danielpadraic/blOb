@@ -171,6 +171,37 @@ describe('the card a posted check-in draws', () => {
     expect(card?.heartRate.avgLine).toBe('103 BPM AVG');
   });
 
+  it('graphs the trace the post carries, so every viewer sees the workout and not just its average', () => {
+    const card = workoutCardForPost({
+      stats: { ...WALK_STATS, hr_series: [96, 104, 118, 112, 103] },
+      challengeTitle: '30-Day Consistency',
+      timeZone: 'America/Denver',
+    });
+    expect(card?.heartRate.sparkline?.values).toEqual([96, 104, 118, 112, 103]);
+  });
+
+  it('prefers the snapshot’s trace, which is the check-in’s own record', () => {
+    const card = workoutCardForPost({
+      stats: { ...WALK_STATS, hr_series: [60, 61] },
+      health: { ...WALK_SNAPSHOT, hrSeries: [96, 104, 118] },
+      challengeTitle: '30-Day Consistency',
+      timeZone: 'America/Denver',
+    });
+    expect(card?.heartRate.sparkline?.values).toEqual([96, 104, 118]);
+  });
+
+  it('draws no trace when nothing stored one, rather than a flat invented line', () => {
+    const card = workoutCardForPost({
+      stats: WALK_STATS,
+      challengeTitle: '30-Day Consistency',
+      timeZone: 'America/Denver',
+    });
+    expect(card?.heartRate.sparkline).toBeNull();
+    // The numbers it does have still print, which is what keeps the band from reading as an error.
+    expect(card?.heartRate.avgLine).toBe('103 BPM AVG');
+    expect(card?.heartRate.maxLabel).toBe('112');
+  });
+
   it('reads as check-in proof when the post does not name a challenge', () => {
     const card = workoutCardForPost({ stats: WALK_STATS, timeZone: 'America/Denver' });
     expect(card?.proofLine).toBe('Check-in proof');

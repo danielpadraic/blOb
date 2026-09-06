@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  WORKOUT_CARD_HEIGHT,
+  WORKOUT_CARD_WIDTH,
   buildWorkoutProofCard,
   workoutCardDateLine,
   workoutCardDistance,
   workoutCardDuration,
   workoutCardFit,
   workoutCardHeartRateAverage,
+  workoutCardHrBand,
   workoutCardLabelBaseline,
+  workoutCardSparklineFor,
   workoutCardSourceLine,
   workoutCardSparkline,
   workoutCardStatFontSize,
@@ -140,7 +144,9 @@ describe('buildWorkoutProofCard', () => {
     expect(card.timeRange).toBe('7:33 – 8:14 AM');
     expect(card.heartRate.avgLine).toBe('108 BPM AVG');
     expect(card.heartRate.minLabel).toBe('100');
-    expect(card.heartRate.maxLabel).toBe('116');
+    // Apple's reported maximum for the workout, not the peak of the thinned trace: the series the card
+    // graphs is downsampled, so its own high can sit under what Fitness shows.
+    expect(card.heartRate.maxLabel).toBe('141');
     expect(card.heartRate.emptyLine).toBeNull();
     expect(card.sourceLine).toBe('Recorded on Apple Watch');
     expect(card.proofLine).toBe('Proof for 30-Day Consistency');
@@ -312,21 +318,23 @@ describe('route on the card', () => {
 });
 
 describe('fitting the card into the box it is drawn in', () => {
+  const RATIO = WORKOUT_CARD_WIDTH / WORKOUT_CARD_HEIGHT;
+
   it('reaches both edges of a phone, where width runs out first', () => {
     const fit = workoutCardFit(390, 780);
     expect(fit.width).toBe(390);
-    expect(fit.height).toBe(487);
+    expect(fit.height).toBe(Math.floor(390 / RATIO));
   });
 
   it('is bounded by height in a short wide box, so nothing is cropped', () => {
     const fit = workoutCardFit(900, 400);
-    expect(fit.height).toBe(400);
-    expect(fit.width).toBe(320);
+    expect(fit.height).toBeLessThanOrEqual(400);
+    expect(fit.width).toBe(Math.floor(400 * RATIO));
   });
 
-  it('keeps the card 4:5 whatever the box', () => {
+  it('keeps the card its own shape whatever the box', () => {
     const fit = workoutCardFit(1000, 1000);
-    expect(fit.width / fit.height).toBeCloseTo(0.8, 2);
+    expect(fit.width / fit.height).toBeCloseTo(RATIO, 2);
   });
 
   it('draws nothing in a box with no size yet', () => {
@@ -360,6 +368,94 @@ describe('sizing the stat strip so columns do not collide', () => {
 
   it('is unbothered by an empty strip', () => {
     expect(workoutCardStatFontSize([], COLUMN, 64)).toBe(64);
+  });
+});
+
+describe('graphing a trace that was stored rather than just read', () => {
+  it('draws the graph from a stored series when there are no live samples', () => {
+    const card = buildWorkoutProofCard({
+      workout: WORKOUT,
+      samples: [],
+      series: [96, 104, 118, 131, 122, 109],
+      timeZone: TZ,
+      challengeTitle: '30-Day Consistency',
+    });
+    expect(card.heartRate.sparkline?.points).toBe(6);
+    expect(card.heartRate.sparkline?.values).toEqual([96, 104, 118, 131, 122, 109]);
+    expect(card.heartRate.emptyLine).toBeNull();
+  });
+
+  it('prefers the samples it just read over the stored series', () => {
+    const card = buildWorkoutProofCard({
+      workout: WORKOUT,
+      samples: samples([100, 108, 116]),
+      series: [60, 61],
+      timeZone: TZ,
+      challengeTitle: '30-Day Consistency',
+    });
+    expect(card.heartRate.sparkline?.values).toEqual([100, 108, 116]);
+  });
+
+  it('has no graph when neither is present, and does not invent one', () => {
+    const card = buildWorkoutProofCard({
+      workout: WORKOUT,
+      samples: [],
+      series: null,
+      timeZone: TZ,
+      challengeTitle: '30-Day Consistency',
+    });
+    expect(card.heartRate.sparkline).toBeNull();
+    // The workout did record heart rate, so the card must not claim otherwise just because the trace
+    // was never kept.
+    expect(card.heartRate.emptyLine).toBeNull();
+    expect(card.heartRate.avgLine).toBe('108 BPM AVG');
+  });
+
+  it('ignores junk readings in a stored series', () => {
+    const card = buildWorkoutProofCard({
+      workout: WORKOUT,
+      samples: [],
+      series: [0, -5, 900, 118, 122] as number[],
+      timeZone: TZ,
+      challengeTitle: '30-Day Consistency',
+    });
+    expect(card.heartRate.sparkline?.values).toEqual([118, 122]);
+  });
+});
+
+describe('the heart-rate band, which is on every card', () => {
+  // Hero geometry the renderer uses: the band takes whatever the hero left.
+  const HERO_TOP = 396;
+  const ROUTE_BOTTOM = HERO_TOP + 780;
+  const PLAIN_BOTTOM = HERO_TOP + 596;
+
+  it('gives a card with a map a strip under it rather than nothing', () => {
+    const band = workoutCardHrBand(ROUTE_BOTTOM);
+    expect(band.y).toBeGreaterThan(ROUTE_BOTTOM);
+    expect(band.height).toBeGreaterThanOrEqual(140);
+  });
+
+  it('gives an indoor card, where the trace is the picture, much more room', () => {
+    expect(workoutCardHrBand(PLAIN_BOTTOM).height).toBeGreaterThan(
+      workoutCardHrBand(ROUTE_BOTTOM).height,
+    );
+  });
+
+  it('ends both variants in the same place, above the footer', () => {
+    const route = workoutCardHrBand(ROUTE_BOTTOM);
+    const plain = workoutCardHrBand(PLAIN_BOTTOM);
+    expect(route.y + route.height).toBe(plain.y + plain.height);
+    // Room left for the band's own caption row and then the footer rule.
+    expect(route.y + route.height).toBeLessThan(WORKOUT_CARD_HEIGHT - 120);
+  });
+
+  it('builds the trace at the size of the band it is drawn in', () => {
+    const tall = workoutCardSparklineFor([100, 140], { width: 800, height: 300 });
+    const short = workoutCardSparklineFor([100, 140], { width: 800, height: 120 });
+    expect(tall?.path).toContain('0.0');
+    // Same readings, different boxes: the path is rebuilt rather than stretched, which is what keeps
+    // the stroke an even weight in a band that is not always the same height.
+    expect(tall?.path).not.toBe(short?.path);
   });
 });
 

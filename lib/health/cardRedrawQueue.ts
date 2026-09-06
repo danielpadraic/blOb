@@ -78,7 +78,18 @@ export async function pendingCardRepairs(userId: string): Promise<CardRepair[]> 
  * ever write today's check-in, and aiming it at an earlier day would rewrite the wrong one. This names
  * the check-in and swaps only the picture.
  */
-export async function putRepairedCard(item: CardRepair, fileUri: string): Promise<string> {
+export async function putRepairedCard(
+  item: CardRepair,
+  fileUri: string,
+  /**
+   * The heart-rate trace this pass read back from Health, when the workout still has one.
+   *
+   * The only way a trace reaches an already-posted card. Everything else the card prints was stored at
+   * attach time, but the series was not, so it has to be re-read on the owner's device and stored now —
+   * after which the post draws its graph for every viewer, including Web.
+   */
+  hrSeries?: number[] | null,
+): Promise<string> {
   const { data: session } = await supabase.auth.getUser();
   const userId = session?.user?.id;
   if (!userId) {
@@ -100,6 +111,9 @@ export async function putRepairedCard(item: CardRepair, fileUri: string): Promis
     p_proof_id: item.proofId,
     p_url: url,
     p_card_version: WORKOUT_CARD_VERSION,
+    // Null leaves whatever trace the snapshot already had. A workout that has aged out of Health, or
+    // never carried heart rate, must not have its stored series wiped by a redraw.
+    p_hr_series: hrSeries && hrSeries.length > 0 ? hrSeries : null,
   });
   if (error) {
     throw new Error(error.message || 'Could not update that workout card.');

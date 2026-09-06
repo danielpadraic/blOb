@@ -1280,10 +1280,11 @@ function SubmitWorkoutInner() {
       const enrichedDistance = provider?.enrichDistance
         ? await provider.enrichDistance(enrichedHr)
         : enrichedHr;
-      // Read the series once: it gives the card its graph and the summary its hr_min.
+      // Read the series once: it gives the card its graph, the summary its hr_min, and the snapshot the
+      // stored trace that lets the card be drawn again later with its graph intact.
       const samples = await readHeartRateSeries(enrichedDistance);
       const enriched = withHeartRateFloor(enrichedDistance, samples);
-      const snapshot = toCheckinHealthProof(enriched);
+      const snapshot = toCheckinHealthProof(enriched, samples);
       const healthWorkoutId = await upsertHealthWorkout(uid, enriched);
       const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
       // A cumulative distance challenge shows a Distance field. Filling it in from the workout is
@@ -1361,7 +1362,7 @@ function SubmitWorkoutInner() {
     // The snapshot is updated as soon as the track is known, so a failed rasterize still leaves the
     // route on the check-in for the ledger and for Web to redraw.
     if (route) {
-      const withRoute: SlotDraft = { health: { ...toCheckinHealthProof(workout), route } };
+      const withRoute: SlotDraft = { health: { ...toCheckinHealthProof(workout, samples), route } };
       setDrafts((current) => ({
         ...current,
         [target.id]: { ...current[target.id], ...withRoute, addingRoute: false, building: true },
@@ -1382,8 +1383,9 @@ function SubmitWorkoutInner() {
       challengeTitle: challengeDisplayTitle(challenge),
       route,
     });
-    // The route travels with the snapshot so the ledger keeps it and Web can redraw the same line.
-    const health = toCheckinHealthProof(workout);
+    // The route and the trace travel with the snapshot, so the ledger keeps them and Web can redraw the
+    // same line and the same graph.
+    const health = toCheckinHealthProof(workout, samples);
     cardTargetRef.current = {
       proofId: target.id,
       healthWorkoutId,

@@ -16,7 +16,9 @@ import { projectRoute } from '@/lib/health/route';
 import {
   WORKOUT_CARD_HEIGHT,
   WORKOUT_CARD_WIDTH,
+  workoutCardHrBand,
   workoutCardLabelBaseline,
+  workoutCardSparklineFor,
   workoutCardStatFontSize,
   type WorkoutProofCardModel,
 } from '@/lib/health/workoutProofCard';
@@ -35,9 +37,8 @@ const STAMP = 132;
  * The hero band. A route map and the indoor stats composition occupy the same box, so an indoor card
  * is never a finished layout with a hole in it.
  *
- * A route card takes the taller box and drops the heart-rate trace: average and max are already in
- * the stats strip, and the map earns that space. An indoor card keeps the trace, which is the visual
- * interest when there is no line to draw.
+ * A route card takes the taller box, and the heart-rate band takes what is left under it. Both
+ * variants end in the same place, so the trace is on every card without the map giving up any width.
  */
 const HERO_BASE = { x: PAD, y: 396, width: INNER, radius: 36 } as const;
 const HERO_ROUTE_HEIGHT = 780;
@@ -46,8 +47,11 @@ const HERO_PLAIN_HEIGHT = 596;
 /** Room reserved at the foot of the hero for the headline and stats over a dark scrim. */
 const SCRIM = 190;
 
-/** Compact heart-rate band under the hero, indoor cards only. */
-const HR = { x: PAD, y: 1046, width: INNER, height: 128, radius: 24 } as const;
+/** Heart-rate band under the hero. On every card: see workoutCardHrBand for how it is sized. */
+const HR = { x: PAD, width: INNER, radius: 24 } as const;
+
+/** Footer sits on the floor of the card, under both bands. */
+const FOOTER = { rule: 1522, text: 1576 } as const;
 
 /** Card-only inks. Text sits on a dark field, so contrast is driven from white down. */
 const INK = {
@@ -111,6 +115,15 @@ function ActivityMark({ type, x, y, color }: { type: HealthActivityType; x: numb
     </G>
   );
 }
+
+/**
+ * What the band says when the workout had heart rate but no trace was kept for it.
+ *
+ * True of every card attached before the series was stored, and of a card rebuilt for a viewer who
+ * cannot read the challenge's own proof. The average and maximum still print on the row below, so the
+ * card is not short of numbers — only of the line between them.
+ */
+const NO_TRACE = 'Heart rate trace not stored';
 
 function PinMark({ x, y, color }: { x: number; y: number; color: string }) {
   return (
@@ -238,6 +251,15 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
   const headlineFontSize = projected ? 96 : 172;
   const headlineBaseline = projected ? HERO.y + HERO.height - 118 : HERO.y + 230;
   const headlineLabelBaseline = workoutCardLabelBaseline(headlineBaseline, headlineFontSize);
+
+  // The band fills what the hero left, and the trace is rebuilt to that box.
+  const band = workoutCardHrBand(HERO.y + HERO.height);
+  const trace = card.heartRate.sparkline
+    ? workoutCardSparklineFor(card.heartRate.sparkline.values, {
+        width: HR.width - 48,
+        height: band.height - 44,
+      })
+    : null;
 
   // One size for the whole stat row, small enough that the widest value stays inside its column.
   const statFontSize = workoutCardStatFontSize(
@@ -426,51 +448,67 @@ export const WorkoutProofCard = forwardRef<Svg, Props>(function WorkoutProofCard
         );
       })}
 
-      {/* Heart rate band. Indoor cards only; a route card carries HR in the stats strip. */}
-      {!projected && card.heartRate.sparkline ? (
-        <G>
-          <Rect x={HR.x} y={HR.y} width={HR.width} height={HR.height} rx={HR.radius} fill={INK.panel} />
-          <G x={HR.x + 24} y={HR.y + 22}>
-            <Path
-              d={card.heartRate.sparkline.path}
-              stroke={accent.accent}
-              strokeWidth={6}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-              // The sparkline path is built against a 872x176 box; squeeze it into the slim band.
-              transform={`scale(${(HR.width - 48) / 872}, ${(HR.height - 44) / 176})`}
-            />
-          </G>
-          <SvgText x={HR.x + 24} y={HR.y + HR.height + 44} fill={INK.faint} fontSize={26} fontWeight="600">
-            {`HEART RATE  ·  MIN ${card.heartRate.minLabel}  ·  MAX ${card.heartRate.maxLabel}`}
-          </SvgText>
-          {card.heartRate.avgLine ? (
-            <SvgText
-              x={HR.x + HR.width}
-              y={HR.y + HR.height + 44}
-              fill={INK.text}
-              fontSize={28}
-              fontWeight="700"
-              textAnchor="end">
-              {card.heartRate.avgLine}
-            </SvgText>
-          ) : null}
+      {/*
+        Heart rate band, on every card. The trace is drawn at the band's own size rather than scaled
+        from a fixed box, so the stroke keeps an even weight whether the band is a strip under a map or
+        the tall panel of an indoor card.
+      */}
+      <Rect x={HR.x} y={band.y} width={HR.width} height={band.height} rx={HR.radius} fill={INK.panel} />
+      {trace ? (
+        <G x={HR.x + 24} y={band.y + 22}>
+          <Path
+            d={trace.path}
+            stroke={accent.accent}
+            strokeWidth={6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
         </G>
-      ) : !projected ? (
-        <SvgText x={HR.x} y={HR.y + 72} fill={INK.faint} fontSize={30} fontWeight="500">
-          {card.heartRate.emptyLine}
+      ) : (
+        // No trace stored for this workout. The numbers it does have sit in the band rather than an
+        // empty frame, and a workout with no heart rate at all says so.
+        <SvgText
+          x={HR.x + 24}
+          y={band.y + band.height / 2 + 12}
+          fill={INK.faint}
+          fontSize={30}
+          fontWeight="500">
+          {card.heartRate.emptyLine ?? NO_TRACE}
+        </SvgText>
+      )}
+      {/* Skipped entirely on a workout with no heart rate, where the row would be the word alone. */}
+      {card.heartRate.minLabel || card.heartRate.maxLabel ? (
+        <SvgText x={HR.x + 24} y={band.y + band.height + 44} fill={INK.faint} fontSize={26} fontWeight="600">
+          {[
+            'HEART RATE',
+            card.heartRate.minLabel ? `MIN ${card.heartRate.minLabel}` : null,
+            card.heartRate.maxLabel ? `MAX ${card.heartRate.maxLabel}` : null,
+          ]
+            .filter(Boolean)
+            .join('  ·  ')}
+        </SvgText>
+      ) : null}
+      {card.heartRate.avgLine ? (
+        <SvgText
+          x={HR.x + HR.width}
+          y={band.y + band.height + 44}
+          fill={INK.text}
+          fontSize={28}
+          fontWeight="700"
+          textAnchor="end">
+          {card.heartRate.avgLine}
         </SvgText>
       ) : null}
 
       {/* Footer. */}
-      <Rect x={PAD} y={1246} width={INNER} height={1} fill={INK.hairline} />
-      <SvgText x={PAD} y={1300} fill={INK.muted} fontSize={28} fontWeight="500">
+      <Rect x={PAD} y={FOOTER.rule} width={INNER} height={1} fill={INK.hairline} />
+      <SvgText x={PAD} y={FOOTER.text} fill={INK.muted} fontSize={28} fontWeight="500">
         {card.sourceLine}
       </SvgText>
       <SvgText
         x={WORKOUT_CARD_WIDTH - PAD}
-        y={1300}
+        y={FOOTER.text}
         fill={accent.accent}
         fontSize={28}
         fontWeight="600"

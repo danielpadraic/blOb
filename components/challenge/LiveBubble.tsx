@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { LiveReactions } from '@/components/challenge/LiveReactions';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { isWorkoutCardUrl, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
+import { WORKOUT_CARD_HEIGHT, WORKOUT_CARD_WIDTH } from '@/lib/health/workoutProofCard';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
 import { MentionText } from '@/components/feed/MentionText';
@@ -559,9 +560,13 @@ function LiveQuoteChip({ quote, mine }: { quote: LiveQuote; mine?: boolean }) {
   );
 }
 
-/** Dense Live stays one thumb, but big enough for the caption chip and the clock to read. */
-/** Portrait, matching the generated workout card so it is never cropped. */
-const CHECKIN_PROOF_RATIO = 4 / 5;
+/**
+ * Portrait, taken from the workout card's own shape so a card fills the tile exactly.
+ *
+ * Hard-coding 4:5 here worked until the card grew to fit the heart-rate band, after which the card
+ * letterboxed inside its own tile.
+ */
+const CHECKIN_PROOF_RATIO = WORKOUT_CARD_WIDTH / WORKOUT_CARD_HEIGHT;
 
 const absoluteFill = {
   position: 'absolute' as const,

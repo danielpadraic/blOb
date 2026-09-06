@@ -1,3 +1,4 @@
+import { parseHrSeries } from '@/lib/health/hrSeries';
 import { routeActivityFor, type RouteActivity, type WorkoutRoute } from '@/lib/health/route';
 import type { HealthHeartRateSample, HealthWorkout } from '@/services/health/types';
 
@@ -12,6 +13,8 @@ export type WorkoutProofSparkline = {
   min: number;
   max: number;
   points: number;
+  /** The readings behind the path, so the renderer can redraw it at the size of its own band. */
+  values: number[];
 };
 
 /**
@@ -65,7 +68,14 @@ export type WorkoutProofCardModel = {
 };
 
 export const WORKOUT_CARD_WIDTH = 1080;
-export const WORKOUT_CARD_HEIGHT = 1350;
+/**
+ * Taller than the 4:5 it started as, to fit the heart-rate band on every card.
+ *
+ * The band used to be indoor-only: a card with a GPS map had no room left for it, so a run showed a
+ * route and an average and no trace. Heart rate for the length of the workout is the point of the
+ * artifact, so the card grew rather than the map shrinking.
+ */
+export const WORKOUT_CARD_HEIGHT = 1620;
 
 /**
  * The renderer generation that drew a stored card.
@@ -76,9 +86,10 @@ export const WORKOUT_CARD_HEIGHT = 1350;
  *
  * Generation 1 cards were rasterized at quarter scale into the corner of an otherwise empty image,
  * could print `0.00 mi` for a walk that covered ground, and overprinted their own stat columns.
+ * Generation 2 printed no heart-rate graph, because the trace was never stored to draw it from.
  * Bump this whenever a change would make an already-posted card wrong.
  */
-export const WORKOUT_CARD_VERSION = 2;
+export const WORKOUT_CARD_VERSION = 3;
 
 /**
  * The largest the card can be drawn inside a box without cropping it.
@@ -103,6 +114,25 @@ export function workoutCardFit(
 
 /** Chart box inside the card. Sparkline geometry is built against these numbers. */
 export const WORKOUT_CARD_CHART = { width: 872, height: 176 } as const;
+
+/** Air between the hero band and the heart-rate band below it. */
+const HR_BAND_GAP = 40;
+/** Where the heart-rate band ends, leaving room for its own caption row and then the footer. */
+const HR_BAND_FLOOR = 1432;
+/** Below this the trace stops being a graph and becomes a squiggle. */
+const HR_BAND_MIN_HEIGHT = 140;
+
+/**
+ * The heart-rate band: whatever is left between the hero and the footer.
+ *
+ * Both card variants end in the same place, so the trace takes the space the hero did not. A card with
+ * a map gets a strip under it; an indoor card, where the trace is the only picture on the card, gets
+ * more than twice as much.
+ */
+export function workoutCardHrBand(heroBottom: number): { y: number; height: number } {
+  const y = heroBottom + HR_BAND_GAP;
+  return { y, height: Math.max(HR_BAND_FLOOR - y, HR_BAND_MIN_HEIGHT) };
+}
 
 /** Keeps neighbouring stat columns apart, and the floor below which the strip stops being readable. */
 const STAT_GUTTER = 16;
@@ -224,6 +254,11 @@ export function workoutCardSourceLine(confidence: HealthWorkout['confidence']): 
   return 'Recorded in Apple Health';
 }
 
+function labelBpm(value: unknown): string | null {
+  const bpm = Number(value);
+  return Number.isFinite(bpm) && bpm > 0 ? `${Math.round(bpm)}` : null;
+}
+
 function cleanSamples(samples: HeartRateSample[]): HeartRateSample[] {
   return samples
     .filter((sample) => Number.isFinite(sample.bpm) && sample.bpm > 0)
@@ -232,33 +267,46 @@ function cleanSamples(samples: HeartRateSample[]): HeartRateSample[] {
 }
 
 /**
- * Scale samples into the chart box. A flat series would divide by zero, so it rides the
+ * Scale a BPM series into the chart box. A flat series would divide by zero, so it rides the
  * middle instead of collapsing onto the top edge.
+ *
+ * The box is a parameter because the band is not one size any more: an indoor card has the room to
+ * give the trace most of the card, while a card carrying a map gets a slimmer strip under it. Building
+ * the path at the size it will be drawn keeps the stroke an even weight, which scaling a path built for
+ * some other box does not.
  */
-export function workoutCardSparkline(
-  samples: HeartRateSample[],
+export function workoutCardSparklineFor(
+  values: number[],
   box: { width: number; height: number } = WORKOUT_CARD_CHART,
 ): WorkoutProofSparkline | null {
-  const clean = cleanSamples(samples);
-  if (clean.length === 0) {
+  if (values.length === 0) {
     return null;
   }
-  const values = clean.map((sample) => sample.bpm);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min;
-  const step = clean.length > 1 ? box.width / (clean.length - 1) : 0;
+  const step = values.length > 1 ? box.width / (values.length - 1) : 0;
   const points = values.map((bpm, index) => {
-    const x = clean.length > 1 ? index * step : box.width / 2;
+    const x = values.length > 1 ? index * step : box.width / 2;
     const ratio = span > 0 ? (bpm - min) / span : 0.5;
     const y = box.height - ratio * box.height;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const path =
-    clean.length === 1
+    values.length === 1
       ? `M0,${(box.height / 2).toFixed(1)} L${box.width.toFixed(1)},${(box.height / 2).toFixed(1)}`
       : `M${points.join(' L')}`;
-  return { path, min, max, points: clean.length };
+  return { path, min, max, points: values.length, values };
+}
+
+export function workoutCardSparkline(
+  samples: HeartRateSample[],
+  box: { width: number; height: number } = WORKOUT_CARD_CHART,
+): WorkoutProofSparkline | null {
+  return workoutCardSparklineFor(
+    cleanSamples(samples).map((sample) => sample.bpm),
+    box,
+  );
 }
 
 /**
@@ -307,6 +355,11 @@ export function workoutCardHeartRateAverage(samples: HeartRateSample[], reported
 export function buildWorkoutProofCard(input: {
   workout: HealthWorkout;
   samples?: HeartRateSample[];
+  /**
+   * The stored BPM trace, for a card rebuilt from a row rather than drawn at attach time. The live
+   * samples win when both are present, being the reading the attach just took.
+   */
+  series?: number[] | null;
   timeZone: string;
   challengeTitle: string;
   placeLabel?: string | null;
@@ -314,7 +367,8 @@ export function buildWorkoutProofCard(input: {
   route?: WorkoutRoute | null;
 }): WorkoutProofCardModel {
   const samples = input.samples ?? [];
-  const sparkline = workoutCardSparkline(samples);
+  const sparkline =
+    workoutCardSparkline(samples) ?? workoutCardSparklineFor(parseHrSeries(input.series) ?? []);
   const avg = workoutCardHeartRateAverage(samples, input.workout.hrAvg);
   const max = Number(input.workout.hrMax);
   const distance = workoutCardDistance(input.workout.distanceM);
@@ -354,12 +408,14 @@ export function buildWorkoutProofCard(input: {
     distanceLine: distance,
     heartRate: {
       avgLine: avg != null ? `${avg} BPM AVG` : null,
-      minLabel: sparkline ? `${sparkline.min}` : null,
-      maxLabel: sparkline ? `${sparkline.max}` : null,
+      // The summary's own floor and ceiling win over the trace's: the trace is thinned, so its ends can
+      // sit a beat or two inside what Apple reported, and this card must not disagree with Fitness.
+      minLabel: labelBpm(input.workout.hrMin) ?? (sparkline ? `${sparkline.min}` : null),
+      maxLabel: labelBpm(max) ?? (sparkline ? `${sparkline.max}` : null),
       sparkline,
-      // Only claim the workout has no heart rate when it really has none. A card rebuilt from the
-      // stored summary has the average but not the sample series, and printing "not on this workout"
-      // above a stat strip reading "AVG HR 137" would call the card a liar.
+      // Only claim the workout has no heart rate when it really has none. A card with an average but no
+      // trace shows its numbers in the band instead, because printing "not on this workout" above a stat
+      // strip reading "AVG HR 137" would call the card a liar.
       emptyLine: sparkline || avg != null ? null : 'Heart rate not on this workout',
     },
     sourceLine: workoutCardSourceLine(input.workout.confidence),

@@ -13,6 +13,7 @@ import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { type CardRepair } from '@/lib/health/cardRedraw';
 import { pendingCardRepairs, putRepairedCard } from '@/lib/health/cardRedrawQueue';
 import { ensureCheckinWaveForRepair } from '@/lib/checkinWave';
+import { toStoredHrSeries } from '@/lib/health/hrSeries';
 import {
   buildWorkoutProofCard,
   withHeartRateFloor,
@@ -41,7 +42,12 @@ export function WorkoutCardRedrawHost() {
   const { user } = useAuth();
   const [queue, setQueue] = useState<CardRepair[]>([]);
   const [request, setRequest] = useState<WorkoutCardRequest | null>(null);
-  const activeRef = useRef<{ item: CardRepair; proof: ChallengeProof } | null>(null);
+  const activeRef = useRef<{
+    item: CardRepair;
+    proof: ChallengeProof;
+    /** Read from Health for this card, and saved alongside it so the trace stops being device-only. */
+    series: number[] | null;
+  } | null>(null);
   const loadedForRef = useRef<string | null>(null);
 
   const userId = user?.id;
@@ -97,19 +103,22 @@ export function WorkoutCardRedrawHost() {
         }
         const row = challenge.data as ChallengeCardRow;
 
-        // The sample series lives on the device, not in the row, and it only feeds the sparkline.
-        // Health is asked for it so the graph survives, but a card is drawn either way: a stated
-        // average with no graph is a smaller loss than leaving a wrong distance on a proof artifact,
-        // and waiting for samples that may never come would mean never fixing the number.
+        // Health is asked for the trace on the owner's own device, because a check-in attached before
+        // the series was stored has no trace in the row to draw. What comes back is saved with the card,
+        // so the graph reaches Web and every other viewer too. A card is still drawn when nothing comes
+        // back: a workout that has aged out of Health keeps its numbers, and waiting for samples that
+        // may never arrive would mean never fixing anything else on the card.
         const samples = await readHeartRateSeries(item);
         if (cancelled) {
           return;
         }
+        const series = toStoredHrSeries(samples) ?? item.health.hrSeries ?? null;
 
         const workout = withHeartRateFloor(item.workout, samples);
         const card = buildWorkoutProofCard({
           workout,
           samples,
+          series,
           timeZone: challengeClockTz(row),
           challengeTitle: challengeDisplayTitle(row),
           route: item.health.route ?? null,
@@ -118,7 +127,7 @@ export function WorkoutCardRedrawHost() {
         const proof =
           parseChallengeProofs(row.proofs).find((entry) => entry.id === item.proofId) ??
           ({ id: item.proofId, name: '', method: item.method } satisfies ChallengeProof);
-        activeRef.current = { item: { ...item, workout }, proof };
+        activeRef.current = { item: { ...item, workout }, proof, series };
         setRequest({
           key: `${item.proofId}-${item.checkinId}`,
           card,
@@ -143,14 +152,15 @@ export function WorkoutCardRedrawHost() {
       if (!active || !key.startsWith(active.item.proofId)) {
         return;
       }
-      const { item, proof } = active;
+      const { item } = active;
       void (async () => {
         try {
           // Uploads the card and swaps it onto this one slot of this one check-in, rebuilding the
-          // post's media so Live and Home both show it. The check-in keeps its status, its health
-          // snapshot and its caption, and the version stamp is what stops the card being picked up
-          // again on the next open.
-          const url = await putRepairedCard(item, fileUri);
+          // post's media so Live and Home both show it. The check-in keeps its status, its caption and
+          // every number that decides whether it counts; the heart-rate trace is added to the snapshot
+          // because nothing else can put it there. The version stamp is what stops the card being
+          // picked up again on the next open.
+          const url = await putRepairedCard(item, fileUri, active.series);
           if (userId) {
             await ensureCheckinWaveForRepair({
               userId,
@@ -167,7 +177,7 @@ export function WorkoutCardRedrawHost() {
         }
       })();
     },
-    [],
+    [userId],
   );
 
   const onFailed = useCallback(

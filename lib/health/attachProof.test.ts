@@ -109,6 +109,35 @@ describe('check-in health snapshot', () => {
     expect(stripHealthSummaryFromNotes(notes ?? '', snapshot)).toBe('Felt strong');
   });
 
+  it('stores the heart-rate trace, so the card can be drawn again with its graph', () => {
+    const samples = [104, 118, 131].map((bpm, index) => ({
+      at: new Date(Date.UTC(2026, 8, 5, 20, index)).toISOString(),
+      bpm,
+    }));
+    const snapshot = toCheckinHealthProof(run, samples);
+    expect(snapshot.hrSeries).toEqual([104, 118, 131]);
+    // Unchanged when the caller has no series to give: an attach on Web reads no samples, and the rest
+    // of the snapshot must still be stored.
+    expect(toCheckinHealthProof(run)).not.toHaveProperty('hrSeries');
+    expect(toCheckinHealthProof(run, [])).not.toHaveProperty('hrSeries');
+  });
+
+  it('keeps the trace through a round trip on proof_parts, and refuses one on a screenshot row', () => {
+    const stored = {
+      source: 'healthkit',
+      startedAt: run.startedAt,
+      endedAt: run.endedAt,
+      durationSec: run.durationSec,
+      activityType: 'running',
+      sourceName: 'Apple Watch',
+      avgHrBpm: 148,
+      hrSeries: [104, 118, 131],
+    };
+    expect(parseCheckinHealthProof(stored)?.hrSeries).toEqual([104, 118, 131]);
+    // A screenshot read gives numbers, never a series — the same rule the GPS route follows.
+    expect(parseCheckinHealthProof({ ...stored, source: 'ocr' })?.hrSeries).toBeUndefined();
+  });
+
   it('round-trips on proof_parts', () => {
     const snapshot = toCheckinHealthProof(run);
     const parts = parseProofParts({

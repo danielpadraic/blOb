@@ -18,9 +18,10 @@ import {
   elevatedHrThreshold,
   type ElevatedHrInput,
 } from '@/lib/health/workoutProofGate';
+import { toStoredHrSeries } from '@/lib/health/hrSeries';
 import { formatHealthDuration, healthSourceLabel } from '@/lib/health/proofSummary';
 import type { Challenge } from '@/lib/types';
-import type { HealthWorkout } from '@/services/health/types';
+import type { HealthHeartRateSample, HealthWorkout } from '@/services/health/types';
 
 export type { CheckinHealthProof };
 export { parseCheckinHealthProof };
@@ -176,7 +177,17 @@ export function workoutAttachNote(
   return hasHr ? ELEVATED_HR_NEEDS_AGE : null;
 }
 
-export function toCheckinHealthProof(workout: HealthWorkout): CheckinHealthProof {
+/**
+ * The snapshot stored on the check-in.
+ *
+ * `samples` are the heart-rate readings for the window, when the caller has them. They are thinned to
+ * a BPM series and stored, because that is the only way the card's graph survives being redrawn from
+ * the row later — the average alone cannot be turned back into a trace.
+ */
+export function toCheckinHealthProof(
+  workout: HealthWorkout,
+  samples?: HealthHeartRateSample[] | null,
+): CheckinHealthProof {
   // A vendor attach always knows its own window, so this path keeps requiring one.
   const snapshot: CheckinHealthProof = {
     source: workout.source === 'health_connect' ? 'health_connect' : 'healthkit',
@@ -200,6 +211,10 @@ export function toCheckinHealthProof(workout: HealthWorkout): CheckinHealthProof
   }
   if (Number(workout.distanceM) > 0) {
     snapshot.distanceMeters = Math.round(Number(workout.distanceM));
+  }
+  const series = samples ? toStoredHrSeries(samples) : null;
+  if (series) {
+    snapshot.hrSeries = series;
   }
   return snapshot;
 }

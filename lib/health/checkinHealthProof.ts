@@ -1,3 +1,4 @@
+import { parseHrSeries } from '@/lib/health/hrSeries';
 import { parseWorkoutRoute, type WorkoutRoute } from '@/lib/health/route';
 
 /** Structured Health proof stored on the check-in (`proof_parts`), not a profile field. */
@@ -40,6 +41,12 @@ export type CheckinHealthProof = {
    * fixes — never a placeholder line. OCR and hand-entered sessions never set this.
    */
   route?: WorkoutRoute | null;
+  /**
+   * The heart-rate trace the card graphs, in BPM. Only a vendor read produces one — a screenshot
+   * gives numbers, not a series — and its absence means the trace was never captured, never that the
+   * workout was flat.
+   */
+  hrSeries?: number[];
 };
 
 function positiveInt(value: unknown): number | undefined {
@@ -122,6 +129,12 @@ export function parseCheckinHealthProof(value: unknown): CheckinHealthProof | nu
     const route = parseWorkoutRoute(row.route);
     if (route) {
       snapshot.route = route;
+    }
+    // Same rule as the route: a trace is something a watch recorded, so a series on a screenshot row
+    // is discarded rather than drawn as if Apple had measured it.
+    const series = parseHrSeries(row.hrSeries);
+    if (series) {
+      snapshot.hrSeries = series;
     }
   }
 

@@ -29,6 +29,14 @@ export type CheckinProofStats = {
    * by participants. The feed draws that slide from these numbers instead of showing the file.
    */
   card_url?: string | null;
+  /**
+   * The heart-rate trace in BPM, thinned server-side from the check-in's own snapshot.
+   *
+   * It rides on the post so the card graphs the workout for anyone who can see the post, not only the
+   * challenge's participants. Same class of reading as hr_avg and hr_max, which were already here; no
+   * timestamps, so it says how the effort moved and not where or when.
+   */
+  hr_series?: number[] | null;
 };
 
 export type ProofStatChip = { key: string; label: string };
