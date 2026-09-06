@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiveBubble } from '@/components/challenge/LiveBubble';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { InlineComposer } from '@/components/feed/InlineComposer';
+import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
+import type { LiftSessionSummary } from '@/lib/lift/types';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
@@ -132,6 +134,8 @@ export function LiveThread({
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
   const [editing, setEditing] = useState<PostWithMeta | null>(null);
   const [missingComment, setMissingComment] = useState(false);
+  const [liftOpen, setLiftOpen] = useState(false);
+  const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const rows = useMemo(() => {
     const built = buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id)));
     return dayBreakChallenge ? insertLiveDayBreaks(built, dayBreakChallenge) : built;
@@ -438,7 +442,7 @@ export function LiveThread({
         jumpToLiveEdge();
         return;
       }
-      if (!split.text && split.mediaUrls.length === 0) {
+      if (!split.text && split.mediaUrls.length === 0 && !attachedLift) {
         return;
       }
       await onCompose({
@@ -448,12 +452,14 @@ export function LiveThread({
         audience: composeAudience,
         mentionedUserIds,
         parentId: parentId ?? null,
+        liftSessionId: attachedLift?.id ?? null,
       });
+      setAttachedLift(null);
       setReplyTo(null);
       // Sending is an explicit act: the author always lands on their own new message.
       jumpToLiveEdge();
     },
-    [composeAudience, composeSource, editPost, editing, jumpToLiveEdge, onCompose],
+    [attachedLift, composeAudience, composeSource, editPost, editing, jumpToLiveEdge, onCompose],
   );
 
   const startReply = useCallback((target: LiveReplyTarget) => {
@@ -800,6 +806,10 @@ export function LiveThread({
           <InlineComposer
             key={editing ? `edit-${editing.id}` : 'live'}
             bar
+            // Editing an existing message is not the place to staple a workout onto it.
+            attachedLift={editing ? null : attachedLift}
+            onAttachLift={editing ? undefined : () => setLiftOpen(true)}
+            onRemoveLift={() => setAttachedLift(null)}
             autoFocus={Boolean(replyTo || editing)}
             placeholder={placeholder ?? copy('live.placeholder')}
             submitLabel={editing ? copy('live.save') : (sendLabel ?? copy('live.send'))}
@@ -829,6 +839,15 @@ export function LiveThread({
       ) : (
         <View style={{ height: composerPad }} />
       )}
+
+      <LiftPickerSheet
+        visible={liftOpen}
+        onClose={() => setLiftOpen(false)}
+        onPick={(session) => {
+          setAttachedLift(session);
+          setLiftOpen(false);
+        }}
+      />
     </View>
   );
 }

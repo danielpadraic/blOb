@@ -13,6 +13,8 @@ import { Card } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
+import type { LiftSessionSummary } from '@/lib/lift/types';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -108,6 +110,8 @@ export function Composer({
   const [attachments, setAttachments] = useState<Attachment[]>(stored?.attachments ?? []);
   const [uploading, setUploading] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
+  const [liftOpen, setLiftOpen] = useState(false);
+  const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const [expanded, setExpanded] = useState(
     () =>
       !idleUntilFocus ||
@@ -222,7 +226,7 @@ export function Composer({
     (item) => item.kind === 'gif' || Boolean(item.remoteUrl),
   );
   const canPost =
-    Boolean(hasText || attachments.length > 0 || quote || attachedChallenge) &&
+    Boolean(hasText || attachments.length > 0 || quote || attachedChallenge || attachedLift) &&
     uploadsReady &&
     (audience !== 'specific' || audienceUserIds.length > 0);
 
@@ -403,7 +407,9 @@ export function Composer({
         quotedPostId: quote?.postId ?? null,
         quoteSnapshot: quote?.snapshot ?? null,
         challengeId: attachedChallenge?.id ?? null,
+        liftSessionId: attachedLift?.id ?? null,
       });
+      setAttachedLift(null);
       clearDraft();
       setAudience(hideAudience ? 'public' : wallHost ? 'public' : profileDefault);
       setAudienceUserIds([]);
@@ -549,6 +555,15 @@ export function Composer({
           }}
           onPress={() => setGifOpen((open) => !open)}
         />
+        <ComposerIcon
+          glyph={GLYPH.lift}
+          label="Attach lift"
+          onPressIn={() => {
+            holdFocus.current = true;
+            cancelCollapse();
+          }}
+          onPress={() => setLiftOpen(true)}
+        />
         {hideAudience ? null : (
           <Pressable
             accessibilityRole="button"
@@ -577,6 +592,15 @@ export function Composer({
       </View>
       ) : null}
 
+      <LiftPickerSheet
+        visible={liftOpen}
+        onClose={() => setLiftOpen(false)}
+        onPick={(session) => {
+          setAttachedLift(session);
+          setLiftOpen(false);
+        }}
+      />
+
       {gifOpen ? (
         <GifPicker
           visible
@@ -601,6 +625,43 @@ export function Composer({
             theme={attachedChallenge.is_official ? 'official' : 'user'}
             context="lobby"
           />
+        </View>
+      ) : null}
+
+      {attachedLift ? (
+        <View className="mt-2">
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: THEME.accentBright,
+              backgroundColor: THEME.accentSoft,
+            }}>
+            <Glyph name={GLYPH.lift} color={THEME.accent} size={16} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AppText
+                numberOfLines={1}
+                style={{ fontSize: 14, fontWeight: '800', color: THEME.textPrimary }}>
+                {attachedLift.title}
+              </AppText>
+              <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
+                {attachedLift.exerciseCount} exercises · {attachedLift.setCount} sets
+              </AppText>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Remove the attached lift"
+              hitSlop={8}
+              onPress={() => setAttachedLift(null)}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.close} color={THEME.textMuted} size={14} />
+            </Pressable>
+          </View>
         </View>
       ) : null}
 

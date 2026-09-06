@@ -747,6 +747,8 @@ export type ComposeInput = {
   quoteSnapshot?: QuoteSnapshot | null;
   challengeId?: string | null;
   circleId?: string | null;
+  /** A saved lift session whose recap card rides along with this post. */
+  liftSessionId?: string | null;
   source?: PostSource;
   type?: PostType;
   durationMs?: number | null;

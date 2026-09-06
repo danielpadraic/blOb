@@ -299,6 +299,7 @@ function postInsertPayload(
     type?: Post['type'];
     duration_ms?: number | null;
     parent_id?: string | null;
+    lift_session_id?: string | null;
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -336,6 +337,9 @@ function postInsertPayload(
   }
   if (schema.hasParentId && base.parent_id) {
     payload.parent_id = base.parent_id;
+  }
+  if (schema.hasLiftSession && base.lift_session_id) {
+    payload.lift_session_id = base.lift_session_id;
   }
   return payload;
 }
@@ -1630,7 +1634,15 @@ export function useCreatePost(challengeId?: string | null) {
       if (attachedId && circleId && input.type !== 'circle_challenge_share') {
         throw new Error('A post can’t belong to a challenge and a Circle.');
       }
-      if (!content && media_urls.length === 0 && !quoted_post_id && !attachedId && !circleId) {
+      const liftSessionId = input.liftSessionId ?? null;
+      if (
+        !content &&
+        media_urls.length === 0 &&
+        !quoted_post_id &&
+        !attachedId &&
+        !circleId &&
+        !liftSessionId
+      ) {
         throw new Error('Write something, or attach a photo first.');
       }
       if (audience === 'specific' && audience_user_ids.length === 0) {
@@ -1652,9 +1664,11 @@ export function useCreatePost(challengeId?: string | null) {
         quote_snapshot: quoted_post_id ? (input.quoteSnapshot ?? null) : null,
         wall_host_id: input.wallHostId ?? null,
         source: input.source ?? 'feed',
-        type: input.type ?? 'feed',
+        // A post carrying a lift is a lift card, so it renders as one wherever it lands.
+        type: input.type ?? (liftSessionId ? 'lift_session' : 'feed'),
         duration_ms: input.durationMs ?? null,
         parent_id: input.parentId ?? null,
+        lift_session_id: liftSessionId,
       });
       const created = await supabase.from('posts').insert(payload).select(schema.select).single();
       if (created.error) {

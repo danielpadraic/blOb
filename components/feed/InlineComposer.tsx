@@ -25,6 +25,7 @@ import {
 } from '@/lib/mediaPermissions';
 import type { PostAudience } from '@/lib/postAudience';
 import { THEME } from '@/lib/theme';
+import type { LiftSessionSummary } from '@/lib/lift/types';
 import { getErrorMessage } from '@/utils/errors';
 import { asGalleryMedia, isHttpUrl, mediaKind } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
@@ -60,6 +61,10 @@ type InlineComposerProps = {
   memberIds?: string[];
   initialText?: string;
   initialMediaUrls?: string[];
+  /** Set to show the Attach Lift control. The host owns which session is attached. */
+  attachedLift?: LiftSessionSummary | null;
+  onAttachLift?: () => void;
+  onRemoveLift?: () => void;
   onSubmit: (content: string, mentionedUserIds: string[], chips: MentionChip[]) => Promise<unknown> | void;
 };
 
@@ -80,6 +85,9 @@ export function InlineComposer({
   memberIds,
   initialText,
   initialMediaUrls,
+  attachedLift,
+  onAttachLift,
+  onRemoveLift,
   onSubmit,
 }: InlineComposerProps) {
   const { user } = useAuth();
@@ -333,7 +341,8 @@ export function InlineComposer({
         }
       }
       const content = [trimmed, ...mediaUrls].filter(Boolean).join('\n');
-      if (!content) {
+      // An attached lift is a message on its own — the card carries it, so no caption is needed.
+      if (!content && !attachedLift) {
         return;
       }
       await onSubmit(
@@ -467,11 +476,58 @@ export function InlineComposer({
           cancelCollapse();
         }}
       />
+      {onAttachLift ? (
+        <ReplyIcon
+          glyph={GLYPH.lift}
+          label="Attach lift"
+          compact={bar}
+          onPress={() => {
+            cancelCollapse();
+            setExpanded(true);
+            onAttachLift();
+          }}
+          onPressIn={() => {
+            holdFocus.current = true;
+            cancelCollapse();
+          }}
+        />
+      ) : null}
     </>
   );
 
   return (
     <View style={{ gap: bar ? 4 : 6, overflow: 'visible' }}>
+      {attachedLift ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: THEME.accentBright,
+            backgroundColor: THEME.accentSoft,
+          }}>
+          <Glyph name={GLYPH.lift} color={THEME.accent} size={14} />
+          <AppText
+            numberOfLines={1}
+            style={{ flex: 1, fontSize: 13, fontWeight: '700', color: THEME.textPrimary }}>
+            {attachedLift.title}
+          </AppText>
+          {onRemoveLift ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Remove the attached lift"
+              hitSlop={10}
+              onPress={onRemoveLift}
+              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {attachments.length > 0 ? (
         <View className="flex-row flex-wrap gap-1.5">
           {attachments.map((attachment) => (
