@@ -157,6 +157,20 @@ export function logPostgrestError(scope: string, error: unknown) {
   });
 }
 
+/**
+ * A friendly line carrying the underlying reason in parentheses.
+ *
+ * A message that only says "try again" reads like a dead button and leaves the user nothing to report
+ * back. The raw reason is appended unless the line already contains it.
+ */
+export function withFailureReason(message: string, error: unknown): string {
+  const detail = extractRawMessage(error).trim();
+  if (!detail || message.includes(detail)) {
+    return message;
+  }
+  return `${message} (${detail})`;
+}
+
 /** Confirm / Submit: never render Postgres or PostgREST. Logs the code. */
 export function getCheckinSubmitMessage(error: unknown): string {
   logPostgrestError('checkin-submit', error);
@@ -190,10 +204,8 @@ export function getCheckinSubmitMessage(error: unknown): string {
   if (raw.includes('not authenticated') || raw.includes('sign in')) {
     return 'You need to be signed in.';
   }
-  // Anything unmapped still has to say what went wrong. "Try again" on its own reads like a dead
-  // button and leaves nothing to report, so the underlying reason rides along.
-  const detail = extractRawMessage(error).trim();
-  return detail ? `${CHECKIN_SUBMIT_FAIL} (${detail})` : CHECKIN_SUBMIT_FAIL;
+  // Anything unmapped still has to say what went wrong.
+  return withFailureReason(CHECKIN_SUBMIT_FAIL, error);
 }
 
 const CREATE_RPC_MESSAGES: Record<string, string> = {

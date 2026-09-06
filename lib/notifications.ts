@@ -2,7 +2,7 @@ import { calloutObserverInviteHref } from '@/lib/callouts';
 import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { circleNotificationPath } from '@/lib/circles';
 import { withCommentQuery } from '@/lib/commentDeepLink';
-import { liveNotificationHref } from '@/lib/livePush';
+import { liveOrReminderPushHref } from '@/lib/livePush';
 import { collapseChallengeDigests } from '@/lib/notifyDigest';
 import { postHref } from '@/lib/postShare';
 import { challengeDetailHref, conversationHref, feedHref, INTERESTS_HREF, reelHref, storyHref } from '@/lib/routes';
@@ -369,19 +369,9 @@ export function notificationHrefFromPushData(data: {
   actor_id?: string;
   notification_id?: string;
 }): Href | null {
-  if (
-    data.type === 'challenge_checkin_reminder' ||
-    data.type === 'health_begin' ||
-    data.type === 'health_checkout'
-  ) {
-    const reminderId = data.challenge_id || data.challengeId;
-    if (reminderId) {
-      return challengeDetailHref(reminderId, 'lobby', null, { tab: 'overview' });
-    }
-  }
-  const liveHref = liveNotificationHref(data);
-  if (liveHref) {
-    return liveHref;
+  const routed = liveOrReminderPushHref(data);
+  if (routed) {
+    return routed;
   }
   const href = data.href || data.url;
   if (href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(href) && data.challenge_id) {
@@ -419,17 +409,7 @@ export function notificationHrefFromPushData(data: {
 
 export function notificationHref(item: AppNotification): Href | null {
   const data = item.data ?? {};
-  if (
-    item.type === 'challenge_checkin_reminder' ||
-    item.type === 'health_begin' ||
-    item.type === 'health_checkout'
-  ) {
-    const reminderChallengeId = notificationChallengeId(data);
-    if (reminderChallengeId) {
-      return challengeDetailHref(reminderChallengeId, 'lobby', null, { tab: 'overview' });
-    }
-  }
-  const liveHref = liveNotificationHref({
+  const routed = liveOrReminderPushHref({
     type: item.type,
     challenge_id: notificationChallengeId(data),
     post_id: notificationPostId(data),
@@ -437,8 +417,8 @@ export function notificationHref(item: AppNotification): Href | null {
     href: typeof data.href === 'string' ? data.href : undefined,
     url: typeof data.url === 'string' ? data.url : undefined,
   });
-  if (liveHref) {
-    return liveHref;
+  if (routed) {
+    return routed;
   }
   if (item.type === 'bob_encouragement') {
     if (data.href) {

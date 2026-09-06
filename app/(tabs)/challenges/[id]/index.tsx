@@ -88,7 +88,8 @@ import { useViewerPeriodMisses } from '@/hooks/usePeriodMisses';
 import { currentRequiredPeriodWindow } from '@/lib/checkinPeriod';
 import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
-import { ChallengePageTabs, CHALLENGE_LIVE_ONLY_TABS, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
+import { ChallengePageTabs, CHALLENGE_LIVE_ONLY_TABS, asChallengePageTab, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
+import { LiveAlertsButton } from '@/components/challenge/LiveMuteSheet';
 import {
   requiresOfficialBodyMetrics,
   usesComparablePointsScoring,
@@ -324,11 +325,7 @@ export default function ChallengeDetailScreen() {
   const [notice, setNotice] = useState<string | null>(noticeParam ?? null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pageTab, setPageTab] = useState<ChallengePageTab>(
-    highlightPostId || highlightCommentId ? 'feed' : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
-      ? tabParam
-      : receiptParam === '1'
-        ? 'overview'
-        : 'overview',
+    highlightPostId || highlightCommentId ? 'feed' : asChallengePageTab(tabParam),
   );
   const [receiptOpen, setReceiptOpen] = useState(receiptParam === '1');
 
@@ -337,11 +334,8 @@ export default function ChallengeDetailScreen() {
       setPageTab('feed');
       return;
     }
-    const next: ChallengePageTab = highlightPostId || highlightCommentId
-      ? 'feed'
-      : tabParam === 'board' || tabParam === 'feed' || tabParam === 'overview'
-        ? tabParam
-        : 'overview';
+    const next: ChallengePageTab =
+      highlightPostId || highlightCommentId ? 'feed' : asChallengePageTab(tabParam);
     setPageTab(next);
   }, [highlightCommentId, highlightPostId, id, isCalloutObserver, tabParam]);
 
@@ -1025,12 +1019,15 @@ export default function ChallengeDetailScreen() {
           ...liveScreenBackGesture(liveTabFocused),
         }}
       />
-      <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
-        <ChallengePageTabs
-          value={pageTab}
-          onChange={setPageTab}
-          options={isCalloutObserver ? CHALLENGE_LIVE_ONLY_TABS : undefined}
-        />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 4 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <ChallengePageTabs
+            value={pageTab}
+            onChange={setPageTab}
+            options={isCalloutObserver ? CHALLENGE_LIVE_ONLY_TABS : undefined}
+          />
+        </View>
+        <LiveAlertsButton />
       </View>
       {notice ? (
         <Pressable

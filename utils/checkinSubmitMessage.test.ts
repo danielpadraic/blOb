@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getCheckinSubmitMessage } from '@/utils/errors';
+import { getCheckinSubmitMessage, withFailureReason } from '@/utils/errors';
 
 describe('what the submit banner says', () => {
   it('keeps the friendly line for the cases it recognises', () => {
@@ -44,5 +44,28 @@ describe('what the submit banner says', () => {
     for (const input of [null, undefined, {}, '', new Error(''), 'boom', { message: 'boom' }]) {
       expect(getCheckinSubmitMessage(input).trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('the reassuring line an upload failure shows', () => {
+  it('keeps the reassurance and adds why it failed', () => {
+    // The upload branch used to show only "your photo is saved", which hid a storage error behind
+    // copy about the photo being safe.
+    const message = withFailureReason('Your photo is saved to Photos. Try Submit again.', {
+      message: 'storage/object-too-large',
+    });
+    expect(message).toContain('Your photo is saved to Photos.');
+    expect(message).toContain('storage/object-too-large');
+  });
+
+  it('leaves the line alone when there is nothing to add', () => {
+    expect(withFailureReason('Saved to Photos.', null)).toBe('Saved to Photos.');
+    expect(withFailureReason('Saved to Photos.', new Error(''))).toBe('Saved to Photos.');
+  });
+
+  it('does not repeat a reason the line already states', () => {
+    expect(withFailureReason('Network request failed', new Error('Network request failed'))).toBe(
+      'Network request failed',
+    );
   });
 });

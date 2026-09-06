@@ -1,8 +1,15 @@
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
-import { LIVE_MUTE_OPTIONS, asLiveMute, type LiveMute } from '@/lib/livePush';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import {
+  LIVE_MUTE_OPTIONS,
+  LIVE_MUTE_REMINDER_LINE,
+  asLiveMute,
+  type LiveMute,
+} from '@/lib/livePush';
 import { THEME, themeShadow } from '@/lib/theme';
 
 export function LiveMuteSheet({
@@ -30,7 +37,7 @@ export function LiveMuteSheet({
         }}
         onPress={(event) => event.stopPropagation()}>
         <AppText className="text-2xl font-bold" style={{ color: THEME.textPrimary }}>
-          Live alerts
+          Live notifications
         </AppText>
         <AppText className="mt-2 text-[14px] leading-5" style={{ color: THEME.textMuted }}>
           This challenge only. Friend requests and tags outside Live stay on.
@@ -41,7 +48,7 @@ export function LiveMuteSheet({
             return (
               <Pressable
                 key={option.value}
-                accessibilityRole="button"
+                accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 onPress={() => {
                   onSave(option.value);
@@ -67,7 +74,63 @@ export function LiveMuteSheet({
             );
           })}
         </View>
+        <AppText className="mt-4 text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+          {LIVE_MUTE_REMINDER_LINE}
+        </AppText>
       </Pressable>
     </ChromeOverlay>
+  );
+}
+
+type MutePublish = {
+  canMute: boolean;
+  liveMute: LiveMute;
+  open: () => void;
+};
+
+let mutePublish: MutePublish = { canMute: false, liveMute: 'all', open: () => {} };
+const muteListeners = new Set<() => void>();
+
+export function publishLiveMuteControl(next: MutePublish) {
+  mutePublish = next;
+  muteListeners.forEach((listener) => listener());
+}
+
+export function LiveAlertsButton() {
+  const [, setRev] = useState(0);
+  useEffect(() => {
+    const listener = () => setRev((value) => value + 1);
+    muteListeners.add(listener);
+    listener();
+    return () => {
+      muteListeners.delete(listener);
+    };
+  }, []);
+
+  if (!mutePublish.canMute) {
+    return null;
+  }
+
+  const mute = asLiveMute(mutePublish.liveMute);
+  const off = mute === 'off';
+  const label =
+    mute === 'off' ? 'Live notifications, Off' : mute === 'mentions' ? 'Live notifications, Mentions only' : 'Live notifications, All';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={mutePublish.open}
+      style={{
+        minWidth: 44,
+        minHeight: 44,
+        paddingHorizontal: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: THEME.border,
+      }}>
+      <Glyph name={GLYPH.bell} color={off ? THEME.textMuted : THEME.accent} size={18} />
+    </Pressable>
   );
 }

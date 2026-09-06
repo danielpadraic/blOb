@@ -5,7 +5,7 @@ import { View } from 'react-native';
 
 import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
 import { LeaveChallengeSheet } from '@/components/challenge/LeaveChallengeSheet';
-import { LiveMuteSheet } from '@/components/challenge/LiveMuteSheet';
+import { LiveMuteSheet, publishLiveMuteControl } from '@/components/challenge/LiveMuteSheet';
 import { StartRollSheet } from '@/components/challenge/StartRollSheet';
 import {
   ChallengeMenuPopover,
@@ -102,6 +102,23 @@ export function useChallengeDetailOverflow() {
     };
   }, [openMenu, showOverflow]);
 
+  const openMute = useCallback(() => {
+    setError(null);
+    setMuteOpen(true);
+    requestPushAfterValue();
+  }, []);
+
+  useEffect(() => {
+    publishLiveMuteControl({
+      canMute,
+      liveMute,
+      open: openMute,
+    });
+    return () => {
+      publishLiveMuteControl({ canMute: false, liveMute: 'all', open: () => {} });
+    };
+  }, [canMute, liveMute, openMute]);
+
   useEffect(() => {
     setRollDismissed(false);
   }, [challenge?.starts_at, challenge?.start_roll_pending]);
@@ -141,10 +158,9 @@ export function useChallengeDetailOverflow() {
   if (canMute) {
     actions.push({
       key: 'live-alerts',
-      label: 'Live alerts',
+      label: 'Live notifications',
       onPress: () => {
-        setError(null);
-        setMuteOpen(true);
+        openMute();
       },
     });
   }

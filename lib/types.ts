@@ -928,6 +928,7 @@ export type NotificationData = {
   badge_key?: string;
   coin_reward?: number;
   href?: string;
+  url?: string;
   dedupe_key?: string;
   conversation_id?: string;
   grant_key?: string;
