@@ -1,5 +1,7 @@
 import { SharedTabs } from '@/components/ui/SharedTabs';
 
+export { asChallengePageTab } from '@/lib/livePush';
+
 export const CHALLENGE_PAGE_TABS = [
   { value: 'overview', label: 'Overview' },
   { value: 'board', label: 'Board' },
@@ -9,17 +11,6 @@ export const CHALLENGE_PAGE_TABS = [
 export const CHALLENGE_LIVE_ONLY_TABS = [{ value: 'feed', label: 'Live' }] as const;
 
 export type ChallengePageTab = (typeof CHALLENGE_PAGE_TABS)[number]['value'];
-
-/** Push / share links use `tab=live`. Internal tab value stays `feed`. */
-export function asChallengePageTab(value?: string | null): ChallengePageTab {
-  if (value === 'live' || value === 'feed') {
-    return 'feed';
-  }
-  if (value === 'board' || value === 'overview') {
-    return value;
-  }
-  return 'overview';
-}
 
 export function ChallengePageTabs({
   value,

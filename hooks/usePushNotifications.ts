@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { pushChallengeHref, pushNotificationHref } from '@/lib/challengeNav';
 import { markNotificationRead, notificationHrefFromPushData } from '@/lib/notifications';
+import { isLivePushType } from '@/lib/livePush';
 import {
   getPushPermissionState,
   maybeRequestPushPermission,
@@ -65,6 +66,9 @@ export function usePushNotifications() {
       const href = notificationHrefFromPushData(data);
       if (href) {
         pushNotificationHref(router, href, 'push-tap', pathname);
+        return;
+      }
+      if (isLivePushType(data.type)) {
         return;
       }
       if (data.story_id) {

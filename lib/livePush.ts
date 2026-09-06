@@ -24,6 +24,17 @@ export function asLiveMute(value: string | null | undefined): LiveMute {
   return 'all';
 }
 
+/** Push / share links use `tab=live`. Internal tab value stays `feed` (the Live tab). */
+export function asChallengePageTab(value?: string | null): 'overview' | 'board' | 'feed' {
+  if (value === 'live' || value === 'feed') {
+    return 'feed';
+  }
+  if (value === 'board' || value === 'overview') {
+    return value;
+  }
+  return 'overview';
+}
+
 /** Off skips Live. Mentions-only only if @mentioned or parent author of a reply. */
 export function liveMuteAllowsRecipient(
   mute: LiveMute,
@@ -121,8 +132,51 @@ export function liveNotificationHref(data: {
   if (!challengeId) {
     return null;
   }
+  const fromUrl = queryIdsFromUrl(url);
   return liveChallengeHref(challengeId, {
-    postId: data.post_id ?? data.postId,
-    commentId: data.comment_id ?? data.commentId,
+    postId: data.post_id ?? data.postId ?? fromUrl.postId,
+    commentId: data.comment_id ?? data.commentId ?? fromUrl.commentId,
   });
+}
+
+function queryIdsFromUrl(url?: string | null): { postId?: string; commentId?: string } {
+  const raw = String(url ?? '');
+  const qIndex = raw.indexOf('?');
+  if (qIndex < 0) {
+    return {};
+  }
+  const qs = new URLSearchParams(raw.slice(qIndex + 1).split('#')[0]);
+  const postId = String(qs.get('postId') ?? '').trim();
+  const commentId = String(qs.get('commentId') ?? '').trim();
+  return {
+    postId: postId || undefined,
+    commentId: commentId || undefined,
+  };
+}
+
+const REMINDER_PUSH_TYPES = new Set([
+  'challenge_checkin_reminder',
+  'health_begin',
+  'health_checkout',
+]);
+
+/** Check-in reminders stay Overview. Live chat never reuses that helper. */
+export function liveOrReminderPushHref(data: {
+  type?: string | null;
+  challenge_id?: string | null;
+  challengeId?: string | null;
+  post_id?: string | null;
+  postId?: string | null;
+  comment_id?: string | null;
+  commentId?: string | null;
+  href?: string | null;
+  url?: string | null;
+}): Href | null {
+  if (REMINDER_PUSH_TYPES.has(String(data.type ?? ''))) {
+    const id = String(data.challenge_id ?? data.challengeId ?? '').trim();
+    if (id) {
+      return `/challenges/${id}?tab=overview` as Href;
+    }
+  }
+  return liveNotificationHref(data);
 }
