@@ -14,7 +14,7 @@ import { THEME } from '@/lib/theme';
 
 type LiftRecapCardProps = {
   recap: LiftRecap;
-  /** "Use this workout" — absent on your own card, where importing your own session is noise. */
+  /** "Add this session" — absent on your own card, where importing your own session is noise. */
   onImport?: (() => void) | null;
   importing?: boolean;
   compact?: boolean;
@@ -127,7 +127,7 @@ export function LiftRecapCard({ recap, onImport, importing, compact }: LiftRecap
       {onImport ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Use this workout"
+          accessibilityLabel="Add this session"
           accessibilityState={{ disabled: Boolean(importing) }}
           disabled={importing}
           onPress={onImport}
@@ -144,7 +144,7 @@ export function LiftRecapCard({ recap, onImport, importing, compact }: LiftRecap
           })}>
           <Glyph name={GLYPH.plus} color={THEME.accent} size={12} />
           <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
-            {importing ? 'Setting it up…' : 'Use this workout'}
+            {importing ? 'Setting it up…' : 'Add this session'}
           </AppText>
         </Pressable>
       ) : null}

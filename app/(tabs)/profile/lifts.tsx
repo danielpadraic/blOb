@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
@@ -11,8 +12,17 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
-import { useLiftHistory, useSaveLiftSession } from '@/hooks/useLift';
+import {
+  useAttachLiftToCheckin,
+  useLiftHistory,
+  useLiftingChallenges,
+  useSaveLiftSession,
+  useShareLiftSession,
+} from '@/hooks/useLift';
+import { useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
 import { fetchLiftSession } from '@/lib/lift/api';
+import { fetchChallengeShareLocks, sendLiftToRecipients } from '@/lib/lift/share';
+import { challengeDetailHref } from '@/lib/routes';
 import { muscleSummary } from '@/lib/lift/muscles';
 import { applyOverload, overloadChipLabel } from '@/lib/lift/overload';
 import { repeatSession, shortDate } from '@/lib/lift/session';
@@ -28,13 +38,41 @@ export default function LiftsHistoryScreen() {
   const insets = useSafeAreaInsets();
   const { data, isLoading, error, refetch } = useLiftHistory();
   const save = useSaveLiftSession();
+  const share = useShareLiftSession();
+  const attach = useAttachLiftToCheckin();
+  const liftingChallenges = useLiftingChallenges();
+  const startChat = useGetOrCreateConversation();
+  const sendMessage = useSendMessage();
+  const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
 
   const [menuFor, setMenuFor] = useState<LiftSessionSummary | null>(null);
   const [overloadFor, setOverloadFor] = useState<LiftSessionDraft | null>(null);
+  const [shareFor, setShareFor] = useState<LiftSessionDraft | null>(null);
+  const [sharedPostId, setSharedPostId] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [menuError, setMenuError] = useState<string | null>(null);
 
   // An abandoned empty session is noise, not history.
   const rows = (data ?? []).filter((row) => row.exerciseCount > 0 || row.completedAt);
+
+  // Which of those challenges keep check-ins inside their own lobby, so the share sheet can hide
+  // the Home toggle rather than offering something the lobby will refuse.
+  useEffect(() => {
+    const ids = liftingChallenges.map((challenge) => challenge.id);
+    if (!ids.length) {
+      setLockedChallengeIds([]);
+      return;
+    }
+    let live = true;
+    void fetchChallengeShareLocks(ids).then((locked) => {
+      if (live) {
+        setLockedChallengeIds(locked);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [liftingChallenges]);
 
   /** "Start this again" and "Overload and start" are the same copy; the plan is what differs. */
   async function startAgain(
@@ -58,6 +96,75 @@ export default function LiftsHistoryScreen() {
       router.push(liftSessionHref(draft.id));
     } catch (caught) {
       setMenuError(caught instanceof Error ? caught.message : 'Could not copy that lift.');
+    }
+  }
+
+  /**
+   * Share picks a destination here rather than opening the session. Reopening a finished lift to
+   * share it invites an accidental edit to a session someone may already have a copy of.
+   */
+  async function openShare(target: LiftSessionSummary | null) {
+    if (!target) {
+      return;
+    }
+    setMenuError(null);
+    try {
+      const source = await fetchLiftSession(target.id);
+      if (!source) {
+        setMenuError('That session is no longer there.');
+        return;
+      }
+      setMenuFor(null);
+      setSharedPostId(null);
+      setShareError(null);
+      setShareFor(source);
+    } catch (caught) {
+      setMenuError(caught instanceof Error ? caught.message : 'Could not open that lift.');
+    }
+  }
+
+  async function onShare(choice: LiftShareChoice) {
+    if (!shareFor) {
+      return;
+    }
+    setShareError(null);
+    try {
+      if (choice.destination === 'live' && choice.challengeId) {
+        const result = await attach.mutateAsync({
+          draft: shareFor,
+          challengeId: choice.challengeId,
+          caption: choice.caption,
+          home: choice.home && !lockedChallengeIds.includes(choice.challengeId),
+        });
+        setShareFor(null);
+        router.push(
+          challengeDetailHref(choice.challengeId, 'lobby', result.postId ?? undefined, {
+            tab: 'feed',
+          }),
+        );
+        return;
+      }
+      const toMessage = choice.destination === 'message';
+      const posted = await share.mutateAsync({
+        draft: shareFor,
+        caption: choice.caption,
+        challengeId: null,
+        home: !toMessage,
+        audience: toMessage ? 'specific' : choice.audience,
+        audienceUserIds: toMessage ? choice.recipientIds : undefined,
+      });
+      if (toMessage) {
+        await sendLiftToRecipients({
+          postId: posted.postId,
+          recipientIds: choice.recipientIds,
+          caption: choice.caption,
+          startChat: (friendId: string) => startChat.mutateAsync(friendId),
+          send: (message) => sendMessage.mutateAsync(message).then(() => undefined),
+        });
+      }
+      setSharedPostId(posted.postId);
+    } catch (caught) {
+      setShareError(caught instanceof Error ? caught.message : 'Could not share that lift.');
     }
   }
 
@@ -157,13 +264,20 @@ export default function LiftsHistoryScreen() {
         }}
         onStartAgain={() => void startAgain(menuFor)}
         onOverload={() => void openOverload(menuFor)}
-        onShare={() => {
-          const id = menuFor?.id;
-          setMenuFor(null);
-          if (id) {
-            router.push(liftSessionHref(id));
-          }
-        }}
+        onShare={() => void openShare(menuFor)}
+      />
+
+      <LiftShareSheet
+        visible={Boolean(shareFor)}
+        draft={shareFor}
+        challenges={liftingChallenges}
+        lockedChallengeIds={lockedChallengeIds}
+        busy={share.isPending || attach.isPending}
+        error={shareError}
+        sharedPostId={sharedPostId}
+        onClose={() => setShareFor(null)}
+        onShare={(choice) => void onShare(choice)}
+        onSkip={() => setShareFor(null)}
       />
 
       <OverloadSheet
@@ -180,8 +294,8 @@ export default function LiftsHistoryScreen() {
 /**
  * Row overflow: repeat the session as it was, repeat it heavier, or share the card.
  *
- * Share opens the saved session rather than publishing from here — the Done sheet is where a
- * caption and an audience get chosen, and there should only be one of those.
+ * Share opens the same destination sheet the Done screen uses, so a caption and an audience are
+ * chosen in one place no matter where the share started.
  */
 function LiftHistoryMenu({
   session,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { AppState, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,7 +28,8 @@ import {
 } from '@/hooks/useLift';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork } from '@/lib/lift/recap';
-import { fetchChallengeShareLocks } from '@/lib/lift/share';
+import { fetchChallengeShareLocks, sendLiftToRecipients } from '@/lib/lift/share';
+import { useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
 import { challengeDetailHref } from '@/lib/routes';
 import { isTimedMuscle, muscleLabel, type MuscleKey } from '@/lib/lift/muscles';
 import {
@@ -100,6 +101,8 @@ function LiftSessionInner({ id }: { id: string }) {
   const attach = useAttachLiftToCheckin();
   const liftingChallenges = useLiftingChallenges();
   const cardioMethods = useCardioMethods();
+  const startChat = useGetOrCreateConversation();
+  const sendMessage = useSendMessage();
 
   const [draft, setDraft] = useState<LiftSessionDraft | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -187,16 +190,27 @@ function LiftSessionInner({ id }: { id: string }) {
   // unmount — not every time a save starts or finishes.
   const saveRef = useRef(save);
   saveRef.current = save;
-  useEffect(
-    () => () => {
-      const pending = draftRef.current;
-      if (pending && dirty.current && !pending.completedAt) {
-        dirty.current = false;
-        void saveRef.current.mutateAsync({ draft: pending }).catch(() => undefined);
+
+  const flush = useCallback(() => {
+    const pending = draftRef.current;
+    if (pending && dirty.current && !pending.completedAt) {
+      dirty.current = false;
+      void saveRef.current.mutateAsync({ draft: pending }).catch(() => undefined);
+    }
+  }, []);
+
+  useEffect(() => () => flush(), [flush]);
+
+  // Switching apps is not leaving the screen, so nothing unmounts and the debounce may still be
+  // counting. Writing on the way out is what makes the set still be there on the way back in.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') {
+        flush();
       }
-    },
-    [],
-  );
+    });
+    return () => subscription.remove();
+  }, [flush]);
 
   function edit(update: (current: LiftSessionDraft) => LiftSessionDraft) {
     setDraft((current) => {
@@ -342,13 +356,27 @@ function LiftSessionInner({ id }: { id: string }) {
         );
         return;
       }
+      // Message addresses the card to named people and keeps it off Home, then puts the link in
+      // their DM. The card is what makes the session readable to them — a bare link would open to
+      // nothing, because a session is only visible through a post the viewer can already see.
+      const toMessage = choice.destination === 'message';
       const posted = await share.mutateAsync({
         draft,
         caption: choice.caption,
         challengeId: null,
-        home: true,
-        audience: choice.audience,
+        home: !toMessage,
+        audience: toMessage ? 'specific' : choice.audience,
+        audienceUserIds: toMessage ? choice.recipientIds : undefined,
       });
+      if (toMessage) {
+        await sendLiftToRecipients({
+          postId: posted.postId,
+          recipientIds: choice.recipientIds,
+          caption: choice.caption,
+          startChat: (friendId: string) => startChat.mutateAsync(friendId),
+          send: (input) => sendMessage.mutateAsync(input).then(() => undefined),
+        });
+      }
       setSharedPostId(posted.postId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not share that lift.');

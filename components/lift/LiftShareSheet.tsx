@@ -18,29 +18,37 @@ import type { LiftSessionDraft } from '@/lib/lift/types';
 import { THEME } from '@/lib/theme';
 
 /**
- * The Done sheet: what happens to a finished lift.
+ * Where a finished lift goes.
  *
- * Picking a challenge is the Live share and the check-in attach at once — a challenge already keeps
- * exactly one feed post per period, so the card goes onto that post instead of publishing a second
- * one. Picking nothing publishes a plain Home card. Corporate challenges lock Home off, the same
- * rule check-ins follow.
+ * This is a destination picker, not an editor — it never reopens the session. The card it publishes
+ * is a snapshot plus a session id, and anyone who receives it copies rather than edits.
+ *
+ * Message sends the card to named people only: a specific-audience card kept off Home, plus the
+ * link in a DM. That is what makes the session readable to them without putting it in front of
+ * everyone. Live puts it on the check-in a challenge already keeps for this period rather than
+ * publishing a second post. Home is a plain card.
  *
  * The caption is whatever they typed. An empty caption stays empty; the app does not write
  * "Daniel crushed chest" on anyone's behalf.
  */
 
+export type LiftShareDestination = 'message' | 'home' | 'live';
+
 export type LiftShareChoice = {
+  destination: LiftShareDestination;
   caption: string;
   /** The challenge to attach to, or null for a Home-only card. */
   challengeId: string | null;
   home: boolean;
   audience: PostAudience;
+  /** Message only: who the card is addressed to. */
+  recipientIds: string[];
 };
 
 type LiftShareSheetProps = {
   visible: boolean;
   draft: LiftSessionDraft | null;
-  /** Live lifting challenges they can still check into. Empty hides the whole Live block. */
+  /** Active challenges they joined or host. Ended ones never reach here. */
   challenges: LoggableChallenge[];
   /** Challenge ids whose lobby forbids Home and Wave. */
   lockedChallengeIds?: string[];
@@ -65,8 +73,12 @@ export function LiftShareSheet({
   onShare,
   onSkip,
 }: LiftShareSheetProps) {
+  const { user } = useAuth();
+  const friends = useFriends(user?.id);
+  const [destination, setDestination] = useState<LiftShareDestination | null>(null);
   const [caption, setCaption] = useState('');
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [recipientIds, setRecipientIds] = useState<string[]>([]);
   const [home, setHome] = useState(true);
   const [audience, setAudience] = useState<PostAudience>(DEFAULT_POST_AUDIENCE);
 
@@ -80,9 +92,38 @@ export function LiftShareSheet({
     }
   }, [locked]);
 
+  // Reopening the sheet on a second share starts at the destination list again.
+  useEffect(() => {
+    if (!visible) {
+      setDestination(null);
+      setRecipientIds([]);
+    }
+  }, [visible]);
+
   if (!recap) {
     return null;
   }
+
+  const people = (friends.data ?? [])
+    .map((edge) => edge.profile)
+    .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile?.id));
+
+  const canSend =
+    destination === 'message'
+      ? recipientIds.length > 0
+      : destination === 'live'
+        ? Boolean(challengeId)
+        : destination === 'home';
+
+  const primaryLabel = busy
+    ? 'Sharing…'
+    : destination === 'message'
+      ? recipientIds.length > 1
+        ? `Send to ${recipientIds.length} people`
+        : 'Send'
+      : destination === 'live'
+        ? 'Add to challenge'
+        : 'Share to Home';
 
   return (
     <ChromeOverlay visible={visible} onClose={busy ? undefined : onClose} align="end" zIndex={140}>
@@ -98,14 +139,32 @@ export function LiftShareSheet({
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingLeft: 18,
+            paddingLeft: destination && !sharedPostId ? 6 : 18,
             paddingRight: 8,
             paddingTop: 14,
             paddingBottom: 6,
           }}>
-          <AppText
-            style={{ flex: 1, fontSize: 19, fontWeight: '800', color: THEME.textPrimary }}>
-            {sharedPostId ? 'Shared' : 'Nice work'}
+          {destination && !sharedPostId ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={8}
+              disabled={busy}
+              onPress={() => setDestination(null)}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name={GLYPH.chevronLeft} color={THEME.textPrimary} size={16} />
+            </Pressable>
+          ) : null}
+          <AppText style={{ flex: 1, fontSize: 19, fontWeight: '800', color: THEME.textPrimary }}>
+            {sharedPostId
+              ? 'Shared'
+              : destination === 'message'
+                ? 'Send to'
+                : destination === 'live'
+                  ? 'Add to a challenge'
+                  : destination === 'home'
+                    ? 'Share to Home'
+                    : 'Nice work'}
           </AppText>
           <Pressable
             accessibilityRole="button"
@@ -125,6 +184,32 @@ export function LiftShareSheet({
 
           {sharedPostId ? (
             <SharedActions postId={sharedPostId} />
+          ) : destination == null ? (
+            <View style={{ marginTop: 16, gap: 8 }}>
+              <DestinationRow
+                glyph={GLYPH.reply}
+                label="Message"
+                detail="Send it to friends in a DM"
+                onPress={() => setDestination('message')}
+              />
+              <DestinationRow
+                glyph={GLYPH.people}
+                label="Home"
+                detail="One card on your feed"
+                onPress={() => setDestination('home')}
+              />
+              <DestinationRow
+                glyph={GLYPH.swords}
+                label="Live"
+                detail={
+                  challenges.length
+                    ? 'Goes on your check-in for this period'
+                    : 'No active challenges to add it to'
+                }
+                disabled={!challenges.length}
+                onPress={() => setDestination('live')}
+              />
+            </View>
           ) : (
             <>
               <TextInput
@@ -151,11 +236,68 @@ export function LiftShareSheet({
                 }}
               />
 
-              {challenges.length ? (
+              {destination === 'message' ? (
+                people.length ? (
+                  <>
+                    <SectionLabel text="FRIENDS" />
+                    <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                      Only the people you pick can open this lift.
+                    </AppText>
+                    <View style={{ gap: 6 }}>
+                      {people.map((friend) => {
+                        const name = friend.display_name || friend.username;
+                        const picked = recipientIds.includes(friend.id);
+                        return (
+                          <Pressable
+                            key={friend.id}
+                            accessibilityRole="checkbox"
+                            accessibilityLabel={name}
+                            accessibilityState={{ checked: picked }}
+                            onPress={() =>
+                              setRecipientIds((current) =>
+                                current.includes(friend.id)
+                                  ? current.filter((id) => id !== friend.id)
+                                  : [...current, friend.id],
+                              )
+                            }
+                            style={{
+                              minHeight: 56,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 10,
+                              paddingHorizontal: 10,
+                              borderRadius: 12,
+                              backgroundColor: picked ? THEME.accentSoft : 'transparent',
+                            }}>
+                            <Avatar uri={friend.avatar_url} name={name} size={34} />
+                            <AppText
+                              numberOfLines={1}
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                fontSize: 15,
+                                fontWeight: '600',
+                                color: THEME.textPrimary,
+                              }}>
+                              {name}
+                            </AppText>
+                            <Checkbox checked={picked} />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : (
+                  <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
+                    Add a friend first and they will show up here.
+                  </AppText>
+                )
+              ) : null}
+
+              {destination === 'live' ? (
                 <>
-                  <SectionLabel text="ADD TO A CHALLENGE" />
-                  <AppText
-                    style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                  <SectionLabel text="ACTIVE CHALLENGES" />
+                  <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
                     Goes on your check-in for this period — it never posts twice.
                   </AppText>
                   <View style={{ gap: 8 }}>
@@ -176,8 +318,7 @@ export function LiftShareSheet({
                 </>
               ) : null}
 
-              {/* A check-in's audience belongs to the lobby, so only a Home-only card asks. */}
-              {challengeId ? null : (
+              {destination === 'home' ? (
                 <>
                   <SectionLabel text="WHO SEES IT" />
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -213,9 +354,9 @@ export function LiftShareSheet({
                     })}
                   </View>
                 </>
-              )}
+              ) : null}
 
-              {challengeId && !locked ? (
+              {destination === 'live' && challengeId && !locked ? (
                 <Pressable
                   accessibilityRole="switch"
                   accessibilityLabel="Also show on Home"
@@ -233,23 +374,7 @@ export function LiftShareSheet({
                     borderColor: THEME.border,
                     backgroundColor: THEME.background,
                   }}>
-                  <View
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 7,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: home ? THEME.accent : THEME.surface,
-                      borderWidth: 1,
-                      borderColor: home ? THEME.accent : THEME.border,
-                    }}>
-                    <Glyph
-                      name={GLYPH.checkmark}
-                      color={home ? THEME.accentForeground : THEME.border}
-                      size={12}
-                    />
-                  </View>
+                  <Checkbox checked={home} />
                   <AppText
                     style={{ flex: 1, fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>
                     Also show on Home
@@ -257,7 +382,7 @@ export function LiftShareSheet({
                 </Pressable>
               ) : null}
 
-              {locked ? (
+              {destination === 'live' && locked ? (
                 <AppText style={{ marginTop: 12, fontSize: 13, color: THEME.textMuted }}>
                   This challenge keeps check-ins inside its own lobby, so this stays off Home.
                 </AppText>
@@ -274,26 +399,24 @@ export function LiftShareSheet({
           ) : null}
           {sharedPostId ? (
             <Button title="Done" onPress={onClose} />
+          ) : destination == null ? (
+            <Button title="Keep it to myself" variant="ghost" size="sm" onPress={onSkip} />
           ) : (
-            <>
-              <Button
-                title={
-                  busy
-                    ? 'Sharing…'
-                    : challengeId
-                      ? 'Share to challenge'
-                      : 'Share to Home'
-                }
-                loading={busy}
-                onPress={() => onShare({ caption: caption.trim(), challengeId, home, audience })}
-              />
-              <Button
-                title="Keep it to myself"
-                variant="ghost"
-                size="sm"
-                onPress={onSkip}
-              />
-            </>
+            <Button
+              title={primaryLabel}
+              loading={busy}
+              disabled={!canSend}
+              onPress={() =>
+                onShare({
+                  destination,
+                  caption: caption.trim(),
+                  challengeId: destination === 'live' ? challengeId : null,
+                  home: destination === 'home' ? true : home,
+                  audience: destination === 'message' ? 'specific' : audience,
+                  recipientIds: destination === 'message' ? recipientIds : [],
+                })
+              }
+            />
           )}
         </View>
       </View>
@@ -314,6 +437,70 @@ function SectionLabel({ text }: { text: string }) {
       }}>
       {text}
     </AppText>
+  );
+}
+
+function Checkbox({ checked }: { checked: boolean }) {
+  return (
+    <View
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 7,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: checked ? THEME.accent : THEME.surface,
+        borderWidth: 1,
+        borderColor: checked ? THEME.accent : THEME.border,
+      }}>
+      <Glyph name={GLYPH.checkmark} color={checked ? THEME.accentForeground : THEME.border} size={12} />
+    </View>
+  );
+}
+
+function DestinationRow({
+  glyph,
+  label,
+  detail,
+  disabled,
+  onPress,
+}: {
+  glyph: Parameters<typeof Glyph>[0]['name'];
+  label: string;
+  detail: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        minHeight: 62,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        backgroundColor: THEME.background,
+        opacity: disabled ? 0.5 : 1,
+      }}>
+      <Glyph name={glyph} color={THEME.accent} size={17} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <AppText style={{ fontSize: 15, fontWeight: '700', color: THEME.textPrimary }}>
+          {label}
+        </AppText>
+        <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
+          {detail}
+        </AppText>
+      </View>
+      {disabled ? null : <Glyph name={GLYPH.chevronRight} color={THEME.textMuted} size={13} />}
+    </Pressable>
   );
 }
 
@@ -346,23 +533,7 @@ function PickRow({
         borderColor: selected ? THEME.accent : THEME.border,
         backgroundColor: selected ? THEME.accentSoft : THEME.background,
       }}>
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 7,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: selected ? THEME.accent : THEME.surface,
-          borderWidth: 1,
-          borderColor: selected ? THEME.accent : THEME.border,
-        }}>
-        <Glyph
-          name={GLYPH.checkmark}
-          color={selected ? THEME.accentForeground : THEME.border}
-          size={12}
-        />
-      </View>
+      <Checkbox checked={selected} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <AppText
           numberOfLines={1}

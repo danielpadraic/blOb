@@ -1,5 +1,6 @@
 import { checkinHidesHomeShare } from '@/lib/checkinShare';
 import { buildRecap, recapFallbackText } from '@/lib/lift/recap';
+import { postShareUrl } from '@/lib/postShare';
 import { supabase } from '@/lib/supabase';
 import type { LiftSessionDraft } from '@/lib/lift/types';
 import type { PostAudience } from '@/lib/postAudience';
@@ -79,6 +80,36 @@ export async function shareLiftSession(input: LiftShareInput): Promise<LiftShare
   const postId = String((data as { id: string }).id);
   await linkSessionToPost(input.draft.id, postId);
   return { postId, challengeId };
+}
+
+/**
+ * Puts a published lift card in front of named people.
+ *
+ * The post is what carries read access, so this runs after the card exists and only ever adds the
+ * link on top. One friend's DM failing does not undo a share the others can already see, so each
+ * send is isolated and the count comes back for the caller to report on.
+ */
+export async function sendLiftToRecipients(input: {
+  postId: string;
+  recipientIds: readonly string[];
+  caption?: string | null;
+  startChat: (friendId: string) => Promise<{ id: string }>;
+  send: (message: { conversation_id: string; body: string }) => Promise<void>;
+}): Promise<number> {
+  const url = postShareUrl(input.postId);
+  const caption = String(input.caption ?? '').trim();
+  const body = caption ? `${caption}\n${url}` : url;
+  let sent = 0;
+  for (const friendId of [...new Set(input.recipientIds.filter(Boolean))]) {
+    try {
+      const conversation = await input.startChat(friendId);
+      await input.send({ conversation_id: conversation.id, body });
+      sent += 1;
+    } catch (error) {
+      console.warn('Could not send the lift in a DM', error);
+    }
+  }
+  return sent;
 }
 
 /** Records the post on the session so History can show "Shared" and offer the link again. */

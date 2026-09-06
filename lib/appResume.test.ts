@@ -15,6 +15,21 @@ describe('shouldReturnHomeOnResume', () => {
     expect(shouldReturnHomeOnResume(base)).toBe(true);
   });
 
+  // A lift is logged over an hour with a lot of app-switching in it. Losing your place mid-workout
+  // is worse than any tidiness a bounce to Home buys.
+  it('keeps a lift in progress when the user switches back', () => {
+    expect(
+      shouldReturnHomeOnResume({ ...base, pathname: '/lift/9f1c2e0a-0000-4000-8000-000000000000' }),
+    ).toBe(false);
+    expect(shouldReturnHomeOnResume({ ...base, pathname: '/lift' })).toBe(false);
+  });
+
+  it('still sends a killed process Home rather than back into the lift', () => {
+    expect(
+      shouldResetToHomeOnLaunch({ pathname: '/lift/9f1c2e0a-0000-4000-8000-000000000000' }),
+    ).toBe(true);
+  });
+
   it('ignores inactive picker / permission / crop returns', () => {
     expect(
       shouldReturnHomeOnResume({
