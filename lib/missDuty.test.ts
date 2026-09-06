@@ -61,6 +61,14 @@ describe('challengeHasDailyCheckinDuty', () => {
         frequency: 'daily',
       }),
     ).toBe(false);
+    expect(
+      challengeHasDailyCheckinDuty({
+        challenge_type: 'consistency',
+        format: 'consistency',
+        frequency: 'daily',
+        metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+      }),
+    ).toBe(false);
   });
 });
 

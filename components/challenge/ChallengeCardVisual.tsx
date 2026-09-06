@@ -20,7 +20,7 @@ import { challengeGoalLabel, challengeGoalSubtitle, challengeRingDays } from '@/
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
-import { usesCumulativeScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesQuantityScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
 import { isOfficialJoinable, isOfficialSeriesChallenge, officialContestantsNeeded, officialFormingStartLine, officialGuaranteeAmount, armingCountdownLabel } from '@/lib/officialSeries';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -148,13 +148,13 @@ export function ChallengeCardVisual({
     duration > 0 &&
     !usesPointsBoard(challenge) &&
     !usesTotalCountCheckins(challenge) &&
-    !usesCumulativeScoring(challenge);
+    !usesQuantityScoring(challenge);
   const goal =
     official ||
     duration <= 0 ||
     usesPointsBoard(challenge) ||
     usesTotalCountCheckins(challenge) ||
-    usesCumulativeScoring(challenge)
+    usesQuantityScoring(challenge)
       ? challengeGoalLabel(challenge, { daysCompleted: days, distanceMetersCompleted: myMeters ?? 0 })
       : `${duration}-Day Consistency`;
   const goalSub = official ? challengeGoalSubtitle(challenge) : null;

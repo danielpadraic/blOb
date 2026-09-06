@@ -80,6 +80,7 @@ export function boardSettledCopy(view: Pick<BoardView, 'forfeited' | 'youPaid' |
 export function boardRowTag(
   person: { bucket: string; you?: boolean; payout?: number | null },
   settled: boolean,
+  extras?: { quantityDone?: boolean },
 ): string {
   if (settled) {
     if (person.bucket === 'dropped') {
@@ -87,15 +88,30 @@ export function boardRowTag(
     }
     return Number(person.payout) > 0 ? 'Paid' : 'In';
   }
-  if (person.bucket === 'caught_up') {
-    return 'Caught up';
-  }
   if (person.bucket === 'dropped') {
     return 'Out';
+  }
+  if (extras?.quantityDone) {
+    return 'Done';
+  }
+  if (person.bucket === 'caught_up') {
+    return 'Caught up';
   }
   return 'In';
 }
 
 export function assertsNoBucksWord(value: string): boolean {
   return !/bucks/i.test(value);
+}
+
+/** Distance / points Board chrome. Never Remaining / Caught Up. */
+export function quantityBoardHeaderLine(inCount: number, doneCount: number, droppedCount: number): string {
+  const parts = [`In ${Math.max(inCount, 0)}`];
+  if (doneCount > 0) {
+    parts.push(`Done ${doneCount}`);
+  }
+  if (droppedCount > 0) {
+    parts.push(`Dropped ${droppedCount}`);
+  }
+  return parts.join(' · ');
 }

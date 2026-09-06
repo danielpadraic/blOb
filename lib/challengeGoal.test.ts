@@ -117,6 +117,39 @@ describe('stored duration', () => {
     ).toBe('Distance');
   });
 
+  it('prints 6.23 / 128 mi from HealthKit meters when metric_totals is empty', () => {
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'cumulative',
+          format: 'cumulative',
+          metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+          target_count: 127,
+          days_required: 127,
+          length_value: 127,
+          title: 'Run 128 Miles by January 1',
+        },
+        { distanceMetersCompleted: 10026, metricTotals: {}, unit: 'mi' },
+      ),
+    ).toBe('6.23 / 128 mi');
+  });
+
+  it('uses a present miles target even when the row is stored as consistency', () => {
+    expect(
+      challengeGoalLabel(
+        {
+          challenge_type: 'consistency',
+          format: 'consistency',
+          metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+          days_required: 127,
+          length_value: 127,
+          title: 'Run 128 Miles by January 1',
+        },
+        { distanceMetersCompleted: 10026, metricTotals: {}, unit: 'mi' },
+      ),
+    ).toBe('6.23 / 128 mi');
+  });
+
   it('does not invent 6 when nothing is saved', () => {
     expect(storedDurationDays({ days_required: 0, length_value: null })).toBeNull();
     expect(challengeDurationDays({ days_required: 0, length_value: null })).toBe(1);

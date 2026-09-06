@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   distanceProofIsSessionLog,
   usesAdvancedCreateEdit,
+  usesConsistencyExperience,
   usesPointsBoard,
+  usesQuantityScoring,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
 
@@ -82,5 +84,42 @@ describe('distanceProofIsSessionLog', () => {
       false,
     );
     expect(distanceProofIsSessionLog(null)).toBe(false);
+  });
+});
+
+describe('usesQuantityScoring', () => {
+  it('treats a consistency row with a miles target as a quantity Board', () => {
+    const row = {
+      challenge_type: 'consistency',
+      format: 'consistency',
+      scoring_method: 'consistency',
+      target_count: 127,
+      days_required: 127,
+      metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+    };
+    expect(usesQuantityScoring(row)).toBe(true);
+    expect(usesConsistencyExperience(row)).toBe(false);
+    expect(usesTotalCountCheckins(row)).toBe(false);
+  });
+
+  it('does not turn a daily mile habit into a race from the title alone', () => {
+    expect(
+      usesQuantityScoring({
+        challenge_type: 'consistency',
+        format: 'consistency',
+        title: 'Run 1 mile every morning',
+        days_required: 7,
+        length_value: 7,
+      }),
+    ).toBe(false);
+    expect(
+      usesConsistencyExperience({
+        challenge_type: 'consistency',
+        format: 'consistency',
+        title: 'Run 1 mile every morning',
+        days_required: 7,
+        length_value: 7,
+      }),
+    ).toBe(true);
   });
 });

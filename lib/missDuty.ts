@@ -1,3 +1,4 @@
+import { usesQuantityScoring } from '@/lib/challengeExperience';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 
 export type MissDutyChallenge = {
@@ -15,6 +16,11 @@ export type MissDutyChallenge = {
   allowed_misses?: number | null;
   max_misses?: number | null;
   consistency?: { misses?: number | null } | null;
+  metrics?: unknown;
+  scoring_config?: unknown;
+  cumulative_target?: number | string | null;
+  title?: string | null;
+  task?: string | null;
 };
 
 function asKey(value: unknown): string {
@@ -37,6 +43,9 @@ export function challengeHasDailyCheckinDuty(
   challenge?: MissDutyChallenge | null,
 ): boolean {
   if (!challenge) {
+    return false;
+  }
+  if (usesQuantityScoring(challenge)) {
     return false;
   }
   if (isOfficialSeriesChallenge(challenge)) {

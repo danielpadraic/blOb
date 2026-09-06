@@ -1,6 +1,6 @@
 import {
   isFitnessOfficialChallenge,
-  usesCumulativeScoring,
+  usesQuantityScoring,
   usesPointsBoard,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
@@ -9,7 +9,7 @@ import { challengeCumulativeProgress } from '@/lib/cumulative';
 import {
   cumulativeMetricsProgressLabel,
   filledCumulativeMetrics,
-  parseMetricTotals,
+  metricTotalsWithDistanceFallback,
   resolveCumulativeMetrics,
 } from '@/lib/cumulativeMetrics';
 import type { Challenge } from '@/lib/types';
@@ -149,11 +149,18 @@ export function challengeGoalLabel(
     metricTotals?: Record<string, number> | null;
   },
 ): string {
-  if (usesCumulativeScoring(challenge)) {
+  if (usesQuantityScoring(challenge)) {
     const metrics = resolveCumulativeMetrics(challenge);
     const filled = filledCumulativeMetrics(metrics);
     if (filled.length > 0) {
-      return cumulativeMetricsProgressLabel(filled, parseMetricTotals(extras?.metricTotals));
+      return cumulativeMetricsProgressLabel(
+        filled,
+        metricTotalsWithDistanceFallback(
+          filled,
+          extras?.metricTotals,
+          extras?.distanceMetersCompleted ?? 0,
+        ),
+      );
     }
     const label = challengeCumulativeProgress(
       challenge,
@@ -203,7 +210,7 @@ export function challengeGoalLabel(
 }
 
 export function challengeGoalSubtitle(challenge: GoalChallenge): string | null {
-  if (usesCumulativeScoring(challenge)) {
+  if (usesQuantityScoring(challenge)) {
     const weekly = challenge.cumulative_window === 'week' || challenge.win_window === 'week';
     return weekly
       ? 'Anyone who hits the goal each week splits the prize.'
