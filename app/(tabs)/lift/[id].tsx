@@ -29,8 +29,12 @@ import {
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork } from '@/lib/lift/recap';
 import { fetchChallengeShareLocks, sendLiftToRecipients } from '@/lib/lift/share';
-import { useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
-import { challengeDetailHref } from '@/lib/routes';
+import {
+  useCreateGroupConversation,
+  useGetOrCreateConversation,
+  useSendMessage,
+} from '@/hooks/useSocial';
+import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
 import { isTimedMuscle, muscleLabel, type MuscleKey } from '@/lib/lift/muscles';
 import {
   addExercise,
@@ -105,6 +109,7 @@ function LiftSessionInner({ id }: { id: string }) {
   const liftingChallenges = useLiftingChallenges();
   const cardioMethods = useCardioMethods();
   const startChat = useGetOrCreateConversation();
+  const startGroup = useCreateGroupConversation();
   const sendMessage = useSendMessage();
 
   const [draft, setDraft] = useState<LiftSessionDraft | null>(null);
@@ -383,8 +388,9 @@ function LiftSessionInner({ id }: { id: string }) {
         draft,
         caption: choice.caption,
         challengeId: null,
+        circleId: choice.circleId,
         home: !toMessage,
-        audience: toMessage ? 'specific' : choice.audience,
+        audience: toMessage ? 'specific' : choice.circleId ? 'friends' : choice.audience,
         audienceUserIds: toMessage ? choice.recipientIds : undefined,
       });
       if (toMessage) {
@@ -393,8 +399,14 @@ function LiftSessionInner({ id }: { id: string }) {
           recipientIds: choice.recipientIds,
           caption: choice.caption,
           startChat: (friendId: string) => startChat.mutateAsync(friendId),
+          startGroup: (friendIds: string[]) => startGroup.mutateAsync(friendIds),
           send: (input) => sendMessage.mutateAsync(input).then(() => undefined),
         });
+      }
+      if (choice.circleId) {
+        setShareOpen(false);
+        router.replace(circleDetailHref(choice.circleId, { tab: 'chat' }));
+        return;
       }
       setSharedPostId(posted.postId);
     } catch (caught) {

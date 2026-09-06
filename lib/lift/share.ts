@@ -22,6 +22,8 @@ export type LiftShareInput = {
   caption?: string | null;
   /** Live: the challenge whose thread this lands in, or null for a Home-only card. */
   challengeId?: string | null;
+  /** Live: the Circle room this lands in. Never set alongside a challenge. */
+  circleId?: string | null;
   /** Home: whether the card also appears on the Home feed. */
   home: boolean;
   audience: PostAudience;
@@ -58,16 +60,23 @@ export async function shareLiftSession(input: LiftShareInput): Promise<LiftShare
   const recap = buildRecap(input.draft);
   const caption = String(input.caption ?? '').trim();
   const challengeId = input.challengeId ?? null;
+  const circleId = input.circleId ?? null;
+  // The posts table refuses to hold both, so catching it here beats a constraint error the user
+  // would have to interpret.
+  if (challengeId && circleId) {
+    throw new Error('A lift card goes to a challenge or a Circle, not both.');
+  }
 
   const payload: Record<string, unknown> = {
     author_id: userId,
     challenge_id: challengeId,
+    circle_id: circleId,
     content: caption || recapFallbackText(recap),
     media_urls: [],
     audience: input.audience,
     audience_user_ids: input.audienceUserIds ?? [],
     type: 'lift_session',
-    source: challengeId ? 'challenge' : 'feed',
+    source: challengeId ? 'challenge' : circleId ? 'circle' : 'feed',
     lift_session_id: input.draft.id,
     hidden_from_home: !input.home,
   };
@@ -85,22 +94,40 @@ export async function shareLiftSession(input: LiftShareInput): Promise<LiftShare
 /**
  * Puts a published lift card in front of named people.
  *
+ * Several recipients become one group thread rather than a stack of identical private DMs — the
+ * people you send a session to are usually the people you train with, and they should be able to
+ * answer each other. One recipient stays a plain 1:1.
+ *
  * The post is what carries read access, so this runs after the card exists and only ever adds the
- * link on top. One friend's DM failing does not undo a share the others can already see, so each
- * send is isolated and the count comes back for the caller to report on.
+ * link on top. A DM that fails does not undo a share the others can already see.
  */
 export async function sendLiftToRecipients(input: {
   postId: string;
   recipientIds: readonly string[];
   caption?: string | null;
   startChat: (friendId: string) => Promise<{ id: string }>;
+  startGroup: (friendIds: string[]) => Promise<{ id: string }>;
   send: (message: { conversation_id: string; body: string }) => Promise<void>;
 }): Promise<number> {
   const url = postShareUrl(input.postId);
   const caption = String(input.caption ?? '').trim();
   const body = caption ? `${caption}\n${url}` : url;
+  const recipients = [...new Set(input.recipientIds.filter(Boolean))];
+
+  if (recipients.length > 1) {
+    try {
+      const conversation = await input.startGroup(recipients);
+      await input.send({ conversation_id: conversation.id, body });
+      return recipients.length;
+    } catch (error) {
+      // A group needs everyone to be an accepted friend. Rather than dropping the share, fall back
+      // to individual threads, which have no such requirement.
+      console.warn('Could not open a group for the lift, sending one by one', error);
+    }
+  }
+
   let sent = 0;
-  for (const friendId of [...new Set(input.recipientIds.filter(Boolean))]) {
+  for (const friendId of recipients) {
     try {
       const conversation = await input.startChat(friendId);
       await input.send({ conversation_id: conversation.id, body });

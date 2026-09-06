@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useFriends, useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
 import { buildRecap } from '@/lib/lift/recap';
@@ -39,9 +40,11 @@ export type LiftShareChoice = {
   caption: string;
   /** The challenge to attach to, or null for a Home-only card. */
   challengeId: string | null;
+  /** The Circle room to post in. Never set alongside a challenge. */
+  circleId: string | null;
   home: boolean;
   audience: PostAudience;
-  /** Message only: who the card is addressed to. */
+  /** Message only: who the card is addressed to. Several people become one group thread. */
   recipientIds: string[];
 };
 
@@ -75,10 +78,14 @@ export function LiftShareSheet({
 }: LiftShareSheetProps) {
   const { user } = useAuth();
   const friends = useFriends(user?.id);
+  const myCircles = useMyCircles();
+  const circles = myCircles.data ?? [];
   const [destination, setDestination] = useState<LiftShareDestination | null>(null);
   const [caption, setCaption] = useState('');
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [circleId, setCircleId] = useState<string | null>(null);
   const [recipientIds, setRecipientIds] = useState<string[]>([]);
+  const [recipientQuery, setRecipientQuery] = useState('');
   const [home, setHome] = useState(true);
   const [audience, setAudience] = useState<PostAudience>(DEFAULT_POST_AUDIENCE);
 
@@ -97,6 +104,9 @@ export function LiftShareSheet({
     if (!visible) {
       setDestination(null);
       setRecipientIds([]);
+      setRecipientQuery('');
+      setChallengeId(null);
+      setCircleId(null);
     }
   }, [visible]);
 
@@ -108,11 +118,21 @@ export function LiftShareSheet({
     .map((edge) => edge.profile)
     .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile?.id));
 
+  // Searching your friends rather than everyone: a group thread can only be opened with accepted
+  // friends, so offering anyone else here would be a dead end at send time.
+  const needle = recipientQuery.trim().toLowerCase();
+  const matches = needle
+    ? people.filter((person) =>
+        `${person.display_name ?? ''} ${person.username ?? ''}`.toLowerCase().includes(needle),
+      )
+    : people;
+  const chosen = people.filter((person) => recipientIds.includes(person.id));
+
   const canSend =
     destination === 'message'
       ? recipientIds.length > 0
       : destination === 'live'
-        ? Boolean(challengeId)
+        ? Boolean(challengeId || circleId)
         : destination === 'home';
 
   const primaryLabel = busy
@@ -122,7 +142,9 @@ export function LiftShareSheet({
         ? `Send to ${recipientIds.length} people`
         : 'Send'
       : destination === 'live'
-        ? 'Add to challenge'
+        ? circleId
+          ? 'Post to Circle'
+          : 'Add to challenge'
         : 'Share to Home';
 
   return (
@@ -161,7 +183,7 @@ export function LiftShareSheet({
               : destination === 'message'
                 ? 'Send to'
                 : destination === 'live'
-                  ? 'Add to a challenge'
+                  ? 'Where should it go?'
                   : destination === 'home'
                     ? 'Share to Home'
                     : 'Nice work'}
@@ -202,11 +224,15 @@ export function LiftShareSheet({
                 glyph={GLYPH.swords}
                 label="Live"
                 detail={
-                  challenges.length
-                    ? 'Goes on your check-in for this period'
-                    : 'No active challenges to add it to'
+                  challenges.length && circles.length
+                    ? 'A challenge you are in, or one of your Circles'
+                    : circles.length
+                      ? 'Post it in one of your Circles'
+                      : challenges.length
+                        ? 'Goes on your check-in for this period'
+                        : 'No challenges or Circles to add it to'
                 }
-                disabled={!challenges.length}
+                disabled={!challenges.length && !circles.length}
                 onPress={() => setDestination('live')}
               />
             </View>
@@ -239,12 +265,95 @@ export function LiftShareSheet({
               {destination === 'message' ? (
                 people.length ? (
                   <>
-                    <SectionLabel text="FRIENDS" />
+                    <SectionLabel text="SEND TO" />
                     <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
-                      Only the people you pick can open this lift.
+                      {recipientIds.length > 1
+                        ? 'Everyone you pick lands in one group chat.'
+                        : 'Only the people you pick can open this lift.'}
                     </AppText>
-                    <View style={{ gap: 6 }}>
-                      {people.map((friend) => {
+
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        height: 46,
+                        paddingHorizontal: 14,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: THEME.border,
+                        backgroundColor: THEME.background,
+                      }}>
+                      <Glyph name={GLYPH.search} color={THEME.textMuted} size={15} />
+                      <TextInput
+                        value={recipientQuery}
+                        onChangeText={setRecipientQuery}
+                        placeholder="Type a name"
+                        placeholderTextColor={THEME.textMuted}
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                        accessibilityLabel="Search friends by name"
+                        selectionColor={THEME.accent}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 15,
+                          color: THEME.textPrimary,
+                          paddingVertical: 0,
+                        }}
+                      />
+                      {recipientQuery ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Clear search"
+                          hitSlop={10}
+                          onPress={() => setRecipientQuery('')}
+                          style={{ width: 26, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                          <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
+                        </Pressable>
+                      ) : null}
+                    </View>
+
+                    {chosen.length ? (
+                      <View
+                        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                        {chosen.map((person) => (
+                          <Pressable
+                            key={person.id}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${person.display_name || person.username}`}
+                            onPress={() =>
+                              setRecipientIds((current) =>
+                                current.filter((id) => id !== person.id),
+                              )
+                            }
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              minHeight: 34,
+                              paddingLeft: 8,
+                              paddingRight: 10,
+                              borderRadius: 999,
+                              backgroundColor: THEME.accentSoft,
+                            }}>
+                            <AppText
+                              style={{ fontSize: 13, fontWeight: '700', color: THEME.accent }}>
+                              {person.display_name || person.username}
+                            </AppText>
+                            <Glyph name={GLYPH.close} color={THEME.accent} size={11} />
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+
+                    <View style={{ gap: 6, marginTop: 10 }}>
+                      {matches.length === 0 ? (
+                        <AppText style={{ fontSize: 14, color: THEME.textMuted, paddingVertical: 8 }}>
+                          No friends match “{recipientQuery.trim()}”.
+                        </AppText>
+                      ) : null}
+                      {matches.map((friend) => {
                         const name = friend.display_name || friend.username;
                         const picked = recipientIds.includes(friend.id);
                         return (
@@ -294,27 +403,68 @@ export function LiftShareSheet({
                 )
               ) : null}
 
+              {/* A challenge and a Circle are both "somewhere my people are", so they share one
+                  screen. They are mutually exclusive because a post row can only carry one of the
+                  two ids. */}
               {destination === 'live' ? (
                 <>
-                  <SectionLabel text="ACTIVE CHALLENGES" />
-                  <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
-                    Goes on your check-in for this period — it never posts twice.
-                  </AppText>
-                  <View style={{ gap: 8 }}>
-                    {challenges.map((challenge) => (
-                      <PickRow
-                        key={challenge.id}
-                        label={challenge.title ?? 'Challenge'}
-                        detail={challenge.statusLine ?? challenge.taskLabel ?? undefined}
-                        selected={challengeId === challenge.id}
-                        onPress={() =>
-                          setChallengeId((current) =>
-                            current === challenge.id ? null : challenge.id,
-                          )
-                        }
-                      />
-                    ))}
-                  </View>
+                  {challenges.length ? (
+                    <>
+                      <SectionLabel text="ACTIVE CHALLENGES" />
+                      <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                        Goes on your check-in for this period — it never posts twice.
+                      </AppText>
+                      <View style={{ gap: 8 }}>
+                        {challenges.map((challenge) => (
+                          <PickRow
+                            key={challenge.id}
+                            label={challenge.title ?? 'Challenge'}
+                            detail={challenge.statusLine ?? challenge.taskLabel ?? undefined}
+                            selected={challengeId === challenge.id}
+                            onPress={() => {
+                              setCircleId(null);
+                              setChallengeId((current) =>
+                                current === challenge.id ? null : challenge.id,
+                              );
+                            }}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+
+                  {circles.length ? (
+                    <>
+                      <SectionLabel text="CIRCLES" />
+                      <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                        Posts in the Circle&rsquo;s room.
+                      </AppText>
+                      <View style={{ gap: 8 }}>
+                        {circles.map((circle) => (
+                          <PickRow
+                            key={circle.id}
+                            label={circle.name}
+                            detail={
+                              circle.member_count
+                                ? `${circle.member_count} ${circle.member_count === 1 ? 'member' : 'members'}`
+                                : undefined
+                            }
+                            selected={circleId === circle.id}
+                            onPress={() => {
+                              setChallengeId(null);
+                              setCircleId((current) => (current === circle.id ? null : circle.id));
+                            }}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+
+                  {!challenges.length && !circles.length ? (
+                    <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
+                      Join a challenge or a Circle and they will show up here.
+                    </AppText>
+                  ) : null}
                 </>
               ) : null}
 
@@ -356,7 +506,7 @@ export function LiftShareSheet({
                 </>
               ) : null}
 
-              {destination === 'live' && challengeId && !locked ? (
+              {destination === 'live' && (challengeId || circleId) && !locked ? (
                 <Pressable
                   accessibilityRole="switch"
                   accessibilityLabel="Also show on Home"
@@ -411,6 +561,7 @@ export function LiftShareSheet({
                   destination,
                   caption: caption.trim(),
                   challengeId: destination === 'live' ? challengeId : null,
+                  circleId: destination === 'live' ? circleId : null,
                   home: destination === 'home' ? true : home,
                   audience: destination === 'message' ? 'specific' : audience,
                   recipientIds: destination === 'message' ? recipientIds : [],

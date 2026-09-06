@@ -21,10 +21,14 @@ import {
   useSaveLiftSession,
   useShareLiftSession,
 } from '@/hooks/useLift';
-import { useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
+import {
+  useCreateGroupConversation,
+  useGetOrCreateConversation,
+  useSendMessage,
+} from '@/hooks/useSocial';
 import { fetchLiftSession } from '@/lib/lift/api';
 import { fetchChallengeShareLocks, sendLiftToRecipients } from '@/lib/lift/share';
-import { challengeDetailHref } from '@/lib/routes';
+import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
 import {
   activeFilterCount,
   EMPTY_LIFT_FILTER,
@@ -53,6 +57,7 @@ export default function LiftsHistoryScreen() {
   const attach = useAttachLiftToCheckin();
   const liftingChallenges = useLiftingChallenges();
   const startChat = useGetOrCreateConversation();
+  const startGroup = useCreateGroupConversation();
   const sendMessage = useSendMessage();
   const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<LiftHistoryFilter>(EMPTY_LIFT_FILTER);
@@ -178,8 +183,9 @@ export default function LiftsHistoryScreen() {
         draft: shareFor,
         caption: choice.caption,
         challengeId: null,
+        circleId: choice.circleId,
         home: !toMessage,
-        audience: toMessage ? 'specific' : choice.audience,
+        audience: toMessage ? 'specific' : choice.circleId ? 'friends' : choice.audience,
         audienceUserIds: toMessage ? choice.recipientIds : undefined,
       });
       if (toMessage) {
@@ -188,8 +194,14 @@ export default function LiftsHistoryScreen() {
           recipientIds: choice.recipientIds,
           caption: choice.caption,
           startChat: (friendId: string) => startChat.mutateAsync(friendId),
+          startGroup: (friendIds: string[]) => startGroup.mutateAsync(friendIds),
           send: (message) => sendMessage.mutateAsync(message).then(() => undefined),
         });
+      }
+      if (choice.circleId) {
+        setShareFor(null);
+        router.push(circleDetailHref(choice.circleId, { tab: 'chat' }));
+        return;
       }
       setSharedPostId(posted.postId);
     } catch (caught) {
