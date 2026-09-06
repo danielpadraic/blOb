@@ -42,6 +42,8 @@ type AddTimedRowSheetProps = {
   /** The section the row lands in — a group of its own, or between two exercises. */
   muscle: MuscleKey;
   methods: readonly LiftCardioMethod[];
+  /** Preselected when they arrived by searching for a method by name. */
+  initialMethodId?: string | null;
   onClose: () => void;
   onSubmit: (result: TimedRowResult) => void;
 };
@@ -51,6 +53,7 @@ export function AddTimedRowSheet({
   kind,
   muscle,
   methods,
+  initialMethodId,
   onClose,
   onSubmit,
 }: AddTimedRowSheetProps) {
@@ -70,12 +73,12 @@ export function AddTimedRowSheet({
       return;
     }
     setQuery('');
-    setMethodId(null);
+    setMethodId(initialMethodId ?? null);
     setCustomName('');
     setType('steady');
     setSeconds(rest ? DEFAULT_REST_SECONDS : DEFAULT_CARDIO_SECONDS);
     setIntensity(DEFAULT_CARDIO_INTENSITY);
-  }, [rest, visible]);
+  }, [initialMethodId, rest, visible]);
 
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();

@@ -9,7 +9,9 @@ import {
   draftToPayload,
   formatDuration,
   joinDuration,
+  matchesRest,
   newSessionDraft,
+  searchCardioMethods,
   sessionSections,
   splitDuration,
   timedRowLabel,
@@ -213,5 +215,44 @@ describe('what can be shared', () => {
       durationSeconds: 300,
     });
     expect(hasShareableWork(session)).toBe(false);
+  });
+});
+
+describe('finding cardio from the exercise search', () => {
+  const methods = [
+    { id: 'treadmill', name: 'Treadmill' },
+    { id: 'trail_run', name: 'Trail Run' },
+    { id: 'air_bike', name: 'Air Bike' },
+    { id: 'outdoor_bike', name: 'Outdoor Bike' },
+    { id: 'row_machine', name: 'Row Machine' },
+  ];
+
+  it('finds a machine the strength catalog does not have', () => {
+    expect(searchCardioMethods(methods, 'tread').map((m) => m.id)).toEqual(['treadmill']);
+  });
+
+  // Someone typing "bike" means the bikes, so a name that starts with it comes before one that
+  // merely contains it.
+  it('puts a leading match above a mid-name match', () => {
+    expect(searchCardioMethods(methods, 'bike').map((m) => m.id)).toEqual([
+      'air_bike',
+      'outdoor_bike',
+    ]);
+  });
+
+  it('lists the catalog when they just type cardio', () => {
+    expect(searchCardioMethods(methods, 'cardio')).toHaveLength(5);
+  });
+
+  it('stays quiet for a strength search', () => {
+    expect(searchCardioMethods(methods, 'bench press')).toEqual([]);
+    expect(searchCardioMethods(methods, '')).toEqual([]);
+  });
+
+  it('offers rest once they have typed enough to mean it', () => {
+    expect(matchesRest('re')).toBe(true);
+    expect(matchesRest('rest')).toBe(true);
+    expect(matchesRest('r')).toBe(false);
+    expect(matchesRest('reverse fly')).toBe(false);
   });
 });

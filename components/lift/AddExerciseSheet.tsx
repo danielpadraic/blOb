@@ -10,13 +10,20 @@ import {
   searchExercises,
   type ExerciseOption,
 } from '@/lib/lift/catalog';
+import { matchesRest, searchCardioMethods } from '@/lib/lift/session';
 import { muscleLabel, muscleShortLabel, type MuscleKey } from '@/lib/lift/muscles';
+import type { LiftCardioMethod } from '@/lib/lift/types';
 import { THEME, themeShadow } from '@/lib/theme';
 
 /**
  * Typeahead over the official catalog filtered to the session's muscles, plus this user's own
  * exercises. Suggestions start at one character. "Add '{query}'" creates a private exercise — it
  * never touches the official catalog.
+ *
+ * Cardio and rest are offered here too. They are not strength exercises and are logged by a
+ * different sheet, but this is where people come to add something to a section, so this is where
+ * they have to be findable — otherwise searching "Treadmill" only offers to invent a barbell
+ * movement by that name.
  */
 
 export type AddExerciseResult = {
@@ -36,9 +43,13 @@ type AddExerciseSheetProps = {
   customs: readonly ExerciseOption[];
   /** Name of the exercise a superset would pair with, or null when the section is empty. */
   supersetPartnerName: string | null;
+  /** The official cardio catalog, so Treadmill is findable from the same search box. */
+  methods: readonly LiftCardioMethod[];
   busy?: boolean;
   onClose: () => void;
   onSubmit: (result: AddExerciseResult) => void;
+  /** Hands off to the timed logger, which asks a different set of questions. */
+  onPickTimed: (result: { kind: 'cardio' | 'rest'; methodId: string | null; muscle: MuscleKey }) => void;
 };
 
 export function AddExerciseSheet({
@@ -47,9 +58,11 @@ export function AddExerciseSheet({
   muscles,
   customs,
   supersetPartnerName,
+  methods,
   busy,
   onClose,
   onSubmit,
+  onPickTimed,
 }: AddExerciseSheetProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
@@ -75,6 +88,12 @@ export function AddExerciseSheet({
 
   const trimmed = query.trim();
   const canCreate = trimmed.length >= 2 && !exerciseNameTaken(trimmed, customs);
+
+  const cardioMatches = useMemo(
+    () => searchCardioMethods(methods, query),
+    [methods, query],
+  );
+  const restMatches = matchesRest(query);
 
   function pick(option: ExerciseOption) {
     onSubmit({ option, createName: null, muscle: target, superset });
@@ -171,7 +190,7 @@ export function AddExerciseSheet({
               ref={inputRef}
               value={query}
               onChangeText={setQuery}
-              placeholder={`Search ${muscleShortLabel(target)} exercises`}
+              placeholder={`Search ${muscleShortLabel(target)}, cardio, or rest`}
               placeholderTextColor={THEME.textMuted}
               autoCorrect={false}
               autoCapitalize="words"
@@ -203,6 +222,51 @@ export function AddExerciseSheet({
           style={{ flexGrow: 0 }}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 8 }}>
+          {/* With nothing typed they are browsing, so cardio and rest are offered by name. This is
+              the only thing that makes intervals discoverable: bench, rest, sprint, rest, bench —
+              all added from inside Chest, without leaving for a screen of their own. */}
+          {!trimmed ? (
+            <>
+              <ResultRow
+                title="Cardio"
+                subtitle={`Treadmill, bike, rower — logged in minutes · goes in ${muscleShortLabel(target)}`}
+                icon={GLYPH.anyExercise}
+                disabled={busy}
+                onPress={() => onPickTimed({ kind: 'cardio', methodId: null, muscle: target })}
+              />
+              <ResultRow
+                title="Rest"
+                subtitle={`A break between sets · goes in ${muscleShortLabel(target)}`}
+                icon={GLYPH.clock}
+                disabled={busy}
+                onPress={() => onPickTimed({ kind: 'rest', methodId: null, muscle: target })}
+              />
+            </>
+          ) : null}
+
+          {/* Cardio and rest sit above the create row on purpose. Someone typing "Treadmill" wants
+              the treadmill, not an offer to invent a barbell movement with that name. */}
+          {cardioMatches.map((method) => (
+            <ResultRow
+              key={`cardio-${method.id}`}
+              title={method.name}
+              subtitle={`Cardio · logged in minutes, not pounds · goes in ${muscleShortLabel(target)}`}
+              icon={GLYPH.anyExercise}
+              disabled={busy}
+              onPress={() => onPickTimed({ kind: 'cardio', methodId: method.id, muscle: target })}
+            />
+          ))}
+
+          {restMatches ? (
+            <ResultRow
+              title="Rest"
+              subtitle={`A break between sets · goes in ${muscleShortLabel(target)}`}
+              icon={GLYPH.clock}
+              disabled={busy}
+              onPress={() => onPickTimed({ kind: 'rest', methodId: null, muscle: target })}
+            />
+          ) : null}
+
           {canCreate ? (
             <ResultRow
               title={`Add “${trimmed}”`}
@@ -226,7 +290,7 @@ export function AddExerciseSheet({
             />
           ))}
 
-          {results.length === 0 && !canCreate ? (
+          {results.length === 0 && !canCreate && !cardioMatches.length && !restMatches ? (
             <View style={{ paddingHorizontal: 16, paddingVertical: 24 }}>
               <AppText style={{ fontSize: 14, color: THEME.textMuted, textAlign: 'center' }}>
                 Nothing matches “{trimmed}”. Keep typing to add it as your own.

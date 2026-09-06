@@ -265,6 +265,44 @@ export function cardioTypeLabel(type: LiftCardioType | null | undefined): string
   return type ? CARDIO_TYPE_LABELS[type] : '';
 }
 
+/**
+ * Cardio methods matching what someone typed into the exercise search.
+ *
+ * The strength catalog has no Treadmill in it, so without this, searching for one offers to create
+ * a private exercise with pounds and reps on it — a worse answer than none. Bare "cardio" lists
+ * everything, because at that point they are browsing rather than searching.
+ */
+export function searchCardioMethods<T extends { id: string; name: string }>(
+  methods: readonly T[],
+  query: string,
+  limit = 6,
+): T[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return [];
+  }
+  if (needle === 'cardio') {
+    return methods.slice(0, limit);
+  }
+  const starts: T[] = [];
+  const contains: T[] = [];
+  for (const method of methods) {
+    const name = method.name.toLowerCase();
+    if (name.startsWith(needle)) {
+      starts.push(method);
+    } else if (name.includes(needle)) {
+      contains.push(method);
+    }
+  }
+  return [...starts, ...contains].slice(0, limit);
+}
+
+/** Whether what they typed is asking for a rest row. */
+export function matchesRest(query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  return needle.length >= 2 && 'rest'.startsWith(needle);
+}
+
 /** What a cardio or rest row is called on a card and in the section list. */
 export function timedRowLabel(row: LiftExerciseDraft): string {
   if (row.kind === 'rest') {

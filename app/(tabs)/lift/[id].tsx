@@ -112,9 +112,11 @@ function LiftSessionInner({ id }: { id: string }) {
   const [collapsedMuscles, setCollapsedMuscles] = useState<Set<string>>(new Set());
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
-  const [timedSheet, setTimedSheet] = useState<{ kind: 'cardio' | 'rest'; muscle: MuscleKey } | null>(
-    null,
-  );
+  const [timedSheet, setTimedSheet] = useState<{
+    kind: 'cardio' | 'rest';
+    muscle: MuscleKey;
+    methodId?: string | null;
+  } | null>(null);
   // True only for the explicit Save press. Autosave must never touch the button, or it blinks
   // between "Save session" and "Saving…" on every keystroke.
   const [finishing, setFinishing] = useState(false);
@@ -888,9 +890,14 @@ function LiftSessionInner({ id }: { id: string }) {
         supersetPartnerName={
           sheetMuscle ? (supersetPartner(draft, sheetMuscle)?.name ?? null) : null
         }
+        methods={cardioMethods.data ?? []}
         busy={createCustom.isPending}
         onClose={() => setSheetMuscle(null)}
         onSubmit={(result) => void onAddExercise(result)}
+        onPickTimed={(result) => {
+          setSheetMuscle(null);
+          setTimedSheet(result);
+        }}
       />
 
       <AddTimedRowSheet
@@ -898,6 +905,7 @@ function LiftSessionInner({ id }: { id: string }) {
         kind={timedSheet?.kind ?? 'cardio'}
         muscle={timedSheet?.muscle ?? draft.muscleKeys[0] ?? 'cardio'}
         methods={cardioMethods.data ?? []}
+        initialMethodId={timedSheet?.methodId ?? null}
         onClose={() => setTimedSheet(null)}
         onSubmit={onAddTimedRow}
       />
