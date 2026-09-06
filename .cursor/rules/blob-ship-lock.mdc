@@ -1,0 +1,12 @@
+---
+description: Stay on blob-beta-three — no feature branches, worktrees, or pull requests.
+alwaysApply: true
+---
+
+# blOb ship lock
+
+Always stay on `blob-beta-three`. Never create a feature branch, worktree, or pull request. Never Squash & Merge. Push is `git push origin blob-beta-three`.
+
+Vercel project is **blob** (not blob-app). Ignored Build Step = Only build production. QA only https://blob.mobi.
+
+The operator is not a programmer; do not ask them to resolve merge commits. If HEAD is not `blob-beta-three`, stop and say so.

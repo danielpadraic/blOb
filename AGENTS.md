@@ -84,6 +84,20 @@ Never ship a stub that only works on one platform without a fallback or honest e
 - Web: Vercel builds `npx expo export --platform web` to `dist/` (see root `vercel.json`). Do not ship consumer UX “on Vercel via `web/blob-app` only.”
 - User-facing work targets the team’s deploy branch (e.g. `blob-beta-three`) when applicable.
 
+## Vercel lock
+
+- Vercel project is **blob** (not blob-app).
+- Ignored Build Step = Only build production.
+- QA only https://blob.mobi.
+
+### Agent git
+
+- Always stay on `blob-beta-three`.
+- Never create a feature branch, worktree, or pull request.
+- Never Squash & Merge.
+- Push is `git push origin blob-beta-three`.
+- Vercel project is **blob** (not blob-app). Ignored Build Step = Only build production. QA only https://blob.mobi.
+
 ## When implementing
 
 - Call out any `Platform.OS` split and why.
