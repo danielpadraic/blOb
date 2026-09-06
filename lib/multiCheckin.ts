@@ -29,8 +29,8 @@ export type MultiCheckinRow = {
 
 export const HOME_CHECKIN_STACK_WINDOW_MS = 2 * 60 * 1000;
 
-/** Slice 7: Home collapses 2+ check-in posts from one author in this window. */
-export const HOME_CHECKIN_STACK_SLICE = 7;
+/** Home never collapses two check-ins into one card. Each challenge keeps its own post. */
+export const HOME_CHECKIN_STACK_SLICE = 0;
 
 const hubSnapshots: Record<string, Pick<MultiCheckinRow, 'title' | 'task' | 'remainingProofLabels'>> = {};
 
@@ -180,56 +180,7 @@ export function homeCheckinStackable(post: HomeCheckinPost): boolean {
   return true;
 }
 
-/** Groups 2+ Home-visible check-in posts from the same author within ~2 minutes. Lobby feeds stay unstacked. */
+/** Home keeps one card per check-in. Never a “checked in to 2 challenges” mash-up. */
 export function stackHomeCheckinPosts(posts: HomeCheckinPost[]): Array<HomeCheckinPost | HomeCheckinStack> {
-  const out: Array<HomeCheckinPost | HomeCheckinStack> = [];
-  const used = new Set<string>();
-  for (const post of posts) {
-    if (!post?.id || used.has(post.id)) {
-      continue;
-    }
-    if (!homeCheckinStackable(post)) {
-      out.push(post);
-      used.add(post.id);
-      continue;
-    }
-    const author = String(post.author_id ?? '');
-    const at = Date.parse(String(post.created_at ?? ''));
-    const cluster = posts.filter((other) => {
-      if (!other?.id || used.has(other.id) || !homeCheckinStackable(other)) {
-        return false;
-      }
-      if (String(other.author_id ?? '') !== author) {
-        return false;
-      }
-      const otherAt = Date.parse(String(other.created_at ?? ''));
-      return Number.isFinite(at) && Number.isFinite(otherAt) && Math.abs(otherAt - at) <= HOME_CHECKIN_STACK_WINDOW_MS;
-    });
-    if (cluster.length >= 2) {
-      cluster.forEach((item) => used.add(item.id));
-      const name =
-        cluster[0]?.author?.display_name?.trim() ||
-        (cluster[0]?.author?.username ? `@${cluster[0].author.username}` : 'Someone');
-      const items = cluster.map((item) => ({
-        postId: item.id,
-        challengeId: String(item.challenge_id),
-        title: item.challenge?.title?.trim() || '',
-      }));
-      const titles = items.map((item) => item.title).filter(Boolean);
-      out.push({
-        kind: 'stack',
-        authorId: author,
-        count: cluster.length,
-        copy: `${name} checked in to ${cluster.length} challenges`,
-        titles,
-        firstPostId: cluster[0]!.id,
-        postIds: cluster.map((item) => item.id),
-        items,
-      });
-      continue;
-    }
-    used.add(post.id);
-    out.push(post);
-  }
-  return out;
+  return posts.filter((post) => Boolean(post?.id));
 }

@@ -12,7 +12,7 @@ import { Alert } from 'react-native';
 
 import { clipPostsQueryKey } from '@/lib/clipPost';
 import { isHomeExcludedClipType } from '@/lib/clipPost';
-import { OFFICIAL_CHALLENGE_TITLE } from '@/lib/constants';
+import { checkinPostBody } from '@/lib/checkin/captions';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { isClipSharePost } from '@/lib/roundShare';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
@@ -1192,8 +1192,7 @@ export async function insertWorkoutCheckInPost(input: {
   challengeTitle?: string | null;
   mediaUrls?: string[];
 }): Promise<Post | null> {
-  const title = input.challengeTitle?.trim() || OFFICIAL_CHALLENGE_TITLE;
-  const content = `Checked in today for the ${title} 💪`;
+  const content = checkinPostBody();
   const media_urls = input.mediaUrls ?? [];
 
   const schema = await resolvePostsSchema();

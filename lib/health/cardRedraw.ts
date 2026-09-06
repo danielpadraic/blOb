@@ -42,6 +42,8 @@ export type CardRepair = {
   hadCard: boolean;
   /** The slot's own caption, which the save rebuilds the part from and would otherwise drop. */
   caption: string | null;
+  /** The JPEG that was on the slot, if any — used to find a Wave row to update. */
+  previousUrl: string | null;
   health: CheckinHealthProof;
   workout: HealthWorkout;
 };
@@ -195,6 +197,7 @@ export function cardRepairFor(
       healthWorkoutId: part.healthWorkoutId ?? null,
       hadCard: /^https?:\/\//i.test(String(part.url ?? '')),
       caption: part.caption ?? null,
+      previousUrl: String(part.url ?? '').trim() || null,
       health,
       workout,
     };

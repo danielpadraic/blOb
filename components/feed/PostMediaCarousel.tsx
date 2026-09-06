@@ -21,12 +21,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { usePathname, useGlobalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { useMediaLightboxOptional, type LightboxItem, type WorkoutSlide } from '@/components/feed/MediaLightbox';
 import { AppText } from '@/components/ui/AppText';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { isWorkoutCardUrl } from '@/lib/health/postWorkoutCard';
+import { lightboxOriginFromPath } from '@/lib/lightboxOrigin';
 import { workoutCardAccent, workoutCardFit } from '@/lib/health/workoutProofCard';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
@@ -239,6 +241,12 @@ export function PostMediaCarousel({
   homeInline?: boolean;
 }) {
   const lightbox = useMediaLightboxOptional();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ tab?: string }>();
+  const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const lightboxOrigin = homeInline
+    ? { kind: 'home' as const }
+    : lightboxOriginFromPath(pathname, tabParam);
   const { width: windowW, height: windowH } = useWindowDimensions();
   const [cardWidth, setCardWidth] = useState(() =>
     Platform.OS === 'web' ? Math.min(windowW, FEED_COLUMN_MAX) : windowW,
@@ -395,7 +403,7 @@ export function PostMediaCarousel({
       return;
     }
     markUserPaused();
-    lightbox?.openLightbox(lightboxItems, itemIndex);
+    lightbox?.openLightbox(lightboxItems, itemIndex, lightboxOrigin);
   }
 
   if (urls.length === 0) {

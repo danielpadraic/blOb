@@ -19,7 +19,7 @@ export type OpenChallengeFromTagInput = {
   isParticipant?: boolean;
   snapshot?: ChallengeLoadSnapshot | null;
   postId?: string | null;
-  tab?: 'overview' | 'board' | 'feed';
+  tab?: 'overview' | 'board' | 'feed' | 'live';
 };
 
 export function useOpenChallengeFromTag() {
@@ -80,7 +80,7 @@ export function useOpenChallengeFromTag() {
         },
         returnTo: 'feed',
         postId: input.postId,
-        extra: input.tab || input.postId ? { tab: input.tab ?? 'feed' } : undefined,
+        extra: { tab: input.tab ?? 'live' },
         source: 'home-in-challenge',
         pathname,
       });

@@ -84,7 +84,7 @@ export function InChallengeChip({
     created_by?: string | null;
   } | null;
   postId?: string | null;
-  tab?: 'overview' | 'board' | 'feed';
+  tab?: 'overview' | 'board' | 'feed' | 'live';
 }) {
   const openTag = useOpenChallengeFromTag();
   const label = titleOnly

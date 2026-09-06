@@ -66,6 +66,7 @@ export const GLYPH = {
   chevronDown: { ios: 'chevron.down', android: 'expand_more', web: 'expand_more' },
   chevronUp: { ios: 'chevron.up', android: 'expand_less', web: 'expand_less' },
   chevronRight: { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' },
+  chevronLeft: { ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' },
   lift: {
     ios: 'figure.strengthtraining.traditional',
     android: 'fitness_center',

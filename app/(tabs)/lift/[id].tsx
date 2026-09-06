@@ -361,6 +361,37 @@ function LiftSessionInner({ id }: { id: string }) {
     }
   }
 
+  function goBackToBuilder() {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace(readOnly ? LIFTS_HISTORY_HREF : LIFT_START_HREF);
+  }
+
+  const backHeader = {
+    headerShown: true as const,
+    headerBackVisible: false,
+    headerLeft: () => (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        onPress={goBackToBuilder}
+        hitSlop={8}
+        style={{
+          minWidth: 44,
+          minHeight: 44,
+          paddingRight: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+        }}>
+        <Glyph name={GLYPH.chevronLeft} color={THEME.textPrimary} size={18} />
+        <AppText style={{ fontSize: 17, fontWeight: '600', color: THEME.textPrimary }}>Back</AppText>
+      </Pressable>
+    ),
+  };
+
   const sections = useMemo(() => (draft ? sessionSections(draft) : []), [draft]);
   const labels = useMemo(() => (draft ? supersetLabels(draft) : {}), [draft]);
   const title = draft ? sessionTitle(draft) : 'Lift';
@@ -368,7 +399,7 @@ function LiftSessionInner({ id }: { id: string }) {
   if (loaded.isLoading || (!draft && !loaded.isFetched)) {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
-        <Stack.Screen options={{ headerShown: true, title: 'Lift' }} />
+        <Stack.Screen options={{ ...backHeader, title: 'Lift' }} />
         <MascotState kind="loading" title="Loading your lift…" />
       </Screen>
     );
@@ -377,7 +408,7 @@ function LiftSessionInner({ id }: { id: string }) {
   if (!draft) {
     return (
       <Screen edges={TAB_ROOT_EDGES}>
-        <Stack.Screen options={{ headerShown: true, title: 'Lift' }} />
+        <Stack.Screen options={{ ...backHeader, title: 'Lift' }} />
         <MascotState
           kind="empty"
           title="That lift isn’t here"
@@ -397,7 +428,7 @@ function LiftSessionInner({ id }: { id: string }) {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
-      <Stack.Screen options={{ headerShown: true, title: readOnly ? 'Lift' : 'Logging' }} />
+      <Stack.Screen options={{ ...backHeader, title: readOnly ? 'Lift' : 'Logging' }} />
       <View style={{ flex: 1, minHeight: 0 }}>
         <ScrollView
           style={{ flex: 1 }}
@@ -702,11 +733,14 @@ function LiftSessionInner({ id }: { id: string }) {
               )}
             </>
           ) : (
-            <Button
-              title={save.isPending ? 'Saving…' : 'Save session'}
-              loading={save.isPending}
-              onPress={() => void onSave()}
-            />
+            <>
+              <Button title="Back" variant="outline" onPress={goBackToBuilder} />
+              <Button
+                title={save.isPending ? 'Saving…' : 'Save session'}
+                loading={save.isPending}
+                onPress={() => void onSave()}
+              />
+            </>
           )}
         </View>
       </View>

@@ -20,6 +20,7 @@ import { fetchLiftSession } from '@/lib/lift/api';
 import { MUSCLE_KEYS, muscleLabel, muscleSummary, type MuscleKey } from '@/lib/lift/muscles';
 import { applyOverload } from '@/lib/lift/overload';
 import { newSessionDraft, repeatSession, shortDate } from '@/lib/lift/session';
+import { recalledLiftMuscles, rememberLiftMuscles } from '@/lib/lift/startMemory';
 import type { LiftOverloadPlan } from '@/lib/lift/types';
 import { LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
@@ -36,7 +37,7 @@ export default function LiftStartScreen() {
   const unit = useLiftUnit();
   const history = useLiftHistory();
   const save = useSaveLiftSession();
-  const [selected, setSelected] = useState<MuscleKey[]>([]);
+  const [selected, setSelected] = useState<MuscleKey[]>(() => recalledLiftMuscles());
   const [error, setError] = useState<string | null>(null);
   const [overloadOpen, setOverloadOpen] = useState(false);
   const last = useLastSessionForMuscles(selected);
@@ -47,17 +48,22 @@ export default function LiftStartScreen() {
 
   function toggle(key: MuscleKey) {
     setError(null);
-    setSelected((current) =>
-      current.includes(key) ? current.filter((value) => value !== key) : [...current, key],
-    );
+    setSelected((current) => {
+      const next = current.includes(key)
+        ? current.filter((value) => value !== key)
+        : [...current, key];
+      rememberLiftMuscles(next);
+      return next;
+    });
   }
 
   async function startNew() {
     setError(null);
     try {
+      rememberLiftMuscles(selected);
       const draft = newSessionDraft({ muscleKeys: selected, unit });
       await save.mutateAsync({ draft });
-      router.replace(liftSessionHref(draft.id));
+      router.push(liftSessionHref(draft.id));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not start that lift.');
     }
@@ -76,9 +82,10 @@ export default function LiftStartScreen() {
         setError('That session is no longer there. Start new instead.');
         return;
       }
+      rememberLiftMuscles(selected);
       const draft = plan ? applyOverload(source, plan) : repeatSession(source);
       await save.mutateAsync({ draft });
-      router.replace(liftSessionHref(draft.id));
+      router.push(liftSessionHref(draft.id));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not copy that lift.');
     }
@@ -280,7 +287,7 @@ export default function LiftStartScreen() {
                 </Pressable>
               ) : null}
               <Button
-                title={busy ? 'Starting…' : 'Start new'}
+                title={busy ? 'Starting…' : 'Continue'}
                 loading={busy}
                 onPress={() => void startNew()}
               />

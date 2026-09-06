@@ -149,7 +149,12 @@ export const LiveBubble = memo(function LiveBubble({
     if (!lightbox || items.length === 0) {
       return;
     }
-    lightbox.openLightbox(items, index);
+    const challengeId = String(post.challenge_id ?? '').trim();
+    lightbox.openLightbox(
+      items,
+      index,
+      challengeId ? { kind: 'live', challengeId, postId: post.id } : { kind: 'other' },
+    );
   }
 
   function openCommentMenu() {

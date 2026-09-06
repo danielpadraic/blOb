@@ -12,6 +12,7 @@ import { challengeClockTz } from '@/lib/checkinPeriod';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { type CardRepair } from '@/lib/health/cardRedraw';
 import { pendingCardRepairs, putRepairedCard } from '@/lib/health/cardRedrawQueue';
+import { ensureCheckinWaveForRepair } from '@/lib/checkinWave';
 import {
   buildWorkoutProofCard,
   withHeartRateFloor,
@@ -149,7 +150,15 @@ export function WorkoutCardRedrawHost() {
           // post's media so Live and Home both show it. The check-in keeps its status, its health
           // snapshot and its caption, and the version stamp is what stops the card being picked up
           // again on the next open.
-          await putRepairedCard(item, fileUri);
+          const url = await putRepairedCard(item, fileUri);
+          if (userId) {
+            await ensureCheckinWaveForRepair({
+              userId,
+              challengeId: item.challengeId,
+              url,
+              previousUrl: item.previousUrl,
+            }).catch(() => undefined);
+          }
         } catch {
           // Unstamped, so it is tried again. The old card stays on the post rather than going empty.
         } finally {

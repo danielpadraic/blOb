@@ -21,16 +21,25 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { usePathname, useGlobalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { PlayerCloseButton } from '@/components/ui/PlayerCloseButton';
 import { useCheckinHealthSnapshot } from '@/hooks/useCheckinHealthSnapshot';
+import { pushChallengeHref } from '@/lib/challengeNav';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { workoutCardForPost } from '@/lib/health/postWorkoutCard';
 import { workoutCardFit, type WorkoutProofCardModel } from '@/lib/health/workoutProofCard';
+import {
+  lightboxNeedsRestore,
+  lightboxReturnHref,
+  type LightboxOrigin,
+} from '@/lib/lightboxOrigin';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
@@ -72,11 +81,12 @@ export type WorkoutSlide = {
 type LightboxState = {
   items: LightboxItem[];
   index: number;
+  origin: LightboxOrigin | null;
 };
 
 type MediaLightboxValue = {
-  openLightbox: (items: LightboxItem[], index?: number) => void;
-  closeLightbox: () => void;
+  openLightbox: (items: LightboxItem[], index?: number, origin?: LightboxOrigin | null) => void;
+  closeLightbox: (opts?: { restore?: boolean }) => void;
   open: boolean;
 };
 
@@ -84,10 +94,11 @@ const MediaLightboxContext = createContext<MediaLightboxValue | null>(null);
 
 const DIM = 'rgba(16, 19, 18, 0.96)';
 
-let closeLightboxFn: (() => void) | null = null;
+let closeLightboxFn: ((opts?: { restore?: boolean }) => void) | null = null;
 
+/** Chrome / tab dismiss only. Does not send the reader back to Live. */
 export function closeMediaLightbox() {
-  closeLightboxFn?.();
+  closeLightboxFn?.({ restore: false });
 }
 
 export function useMediaLightboxOptional() {
@@ -102,21 +113,52 @@ export function useMediaLightbox() {
   return value;
 }
 
+export type { LightboxOrigin } from '@/lib/lightboxOrigin';
+
 function lightboxItems(items: LightboxItem[]): LightboxItem[] {
   return items.filter((item) => Boolean(item.uri));
 }
 
 export function MediaLightboxHost({ children }: { children: ReactNode }) {
   const [state, setState] = useState<LightboxState | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ tab?: string }>();
+  const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const originRef = useRef<LightboxOrigin | null>(null);
+  const pathRef = useRef(pathname);
+  const tabRef = useRef(tabParam);
+  pathRef.current = pathname;
+  tabRef.current = tabParam;
 
-  const closeLightbox = useCallback(() => setState(null), []);
-  const openLightbox = useCallback((items: LightboxItem[], index = 0) => {
+  const closeLightbox = useCallback((opts?: { restore?: boolean }) => {
+    const origin = originRef.current;
+    setState(null);
+    originRef.current = null;
+    if (opts?.restore === false) {
+      return;
+    }
+    if (!lightboxNeedsRestore(origin, pathRef.current, tabRef.current)) {
+      return;
+    }
+    const href = lightboxReturnHref(origin);
+    if (!href) {
+      return;
+    }
+    if (origin?.kind === 'home') {
+      router.replace('/feed');
+      return;
+    }
+    pushChallengeHref(router, href, 'lightbox-close', origin?.challengeId ?? '', pathRef.current);
+  }, [router]);
+  const openLightbox = useCallback((items: LightboxItem[], index = 0, origin?: LightboxOrigin | null) => {
     const next = lightboxItems(items);
     if (next.length === 0) {
       return;
     }
     const start = Math.min(Math.max(index, 0), next.length - 1);
-    setState({ items: next, index: start });
+    originRef.current = origin ?? null;
+    setState({ items: next, index: start, origin: origin ?? null });
   }, []);
 
   useEffect(() => {
@@ -154,20 +196,41 @@ function MediaLightboxOverlay({
   const { width, height } = useWindowDimensions();
   const pager = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
+  const [pageScale, setPageScale] = useState(1);
   const pageWidth = Math.max(width, 1);
   const pageHeight = Math.max(height, 1);
   const open = Boolean(state);
+  const zoomed = pageScale > 1.01;
 
   useEffect(() => {
     if (!state) {
       return;
     }
     setPage(state.index);
+    setPageScale(1);
     const x = state.index * pageWidth;
     requestAnimationFrame(() => {
       pager.current?.scrollTo({ x, animated: false });
     });
   }, [state, pageWidth]);
+
+  useEffect(() => {
+    if (!open || Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+    const win = window;
+    win.history.pushState({ blobLightbox: true }, '', win.location.href);
+    const onPop = () => {
+      onClose();
+    };
+    win.addEventListener('popstate', onPop);
+    return () => {
+      win.removeEventListener('popstate', onPop);
+      if (win.history.state && (win.history.state as { blobLightbox?: boolean }).blobLightbox) {
+        win.history.back();
+      }
+    };
+  }, [open, onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -243,7 +306,8 @@ function MediaLightboxOverlay({
           <ScrollView
             ref={pager}
             horizontal
-            pagingEnabled
+            pagingEnabled={!zoomed}
+            scrollEnabled={!zoomed}
             nestedScrollEnabled={false}
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
@@ -263,7 +327,9 @@ function MediaLightboxOverlay({
                 mediaWidth={columnW}
                 height={pageHeight}
                 mediaHeight={mediaHeight}
+                active={itemIndex === page}
                 onClose={onClose}
+                onScaleChange={itemIndex === page ? setPageScale : undefined}
               />
             ))}
           </ScrollView>
@@ -309,21 +375,25 @@ function LightboxPage({
   mediaWidth,
   height,
   mediaHeight,
+  active,
   onClose,
+  onScaleChange,
 }: {
   item: LightboxItem;
   width: number;
   mediaWidth: number;
   height: number;
   mediaHeight: number;
+  active: boolean;
   onClose: () => void;
+  onScaleChange?: (scale: number) => void;
 }) {
   const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
   const workout = item.workout ?? null;
-  // A card is vector art sized to the slide, so it is already as sharp and as large as it can be.
-  // Pinch-zoom would only let the reader push the stats off their own screen.
-  const zoomable = Platform.OS === 'ios' && kind !== 'video' && !workout;
+  // Live-rendered workout cards are already as sharp as they can be. A bitmap (selfie, proof
+  // still, or a flattened card with no live model) pinch-zooms on every platform.
+  const zoomable = kind !== 'video' && !workout;
   const mediaStyle = { width: mediaWidth, height: mediaHeight };
 
   const media = workout ? (
@@ -354,24 +424,138 @@ function LightboxPage({
         pointerEvents={kind === 'video' || zoomable ? 'auto' : 'none'}
         style={[styles.mediaSlot, { width, height: mediaHeight }]}>
         {zoomable ? (
-          <ScrollView
-            style={mediaStyle}
-            contentContainerStyle={mediaStyle}
-            maximumZoomScale={4}
-            minimumZoomScale={1}
-            showsVerticalScrollIndicator={false}
-            showsHorizontalScrollIndicator={false}
-            centerContent
-            bouncesZoom>
-            <View style={mediaStyle} pointerEvents="none">
-              {media}
-            </View>
-          </ScrollView>
+          <ZoomableStill
+            width={mediaWidth}
+            height={mediaHeight}
+            active={active}
+            onClose={onClose}
+            onScaleChange={onScaleChange}>
+            {media}
+          </ZoomableStill>
         ) : (
           media
         )}
       </View>
     </View>
+  );
+}
+
+function ZoomableStill({
+  width,
+  height,
+  active,
+  onClose,
+  onScaleChange,
+  children,
+}: {
+  width: number;
+  height: number;
+  active: boolean;
+  onClose: () => void;
+  onScaleChange?: (scale: number) => void;
+  children: ReactNode;
+}) {
+  const scale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const startScale = useSharedValue(1);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const [zoomed, setZoomed] = useState(false);
+  const report = onScaleChange;
+
+  const reportScale = useCallback(
+    (next: number) => {
+      setZoomed(next > 1.01);
+      report?.(next);
+    },
+    [report],
+  );
+
+  const resetZoom = useCallback(() => {
+    scale.value = withTiming(1);
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    reportScale(1);
+  }, [reportScale, scale, translateX, translateY]);
+
+  useEffect(() => {
+    if (!active) {
+      resetZoom();
+    }
+  }, [active, resetZoom]);
+
+  const pinch = Gesture.Pinch()
+    .onBegin(() => {
+      startScale.value = scale.value;
+    })
+    .onUpdate((event) => {
+      const next = Math.min(4, Math.max(1, startScale.value * event.scale));
+      scale.value = next;
+      if (reportScale) {
+        runOnJS(reportScale)(next);
+      }
+    })
+    .onEnd(() => {
+      if (scale.value <= 1.02) {
+        scale.value = withTiming(1);
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        runOnJS(reportScale)(1);
+      }
+    });
+
+  const pan = Gesture.Pan()
+    .enabled(zoomed)
+    .onBegin(() => {
+      startX.value = translateX.value;
+      startY.value = translateY.value;
+    })
+    .onUpdate((event) => {
+      translateX.value = startX.value + event.translationX;
+      translateY.value = startY.value + event.translationY;
+    });
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1.01) {
+        scale.value = withTiming(1);
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        runOnJS(reportScale)(1);
+        return;
+      }
+      scale.value = withTiming(2.4);
+      runOnJS(reportScale)(2.4);
+    });
+
+  const dismiss = Gesture.Pan()
+    .enabled(active && !zoomed)
+    .activeOffsetY(24)
+    .failOffsetX([-28, 28])
+    .onEnd((event) => {
+      if (event.translationY > 72 && event.velocityY > 0) {
+        runOnJS(onClose)();
+      }
+    });
+
+  const composed = Gesture.Simultaneous(pinch, Gesture.Exclusive(doubleTap, Gesture.Race(pan, dismiss)));
+
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={composed}>
+      <Animated.View style={[{ width, height, alignItems: 'center', justifyContent: 'center' }, style]}>
+        {children}
+      </Animated.View>
+    </GestureDetector>
   );
 }
 

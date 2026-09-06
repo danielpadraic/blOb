@@ -30,7 +30,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
-import { seedChallengeLivePost, useCreatePost } from '@/hooks/useFeed';
+import { seedChallengeLivePost } from '@/hooks/useFeed';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
@@ -78,7 +78,7 @@ import {
 } from '@/lib/distance';
 import { successHaptic } from '@/lib/haptics';
 import { safeUserId, sessionAuthor } from '@/lib/safeIds';
-import { attachClipPostId, createStory } from '@/lib/social';
+import { publishCheckinWave } from '@/lib/checkinWave';
 import {
   applyCheckinShareLock,
   checkinHidesHomeShare,
@@ -91,7 +91,6 @@ import {
   writeLocalSharePrefs,
   type CheckinSharePrefs,
 } from '@/lib/checkinShare';
-import { asDefaultPostAudience } from '@/lib/postAudience';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
   ensureLibraryPermission,
@@ -131,7 +130,7 @@ import { firstRouteParam } from '@/lib/challengeLoad';
 import { isChallengeRouteId } from '@/lib/challengeTimezone';
 import { parseDoneIds } from '@/lib/multiCheckin';
 import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
-import { challengeDetailHref, checkinSubmitHref, LOBBY_HREF, multiCheckinHref, publishedRowId } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref, LOBBY_HREF, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getCheckinSubmitMessage, getErrorMessage, withFailureReason } from '@/utils/errors';
@@ -295,7 +294,6 @@ function SubmitWorkoutInner() {
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
   const saveProof = useSaveCheckinProof(id);
   const submitCheckin = useSubmitCheckin(id);
-  const createPost = useCreatePost();
   const queryClient = useQueryClient();
   const wavePublishedRef = useRef(false);
 
@@ -1167,33 +1165,15 @@ function SubmitWorkoutInner() {
         });
         if (wave) {
           try {
-            const stories = await createStory(uid, {
-              media_url: wave.url,
-              media_type: wave.mediaType,
-              caption: wave.caption,
-              challenge_id: id,
+            const published = await publishCheckinWave({
+              userId: uid,
+              challengeId: id,
+              wave,
+              audience: profile?.default_post_audience,
             });
-            const storyId = publishedRowId(stories);
-            const audience = asDefaultPostAudience(profile?.default_post_audience);
-            if (storyId) {
-              try {
-                const posted = await createPost.mutateAsync({
-                  content: wave.caption,
-                  mediaUrls: [wave.url],
-                  audience,
-                  source: 'feed',
-                  type: 'wave',
-                  durationMs: wave.durationMs,
-                });
-                const postedId = publishedRowId(posted);
-                if (postedId) {
-                  await attachClipPostId('story', storyId, postedId);
-                }
-              } catch {
-                // Story is live; Friends is the missing-audience default.
-              }
+            if (published) {
+              wavePublishedRef.current = true;
             }
-            wavePublishedRef.current = true;
           } catch {
             // Wave is extra; lobby check-in already landed.
           }

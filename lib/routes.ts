@@ -107,10 +107,11 @@ export function challengeHref(id: string): Href {
   return `/challenges/${String(id ?? '').trim()}` as Href;
 }
 
-/** Home named-challenge taps. `?tab=feed` only for Pulse / Live chips. */
-export function namedChallengeHref(id: string, extra?: { tab?: 'feed' }): Href {
+/** Home named-challenge taps. Live for that row — never last-open, never Overview unless asked. */
+export function namedChallengeHref(id: string, extra?: { tab?: 'feed' | 'live' | 'overview' }): Href {
   const path = String(challengeHref(id));
-  return extra?.tab === 'feed' ? (`${path}?tab=feed` as Href) : (path as Href);
+  const tab = extra?.tab ?? 'live';
+  return `${path}?tab=${tab}` as Href;
 }
 
 export function challengeDetailHref(

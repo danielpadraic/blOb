@@ -154,7 +154,7 @@ export type CheckinWaveSource = {
   durationMs?: number | null;
 };
 
-/** First selfie or short clip on this check-in. One Wave, not every proof. */
+/** First workout card, selfie, or short clip on this check-in. One Wave, not every proof. */
 export function pickCheckinWaveSource(input: {
   proofs: ChallengeProof[];
   parts: Record<string, ChallengeProofPart | undefined>;
@@ -162,6 +162,23 @@ export function pickCheckinWaveSource(input: {
   captions?: Record<string, string>;
   extras?: Array<{ remoteUrl?: string | null; uri?: string | null; kind?: string | null }>;
 }): CheckinWaveSource | null {
+  const captionOf = (proofId: string, part?: ChallengeProofPart) =>
+    clampProofCaption(input.captions?.[proofId] ?? part?.caption ?? '');
+
+  for (const proof of input.proofs) {
+    const part = input.parts[proof.id];
+    const url = String(part?.url ?? '').trim();
+    const isCard =
+      Boolean(part?.health) || proof.method === 'hr' || proof.method === 'distance';
+    if (!isCard || !canWaveProof({ method: 'photo', uri: url })) {
+      continue;
+    }
+    return {
+      url,
+      mediaType: 'image',
+      caption: captionOf(proof.id, part),
+    };
+  }
   for (const proof of input.proofs) {
     const part = input.parts[proof.id];
     const url = String(part?.url ?? '').trim();
@@ -172,7 +189,7 @@ export function pickCheckinWaveSource(input: {
     return {
       url,
       mediaType: proof.method === 'video' ? 'video' : 'image',
-      caption: clampProofCaption(input.captions?.[proof.id] ?? part?.caption ?? ''),
+      caption: captionOf(proof.id, part),
       durationMs,
     };
   }

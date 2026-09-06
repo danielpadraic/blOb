@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { namedChallengeHref } from '@/lib/routes';
 import {
   PULSE_CAP,
   buildPulsePills,
@@ -224,11 +225,18 @@ describe('buildPulsePills', () => {
   });
 });
 
+describe('namedChallengeHref', () => {
+  it('opens Live for a Home named tap with no postId', () => {
+    const href = String(namedChallengeHref('abc-123'));
+    expect(href).toBe('/challenges/abc-123?tab=live');
+  });
+});
+
 describe('pulseChallengeHref', () => {
   it('opens Live for that challenge id only', () => {
     const href = String(pulseChallengeHref('abc-123'));
     expect(href).toContain('/challenges/abc-123');
-    expect(href).toContain('tab=feed');
+    expect(href).toContain('tab=live');
     expect(href).not.toBe('/challenges');
     expect(href).not.toContain('returnTo');
     expect(href).not.toContain('abc-999');

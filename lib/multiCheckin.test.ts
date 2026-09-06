@@ -67,7 +67,7 @@ function checkin(partial: Partial<HomeCheckinPost> & Pick<HomeCheckinPost, 'id'>
 }
 
 describe('Home check-in stack', () => {
-  it('stacks two Home check-ins from the same author within two minutes', () => {
+  it('never mashes two check-ins into one Home card', () => {
     const stacked = stackHomeCheckinPosts([
       checkin({
         id: 'p1',
@@ -84,13 +84,9 @@ describe('Home check-in stack', () => {
         challenge: { title: 'Gym' },
       }),
     ]);
-    expect(stacked).toHaveLength(1);
-    expect(stacked[0]).toMatchObject({
-      kind: 'stack',
-      count: 2,
-      copy: 'Ada checked in to 2 challenges',
-      postIds: ['p1', 'p2'],
-    });
+    expect(stacked).toHaveLength(2);
+    expect(stacked.map((item) => ('id' in item ? item.id : ''))).toEqual(['p1', 'p2']);
+    expect(stacked.some((item) => 'kind' in item && item.kind === 'stack')).toBe(false);
   });
 
   it('leaves a single check-in as a normal card', () => {
@@ -163,9 +159,12 @@ describe('Home check-in stack', () => {
         challenge: { title: 'Gym' },
       }),
     ]);
-    expect(stacked).toHaveLength(2);
-    expect(stacked[0]).toMatchObject({ kind: 'stack', count: 2, postIds: ['p1', 'p2'] });
-    expect(stacked[1]).toMatchObject({ id: 'p-hidden' });
+    expect(stacked).toHaveLength(3);
+    expect(stacked.map((item) => ('kind' in item && item.kind === 'stack' ? 'stack' : item.id))).toEqual([
+      'p1',
+      'p-hidden',
+      'p2',
+    ]);
   });
 
   it('never stacks private or corporate children', () => {

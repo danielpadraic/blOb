@@ -111,10 +111,35 @@ describe('check-in share prefs', () => {
     });
   });
 
-  it('allows Wave for photo and short video only', () => {
+  it('allows Wave for photo, short video, and a rasterized workout card', () => {
     expect(canWaveProof({ method: 'photo', uri: 'file://selfie.jpg' })).toBe(true);
     expect(canWaveProof({ method: 'video', uri: 'file://clip.mp4', durationMs: 29_000 })).toBe(true);
     expect(canWaveProof({ method: 'video', uri: 'file://clip.mp4', durationMs: 30_001 })).toBe(false);
     expect(canWaveProof({ method: 'photo', uri: 'health:abc' })).toBe(false);
+    expect(canWaveProof({ method: 'hr', uri: 'https://cdn/workout-card.jpg' })).toBe(true);
+    expect(canWaveProof({ method: 'distance', uri: 'https://cdn/miles-card.jpg' })).toBe(true);
+  });
+
+  it('prefers the rasterized workout card over a selfie so HealthKit check-ins land on Wave', () => {
+    const wave = pickCheckinWaveSource({
+      proofs: [
+        { id: 'pre', name: 'Selfie', method: 'photo' },
+        { id: 'hr', name: 'Heart rate', method: 'hr' },
+      ],
+      parts: {
+        pre: { method: 'photo', url: 'https://cdn/pre.jpg', caption: 'Ready' },
+        hr: {
+          method: 'hr',
+          url: 'https://cdn/card.jpg',
+          health: { source: 'healthkit', sourceName: 'Apple Watch', durationSec: 1800, activityType: 'walking' },
+        },
+      },
+      captions: {},
+    });
+    expect(wave).toEqual({
+      url: 'https://cdn/card.jpg',
+      mediaType: 'image',
+      caption: '',
+    });
   });
 });

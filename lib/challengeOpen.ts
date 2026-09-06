@@ -299,7 +299,7 @@ export function openChallengeLobby(
     snapshot?: ChallengeLoadSnapshot | ChallengeWithStats | null;
     returnTo?: 'lobby' | 'feed';
     postId?: string | null;
-    extra?: { tab?: 'overview' | 'board' | 'feed'; receipt?: boolean };
+    extra?: { tab?: 'overview' | 'board' | 'feed' | 'live'; receipt?: boolean };
     source?: string;
     pathname?: string | null;
   },

@@ -124,7 +124,7 @@ export function pulseSnippet(post?: PulseLobbyPost | null): string {
 }
 
 export function pulseChallengeHref(id: string) {
-  return namedChallengeHref(String(id).trim(), { tab: 'feed' });
+  return namedChallengeHref(String(id).trim(), { tab: 'live' });
 }
 
 export function sortPulsePills<T extends { lastAt: string | null }>(pills: T[]): T[] {

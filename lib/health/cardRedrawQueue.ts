@@ -78,7 +78,7 @@ export async function pendingCardRepairs(userId: string): Promise<CardRepair[]> 
  * ever write today's check-in, and aiming it at an earlier day would rewrite the wrong one. This names
  * the check-in and swaps only the picture.
  */
-export async function putRepairedCard(item: CardRepair, fileUri: string): Promise<void> {
+export async function putRepairedCard(item: CardRepair, fileUri: string): Promise<string> {
   const { data: session } = await supabase.auth.getUser();
   const userId = session?.user?.id;
   if (!userId) {
@@ -104,6 +104,7 @@ export async function putRepairedCard(item: CardRepair, fileUri: string): Promis
   if (error) {
     throw new Error(error.message || 'Could not update that workout card.');
   }
+  return url;
 }
 
 /**
