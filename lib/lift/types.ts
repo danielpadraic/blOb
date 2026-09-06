@@ -50,7 +50,14 @@ export type LiftExerciseDraft = {
   durationSeconds?: number | null;
   /** 1–10, cardio only. */
   intensity?: number | null;
-  /** This user's demo clip for this exercise, copied onto the row so a copy keeps the video. */
+  /**
+   * This user's demo clip for this exercise, copied onto the row so a copy keeps the video.
+   *
+   * TODO(demo-round): the column, the per-user `lift_exercise_demos` table, and copy-on-Add all
+   * carry this already, but nothing records or attaches a clip yet. That needs a Round capture
+   * (3:00 cap) hung off the exercise overflow, writing one row per (user, exercise). Saving and
+   * sharing a lift must keep working without it — a missing clip is an absent row, not an error.
+   */
   demoUrl?: string | null;
 };
 
