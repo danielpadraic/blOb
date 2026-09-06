@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { workoutCardDistance } from '@/lib/health/workoutProofCard';
 import { activityLabelOf, milesToMeters } from '@/services/health/apple';
 
 /**
@@ -33,6 +34,14 @@ describe('milesToMeters', () => {
 
   it('keeps a short walk out of the rounding hole', () => {
     expect(milesToMeters(0.1)).toBe(161);
+  });
+
+  it('reaches the card as the 6.23 mi Fitness showed, not 0.00 mi', () => {
+    expect(workoutCardDistance(milesToMeters(6.23))).toBe('6.23 mi');
+  });
+
+  it('still says nothing on a treadmill walk that carried no distance', () => {
+    expect(workoutCardDistance(milesToMeters(undefined))).toBeNull();
   });
 });
 
