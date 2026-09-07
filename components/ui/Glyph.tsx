@@ -41,6 +41,7 @@ export const GLYPH = {
   circle: { ios: 'circle', android: 'trip_origin', web: 'trip_origin' },
   streak: { ios: 'bolt.fill', android: 'bolt', web: 'bolt' },
   star: { ios: 'star.fill', android: 'star', web: 'star' },
+  starOutline: { ios: 'star', android: 'star_border', web: 'star_border' },
   crown: { ios: 'crown.fill', android: 'workspace_premium', web: 'workspace_premium' },
   swords: { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' },
   person: { ios: 'person.fill', android: 'person', web: 'person' },

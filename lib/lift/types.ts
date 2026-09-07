@@ -58,6 +58,11 @@ export type LiftExerciseDraft = {
    */
   rounds?: LiftRound[] | null;
   /**
+   * Done on a cardio main block (steady / sprint / warmup / cooldown). Interval Done lives on
+   * each round instead.
+   */
+  completedAt?: string | null;
+  /**
    * This user's demo clip for this exercise, copied onto the row so a copy keeps the video.
    *
    * TODO(demo-round): the column, the per-user `lift_exercise_demos` table, and copy-on-Add all
@@ -77,6 +82,11 @@ export type LiftSessionDraft = {
   title: string | null;
   performedAt: string;
   completedAt: string | null;
+  /** open = Draft. completed / saved = finished. */
+  status?: string | null;
+  favorite?: boolean;
+  weightMoved?: number;
+  healthkitWorkoutUuid?: string | null;
   muscleKeys: MuscleKey[];
   unit: WeightUnit;
   exercises: LiftExerciseDraft[];
@@ -119,11 +129,14 @@ export type LiftSessionRow = {
   title: string | null;
   performed_at: string;
   completed_at: string | null;
+  status?: string | null;
+  favorite?: boolean | null;
+  weight_moved?: number | string | null;
+  healthkit_workout_uuid?: string | null;
   muscle_keys: string[];
   unit: WeightUnit;
   created_at: string;
   updated_at: string;
-  status?: string | null;
   source_session_id?: string | null;
   source_user_id?: string | null;
   shared_post_id?: string | null;
@@ -148,6 +161,7 @@ export type LiftSessionExerciseRow = {
   intensity?: number | null;
   demo_url?: string | null;
   rounds?: unknown;
+  completed_at?: string | null;
 };
 
 /**
@@ -165,6 +179,8 @@ export type LiftRound = {
   seconds: number;
   /** Interval ON only — recovery has no target effort. */
   intensity?: number | null;
+  /** Done on this round. Complete requires every remaining round to be checked. */
+  completedAt?: string | null;
 };
 
 /** One row of the shared cardio catalog. */
@@ -202,6 +218,10 @@ export type LiftSessionSummary = {
   unit: WeightUnit;
   exerciseCount: number;
   setCount: number;
+  status?: string | null;
+  favorite?: boolean;
+  weightMoved?: number;
+  durationSeconds?: number;
   /** Up to two lines of "Incline BB Bench Press · 3 sets". */
   preview: string[];
   /** Set once the session has been shared, so History can offer the link instead of a new post. */
@@ -234,4 +254,5 @@ export type LiftSavePayloadExercise = {
   intensity: number | null;
   demoUrl: string | null;
   rounds: LiftRound[];
+  completedAt: string | null;
 };

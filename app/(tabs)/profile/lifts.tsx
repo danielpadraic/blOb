@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LiftCompletedCard } from '@/components/lift/LiftCompletedCard';
 import { LiftFilterSheet } from '@/components/lift/LiftFilterSheet';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
@@ -19,6 +20,7 @@ import {
   useLiftHistory,
   useLiftingChallenges,
   useSaveLiftSession,
+  useSetLiftSessionFavorite,
   useShareLiftSession,
 } from '@/hooks/useLift';
 import { useCreatePost } from '@/hooks/useFeed';
@@ -43,6 +45,13 @@ import {
   musclesInHistory,
   type LiftHistoryFilter,
 } from '@/lib/lift/historyFilter';
+import {
+  buildCompletedCardFromSummary,
+  defaultHistoryTab,
+  filterHistoryTab,
+  formatWeightMoved,
+  isCompletedStatus,
+} from '@/lib/lift/complete';
 import { muscleSummary } from '@/lib/lift/muscles';
 import { applyOverload, overloadChipLabel } from '@/lib/lift/overload';
 import { repeatSession, shortDate } from '@/lib/lift/session';
@@ -58,6 +67,7 @@ export default function LiftsHistoryScreen() {
   const insets = useSafeAreaInsets();
   const { data, isLoading, error, refetch } = useLiftHistory();
   const save = useSaveLiftSession();
+  const favorite = useSetLiftSessionFavorite();
   const remove = useDeleteLiftSession();
   const share = useShareLiftSession();
   const attach = useAttachLiftToCheckin();
@@ -69,6 +79,9 @@ export default function LiftsHistoryScreen() {
   const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<LiftHistoryFilter>(EMPTY_LIFT_FILTER);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [tab, setTab] = useState<'favorites' | 'drafts' | 'completed' | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [menuFor, setMenuFor] = useState<LiftSessionSummary | null>(null);
   const [overloadFor, setOverloadFor] = useState<LiftSessionDraft | null>(null);
@@ -79,9 +92,13 @@ export default function LiftsHistoryScreen() {
 
   // An abandoned empty session is noise, not history.
   const all = (data ?? []).filter((row) => row.exerciseCount > 0 || row.completedAt);
-  const rows = useMemo(() => filterLiftHistory(all, filter), [all, filter]);
-  const filterMuscles = useMemo(() => musclesInHistory(all), [all]);
+  const resolvedTab = tab ?? defaultHistoryTab(all);
+  const tabbed = useMemo(() => filterHistoryTab(all, resolvedTab), [all, resolvedTab]);
+  const rows = useMemo(() => filterLiftHistory(tabbed, filter), [tabbed, filter]);
+  const filterMuscles = useMemo(() => musclesInHistory(tabbed), [tabbed]);
   const filtering = isFilterActive(filter);
+  const completedWeight = tabbed.reduce((total, row) => total + (row.weightMoved ?? 0), 0);
+  const weightUnit = tabbed[0]?.unit ?? 'lb';
 
   // Which of those challenges keep check-ins inside their own lobby, so the share sheet can hide
   // the Home toggle rather than offering something the lobby will refuse.
@@ -155,6 +172,31 @@ export default function LiftsHistoryScreen() {
     } catch (caught) {
       setMenuError(caught instanceof Error ? caught.message : 'Could not delete that lift.');
     }
+  }
+
+  async function deleteSelected() {
+    const ids = [...selected];
+    if (!ids.length) {
+      return;
+    }
+    setMenuError(null);
+    try {
+      await Promise.all(ids.map((id) => remove.mutateAsync(id)));
+      setSelected(new Set());
+      setSelecting(false);
+    } catch (caught) {
+      setMenuError(caught instanceof Error ? caught.message : 'Could not delete those lifts.');
+    }
+  }
+
+  function toggleFavorite(target: LiftSessionSummary) {
+    void favorite.mutateAsync({ id: target.id, favorite: !target.favorite });
+  }
+
+  function switchTab(next: 'favorites' | 'drafts' | 'completed') {
+    setTab(next);
+    setSelected(new Set());
+    setSelecting(false);
   }
 
   /**
@@ -289,16 +331,85 @@ export default function LiftsHistoryScreen() {
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
+                gap: 8,
+                paddingHorizontal: 16,
+                paddingTop: 4,
+                paddingBottom: 8,
+              }}>
+              {(['favorites', 'drafts', 'completed'] as const).map((item) => {
+                const on = resolvedTab === item;
+                const label = item === 'favorites' ? 'Favorites' : item === 'drafts' ? 'Drafts' : 'Completed';
+                return (
+                  <Pressable
+                    key={item}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: on }}
+                    onPress={() => switchTab(item)}
+                    style={{
+                      flex: 1,
+                      minHeight: 36,
+                      borderRadius: 999,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: on ? THEME.accent : THEME.background,
+                      borderWidth: 1,
+                      borderColor: on ? THEME.accent : THEME.border,
+                    }}>
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '800',
+                        color: on ? THEME.accentForeground : THEME.textPrimary,
+                      }}>
+                      {label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
                 gap: 10,
                 paddingHorizontal: 16,
                 paddingTop: 4,
                 paddingBottom: 10,
               }}>
               <AppText style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>
-                {filtering
-                  ? `${rows.length} of ${all.length} ${all.length === 1 ? 'session' : 'sessions'}`
-                  : `${all.length} ${all.length === 1 ? 'session' : 'sessions'} · only you can see these`}
+                {resolvedTab === 'completed' && completedWeight > 0
+                  ? formatWeightMoved(completedWeight, weightUnit)
+                  : filtering
+                    ? `${rows.length} of ${tabbed.length} ${tabbed.length === 1 ? 'session' : 'sessions'}`
+                    : `${tabbed.length} ${tabbed.length === 1 ? 'session' : 'sessions'}`}
               </AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={selecting ? 'Cancel select' : 'Select lifts'}
+                onPress={() => {
+                  setSelecting((open) => !open);
+                  setSelected(new Set());
+                }}
+                style={({ pressed }) => ({
+                  minHeight: 36,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: selecting ? THEME.accent : THEME.border,
+                  backgroundColor: selecting ? THEME.accentSoft : pressed ? THEME.accentSoft : THEME.surface,
+                })}>
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '700',
+                    color: selecting ? THEME.accent : THEME.textPrimary,
+                  }}>
+                  {selecting ? 'Cancel' : 'Select'}
+                </AppText>
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={filtering ? 'Change filters' : 'Filter lifts'}
@@ -339,18 +450,48 @@ export default function LiftsHistoryScreen() {
               <View style={{ flex: 1, minHeight: 0 }}>
                 <MascotState
                   kind="empty"
-                  title="Nothing matches those filters"
-                  body="Try a wider date range, or clear the muscles you picked."
-                  actionLabel="Clear filters"
-                  onAction={() => setFilter(EMPTY_LIFT_FILTER)}
+                  title={
+                    filtering
+                      ? 'Nothing matches those filters'
+                      : resolvedTab === 'favorites'
+                        ? 'No favorites yet'
+                        : resolvedTab === 'drafts'
+                          ? 'No drafts'
+                          : 'No completed lifts'
+                  }
+                  body={
+                    filtering
+                      ? 'Try a wider date range, or clear the muscles you picked.'
+                      : resolvedTab === 'favorites'
+                        ? 'Star a draft or a completed session to keep it here.'
+                        : resolvedTab === 'drafts'
+                          ? 'Open sessions stay here until you Complete them.'
+                          : 'Check Done on leftover sets and rounds, then Complete.'
+                  }
+                  actionLabel={filtering ? 'Clear filters' : undefined}
+                  onAction={filtering ? () => setFilter(EMPTY_LIFT_FILTER) : undefined}
                 />
               </View>
             ) : (
               <View style={{ flex: 1, minHeight: 0 }}>
                 <LiftList
                   rows={rows}
+                  selecting={selecting}
+                  selected={selected}
                   onOpen={(id) => router.push(liftSessionHref(id, { from: 'history' }))}
                   onMenu={(session) => setMenuFor(session)}
+                  onStar={toggleFavorite}
+                  onToggleSelect={(session) => {
+                    setSelected((current) => {
+                      const next = new Set(current);
+                      if (next.has(session.id)) {
+                        next.delete(session.id);
+                      } else {
+                        next.add(session.id);
+                      }
+                      return next;
+                    });
+                  }}
                 />
               </View>
             )}
@@ -367,7 +508,17 @@ export default function LiftsHistoryScreen() {
             paddingBottom: tabBarLift(insets.bottom, 'sticky') + 12,
             ...themeShadow('bar'),
           }}>
-          <Button title="Start lift" onPress={() => router.push(LIFT_START_HREF)} />
+          {selecting ? (
+            <Button
+              title={selected.size ? `Delete ${selected.size}` : 'Delete'}
+              variant="danger"
+              disabled={!selected.size}
+              loading={remove.isPending}
+              onPress={() => void deleteSelected()}
+            />
+          ) : (
+            <Button title="Start lift" onPress={() => router.push(LIFT_START_HREF)} />
+          )}
         </View>
       </View>
 
@@ -382,6 +533,11 @@ export default function LiftsHistoryScreen() {
         onStartAgain={() => void startAgain(menuFor)}
         onOverload={() => void openOverload(menuFor)}
         onShare={() => void openShare(menuFor)}
+        onFavorite={() => {
+          if (menuFor) {
+            toggleFavorite(menuFor);
+          }
+        }}
         onDelete={() => void deleteSession(menuFor)}
       />
 
@@ -433,6 +589,7 @@ function LiftHistoryMenu({
   onStartAgain,
   onOverload,
   onShare,
+  onFavorite,
   onDelete,
 }: {
   session: LiftSessionSummary | null;
@@ -442,6 +599,7 @@ function LiftHistoryMenu({
   onStartAgain: () => void;
   onOverload: () => void;
   onShare: () => void;
+  onFavorite: () => void;
   onDelete: () => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -496,15 +654,26 @@ function LiftHistoryMenu({
           disabled={busy}
           onPress={onOverload}
         />
-        {session.completedAt ? (
-          <MenuRow
-            icon={GLYPH.share}
-            label="Share"
-            detail={session.sharedPostId ? 'Already shared — post it again.' : 'Post the recap card.'}
-            disabled={busy}
-            onPress={onShare}
-          />
-        ) : null}
+        <MenuRow
+          icon={session.favorite ? GLYPH.star : GLYPH.starOutline}
+          label={session.favorite ? 'Remove favorite' : 'Favorite'}
+          detail="Keeps it on the Favorites tab."
+          disabled={busy}
+          onPress={onFavorite}
+        />
+        <MenuRow
+          icon={GLYPH.share}
+          label="Share"
+          detail={
+            isCompletedStatus(session.status, session.completedAt)
+              ? session.sharedPostId
+                ? 'Already shared — post it again.'
+                : 'Post the recap card.'
+              : 'Share a template card. Weight moved stays off until Complete.'
+          }
+          disabled={busy}
+          onPress={onShare}
+        />
         {confirmingDelete ? (
           <View
             style={{
@@ -615,12 +784,20 @@ function MenuRow({
 
 function LiftList({
   rows,
+  selecting,
+  selected,
   onOpen,
   onMenu,
+  onStar,
+  onToggleSelect,
 }: {
   rows: LiftSessionSummary[];
+  selecting: boolean;
+  selected: Set<string>;
   onOpen: (id: string) => void;
   onMenu: (session: LiftSessionSummary) => void;
+  onStar: (session: LiftSessionSummary) => void;
+  onToggleSelect: (session: LiftSessionSummary) => void;
 }) {
   return (
     <ScrollView
@@ -636,8 +813,11 @@ function LiftList({
         <LiftHistoryCard
           key={row.id}
           session={row}
-          onPress={() => onOpen(row.id)}
+          selecting={selecting}
+          selected={selected.has(row.id)}
+          onPress={() => (selecting ? onToggleSelect(row) : onOpen(row.id))}
           onMenu={() => onMenu(row)}
+          onStar={() => onStar(row)}
         />
       ))}
     </ScrollView>
@@ -648,12 +828,18 @@ export function LiftHistoryCard({
   session,
   onPress,
   onMenu,
+  onStar,
+  selecting,
+  selected,
 }: {
   session: LiftSessionSummary;
   onPress: () => void;
   onMenu?: () => void;
+  onStar?: () => void;
+  selecting?: boolean;
+  selected?: boolean;
 }) {
-  const open = !session.completedAt;
+  const completed = isCompletedStatus(session.status, session.completedAt);
   const chip = overloadChipLabel(session.overloadSummary);
   const countLabel =
     session.setCount > 0
@@ -672,7 +858,7 @@ export function LiftHistoryCard({
         borderRadius: 18,
         backgroundColor: THEME.surface,
         borderWidth: 1,
-        borderColor: THEME.border,
+        borderColor: selected ? THEME.accent : THEME.border,
         ...themeShadow('card'),
       }}>
       <View
@@ -724,7 +910,11 @@ export function LiftHistoryCard({
             }}>
             {subtitle}
           </AppText>
-          {session.preview.length ? (
+          {completed ? (
+            <View style={{ marginTop: 8 }}>
+              <LiftCompletedCard card={buildCompletedCardFromSummary(session)} compact hideChrome />
+            </View>
+          ) : session.preview.length ? (
             <View style={{ marginTop: 8, gap: 2, width: '100%' }}>
               {session.preview.map((line) => (
                 <AppText
@@ -763,7 +953,7 @@ export function LiftHistoryCard({
               </AppText>
             </View>
           ) : null}
-          {open ? (
+          {completed ? null : (
             <View
               style={{
                 paddingHorizontal: 8,
@@ -774,8 +964,29 @@ export function LiftHistoryCard({
                 backgroundColor: THEME.accentSoft,
                 marginRight: 4,
               }}>
-              <AppText style={{ fontSize: 11, fontWeight: '800', color: THEME.accent }}>Open</AppText>
+              <AppText style={{ fontSize: 11, fontWeight: '800', color: THEME.accent }}>Draft</AppText>
             </View>
+          )}
+          {onStar && !selecting ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={session.favorite ? 'Remove favorite' : 'Favorite'}
+              hitSlop={6}
+              onPress={onStar}
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 999,
+                backgroundColor: pressed ? THEME.accentSoft : 'transparent',
+              })}>
+              <Glyph
+                name={session.favorite ? GLYPH.star : GLYPH.starOutline}
+                color={session.favorite ? THEME.accent : THEME.textMuted}
+                size={16}
+              />
+            </Pressable>
           ) : null}
           <View
             pointerEvents="none"
@@ -787,7 +998,7 @@ export function LiftHistoryCard({
             }}>
             <Glyph name={GLYPH.chevronRight} color={THEME.textMuted} size={14} />
           </View>
-          {onMenu ? (
+          {onMenu && !selecting ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`More options for ${session.title}`}

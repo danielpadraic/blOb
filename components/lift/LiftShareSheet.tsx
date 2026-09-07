@@ -3,6 +3,7 @@ import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import { Composer } from '@/components/feed/Composer';
+import { LiftCompletedCard } from '@/components/lift/LiftCompletedCard';
 import { LiftRecapCard } from '@/components/lift/LiftRecapCard';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
@@ -14,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useFriends, useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
+import { buildCompletedCard } from '@/lib/lift/complete';
 import { buildRecap } from '@/lib/lift/recap';
 import { draftSummary } from '@/lib/lift/session';
 import { postShareUrl } from '@/lib/postShare';
@@ -97,6 +99,7 @@ export function LiftShareSheet({
   const peopleListRef = useRef<ScrollView>(null);
 
   const recap = useMemo(() => (draft ? buildRecap(draft) : null), [draft]);
+  const completedCard = useMemo(() => (draft ? buildCompletedCard(draft) : null), [draft]);
   const summary = useMemo(() => (draft ? draftSummary(draft) : null), [draft]);
   const locked = challengeId ? (lockedChallengeIds ?? []).includes(challengeId) : false;
 
@@ -264,7 +267,7 @@ export function LiftShareSheet({
           keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 10 }}>
-          <LiftRecapCard recap={recap} />
+          {completedCard ? <LiftCompletedCard card={completedCard} /> : recap ? <LiftRecapCard recap={recap} /> : null}
 
           {sharedPostId ? (
             <SharedActions postId={sharedPostId} />

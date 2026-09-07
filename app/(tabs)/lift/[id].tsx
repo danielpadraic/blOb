@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Pressable, ScrollView, TextInput, useWindowDimensions, View, ActivityIndicator } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +8,7 @@ import { AddTimedRowSheet, type TimedRowResult } from '@/components/lift/AddTime
 import { ExerciseCard } from '@/components/lift/ExerciseCard';
 import { rowPlaySpec, useLiftPlay } from '@/components/lift/LiftPlayHost';
 import { TimedRowCard } from '@/components/lift/TimedRowCard';
+import { LiftHealthKitSheet } from '@/components/lift/LiftHealthKitSheet';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -26,8 +27,14 @@ import {
   useSaveLiftSession,
   useShareLiftSession,
 } from '@/hooks/useLift';
+import {
+  canCompleteSession,
+  COMPLETE_LEFTOVER_HINT,
+  sessionWeightMoved,
+} from '@/lib/lift/complete';
+import { rankHealthKitWorkouts } from '@/lib/lift/healthkit';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
-import { hasShareableWork } from '@/lib/lift/recap';
+import { hasShareableWork, sessionCardioSeconds } from '@/lib/lift/recap';
 import { canPlay } from '@/lib/lift/rounds';
 import {
   fetchChallengeShareLocks,
@@ -65,6 +72,9 @@ import {
   updateSet,
   updateTimedRow,
 } from '@/lib/lift/session';
+import { linkLiftSessionHealthKit } from '@/lib/lift/api';
+import { appleHealth } from '@/services/health/apple';
+import type { HealthWorkout } from '@/services/health/types';
 import type { LiftOverloadPlan, LiftSessionDraft, LiftSetKind } from '@/lib/lift/types';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { LIFT_START_HREF, LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
@@ -141,6 +151,9 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   // True only for the explicit Save press. Autosave must never touch the button, or it blinks
   // between "Save session" and "Saving…" on every keystroke.
   const [finishing, setFinishing] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [hkOpen, setHkOpen] = useState(false);
+  const [hkWorkouts, setHkWorkouts] = useState<HealthWorkout[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [titleText, setTitleText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -350,23 +363,76 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     }
     dirty.current = false;
     setFinishing(true);
-    const ok = await persist(draft, true);
+    const ok = await persist(draft, false);
     setFinishing(false);
     if (!ok) {
       return;
     }
-    // Mark it complete locally first: this route is already `draft.id`, so navigating here would
-    // not remount, and the unmount autosave would otherwise write the session back as unfinished.
-    const done = { ...draft, completedAt: new Date().toISOString() };
-    setDraft(done);
+    setError(null);
+  }
 
-    // A session with no finished working sets has nothing to put on a card, so it goes straight to
-    // History rather than opening a share sheet with an empty brag in it.
-    if (hasShareableWork(done)) {
-      setShareOpen(true);
+  async function onComplete() {
+    if (!draft) {
       return;
     }
-    router.replace(LIFTS_HISTORY_HREF);
+    if (!canCompleteSession(draft)) {
+      setError(COMPLETE_LEFTOVER_HINT);
+      return;
+    }
+    dirty.current = false;
+    setCompleting(true);
+    const done: LiftSessionDraft = {
+      ...draft,
+      completedAt: new Date().toISOString(),
+      status: 'completed',
+      weightMoved: sessionWeightMoved(draft),
+    };
+    const ok = await persist(done, true);
+    setCompleting(false);
+    if (!ok) {
+      return;
+    }
+    setDraft(done);
+    void offerHealthKitLink(done);
+  }
+
+  async function offerHealthKitLink(session: LiftSessionDraft) {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+    try {
+      if (!appleHealth.isAvailable()) {
+        return;
+      }
+      const access = await appleHealth.getAuthStatus();
+      if (access === 'denied') {
+        return;
+      }
+      if (access !== 'connected') {
+        const result = await appleHealth.requestAccess();
+        if (result !== 'connected') {
+          return;
+        }
+      }
+      const day = new Date(session.performedAt);
+      if (Number.isNaN(day.getTime())) {
+        return;
+      }
+      const from = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+      const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+      const workouts = rankHealthKitWorkouts(
+        await appleHealth.fetchWorkouts({ from, to }),
+        session.performedAt,
+        sessionCardioSeconds(session),
+      );
+      if (!workouts.length) {
+        return;
+      }
+      setHkWorkouts(workouts);
+      setHkOpen(true);
+    } catch {
+      // Complete already succeeded. Missing HealthKit is not an error banner.
+    }
   }
 
   async function onShare(choice: LiftShareChoice) {
@@ -828,6 +894,13 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                                 updateTimedRow(current, exercise.key, { rounds }),
                               )
                             }
+                            onToggleComplete={() =>
+                              edit((current) =>
+                                updateTimedRow(current, exercise.key, {
+                                  completedAt: exercise.completedAt ? null : new Date().toISOString(),
+                                }),
+                              )
+                            }
                             onPlay={() => startPlay(rowPlaySpec(exercise))}
                             onRemove={() => edit((current) => removeExercise(current, exercise.key))}
                             onDuplicate={() =>
@@ -957,10 +1030,17 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                 }}
               />
               <FooterBtn
-                title="Save session"
+                title="Save"
                 variant="save"
                 loading={finishing}
                 onPress={() => void onSave()}
+              />
+              <FooterBtn
+                title="Complete"
+                variant="save"
+                dimmed={!canCompleteSession(draft)}
+                loading={completing}
+                onPress={() => void onComplete()}
               />
             </View>
           )}
@@ -1024,6 +1104,20 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
           router.replace(LIFTS_HISTORY_HREF);
         }}
       />
+
+      {Platform.OS === 'ios' ? (
+        <LiftHealthKitSheet
+          visible={hkOpen}
+          workouts={hkWorkouts}
+          busy={save.isPending}
+          onClose={() => setHkOpen(false)}
+          onPick={(workout) => {
+            void linkLiftSessionHealthKit(draft.id, workout.providerWorkoutId)
+              .catch(() => undefined)
+              .finally(() => setHkOpen(false));
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -1079,6 +1173,7 @@ function FooterBtn({
   title,
   variant,
   disabled,
+  dimmed,
   loading,
   glyph,
   onPress,
@@ -1086,11 +1181,13 @@ function FooterBtn({
   title: string;
   variant: 'play' | 'save' | 'share' | 'outline' | 'danger';
   disabled?: boolean;
+  dimmed?: boolean;
   loading?: boolean;
   glyph?: boolean;
   onPress: () => void;
 }) {
   const isDisabled = Boolean(disabled || loading);
+  const grey = Boolean(dimmed && !loading);
   const fill =
     variant === 'play'
       ? THEME.accent
@@ -1110,7 +1207,7 @@ function FooterBtn({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={title}
-      accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}
+      accessibilityState={{ disabled: isDisabled || grey, busy: Boolean(loading) }}
       disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => ({
@@ -1127,7 +1224,7 @@ function FooterBtn({
         backgroundColor: fill,
         borderWidth: variant === 'outline' ? 1 : 0,
         borderColor: variant === 'outline' ? THEME.border : 'transparent',
-        opacity: isDisabled ? 0.38 : pressed ? 0.88 : 1,
+        opacity: isDisabled || grey ? 0.38 : pressed ? 0.88 : 1,
       })}>
       {loading ? (
         <ActivityIndicator color={labelColor} />

@@ -14,6 +14,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
+import { AttachedLiftPreview } from '@/components/lift/AttachedLiftPreview';
 import type { LiftSessionSummary } from '@/lib/lift/types';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
 import { useAuth } from '@/hooks/useAuth';
@@ -633,42 +634,10 @@ export function Composer({
 
       {attachedLift ? (
         <View className="mt-2">
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: THEME.accentBright,
-              backgroundColor: THEME.accentSoft,
-            }}>
-            <Glyph name={GLYPH.lift} color={THEME.accent} size={16} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <AppText
-                numberOfLines={1}
-                style={{ fontSize: 14, fontWeight: '800', color: THEME.textPrimary }}>
-                {attachedLift.title}
-              </AppText>
-              <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
-                {attachedLift.exerciseCount} exercises · {attachedLift.setCount} sets
-              </AppText>
-            </View>
-            {/* When the lift is the reason this composer opened, removing it would leave a Share
-                that shares nothing. */}
-            {initialLift ? null : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Remove the attached lift"
-                hitSlop={8}
-                onPress={() => setAttachedLift(null)}
-                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-                <Glyph name={GLYPH.close} color={THEME.textMuted} size={14} />
-              </Pressable>
-            )}
-          </View>
+          <AttachedLiftPreview
+            session={attachedLift}
+            onRemove={initialLift ? undefined : () => setAttachedLift(null)}
+          />
         </View>
       ) : null}
 

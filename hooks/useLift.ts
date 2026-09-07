@@ -16,6 +16,7 @@ import {
   fetchOpenLiftSession,
   importLiftSession,
   saveLiftSession,
+  setLiftSessionFavorite,
   startLiftSession,
   unitFor,
 } from '@/lib/lift/api';
@@ -115,6 +116,17 @@ export function useSaveLiftSession() {
   return useMutation({
     mutationFn: ({ draft, completed }: { draft: LiftSessionDraft; completed?: boolean }) =>
       saveLiftSession(draft, { completed }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: [LIFT_KEY] });
+    },
+  });
+}
+
+export function useSetLiftSessionFavorite() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, favorite }: { id: string; favorite: boolean }) =>
+      setLiftSessionFavorite(id, favorite),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: [LIFT_KEY] });
     },

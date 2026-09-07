@@ -120,6 +120,9 @@ export function newSessionDraft(input: {
     title: null,
     performedAt: input.performedAt ?? new Date().toISOString(),
     completedAt: null,
+    status: 'open',
+    favorite: false,
+    weightMoved: 0,
     muscleKeys: orderMuscles(input.muscleKeys),
     unit: input.unit,
     exercises: [],
@@ -186,6 +189,7 @@ export function newTimedDraft(input: {
     // rather than as an empty list behind a plus button.
     rounds:
       !rest && (input.cardioType ?? 'steady') === 'interval' ? tabataTemplate() : [],
+    completedAt: null,
   };
 }
 
@@ -228,6 +232,7 @@ export function updateTimedRow(
       | 'intensity'
       | 'name'
       | 'rounds'
+      | 'completedAt'
     >
   >,
 ): LiftSessionDraft {
@@ -507,6 +512,8 @@ export function duplicateExercise(draft: LiftSessionDraft, key: string): LiftSes
     key: newLocalKey('ex'),
     supersetGroup: null,
     sets: source.sets.map((set) => ({ ...set, key: newLocalKey('set'), completedAt: null })),
+    rounds: (source.rounds ?? []).map((round) => ({ ...round, completedAt: null })),
+    completedAt: null,
   };
   const exercises = draft.exercises.slice();
   exercises.splice(index + 1, 0, copy);
@@ -741,11 +748,18 @@ export function draftSummary(draft: LiftSessionDraft): LiftSessionSummary {
     title: sessionTitle(draft),
     performedAt: draft.performedAt,
     completedAt: draft.completedAt ?? null,
+    status: draft.status ?? (draft.completedAt ? 'completed' : 'open'),
+    favorite: Boolean(draft.favorite),
+    weightMoved: draft.weightMoved ?? 0,
     muscleKeys: [...draft.muscleKeys],
     unit: draft.unit,
     exerciseCount: draft.exercises.length,
     setCount: countWorkSets(draft),
     preview: sessionPreview(draft.exercises),
+    durationSeconds: draft.exercises.reduce(
+      (total, row) => (row.kind === 'cardio' ? total + cardioRowSeconds(row) : total),
+      0,
+    ),
     overloadSummary: draft.overloadSummary ?? null,
   };
 }
@@ -817,6 +831,7 @@ export function draftToPayload(draft: LiftSessionDraft): LiftSavePayloadExercise
       intensity: row.kind === 'cardio' ? (row.intensity ?? null) : null,
       demoUrl: timed ? null : (row.demoUrl ?? null),
       rounds: row.kind === 'cardio' ? (row.rounds ?? []) : [],
+      completedAt: row.kind === 'cardio' ? (row.completedAt ?? null) : null,
     };
   });
 }
@@ -858,6 +873,7 @@ export function rowsToDraft(
       intensity: row.intensity ?? null,
       demoUrl: row.demo_url ?? null,
       rounds: parseRounds(row.rounds),
+      completedAt: row.completed_at ?? null,
       sets: (setsByExercise.get(row.id) ?? [])
         .sort((a, b) => a.sort - b.sort)
         .map((set) => ({
@@ -875,6 +891,10 @@ export function rowsToDraft(
     title: session.title,
     performedAt: session.performed_at,
     completedAt: session.completed_at,
+    status: session.status ?? (session.completed_at ? 'completed' : 'open'),
+    favorite: Boolean(session.favorite),
+    weightMoved: toNumber(session.weight_moved ?? null) ?? 0,
+    healthkitWorkoutUuid: session.healthkit_workout_uuid ?? null,
     muscleKeys: orderMuscles(session.muscle_keys),
     unit: session.unit === 'kg' ? 'kg' : 'lb',
     exercises,
@@ -903,6 +923,10 @@ export function copySession(
     title: null,
     performedAt: new Date().toISOString(),
     completedAt: null,
+    status: 'open',
+    favorite: false,
+    weightMoved: 0,
+    healthkitWorkoutUuid: null,
     muscleKeys: source.muscleKeys,
     unit: options?.unit ?? source.unit,
     sourceSessionId: source.id,
@@ -932,7 +956,12 @@ export function copySession(
       demoUrl: row.demoUrl ?? null,
       // The interval structure is the workout itself, so it copies whole. Clearing it would hand
       // someone an Air Bike row with a Play button and nothing to count down.
-      rounds: (row.rounds ?? []).map((round) => ({ ...round })),
+      rounds: (row.rounds ?? []).map((round) => {
+        const copy = { ...round };
+        delete copy.completedAt;
+        return copy;
+      }),
+      completedAt: null,
       sets: row.sets.map((set) => ({
         key: newLocalKey('set'),
         kind: set.kind,
@@ -958,11 +987,18 @@ export function summarize(draft: LiftSessionDraft): LiftSessionSummary {
     title: sessionTitle(draft),
     performedAt: draft.performedAt,
     completedAt: draft.completedAt,
+    status: draft.status ?? (draft.completedAt ? 'completed' : 'open'),
+    favorite: Boolean(draft.favorite),
+    weightMoved: draft.weightMoved ?? 0,
     muscleKeys: draft.muscleKeys,
     unit: draft.unit,
     exerciseCount: draft.exercises.length,
     setCount: countWorkSets(draft),
     preview: sessionPreview(draft.exercises),
+    durationSeconds: draft.exercises.reduce(
+      (total, row) => (row.kind === 'cardio' ? total + cardioRowSeconds(row) : total),
+      0,
+    ),
     sharedPostId: draft.sharedPostId ?? null,
     overloadSummary: draft.overloadSummary ?? null,
   };

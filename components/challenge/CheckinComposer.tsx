@@ -19,6 +19,7 @@ import { CheckinShareTo } from '@/components/challenge/CheckinShareTo';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { GifPicker } from '@/components/feed/GifPicker';
 import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
+import { AttachedLiftPreview } from '@/components/lift/AttachedLiftPreview';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import type { LiftSessionSummary } from '@/lib/lift/types';
@@ -905,40 +906,12 @@ export function CheckinComposer({
       {/* The wording matters: this rides along with the check-in, it does not stand in for the
           proof the challenge asked for. */}
       {attachedLift ? (
-        <View
-          style={{
-            marginTop: 8,
-            marginHorizontal: 8,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-            padding: 10,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: THEME.border,
-            backgroundColor: THEME.background,
-          }}>
-          <Glyph name={GLYPH.lift} color={THEME.accent} size={15} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <AppText
-              numberOfLines={1}
-              style={{ fontSize: 14, fontWeight: '800', color: THEME.textPrimary }}>
-              {attachedLift.title}
-            </AppText>
-            <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
-              {attachedLift.exerciseCount} exercises · {attachedLift.setCount} sets · not proof
-            </AppText>
-          </View>
-          {onRemoveLift ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Remove the attached lift"
-              hitSlop={8}
-              onPress={onRemoveLift}
-              style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-              <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
-            </Pressable>
-          ) : null}
+        <View style={{ marginTop: 8, marginHorizontal: 8 }}>
+          <AttachedLiftPreview
+            session={attachedLift}
+            onRemove={onRemoveLift}
+            note={`${attachedLift.exerciseCount} exercises · ${attachedLift.setCount} sets · not proof`}
+          />
         </View>
       ) : null}
 

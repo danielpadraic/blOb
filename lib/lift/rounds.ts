@@ -98,7 +98,12 @@ export function roundsTotalSeconds(rounds: readonly LiftRound[]): number {
   return rounds.reduce((total, round) => total + roundSeconds(round), 0);
 }
 
-function fromSeconds(kind: LiftRoundKind, seconds: number, intensity?: number | null): LiftRound {
+function fromSeconds(
+  kind: LiftRoundKind,
+  seconds: number,
+  intensity?: number | null,
+  completedAt?: string | null,
+): LiftRound {
   const total = clampDuration(seconds);
   const round: LiftRound = {
     kind,
@@ -107,6 +112,9 @@ function fromSeconds(kind: LiftRoundKind, seconds: number, intensity?: number | 
   };
   if (roundHasIntensity(kind)) {
     round.intensity = clampIntensity(intensity ?? DEFAULT_ON_INTENSITY);
+  }
+  if (completedAt) {
+    round.completedAt = completedAt;
   }
   return round;
 }
@@ -178,13 +186,13 @@ export function duplicateLastPair(rounds: readonly LiftRound[]): LiftRound[] {
   if (rounds.length >= 2) {
     const [second, first] = [rounds[rounds.length - 1], rounds[rounds.length - 2]];
     if (first.kind === 'on' && second.kind === 'off') {
-      return [...rounds, { ...first }, { ...second }];
+      return [...rounds, { ...first, completedAt: null }, { ...second, completedAt: null }];
     }
   }
   if (!rounds.length) {
     return addRound(rounds);
   }
-  return [...rounds, { ...rounds[rounds.length - 1] }];
+  return [...rounds, { ...rounds[rounds.length - 1], completedAt: null }];
 }
 
 export function duplicateRound(rounds: readonly LiftRound[], index: number): LiftRound[] {
@@ -192,7 +200,7 @@ export function duplicateRound(rounds: readonly LiftRound[], index: number): Lif
     return [...rounds];
   }
   const next = [...rounds];
-  next.splice(index + 1, 0, { ...rounds[index] });
+  next.splice(index + 1, 0, { ...rounds[index], completedAt: null });
   return next;
 }
 
@@ -238,7 +246,12 @@ export function updateRound(
         : roundSeconds(round);
     // Switching to a recovery kind drops the intensity rather than keeping a value the row will
     // not show and the timer will not read.
-    return fromSeconds(kind, seconds, patch.intensity ?? round.intensity);
+    const next = fromSeconds(kind, seconds, patch.intensity ?? round.intensity);
+    const completedAt = patch.completedAt !== undefined ? patch.completedAt : round.completedAt;
+    if (completedAt) {
+      next.completedAt = completedAt;
+    }
+    return next;
   });
 }
 
@@ -262,6 +275,7 @@ export function parseRounds(value: unknown): LiftRound[] {
         kind,
         joinDuration(Number(raw.minutes ?? 0) || 0, Number(raw.seconds ?? 0) || 0),
         raw.intensity == null ? null : Number(raw.intensity),
+        typeof raw.completedAt === 'string' && raw.completedAt ? raw.completedAt : null,
       ),
     );
   }

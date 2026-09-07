@@ -2,6 +2,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { DurationField } from '@/components/lift/DurationField';
 import { NumberField } from '@/components/lift/NumberField';
+import { DoneCheck } from '@/components/lift/DoneCheck';
 import { RoundsEditor } from '@/components/lift/RoundsEditor';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -33,6 +34,7 @@ type TimedRowCardProps = {
   onDuplicate: () => void;
   onMove: (direction: -1 | 1) => void;
   onChangeRounds?: (rounds: LiftRound[]) => void;
+  onToggleComplete?: () => void;
   onPlay?: () => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
@@ -49,6 +51,7 @@ export function TimedRowCard({
   onDuplicate,
   onMove,
   onChangeRounds,
+  onToggleComplete,
   onPlay,
   canMoveUp,
   canMoveDown,
@@ -61,6 +64,7 @@ export function TimedRowCard({
   // second, contradictory answer to "how long is this".
   const showDuration = !interval;
   const playable = !rest && canPlay(row);
+  const showMainDone = !rest && !interval;
 
   if (readOnly) {
     return (
@@ -79,6 +83,14 @@ export function TimedRowCard({
           <AppText style={{ fontSize: 15, fontWeight: '800', color: THEME.textPrimary }}>
             {formatDuration(rest ? row.durationSeconds : cardioRowSeconds(row))}
           </AppText>
+          {showMainDone ? (
+            <DoneCheck
+              done={Boolean(row.completedAt)}
+              label={title}
+              disabled
+              onToggle={() => {}}
+            />
+          ) : null}
         </View>
         {rest ? null : (
           <AppText style={{ marginTop: 2, fontSize: 12, color: THEME.textMuted }}>
@@ -229,6 +241,16 @@ export function TimedRowCard({
               </AppText>
             </View>
           )}
+          {showMainDone ? (
+            <View style={{ paddingTop: 18 }}>
+              <DoneCheck
+                done={Boolean(row.completedAt)}
+                label={title}
+                disabled={!onToggleComplete}
+                onToggle={onToggleComplete ?? (() => {})}
+              />
+            </View>
+          ) : null}
         </View>
       ) : null}
 

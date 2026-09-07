@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 
 import { DurationField } from '@/components/lift/DurationField';
 import { NumberField } from '@/components/lift/NumberField';
+import { DoneCheck } from '@/components/lift/DoneCheck';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { formatDuration, splitDuration } from '@/lib/lift/duration';
@@ -20,6 +21,7 @@ import {
   roundsSummary,
   updateRound,
 } from '@/lib/lift/rounds';
+import { toggleRoundComplete } from '@/lib/lift/complete';
 import type { LiftRound, LiftRoundKind } from '@/lib/lift/types';
 import { THEME } from '@/lib/theme';
 
@@ -68,6 +70,7 @@ export function RoundsEditor({ rounds, readOnly, onChange }: RoundsEditorProps) 
                 @ {round.intensity}
               </AppText>
             ) : null}
+            <DoneCheck done={Boolean(round.completedAt)} label={`Round ${index + 1}`} disabled onToggle={() => {}} />
           </View>
         ))}
         {hidden > 0 ? (
@@ -117,6 +120,7 @@ export function RoundsEditor({ rounds, readOnly, onChange }: RoundsEditorProps) 
           index={index}
           total={rounds.length}
           onChange={(patch) => onChange(updateRound(rounds, index, patch))}
+          onToggleComplete={() => onChange(toggleRoundComplete(rounds, index))}
           onDuplicate={() => onChange(duplicateRound(rounds, index))}
           onRemove={() => onChange(removeRound(rounds, index))}
           onMove={(direction) => onChange(moveRound(rounds, index, direction))}
@@ -141,6 +145,7 @@ function RoundRow({
   index,
   total,
   onChange,
+  onToggleComplete,
   onDuplicate,
   onRemove,
   onMove,
@@ -149,6 +154,7 @@ function RoundRow({
   index: number;
   total: number;
   onChange: (patch: Partial<LiftRound>) => void;
+  onToggleComplete: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
@@ -285,6 +291,11 @@ function RoundRow({
           // disabled stepper the eye has to skip past on every other row.
           <View style={{ flex: 1, minWidth: 0 }} />
         )}
+        <DoneCheck
+          done={Boolean(round.completedAt)}
+          label={label}
+          onToggle={onToggleComplete}
+        />
       </View>
     </View>
   );

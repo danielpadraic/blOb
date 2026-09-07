@@ -1923,6 +1923,8 @@ export type Database = {
           p_source_session_id?: string | null;
           p_overload_from_session_id?: string | null;
           p_overload_summary?: unknown;
+          p_weight_moved?: number | null;
+          p_healthkit_workout_uuid?: string | null;
         };
         Returns: string;
       };
