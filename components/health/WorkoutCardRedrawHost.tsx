@@ -61,7 +61,9 @@ export function WorkoutCardRedrawHost() {
     let cancelled = false;
     void (async () => {
       try {
-        const work = await pendingCardRepairs(userId);
+        const work = await pendingCardRepairs(userId, {
+          traceReadable: await traceReadable(),
+        });
         if (!cancelled && work.length > 0) {
           setQueue(work);
         }
@@ -217,6 +219,31 @@ const CHALLENGE_COLUMNS =
 
 type ChallengeCardRow = Parameters<typeof challengeDisplayTitle>[0] &
   Parameters<typeof challengeClockTz>[0] & { proofs?: unknown };
+
+/**
+ * Whether asking this device for a heart-rate trace could ever produce one.
+ *
+ * A trace repair is deliberately dropped unstamped when nothing comes back, so that it is retried
+ * on a later open. That is free on a phone whose samples might yet arrive, and endless on one that
+ * can never answer — those cards matched, found nothing and requeued on every single app open.
+ *
+ * Deliberately phrased as "not proven impossible" rather than "known to work". HealthKit does not
+ * report read authorization at all, by Apple's design, so a granted iPhone answers `unknown` here;
+ * demanding `connected` would switch the graph repair off on exactly the platform that has it.
+ * `isAvailable` is the honest half — it is false with no health module and false when Health
+ * Connect is not on the phone.
+ */
+async function traceReadable(): Promise<boolean> {
+  try {
+    const provider = getHealthProvider();
+    if (!provider?.fetchHeartRateSeries || !provider.isAvailable()) {
+      return false;
+    }
+    return (await provider.getAuthStatus()) !== 'denied';
+  } catch {
+    return false;
+  }
+}
 
 async function readHeartRateSeries(item: CardRepair): Promise<HeartRateSample[]> {
   if (!item.health.startedAt || !item.health.endedAt) {

@@ -1,5 +1,7 @@
 import { Linking, Platform } from 'react-native';
 
+import { overlapsWindow, samplesWithin } from '@/lib/health/hrSamples';
+import { usableBpm } from '@/lib/health/hrSeries';
 import { readLocalHealthStatus, writeLocalHealthStatus } from '@/services/health/local';
 import type {
   HealthAccessResult,
@@ -7,6 +9,7 @@ import type {
   HealthAuthStatus,
   HealthAvailabilityDetail,
   HealthConfidence,
+  HealthHeartRateSample,
   HealthProvider,
   HealthWorkout,
 } from '@/services/health/types';
@@ -207,20 +210,6 @@ function asRecords<T>(result: { records?: unknown[] } | unknown[]): T[] {
   return Array.isArray(result?.records) ? (result.records as T[]) : [];
 }
 
-function overlaps(
-  start: string | undefined,
-  end: string | undefined,
-  from: number,
-  to: number,
-): boolean {
-  const startMs = start ? new Date(start).getTime() : NaN;
-  const endMs = end ? new Date(end).getTime() : NaN;
-  if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
-    return false;
-  }
-  return startMs < to && endMs > from;
-}
-
 function hasRecord(granted: Permission[], recordType: string): boolean {
   return granted.some((row) => row.accessType === 'read' && row.recordType === recordType);
 }
@@ -419,6 +408,52 @@ class HealthConnectProvider implements HealthProvider {
       return [];
     }
   }
+
+  /**
+   * The heart-rate trace for one workout window, which is what a proof card graphs.
+   *
+   * Read on demand rather than folded into `fetchWorkouts`, because a picker showing a fortnight
+   * of workouts wants summaries and would otherwise pull every sample of every one of them.
+   *
+   * An empty array is the honest answer for a workout recorded without heart rate, and it is also
+   * what a revoked `HeartRate` permission produces — the card prints its numbers and no graph
+   * either way, which is why this never throws.
+   */
+  async fetchHeartRateSeries(window: {
+    startedAt: string;
+    endedAt: string;
+  }): Promise<HealthHeartRateSample[]> {
+    const hc = await this.ensureClient();
+    if (!hc) {
+      return [];
+    }
+    const from = new Date(window.startedAt).getTime();
+    const to = new Date(window.endedAt).getTime();
+    if (Number.isNaN(from) || Number.isNaN(to) || to <= from) {
+      return [];
+    }
+    if ((await readLocalHealthStatus('health_connect')) === 'denied') {
+      return [];
+    }
+    try {
+      const granted = await hc.getGrantedPermissions();
+      if (!hasRecord(granted, 'HeartRate')) {
+        return [];
+      }
+      const records = asRecords<IntervalRecord>(
+        await hc.readRecords('HeartRate', {
+          timeRangeFilter: {
+            operator: 'between',
+            startTime: new Date(from).toISOString(),
+            endTime: new Date(to).toISOString(),
+          },
+        }),
+      );
+      return samplesWithin(records, from, to);
+    } catch {
+      return [];
+    }
+  }
 }
 
 function mapSession(
@@ -441,39 +476,32 @@ function mapSession(
   const to = endedAt.getTime();
   let caloriesKcal = 0;
   for (const row of extras.calories) {
-    if (overlaps(row.startTime, row.endTime, from, to)) {
+    if (overlapsWindow(row.startTime, row.endTime, from, to)) {
       caloriesKcal += kcalOf(row.energy) ?? 0;
     }
   }
   let distanceM = 0;
   for (const row of extras.distances) {
-    if (overlaps(row.startTime, row.endTime, from, to)) {
+    if (overlapsWindow(row.startTime, row.endTime, from, to)) {
       distanceM += metersOf(row.distance) ?? 0;
     }
   }
   let hrAvg: number | undefined;
   let hrMax: number | undefined;
+  let hrMin: number | undefined;
   if (extras.canHr) {
-    const values: number[] = [];
-    for (const row of extras.heartRates) {
-      if (!overlaps(row.startTime, row.endTime, from, to)) {
-        continue;
-      }
-      for (const sample of row.samples ?? []) {
-        const bpm = Number(sample.beatsPerMinute ?? sample.value);
-        const at = sample.time ? new Date(sample.time).getTime() : NaN;
-        if (!Number.isFinite(bpm) || bpm <= 0) {
-          continue;
-        }
-        if (!Number.isNaN(at) && (at < from || at > to)) {
-          continue;
-        }
-        values.push(bpm);
-      }
-    }
+    // Implausible readings are a sensor fault rather than a heartbeat, and one of them would set
+    // the maximum this workout is described by. The same floor the card's graph uses is applied
+    // here, so the summary and the trace cannot describe different workouts.
+    const values = samplesWithin(extras.heartRates, from, to)
+      .map((sample) => usableBpm(sample.bpm))
+      .filter((bpm): bpm is number => bpm != null);
     if (values.length > 0) {
       hrAvg = Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-      hrMax = Math.round(Math.max(...values));
+      hrMax = Math.max(...values);
+      // Health Connect has no workout summary to take a floor from, so unlike HealthKit the
+      // minimum is available here directly rather than only once the trace is read back.
+      hrMin = Math.min(...values);
     }
   }
   const providerWorkoutId =
@@ -491,6 +519,7 @@ function mapSession(
     distanceM: distanceM > 0 ? Math.round(distanceM) : undefined,
     hrAvg,
     hrMax,
+    hrMin,
     sourceBundle: originOf(session.metadata) || undefined,
     confidence: mapConfidence(session),
   };

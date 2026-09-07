@@ -203,6 +203,33 @@ describe('which posted cards get drawn again', () => {
     expect(work).toBeNull();
   });
 
+  /**
+   * The endless pass. A trace repair is dropped unstamped when Health has nothing to give, so on a
+   * device that can never answer it matched, found nothing and came back on every app open.
+   */
+  it('does not queue a trace repair on a device that cannot read a series', () => {
+    const current = {
+      ...CHECKIN,
+      proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION } },
+    };
+    expect(cardRepairFor(current, undefined, { traceReadable: true })?.reason).toBe('trace');
+    expect(cardRepairFor(current, undefined, { traceReadable: false })).toBeNull();
+  });
+
+  it('still fixes a wrong number on a device that cannot read a series', () => {
+    // A stale card prints wrong stats, which is repairable from the row alone — no vendor needed.
+    expect(cardRepairFor(CHECKIN, LABELS, { traceReadable: false })?.reason).toBe('renderer');
+  });
+
+  it('chases the trace by default, so only an explicit false opts out', () => {
+    const current = {
+      ...CHECKIN,
+      proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION } },
+    };
+    expect(cardRepairFor(current, undefined, {})?.reason).toBe('trace');
+    expect(cardRepairFor(current)?.reason).toBe('trace');
+  });
+
   it('calls a stale card stale, whether or not it has a trace', () => {
     expect(cardRepairFor(CHECKIN, LABELS)?.reason).toBe('renderer');
     expect(

@@ -20,7 +20,11 @@ export type HealthWorkout = {
   distanceM?: number;
   hrAvg?: number;
   hrMax?: number;
-  /** Only set once the HR sample series has been read for the window. */
+  /**
+   * HealthKit's workout summary carries no minimum, so on iOS this arrives only once the sample
+   * series has been read for the window. Health Connect has no summary to begin with and is read
+   * from its samples either way, so Android fills it from the start.
+   */
   hrMin?: number;
   sourceBundle?: string;
   confidence: HealthConfidence;

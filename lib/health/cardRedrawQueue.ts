@@ -1,6 +1,7 @@
 import {
   cardRepairFor,
   type CardRepair,
+  type CardRepairScope,
   type StoredActivityLabels,
   type StoredCheckinRow,
 } from '@/lib/health/cardRedraw';
@@ -24,8 +25,17 @@ import { challengeProofUrl, uploadChallengeProof } from '@/utils/upload';
 /** Small on purpose: this runs on app open and must never look like a sync. */
 const BATCH = 4;
 
-/** Newest first, so the card someone is most likely looking at is the first one fixed. */
-export async function pendingCardRepairs(userId: string): Promise<CardRepair[]> {
+/**
+ * Newest first, so the card someone is most likely looking at is the first one fixed.
+ *
+ * `scope` says what this device can actually do about a card. It is applied before the check-in
+ * rows are even read, so a platform that can never supply a heart-rate trace does no database work
+ * for cards that only want one.
+ */
+export async function pendingCardRepairs(
+  userId: string,
+  scope?: CardRepairScope,
+): Promise<CardRepair[]> {
   if (!userId) {
     return [];
   }
@@ -43,7 +53,7 @@ export async function pendingCardRepairs(userId: string): Promise<CardRepair[]> 
   const rows = checkins.data as StoredCheckinRow[];
   const candidates: CardRepair[] = [];
   for (const row of rows) {
-    const repair = cardRepairFor(row);
+    const repair = cardRepairFor(row, undefined, scope);
     if (repair?.challengeId) {
       candidates.push(repair);
     }
@@ -67,7 +77,7 @@ export async function pendingCardRepairs(userId: string): Promise<CardRepair[]> 
   }
   return byUrgency(
     rows
-      .map((row) => cardRepairFor(row, labels))
+      .map((row) => cardRepairFor(row, labels, scope))
       .filter((item): item is CardRepair => Boolean(item?.challengeId)),
   ).slice(0, BATCH);
 }

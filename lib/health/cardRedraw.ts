@@ -189,6 +189,21 @@ export function traceMissing(health: CheckinHealthProof): boolean {
 }
 
 /**
+ * What this device is able to fix, which is not the same on every platform.
+ *
+ * A `trace` repair asks the vendor for heart-rate samples, so it is only work worth queueing where
+ * something can answer. Without this, a provider that cannot read a series — no health provider at
+ * all, Health Connect not installed, a build whose adapter does not implement the read — matched
+ * every heart-rate check-in it owned, found nothing, and deliberately dropped each one unstamped so
+ * it would be retried. Nothing was ever fixed and nothing ever left the queue, so the same futile
+ * pass ran on every single app open.
+ */
+export type CardRepairScope = {
+  /** False when nothing on this device can return a heart-rate series. */
+  traceReadable?: boolean;
+};
+
+/**
  * The one slot on this check-in whose card needs drawing, or null when none does.
  *
  * A slot qualifies whether or not it already holds an image: a stale card is replaced, and a Health
@@ -198,7 +213,9 @@ export function traceMissing(health: CheckinHealthProof): boolean {
 export function cardRepairFor(
   checkin: StoredCheckinRow,
   labels?: StoredActivityLabels,
+  scope?: CardRepairScope,
 ): CardRepair | null {
+  const traceReadable = scope?.traceReadable ?? true;
   const found: CardRepair[] = [];
   const parts = parseProofParts(checkin.proof_parts);
   for (const [proofId, part] of Object.entries(parts)) {
@@ -208,7 +225,7 @@ export function cardRepairFor(
     }
     const reason: CardRepairReason | null = !cardIsCurrent(part)
       ? 'renderer'
-      : traceMissing(health)
+      : traceReadable && traceMissing(health)
         ? 'trace'
         : null;
     if (!reason) {
