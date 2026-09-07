@@ -72,7 +72,7 @@ export async function transferFunds(
   currency: WalletCurrency = 'coins',
 ): Promise<CoinTransfer> {
   const { data, error } = await supabase.rpc('transfer_funds', {
-    p_recipient_id: recipientId,
+    p_to_user: recipientId,
     p_amount: amount,
     p_currency: asWalletCurrency(currency),
   });

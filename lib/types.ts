@@ -2224,7 +2224,13 @@ export type Database = {
         Returns: CoinTransfer;
       };
       transfer_funds: {
-        Args: { p_recipient_id: string; p_amount: number; p_currency?: string };
+        Args: {
+          p_to_user: string;
+          p_amount: number;
+          p_currency?: string;
+          p_reason?: string;
+          p_reference_id?: string | null;
+        };
         Returns: CoinTransfer;
       };
       create_callout: {

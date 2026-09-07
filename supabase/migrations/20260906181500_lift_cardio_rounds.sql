@@ -91,11 +91,11 @@ begin
   -- crafted payload could claim descent from a stranger's private session.
   select id into v_source_session
   from public.lift_sessions
-  where id = p_source_session_id and public.lift_session_readable(id);
+  where id = p_source_session_id and public.lift_session_readable(id, user_id);
 
   select id into v_overload_from
   from public.lift_sessions
-  where id = p_overload_from_session_id and public.lift_session_readable(id);
+  where id = p_overload_from_session_id and public.lift_session_readable(id, user_id);
 
   v_source_user := case when v_source_session is null then null else p_source_user_id end;
 
