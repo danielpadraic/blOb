@@ -20,7 +20,7 @@ const MAX_POINTS = 120;
 const MIN_BPM = 20;
 const MAX_BPM = 260;
 
-function usable(value: unknown): number | null {
+export function usableBpm(value: unknown): number | null {
   const bpm = Math.round(Number(value));
   if (!Number.isFinite(bpm) || bpm < MIN_BPM || bpm > MAX_BPM) {
     return null;
@@ -63,7 +63,7 @@ export function toStoredHrSeries(samples: HealthHeartRateSample[]): number[] | n
   }
   const values: number[] = [];
   for (const sample of samples) {
-    const bpm = usable(sample?.bpm);
+    const bpm = usableBpm(sample?.bpm);
     if (bpm != null) {
       values.push(bpm);
     }
@@ -78,7 +78,7 @@ export function parseHrSeries(value: unknown): number[] | null {
   }
   const values: number[] = [];
   for (const entry of value) {
-    const bpm = usable(entry);
+    const bpm = usableBpm(entry);
     if (bpm != null) {
       values.push(bpm);
     }

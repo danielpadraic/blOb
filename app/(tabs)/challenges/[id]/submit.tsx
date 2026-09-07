@@ -11,6 +11,7 @@ import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { WorkoutStatChips } from '@/components/challenge/WorkoutStatChips';
 import { isOcrEligibleProof, shouldReadWorkoutStill, useWorkoutOcr } from '@/hooks/useWorkoutOcr';
 import { saveWorkoutSession } from '@/lib/health/workoutSessions';
+import { recordHrSignature } from '@/lib/health/hrIntegrity';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
 import {
   CheckinRouteErrorBoundary,
@@ -1286,6 +1287,9 @@ function SubmitWorkoutInner() {
       const enriched = withHeartRateFloor(enrichedDistance, samples);
       const snapshot = toCheckinHealthProof(enriched, samples);
       const healthWorkoutId = await upsertHealthWorkout(uid, enriched);
+      // What this heart looked like doing this work, for comparison against this account's own history
+      // later. Fire and forget: it never blocks the attach.
+      void recordHrSignature({ userId: uid, workout: enriched, samples });
       const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
       // A cumulative distance challenge shows a Distance field. Filling it in from the workout is
       // what puts 6.23 in front of them instead of an empty box they have to guess at; it stays

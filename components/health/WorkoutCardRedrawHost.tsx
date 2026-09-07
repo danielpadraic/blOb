@@ -14,6 +14,7 @@ import { type CardRepair } from '@/lib/health/cardRedraw';
 import { pendingCardRepairs, putRepairedCard } from '@/lib/health/cardRedrawQueue';
 import { ensureCheckinWaveForRepair } from '@/lib/checkinWave';
 import { toStoredHrSeries } from '@/lib/health/hrSeries';
+import { recordHrSignature } from '@/lib/health/hrIntegrity';
 import {
   buildWorkoutProofCard,
   withHeartRateFloor,
@@ -123,6 +124,11 @@ export function WorkoutCardRedrawHost() {
         }
 
         const workout = withHeartRateFloor(item.workout, samples);
+        // The same read that gives the card its graph is also the only chance to describe an older
+        // workout's heart rate, so the baseline picks up history instead of starting from today.
+        if (userId) {
+          void recordHrSignature({ userId, workout, samples, series });
+        }
         const card = buildWorkoutProofCard({
           workout,
           samples,
@@ -151,7 +157,7 @@ export function WorkoutCardRedrawHost() {
     return () => {
       cancelled = true;
     };
-  }, [queue, request, skipHead]);
+  }, [queue, request, skipHead, userId]);
 
   const onRendered = useCallback(
     (key: string, fileUri: string) => {

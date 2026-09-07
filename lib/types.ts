@@ -624,6 +624,35 @@ export interface LiveThreadFocusRecord {
   focused_at: string;
 }
 
+/**
+ * What one workout's heart rate looked like, compared later against the same account's own history.
+ *
+ * For the case provenance cannot see: the owner hands their own watch to someone else to finish a
+ * workout for them, so the account, the device and the workout are all genuinely theirs. Derived
+ * statistics only, and never compared against another person.
+ */
+export interface WorkoutHrSignatureRecord {
+  id: string;
+  user_id: string;
+  provider_workout_id: string;
+  activity_type: string;
+  activity_label: string | null;
+  /** The device that recorded it, so a signature shift can be told apart from a device swap. */
+  source_id: string | null;
+  started_at: string;
+  duration_sec: number;
+  /** Readings behind these numbers. Few readings make every figure below softer. */
+  points: number;
+  hr_mean: number;
+  hr_peak: number;
+  hr_floor: number;
+  hr_sd: number;
+  onset_bpm_min: number | null;
+  recovery_bpm_min: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkoutSessionRecord {
   id: string;
   user_id: string;
@@ -1280,6 +1309,12 @@ export type Database = {
           Relationship<'live_thread_focus_user_id_fkey', 'user_id', 'profiles', 'id'>,
           Relationship<'live_thread_focus_challenge_id_fkey', 'challenge_id', 'challenges', 'id'>,
         ]
+      >;
+      workout_hr_signatures: TableDef<
+        WorkoutHrSignatureRecord,
+        Partial<WorkoutHrSignatureRecord>,
+        Partial<WorkoutHrSignatureRecord>,
+        [Relationship<'workout_hr_signatures_user_id_fkey', 'user_id', 'profiles', 'id'>]
       >;
       workout_sessions: TableDef<
         WorkoutSessionRecord,
