@@ -137,7 +137,7 @@ describe('blocksFromRounds', () => {
     expect(recovery.intensity).toBeNull();
   });
 
-  it('treats a warm-up and a cool down as work, so both get a countdown in', () => {
+  it('treats a warm-up and a cool down as work, so both get a whistle in', () => {
     const blocks = blocksFromRounds([
       { kind: 'warmup', minutes: 2, seconds: 0 },
       { kind: 'cooldown', minutes: 5, seconds: 0 },

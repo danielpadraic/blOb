@@ -47,13 +47,13 @@ import { holdScreenAwake, reacquireScreenAwake, releaseScreenAwake } from '@/lib
  * lets the timer land on the correct round after the OS suspends the page entirely.
  */
 
-const PREROLL_SECONDS = 3;
 /**
  * How many seconds of a round get counted down out loud before it hands over.
  *
- * Every round gets this, whatever kind it is. A work round then opens with its own silent pre-roll
- * on top, so a rest running into a sprint reads as "rest ending — get set — go" rather than as two
- * competing counts: the pips finish the round you are in, and the pre-roll starts the next one.
+ * Every round gets this, whatever kind it is. The tick lives on the round that is ending, so a
+ * rest running into a sprint reads as the rest finishing rather than as a second 3-2-1 jammed in
+ * front of ON. Work still opens with a whistle at 0:00 of that round; it does not get its own
+ * pre-roll on top.
  */
 const COUNT_IN_SECONDS = 3;
 /** Fast enough that the clock never visibly skips a second. */
@@ -72,18 +72,15 @@ type LiftPlayOverlayProps = {
   onClose: () => void;
 };
 
-type Phase = 'preroll' | 'running' | 'paused' | 'done';
+type Phase = 'running' | 'paused' | 'done';
 
 export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
   // Snapshotted once. Logging re-renders on every autosave, and recomputing this from the spec
   // would hand the timer a fresh array mid-sprint and restart it from round one.
   const [blocks] = useState<LiftPlayBlock[]>(() => spec.blocks);
   const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState<Phase>(() =>
-    blocks.length ? (needsPreroll(blocks[0], 0) ? 'preroll' : 'running') : 'done',
-  );
+  const [phase, setPhase] = useState<Phase>(() => (blocks.length ? 'running' : 'done'));
   const [remaining, setRemaining] = useState(() => blocks[0]?.seconds ?? 0);
-  const [prerollLeft, setPrerollLeft] = useState(PREROLL_SECONDS);
   const [muted, setMuted] = useState(() => cuesMuted());
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -95,7 +92,6 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
   // above is just what the screen is currently showing.
   const endsAt = useRef<number>(0);
   const pausedLeft = useRef<number>(0);
-  const pausedPhase = useRef<Phase>('running');
   const cued = useRef<Set<string>>(new Set());
   /** Detects the gap left behind when the OS stops running our interval. */
   const lastTick = useRef<number>(Date.now());
@@ -103,17 +99,34 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
   // Lazy one-time anchor. This has to be set before the first tick rather than in an effect,
   // because an unset deadline reads as "already expired" and would skip round one outright.
   if (endsAt.current === 0 && blocks.length) {
-    const first = blocks[0];
-    const opening = needsPreroll(first, 0) ? PREROLL_SECONDS : first.seconds;
-    endsAt.current = Date.now() + opening * 1000;
+    endsAt.current = Date.now() + blocks[0].seconds * 1000;
   }
 
   // Play is only ever opened by a tap, which is the gesture Safari requires before a page may
-  // make any sound at all, and the moment native is allowed to take an audio session.
+  // make any sound at all, and the moment native is allowed to take an audio session. The first
+  // round has no previous interval to tick out of, so the whistle here is how work announces
+  // itself at the tap — not a three-count in front of it.
   useEffect(() => {
-    void primeCues();
-    return () => releaseCues();
-  }, []);
+    let cancelled = false;
+    void (async () => {
+      await primeCues();
+      if (cancelled) {
+        return;
+      }
+      const first = blocks[0];
+      if (!first) {
+        return;
+      }
+      buzz(first.work ? 'work' : 'recovery');
+      if (first.work) {
+        playCue('whistle');
+      }
+    })();
+    return () => {
+      cancelled = true;
+      releaseCues();
+    };
+  }, [blocks]);
 
   // Hold the screen on for the whole session. On web a locked screen suspends the page outright,
   // so preventing the lock is the only way the clock keeps running out loud there.
@@ -147,7 +160,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
   }, []);
 
   const startBlock = useCallback(
-    (at: number, withPreroll: boolean, options?: { silent?: boolean; elapsed?: number }) => {
+    (at: number, options?: { silent?: boolean; elapsed?: number }) => {
       const target = blocks[at];
       if (!target) {
         setPhase('done');
@@ -157,24 +170,11 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
       setIndex(at);
 
       const silent = Boolean(options?.silent);
-      // Carried over from a suspension: the round is already partly gone by the time we get here.
       const spent = Math.max(0, options?.elapsed ?? 0);
-
-      if (withPreroll && spent < PREROLL_SECONDS) {
-        setRemaining(target.seconds);
-        setPrerollLeft(PREROLL_SECONDS - spent);
-        setPhase('preroll');
-        endsAt.current = Date.now() + (PREROLL_SECONDS - spent) * 1000;
-        return;
-      }
-
-      const offset = withPreroll ? spent - PREROLL_SECONDS : spent;
-      const left = Math.max(0, target.seconds - offset);
+      const left = Math.max(0, target.seconds - spent);
       setRemaining(left);
       setPhase('running');
       endsAt.current = Date.now() + left * 1000;
-      // A round begun without its three-count still announces itself, unless we are fast-forwarding
-      // through rounds that already happened behind a dark screen.
       if (!silent) {
         buzz(target.work ? 'work' : 'recovery');
         if (target.work) {
@@ -199,11 +199,10 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
       let at = index + 1;
       while (at < blocks.length) {
         const target = blocks[at];
-        const span = (needsPreroll(target, at) ? PREROLL_SECONDS : 0) + target.seconds;
-        if (spent < span) {
+        if (spent < target.seconds) {
           break;
         }
-        spent -= span;
+        spent -= target.seconds;
         at += 1;
       }
       if (at >= blocks.length) {
@@ -212,7 +211,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
       }
       const landed = blocks[at];
       const skipped = at > index + 1;
-      startBlock(at, needsPreroll(landed, at), { silent: skipped, elapsed: spent });
+      startBlock(at, { silent: skipped, elapsed: spent });
       // One buzz on return, so a glance at the phone is not needed to know the round changed.
       if (skipped) {
         buzz(landed.work ? 'work' : 'recovery');
@@ -244,22 +243,6 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
       const suspended = now - lastTick.current > SUSPEND_GAP_MS;
       lastTick.current = now;
       const left = Math.max(0, (endsAt.current - now) / 1000);
-
-      if (phase === 'preroll') {
-        setPrerollLeft(Math.ceil(left));
-        if (left > 0) {
-          return;
-        }
-        // The whistle lands on the start of work, after the three-count, never during it.
-        buzz(block.work ? 'work' : 'recovery');
-        if (block.work) {
-          fire('whistle', `whistle-${index}`);
-        }
-        setPhase('running');
-        setRemaining(block.seconds);
-        endsAt.current = now + block.seconds * 1000;
-        return;
-      }
 
       setRemaining(left);
       if (left > 0) {
@@ -294,7 +277,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
         buzz('end');
         return;
       }
-      startBlock(at, needsPreroll(blocks[at], at));
+      startBlock(at);
     }, FRAME_MS);
 
     return () => clearInterval(handle);
@@ -302,20 +285,19 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
   const pause = useCallback(() => {
     pausedLeft.current = Math.max(0, (endsAt.current - Date.now()) / 1000);
-    pausedPhase.current = phase === 'preroll' ? 'preroll' : 'running';
     setPhase('paused');
-  }, [phase]);
+  }, []);
 
   /**
    * Picks the clock back up exactly where it stopped.
    *
-   * No fresh three-count when resuming mid-round: they are already on the machine, and a countdown
-   * there would take back the seconds it was supposed to give them. Pausing *during* a three-count
-   * is the one case that resumes counting down, because that pause was pre-round.
+   * No fresh three-count: they are already on the machine, and a countdown there would take back
+   * the seconds it was supposed to give them. The handover tick lives on the round that is ending,
+   * so resume just continues that round.
    */
   const resume = useCallback(() => {
     endsAt.current = Date.now() + pausedLeft.current * 1000;
-    setPhase(pausedPhase.current);
+    setPhase('running');
   }, []);
 
   const skip = useCallback(() => {
@@ -324,7 +306,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
       setPhase('done');
       return;
     }
-    startBlock(at, needsPreroll(blocks[at], at));
+    startBlock(at);
   }, [blocks, index, startBlock]);
 
   const toggleMute = useCallback(() => {
@@ -351,12 +333,9 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
   // Pause and Stop off the bottom of a landscape window.
   const dial = Math.max(Math.min(width * 0.66, height * 0.4, 320), 140);
 
-  // Fraction of the current block still to run. Preroll shows a full ring so the three-count reads
-  // as "about to start" rather than as a round already draining away.
+  // Fraction of the current block still to run.
   const fraction =
-    phase === 'preroll' || !block || block.seconds <= 0
-      ? 1
-      : Math.max(0, Math.min(1, remaining / block.seconds));
+    !block || block.seconds <= 0 ? 1 : Math.max(0, Math.min(1, remaining / block.seconds));
 
   const elapsedRounds = blocks.slice(0, index).reduce((total, item) => total + item.seconds, 0);
   const totalSeconds = blocks.reduce((total, item) => total + item.seconds, 0);
@@ -386,7 +365,8 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
         style={{
           flex: 1,
           paddingTop: Math.max(insets.top, 12) + 8,
-          paddingHorizontal: 20,
+          paddingLeft: Math.max(insets.left, 16),
+          paddingRight: Math.max(insets.right, 16),
           paddingBottom: Math.max(insets.bottom, 12) + 8,
         }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -483,27 +463,14 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                {phase === 'preroll' ? (
-                  <AppText
-                    style={{
-                      fontSize: dial * 0.46,
-                      lineHeight: dial * 0.52,
-                      fontWeight: '900',
-                      color: THEME.accentForeground,
-                      fontVariant: ['tabular-nums'],
-                    }}>
-                    {Math.max(1, prerollLeft)}
-                  </AppText>
-                ) : (
-                  <>
                     <AppText
                       style={{
                         fontSize: dial * 0.29,
                         lineHeight: dial * 0.34,
                         fontWeight: '900',
                         letterSpacing: -2,
-                        // The last three seconds of work turn the clock itself into the countdown,
-                        // so a muted phone across the room still shows the handover coming.
+                        // The last three seconds turn the clock itself into the countdown, so a
+                        // muted phone across the room still shows the handover coming.
                         color: finalCount ? THEME.accentBright : THEME.accentForeground,
                         fontVariant: ['tabular-nums'],
                       }}>
@@ -533,8 +500,6 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
                         Paused
                       </AppText>
                     ) : null}
-                  </>
-                )}
               </View>
             </View>
           )}
@@ -559,35 +524,17 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
         {phase === 'done' ? null : <UpcomingList blocks={blocks} index={index} />}
 
         {phase === 'done' ? null : (
-          <View style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={phase === 'paused' ? 'Resume the timer' : 'Pause the timer'}
+          <View style={{ marginTop: 14, flexDirection: 'row', alignItems: 'stretch', gap: 8 }}>
+            <PlayControl
+              label={phase === 'paused' ? 'Resume the timer' : 'Pause the timer'}
+              title={phase === 'paused' ? 'Resume' : 'Pause'}
+              tone="primary"
               onPress={phase === 'paused' ? resume : pause}
-              style={({ pressed }) => ({
-                flex: 2,
-                minHeight: 56,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                borderRadius: 999,
-                backgroundColor: THEME.accentForeground,
-                opacity: pressed ? 0.8 : 1,
-              })}>
-              <Glyph
-                name={phase === 'paused' ? GLYPH.play : GLYPH.pause}
-                color={THEME.textPrimary}
-                size={19}
-              />
-              <AppText style={{ fontSize: 16, fontWeight: '800', color: THEME.textPrimary }}>
-                {phase === 'paused' ? 'Resume' : 'Pause'}
-              </AppText>
-            </Pressable>
-            <OutlineControl label="Skip this round" title="Skip" onPress={skip} />
+            />
+            <PlayControl label="Skip this round" title="Skip" tone="accent" onPress={skip} />
             {/* Stop, not Save. It closes the timer and hands back the editor with every round
                 intact — spelled out because an X alone reads as "throw this away". */}
-            <OutlineControl label="Stop the timer" title="Stop" onPress={stop} />
+            <PlayControl label="Stop the timer" title="Stop" tone="quiet" onPress={stop} />
           </View>
         )}
       </View>
@@ -640,16 +587,31 @@ function Dial({ size, fraction, tint }: { size: number; fraction: number; tint: 
   );
 }
 
-/** Skip and Stop: same weight as each other, quieter than Pause. */
-function OutlineControl({
+/**
+ * Pause, Skip, and Stop: three real buttons, same size.
+ *
+ * Skip and Stop used to be 1px hairlines on a near-black screen, which read as text links, and
+ * Pause used a filled-circle glyph that overflowed the pill on a phone. Equal flex, a filled
+ * background, and the label as the only child is what keeps every word on screen.
+ */
+function PlayControl({
   label,
   title,
+  tone,
   onPress,
 }: {
   label: string;
   title: string;
+  tone: 'primary' | 'accent' | 'quiet';
   onPress: () => void;
 }) {
+  const fill =
+    tone === 'primary'
+      ? THEME.accentForeground
+      : tone === 'accent'
+        ? 'rgba(114,217,203,0.28)'
+        : 'rgba(255,255,255,0.16)';
+  const color = tone === 'primary' ? THEME.textPrimary : THEME.accentForeground;
   return (
     <Pressable
       accessibilityRole="button"
@@ -657,15 +619,18 @@ function OutlineControl({
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
-        minHeight: 56,
+        minWidth: 0,
+        minHeight: 52,
+        paddingHorizontal: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.28)',
-        opacity: pressed ? 0.7 : 1,
+        borderRadius: 16,
+        backgroundColor: fill,
+        opacity: pressed ? 0.78 : 1,
       })}>
-      <AppText style={{ fontSize: 15, fontWeight: '800', color: THEME.accentForeground }}>
+      <AppText
+        numberOfLines={1}
+        style={{ fontSize: 15, fontWeight: '800', color, fontVariant: ['tabular-nums'] }}>
         {title}
       </AppText>
     </Pressable>
@@ -774,19 +739,6 @@ function ChromeButton({
       <Glyph name={glyph} color={THEME.accentForeground} size={17} />
     </Pressable>
   );
-}
-
-/**
- * Work opens with a three-count; recovery does not.
- *
- * The first block always gets one regardless of kind, because Play starting the instant a thumb
- * leaves the button gives nobody time to get their hands on the bars.
- */
-function needsPreroll(block: LiftPlayBlock | undefined, at: number): boolean {
-  if (!block) {
-    return false;
-  }
-  return at === 0 || block.work;
 }
 
 /**

@@ -71,9 +71,10 @@ export function roundKindShortLabel(kind: LiftRoundKind): string {
 /**
  * Whether this block is effort rather than recovery.
  *
- * Work blocks get the three-count and the whistle; recovery does not. Anything that is not an
- * explicit OFF or Rest counts as work, so a warm-up or a cool down still opens with a countdown
- * instead of starting silently under someone's headphones.
+ * Work blocks open with a whistle and close with a bell; recovery does not. Anything that is not
+ * an explicit OFF or Rest counts as work, so a warm-up or a cool down still announces itself
+ * instead of starting silently under someone's headphones. The last-three-seconds tick is on
+ * every round, work or not — that is the handover warning, not a second countdown in front of ON.
  */
 export function isWorkRound(kind: LiftRoundKind): boolean {
   return kind !== 'off' && kind !== 'rest';
