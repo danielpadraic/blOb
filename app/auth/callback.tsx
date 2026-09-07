@@ -10,6 +10,7 @@ import { Screen } from '@/components/ui/Screen';
 import { createSessionFromUrl, useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
 import { useMyProfile } from '@/hooks/useProfile';
+import { useStalled } from '@/hooks/useStalled';
 import { reportAppError } from '@/lib/appErrors';
 import { blobAuthCallbackDeepLink, loginHrefWithAuthError } from '@/lib/authRedirect';
 import { hasAuthCallbackPayload, parseAuthRedirectParams } from '@/lib/authRedirectParams';
@@ -61,6 +62,10 @@ export default function AuthCallbackScreen() {
   const [callbackError, setCallbackError] = useState<string | null>(null);
   const [emailConfirmed, setEmailConfirmed] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
+  const settling = isLoading || isBootstrapping || path === 'boot' || exchanging;
+  // Longer than the root layout's 2s boot budget: a real OAuth exchange plus profile load can
+  // legitimately take a few seconds on a cold network.
+  const settleStalled = useStalled(settling, 9000);
 
   useEffect(() => {
     const url = pickCanonicalAuthCallbackUrl([
@@ -196,7 +201,18 @@ export default function AuthCallbackScreen() {
     );
   }
 
-  if (isLoading || isBootstrapping || path === 'boot' || exchanging) {
+  // The root layout stops blocking on boot after 2s, but this screen waits on the profile query
+  // too. When that never resolved the user sat on "Signing in…" with nothing to tap, so once the
+  // wait stops being plausible we hand off: into the app if a session exists, back to login if not.
+  if (settleStalled) {
+    return session ? (
+      <Redirect href={TABS_HREF} />
+    ) : (
+      <Redirect href={loginHrefWithAuthError(copy('auth.signInTimeout', tone)) as Href} />
+    );
+  }
+
+  if (settling) {
     return (
       <Screen>
         <MascotState kind="loading" title={copy('auth.signingIn', tone)} />

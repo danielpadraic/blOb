@@ -18,6 +18,7 @@ import { SharedTabs } from '@/components/ui/SharedTabs';
 import { AppHeader } from '@/components/wallet/AppHeader';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
+import { useStalled } from '@/hooks/useStalled';
 import { useMyInterests } from '@/hooks/useInterests';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
@@ -399,6 +400,9 @@ export default function ChallengesScreen() {
         : tab === 'active'
           ? activeQuery.isPending && !activeQuery.data
           : officialBusy;
+  // Before tabReady the lobby needs both queries to fail before it offers a retry, so two requests
+  // that simply never settle used to hold the first paint on the loading mascot indefinitely.
+  const lobbyStalled = useStalled(loading);
   const failed = !tabReady
     ? officialQuery.isError &&
       activeQuery.isError &&
@@ -665,9 +669,9 @@ export default function ChallengesScreen() {
 
       <LobbyFilterChips chips={chips} onDismiss={(id) => onFiltersCommit(clearLobbyFilterChip(displayFilters, id))} />
 
-      {loading && tab !== 'official' ? (
+      {loading && !lobbyStalled && tab !== 'official' ? (
         <MascotState kind="loading" title={copy('lobby.loading', tone)} />
-      ) : failed && tab !== 'official' ? (
+      ) : (failed || lobbyStalled) && tab !== 'official' ? (
         <MascotState
           kind="error"
           title={copy('lobby.unreachable')}

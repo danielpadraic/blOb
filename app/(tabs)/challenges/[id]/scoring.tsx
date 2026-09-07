@@ -5,11 +5,13 @@ import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ComparablePointsEditor } from '@/components/challenge/create/comparablePoints/ComparablePointsEditor';
+import { MascotState } from '@/components/mascot/MascotState';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
 import { useComparablePointsForm } from '@/hooks/useComparablePointsForm';
 import { useAuth } from '@/hooks/useAuth';
+import { useStalled } from '@/hooks/useStalled';
 import { useChallenge, usePublishScoringChange } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
@@ -73,6 +75,24 @@ export default function OfficialScoringScreen() {
   const saved = fromChallenge ?? comparablePointsFromChallenge(mergedChallenge);
   const queryReady =
     !challengeQuery.isPending && (!needScoringFetch || scoringSource.isFetched || scoringSource.isError);
+  const stalled = useStalled(!queryReady);
+
+  if (stalled) {
+    return (
+      <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+        <MascotState
+          kind="error"
+          title="Something went wrong"
+          body="We couldn’t load the scoring rules. Try again in a moment."
+          actionLabel="Retry"
+          onAction={() => {
+            void challengeQuery.refetch();
+            void scoringSource.refetch();
+          }}
+        />
+      </View>
+    );
+  }
 
   if (!queryReady) {
     return (

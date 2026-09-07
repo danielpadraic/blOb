@@ -154,6 +154,11 @@ const STRINGS = {
     neutral: 'Signing you in.',
     honest: 'Waiting on you, not the internet.',
   },
+  'auth.signInTimeout': {
+    gentle: 'That took too long. Try signing in again.',
+    neutral: 'Signing in timed out. Try again.',
+    honest: 'That stalled. Sign in again.',
+  },
   'auth.createAccount': 'Create account',
   'auth.signIn': 'Sign in',
   'auth.checkInboxThenSignIn': 'Check your inbox, then sign in here.',

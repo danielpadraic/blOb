@@ -6,12 +6,14 @@ import { Dimensions, Pressable, View } from 'react-native';
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
 import { LocationPlacePicker } from '@/components/challenge/LocationPlacePicker';
+import { MascotState } from '@/components/mascot/MascotState';
 import { Button } from '@/components/ui/Button';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
+import { useStalled } from '@/hooks/useStalled';
 import { useChallenge, useUpdateOfficialChallengeDetails } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
@@ -133,6 +135,10 @@ export default function OfficialDetailsScreen() {
     viewerId: user?.id,
     profile,
   });
+  // A deleted or unreadable challenge settles the queries without ever producing a row, which used
+  // to leave this screen on "Loading details…" for good.
+  const stalled = useStalled(!queryReady || !draft);
+  const unreadable = queryReady && !merged;
 
   useEffect(() => {
     if (!queryReady || !merged) {
@@ -187,6 +193,27 @@ export default function OfficialDetailsScreen() {
           setFormError(detailsSaveMessage(error));
         },
       },
+    );
+  }
+
+  if (unreadable || stalled) {
+    return (
+      <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+        <MascotState
+          kind="error"
+          title={unreadable ? copy('challenge.unavailable') : 'Something went wrong'}
+          body={
+            unreadable
+              ? 'This challenge is gone or you no longer have access to it.'
+              : 'We couldn’t load these details. Try again in a moment.'
+          }
+          actionLabel="Retry"
+          onAction={() => {
+            void challengeQuery.refetch();
+            void detailsSource.refetch();
+          }}
+        />
+      </View>
     );
   }
 

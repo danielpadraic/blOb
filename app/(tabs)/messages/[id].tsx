@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
+import { useStalled } from '@/hooks/useStalled';
 import {
   useConversation,
   useGetOrCreateConversation,
@@ -200,7 +201,11 @@ export default function ConversationScreen() {
   }
 
   const showOpenError = Boolean(threadError && !conversation.data && !opening);
-  const composerReady = Boolean(conversationId) && !showOpenError;
+  const threadWaiting = Boolean(messages.isLoading || opening || (!conversationId && peerIdParam));
+  // A hung open or message fetch never sets threadError, so without this the thread kept a bare
+  // spinner and a dead composer with nothing to retry.
+  const threadStalled = useStalled(threadWaiting);
+  const composerReady = Boolean(conversationId) && !showOpenError && !threadStalled;
   const tabReserve = TAB_BAR_HEIGHT + Math.max(insets.bottom, TAB_BAR_GUTTER);
   const composerPad =
     keyboardHeight > 0
@@ -253,7 +258,7 @@ export default function ConversationScreen() {
         </Pressable>
       </View>
 
-      {showOpenError ? (
+      {showOpenError || threadStalled ? (
         <View className="flex-1 items-center justify-center px-8">
           <AppText className="text-center text-[16px] font-bold text-charcoal">
             {threadError === DM_BLOCKED_COPY ? DM_BLOCKED_COPY : copy('messages.openFailed')}
@@ -268,7 +273,7 @@ export default function ConversationScreen() {
             <Button title="Try again" onPress={retryOpen} loading={startChat.isPending || conversation.isLoading} />
           </View>
         </View>
-      ) : messages.isLoading || opening || (!conversationId && peerIdParam) ? (
+      ) : threadWaiting ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={THEME.accent} />
         </View>

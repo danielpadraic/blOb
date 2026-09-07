@@ -7,16 +7,18 @@ import { isChallengeRouteId } from '@/lib/challengeTimezone';
 export function useStableChallengeRouteId(routeParam: unknown): { id: string; waiting: boolean } {
   const fromRoute = firstRouteParam(routeParam);
   const stableId = isChallengeRouteId(fromRoute) || fromRoute ? fromRoute : '';
-  const [waiting, setWaiting] = useState(!stableId);
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     if (stableId) {
-      setWaiting(false);
       return;
     }
-    setWaiting(true);
+    setSettled(false);
+    // One frame is all the router needs to populate `[id]`. If it is still empty after that the
+    // link itself was malformed, so stop waiting and let the screen say the challenge is
+    // unavailable rather than holding a spinner nothing will ever resolve.
     const frame = requestAnimationFrame(() => {
-      setWaiting(true);
+      setSettled(true);
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -25,7 +27,7 @@ export function useStableChallengeRouteId(routeParam: unknown): { id: string; wa
 
   return {
     id: stableId,
-    waiting: !stableId || waiting,
+    waiting: !stableId && !settled,
   };
 }
 

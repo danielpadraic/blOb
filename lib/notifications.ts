@@ -3,6 +3,7 @@ import { clipReactionNotifyCopy } from '@/lib/clipNotify';
 import { circleNotificationPath } from '@/lib/circles';
 import { withCommentQuery } from '@/lib/commentDeepLink';
 import { liveOrReminderPushHref } from '@/lib/livePush';
+import { isSafeNotificationHref, safeNotificationHref } from '@/lib/notificationHref';
 import { collapseChallengeDigests } from '@/lib/notifyDigest';
 import { postHref } from '@/lib/postShare';
 import { challengeDetailHref, conversationHref, feedHref, INTERESTS_HREF, reelHref, storyHref } from '@/lib/routes';
@@ -421,8 +422,11 @@ export function notificationHref(item: AppNotification): Href | null {
     return routed;
   }
   if (item.type === 'bob_encouragement') {
-    if (data.href) {
-      return data.href as Href;
+    // data.href is server-supplied. A stale one used to navigate nowhere and leave a blank screen,
+    // so fall through to the challenge (or the feed) instead of trusting it.
+    const safe = safeNotificationHref(data.href);
+    if (safe) {
+      return safe;
     }
     if (data.challenge_id) {
       return challengeDetailHref(data.challenge_id, 'lobby');
@@ -430,7 +434,7 @@ export function notificationHref(item: AppNotification): Href | null {
     return '/feed';
   }
   const commentId = notificationCommentId(data);
-  if (data.href) {
+  if (isSafeNotificationHref(data.href)) {
     return commentAwareHref(data.href, data);
   }
   if (data.conversation_id || item.type === 'message') {

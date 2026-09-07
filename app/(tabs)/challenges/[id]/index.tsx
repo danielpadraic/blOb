@@ -44,6 +44,7 @@ import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
+import { useStalled } from '@/hooks/useStalled';
 import { BODY_METRICS_HREF, captureHref, challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
 import { applyLiveBackGesture, liveScreenBackGesture } from '@/lib/liveThread';
@@ -300,6 +301,10 @@ export default function ChallengeDetailScreen() {
     }));
   }, [boardProfiles.data, roster.data]);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
+  // The sticky bar showed a disabled "Checking today's check-in" button while this query ran, so a
+  // request that never settled left the user unable to check in at all. Fall through to the real
+  // CTA instead -- the check-in screen loads its own state.
+  const checkinStalled = useStalled(periodCheckin.isLoading);
   const periodMisses = useViewerPeriodMisses(
     id,
     Boolean(challengeQuery.data && challengeShowsMissBudget(challengeQuery.data)),
@@ -1569,7 +1574,7 @@ export default function ChallengeDetailScreen() {
               />
             )}
           </View>
-        ) : periodCheckin.isLoading ? (
+        ) : periodCheckin.isLoading && !checkinStalled ? (
           <Button title="Checking today’s check-in" size="md" loading disabled />
         ) : (
           <View className="gap-2">
