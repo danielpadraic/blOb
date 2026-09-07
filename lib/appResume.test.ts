@@ -1,76 +1,56 @@
 import { describe, expect, it } from 'vitest';
 
-import { MIN_BACKGROUND_MS, shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
+import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
+
+const resume = {
+  previous: 'background' as const,
+  next: 'active' as const,
+  backgroundedAt: 1_000,
+  now: 1_000 + 8_000,
+  pathname: '/challenges',
+};
 
 describe('shouldReturnHomeOnResume', () => {
-  const base = {
-    previous: 'background' as const,
-    next: 'active' as const,
-    backgroundedAt: 1_000,
-    now: 1_000 + MIN_BACKGROUND_MS + 50,
-    pathname: '/challenges',
-  };
-
-  it('returns Home only after a long true background', () => {
-    expect(shouldReturnHomeOnResume(base)).toBe(true);
-  });
-
-  // A lift is logged over an hour with a lot of app-switching in it. Losing your place mid-workout
-  // is worse than any tidiness a bounce to Home buys.
-  it('keeps a lift in progress when the user switches back', () => {
-    expect(
-      shouldReturnHomeOnResume({ ...base, pathname: '/lift/9f1c2e0a-0000-4000-8000-000000000000' }),
-    ).toBe(false);
-    expect(shouldReturnHomeOnResume({ ...base, pathname: '/lift' })).toBe(false);
-  });
-
-  it('still sends a killed process Home rather than back into the lift', () => {
-    expect(
-      shouldResetToHomeOnLaunch({ pathname: '/lift/9f1c2e0a-0000-4000-8000-000000000000' }),
-    ).toBe(true);
-  });
-
-  it('ignores inactive picker / permission / crop returns', () => {
+  it('never sends Home just because the app was backgrounded', () => {
+    expect(shouldReturnHomeOnResume(resume)).toBe(false);
+    expect(shouldReturnHomeOnResume({ ...resume, pathname: '/profile/lifts' })).toBe(false);
     expect(
       shouldReturnHomeOnResume({
-        ...base,
+        ...resume,
+        pathname: '/lift/9f1c2e0a-0000-4000-8000-000000000000',
+      }),
+    ).toBe(false);
+    expect(shouldReturnHomeOnResume({ ...resume, pathname: '/lift' })).toBe(false);
+    expect(
+      shouldReturnHomeOnResume({
+        ...resume,
+        pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      }),
+    ).toBe(false);
+    expect(shouldReturnHomeOnResume({ ...resume, pathname: '/messages' })).toBe(false);
+    expect(shouldReturnHomeOnResume({ ...resume, pathname: '/challenges/create' })).toBe(false);
+    expect(shouldReturnHomeOnResume({ ...resume, platform: 'web' })).toBe(false);
+  });
+
+  it('ignores inactive picker flashes the same way — still not a Home reset', () => {
+    expect(
+      shouldReturnHomeOnResume({
+        ...resume,
         previous: 'inactive',
         pathname: '/challenges/create',
       }),
     ).toBe(false);
   });
-
-  it('ignores a short background flash from camera or gallery', () => {
-    expect(
-      shouldReturnHomeOnResume({
-        ...base,
-        now: 1_000 + 400,
-        pathname: '/challenges/create',
-      }),
-    ).toBe(false);
-  });
-
-  it('never dumps create, submit, or capture', () => {
-    expect(shouldReturnHomeOnResume({ ...base, pathname: '/challenges/create' })).toBe(false);
-    expect(shouldReturnHomeOnResume({ ...base, pathname: '/challenges/abc/submit' })).toBe(false);
-    expect(shouldReturnHomeOnResume({ ...base, pathname: '/challenges/abc/details' })).toBe(false);
-    expect(shouldReturnHomeOnResume({ ...base, pathname: '/capture' })).toBe(false);
-    expect(shouldReturnHomeOnResume({ ...base, pathname: '/checkin' })).toBe(false);
-  });
-
-  it('does not bounce Home onto itself', () => {
-    expect(shouldReturnHomeOnResume({ ...base, pathname: '/feed' })).toBe(false);
-  });
-
-  it('uses the same resume rules on Expo Web as native', () => {
-    expect(shouldReturnHomeOnResume({ ...base, platform: 'web' })).toBe(true);
-    expect(shouldReturnHomeOnResume({ ...base, platform: 'web', pathname: '/challenges/create' })).toBe(
-      false,
-    );
-  });
 });
 
 describe('shouldResetToHomeOnLaunch', () => {
+  it('opens Home after a force-quit on a lift, not back into the session', () => {
+    expect(
+      shouldResetToHomeOnLaunch({ pathname: '/lift/9f1c2e0a-0000-4000-8000-000000000000' }),
+    ).toBe(true);
+    expect(shouldResetToHomeOnLaunch({ pathname: '/profile/lifts' })).toBe(true);
+  });
+
   it('opens Home after a force-quit on a challenge, not the last lobby', () => {
     expect(
       shouldResetToHomeOnLaunch({
@@ -130,5 +110,12 @@ describe('shouldResetToHomeOnLaunch', () => {
         platform: 'web',
       }),
     ).toBe(true);
+  });
+
+  it('keeps in-progress capture, create, and auth through a cold start', () => {
+    expect(shouldResetToHomeOnLaunch({ pathname: '/challenges/create' })).toBe(false);
+    expect(shouldResetToHomeOnLaunch({ pathname: '/capture' })).toBe(false);
+    expect(shouldResetToHomeOnLaunch({ pathname: '/checkin' })).toBe(false);
+    expect(shouldResetToHomeOnLaunch({ pathname: '/auth/callback' })).toBe(false);
   });
 });

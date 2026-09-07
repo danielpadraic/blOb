@@ -333,8 +333,12 @@ export const LIFTS_HISTORY_HREF = '/profile/lifts' as Href;
 export const LIFT_TIMER_HREF = '/lift/timer' as Href;
 
 /** Literal path, like the check-in hrefs: an object `{ pathname, params }` breaks Safari. */
-export function liftSessionHref(id: string): Href {
-  return `/lift/${String(id ?? '').trim()}` as Href;
+export function liftSessionHref(id: string, extra?: { from?: 'history' }): Href {
+  const sessionId = String(id ?? '').trim();
+  if (extra?.from === 'history') {
+    return `/lift/${sessionId}?from=history` as Href;
+  }
+  return `/lift/${sessionId}` as Href;
 }
 
 /**

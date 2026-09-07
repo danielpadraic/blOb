@@ -121,7 +121,7 @@ export default function LiftsHistoryScreen() {
       await save.mutateAsync({ draft });
       setMenuFor(null);
       setOverloadFor(null);
-      router.push(liftSessionHref(draft.id));
+      router.push(liftSessionHref(draft.id, { from: 'history' }));
     } catch (caught) {
       setMenuError(caught instanceof Error ? caught.message : 'Could not copy that lift.');
     }
@@ -349,7 +349,7 @@ export default function LiftsHistoryScreen() {
               <View style={{ flex: 1, minHeight: 0 }}>
                 <LiftList
                   rows={rows}
-                  onOpen={(id) => router.push(liftSessionHref(id))}
+                  onOpen={(id) => router.push(liftSessionHref(id, { from: 'history' }))}
                   onMenu={(session) => setMenuFor(session)}
                 />
               </View>
@@ -458,6 +458,7 @@ function LiftHistoryMenu({
     <ChromeOverlay visible onClose={busy ? undefined : onClose} align="end" zIndex={135}>
       <View
         style={{
+          width: '100%',
           backgroundColor: THEME.surface,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,
@@ -565,20 +566,17 @@ function MenuRow({
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({
+        width: '100%',
         minHeight: 60,
         paddingHorizontal: 12,
+        paddingVertical: 10,
         borderRadius: 14,
         backgroundColor: pressed ? THEME.accentSoft : 'transparent',
         opacity: disabled ? 0.5 : 1,
       })}>
-      {/* Pressable on iOS does not hand its width to children, so a row sitting directly inside
-          it shrink-wraps. The title then has flex 1 of nothing, which is how this menu showed
-          four icons and a blank sheet. The inner view is what actually gets the width. */}
       <View
         style={{
-          flex: 1,
           width: '100%',
-          minWidth: 0,
           flexDirection: 'row',
           alignItems: 'center',
           gap: 12,
@@ -596,9 +594,10 @@ function MenuRow({
         }}>
         <Glyph name={icon} color={danger ? THEME.danger : THEME.accent} size={15} />
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>
         <AppText
           style={{
+            minHeight: 20,
             fontSize: 15,
             fontWeight: '700',
             color: danger ? THEME.danger : THEME.textPrimary,
@@ -625,9 +624,14 @@ function LiftList({
 }) {
   return (
     <ScrollView
-      style={{ flex: 1 }}
+      style={{ flex: 1, width: '100%' }}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingBottom: 16 }}>
+      contentContainerStyle={{
+        gap: 10,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        width: '100%',
+      }}>
       {rows.map((row) => (
         <LiftHistoryCard
           key={row.id}
@@ -651,128 +655,156 @@ export function LiftHistoryCard({
 }) {
   const open = !session.completedAt;
   const chip = overloadChipLabel(session.overloadSummary);
+  const countLabel =
+    session.setCount > 0
+      ? `${session.setCount} ${session.setCount === 1 ? 'set' : 'sets'}`
+      : `${session.exerciseCount} ${session.exerciseCount === 1 ? 'exercise' : 'exercises'}`;
+  const subtitle = [muscleSummary(session.muscleKeys), shortDate(session.performedAt), countLabel]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    // The overflow button is a sibling, not a child: nesting it inside the card's Pressable makes
-    // one tap fire both handlers on Web.
     <View
+      collapsable={false}
       style={{
+        alignSelf: 'stretch',
+        width: '100%',
         borderRadius: 18,
         backgroundColor: THEME.surface,
         borderWidth: 1,
         borderColor: THEME.border,
         ...themeShadow('card'),
       }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View
+        collapsable={false}
+        style={{
+          width: '100%',
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+        }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Open ${session.title}`}
           onPress={onPress}
           style={({ pressed }) => ({
-            flex: 1,
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
             minWidth: 0,
             paddingLeft: 14,
-            paddingRight: 6,
+            paddingRight: 8,
             paddingTop: 14,
-            paddingBottom: onMenu ? 6 : 14,
+            paddingBottom: 14,
             borderRadius: 18,
             backgroundColor: pressed ? THEME.accentSoft : 'transparent',
           })}>
-          {/* Same Pressable-width hole as the overflow menu: without this inner view, iOS
-              shrink-wraps the row to the chevron and the title collapses to an ellipsis. */}
-          <View
+          <AppText
+            numberOfLines={1}
+            ellipsizeMode="tail"
             style={{
-              flex: 1,
               width: '100%',
-              minWidth: 0,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
+              minHeight: 22,
+              lineHeight: 22,
+              fontSize: 16,
+              fontWeight: '800',
+              color: THEME.textPrimary,
             }}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <AppText
-                numberOfLines={1}
-                style={{ fontSize: 16, fontWeight: '800', color: THEME.textPrimary }}>
-                {session.title}
-              </AppText>
-              <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
-                {[
-                  muscleSummary(session.muscleKeys),
-                  shortDate(session.performedAt),
-                  `${session.setCount} ${session.setCount === 1 ? 'set' : 'sets'}`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </AppText>
-            </View>
-            {chip ? (
-              <View
-                style={{
-                  paddingHorizontal: 8,
-                  height: 22,
-                  borderRadius: 999,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: THEME.accent,
-                }}>
+            {session.title}
+          </AppText>
+          <AppText
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={{
+              width: '100%',
+              minHeight: 16,
+              lineHeight: 16,
+              marginTop: 2,
+              fontSize: 12,
+              color: THEME.textMuted,
+            }}>
+            {subtitle}
+          </AppText>
+          {session.preview.length ? (
+            <View style={{ marginTop: 8, gap: 2, width: '100%' }}>
+              {session.preview.map((line) => (
                 <AppText
-                  style={{ fontSize: 11, fontWeight: '800', color: THEME.accentForeground }}>
-                  {chip}
+                  key={line}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={{ fontSize: 13, lineHeight: 18, color: THEME.textPrimary }}>
+                  {line}
                 </AppText>
-              </View>
-            ) : null}
-            {open ? (
-              <View
-                style={{
-                  paddingHorizontal: 8,
-                  height: 22,
-                  borderRadius: 999,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: THEME.accentSoft,
-                }}>
-                <AppText style={{ fontSize: 11, fontWeight: '800', color: THEME.accent }}>
-                  Open
-                </AppText>
-              </View>
-            ) : null}
-            <View style={{ width: 14, height: 14, flexShrink: 0 }}>
-              <Glyph name={GLYPH.chevronRight} color={THEME.textMuted} size={14} />
+              ))}
             </View>
-          </View>
+          ) : null}
         </Pressable>
-        {onMenu ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`More options for ${session.title}`}
-            hitSlop={6}
-            onPress={onMenu}
-            style={({ pressed }) => ({
-              width: 44,
+        <View
+          style={{
+            flexGrow: 0,
+            flexShrink: 0,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingTop: 8,
+            paddingRight: 4,
+          }}>
+          {chip ? (
+            <View
+              style={{
+                paddingHorizontal: 8,
+                height: 22,
+                borderRadius: 999,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: THEME.accent,
+                marginRight: 4,
+              }}>
+              <AppText style={{ fontSize: 11, fontWeight: '800', color: THEME.accentForeground }}>
+                {chip}
+              </AppText>
+            </View>
+          ) : null}
+          {open ? (
+            <View
+              style={{
+                paddingHorizontal: 8,
+                height: 22,
+                borderRadius: 999,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: THEME.accentSoft,
+                marginRight: 4,
+              }}>
+              <AppText style={{ fontSize: 11, fontWeight: '800', color: THEME.accent }}>Open</AppText>
+            </View>
+          ) : null}
+          <View
+            pointerEvents="none"
+            style={{
+              width: 28,
               height: 44,
-              flexShrink: 0,
-              marginRight: 4,
-              borderRadius: 999,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: pressed ? THEME.accentSoft : 'transparent',
-            })}>
-            <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
-          </Pressable>
-        ) : null}
-      </View>
-      <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-        {session.preview.length ? (
-          <View style={{ gap: 2 }}>
-            {session.preview.map((line) => (
-              <AppText
-                key={line}
-                numberOfLines={1}
-                style={{ fontSize: 13, color: THEME.textPrimary }}>
-                {line}
-              </AppText>
-            ))}
+            }}>
+            <Glyph name={GLYPH.chevronRight} color={THEME.textMuted} size={14} />
           </View>
-        ) : null}
+          {onMenu ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`More options for ${session.title}`}
+              hitSlop={6}
+              onPress={onMenu}
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 999,
+                backgroundColor: pressed ? THEME.accentSoft : 'transparent',
+              })}>
+              <Glyph name={GLYPH.more} color={THEME.textMuted} size={16} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );

@@ -27,6 +27,7 @@ import {
   updateSet,
 } from '@/lib/lift/session';
 import type { LiftSessionDraft } from '@/lib/lift/types';
+import { liftSessionHref } from '@/lib/routes';
 
 function chestAndTriceps(): LiftSessionDraft {
   return newSessionDraft({
@@ -365,5 +366,16 @@ describe('start this again', () => {
     expect(next.exercises[0].sets[0].reps).toBe(8);
     expect(next.exercises[0].sets[0].completedAt).toBeNull();
     expect(next.exercises[0].key).not.toBe(source.exercises[0].key);
+  });
+});
+
+describe('history opens the same logging route', () => {
+  it('tags a history tap so Back returns to History, without minting a new session id', () => {
+    expect(liftSessionHref('9f1c2e0a-0000-4000-8000-000000000000')).toBe(
+      '/lift/9f1c2e0a-0000-4000-8000-000000000000',
+    );
+    expect(liftSessionHref('9f1c2e0a-0000-4000-8000-000000000000', { from: 'history' })).toBe(
+      '/lift/9f1c2e0a-0000-4000-8000-000000000000?from=history',
+    );
   });
 });

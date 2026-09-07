@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tabs, usePathname, useRouter, useSegments, type Href } from 'expo-router';
-import { AppState, Platform, StyleSheet, View, type AppStateStatus } from 'react-native';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
 
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
 import { PlusActionBar, type QuickActionId } from '@/components/navigation/PlusActionBar';
@@ -48,7 +48,7 @@ import {
 } from '@/lib/routes';
 import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
-import { shouldResetToHomeOnLaunch, shouldReturnHomeOnResume } from '@/lib/appResume';
+import { shouldResetToHomeOnLaunch } from '@/lib/appResume';
 import { THEME } from '@/lib/theme';
 import * as Linking from 'expo-linking';
 
@@ -151,8 +151,6 @@ function TabLayoutInner() {
   const [messagesOpen, setMessagesOpen] = useState(false);
   const tour = useTourOptional();
   const loggable = useLoggableChallenges();
-  const appState = useRef<AppStateStatus>(AppState.currentState);
-  const backgroundedAt = useRef<number | null>(null);
   const pathRef = useRef(pathname);
   const launchPath = useRef(pathname);
   pathRef.current = pathname;
@@ -297,36 +295,12 @@ function TabLayoutInner() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      const previous = appState.current;
       if (next !== 'active') {
         stopAllLiveMedia();
       }
-      if (next === 'background') {
-        backgroundedAt.current = Date.now();
-      }
-      if (
-        shouldReturnHomeOnResume({
-          previous,
-          next,
-          backgroundedAt: backgroundedAt.current,
-          now: Date.now(),
-          pathname,
-          platform: Platform.OS,
-        })
-      ) {
-        backgroundedAt.current = null;
-        appState.current = next;
-        clearLastOpenChallenge();
-        router.replace('/feed');
-        return;
-      }
-      if (next === 'active') {
-        backgroundedAt.current = null;
-      }
-      appState.current = next;
     });
     return () => sub.remove();
-  }, [pathname, router]);
+  }, []);
 
   function go(href: Href) {
     closeOverlays();

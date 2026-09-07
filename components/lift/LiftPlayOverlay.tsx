@@ -186,39 +186,15 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
     [blocks],
   );
 
-  /**
-   * Walks forward to the round the wall clock says we are actually on.
-   *
-   * The screen was off, or the tab was buried, and JavaScript stopped. The elapsed time is real
-   * even though none of the intervening rounds were counted down, so this finds where the workout
-   * genuinely is instead of advancing one round per tick and firing a burst of stale whistles.
-   */
-  const catchUp = useCallback(
-    (overshoot: number) => {
-      let spent = overshoot;
-      let at = index + 1;
-      while (at < blocks.length) {
-        const target = blocks[at];
-        if (spent < target.seconds) {
-          break;
-        }
-        spent -= target.seconds;
-        at += 1;
-      }
-      if (at >= blocks.length) {
-        setPhase('done');
-        return;
-      }
-      const landed = blocks[at];
-      const skipped = at > index + 1;
-      startBlock(at, { silent: skipped, elapsed: spent });
-      // One buzz on return, so a glance at the phone is not needed to know the round changed.
-      if (skipped) {
-        buzz(landed.work ? 'work' : 'recovery');
-      }
-    },
-    [blocks, index, startBlock],
-  );
+  const pause = useCallback(() => {
+    if (phase !== 'running') {
+      return;
+    }
+    const anchor = lastTick.current || Date.now();
+    pausedLeft.current = Math.max(0, (endsAt.current - anchor) / 1000);
+    setRemaining(pausedLeft.current);
+    setPhase('paused');
+  }, [phase]);
 
   useEffect(() => {
     if (phase === 'paused' || phase === 'done' || !block) {
@@ -239,8 +215,11 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
     const handle = setInterval(() => {
       const now = Date.now();
-      // A long gap means the OS parked us — the screen locked, or the tab went to the background.
-      const suspended = now - lastTick.current > SUSPEND_GAP_MS;
+      // A long gap means the OS parked us. Freeze the round that was on screen; do not skip ahead.
+      if (now - lastTick.current > SUSPEND_GAP_MS) {
+        pause();
+        return;
+      }
       lastTick.current = now;
       const left = Math.max(0, (endsAt.current - now) / 1000);
 
@@ -260,12 +239,6 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
         return;
       }
 
-      const overshoot = (now - endsAt.current) / 1000;
-      if (suspended) {
-        catchUp(overshoot);
-        return;
-      }
-
       // The last three seconds of work count down on screen; the bell marks the handover.
       if (block.work) {
         fire('bell', `bell-${index}`);
@@ -281,12 +254,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
     }, FRAME_MS);
 
     return () => clearInterval(handle);
-  }, [block, blocks, catchUp, index, phase, startBlock]);
-
-  const pause = useCallback(() => {
-    pausedLeft.current = Math.max(0, (endsAt.current - Date.now()) / 1000);
-    setPhase('paused');
-  }, []);
+  }, [block, blocks, index, pause, phase, startBlock]);
 
   /**
    * Picks the clock back up exactly where it stopped.
@@ -299,6 +267,30 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
     endsAt.current = Date.now() + pausedLeft.current * 1000;
     setPhase('running');
   }, []);
+
+  // Switching apps, Control Center, or the lock screen must not wipe the overlay or skip rounds.
+  // The clock pauses where it was; coming back still shows Play, waiting on Resume.
+  useEffect(() => {
+    const hide = () => pause();
+    if (Platform.OS === 'web') {
+      if (typeof document === 'undefined') {
+        return undefined;
+      }
+      const onVisible = () => {
+        if (document.visibilityState === 'hidden') {
+          hide();
+        }
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => document.removeEventListener('visibilitychange', onVisible);
+    }
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        hide();
+      }
+    });
+    return () => subscription.remove();
+  }, [pause]);
 
   const skip = useCallback(() => {
     const at = index + 1;

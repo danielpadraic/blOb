@@ -4,20 +4,13 @@ import type { AppStateStatus } from 'react-native';
 export const MIN_BACKGROUND_MS = 2500;
 
 /**
- * Routes that survive both a resume and a cold start. These are places where the user is part-way
- * through telling us something, and dropping them on Home would throw the answer away.
+ * Routes that survive a cold start. These are places where the user is part-way through telling
+ * us something, and dropping them on Home would throw the answer away.
+ *
+ * Background → active never consults this list. Switching apps is not a kill.
  */
 const KEEP_ROUTE =
   /\/(onboarding|capture|submit|checkin|create|compose|details|auth|reset-password|forgot-password)/i;
-
-/**
- * Routes that survive a resume but not a cold start.
- *
- * Logging a lift is a long session with a lot of app-switching in it — a timer, a podcast, a text
- * back. Coming back to Home mid-workout loses your place. But a killed process reopening straight
- * into a half-finished lift is disorienting, and Home is the honest landing for a fresh start.
- */
-const RESUME_ONLY_KEEP_ROUTE = /\/lift(\/|$)/i;
 
 function normalizePath(pathname: string): string {
   return (pathname.split('?')[0] ?? '').replace(/\/$/, '') || '/';
@@ -30,7 +23,15 @@ function isHomePath(path: string): boolean {
 const EXPLICIT_LAUNCH =
   /(?:^|[/?#]|:\/\/)(?:challenges\/[^/?#]+|invite\/|feed\/p\/|story\/|reel\/)/i;
 
-export function shouldReturnHomeOnResume(input: {
+/**
+ * Background is not a kill.
+ *
+ * Messages, Control Center, the lock screen, or another app must leave the person on the exact
+ * screen they left — Lift Logging, History, Play/Tabata, Challenge Live, a composer draft.
+ * Home-on-resume used to fire after a couple of seconds in the background. That was the cold-start
+ * rule applied to the wrong event.
+ */
+export function shouldReturnHomeOnResume(_input: {
   previous: AppStateStatus | null;
   next: AppStateStatus;
   backgroundedAt: number | null;
@@ -39,27 +40,7 @@ export function shouldReturnHomeOnResume(input: {
   minBackgroundMs?: number;
   platform?: string;
 }): boolean {
-  if (input.next !== 'active') {
-    return false;
-  }
-  if (input.previous !== 'background') {
-    return false;
-  }
-  if (input.backgroundedAt == null) {
-    return false;
-  }
-  const waited = input.now - input.backgroundedAt;
-  if (waited < (input.minBackgroundMs ?? MIN_BACKGROUND_MS)) {
-    return false;
-  }
-  const path = normalizePath(input.pathname);
-  if (isHomePath(path)) {
-    return false;
-  }
-  if (KEEP_ROUTE.test(path) || RESUME_ONLY_KEEP_ROUTE.test(path)) {
-    return false;
-  }
-  return true;
+  return false;
 }
 
 /** Notification, share, or typed challenge URL — not a restored last screen. */
@@ -74,8 +55,8 @@ export function isExplicitLaunchUrl(url?: string | null): boolean {
 /**
  * Cold start / kill+reopen: Home unless this process was opened from a real link.
  *
- * Deliberately not routed through the resume rule. A lift is worth restoring when you switch back
- * to the app, and not worth restoring when you reopen a killed tab.
+ * A lift, History, or last-open challenge must not steal Home after a force-quit. Deep links
+ * (notification, challenge View, auth callback) still land where they were pointed.
  */
 export function shouldResetToHomeOnLaunch(input: {
   pathname: string;

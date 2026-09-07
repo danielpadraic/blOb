@@ -97,14 +97,15 @@ function writeCollapse(sessionId: string, muscles: Set<string>, exercises: Set<s
 }
 
 export default function LiftSessionScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; from?: string }>();
   const id = firstRouteParam(params.id);
+  const fromHistory = firstRouteParam(params.from) === 'history';
   // Keying on the id remounts on "Start this again", which lands on the same route with a new id.
   // Without it the screen would keep rendering the session that was just copied.
-  return <LiftSessionInner key={id || 'lift'} id={id} />;
+  return <LiftSessionInner key={id || 'lift'} id={id} fromHistory={fromHistory} />;
 }
 
-function LiftSessionInner({ id }: { id: string }) {
+function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolean }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const loaded = useLiftSession(id);
@@ -469,7 +470,7 @@ function LiftSessionInner({ id }: { id: string }) {
     const next = repeatSession(draft);
     const ok = await persist(next);
     if (ok) {
-      router.replace(liftSessionHref(next.id));
+      router.replace(liftSessionHref(next.id, fromHistory ? { from: 'history' } : undefined));
     }
   }
 
@@ -486,6 +487,10 @@ function LiftSessionInner({ id }: { id: string }) {
   }
 
   function goBackToBuilder() {
+    if (fromHistory) {
+      router.navigate(LIFTS_HISTORY_HREF);
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
       return;
@@ -495,6 +500,9 @@ function LiftSessionInner({ id }: { id: string }) {
 
   const backHeader = {
     headerShown: true as const,
+    presentation: 'card' as const,
+    animation: 'slide_from_right' as const,
+    gestureEnabled: true,
     headerBackVisible: false,
     headerLeft: () => (
       <Pressable
