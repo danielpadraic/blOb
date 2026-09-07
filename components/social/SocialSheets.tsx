@@ -35,11 +35,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCreatePost } from '@/hooks/useFeed';
 import {
   useBlockUser,
+  useBlockedUserIds,
   useHidePost,
   useMutedUserIds,
   useRemoveFromWall,
   useReportPost,
   useToggleMute,
+  useUnblockUser,
 } from '@/hooks/usePostModeration';
 import { useHidePostFromHome, usePostEdits } from '@/hooks/usePostEdit';
 import { useCommentEdits, useDeleteComment } from '@/hooks/useCommentEdit';
@@ -52,6 +54,7 @@ import {
   useSendMessage,
   useUnfriend,
 } from '@/hooks/useSocial';
+import { confirmDestructive } from '@/lib/confirm';
 import { copy } from '@/lib/copy';
 import { postShareUrl } from '@/lib/postShare';
 import { snapshotFromPost } from '@/lib/quotePost';
@@ -85,13 +88,13 @@ type Sheet =
   | { kind: 'quote'; post: PostWithMeta }
   | { kind: 'edit'; post: PostWithMeta }
   | { kind: 'history'; post: PostWithMeta }
-  | { kind: 'profile'; userId: string; muted: boolean; anchor: WindowRect }
+  | { kind: 'profile'; userId: string; name?: string; muted: boolean; anchor: WindowRect }
   | { kind: 'audience'; draft: AudienceDraft };
 
 type SocialSheetsValue = {
   toggleOverflow: (post: PostWithMeta, anchor: WindowRect) => void;
   toggleCommentOverflow: (comment: CommentWithAuthor, anchor: WindowRect) => void;
-  toggleProfileMenu: (userId: string, anchor: WindowRect) => void;
+  toggleProfileMenu: (userId: string, anchor: WindowRect, name?: string) => void;
   openShare: (post: PostWithMeta, anchor: WindowRect) => void;
   openAudience: (draft: AudienceDraft) => void;
   openEdit: (post: PostWithMeta) => void;
@@ -230,11 +233,11 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
-  const toggleProfileMenu = useCallback((userId: string, anchor: WindowRect) => {
+  const toggleProfileMenu = useCallback((userId: string, anchor: WindowRect, name?: string) => {
     setSheet((current) =>
       current?.kind === 'profile' && current.userId === userId
         ? null
-        : { kind: 'profile', userId, muted: mutedRef.current.has(userId), anchor },
+        : { kind: 'profile', userId, name, muted: mutedRef.current.has(userId), anchor },
     );
   }, []);
 
@@ -427,6 +430,7 @@ function SheetView({
     <AnchoredPopover anchor={sheet.anchor} onClose={onClose}>
       <ProfileMuteMenu
         userId={sheet.userId}
+        name={sheet.name}
         muted={sheet.muted}
         onClose={onClose}
         onToast={onToast}
@@ -463,6 +467,9 @@ function OverflowPopover({
   const friends = useFriends();
   const startChat = useGetOrCreateConversation();
   const send = useSendMessage();
+  const mutes = useMutedUserIds();
+  const toggleMute = useToggleMute();
+  const block = useBlockUser();
   const [busy, setBusy] = useState(false);
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
     null,
@@ -470,6 +477,8 @@ function OverflowPopover({
   const [reportNote, setReportNote] = useState('');
   const mine = Boolean(userId && userId === post.author_id);
   const host = Boolean(userId && post.wall_host_id && userId === post.wall_host_id && !post.wall_removed_at);
+  const authorName = personDisplayName(post.author);
+  const authorMuted = (mutes.data ?? []).includes(post.author_id);
 
   async function onRemoveFromWall() {
     if (busy) {
@@ -590,6 +599,45 @@ function OverflowPopover({
           </View>
           {host ? (
             <ListRow label={copy('wall.remove')} onPress={() => void onRemoveFromWall()} />
+          ) : null}
+          {!mine ? (
+            <ListRow
+              label={authorMuted ? copy('mute.unmute') : `${copy('mute.action')} ${authorName}`}
+              onPress={() => {
+                toggleMute.mutate(
+                  { userId: post.author_id, muted: authorMuted },
+                  {
+                    onSuccess: () => {
+                      onClose();
+                      onToast(authorMuted ? copy('mute.undone') : copy('mute.done'));
+                    },
+                    onError: (error) => Alert.alert(copy('mute.failed'), getErrorMessage(error)),
+                  },
+                );
+              }}
+            />
+          ) : null}
+          {!mine ? (
+            <ListRow
+              label={`${copy('block.action')} ${authorName}`}
+              danger
+              onPress={() => {
+                confirmDestructive({
+                  title: copy('block.confirmTitle', undefined, { name: authorName }),
+                  message: copy('block.confirmBody'),
+                  confirmLabel: copy('block.action'),
+                  onConfirm: () => {
+                    block.mutate(post.author_id, {
+                      onSuccess: () => {
+                        onClose();
+                        onToast(copy('block.done'));
+                      },
+                      onError: (error) => Alert.alert(copy('block.failed'), getErrorMessage(error)),
+                    });
+                  },
+                });
+              }}
+            />
           ) : null}
         </View>
       ) : null}
@@ -916,43 +964,63 @@ function QuoteSheet({ post, onClose }: { post: PostWithMeta; onClose: () => void
 
 function ProfileMuteMenu({
   userId,
+  name,
   muted,
   onClose,
   onToast,
 }: {
   userId: string;
+  name?: string;
   muted: boolean;
   onClose: () => void;
   onToast: (message: string) => void;
 }) {
   const toggle = useToggleMute();
   const block = useBlockUser();
+  const unblock = useUnblockUser();
+  const blockedIds = useBlockedUserIds();
   const unfriend = useUnfriend();
   const friendship = useFriendshipStatus(userId);
   const bugReport = useBugReport();
   const accepted = friendship.data?.status === 'accepted';
+  const blocked = (blockedIds.data ?? []).includes(userId);
+
+  function confirmBlock() {
+    confirmDestructive({
+      title: copy('block.confirmTitle', undefined, { name: name?.trim() || 'this account' }),
+      message: copy('block.confirmBody'),
+      confirmLabel: copy('block.action'),
+      onConfirm: () => {
+        block.mutate(userId, {
+          onSuccess: () => {
+            onClose();
+            onToast(copy('block.done'));
+          },
+          onError: (error) => Alert.alert(copy('block.failed'), getErrorMessage(error)),
+        });
+      },
+    });
+  }
+
   return (
     <View style={{ minWidth: 140 }}>
-      {accepted ? (
+      {accepted && !blocked ? (
         <ListRow
           label="Unfriend"
           onPress={() => {
-            Alert.alert('Unfriend?', '', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Unfriend',
-                style: 'destructive',
-                onPress: () => {
-                  unfriend.mutate(userId, {
-                    onSuccess: () => {
-                      onClose();
-                      onToast('Unfriended.');
-                    },
-                    onError: (error) => Alert.alert('Couldn’t unfriend', getErrorMessage(error)),
-                  });
-                },
+            confirmDestructive({
+              title: 'Unfriend?',
+              confirmLabel: 'Unfriend',
+              onConfirm: () => {
+                unfriend.mutate(userId, {
+                  onSuccess: () => {
+                    onClose();
+                    onToast('Unfriended.');
+                  },
+                  onError: (error) => Alert.alert('Couldn’t unfriend', getErrorMessage(error)),
+                });
               },
-            ]);
+            });
           }}
         />
       ) : null}
@@ -963,33 +1031,39 @@ function ProfileMuteMenu({
           bugReport.open();
         }}
       />
-      <ListRow
-        label={muted ? 'Unmute' : 'Mute'}
-        onPress={() => {
-          toggle.mutate(
-            { userId, muted },
-            {
+      {blocked ? null : (
+        <ListRow
+          label={muted ? copy('mute.unmute') : copy('mute.action')}
+          onPress={() => {
+            toggle.mutate(
+              { userId, muted },
+              {
+                onSuccess: () => {
+                  onClose();
+                  onToast(muted ? copy('mute.undone') : copy('mute.done'));
+                },
+                onError: (error) => Alert.alert(copy('mute.failed'), getErrorMessage(error)),
+              },
+            );
+          }}
+        />
+      )}
+      {blocked ? (
+        <ListRow
+          label={copy('block.unblock')}
+          onPress={() => {
+            unblock.mutate(userId, {
               onSuccess: () => {
                 onClose();
-                onToast(muted ? 'Unmuted.' : 'Muted.');
+                onToast(copy('block.undone'));
               },
-              onError: (error) => Alert.alert('Couldn’t update that', getErrorMessage(error)),
-            },
-          );
-        }}
-      />
-      <ListRow
-        label={copy('wall.block')}
-        onPress={() => {
-          block.mutate(userId, {
-            onSuccess: () => {
-              onClose();
-              onToast(copy('wall.block'));
-            },
-            onError: (error) => Alert.alert('Couldn’t block that', getErrorMessage(error)),
-          });
-        }}
-      />
+              onError: (error) => Alert.alert(copy('block.unblockFailed'), getErrorMessage(error)),
+            });
+          }}
+        />
+      ) : (
+        <ListRow label={copy('block.action')} danger onPress={confirmBlock} />
+      )}
     </View>
   );
 }

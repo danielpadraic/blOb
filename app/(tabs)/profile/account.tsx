@@ -204,6 +204,21 @@ export default function AccountScreen() {
         </View>
         ) : null}
         <View className="gap-2">
+          <AppText className="text-sm font-semibold text-charcoal">Privacy</AppText>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/profile/blocked' as Href)}
+            hitSlop={8}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
+              {copy('block.manageEntry')}
+            </AppText>
+          </Pressable>
+          <AppText className="text-[12px] leading-5 text-muted">
+            Review who you blocked or muted, and undo either one.
+          </AppText>
+        </View>
+        <View className="gap-2">
           <AppText className="text-sm font-semibold text-charcoal">Legal</AppText>
           <Pressable
             accessibilityRole="link"

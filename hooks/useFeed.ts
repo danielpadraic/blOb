@@ -19,6 +19,7 @@ import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { reportAppError } from '@/lib/appErrors';
 import { rawFeedError } from '@/lib/feedError';
+import { fetchSilencedAuthorIds } from '@/lib/moderation';
 import { logMissingPublishAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
 import {
   dropCachedCircleId,
@@ -42,7 +43,7 @@ import type {
 import { reportBadgeActivity } from '@/lib/badgeActivity';
 import { queryClient as appQueryClient } from '@/lib/queryClient';
 import { fetchAuthorsSharingAcceptedFriend, fetchCirclePreviews } from '@/lib/circles';
-import { fetchFriends, type FriendEdge } from '@/lib/social';
+import { fetchBlockedPeerIds, fetchFriends, type FriendEdge } from '@/lib/social';
 import {
   getErrorMessage,
   isMentionAccessDenied,
@@ -351,8 +352,14 @@ async function withSocial(posts: PostWithMeta[], viewerId?: string): Promise<Pos
     return posts;
   }
 
-  const commentsResult = await fetchComments(ids);
-  const comments = (commentsResult.data ?? []) as CommentWithAuthor[];
+  const [commentsResult, silenced] = await Promise.all([
+    fetchComments(ids),
+    fetchSilencedAuthorIds(viewerId),
+  ]);
+  // A muted or blocked person's replies stay off every thread, not just Home.
+  const comments = ((commentsResult.data ?? []) as CommentWithAuthor[]).filter(
+    (comment) => !comment?.author_id || !silenced.has(comment.author_id),
+  );
   const commentIds = comments.map((comment) => comment.id).filter(Boolean);
 
   const [postReactionsResult, commentReactionsResult] = await Promise.all([
@@ -733,18 +740,14 @@ function viewerCanSeeProfilePost(
 }
 
 async function fetchBlockedUserIds(userId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('friendships')
-    .select('user_a_id, user_b_id')
-    .eq('status', 'blocked')
-    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
-  if (error) {
+  try {
+    return [...(await fetchBlockedPeerIds(userId))];
+  } catch (error) {
     if (!isMissingRelationError(error)) {
-      console.log('[blob:feed] blocked lookup skipped', error.message);
+      console.log('[blob:feed] blocked lookup skipped', rawFeedError(error));
     }
     return [];
   }
-  return (data ?? []).map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id));
 }
 
 async function fetchHiddenPostIds(userId: string): Promise<string[]> {
@@ -1419,22 +1422,28 @@ export function useAuthorFeed(authorId?: string | null) {
         }
       }
       const rows = dedupePosts([authored, wall]);
-      const [hiddenIds, friendIds, officialIds] = await Promise.all([
+      const [hiddenIds, friendIds, officialIds, mutedIds, blockedIds] = await Promise.all([
         user?.id ? fetchHiddenPostIds(user.id) : Promise.resolve([] as string[]),
         user?.id ? friendIdsForUser(user.id) : Promise.resolve([] as string[]),
         fetchOfficialAuthorIds(),
+        user?.id ? fetchMutedUserIds(user.id) : Promise.resolve([] as string[]),
+        user?.id ? fetchBlockedUserIds(user.id) : Promise.resolve([] as string[]),
       ]);
       const hidden = new Set(hiddenIds);
       const friends = new Set(friendIds);
       const official = new Set(officialIds);
-      const visible = rows.filter((post) =>
-        viewerCanSeeProfilePost(post, {
-          viewerId: user?.id,
-          profileId,
-          friendsWithAuthor: friends.has(post.author_id),
-          officialAuthor: official.has(post.author_id),
-          hidden,
-        }),
+      // A muted or blocked author stays out of every wall, not just Home.
+      const silenced = new Set([...mutedIds, ...blockedIds]);
+      const visible = rows.filter(
+        (post) =>
+          !silenced.has(post.author_id) &&
+          viewerCanSeeProfilePost(post, {
+            viewerId: user?.id,
+            profileId,
+            friendsWithAuthor: friends.has(post.author_id),
+            officialAuthor: official.has(post.author_id),
+            hidden,
+          }),
       );
       return hydrateAuthors(await withSocial(visible, user?.id));
     },

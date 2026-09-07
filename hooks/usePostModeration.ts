@@ -2,8 +2,36 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 
 import { useAuth } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
+import { clearSilencedAuthorCache } from '@/lib/moderation';
+import { fetchBlockedPeerIds, fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
+import type { PublicProfile } from '@/lib/types';
 import { getErrorMessage, isMissingRelationError } from '@/utils/errors';
+
+export type ModeratedPerson = {
+  userId: string;
+  createdAt: string;
+  profile: PublicProfile | null;
+};
+
+function stripAuthorFromFeeds(queryClient: QueryClient, authorId: string) {
+  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
+    if (Array.isArray(current)) {
+      return current.filter(
+        (row) => !row || typeof row !== 'object' || row.author_id !== authorId,
+      );
+    }
+    if (
+      current &&
+      typeof current === 'object' &&
+      'author_id' in current &&
+      current.author_id === authorId
+    ) {
+      return null;
+    }
+    return current;
+  });
+}
 
 function stripPostFromFeeds(queryClient: QueryClient, postId: string) {
   queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
@@ -51,6 +79,90 @@ export function useMutedUserIds() {
       return (data ?? []).map((row) => row.muted_user_id);
     },
   });
+}
+
+/** Everyone the viewer can no longer reach, whichever side blocked. */
+export function useBlockedUserIds() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['blocked-ids', user?.id],
+    enabled: Boolean(user?.id),
+    staleTime: 30_000,
+    queryFn: async (): Promise<string[]> => {
+      try {
+        return [...(await fetchBlockedPeerIds(user!.id))];
+      } catch (error) {
+        if (isMissingRelationError(error)) {
+          return [];
+        }
+        throw new Error(getErrorMessage(error));
+      }
+    },
+  });
+}
+
+/** Only the people I blocked, so the list can offer Unblock. */
+export function useMyBlocks() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['my-blocks', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<ModeratedPerson[]> => {
+      const { data, error } = await supabase
+        .from('blocks')
+        .select('blocked_id, created_at')
+        .order('created_at', { ascending: false });
+      if (error) {
+        if (isMissingRelationError(error)) {
+          return [];
+        }
+        throw new Error(getErrorMessage(error));
+      }
+      return withProfiles(
+        (data ?? []).map((row) => ({ userId: row.blocked_id, createdAt: row.created_at })),
+      );
+    },
+  });
+}
+
+export function useMyMutes() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['my-mutes', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<ModeratedPerson[]> => {
+      const { data, error } = await supabase
+        .from('mutes')
+        .select('muted_user_id, created_at')
+        .order('created_at', { ascending: false });
+      if (error) {
+        if (isMissingRelationError(error)) {
+          return [];
+        }
+        throw new Error(getErrorMessage(error));
+      }
+      return withProfiles(
+        (data ?? []).map((row) => ({ userId: row.muted_user_id, createdAt: row.created_at })),
+      );
+    },
+  });
+}
+
+async function withProfiles(
+  rows: { userId: string; createdAt: string }[],
+): Promise<ModeratedPerson[]> {
+  const ids = [...new Set(rows.map((row) => row.userId).filter(Boolean))];
+  if (ids.length === 0) {
+    return [];
+  }
+  let byId = new Map<string, PublicProfile>();
+  try {
+    const profiles = await fetchPublicProfilesByIds(ids);
+    byId = new Map(profiles.map((profile) => [profile.id, profile]));
+  } catch {
+    // A missing profile still deserves an Unblock row.
+  }
+  return rows.map((row) => ({ ...row, profile: byId.get(row.userId) ?? null }));
 }
 
 export function useHidePost() {
@@ -134,6 +246,31 @@ export function useRemoveFromWall() {
   });
 }
 
+/** Everything the graph knows about one person, after block or unblock. */
+function invalidateRelationship(
+  queryClient: QueryClient,
+  userId: string | undefined,
+) {
+  clearSilencedAuthorCache();
+  void queryClient.invalidateQueries({ queryKey: ['feed'] });
+  void queryClient.invalidateQueries({ queryKey: ['mutes', userId] });
+  void queryClient.invalidateQueries({ queryKey: ['my-mutes', userId] });
+  void queryClient.invalidateQueries({ queryKey: ['blocked-ids', userId] });
+  void queryClient.invalidateQueries({ queryKey: ['my-blocks', userId] });
+  void queryClient.invalidateQueries({ queryKey: ['blocked-peers', userId] });
+  void queryClient.invalidateQueries({ queryKey: ['public-profile'] });
+  void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+  void queryClient.invalidateQueries({ queryKey: ['friends'] });
+  void queryClient.invalidateQueries({ queryKey: ['friend-count'] });
+  void queryClient.invalidateQueries({ queryKey: ['follow'] });
+  void queryClient.invalidateQueries({ queryKey: ['following'] });
+  void queryClient.invalidateQueries({ queryKey: ['followers'] });
+  void queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+  void queryClient.invalidateQueries({ queryKey: ['people-search'] });
+  void queryClient.invalidateQueries({ queryKey: ['conversations', userId] });
+  void queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+}
+
 export function useBlockUser() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -148,18 +285,32 @@ export function useBlockUser() {
       }
     },
     onSuccess: (_data, targetUserId) => {
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['mutes', user?.id] });
-      void queryClient.invalidateQueries({ queryKey: ['blocked-ids', user?.id] });
-      void queryClient.invalidateQueries({ queryKey: ['public-profile'] });
-      void queryClient.invalidateQueries({ queryKey: ['friendship'] });
-      void queryClient.invalidateQueries({ queryKey: ['friends'] });
-      void queryClient.invalidateQueries({ queryKey: ['follow'] });
-      void queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+      stripAuthorFromFeeds(queryClient, targetUserId);
+      invalidateRelationship(queryClient, user?.id);
     },
   });
 }
 
+export function useUnblockUser() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      if (!user) {
+        throw new Error('You need to be signed in.');
+      }
+      const { error } = await supabase.rpc('unblock_user', { p_target: targetUserId });
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+    },
+    onSuccess: () => {
+      invalidateRelationship(queryClient, user?.id);
+    },
+  });
+}
+
+/** `muted` is the state right now, so passing true unmutes. */
 export function useToggleMute() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -187,9 +338,15 @@ export function useToggleMute() {
         throw new Error(getErrorMessage(error));
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, input) => {
+      clearSilencedAuthorCache();
+      if (!input.muted) {
+        stripAuthorFromFeeds(queryClient, input.userId);
+      }
       void queryClient.invalidateQueries({ queryKey: ['mutes', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['my-mutes', user?.id] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
     },
   });
 }

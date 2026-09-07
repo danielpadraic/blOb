@@ -1697,6 +1697,15 @@ export type Database = {
           Relationship<'mutes_muted_user_id_fkey', 'muted_user_id', 'profiles', 'id'>,
         ]
       >;
+      blocks: TableDef<
+        { blocker_id: string; blocked_id: string; created_at: string },
+        Partial<{ blocker_id: string; blocked_id: string; created_at: string }>,
+        Partial<{ blocker_id: string; blocked_id: string; created_at: string }>,
+        [
+          Relationship<'blocks_blocker_id_fkey', 'blocker_id', 'profiles', 'id'>,
+          Relationship<'blocks_blocked_id_fkey', 'blocked_id', 'profiles', 'id'>,
+        ]
+      >;
       comments: TableDef<
         Comment,
         Partial<Comment>,
@@ -2386,6 +2395,14 @@ export type Database = {
       block_user: {
         Args: { p_target: string };
         Returns: undefined;
+      };
+      unblock_user: {
+        Args: { p_target: string };
+        Returns: undefined;
+      };
+      blocked_peer_ids: {
+        Args: Record<string, never>;
+        Returns: string[];
       };
       soft_delete_post: {
         Args: { p_post_id: string };

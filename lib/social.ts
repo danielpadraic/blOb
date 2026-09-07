@@ -1,5 +1,6 @@
 import { addHours } from 'date-fns';
 
+import { readBlockedPeerRows } from '@/lib/blockedPeers';
 import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
@@ -1624,7 +1625,20 @@ function throwDmOpen(error: unknown) {
   }
 }
 
+/**
+ * Everyone the viewer can no longer interact with, in either direction. The
+ * server never says which side blocked, so a blocked person is not told.
+ */
 export async function fetchBlockedPeerIds(userId: string): Promise<Set<string>> {
+  const rpc = await supabase.rpc('blocked_peer_ids');
+  if (!rpc.error) {
+    return new Set(readBlockedPeerRows(rpc.data).filter((id) => id && id !== userId));
+  }
+  if (!isMissingBlockedPeerRpc(rpc.error)) {
+    throwIfError(rpc.error);
+  }
+
+  // Fallback for a database that has not run the block migration yet.
   const { data, error } = await supabase
     .from('friendships')
     .select('user_a_id, user_b_id, status')
@@ -1644,6 +1658,21 @@ export async function fetchBlockedPeerIds(userId: string): Promise<Set<string>> 
     }
   }
   return ids;
+}
+
+function isMissingBlockedPeerRpc(error: unknown): boolean {
+  if (isMissingRelationError(error)) {
+    return true;
+  }
+  const raw =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '').toLowerCase()
+      : String(error ?? '').toLowerCase();
+  return (
+    raw.includes('blocked_peer_ids') ||
+    raw.includes('pgrst202') ||
+    raw.includes('could not find the function')
+  );
 }
 
 export async function getOrCreateDirectConversation(

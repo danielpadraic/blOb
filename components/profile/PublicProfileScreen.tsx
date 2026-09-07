@@ -23,6 +23,7 @@ import {
   useCreatePost,
   useToggleReaction,
 } from '@/hooks/useFeed';
+import { useBlockedUserIds, useUnblockUser } from '@/hooks/usePostModeration';
 import { usePublicProfile } from '@/hooks/usePublicProfile';
 import {
   useAcceptFriendRequest,
@@ -38,6 +39,7 @@ import {
   profileChallengeIsHiddenFromOthers,
   viewerCanSeeShowcase,
 } from '@/lib/profileShowcase';
+import { confirmDestructive } from '@/lib/confirm';
 import { canPostOnProfile } from '@/lib/profileWall';
 import { directMessageHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
@@ -91,6 +93,8 @@ export default function PublicProfileScreen() {
   const createPost = useCreatePost();
   const social = useSocialSheetsOptional();
   const bugReport = useBugReport();
+  const blockedIds = useBlockedUserIds();
+  const unblock = useUnblockUser();
   const menuRef = useRef<View>(null);
   const headerTitle = profile?.username ? `@${profile.username}` : 'Profile';
   const headerOptions = useMemo(
@@ -169,30 +173,29 @@ export default function PublicProfileScreen() {
     });
   });
   const friendCount = friendCountQuery.data;
+  const blocked =
+    relation?.status === 'blocked' || (blockedIds.data ?? []).includes(profile.id);
   const canPost = canPostOnProfile({
     viewerId: user?.id,
     host: profile,
     friends: relation?.status === 'accepted',
     followingCreator: follow.isFollowing,
-    blocked: relation?.status === 'blocked',
+    blocked,
   });
 
   function confirmUnfriend() {
     if (!profile || unfriend.isPending) {
       return;
     }
-    Alert.alert('Unfriend?', '', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Unfriend',
-        style: 'destructive',
-        onPress: () => {
-          unfriend.mutate(profile.id, {
-            onError: (error) => Alert.alert('Couldn’t unfriend', getErrorMessage(error)),
-          });
-        },
+    confirmDestructive({
+      title: 'Unfriend?',
+      confirmLabel: 'Unfriend',
+      onConfirm: () => {
+        unfriend.mutate(profile.id, {
+          onError: (error) => Alert.alert('Couldn’t unfriend', getErrorMessage(error)),
+        });
       },
-    ]);
+    });
   }
 
   function followAction() {
@@ -200,17 +203,15 @@ export default function PublicProfileScreen() {
       return;
     }
     if (follow.isFollowing) {
-      Alert.alert('Unfollow?', '', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unfollow',
-          onPress: () => {
-            toggleFollow.mutate(false, {
-              onError: (error) => Alert.alert('Couldn’t unfollow', getErrorMessage(error)),
-            });
-          },
+      confirmDestructive({
+        title: 'Unfollow?',
+        confirmLabel: 'Unfollow',
+        onConfirm: () => {
+          toggleFollow.mutate(false, {
+            onError: (error) => Alert.alert('Couldn’t unfollow', getErrorMessage(error)),
+          });
         },
-      ]);
+      });
       return;
     }
     toggleFollow.mutate(true, {
@@ -281,7 +282,7 @@ export default function PublicProfileScreen() {
                     hitSlop={8}
                     onPress={() => {
                       menuRef.current?.measureInWindow((x, y, width, height) => {
-                        social?.toggleProfileMenu(profile.id, { x, y, width, height });
+                        social?.toggleProfileMenu(profile.id, { x, y, width, height }, name);
                       });
                     }}
                     style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
@@ -347,41 +348,72 @@ export default function PublicProfileScreen() {
               </View>
             ) : (
               <View className="mt-2 flex-row flex-wrap items-center gap-2">
-                <Button
-                  title={friendTitle}
-                  size="sm"
-                  variant={
-                    official || relation?.status === 'accepted' || relation?.status === 'pending'
-                      ? 'outline'
-                      : 'primary'
-                  }
-                  disabled={official}
-                  loading={
-                    !official &&
-                    (sendRequest.isPending || acceptRequest.isPending || unfriend.isPending)
-                  }
-                  onPress={friendAction}
-                />
-                {isCreatorAccount(profile) || isOfficialAccount(profile) ? (
-                  <Button
-                    title={follow.isFollowing ? 'Following' : 'Follow'}
-                    size="sm"
-                    variant="outline"
-                    loading={toggleFollow.isPending}
-                    onPress={followAction}
-                  />
-                ) : null}
-                {relation?.status === 'blocked' ? (
-                  <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
-                    {copy('messages.blocked')}
-                  </AppText>
+                {blocked ? (
+                  <>
+                    <View
+                      className="items-center justify-center px-3"
+                      style={{
+                        minHeight: 32,
+                        borderRadius: 12,
+                        backgroundColor: THEME.surface2,
+                      }}>
+                      <AppText
+                        className="text-[13px] font-extrabold"
+                        style={{ color: THEME.textMuted }}>
+                        {copy('block.blockedLabel')}
+                      </AppText>
+                    </View>
+                    <Button
+                      title={copy('block.unblock')}
+                      size="sm"
+                      variant="outline"
+                      loading={unblock.isPending}
+                      onPress={() =>
+                        confirmDestructive({
+                          title: `${copy('block.unblock')} ${name}?`,
+                          confirmLabel: copy('block.unblock'),
+                          onConfirm: () =>
+                            unblock.mutate(profile.id, {
+                              onError: (error) =>
+                                Alert.alert(copy('block.unblockFailed'), getErrorMessage(error)),
+                            }),
+                        })
+                      }
+                    />
+                  </>
                 ) : (
-                  <Button
-                    title="Message"
-                    size="sm"
-                    variant="outline"
-                    onPress={() => router.push(directMessageHref(profile.id))}
-                  />
+                  <>
+                    <Button
+                      title={friendTitle}
+                      size="sm"
+                      variant={
+                        official || relation?.status === 'accepted' || relation?.status === 'pending'
+                          ? 'outline'
+                          : 'primary'
+                      }
+                      disabled={official}
+                      loading={
+                        !official &&
+                        (sendRequest.isPending || acceptRequest.isPending || unfriend.isPending)
+                      }
+                      onPress={friendAction}
+                    />
+                    {isCreatorAccount(profile) || isOfficialAccount(profile) ? (
+                      <Button
+                        title={follow.isFollowing ? 'Following' : 'Follow'}
+                        size="sm"
+                        variant="outline"
+                        loading={toggleFollow.isPending}
+                        onPress={followAction}
+                      />
+                    ) : null}
+                    <Button
+                      title="Message"
+                      size="sm"
+                      variant="outline"
+                      onPress={() => router.push(directMessageHref(profile.id))}
+                    />
+                  </>
                 )}
                 <Pressable
                   accessibilityRole="button"

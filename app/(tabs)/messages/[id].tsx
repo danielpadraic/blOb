@@ -25,13 +25,15 @@ import {
   useMessages,
   useSendMessage,
 } from '@/hooks/useSocial';
+import { useBlockedUserIds, useMyBlocks, useUnblockUser } from '@/hooks/usePostModeration';
+import { confirmDestructive } from '@/lib/confirm';
 import { copy } from '@/lib/copy';
 import { DM_BLOCKED_COPY } from '@/lib/dmOpen';
 import { conversationHref } from '@/lib/routes';
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 import { conversationTitle, fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { TAB_BAR_GUTTER, TAB_BAR_HEIGHT, TAB_BAR_PEEK, THEME } from '@/lib/theme';
-import { getDmOpenMessage } from '@/utils/errors';
+import { getDmOpenMessage, getErrorMessage } from '@/utils/errors';
 import type { PublicProfile } from '@/lib/types';
 import type { Message } from '@/types/social';
 
@@ -54,6 +56,9 @@ export default function ConversationScreen() {
   const sendMessage = useSendMessage();
   const markRead = useMarkConversationRead();
   const startChat = useGetOrCreateConversation();
+  const blockedIds = useBlockedUserIds();
+  const myBlocks = useMyBlocks();
+  const unblock = useUnblockUser();
   const listRef = useRef<FlatList<Message>>(null);
   const [peer, setPeer] = useState<PublicProfile | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -205,7 +210,16 @@ export default function ConversationScreen() {
   // A hung open or message fetch never sets threadError, so without this the thread kept a bare
   // spinner and a dead composer with nothing to retry.
   const threadStalled = useStalled(threadWaiting);
-  const composerReady = Boolean(conversationId) && !showOpenError && !threadStalled;
+  // Blocking an existing thread leaves it in the list. Say so instead of letting
+  // the send bounce off row-level security.
+  const peerBlocked = Boolean(
+    !isGroup && resolvedPeer?.id && (blockedIds.data ?? []).includes(resolvedPeer.id),
+  );
+  const iBlockedPeer = Boolean(
+    resolvedPeer?.id && (myBlocks.data ?? []).some((row) => row.userId === resolvedPeer.id),
+  );
+  const composerReady =
+    Boolean(conversationId) && !showOpenError && !threadStalled && !peerBlocked;
   const tabReserve = TAB_BAR_HEIGHT + Math.max(insets.bottom, TAB_BAR_GUTTER);
   const composerPad =
     keyboardHeight > 0
@@ -297,13 +311,40 @@ export default function ConversationScreen() {
       )}
 
       <View style={{ paddingBottom: composerPad }}>
-        <MessageInput
-          onSend={onSend}
-          sending={sendMessage.isPending}
-          autoFocus={focus && composerReady}
-          disabled={!composerReady}
-          draft={draftParam}
-        />
+        {peerBlocked ? (
+          <View className="items-center gap-2 px-4 pt-3">
+            <AppText className="text-center text-[13px] font-semibold text-muted">
+              {copy('messages.blocked')}
+            </AppText>
+            {iBlockedPeer && resolvedPeer?.id ? (
+              <Button
+                title={copy('block.unblock')}
+                size="sm"
+                variant="outline"
+                loading={unblock.isPending}
+                onPress={() =>
+                  confirmDestructive({
+                    title: `${copy('block.unblock')} ${name}?`,
+                    confirmLabel: copy('block.unblock'),
+                    onConfirm: () =>
+                      unblock.mutate(resolvedPeer.id, {
+                        onError: (error) =>
+                          Alert.alert(copy('block.unblockFailed'), getErrorMessage(error)),
+                      }),
+                  })
+                }
+              />
+            ) : null}
+          </View>
+        ) : (
+          <MessageInput
+            onSend={onSend}
+            sending={sendMessage.isPending}
+            autoFocus={focus && composerReady}
+            disabled={!composerReady}
+            draft={draftParam}
+          />
+        )}
       </View>
     </View>
   );
