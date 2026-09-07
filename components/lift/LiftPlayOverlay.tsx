@@ -48,7 +48,13 @@ import { holdScreenAwake, reacquireScreenAwake, releaseScreenAwake } from '@/lib
  */
 
 const PREROLL_SECONDS = 3;
-/** How many seconds of a round get counted down out loud before it hands over. */
+/**
+ * How many seconds of a round get counted down out loud before it hands over.
+ *
+ * Every round gets this, whatever kind it is. A work round then opens with its own silent pre-roll
+ * on top, so a rest running into a sprint reads as "rest ending — get set — go" rather than as two
+ * competing counts: the pips finish the round you are in, and the pre-roll starts the next one.
+ */
 const COUNT_IN_SECONDS = 3;
 /** Fast enough that the clock never visibly skips a second. */
 const FRAME_MS = 100;
@@ -84,16 +90,6 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
   const block = blocks[index] ?? null;
   const next = blocks[index + 1] ?? null;
-
-  /**
-   * Whether this round's last three seconds get counted down.
-   *
-   * A work round opens with its own three-second pre-roll, so counting the round before it down as
-   * well would run 3-2-1 twice back to back — six seconds of counting for one handover. The count
-   * therefore fills in exactly where the pre-roll does not: sprint into recovery, and the final
-   * round into the end of the session.
-   */
-  const countsIn = !next || !needsPreroll(next, index + 1);
 
   // Wall-clock anchors. `endsAt` is the only source of truth for how much time is left; the state
   // above is just what the screen is currently showing.
@@ -267,12 +263,13 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
       setRemaining(left);
       if (left > 0) {
-        // Count the handover in out loud. `Math.ceil` puts the pip for "3" on the moment the clock
-        // reads 0:03, and the token keeps it to one pip per second rather than one per frame. The
-        // buzz shares the token so a muted phone gets three taps, not thirty.
+        // Every round counts its own handover in, whatever kind it is — a rest ending needs the
+        // same warning as a sprint ending. `Math.ceil` puts the pip for "3" on the moment the
+        // clock reads 0:03, and the token keeps it to one pip per second rather than one per
+        // frame. The buzz shares the token so a muted phone gets three taps, not thirty.
         const pip = Math.ceil(left);
         const token = `tick-${index}-${pip}`;
-        if (countsIn && pip <= COUNT_IN_SECONDS && !cued.current.has(token)) {
+        if (pip <= COUNT_IN_SECONDS && !cued.current.has(token)) {
           cued.current.add(token);
           playCue('tick');
           buzz('count');
@@ -301,7 +298,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
     }, FRAME_MS);
 
     return () => clearInterval(handle);
-  }, [block, blocks, catchUp, countsIn, index, phase, startBlock]);
+  }, [block, blocks, catchUp, index, phase, startBlock]);
 
   const pause = useCallback(() => {
     pausedLeft.current = Math.max(0, (endsAt.current - Date.now()) / 1000);
@@ -345,7 +342,7 @@ export function LiftPlayOverlay({ spec, onClose }: LiftPlayOverlayProps) {
 
   const shown = Math.ceil(remaining);
   const working = phase !== 'done' && isHardBlock(block);
-  const finalCount = phase === 'running' && countsIn && shown <= COUNT_IN_SECONDS && shown > 0;
+  const finalCount = phase === 'running' && shown <= COUNT_IN_SECONDS && shown > 0;
   const tint = phase === 'done' ? THEME.accentBright : kindTint(block);
 
   // The ring is the loudest thing on the screen, so it takes what room there is and then stops —
