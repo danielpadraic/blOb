@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
@@ -9,6 +9,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
@@ -93,6 +94,7 @@ export function LiftShareSheet({
   const [recipientIds, setRecipientIds] = useState<string[]>([]);
   const [recipientQuery, setRecipientQuery] = useState('');
   const [home, setHome] = useState(true);
+  const peopleListRef = useRef<ScrollView>(null);
 
   const recap = useMemo(() => (draft ? buildRecap(draft) : null), [draft]);
   const summary = useMemo(() => (draft ? draftSummary(draft) : null), [draft]);
@@ -115,6 +117,10 @@ export function LiftShareSheet({
       setCircleId(null);
     }
   }, [visible]);
+
+  useEffect(() => {
+    peopleListRef.current?.scrollTo({ y: 0, animated: false });
+  }, [recipientQuery]);
 
   if (!recap) {
     return null;
@@ -155,13 +161,14 @@ export function LiftShareSheet({
 
   return (
     <ChromeOverlay visible={visible} onClose={busy ? undefined : onClose} align="end" zIndex={140}>
+      <KeyboardSheet>
       <View
         style={{
           backgroundColor: THEME.surface,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,
-          paddingBottom: 20,
-          maxHeight: '94%',
+          minHeight: 0,
+          flexGrow: 1,
         }}>
         <View
           style={{
@@ -204,8 +211,57 @@ export function LiftShareSheet({
           </Pressable>
         </View>
 
+        {destination === 'message' && people.length ? (
+          <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                height: 46,
+                paddingHorizontal: 14,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: THEME.border,
+                backgroundColor: THEME.background,
+              }}>
+              <Glyph name={GLYPH.search} color={THEME.textMuted} size={15} />
+              <TextInput
+                value={recipientQuery}
+                onChangeText={setRecipientQuery}
+                placeholder="Type a name"
+                placeholderTextColor={THEME.textMuted}
+                autoCorrect={false}
+                autoCapitalize="none"
+                accessibilityLabel="Search friends by name"
+                selectionColor={THEME.accent}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 15,
+                  color: THEME.textPrimary,
+                  paddingVertical: 0,
+                }}
+              />
+              {recipientQuery ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  hitSlop={10}
+                  onPress={() => setRecipientQuery('')}
+                  style={{ width: 26, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                  <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         <ScrollView
+          ref={peopleListRef}
+          style={{ flexGrow: 1, minHeight: 0 }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 10 }}>
           <LiftRecapCard recap={recap} />
@@ -289,48 +345,6 @@ export function LiftShareSheet({
                         ? 'Everyone you pick lands in one group chat.'
                         : 'Only the people you pick can open this lift.'}
                     </AppText>
-
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 8,
-                        height: 46,
-                        paddingHorizontal: 14,
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: THEME.border,
-                        backgroundColor: THEME.background,
-                      }}>
-                      <Glyph name={GLYPH.search} color={THEME.textMuted} size={15} />
-                      <TextInput
-                        value={recipientQuery}
-                        onChangeText={setRecipientQuery}
-                        placeholder="Type a name"
-                        placeholderTextColor={THEME.textMuted}
-                        autoCorrect={false}
-                        autoCapitalize="none"
-                        accessibilityLabel="Search friends by name"
-                        selectionColor={THEME.accent}
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          fontSize: 15,
-                          color: THEME.textPrimary,
-                          paddingVertical: 0,
-                        }}
-                      />
-                      {recipientQuery ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Clear search"
-                          hitSlop={10}
-                          onPress={() => setRecipientQuery('')}
-                          style={{ width: 26, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-                          <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
-                        </Pressable>
-                      ) : null}
-                    </View>
 
                     {chosen.length ? (
                       <View
@@ -551,6 +565,7 @@ export function LiftShareSheet({
           )}
         </View>
       </View>
+      </KeyboardSheet>
     </ChromeOverlay>
   );
 }

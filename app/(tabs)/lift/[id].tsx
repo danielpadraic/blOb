@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { AppState, Pressable, ScrollView, TextInput, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,7 +12,6 @@ import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShar
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
@@ -913,16 +912,14 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         <View
           style={{
             paddingHorizontal: 16,
-            paddingTop: 10,
+            paddingTop: 8,
             gap: 8,
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,
-            paddingBottom: tabBarLift(insets.bottom, 'sticky') + 12,
+            paddingBottom: tabBarLift(insets.bottom, 'sticky'),
             ...themeShadow('bar'),
           }}>
-          {/* One fixed-height line. Autosave and errors both land here, so the bar never grows or
-              shrinks under the user's thumb while they are typing a weight. */}
           <View style={{ height: 16, justifyContent: 'center' }}>
             {error ? (
               <AppText numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>
@@ -934,59 +931,38 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
           </View>
 
           {readOnly ? (
-            <>
-              {hasShareableWork(draft) ? (
-                <Button
-                  title={draft.sharedPostId ? 'Share again' : 'Share this lift'}
-                  onPress={() => {
-                    setSharedPostId(null);
-                    setShareOpen(true);
-                  }}
-                />
-              ) : null}
-              <Button
-                title="Start this again"
-                variant={hasShareableWork(draft) ? 'outline' : 'primary'}
-                loading={save.isPending}
-                onPress={() => void onStartAgain()}
-              />
-              {confirmDelete ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <AppText style={{ flex: 1, fontSize: 13, color: THEME.textMuted }}>
-                    Delete this lift for good?
-                  </AppText>
-                  <Button title="Keep" variant="outline" size="sm" onPress={() => setConfirmDelete(false)} />
-                  <Button
-                    title="Delete"
-                    variant="danger"
-                    size="sm"
-                    loading={remove.isPending}
-                    onPress={() => void onDelete()}
-                  />
-                </View>
-              ) : (
-                <Button
-                  title="Delete lift"
-                  variant="ghost"
-                  size="sm"
-                  onPress={() => setConfirmDelete(true)}
-                />
-              )}
-            </>
+            <SavedFooter
+              canShare={hasShareableWork(draft)}
+              confirmingDelete={confirmDelete}
+              busy={save.isPending || remove.isPending}
+              onShare={() => {
+                setSharedPostId(null);
+                setShareOpen(true);
+              }}
+              onStartAgain={() => void onStartAgain()}
+              onAskDelete={() => setConfirmDelete(true)}
+              onKeep={() => setConfirmDelete(false)}
+              onDelete={() => void onDelete()}
+            />
           ) : (
-            <>
-              <Button title="Back" variant="outline" onPress={goBackToBuilder} />
-              {/* Only appears once a round has time on it, and it sits above Save so Save keeps
-                  its place against the tab bar. Play neither saves nor navigates. */}
-              {playableRow ? (
-                <Button
-                  title="Play"
-                  variant="secondary"
-                  onPress={() => startPlay(rowPlaySpec(playableRow))}
-                />
-              ) : null}
-              <Button title="Save session" loading={finishing} onPress={() => void onSave()} />
-            </>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <FooterBtn
+                title="Play"
+                variant="play"
+                disabled={!playableRow}
+                onPress={() => {
+                  if (playableRow) {
+                    startPlay(rowPlaySpec(playableRow));
+                  }
+                }}
+              />
+              <FooterBtn
+                title="Save session"
+                variant="save"
+                loading={finishing}
+                onPress={() => void onSave()}
+              />
+            </View>
           )}
         </View>
       </View>
@@ -1049,6 +1025,128 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         }}
       />
     </Screen>
+  );
+}
+
+const FOOTER_H = 44;
+
+function SavedFooter({
+  canShare,
+  confirmingDelete,
+  busy,
+  onShare,
+  onStartAgain,
+  onAskDelete,
+  onKeep,
+  onDelete,
+}: {
+  canShare: boolean;
+  confirmingDelete: boolean;
+  busy: boolean;
+  onShare: () => void;
+  onStartAgain: () => void;
+  onAskDelete: () => void;
+  onKeep: () => void;
+  onDelete: () => void;
+}) {
+  const { width } = useWindowDimensions();
+  const trashOnly = width < 360;
+
+  if (confirmingDelete) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <FooterBtn title="Keep" variant="outline" onPress={onKeep} />
+        <FooterBtn title="Delete" variant="danger" loading={busy} onPress={onDelete} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <FooterBtn title="Share" variant="share" disabled={!canShare} onPress={onShare} />
+      <FooterBtn title="Start again" variant="outline" loading={busy} onPress={onStartAgain} />
+      <FooterBtn
+        title="Delete"
+        variant="outline"
+        glyph={trashOnly}
+        onPress={onAskDelete}
+      />
+    </View>
+  );
+}
+
+function FooterBtn({
+  title,
+  variant,
+  disabled,
+  loading,
+  glyph,
+  onPress,
+}: {
+  title: string;
+  variant: 'play' | 'save' | 'share' | 'outline' | 'danger';
+  disabled?: boolean;
+  loading?: boolean;
+  glyph?: boolean;
+  onPress: () => void;
+}) {
+  const isDisabled = Boolean(disabled || loading);
+  const fill =
+    variant === 'play'
+      ? THEME.accent
+      : variant === 'save' || variant === 'share'
+        ? THEME.primary
+        : variant === 'danger'
+          ? THEME.danger
+          : THEME.surface;
+  const labelColor =
+    variant === 'outline'
+      ? title === 'Delete'
+        ? THEME.danger
+        : THEME.textPrimary
+      : THEME.primaryForeground;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}
+      disabled={isDisabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        minWidth: 0,
+        minHeight: FOOTER_H,
+        height: FOOTER_H,
+        paddingHorizontal: 8,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 4,
+        backgroundColor: fill,
+        borderWidth: variant === 'outline' ? 1 : 0,
+        borderColor: variant === 'outline' ? THEME.border : 'transparent',
+        opacity: isDisabled ? 0.38 : pressed ? 0.88 : 1,
+      })}>
+      {loading ? (
+        <ActivityIndicator color={labelColor} />
+      ) : glyph ? (
+        <Glyph name={GLYPH.trash} color={THEME.danger} size={16} />
+      ) : (
+        <AppText
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={{
+            fontSize: 14,
+            fontWeight: '700',
+            color: labelColor,
+            includeFontPadding: false,
+          }}>
+          {title}
+        </AppText>
+      )}
+    </Pressable>
   );
 }
 

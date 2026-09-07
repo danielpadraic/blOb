@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import {
   exerciseNameTaken,
   searchExercises,
@@ -67,7 +67,6 @@ export function AddExerciseSheet({
   onSubmit,
   onPickTimed,
 }: AddExerciseSheetProps) {
-  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [target, setTarget] = useState<MuscleKey>(muscle);
   const [superset, setSuperset] = useState(false);
@@ -104,14 +103,14 @@ export function AddExerciseSheet({
 
   return (
     <ChromeOverlay visible={visible} onClose={onClose} align="end" zIndex={130}>
+      <KeyboardSheet>
       <View
         style={{
           backgroundColor: THEME.surface,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,
-          maxHeight: '90%',
-          minHeight: 380,
-          paddingBottom: Math.max(insets.bottom, 12),
+          minHeight: 0,
+          flexGrow: 1,
           ...themeShadow('card'),
         }}>
         <View style={{ alignItems: 'center', paddingTop: 8 }}>
@@ -229,8 +228,9 @@ export function AddExerciseSheet({
         </View>
 
         <ScrollView
-          style={{ flexGrow: 0 }}
+          style={{ flexGrow: 1, minHeight: 0 }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
           contentContainerStyle={{ paddingBottom: 8 }}>
           {/* With nothing typed they are browsing, so cardio and rest are offered by name. This is
               the only thing that makes intervals discoverable: bench, rest, sprint, rest, bench —
@@ -352,6 +352,7 @@ export function AddExerciseSheet({
           </Pressable>
         ) : null}
       </View>
+      </KeyboardSheet>
     </ChromeOverlay>
   );
 }

@@ -4,6 +4,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import {
   isFilterActive,
   LIFT_DATE_RANGES,
@@ -52,13 +53,14 @@ export function LiftFilterSheet({
 
   return (
     <ChromeOverlay visible={visible} onClose={onClose} align="end" zIndex={135}>
+      <KeyboardSheet>
       <View
         style={{
           backgroundColor: THEME.surface,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,
-          paddingBottom: 20,
-          maxHeight: '90%',
+          minHeight: 0,
+          flexGrow: 1,
         }}>
         <View
           style={{
@@ -82,10 +84,7 @@ export function LiftFilterSheet({
           </Pressable>
         </View>
 
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
+        <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
           <View
             style={{
               flexDirection: 'row',
@@ -126,7 +125,14 @@ export function LiftFilterSheet({
               </Pressable>
             ) : null}
           </View>
+        </View>
 
+        <ScrollView
+          style={{ flexGrow: 1, minHeight: 0 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
           <SectionLabel text="WHEN" />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {LIFT_DATE_RANGES.map((option) => (
@@ -174,6 +180,7 @@ export function LiftFilterSheet({
           ) : null}
         </View>
       </View>
+      </KeyboardSheet>
     </ChromeOverlay>
   );
 }

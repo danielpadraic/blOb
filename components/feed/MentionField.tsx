@@ -11,6 +11,7 @@ import {
 import {
   Platform,
   Pressable,
+  ScrollView,
   TextInput,
   View,
   type NativeSyntheticEvent,
@@ -327,7 +328,12 @@ function MentionFieldInner(
       ) : candidates.data.length === 0 ? (
         <AppText className="px-3 py-3 text-[13px] text-muted">{copy('mention.empty')}</AppText>
       ) : (
-        candidates.data.slice(0, 8).map((row) => (
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          style={{ maxHeight: 180 }}
+          keyboardDismissMode="none">
+          {candidates.data.slice(0, 8).map((row) => (
           <Pressable
             key={`${row.kind}-${row.id}`}
             accessibilityRole="button"
@@ -387,7 +393,8 @@ function MentionFieldInner(
               ) : null}
             </View>
           </Pressable>
-        ))
+        ))}
+        </ScrollView>
       )}
     </View>
   ) : null;

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DurationField } from '@/components/lift/DurationField';
 import { NumberField } from '@/components/lift/NumberField';
@@ -8,6 +7,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import {
   CARDIO_TYPES,
   cardioTypeLabel,
@@ -57,7 +57,6 @@ export function AddTimedRowSheet({
   onClose,
   onSubmit,
 }: AddTimedRowSheetProps) {
-  const insets = useSafeAreaInsets();
   const rest = kind === 'rest';
   const inputRef = useRef<TextInput>(null);
 
@@ -112,13 +111,14 @@ export function AddTimedRowSheet({
 
   return (
     <ChromeOverlay visible={visible} onClose={onClose} align="end" zIndex={130}>
+      <KeyboardSheet>
       <View
         style={{
           backgroundColor: THEME.surface,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,
-          maxHeight: '90%',
-          paddingBottom: Math.max(insets.bottom, 12),
+          minHeight: 0,
+          flexGrow: 1,
           ...themeShadow('card'),
         }}>
         <View style={{ alignItems: 'center', paddingTop: 8 }}>
@@ -152,8 +152,9 @@ export function AddTimedRowSheet({
         </View>
 
         <ScrollView
-          style={{ flexGrow: 0 }}
+          style={{ flexGrow: 1, minHeight: 0 }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12 }}>
           {rest ? null : (
@@ -386,6 +387,7 @@ export function AddTimedRowSheet({
           />
         </View>
       </View>
+      </KeyboardSheet>
     </ChromeOverlay>
   );
 }

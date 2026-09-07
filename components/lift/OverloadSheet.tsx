@@ -5,6 +5,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import {
   EMPTY_OVERLOAD,
   isOverloadActive,
@@ -56,13 +57,14 @@ export function OverloadSheet({ visible, source, busy, onClose, onApply }: Overl
 
   return (
     <ChromeOverlay visible={visible} onClose={close} align="end" zIndex={140}>
+      <KeyboardSheet>
       <View
         style={{
           backgroundColor: THEME.surface,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,
-          paddingBottom: 20,
-          maxHeight: '92%',
+          minHeight: 0,
+          flexGrow: 1,
         }}>
         <View
           style={{
@@ -94,7 +96,9 @@ export function OverloadSheet({ visible, source, busy, onClose, onApply }: Overl
         </View>
 
         <ScrollView
+          style={{ flexGrow: 1, minHeight: 0 }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 8 }}>
           <FieldBlock
@@ -141,6 +145,7 @@ export function OverloadSheet({ visible, source, busy, onClose, onApply }: Overl
           <Button title="Keep last time's numbers" variant="ghost" size="sm" onPress={close} />
         </View>
       </View>
+      </KeyboardSheet>
     </ChromeOverlay>
   );
 }
