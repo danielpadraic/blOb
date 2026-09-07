@@ -5,6 +5,7 @@ import {
   cardRepairFor,
   confidenceFromSourceName,
   isVendorHealthProof,
+  traceMissing,
   workoutFromStoredSession,
 } from '@/lib/health/cardRedraw';
 import { buildWorkoutProofCard, WORKOUT_CARD_VERSION } from '@/lib/health/workoutProofCard';
@@ -161,12 +162,66 @@ describe('which posted cards get drawn again', () => {
   });
 
   // The whole point of the pass: a card the current renderer already drew is finished work.
-  it('leaves a card alone once it carries the current stamp', () => {
+  it('leaves a card alone once it carries the current stamp and its graph', () => {
+    const work = cardRepairFor({
+      ...CHECKIN,
+      proof_parts: {
+        p_hr: {
+          ...CARD_SLOT,
+          cardVersion: WORKOUT_CARD_VERSION,
+          health: { ...WALK, hrSeries: [98, 104, 111] },
+        },
+      },
+    });
+    expect(work).toBeNull();
+  });
+
+  /**
+   * The card the graph never reached. Stamping it current and walking away is what would leave it
+   * graphless for good, since only this phone can read the series.
+   */
+  it('comes back for a current card whose heart-rate trace is still missing', () => {
     const work = cardRepairFor({
       ...CHECKIN,
       proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION } },
     });
+    expect(work?.reason).toBe('trace');
+    expect(work?.proofId).toBe('p_hr');
+  });
+
+  it('does not chase a trace for a workout that recorded no heart rate', () => {
+    const work = cardRepairFor({
+      ...CHECKIN,
+      proof_parts: {
+        p_hr: {
+          ...CARD_SLOT,
+          cardVersion: WORKOUT_CARD_VERSION,
+          health: { ...WALK, avgHrBpm: undefined, maxHrBpm: undefined, minHrBpm: undefined },
+        },
+      },
+    });
     expect(work).toBeNull();
+  });
+
+  it('calls a stale card stale, whether or not it has a trace', () => {
+    expect(cardRepairFor(CHECKIN, LABELS)?.reason).toBe('renderer');
+    expect(
+      cardRepairFor({
+        ...CHECKIN,
+        proof_parts: { p_hr: { ...CARD_SLOT, health: { ...WALK, hrSeries: [98, 104] } } },
+      })?.reason,
+    ).toBe('renderer');
+  });
+
+  it('draws a stale card before one that is only chasing its graph', () => {
+    const work = cardRepairFor({
+      ...CHECKIN,
+      proof_parts: {
+        p_trace: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION },
+        p_stale: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION - 1 },
+      },
+    });
+    expect(work?.proofId).toBe('p_stale');
   });
 
   it('still picks up a card stamped by an older renderer', () => {
@@ -226,5 +281,24 @@ describe('the stamp that stops the pass repeating itself', () => {
   it('treats the current generation, or a later one, as done', () => {
     expect(cardIsCurrent({ cardVersion: WORKOUT_CARD_VERSION })).toBe(true);
     expect(cardIsCurrent({ cardVersion: WORKOUT_CARD_VERSION + 1 })).toBe(true);
+  });
+});
+
+describe('knowing which cards are still missing their graph', () => {
+  it('is missing when the workout has a heart rate but no series', () => {
+    expect(traceMissing(WALK)).toBe(true);
+    expect(traceMissing(LEGACY)).toBe(true);
+  });
+
+  it('is satisfied once a series is stored', () => {
+    expect(traceMissing({ ...WALK, hrSeries: [98, 104, 111] })).toBe(false);
+  });
+
+  it('is not missing on a workout that recorded no heart rate, which has none to find', () => {
+    expect(traceMissing({ ...WALK, avgHrBpm: undefined, maxHrBpm: undefined })).toBe(false);
+  });
+
+  it('treats an empty series as no series, so the card is not left with a blank band', () => {
+    expect(traceMissing({ ...WALK, hrSeries: [] })).toBe(true);
   });
 });

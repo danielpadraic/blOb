@@ -63,12 +63,24 @@ export async function pendingCardRepairs(userId: string): Promise<CardRepair[]> 
     candidates.map((item) => item.healthWorkoutId),
   );
   if (!labels) {
-    return candidates;
+    return byUrgency(candidates);
   }
-  return rows
-    .map((row) => cardRepairFor(row, labels))
-    .filter((item): item is CardRepair => Boolean(item?.challengeId))
-    .slice(0, BATCH);
+  return byUrgency(
+    rows
+      .map((row) => cardRepairFor(row, labels))
+      .filter((item): item is CardRepair => Boolean(item?.challengeId)),
+  ).slice(0, BATCH);
+}
+
+/**
+ * Stale cards ahead of cards that are only chasing their heart-rate graph.
+ *
+ * A workout whose samples are gone from Health can never be filled, and it sits in the queue asking
+ * every time the app opens. Without this it would take a batch slot from a card that still has a wrong
+ * number on it. Sort is stable, so newest-first survives inside each group.
+ */
+function byUrgency(items: CardRepair[]): CardRepair[] {
+  return [...items].sort((a, b) => Number(a.reason === 'trace') - Number(b.reason === 'trace'));
 }
 
 /**

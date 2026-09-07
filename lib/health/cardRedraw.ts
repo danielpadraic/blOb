@@ -26,8 +26,20 @@ import type {
  * of Apple Health.
  */
 
+/**
+ * Why this card is being drawn again.
+ *
+ * `renderer` is the ordinary case: the stamp says an older generation drew it. `trace` is the card
+ * the graph never reached — a heart-rate series can only be read on the owner's device, so a repair
+ * that ran while Health had nothing to give would otherwise stamp itself finished and leave the card
+ * graphless for good. Those come back on a later open, and are skipped without a write when Health
+ * still has no samples, which keeps the retry free.
+ */
+export type CardRepairReason = 'renderer' | 'trace';
+
 /** A card that has to be drawn, with everything the renderer and the save need to do it. */
 export type CardRepair = {
+  reason: CardRepairReason;
   checkinId: string;
   challengeId: string;
   /** The proof slot the card belongs to. Saving it leaves the check-in's other media untouched. */
@@ -165,6 +177,18 @@ export function cardIsCurrent(part: Pick<ChallengeProofPart, 'cardVersion'>): bo
 }
 
 /**
+ * Whether this workout recorded heart rate but has no stored trace for the card to graph.
+ *
+ * The average and the maximum are stored at attach time; the series was not, until now. So a workout
+ * with a heart rate and no series is a card missing its graph, and the only place the graph can come
+ * from is Apple Health on the owner's own phone.
+ */
+export function traceMissing(health: CheckinHealthProof): boolean {
+  const hasHeartRate = Number(health.avgHrBpm) > 0 || Number(health.maxHrBpm) > 0;
+  return hasHeartRate && !(health.hrSeries && health.hrSeries.length > 0);
+}
+
+/**
  * The one slot on this check-in whose card needs drawing, or null when none does.
  *
  * A slot qualifies whether or not it already holds an image: a stale card is replaced, and a Health
@@ -175,10 +199,19 @@ export function cardRepairFor(
   checkin: StoredCheckinRow,
   labels?: StoredActivityLabels,
 ): CardRepair | null {
+  const found: CardRepair[] = [];
   const parts = parseProofParts(checkin.proof_parts);
   for (const [proofId, part] of Object.entries(parts)) {
     const health = parseCheckinHealthProof(part.health);
-    if (!health || !isVendorHealthProof(health, part) || cardIsCurrent(part)) {
+    if (!health || !isVendorHealthProof(health, part)) {
+      continue;
+    }
+    const reason: CardRepairReason | null = !cardIsCurrent(part)
+      ? 'renderer'
+      : traceMissing(health)
+        ? 'trace'
+        : null;
+    if (!reason) {
       continue;
     }
     const workout = workoutFromStoredSession(
@@ -189,7 +222,8 @@ export function cardRepairFor(
     if (!workout) {
       continue;
     }
-    return {
+    found.push({
+      reason,
       checkinId: checkin.id,
       challengeId: checkin.challenge_id,
       proofId,
@@ -200,7 +234,9 @@ export function cardRepairFor(
       previousUrl: String(part.url ?? '').trim() || null,
       health,
       workout,
-    };
+    });
   }
-  return null;
+  // A stale card is drawn before one that is only chasing its graph: the graph may never arrive, and a
+  // wrong number on a proof artifact is the more urgent of the two.
+  return found.find((item) => item.reason === 'renderer') ?? found[0] ?? null;
 }

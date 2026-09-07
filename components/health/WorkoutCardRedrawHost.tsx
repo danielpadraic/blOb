@@ -114,6 +114,14 @@ export function WorkoutCardRedrawHost() {
         }
         const series = toStoredHrSeries(samples) ?? item.health.hrSeries ?? null;
 
+        // This card is only in the queue to collect its graph, and Health had none to give — the
+        // workout may predate this phone or have aged out. Dropped without a write, so the card keeps
+        // what it has and the next open can try again for free.
+        if (item.reason === 'trace' && !series) {
+          skipHead();
+          return;
+        }
+
         const workout = withHeartRateFloor(item.workout, samples);
         const card = buildWorkoutProofCard({
           workout,
