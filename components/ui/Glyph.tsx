@@ -9,7 +9,18 @@ type GlyphProps = {
 };
 
 export function Glyph({ name, color, size = 18 }: GlyphProps) {
-  return <SymbolView name={name} tintColor={color} size={size} weight="semibold" />;
+  // Width and height have to be on the view, not just `size`. On iOS a SymbolView without a
+  // layout box keeps the SF Symbol's intrinsic size, which for something like the lift figure is
+  // wide enough to shove neighbouring text to zero width in a row.
+  return (
+    <SymbolView
+      name={name}
+      tintColor={color}
+      size={size}
+      weight="semibold"
+      style={{ width: size, height: size }}
+    />
+  );
 }
 
 export const GLYPH = {

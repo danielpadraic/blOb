@@ -566,21 +566,32 @@ function MenuRow({
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: 60,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
         paddingHorizontal: 12,
         borderRadius: 14,
         backgroundColor: pressed ? THEME.accentSoft : 'transparent',
         opacity: disabled ? 0.5 : 1,
       })}>
+      {/* Pressable on iOS does not hand its width to children, so a row sitting directly inside
+          it shrink-wraps. The title then has flex 1 of nothing, which is how this menu showed
+          four icons and a blank sheet. The inner view is what actually gets the width. */}
+      <View
+        style={{
+          flex: 1,
+          width: '100%',
+          minWidth: 0,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        }}>
       <View
         style={{
           width: 34,
           height: 34,
+          flexShrink: 0,
           borderRadius: 11,
           alignItems: 'center',
           justifyContent: 'center',
+          overflow: 'hidden',
           backgroundColor: danger ? THEME.background : THEME.accentSoft,
         }}>
         <Glyph name={icon} color={danger ? THEME.danger : THEME.accent} size={15} />
@@ -597,6 +608,7 @@ function MenuRow({
         <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
           {detail}
         </AppText>
+      </View>
       </View>
     </Pressable>
   );
@@ -665,7 +677,17 @@ export function LiftHistoryCard({
             borderRadius: 18,
             backgroundColor: pressed ? THEME.accentSoft : 'transparent',
           })}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {/* Same Pressable-width hole as the overflow menu: without this inner view, iOS
+              shrink-wraps the row to the chevron and the title collapses to an ellipsis. */}
+          <View
+            style={{
+              flex: 1,
+              width: '100%',
+              minWidth: 0,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <AppText
                 numberOfLines={1}
@@ -713,7 +735,9 @@ export function LiftHistoryCard({
                 </AppText>
               </View>
             ) : null}
-            <Glyph name={GLYPH.chevronRight} color={THEME.textMuted} size={14} />
+            <View style={{ width: 14, height: 14, flexShrink: 0 }}>
+              <Glyph name={GLYPH.chevronRight} color={THEME.textMuted} size={14} />
+            </View>
           </View>
         </Pressable>
         {onMenu ? (
@@ -725,6 +749,7 @@ export function LiftHistoryCard({
             style={({ pressed }) => ({
               width: 44,
               height: 44,
+              flexShrink: 0,
               marginRight: 4,
               borderRadius: 999,
               alignItems: 'center',
