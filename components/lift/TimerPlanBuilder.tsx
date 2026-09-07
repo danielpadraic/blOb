@@ -5,13 +5,15 @@ import { DurationField } from '@/components/lift/DurationField';
 import { NumberField } from '@/components/lift/NumberField';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { formatDuration } from '@/lib/lift/duration';
 import {
   addBlock,
+  blockDetail,
   clampRepeat,
   duplicateBlock,
   moveBlock,
-  newIntervalBlock,
-  newRestBlock,
+  nextIntervalBlock,
+  nextRestBlock,
   planSummary,
   removeBlock,
   updateBlock,
@@ -62,9 +64,9 @@ export function TimerPlanBuilder({ plan, onChange, onGenerate }: TimerPlanBuilde
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TextAction
           label="+ Intervals"
-          onPress={() => onChange(addBlock(plan, newIntervalBlock(lastIntervalSeed(plan))))}
+          onPress={() => onChange(addBlock(plan, nextIntervalBlock(plan)))}
         />
-        <TextAction label="+ Rest" onPress={() => onChange(addBlock(plan, newRestBlock()))} />
+        <TextAction label="+ Rest" onPress={() => onChange(addBlock(plan, nextRestBlock(plan)))} />
       </View>
 
       <EdgeRow
@@ -112,23 +114,12 @@ export function TimerPlanBuilder({ plan, onChange, onGenerate }: TimerPlanBuilde
   );
 }
 
-/** A new interval block copies the last one, since intervals repeat by definition. */
-function lastIntervalSeed(plan: TimerPlan) {
-  for (let index = plan.blocks.length - 1; index >= 0; index -= 1) {
-    const block = plan.blocks[index];
-    if (block.type === 'intervals') {
-      return {
-        onSeconds: block.onSeconds,
-        offSeconds: block.offSeconds,
-        repeat: block.repeat,
-        intensity: block.intensity,
-      };
-    }
-  }
-  return undefined;
-}
-
-/** Warm-up and cool down: one duration, no reordering, no delete. 0:00 means skip. */
+/**
+ * Warm-up and cool down: one duration, no reordering, no delete. 0:00 means skip.
+ *
+ * The field takes its own row under the heading. Beside it, minutes and seconds had to share a
+ * fixed 150pt with four stepper buttons, which left the numbers themselves no width at all.
+ */
 function EdgeRow({
   title,
   seconds,
@@ -142,26 +133,18 @@ function EdgeRow({
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
+        gap: 8,
         padding: 10,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: THEME.border,
         backgroundColor: off ? THEME.background : THEME.surface,
       }}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <AppText style={{ fontSize: 14, fontWeight: '800', color: THEME.textPrimary }}>
-          {title}
-        </AppText>
-        <AppText style={{ fontSize: 11, color: THEME.textMuted }}>
-          {off ? 'Off — set a time to add it' : 'Runs once'}
-        </AppText>
-      </View>
-      <View style={{ width: 150 }}>
-        <DurationField seconds={seconds} label={title} onChange={onChange} />
-      </View>
+      <BlockHeading
+        title={title}
+        detail={off ? 'Off — set a time to add it' : `Runs once · ${formatDuration(seconds)}`}
+      />
+      <DurationField seconds={seconds} label={title} onChange={onChange} />
     </View>
   );
 }
@@ -199,9 +182,7 @@ function BlockCard({
         backgroundColor: intervals ? THEME.surface : THEME.background,
       }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <AppText style={{ flex: 1, fontSize: 14, fontWeight: '800', color: THEME.textPrimary }}>
-          {label}
-        </AppText>
+        <BlockHeading title={label} detail={blockDetail(block)} />
         <BlockAction
           glyph={GLYPH.chevronUp}
           label={`Move ${label} up`}
@@ -223,23 +204,23 @@ function BlockCard({
         />
       </View>
 
-      {intervals && block.type === 'intervals' ? (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-          <Field caption="ON">
+      {block.type === 'intervals' ? (
+        <>
+          <PlanRow label="On">
             <DurationField
               seconds={block.onSeconds}
               label="Interval on"
               onChange={(onSeconds) => onChange({ onSeconds })}
             />
-          </Field>
-          <Field caption="OFF">
+          </PlanRow>
+          <PlanRow label="Off">
             <DurationField
               seconds={block.offSeconds}
               label="Interval off"
               onChange={(offSeconds) => onChange({ offSeconds })}
             />
-          </Field>
-          <Field caption="ROUNDS" width={72}>
+          </PlanRow>
+          <PlanRow label="Rounds" fieldWidth={ROUNDS_WIDTH}>
             <NumberField
               value={block.repeat}
               label="Number of rounds"
@@ -250,47 +231,67 @@ function BlockCard({
               }}
               onStep={(direction) => onChange({ repeat: clampRepeat(block.repeat + direction) })}
             />
-          </Field>
-        </View>
-      ) : block.type === 'rest' ? (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-          <Field caption="TIME">
-            <DurationField
-              seconds={block.seconds}
-              label="Rest"
-              onChange={(seconds) => onChange({ seconds })}
-            />
-          </Field>
-          <View style={{ flex: 1 }} />
-        </View>
-      ) : null}
+          </PlanRow>
+        </>
+      ) : (
+        <PlanRow label="Time">
+          <DurationField
+            seconds={block.seconds}
+            label="Rest"
+            onChange={(seconds) => onChange({ seconds })}
+          />
+        </PlanRow>
+      )}
     </View>
   );
 }
 
-function Field({
-  caption,
-  width,
+/** Enough for two digits between its steppers, and no wider — 99 rounds is the ceiling. */
+const ROUNDS_WIDTH = 112;
+const LABEL_WIDTH = 52;
+/** Matches NumberField's height, so a row's label sits level with the number it names. */
+const FIELD_HEIGHT = 44;
+
+/** A block's name with the shape it currently describes: "Intervals / 4 × 0:30 / 1:00". */
+function BlockHeading({ title, detail }: { title: string; detail: string }) {
+  return (
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <AppText style={{ fontSize: 14, fontWeight: '800', color: THEME.textPrimary }}>
+        {title}
+      </AppText>
+      <AppText
+        numberOfLines={1}
+        style={{ fontSize: 11, color: THEME.textMuted, fontVariant: ['tabular-nums'] }}>
+        {detail}
+      </AppText>
+    </View>
+  );
+}
+
+/**
+ * One named parameter per row.
+ *
+ * On, Off and Rounds used to share a single row, which meant five steppers — 340pt of buttons
+ * alone — competing for about 280pt. Every value was flexed to nothing, so the card showed a wall
+ * of − and + with no numbers between them. A row each gives minutes and seconds room to be read.
+ */
+function PlanRow({
+  label,
+  fieldWidth,
   children,
 }: {
-  caption: string;
-  width?: number;
+  label: string;
+  fieldWidth?: number;
   children: ReactNode;
 }) {
   return (
-    <View style={width ? { width } : { flex: 1, minWidth: 0 }}>
-      {children}
-      <AppText
-        style={{
-          marginTop: 3,
-          fontSize: 10,
-          fontWeight: '800',
-          letterSpacing: 0.6,
-          textAlign: 'center',
-          color: THEME.textMuted,
-        }}>
-        {caption}
-      </AppText>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+      <View style={{ width: LABEL_WIDTH, height: FIELD_HEIGHT, justifyContent: 'center' }}>
+        <AppText style={{ fontSize: 12, fontWeight: '800', color: THEME.textMuted }}>
+          {label}
+        </AppText>
+      </View>
+      <View style={fieldWidth ? { width: fieldWidth } : { flex: 1, minWidth: 0 }}>{children}</View>
     </View>
   );
 }

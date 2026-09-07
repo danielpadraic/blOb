@@ -16,6 +16,15 @@ const BUTTON_WIDTH = 34;
 const ROW_HEIGHT = 44;
 /** Visual width is tight so two of these fit a phone row; the tap area is not. */
 const HIT = { top: 4, bottom: 4, left: 5, right: 5 };
+/**
+ * Two digits' worth of floor under the value.
+ *
+ * The steppers have fixed widths and the value flexes between them, so a row that packs in more
+ * fields than fit takes all of its missing width out of the numbers — silently, because the
+ * buttons still look right. This turns that into visible crowding instead of a field that reads
+ * as an empty box.
+ */
+const MIN_VALUE_WIDTH = 24;
 
 type NumberFieldProps = {
   value: number | null;
@@ -86,7 +95,7 @@ export function NumberField({
         selectionColor={THEME.accent}
         style={{
           flex: 1,
-          minWidth: 0,
+          minWidth: MIN_VALUE_WIDTH,
           height: ROW_HEIGHT - 2,
           textAlign: 'center',
           fontSize: 16,

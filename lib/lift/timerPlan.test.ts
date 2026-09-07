@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addBlock,
+  blockDetail,
   clampRepeat,
   duplicateBlock,
   emptyPlan,
@@ -10,6 +11,8 @@ import {
   moveBlock,
   newIntervalBlock,
   newRestBlock,
+  nextIntervalBlock,
+  nextRestBlock,
   parsePlan,
   planDetail,
   planRoundCount,
@@ -198,5 +201,64 @@ describe('emptyPlan', () => {
     expect(base.blocks).toHaveLength(1);
     expect(base.warmupSeconds).toBe(0);
     expect(base.cooldownSeconds).toBe(0);
+  });
+});
+
+describe('nextIntervalBlock and nextRestBlock', () => {
+  it('carries the last interval numbers forward, on its own key', () => {
+    const base = plan({
+      blocks: [newIntervalBlock({ onSeconds: 45, offSeconds: 15, repeat: 6, intensity: 9 })],
+    });
+    const next = nextIntervalBlock(base);
+    expect(next.onSeconds).toBe(45);
+    expect(next.offSeconds).toBe(15);
+    expect(next.repeat).toBe(6);
+    expect(next.intensity).toBe(9);
+    expect(next.key).not.toBe(base.blocks[0].key);
+  });
+
+  it('reads past a trailing rest to find the last interval', () => {
+    const base = plan({
+      blocks: [newIntervalBlock({ onSeconds: 20, offSeconds: 10, repeat: 8 }), newRestBlock(90)],
+    });
+    expect(nextIntervalBlock(base).onSeconds).toBe(20);
+    expect(nextRestBlock(base).seconds).toBe(90);
+  });
+
+  it('falls back to the defaults when there is nothing of that kind to copy', () => {
+    const base = plan({ blocks: [newRestBlock(30)] });
+    expect(nextIntervalBlock(base).onSeconds).toBe(30);
+    expect(nextIntervalBlock(base).repeat).toBe(4);
+  });
+
+  it('edits the copy without touching the block it came from', () => {
+    const base = plan({ blocks: [newIntervalBlock({ onSeconds: 30, offSeconds: 60, repeat: 4 })] });
+    const grown = addBlock(base, nextIntervalBlock(base));
+    const changed = updateBlock(grown, grown.blocks[1].key, { onSeconds: 90 });
+    const [first, second] = changed.blocks;
+    expect(first.type === 'intervals' && first.onSeconds).toBe(30);
+    expect(second.type === 'intervals' && second.onSeconds).toBe(90);
+  });
+});
+
+describe('blockDetail', () => {
+  it('reads an interval block out loud', () => {
+    expect(blockDetail(newIntervalBlock({ onSeconds: 30, offSeconds: 60, repeat: 4 }))).toBe(
+      '4 × 0:30 / 1:00',
+    );
+  });
+
+  it('drops the recovery half when there is none', () => {
+    expect(blockDetail(newIntervalBlock({ onSeconds: 45, offSeconds: 0, repeat: 3 }))).toBe(
+      '3 × 0:45',
+    );
+  });
+
+  it('gives a rest its own duration', () => {
+    expect(blockDetail(newRestBlock(120))).toBe('2:00');
+  });
+
+  it('says a zeroed rest is off rather than printing 0:00', () => {
+    expect(blockDetail(newRestBlock(0))).toBe('Off — set a time to add it');
   });
 });

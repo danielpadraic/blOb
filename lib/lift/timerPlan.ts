@@ -83,6 +83,39 @@ export function newRestBlock(seconds?: number): TimerRestBlock {
   return { key: nextKey('rest'), type: 'rest', seconds: clampDuration(seconds ?? DEFAULT_REST) };
 }
 
+/**
+ * The next interval block, carrying the last one's numbers.
+ *
+ * Sprint sets are the same interval repeated with a breather in between, so adding a second block
+ * should not mean re-entering thirty-on-sixty-off. Copied rather than linked: the new block is
+ * editable on its own, which is how a session ramps up.
+ */
+export function nextIntervalBlock(plan: TimerPlan): TimerIntervalBlock {
+  for (let index = plan.blocks.length - 1; index >= 0; index -= 1) {
+    const block = plan.blocks[index];
+    if (block.type === 'intervals') {
+      return newIntervalBlock({
+        onSeconds: block.onSeconds,
+        offSeconds: block.offSeconds,
+        repeat: block.repeat,
+        intensity: block.intensity,
+      });
+    }
+  }
+  return newIntervalBlock();
+}
+
+/** A new rest matches the last one, for the same reason a new interval does. */
+export function nextRestBlock(plan: TimerPlan): TimerRestBlock {
+  for (let index = plan.blocks.length - 1; index >= 0; index -= 1) {
+    const block = plan.blocks[index];
+    if (block.type === 'rest') {
+      return newRestBlock(block.seconds);
+    }
+  }
+  return newRestBlock();
+}
+
 export function emptyPlan(): TimerPlan {
   return { warmupSeconds: 0, blocks: [newIntervalBlock()], cooldownSeconds: 0 };
 }
@@ -204,6 +237,24 @@ export function planSummary(plan: TimerPlan): string {
   }
   const label = count === 1 ? 'round' : 'rounds';
   return `${count} ${label} · ${formatDuration(planTotalSeconds(plan))}`;
+}
+
+/**
+ * One block's shape, for the line under its heading: "4 × 0:30 / 1:00".
+ *
+ * This is how people say an interval out loud, and it is the whole point of the block being a
+ * block rather than eight rounds. Derived here so the heading can never disagree with the fields
+ * beneath it.
+ */
+export function blockDetail(block: TimerBlock): string {
+  if (block.type === 'rest') {
+    return block.seconds > 0 ? formatDuration(block.seconds) : 'Off — set a time to add it';
+  }
+  const work = formatDuration(block.onSeconds);
+  if (block.offSeconds <= 0) {
+    return `${block.repeat} × ${work}`;
+  }
+  return `${block.repeat} × ${work} / ${formatDuration(block.offSeconds)}`;
 }
 
 /**
