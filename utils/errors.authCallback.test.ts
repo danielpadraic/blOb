@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { copy } from '@/lib/copy';
-import { getAuthCallbackMessage, getAuthFormMessage, getErrorMessage } from '@/utils/errors';
+import {
+  getAuthCallbackMessage,
+  getAuthFormMessage,
+  getErrorMessage,
+  getProfileSetupSaveMessage,
+  OS_SETTINGS_PERMISSION_COPY,
+} from '@/utils/errors';
 
 const PHOTO_SAVE = 'We couldn’t save that photo. Check your connection and try again.';
 const PKCE = 'AuthPKCE: code verifier not found in storage';
@@ -60,5 +66,34 @@ describe('humanize storage vs photo', () => {
     expect(getErrorMessage(new Error('NEED_REGION'))).toBe(copy('geo.unavailable'));
     expect(getErrorMessage({ message: 'GEO_BLOCKED', code: 'P0001' })).toBe(copy('geo.unavailable'));
     expect(getErrorMessage(new Error('status code 400'))).not.toContain('photo');
+  });
+});
+
+describe('profile setup save errors are not OS Settings copy', () => {
+  it('does not tell people to open Settings for a column privilege error', () => {
+    const denied = { code: '42501', message: 'permission denied for column gender' };
+    expect(getErrorMessage(denied)).toBe(copy('error.saveDetails'));
+    expect(getErrorMessage(denied)).not.toBe(OS_SETTINGS_PERMISSION_COPY);
+    expect(getProfileSetupSaveMessage(denied)).toBe(copy('error.saveDetails'));
+    expect(getProfileSetupSaveMessage(denied).toLowerCase()).not.toContain('settings');
+  });
+
+  it('does not tell people to open Settings for a generic permission denied', () => {
+    const denied = new Error('permission denied');
+    expect(getErrorMessage(denied)).toBe(copy('error.saveDetails'));
+    expect(getErrorMessage(denied)).not.toBe(OS_SETTINGS_PERMISSION_COPY);
+    expect(getProfileSetupSaveMessage(denied)).not.toBe(OS_SETTINGS_PERMISSION_COPY);
+  });
+
+  it('still uses Settings copy for a real OS camera/health denial', () => {
+    expect(getErrorMessage(new Error('User denied camera permission'))).toBe(
+      OS_SETTINGS_PERMISSION_COPY,
+    );
+    expect(getErrorMessage(new Error('HealthKit authorization denied'))).toBe(
+      OS_SETTINGS_PERMISSION_COPY,
+    );
+    expect(getProfileSetupSaveMessage(new Error('HealthKit authorization denied'))).toBe(
+      copy('error.saveDetails'),
+    );
   });
 });

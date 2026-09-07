@@ -2,9 +2,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import { asCopyTone, copy } from '@/lib/copy';
+import {
+  buildCompleteProfileRow,
+  coreProfileUpsertRow,
+  isOptionalProfileWriteError,
+  omitOptionalOnboardingFields,
+  withTimeout,
+} from '@/lib/completeProfileRow';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProfileUpdate, PublicProfile } from '@/lib/types';
-import { getErrorMessage, isUnknownColumnError } from '@/utils/errors';
+import { getErrorMessage, getProfileSetupSaveMessage, isUnknownColumnError } from '@/utils/errors';
 import { normalizeUsername } from '@/lib/username';
 import { isProfileComplete } from '@/utils/validators';
 import { useAuth } from '@/hooks/useAuth';
@@ -303,45 +310,45 @@ export function useCompleteProfile() {
         throw new Error('You need to be signed in.');
       }
 
-      const row = {
-        id: user.id,
-        username: patch.username
-          ? normalizeUsername(patch.username)
-          : `blob_${user.id.replace(/-/g, '').slice(0, 10)}`,
-        display_name: patch.display_name ?? null,
-        avatar_url: patch.avatar_url ?? null,
-        bio: patch.bio ?? null,
-        height_cm: patch.height_cm ?? null,
-        current_weight: patch.current_weight ?? null,
-        goal_weight: patch.goal_weight ?? null,
-        weight_unit: patch.weight_unit ?? 'lb',
-        gender: patch.gender ?? null,
-        body_fat_pct: patch.body_fat_pct ?? null,
-        body_metrics_completed_at: patch.body_metrics_completed_at ?? null,
-        typical_weekly_workout_frequency:
-          patch.typical_weekly_workout_frequency ?? null,
-        primary_activities: patch.primary_activities ?? [],
-        skill_tags: patch.skill_tags ?? [],
-        show_fitness_stats_publicly: patch.show_fitness_stats_publicly ?? false,
-        motivation_tone: patch.motivation_tone ?? 'gentle',
-        encouragement_tone: patch.encouragement_tone ?? 'gentle',
-        ...(patch.fitness_profile ? { fitness_profile: patch.fitness_profile } : {}),
+      const row = buildCompleteProfileRow(user.id, patch);
+
+      const tryUpsert = async (next: Record<string, unknown>) => {
+        try {
+          const result = await withTimeout(
+            supabase.from('profiles').upsert(next as never, { onConflict: 'id' }),
+            8000,
+          );
+          return { error: result.error };
+        } catch (error) {
+          return { error: error instanceof Error ? error : new Error('timeout') };
+        }
       };
 
-      const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' });
-      if (!error) {
+      const first = await tryUpsert(row);
+      if (!first.error) {
         return;
       }
-      // Never block account creation on optional prefs / schema-cache misses.
-      const retryRow = omitOptionalPreferences(row);
-      const retry = await supabase.from('profiles').upsert(retryRow, { onConflict: 'id' });
+
+      const retryRow = omitOptionalOnboardingFields(omitOptionalPreferences(row));
+      const retry = await tryUpsert(retryRow);
       if (!retry.error) {
         return;
       }
+
+      const core = coreProfileUpsertRow(user.id, retryRow);
+      const last = await tryUpsert(core);
+      if (!last.error) {
+        return;
+      }
+
+      const failed = last.error ?? retry.error ?? first.error;
       throw new Error(
-        isUnknownColumnError(error) || isUnknownColumnError(retry.error)
-          ? copy('error.preferenceSave')
-          : getErrorMessage(retry.error),
+        isUnknownColumnError(first.error) ||
+          isUnknownColumnError(retry.error) ||
+          isUnknownColumnError(last.error) ||
+          isOptionalProfileWriteError(failed)
+          ? copy('error.saveDetails')
+          : getProfileSetupSaveMessage(failed),
       );
     },
     onSuccess: (_data, patch) => {

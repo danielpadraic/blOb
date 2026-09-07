@@ -10,6 +10,10 @@ import { Platform } from 'react-native';
 
 const CHECKIN_SUBMIT_FAIL = 'Couldn’t submit this check-in. Try again.';
 
+/** OS permission copy. Never use this for Gender or other private profile fields. */
+export const OS_SETTINGS_PERMISSION_COPY =
+  'We need permission to continue. You can change this in Settings.';
+
 function isDevBuild(): boolean {
   return Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
 }
@@ -329,6 +333,37 @@ export function isMentionAccessDenied(error: unknown): boolean {
   );
 }
 
+/** Postgres / PostgREST privilege — not an iPhone Settings prompt. */
+export function isDatabasePrivilegeError(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  const code = String(record?.code ?? '').toUpperCase();
+  return code === '42501' || isDatabasePrivilegeMessage(extractRawMessage(error).toLowerCase());
+}
+
+export function isOsSettingsPermissionCopy(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes('we need permission to continue') ||
+    (lower.includes('change this in settings') && lower.includes('permission'))
+  );
+}
+
+/** Profile onboarding save. Never tells the user to open OS Settings. */
+export function getProfileSetupSaveMessage(error: unknown): string {
+  const raw = extractRawMessage(error).toLowerCase();
+  if (raw.includes('timeout')) {
+    return 'We couldn’t reach blOb just now. Try again.';
+  }
+  if (isDatabasePrivilegeError(error) || isUnknownColumnError(error)) {
+    return copy('error.saveDetails');
+  }
+  const mapped = getErrorMessage(error);
+  if (isOsSettingsPermissionCopy(mapped)) {
+    return copy('error.saveDetails');
+  }
+  return mapped;
+}
+
 /** Missing table / schema-cache miss (PGRST205, 42P01, 404). Safe to treat as empty. */
 export function isMissingRelationError(error: unknown): boolean {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
@@ -593,6 +628,35 @@ export function getAuthFormMessage(error: unknown): string {
     return copy('auth.waitRetry');
   }
   return human;
+}
+
+function isDatabasePrivilegeMessage(message: string): boolean {
+  return (
+    message.includes('42501') ||
+    message.includes('permission denied for') ||
+    message.includes('row-level security') ||
+    message.includes('rls policy')
+  );
+}
+
+function isOsPermissionMessage(message: string): boolean {
+  if (isDatabasePrivilegeMessage(message)) {
+    return false;
+  }
+  return (
+    message.includes('healthkit') ||
+    message.includes('apple health') ||
+    message.includes('health connect') ||
+    message.includes('motion') ||
+    message.includes('location') ||
+    message.includes('camera') ||
+    message.includes('photo access') ||
+    message.includes('media library') ||
+    message.includes('notification permission') ||
+    message.includes('user denied') ||
+    message.includes('user rejected') ||
+    (message.includes('turn on') && message.includes('settings'))
+  );
 }
 
 function humanize(raw: string): string {
@@ -953,8 +1017,8 @@ function humanize(raw: string): string {
   if (message.includes('legal_required')) {
     return 'Agree to the Terms, Privacy Policy, and skill statement to continue.';
   }
-  if (message.includes('row-level security') || message.includes('42501')) {
-    return 'Couldn’t save that (permission). Try again.';
+  if (isDatabasePrivilegeMessage(message)) {
+    return copy('error.saveDetails');
   }
   if (message.includes('profile_missing')) {
     return 'Couldn’t save that. Try again.';
@@ -1034,8 +1098,11 @@ function humanize(raw: string): string {
   if (message.includes('cancel') && (message.includes('sign') || message.includes('oauth') || message.includes('auth'))) {
     return 'Sign-in was cancelled.';
   }
+  if (isOsPermissionMessage(message)) {
+    return OS_SETTINGS_PERMISSION_COPY;
+  }
   if (message.includes('permission') || message.includes('denied')) {
-    return 'We need permission to continue. You can change this in Settings.';
+    return copy('error.saveDetails');
   }
   if (
     message.includes('pgrst204') ||

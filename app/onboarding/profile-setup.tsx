@@ -48,9 +48,14 @@ import { fitnessProfileFromUser } from '@/lib/fitnessProfile';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import type { PostAudience } from '@/lib/postAudience';
+import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
-import { getErrorMessage } from '@/utils/errors';
+import {
+  getErrorMessage,
+  getProfileSetupSaveMessage,
+  isOsSettingsPermissionCopy,
+} from '@/utils/errors';
 import {
   cmToFeetInches,
   convertWeight,
@@ -70,6 +75,7 @@ import {
 const GENDER_OPTIONS = [
   { value: 'male' as const, label: 'Male' },
   { value: 'female' as const, label: 'Female' },
+  { value: '' as const, label: 'Skip' },
 ];
 
 const STEP_COPY = [
@@ -95,6 +101,7 @@ export function ProfileSetupWizard() {
   const uploadAvatar = useUploadAvatar();
   const [step, setStep] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [exactOpen, setExactOpen] = useState(false);
   const [exactDraft, setExactDraft] = useState(String(BODY_FAT_DEFAULT));
   const [tone, setTone] = useState<CopyTone>(() => profileSetupTone(profile?.motivation_tone));
@@ -104,21 +111,27 @@ export function ProfileSetupWizard() {
 
   const {
     control,
-    handleSubmit,
     watch,
     setValue,
     getValues,
     trigger,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<ProfileSetupValues>({
     resolver: zodResolver(profileSetupSchema),
     defaultValues: defaults,
   });
 
   useEffect(() => {
+    if (!profile) {
+      return;
+    }
+    const current = getValues();
+    if (current.username.trim() || current.display_name.trim()) {
+      return;
+    }
     reset(buildDefaults(profile));
-  }, [profile, reset]);
+  }, [profile, reset, getValues]);
 
   useEffect(() => {
     if (profile?.motivation_tone) {
@@ -248,13 +261,48 @@ export function ProfileSetupWizard() {
     }
   }
 
-  const onSubmit = handleSubmit(async (values) => {
+  const onSubmit = () => {
+    void persistSetup(false);
+  };
+
+  async function persistSetup(skipMetrics: boolean) {
     if (availability.isTaken) {
       setFormError('That username is taken.');
       setStep(0);
       return;
     }
-    setFormError(null);
+
+    const namedOk = await trigger([...PROFILE_STEP_FIELDS[0]]);
+    if (!namedOk) {
+      setStep(0);
+      return;
+    }
+    const trainingOk = await trigger([...PROFILE_STEP_FIELDS[1]]);
+    if (!trainingOk) {
+      setStep(1);
+      return;
+    }
+
+    if (skipMetrics) {
+      const metricFields = [
+        'gender',
+        'height_cm',
+        'height_ft',
+        'height_in',
+        'current_weight',
+        'goal_weight',
+      ] as const;
+      for (const field of metricFields) {
+        setValue(field, '', { shouldValidate: false });
+      }
+    } else {
+      const metricsOk = await trigger([...PROFILE_STEP_FIELDS[2]]);
+      if (!metricsOk) {
+        return;
+      }
+    }
+
+    const values = getValues();
     const heightCm =
       values.weight_unit === 'lb'
         ? feetInchesToCm(Number(values.height_ft), Number(values.height_in || 0))
@@ -271,9 +319,6 @@ export function ProfileSetupWizard() {
         ? inputWeightToKg(goal, values.weight_unit === 'kg' ? 'metric' : 'imperial')
         : null;
 
-    // Physical Details are optional. Only claim body metrics when the user
-    // actually gave us gender, height, and weight — otherwise keep whatever is
-    // already stored (null on a new account) and leave the stamp alone.
     const enteredHeight =
       values.weight_unit === 'lb'
         ? Boolean(values.height_ft?.trim())
@@ -281,26 +326,13 @@ export function ProfileSetupWizard() {
     const enteredGender =
       values.gender === 'male' || values.gender === 'female' ? values.gender : null;
     const enteredMetrics =
-      enteredGender != null && enteredHeight && Boolean(values.current_weight.trim());
+      !skipMetrics &&
+      enteredGender != null &&
+      enteredHeight &&
+      Boolean(values.current_weight.trim());
 
-    const metrics = enteredMetrics
-      ? {
-          gender: enteredGender,
-          height_cm: Number.isFinite(heightCm) ? heightCm : null,
-          current_weight: Number.isFinite(weightKg) ? weightKg : null,
-          goal_weight: goalKg,
-          body_fat_pct: clampBodyFat(values.body_fat_pct),
-          body_metrics_completed_at: new Date().toISOString(),
-        }
-      : {
-          gender: profile?.gender ?? null,
-          height_cm: profile?.height_cm ?? null,
-          current_weight: profile?.current_weight ?? null,
-          goal_weight: profile?.goal_weight ?? null,
-          body_fat_pct: profile?.body_fat_pct ?? null,
-          body_metrics_completed_at: profile?.body_metrics_completed_at ?? null,
-        };
-
+    setFormError(null);
+    setSaving(true);
     try {
       await completeProfile.mutateAsync({
         username: normalizeUsername(values.username),
@@ -308,43 +340,37 @@ export function ProfileSetupWizard() {
         avatar_url: profile?.avatar_url,
         bio: values.bio || null,
         weight_unit: values.weight_unit,
-        ...metrics,
-        fitness_profile: {
-          ...fitnessProfileFromUser(profile),
-          preferred_units: values.weight_unit === 'kg' ? 'metric' : 'imperial',
-        },
         typical_weekly_workout_frequency: parseOptionalNumber(
           values.typical_weekly_workout_frequency,
         ),
         primary_activities: values.primary_activities,
-        show_fitness_stats_publicly: false,
-        motivation_tone: tone,
+        ...(enteredMetrics
+          ? {
+              gender: enteredGender,
+              height_cm: Number.isFinite(heightCm) ? heightCm : null,
+              current_weight: Number.isFinite(weightKg) ? weightKg : null,
+              goal_weight: goalKg,
+              body_fat_pct: clampBodyFat(values.body_fat_pct),
+              body_metrics_completed_at: new Date().toISOString(),
+              fitness_profile: {
+                ...fitnessProfileFromUser(profile),
+                preferred_units: values.weight_unit === 'kg' ? 'metric' : 'imperial',
+              },
+              show_fitness_stats_publicly: false,
+              motivation_tone: tone,
+            }
+          : {}),
       });
-      router.replace('/feed');
+      router.replace(TABS_HREF);
     } catch (error) {
-      setFormError(getErrorMessage(error));
+      setFormError(getProfileSetupSaveMessage(error));
+    } finally {
+      setSaving(false);
     }
-  });
+  }
 
-  // "Set this up later" keeps anything valid the user already typed, but must
-  // never dead-end on a malformed half-entry — if it cannot be saved, drop it.
   async function skipPhysicalDetails() {
-    const valid = await trigger([...PROFILE_STEP_FIELDS[2]]);
-    if (!valid) {
-      const metricFields = [
-        'gender',
-        'height_cm',
-        'height_ft',
-        'height_in',
-        'current_weight',
-        'goal_weight',
-      ] as const;
-      for (const field of metricFields) {
-        setValue(field, '', { shouldValidate: false });
-      }
-    }
-    setFormError(null);
-    await onSubmit();
+    await persistSetup(true);
   }
 
   const handleLabel = usernameHandleLabel(username);
@@ -372,7 +398,7 @@ export function ProfileSetupWizard() {
       protectFieldFocus
       footer={
         <View className="gap-3">
-          {formError ? (
+          {formError && !isOsSettingsPermissionCopy(formError) ? (
             <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
           ) : null}
           {step < 2 ? (
@@ -391,14 +417,14 @@ export function ProfileSetupWizard() {
                 title="Finish"
                 size="lg"
                 onPress={onSubmit}
-                loading={isSubmitting || completeProfile.isPending}
+                loading={saving || completeProfile.isPending}
               />
               <Button
                 title="Set this up later"
                 variant="ghost"
                 size="lg"
                 onPress={() => void skipPhysicalDetails()}
-                disabled={isSubmitting || completeProfile.isPending}
+                disabled={saving || completeProfile.isPending}
               />
             </>
           )}
@@ -578,14 +604,14 @@ export function ProfileSetupWizard() {
               name="gender"
               render={({ field: { value, onChange } }) => (
                 <SegmentedControl
-                  value={value || null}
+                  value={value}
                   options={GENDER_OPTIONS}
                   onChange={onChange}
                   accessibilityLabel="Gender"
                 />
               )}
             />
-            {errors.gender ? (
+            {errors.gender?.message && !isOsSettingsPermissionCopy(errors.gender.message) ? (
               <AppText className="text-xs text-coral-dark">{errors.gender.message}</AppText>
             ) : null}
           </View>

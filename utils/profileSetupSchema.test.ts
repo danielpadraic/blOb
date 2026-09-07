@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { profileSetupSchema } from '@/utils/validators';
+import { profileSetupSchema, isProfileComplete } from '@/utils/validators';
 
 /** Name + tone only. Physical Details are left blank, as a skipping user leaves them. */
 const NAMED_ONLY = {
@@ -79,5 +79,21 @@ describe('profileSetupSchema — Physical Details are optional', () => {
 
   it('asks for feet when only inches are given', () => {
     expect(issuePaths({ ...NAMED_ONLY, height_in: '10' })).toContain('height_ft');
+  });
+
+  it('treats Skip (empty gender) as valid', () => {
+    expect(profileSetupSchema.safeParse({ ...NAMED_ONLY, gender: '' }).success).toBe(true);
+  });
+
+  it('does not require gender or body metrics after name and legal', () => {
+    expect(
+      isProfileComplete({
+        display_name: 'Daniel',
+        username: 'danielh',
+        tos_accepted_at: '2026-09-07T00:00:00.000Z',
+        privacy_accepted_at: '2026-09-07T00:00:00.000Z',
+        skill_attestation_at: '2026-09-07T00:00:00.000Z',
+      } as Parameters<typeof isProfileComplete>[0]),
+    ).toBe(true);
   });
 });
