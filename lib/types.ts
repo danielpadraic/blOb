@@ -1963,6 +1963,15 @@ export type Database = {
         };
         Returns: unknown;
       };
+      /** Fills empty screenshot health on an existing check-in. Service role only. Never clears the photo. */
+      backfill_ocr_checkin_health: {
+        Args: {
+          p_checkin_id: string;
+          p_proof_id: string;
+          p_health: Record<string, unknown>;
+        };
+        Returns: { ok: boolean; checkin_id: string; proof_id: string };
+      };
       get_my_profile: {
         Args: Record<string, never>;
         Returns: Profile | null;
