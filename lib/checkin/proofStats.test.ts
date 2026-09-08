@@ -36,16 +36,22 @@ describe('proof stat chips', () => {
     expect(proofStatChips(RUN).map((chip) => chip.label)).toEqual([
       '30 min',
       '305 cal',
-      '152 bpm avg',
       '5.00 mi',
+      '152 bpm avg',
     ]);
     expect(proofStatChips({ ...RUN, activity: 'walking' }).some((c) => c.key === 'distance')).toBe(true);
     expect(proofStatChips({ ...RUN, activity: 'cycling' }).some((c) => c.key === 'distance')).toBe(true);
   });
 
-  it('does not show miles for a strength workout that happens to carry distance', () => {
+  it('shows distance whenever the screenshot had it, even if activity is strength', () => {
     const chips = proofStatChips({ ...STRENGTH, distance_m: 500 });
-    expect(chips.some((chip) => chip.key === 'distance')).toBe(false);
+    expect(chips.some((chip) => chip.key === 'distance')).toBe(true);
+  });
+
+  it('shows average HR with no duration or distance', () => {
+    expect(proofStatChips({ activity: 'other', hr_avg: 142 }).map((chip) => chip.label)).toEqual([
+      '142 bpm avg',
+    ]);
   });
 
   it('hides missing fields instead of printing zero', () => {
@@ -87,7 +93,7 @@ describe('no generated caption', () => {
 
   it('still gives Home and Live the chips, which are numbers and not a sentence', () => {
     const labels = proofStatChips(RUN).map((chip) => chip.label);
-    expect(labels).toEqual(['30 min', '305 cal', '152 bpm avg', '5.00 mi']);
+    expect(labels).toEqual(['30 min', '305 cal', '5.00 mi', '152 bpm avg']);
     for (const label of labels) {
       expect(label).not.toMatch(/burned|average heart rate|traveled/i);
     }

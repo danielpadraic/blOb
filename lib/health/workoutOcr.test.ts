@@ -158,6 +158,14 @@ describe('classifier', () => {
     expect(result.isWorkoutScreen).toBe(false);
     expect(result.reason).toBe('not_a_workout_screen');
   });
+
+  it('accepts a Whoop summary that names the tracker and shows BPM', () => {
+    expect(classifyWorkoutScreen('WHOOP  ·  142 bpm avg').isWorkoutScreen).toBe(true);
+  });
+
+  it('still rejects a selfie even if the word workout appears once', () => {
+    expect(classifyWorkoutScreen('Post-workout smile').isWorkoutScreen).toBe(false);
+  });
 });
 
 describe('editor clamps', () => {

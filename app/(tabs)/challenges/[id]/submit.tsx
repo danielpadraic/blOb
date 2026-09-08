@@ -698,7 +698,12 @@ function SubmitWorkoutInner() {
       }
       const draft = drafts[proof.id];
       // A vendor attach and our own card already show exact numbers on the card itself.
-      if (!draft?.uri || draft.healthWorkoutId || draft.health?.source === 'healthkit') {
+      if (
+        !draft?.uri ||
+        draft.healthWorkoutId ||
+        draft.health?.source === 'healthkit' ||
+        draft.health?.source === 'health_connect'
+      ) {
         continue;
       }
       const entry = workoutOcr.entries[proof.id];
@@ -713,18 +718,32 @@ function SubmitWorkoutInner() {
       }
       if (entry.status === 'ready') {
         map[proof.id] = (
-          <WorkoutStatChips
-            fields={entry.fields}
-            distanceUnit={distanceUnit}
-            onChange={(fields) => workoutOcr.edit(proof.id, fields)}
-          />
+          <View className="gap-1.5">
+            <AppText className="text-[12px] text-muted">
+              {entry.source === 'manual' ? 'Entered by hand' : 'Workout screenshot'}
+            </AppText>
+            <WorkoutStatChips
+              fields={entry.fields}
+              distanceUnit={distanceUnit}
+              onChange={(fields) => workoutOcr.edit(proof.id, fields)}
+            />
+          </View>
         );
         continue;
       }
-      // Send still works: the photo is the proof and the numbers were only a bonus.
-      map[proof.id] = (
-        <AppText className="text-[12px] text-muted">Couldn’t read numbers. You can still send.</AppText>
-      );
+      if (entry.status === 'failed') {
+        map[proof.id] = (
+          <View className="gap-2">
+            <AppText className="text-[12px] text-muted">Couldn’t read that screen.</AppText>
+            <WorkoutStatChips
+              fields={entry.fields}
+              distanceUnit={distanceUnit}
+              allowAdd
+              onChange={(fields) => workoutOcr.edit(proof.id, fields)}
+            />
+          </View>
+        );
+      }
     }
     return map;
   }, [distanceUnit, drafts, proofSteps, workoutOcr]);
@@ -1010,18 +1029,23 @@ function SubmitWorkoutInner() {
         const draft = drafts[proof.id];
         const nextCaption = clampProofCaption(proofCaptions[proof.id] ?? '');
         const savedCaption = clampProofCaption(savedParts[proof.id]?.caption ?? '');
+        const withStats = draftWithReadStats(proof, draft);
+        const healthPending =
+          Boolean(withStats?.health) &&
+          JSON.stringify(savedParts[proof.id]?.health ?? null) !== JSON.stringify(withStats?.health ?? null);
         if (
           partSatisfies(proof, savedParts[proof.id], { sessionDistance }) &&
-          partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance }) &&
-          !proofSlotNeedsRewrite(draft?.uri, savedParts[proof.id]?.url) &&
-          nextCaption === savedCaption
+          partSatisfies(proof, slotPart(proof, withStats, distanceUnit), { sessionDistance }) &&
+          !proofSlotNeedsRewrite(withStats?.uri, savedParts[proof.id]?.url) &&
+          nextCaption === savedCaption &&
+          !healthPending
         ) {
           continue;
         }
-        if (!partSatisfies(proof, slotPart(proof, draft, distanceUnit), { sessionDistance })) {
+        if (!partSatisfies(proof, slotPart(proof, withStats, distanceUnit), { sessionDistance })) {
           continue;
         }
-        const row = await persistProof(proof, draftWithReadStats(proof, draft), body);
+        const row = await persistProof(proof, withStats, body);
         if (row?.proof_parts) {
           savedParts = row.proof_parts;
         }

@@ -18,5 +18,11 @@
       "source": "/((?!api/).*)",
       "destination": "/"
     }
-  ]
+  ],
+  "functions": {
+    "api/ocr-workout.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
 }

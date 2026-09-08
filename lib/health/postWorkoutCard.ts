@@ -49,9 +49,17 @@ export function workoutFromPostStats(stats?: CheckinProofStats | null): HealthWo
   const distanceM = Number(stats.distance_m);
   const hasDuration = Number.isFinite(durationSec) && durationSec > 0;
   const hasDistance = Number.isFinite(distanceM) && distanceM > 0;
-  // The card leads with distance or elapsed time. With neither there is no headline, so there is no
-  // card — an honor check-in must not become a recap of nothing.
-  if (!hasDuration && !hasDistance) {
+  const calories = Number(stats.active_cal) || Number(stats.total_cal);
+  const hasCalories = Number.isFinite(calories) && calories > 0;
+  const avg = Number(stats.hr_avg);
+  const max = Number(stats.hr_max);
+  const min = Number(stats.hr_min);
+  const hasHr =
+    (Number.isFinite(avg) && avg > 0) ||
+    (Number.isFinite(max) && max > 0) ||
+    (Number.isFinite(min) && min > 0);
+  // A duration-only or HR-only screenshot is a valid recap. Honor check-ins still have none of these.
+  if (!hasDuration && !hasDistance && !hasCalories && !hasHr) {
     return null;
   }
   const activity = String(stats.activity ?? '').trim() || 'other';
@@ -72,19 +80,15 @@ export function workoutFromPostStats(stats?: CheckinProofStats | null): HealthWo
   if (hasDistance) {
     workout.distanceM = Math.round(distanceM);
   }
-  const calories = Number(stats.active_cal) || Number(stats.total_cal);
-  if (Number.isFinite(calories) && calories > 0) {
+  if (hasCalories) {
     workout.caloriesKcal = Math.round(calories);
   }
-  const avg = Number(stats.hr_avg);
   if (Number.isFinite(avg) && avg > 0) {
     workout.hrAvg = Math.round(avg);
   }
-  const max = Number(stats.hr_max);
   if (Number.isFinite(max) && max > 0) {
     workout.hrMax = Math.round(max);
   }
-  const min = Number(stats.hr_min);
   if (Number.isFinite(min) && min > 0) {
     workout.hrMin = Math.round(min);
   }

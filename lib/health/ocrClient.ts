@@ -3,7 +3,8 @@ import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
 import { BLOB_APEX_HOST } from '@/lib/webHost';
-import type { ParsedWorkoutOcr } from '@/lib/health/workoutOcr';
+import { isOcrSpaHtml, isProjectStorageImageUrl } from '@/lib/health/ocrAllowlist';
+import { hasOcrNumbers, type ParsedWorkoutOcr } from '@/lib/health/workoutOcr';
 
 /**
  * Client for the workout-screenshot reader.
@@ -19,6 +20,7 @@ export type OcrReadResult = {
   isWorkoutScreen: boolean;
   reason: string;
   parsed?: ParsedWorkoutOcr;
+  status?: number;
 };
 
 /** Relative on Web so previews and local dev hit their own origin; absolute on native. */
@@ -33,6 +35,20 @@ const TIMEOUT_MS = 45_000;
 
 /** Wide enough for Tesseract to read phone-screenshot type, small enough to post quickly. */
 const OCR_MAX_WIDTH = 1400;
+
+function logOcrMiss(input: { reason: string; status: number; endpoint: string }) {
+  console.log('[blob:ocr]', {
+    reason: input.reason,
+    status: input.status,
+    endpoint: input.endpoint,
+  });
+}
+
+function miss(reason: string, status = 0): OcrReadResult {
+  const endpoint = ocrEndpoint();
+  logOcrMiss({ reason, status, endpoint });
+  return { ok: false, isWorkoutScreen: false, reason, status };
+}
 
 /**
  * Reads the still as a downscaled JPEG. Same call on iOS, Android and Web — image-manipulator has a
@@ -53,23 +69,29 @@ async function readImageBase64(uri: string): Promise<string | null> {
  * itself is the proof and the numbers are a bonus.
  *
  * Pass `localUri` for a still that is still on the hero and not yet uploaded, or `imageUrl` for one
- * already in Storage.
+ * already in this project's Storage. Bytes first; a Storage URL is only used when it is ours.
  */
 export async function readWorkoutScreenshot(input: {
   localUri?: string;
   imageUrl?: string;
 }): Promise<OcrReadResult> {
-  const imageUrl = String(input.imageUrl ?? '').trim();
+  const rawUrl = String(input.imageUrl ?? '').trim();
   const localUri = String(input.localUri ?? '').trim();
+  const storageUrl = isProjectStorageImageUrl(rawUrl)
+    ? rawUrl
+    : isProjectStorageImageUrl(localUri)
+      ? localUri
+      : '';
 
+  // Bytes first (the still on the hero). A Storage URL is only posted when encode fails
+  // and the URL is this project's host.
   let imageBase64: string | null = null;
   if (localUri) {
     imageBase64 = await readImageBase64(localUri);
-    if (!imageBase64) {
-      return { ok: false, isWorkoutScreen: false, reason: 'unreadable_image' };
-    }
-  } else if (!imageUrl.startsWith('http')) {
-    return { ok: false, isWorkoutScreen: false, reason: 'no_image' };
+  }
+
+  if (!imageBase64 && !storageUrl) {
+    return miss(localUri ? 'unreadable_image' : 'no_image');
   }
 
   let token: string | undefined;
@@ -80,31 +102,59 @@ export async function readWorkoutScreenshot(input: {
     token = undefined;
   }
   if (!token) {
-    return { ok: false, isWorkoutScreen: false, reason: 'unauthorized' };
+    return miss('unauthorized');
   }
 
+  const endpoint = ocrEndpoint();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetch(ocrEndpoint(), {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(imageBase64 ? { imageBase64 } : { imageUrl }),
+      body: JSON.stringify(imageBase64 ? { imageBase64 } : { imageUrl: storageUrl }),
       signal: controller.signal,
     });
-    if (!response.ok) {
-      return { ok: false, isWorkoutScreen: false, reason: `http_${response.status}` };
+    const raw = await response.text();
+    if (isOcrSpaHtml(response.headers.get('content-type'), raw)) {
+      return miss('spa_html', response.status);
     }
-    const body = (await response.json()) as OcrReadResult;
-    return {
+    let body: OcrReadResult;
+    try {
+      body = JSON.parse(raw) as OcrReadResult;
+    } catch {
+      return miss('bad_json', response.status);
+    }
+    if (!response.ok) {
+      const reason =
+        typeof body?.reason === 'string' && body.reason.trim()
+          ? body.reason
+          : `http_${response.status}`;
+      return miss(reason, response.status);
+    }
+    const parsed = body?.parsed;
+    const result: OcrReadResult = {
       ok: Boolean(body?.ok),
       isWorkoutScreen: Boolean(body?.isWorkoutScreen),
       reason: typeof body?.reason === 'string' ? body.reason : 'ok',
-      parsed: body?.parsed,
+      parsed,
+      status: response.status,
     };
+    if (!result.ok || !result.isWorkoutScreen || !hasOcrNumbers(parsed)) {
+      logOcrMiss({
+        reason: !result.ok
+          ? result.reason || 'ocr_failed'
+          : result.isWorkoutScreen
+            ? 'parse_miss'
+            : result.reason || 'not_workout',
+        status: response.status,
+        endpoint,
+      });
+    }
+    return result;
   } catch (error) {
     const aborted = error instanceof Error && error.name === 'AbortError';
-    return { ok: false, isWorkoutScreen: false, reason: aborted ? 'timeout' : 'network' };
+    return miss(aborted ? 'timeout' : 'network');
   } finally {
     clearTimeout(timer);
   }

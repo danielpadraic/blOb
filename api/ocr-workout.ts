@@ -1,9 +1,13 @@
+import { isAllowedOcrImageUrl } from '../lib/health/ocrAllowlist';
 import {
   classifyWorkoutScreen,
   parseWorkoutOcrText,
   type ParsedWorkoutOcr,
 } from '../lib/health/workoutOcr';
 import { ocrImageBuffer, ocrImageFromUrl } from './_lib/ocrRunner';
+
+/** Tesseract needs Node, not Edge. */
+export const runtime = 'nodejs';
 
 /**
  * Reads the numbers off a workout-summary screenshot.
@@ -58,21 +62,7 @@ function json(body: unknown, status = 200): Response {
  * be an open fetch proxy that anyone could aim at an internal address.
  */
 export function isAllowedImageUrl(raw: string, supabaseUrl: string): boolean {
-  let url: URL;
-  let base: URL;
-  try {
-    url = new URL(raw);
-    base = new URL(supabaseUrl);
-  } catch {
-    return false;
-  }
-  if (url.protocol !== 'https:') {
-    return false;
-  }
-  if (url.hostname.toLowerCase() !== base.hostname.toLowerCase()) {
-    return false;
-  }
-  return url.pathname.startsWith('/storage/v1/');
+  return isAllowedOcrImageUrl(raw, supabaseUrl);
 }
 
 /** Confirms the bearer token belongs to a real user. Uses the public anon key, not a secret. */

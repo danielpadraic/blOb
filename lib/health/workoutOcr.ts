@@ -369,7 +369,7 @@ export function classifyWorkoutScreen(text: string): { isWorkoutScreen: boolean;
     /\bkcal\b/i,
     /workout/i,
     /\b\d{1,2}:\d{2}:\d{2}\b/,
-    /(apple ?fitness|strava|garmin|fitbit|samsung health|google fit|health app)/i,
+    /(apple ?watch|apple ?fitness|strava|garmin|whoop|fitbit|samsung health|google fit|health app)/i,
   ].filter((pattern) => pattern.test(scrubbed)).length;
 
   if (signals < 2) {
@@ -433,6 +433,7 @@ export function hasOcrNumbers(parsed?: ParsedWorkoutOcr | null): boolean {
   return (
     parsed.durationSec != null ||
     parsed.activeEnergyKcal != null ||
+    parsed.totalEnergyKcal != null ||
     parsed.avgHrBpm != null ||
     parsed.maxHrBpm != null ||
     parsed.distanceMeters != null

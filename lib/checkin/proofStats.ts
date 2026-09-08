@@ -41,8 +41,7 @@ export type CheckinProofStats = {
 
 export type ProofStatChip = { key: string; label: string };
 
-/** Only these activities read as a distance effort, so only they get a miles chip. */
-const DISTANCE_ACTIVITIES = new Set(['running', 'walking', 'cycling']);
+/** Only these activities used to hide miles. Screenshots still show distance when the screen had it. */
 
 function positive(value?: number | null): number | null {
   const n = Number(value);
@@ -69,13 +68,11 @@ function milesLabel(miles: number): string {
   return `${miles < 10 ? miles.toFixed(2) : miles.toFixed(1)} mi`;
 }
 
-function wantsDistance(activity?: string | null): boolean {
-  return DISTANCE_ACTIVITIES.has(String(activity ?? '').trim().toLowerCase());
-}
-
 /**
  * Compact chips for the post. Missing fields are dropped rather than shown as zero, so an honor
  * or non-fitness check-in produces an empty row and renders nothing.
+ *
+ * Order matches the composer: duration · calories · distance · average HR.
  */
 export function proofStatChips(stats?: CheckinProofStats | null): ProofStatChip[] {
   if (!stats) {
@@ -90,13 +87,13 @@ export function proofStatChips(stats?: CheckinProofStats | null): ProofStatChip[
   if (calories != null) {
     chips.push({ key: 'calories', label: `${Math.round(calories)} cal` });
   }
+  const miles = proofStatsMiles(stats.distance_m);
+  if (miles != null) {
+    chips.push({ key: 'distance', label: milesLabel(miles) });
+  }
   const avg = positive(stats.hr_avg);
   if (avg != null) {
     chips.push({ key: 'hr', label: `${Math.round(avg)} bpm avg` });
-  }
-  const miles = wantsDistance(stats.activity) ? proofStatsMiles(stats.distance_m) : null;
-  if (miles != null) {
-    chips.push({ key: 'distance', label: milesLabel(miles) });
   }
   return chips;
 }

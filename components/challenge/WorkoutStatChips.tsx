@@ -22,6 +22,8 @@ type Props = {
   /** Distance unit the athlete types in. Metres are stored either way. */
   distanceUnit?: 'mi' | 'km';
   editable?: boolean;
+  /** Empty chips the user can tap to type 32 min / 142 bpm when OCR missed. */
+  allowAdd?: boolean;
 };
 
 function minutesFrom(durationSec?: number): number | undefined {
@@ -35,7 +37,8 @@ function chipLabel(key: ChipKey, fields: OcrSessionFields, unit: 'mi' | 'km'): s
     return minutes == null ? null : `${minutes} min`;
   }
   if (key === 'activeEnergyKcal') {
-    return fields.activeEnergyKcal == null ? null : `${fields.activeEnergyKcal} cal`;
+    const kcal = fields.activeEnergyKcal ?? fields.totalEnergyKcal;
+    return kcal == null ? null : `${kcal} cal`;
   }
   if (key === 'avgHrBpm') {
     return fields.avgHrBpm == null ? null : `${fields.avgHrBpm} bpm avg`;
@@ -62,6 +65,9 @@ function editValue(key: ChipKey, fields: OcrSessionFields, unit: 'mi' | 'km'): s
     const value = unit === 'mi' ? fields.distanceMeters / METERS_PER_MILE : fields.distanceMeters / 1000;
     return value.toFixed(2);
   }
+  if (key === 'activeEnergyKcal') {
+    return String(fields.activeEnergyKcal ?? fields.totalEnergyKcal ?? '');
+  }
   const raw = fields[key];
   return raw == null ? '' : String(raw);
 }
@@ -74,14 +80,28 @@ const HINTS: Record<ChipKey, string> = {
   distanceMeters: 'distance',
 };
 
-const ORDER: ChipKey[] = ['durationSec', 'activeEnergyKcal', 'avgHrBpm', 'maxHrBpm', 'distanceMeters'];
+const ORDER: ChipKey[] = ['durationSec', 'activeEnergyKcal', 'distanceMeters', 'avgHrBpm'];
+const ADD_LABEL: Record<ChipKey, string> = {
+  durationSec: 'Add min',
+  activeEnergyKcal: 'Add cal',
+  avgHrBpm: 'Add bpm',
+  maxHrBpm: 'Add bpm',
+  distanceMeters: 'Add distance',
+};
 
-export function WorkoutStatChips({ fields, onChange, distanceUnit = 'mi', editable = true }: Props) {
+export function WorkoutStatChips({
+  fields,
+  onChange,
+  distanceUnit = 'mi',
+  editable = true,
+  allowAdd = false,
+}: Props) {
   const [editing, setEditing] = useState<ChipKey | null>(null);
   const [draft, setDraft] = useState('');
 
   const present = ORDER.filter((key) => chipLabel(key, fields, distanceUnit) != null);
-  if (present.length === 0) {
+  const extras = allowAdd ? ORDER.filter((key) => !present.includes(key)) : [];
+  if (present.length === 0 && extras.length === 0) {
     return null;
   }
 
@@ -174,6 +194,60 @@ export function WorkoutStatChips({ fields, onChange, distanceUnit = 'mi', editab
             }}>
             <AppText className="text-[12px] font-semibold" style={{ color: THEME.accent }}>
               {chipLabel(key, fields, distanceUnit)}
+            </AppText>
+          </Pressable>
+        );
+      })}
+      {extras.map((key) => {
+        if (editing === key) {
+          return (
+            <View
+              key={key}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: THEME.accent,
+                backgroundColor: THEME.surface,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                onBlur={() => commit(key)}
+                onSubmitEditing={() => commit(key)}
+                keyboardType="numeric"
+                autoFocus
+                returnKeyType="done"
+                placeholder={HINTS[key]}
+                placeholderTextColor={THEME.textMuted}
+                style={{ minWidth: 52, paddingVertical: 0, color: THEME.textPrimary, fontSize: 12 }}
+              />
+            </View>
+          );
+        }
+        return (
+          <Pressable
+            key={`add-${key}`}
+            disabled={!editable}
+            onPress={() => {
+              setDraft('');
+              setEditing(key);
+            }}
+            hitSlop={6}
+            style={{
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              backgroundColor: THEME.surface,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+            }}>
+            <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }}>
+              {key === 'distanceMeters' ? `Add ${distanceUnit}` : ADD_LABEL[key]}
             </AppText>
           </Pressable>
         );

@@ -103,6 +103,12 @@ describe('the workout a post rebuilds from its own stats', () => {
     expect(workoutFromPostStats({ pronoun: 'he' })).toBeNull();
     expect(workoutFromPostStats(null)).toBeNull();
   });
+
+  it('still rebuilds a recap from average HR alone', () => {
+    const workout = workoutFromPostStats({ activity: 'other', hr_avg: 142 });
+    expect(workout?.hrAvg).toBe(142);
+    expect(workout?.durationSec).toBe(0);
+  });
 });
 
 describe('the card a posted check-in draws', () => {

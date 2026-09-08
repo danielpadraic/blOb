@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
+import { isProjectStorageImageUrl } from '@/lib/health/ocrAllowlist';
 import { readWorkoutScreenshot } from '@/lib/health/ocrClient';
 import {
   buildOcrHealthProof,
@@ -9,7 +10,7 @@ import {
   shouldReadWorkoutStill,
   type OcrSessionFields,
 } from '@/lib/health/ocrSession';
-import type { OcrClockRange } from '@/lib/health/workoutOcr';
+import { hasOcrNumbers, type OcrClockRange } from '@/lib/health/workoutOcr';
 
 /**
  * Reads workout screenshots for the tracker slots of a check-in.
@@ -29,6 +30,7 @@ export type WorkoutOcrEntry = {
   source: 'ocr' | 'manual';
   clockRange?: OcrClockRange | null;
   activityLabel?: string | null;
+  reason?: string;
 };
 
 export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: string }) {
@@ -49,28 +51,49 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
       [proofId]: { status: 'reading', fields: {}, source: 'ocr' },
     }));
 
-    const result = await readWorkoutScreenshot({ localUri: uri });
+    const storageUrl = isProjectStorageImageUrl(uri) ? uri : '';
+    const result = await readWorkoutScreenshot({
+      localUri: uri,
+      imageUrl: storageUrl || undefined,
+    });
     setEntries((current) => {
       // A newer still landed while this read was in flight; that read owns the slot now.
       if (readFor.current[proofId] !== uri) {
         return current;
       }
-      if (!result.ok || !result.isWorkoutScreen || !result.parsed) {
+      if (!result.ok) {
         return {
           ...current,
-          [proofId]: { status: result.isWorkoutScreen ? 'empty' : 'failed', fields: {}, source: 'ocr' },
+          [proofId]: {
+            status: 'failed',
+            fields: {},
+            source: 'ocr',
+            reason: result.reason,
+          },
+        };
+      }
+      if (!result.isWorkoutScreen) {
+        return {
+          ...current,
+          [proofId]: {
+            status: 'empty',
+            fields: {},
+            source: 'ocr',
+            reason: result.reason,
+          },
         };
       }
       const fields = ocrFieldsFromParse(result.parsed);
-      const found = Object.keys(fields).length > 0;
+      const found = hasOcrNumbers(result.parsed) && Object.keys(fields).length > 0;
       return {
         ...current,
         [proofId]: {
           status: found ? 'ready' : 'empty',
           fields,
           source: 'ocr',
-          clockRange: result.parsed.clockRange ?? null,
-          activityLabel: result.parsed.activityLabel ?? null,
+          clockRange: result.parsed?.clockRange ?? null,
+          activityLabel: result.parsed?.activityLabel ?? null,
+          reason: found ? 'ok' : 'parse_miss',
         },
       };
     });
@@ -84,11 +107,12 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
       return {
         ...current,
         [proofId]: {
-          status: hasNumbers ? 'ready' : 'empty',
+          status: hasNumbers ? 'ready' : entry?.status === 'failed' ? 'failed' : 'empty',
           fields,
           source: 'manual',
           clockRange: entry?.clockRange ?? null,
           activityLabel: entry?.activityLabel ?? null,
+          reason: entry?.reason,
         },
       };
     });
@@ -110,7 +134,7 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
   const healthFor = useCallback(
     (proofId: string): CheckinHealthProof | null => {
       const entry = entries[proofId];
-      if (!entry || entry.status !== 'ready') {
+      if (!entry || Object.keys(entry.fields).length === 0) {
         return null;
       }
       return buildOcrHealthProof({
