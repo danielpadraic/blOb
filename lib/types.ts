@@ -351,6 +351,14 @@ export interface Profile {
   interests_nudge_at?: string | null;
   /** PRIVATE USPS region. Ops/eligibility only — not a public badge. */
   declared_region?: string | null;
+  /** PRIVATE mailing region. Same codes as declared_region; never on the public profile. */
+  home_state?: string | null;
+  /** PRIVATE payout mailing. Read via get_my_profile(); never on the public profile. */
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
   last_precise_region?: string | null;
   last_precise_at?: string | null;
   created_at: string;
@@ -1054,6 +1062,12 @@ export type ProfileUpdate = Partial<
     | 'interests_skipped_all_at'
     | 'interests_nudge_at'
     | 'declared_region'
+    | 'home_state'
+    | 'address_line1'
+    | 'address_line2'
+    | 'city'
+    | 'postal_code'
+    | 'country'
   >
 >;
 

@@ -123,6 +123,37 @@ async function markAsked(): Promise<void> {
   }
 }
 
+/**
+ * Settings recovery path. Asks the OS when iOS still can, or returns denied so Settings can
+ * open the system page. Never used on boot — existing accounts that skipped the first sheet
+ * reach this from Account.
+ */
+export async function requestPushFromSettings(): Promise<PushPermissionState> {
+  if (Platform.OS === 'web') {
+    return 'unavailable';
+  }
+  const current = await getPushPermissionState();
+  if (current === 'granted') {
+    void registerPushToken();
+    return 'granted';
+  }
+  if (current === 'denied' || current === 'unavailable') {
+    return current;
+  }
+  await markAsked();
+  await ensureAndroidChannel();
+  try {
+    const next = await Notifications.requestPermissionsAsync();
+    if (next.granted) {
+      void registerPushToken();
+      return 'granted';
+    }
+    return next.canAskAgain === false ? 'denied' : 'undetermined';
+  } catch {
+    return 'unavailable';
+  }
+}
+
 /** Prompt once, on the first notifiable action. Never on launch. No nag if denied. */
 export async function maybeRequestPushPermission(): Promise<PushPermissionState> {
   if (Platform.OS === 'web') {

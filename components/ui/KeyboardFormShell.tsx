@@ -83,6 +83,8 @@ type KeyboardFormShellProps = {
   tone?: 'light' | 'dark';
   /** Auth email/password: do not wrap fields in a dismiss Pressable, and never scroll-to-top on keyboard / viewport. */
   protectFieldFocus?: boolean;
+  /** When the keyboard is down, extra footer pad (tab bar). Keyboard up sits on the keys with no gap. */
+  closedFooterPad?: number;
 };
 
 export function KeyboardFormShell({
@@ -95,6 +97,7 @@ export function KeyboardFormShell({
   contentContainerStyle,
   tone = 'light',
   protectFieldFocus = false,
+  closedFooterPad,
 }: KeyboardFormShellProps) {
   const insets = useSafeAreaInsets();
   const overlap = useKeyboardOverlap();
@@ -243,7 +246,7 @@ export function KeyboardFormShell({
             style={{
               paddingHorizontal: gutter,
               paddingTop: 10,
-              paddingBottom: overlap > 0 ? 0 : safeBottom,
+              paddingBottom: overlap > 0 ? 0 : closedFooterPad ?? safeBottom,
               backgroundColor,
               borderTopWidth: 1,
               borderTopColor:

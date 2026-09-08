@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Pressable, ScrollView, View } from 'react-native';
+import { Alert, AppState, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HomeStateField } from '@/components/geo/HomeStateField';
+import { NotificationsSettingsRow } from '@/components/account/NotificationsSettingsRow';
+import { PayoutAddressFields } from '@/components/account/PayoutAddressFields';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { KeyboardField, KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
@@ -15,25 +18,21 @@ import { useMyProfile, useUpdateProfile, useUsernameAvailability } from '@/hooks
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { copy } from '@/lib/copy';
 import { replayTutorial, setCreateTourOptOut } from '@/lib/legal';
-import { TAB_BAR_PEEK, THEME } from '@/lib/theme';
+import { draftFromProfile, payoutAddressPatch, type PayoutAddressDraft } from '@/lib/payoutAddress';
+import { tabBarLift, THEME } from '@/lib/theme';
 import { useTour } from '@/components/tour/TourContext';
 import { reportAppError } from '@/lib/appErrors';
 import { getErrorMessage, getPasswordUpdateMessage } from '@/utils/errors';
-import {
-  getPushPermissionState,
-  openNotificationSettings,
-  type PushPermissionState,
-} from '@/lib/push';
 
 const PASSWORD_TIMEOUT_MS = 20000;
 
 export default function AccountScreen() {
   const router = useRouter();
   const tour = useTour();
+  const insets = useSafeAreaInsets();
   const { user, updateEmail, updatePassword } = useAuth();
   const { profile, refetch } = useMyProfile();
   const updateProfile = useUpdateProfile();
-  const scrollRef = useRef<ScrollView>(null);
 
   const [username, setUsername] = useState(profile?.username ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -42,16 +41,25 @@ export default function AccountScreen() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'username' | 'email' | 'password' | null>(null);
-  const [pushState, setPushState] = useState<PushPermissionState>('undetermined');
+  const [busy, setBusy] = useState<'username' | 'email' | 'password' | 'address' | null>(null);
   const [healthSheet, setHealthSheet] = useState(false);
+  const [address, setAddress] = useState<PayoutAddressDraft>(() => draftFromProfile(profile));
+  const [stateError, setStateError] = useState<string | null>(null);
+  const seededFrom = useRef<string | null>(null);
   const health = useHealthConnection();
 
   useEffect(() => {
-    void getPushPermissionState().then(setPushState);
+    const stamp = `${profile?.id ?? ''}:${profile?.updated_at ?? ''}`;
+    if (!profile || seededFrom.current === stamp) {
+      return;
+    }
+    seededFrom.current = stamp;
+    setAddress(draftFromProfile(profile));
+  }, [profile]);
+
+  useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') {
-        void getPushPermissionState().then(setPushState);
         void health.refetch();
       }
     });
@@ -123,7 +131,6 @@ export default function AccountScreen() {
       setPassword('');
       setConfirm('');
       setNotice(copy('account.passwordUpdated'));
-      scrollRef.current?.scrollTo({ y: 0 });
     } catch (error) {
       reportAppError({ route: 'profile/account-password', error });
       setPasswordError(getPasswordUpdateMessage(error));
@@ -131,6 +138,27 @@ export default function AccountScreen() {
       if (timer) {
         clearTimeout(timer);
       }
+      setBusy(null);
+    }
+  }
+
+  async function saveAddress() {
+    if (busy != null) {
+      return;
+    }
+    const { patch, error } = payoutAddressPatch(address);
+    if (error === 'state') {
+      setStateError(copy('account.addressStateInvalid'));
+      return;
+    }
+    setStateError(null);
+    setBusy('address');
+    try {
+      await updateProfile.mutateAsync(patch);
+      setNotice(copy('account.addressSaved'));
+    } catch (caught) {
+      Alert.alert('Couldn’t save address', getErrorMessage(caught));
+    } finally {
       setBusy(null);
     }
   }
@@ -144,14 +172,20 @@ export default function AccountScreen() {
         : 'lowercase, unique, 3–24 characters';
 
   return (
-    <Screen padded={false} edges={TAB_ROOT_EDGES}>
-      <ScrollView
-        ref={scrollRef}
-        className="flex-1"
-        contentContainerClassName="grow px-4"
-        contentContainerStyle={{ paddingBottom: 24 + TAB_BAR_PEEK }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+    <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
+      <KeyboardFormShell
+        padded
+        protectFieldFocus
+        closedFooterPad={tabBarLift(insets.bottom, 'sticky')}
+        footer={
+          <Button
+            title={copy('account.addressSave')}
+            onPress={() => void saveAddress()}
+            loading={busy === 'address'}
+            disabled={busy != null}
+          />
+        }>
+        <View style={{ paddingTop: 8, paddingBottom: 12 }}>
       <AppText className="mb-4 text-[22px] font-extrabold text-charcoal">Account</AppText>
       {notice ? (
         <AppText className="mb-4 text-sm font-semibold" style={{ color: THEME.accent }}>
@@ -159,10 +193,33 @@ export default function AccountScreen() {
         </AppText>
       ) : null}
       <View className="gap-5">
-        <HomeStateField
-          value={profile?.declared_region}
-          onSaved={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        <View className="gap-3">
+          <KeyboardField>
+            <Input
+              label="Username"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={username}
+              onChangeText={setUsername}
+              hint={usernameHint}
+            />
+          </KeyboardField>
+          <Button
+            title="Save username"
+            onPress={() => void saveUsername()}
+            loading={busy === 'username'}
+            disabled={busy != null || availability.isTaken || availability.isChecking}
+          />
+        </View>
+        <PayoutAddressFields
+          draft={address}
+          onChange={(next) => {
+            setStateError(null);
+            setAddress(next);
+          }}
+          stateError={stateError}
         />
+        <NotificationsSettingsRow />
         {health.showRow ? (
         <View className="gap-2">
           <AppText className="text-sm font-semibold text-charcoal">{health.title}</AppText>
@@ -274,52 +331,17 @@ export default function AccountScreen() {
             </AppText>
           </Pressable>
         </View>
-        <View className="gap-2">
-          <AppText className="text-sm font-semibold text-charcoal">Notifications</AppText>
-          <AppText className="text-sm leading-5 text-muted">
-            {pushState === 'granted'
-              ? 'Push is on.'
-              : pushState === 'denied'
-                ? 'Push is off. In-app alerts still work.'
-                : 'Push stays off until a friend request, invite, or Challenge.'}
-          </AppText>
-          {pushState !== 'granted' && pushState !== 'unavailable' ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => void openNotificationSettings()}
-              hitSlop={8}
-              style={{ minHeight: 44, justifyContent: 'center' }}>
-              <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
-                Open system settings
-              </AppText>
-            </Pressable>
-          ) : null}
-        </View>
         <View className="gap-3">
-          <Input
-            label="Username"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={username}
-            onChangeText={setUsername}
-            hint={usernameHint}
-          />
-          <Button
-            title="Save username"
-            onPress={() => void saveUsername()}
-            loading={busy === 'username'}
-            disabled={busy != null || availability.isTaken || availability.isChecking}
-          />
-        </View>
-        <View className="gap-3">
-          <Input
-            label="Email"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
+          <KeyboardField>
+            <Input
+              label="Email"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+          </KeyboardField>
           <Button
             title="Save email"
             onPress={() => void saveEmail()}
@@ -328,31 +350,35 @@ export default function AccountScreen() {
           />
         </View>
         <View className="gap-3">
-          <Input
-            label="New password"
-            secureTextEntry
-            autoComplete="new-password"
-            textContentType="newPassword"
-            value={password}
-            onChangeText={(value) => {
-              setPassword(value);
-              setPasswordError(null);
-            }}
-            error={passwordError ?? undefined}
-            hint={passwordError ? undefined : copy('account.passwordHint')}
-          />
-          <Input
-            label="Confirm password"
-            secureTextEntry
-            autoComplete="new-password"
-            textContentType="newPassword"
-            value={confirm}
-            onChangeText={(value) => {
-              setConfirm(value);
-              setConfirmError(null);
-            }}
-            error={confirmError ?? undefined}
-          />
+          <KeyboardField>
+            <Input
+              label="New password"
+              secureTextEntry
+              autoComplete="new-password"
+              textContentType="newPassword"
+              value={password}
+              onChangeText={(value) => {
+                setPassword(value);
+                setPasswordError(null);
+              }}
+              error={passwordError ?? undefined}
+              hint={passwordError ? undefined : copy('account.passwordHint')}
+            />
+          </KeyboardField>
+          <KeyboardField>
+            <Input
+              label="Confirm password"
+              secureTextEntry
+              autoComplete="new-password"
+              textContentType="newPassword"
+              value={confirm}
+              onChangeText={(value) => {
+                setConfirm(value);
+                setConfirmError(null);
+              }}
+              error={confirmError ?? undefined}
+            />
+          </KeyboardField>
           <Button
             title="Save password"
             onPress={() => void savePassword()}
@@ -361,7 +387,8 @@ export default function AccountScreen() {
           />
         </View>
       </View>
-      </ScrollView>
+        </View>
+      </KeyboardFormShell>
       <ChromeOverlay visible={healthSheet} onClose={() => setHealthSheet(false)} align="end">
         <View
           className="px-5 pt-4"

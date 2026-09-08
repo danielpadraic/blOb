@@ -13,6 +13,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
 import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { copy } from '@/lib/copy';
+import { hasPayoutAddress } from '@/lib/payoutAddress';
 import { THEME } from '@/lib/theme';
 
 const EARN_WAYS = [
@@ -121,6 +122,11 @@ export function WalletSheet() {
                   })();
                 }}
               />
+              {!hasPayoutAddress(profile) ? (
+                <AppText className="text-[13px] leading-5 text-muted">
+                  {copy('wallet.addAddressToCashOut')}
+                </AppText>
+              ) : null}
               {cashOutNote ? (
                 <AppText className="text-[13px] leading-5 text-muted">{cashOutNote}</AppText>
               ) : null}

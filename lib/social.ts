@@ -469,9 +469,26 @@ function throwIfError(error: unknown) {
 }
 
 export function asPublicProfile(row: PublicProfile): PublicProfile {
-  const raw = row as PublicProfile & { gender?: unknown; pronoun?: unknown };
+  const raw = row as PublicProfile & {
+    gender?: unknown;
+    pronoun?: unknown;
+    address_line1?: unknown;
+    address_line2?: unknown;
+    city?: unknown;
+    postal_code?: unknown;
+    country?: unknown;
+    home_state?: unknown;
+    declared_region?: unknown;
+  };
   delete raw.gender;
   delete raw.pronoun;
+  delete raw.address_line1;
+  delete raw.address_line2;
+  delete raw.city;
+  delete raw.postal_code;
+  delete raw.country;
+  delete raw.home_state;
+  delete raw.declared_region;
   return raw;
 }
 

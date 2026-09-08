@@ -17,8 +17,8 @@ export function missingProfileGaps(profile?: Profile | null): ProfileGap[] {
   }
   if (
     profile &&
-    'address_line' in profile &&
-    !String((profile as { address_line?: string | null }).address_line ?? '').trim()
+    'address_line1' in profile &&
+    !String((profile as { address_line1?: string | null }).address_line1 ?? '').trim()
   ) {
     gaps.push({ id: 'address', label: 'address' });
   }
