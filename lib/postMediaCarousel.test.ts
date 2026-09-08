@@ -10,6 +10,9 @@ import {
   orientationFromSize,
   pagerFrameHeight,
   pagerUrlsForViewer,
+  mediaUrlsForPost,
+  liveInlineFrameHeight,
+  liveInlineSeedWidth,
   rememberPagerIndex,
   rememberedPagerIndex,
   stillCountInPager,
@@ -125,5 +128,20 @@ describe('post media carousel', () => {
     ).toBe(false);
     expect(nextAutoCycleIndex(['https://a.jpg', 'https://b.jpg', 'https://c.mp4'], 0)).toBe(1);
     expect(nextAutoCycleIndex(['https://a.jpg', 'https://b.jpg', 'https://c.mp4'], 1)).toBe(0);
+  });
+
+  it('puts user stills first and the recap last, same as Home', () => {
+    expect(
+      mediaUrlsForPost({
+        urls: ['https://cdn.test/watch.jpg', 'https://cdn.test/hr.jpg'],
+        stats: { duration_sec: 2100, active_cal: 218 },
+      }),
+    ).toEqual(['https://cdn.test/watch.jpg', 'https://cdn.test/hr.jpg', 'blob:workout-card']);
+  });
+
+  it('sizes the Live tile from the workout card shape and seeds a width before layout', () => {
+    expect(liveInlineFrameHeight(360)).toBe(540);
+    expect(liveInlineSeedWidth(400)).toBe(288);
+    expect(liveInlineSeedWidth(80)).toBe(160);
   });
 });

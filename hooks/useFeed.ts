@@ -1303,6 +1303,7 @@ export function useFeed(challengeId?: string | null) {
     enabled: !home,
     staleTime: 30_000,
     retry: 1,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       return await fetchPosts({ challengeId, userId: user?.id });
     },

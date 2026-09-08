@@ -2,6 +2,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { reportAppError } from '@/lib/appErrors';
+import { patchChallengeLiveFeed } from '@/lib/liveFeedPatch';
 import { supabase } from '@/lib/supabase';
 
 const UUID_RE =
@@ -9,7 +10,7 @@ const UUID_RE =
 
 export const CHALLENGE_BOARD_CHANNEL_PREFIX = 'challenge-board:';
 
-type BoardQueryClient = Pick<QueryClient, 'invalidateQueries'>;
+type BoardQueryClient = Pick<QueryClient, 'invalidateQueries' | 'setQueriesData'>;
 
 export type ChallengeBoardRealtimeHost = {
   channel: (name: string) => RealtimeChannel;
@@ -84,6 +85,12 @@ function bindBoardChannel(
   const refreshFeed = () => {
     void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
   };
+  const patchOrRefreshFeed = (payload: { eventType?: string; new?: { id?: string }; old?: { id?: string } }) => {
+    if (patchChallengeLiveFeed(queryClient, challengeId, payload)) {
+      return;
+    }
+    refreshFeed();
+  };
   const refreshSettlement = () => {
     void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
     void queryClient.invalidateQueries({ queryKey: ['challenge-settlement', challengeId] });
@@ -123,7 +130,7 @@ function bindBoardChannel(
         table: 'posts',
         filter: `challenge_id=eq.${challengeId}`,
       },
-      refreshFeed,
+      patchOrRefreshFeed,
     )
     .on(
       'postgres_changes',

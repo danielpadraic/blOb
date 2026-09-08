@@ -25,7 +25,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useEditPost } from '@/hooks/usePostEdit';
 import { useLiveThreadReads } from '@/hooks/useLiveThreadReads';
 import { copy } from '@/lib/copy';
-import { insertLiveDayBreaks, type LiveDayBreakChallenge } from '@/lib/liveDayBreak';
+import {
+  insertLiveDayBreaks,
+  liveDayBreakFingerprint,
+  type LiveDayBreakChallenge,
+} from '@/lib/liveDayBreak';
 import {
   buildLiveThreadRows,
   findLiveHighlightIndex,
@@ -136,10 +140,26 @@ export function LiveThread({
   const [missingComment, setMissingComment] = useState(false);
   const [liftOpen, setLiftOpen] = useState(false);
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
+  const dayBreakFp = liveDayBreakFingerprint(dayBreakChallenge);
+  const stableDayBreak = useMemo(
+    () => dayBreakChallenge ?? null,
+    // Same calendar math → keep the same object so day-breaks and the WeakMap cache do not rebuild.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dayBreakFp],
+  );
   const rows = useMemo(() => {
     const built = buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id)));
-    return dayBreakChallenge ? insertLiveDayBreaks(built, dayBreakChallenge) : built;
-  }, [dayBreakChallenge, posts]);
+    return stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built;
+  }, [posts, stableDayBreak]);
+
+  const challengeIdRef = useRef(readCursorChallengeId);
+  challengeIdRef.current = readCursorChallengeId;
+  useEffect(() => {
+    console.log('[blob:live]', { reason: 'mount', challengeId: challengeIdRef.current ?? null });
+    return () => {
+      console.log('[blob:live]', { reason: 'unmount', challengeId: challengeIdRef.current ?? null });
+    };
+  }, []);
   const commentsReady = !isLoading;
   const highlightKey = highlightCommentId
     ? `comment:${highlightCommentId}`
@@ -269,7 +289,7 @@ export function LiveThread({
   useEffect(() => {
     const timer = setTimeout(() => {
       firstPaintPendingRef.current = false;
-    }, 1500);
+    }, 800);
     return () => clearTimeout(timer);
   }, []);
 

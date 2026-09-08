@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   insertLiveDayBreaks,
+  liveDayBreakFingerprint,
   liveDayDateLine,
   liveDayLine,
   livePeriodKeyAt,
@@ -154,5 +155,14 @@ describe('insertLiveDayBreaks', () => {
   it('leaves rows untouched without a challenge', () => {
     const rows = [postRow('a', '2026-09-04T14:33:00Z')];
     expect(insertLiveDayBreaks(rows, null)).toBe(rows);
+  });
+
+  it('keeps the same fingerprint when only unused challenge fields change', () => {
+    expect(liveDayBreakFingerprint(THIRTY_DAY)).toBe(
+      liveDayBreakFingerprint({ ...THIRTY_DAY, title: 'Other' } as LiveDayBreakChallenge),
+    );
+    expect(liveDayBreakFingerprint(THIRTY_DAY)).not.toBe(
+      liveDayBreakFingerprint({ ...THIRTY_DAY, duration_days: 29 }),
+    );
   });
 });

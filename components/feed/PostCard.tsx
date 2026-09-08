@@ -10,7 +10,7 @@ import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import type { WorkoutSlide } from '@/components/feed/MediaLightbox';
-import { isWorkoutCardSlide, pagerUrlsWithWorkoutCard, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
+import { isWorkoutCardSlide, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import { MentionText } from '@/components/feed/MentionText';
 import { InChallengeChip, OriginChip } from '@/components/feed/OriginChip';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
@@ -57,7 +57,7 @@ import { copy } from '@/lib/copy';
 import { visibleCommentCount } from '@/lib/commentEdit';
 import { mentionChipFromAuthor, type MentionChip } from '@/lib/mentions';
 import { OFFICIAL_BOB_ID } from '@/lib/official';
-import { pagerUrlsForViewer } from '@/lib/postMediaCarousel';
+import { mediaUrlsForPost } from '@/lib/postMediaCarousel';
 import { flexChildMin, THEME } from '@/lib/theme';
 import type { PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -953,7 +953,7 @@ function ProofMedia({
   homeInline?: boolean;
   workout?: (WorkoutSlide & { url: string }) | null;
 }) {
-  const visuals = pagerUrlsWithWorkoutCard(pagerUrlsForViewer({ urls, hidden, isOwner }), workout?.stats);
+  const visuals = mediaUrlsForPost({ urls, hidden, isOwner, stats: workout?.stats });
   const others = urls.filter((url) => {
     if (!url) {
       return false;

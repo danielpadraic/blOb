@@ -118,6 +118,26 @@ export function liveDayLine(
   return `Day ${day} / ${total}`;
 }
 
+/** Stable across challenge query refetches so Live day-breaks do not remount. */
+export function liveDayBreakFingerprint(challenge: LiveDayBreakChallenge | null | undefined): string {
+  if (!challenge) {
+    return '';
+  }
+  return [
+    challenge.starts_at ?? '',
+    challenge.ends_at ?? '',
+    challenge.timezone ?? '',
+    challenge.length_value ?? '',
+    challenge.length_unit ?? '',
+    challenge.duration_days ?? '',
+    challenge.days_required ?? '',
+    challenge.target_count ?? '',
+    challenge.is_unlimited ? '1' : '0',
+    challenge.is_official ? '1' : '0',
+    challenge.series_id ?? '',
+  ].join('|');
+}
+
 export function liveDayBreakFor(
   challenge: LiveDayBreakChallenge | null | undefined,
   periodKey: string,

@@ -28,7 +28,7 @@ import { useMediaLightboxOptional, type LightboxItem, type WorkoutSlide } from '
 import { AppText } from '@/components/ui/AppText';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { isWorkoutCardUrl } from '@/lib/health/postWorkoutCard';
-import { lightboxOriginFromPath } from '@/lib/lightboxOrigin';
+import { lightboxOriginFromPath, type LightboxOrigin } from '@/lib/lightboxOrigin';
 import { workoutCardAccent, workoutCardFit } from '@/lib/health/workoutProofCard';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useVideoPoster } from '@/hooks/useVideoPoster';
@@ -45,6 +45,8 @@ import {
   canAutoCyclePager,
   carouselClaimsHorizontal,
   isStillPostMedia,
+  liveInlineFrameHeight,
+  liveInlineSeedWidth,
   nextAutoCycleIndex,
   orientationFromSize,
   pagerFrameHeight,
@@ -226,6 +228,8 @@ export function PostMediaCarousel({
   workout,
   pauseCycle = false,
   homeInline = false,
+  liveInline = false,
+  lightboxOrigin: originOverride,
 }: {
   postId: string;
   urls: string[];
@@ -239,33 +243,42 @@ export function PostMediaCarousel({
   pauseCycle?: boolean;
   /** Home list only: muted autoplay, speaker, phone-width player with X. */
   homeInline?: boolean;
+  /** Challenge Live check-in: same slides as Home, bubble-sized frame, X returns to Live. */
+  liveInline?: boolean;
+  lightboxOrigin?: LightboxOrigin;
 }) {
   const lightbox = useMediaLightboxOptional();
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ tab?: string }>();
   const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
-  const lightboxOrigin = homeInline
-    ? { kind: 'home' as const }
-    : lightboxOriginFromPath(pathname, tabParam);
+  const lightboxOrigin =
+    originOverride ??
+    (homeInline ? { kind: 'home' as const } : lightboxOriginFromPath(pathname, tabParam));
   const { width: windowW, height: windowH } = useWindowDimensions();
   const [cardWidth, setCardWidth] = useState(() =>
-    Platform.OS === 'web' ? Math.min(windowW, FEED_COLUMN_MAX) : windowW,
+    liveInline
+      ? liveInlineSeedWidth(windowW)
+      : Platform.OS === 'web'
+        ? Math.min(windowW, FEED_COLUMN_MAX)
+        : windowW,
   );
   const firstSize = useFirstMediaSize(urls[0]);
   const orientation = orientationFromSize(firstSize);
-  const frameH = pagerFrameHeight({
-    viewportHeight: windowH,
-    cardWidth,
-    orientation,
-  });
+  const pageWidth = Math.max(cardWidth, 1);
+  const frameH = liveInline
+    ? liveInlineFrameHeight(pageWidth)
+    : pagerFrameHeight({
+        viewportHeight: windowH,
+        cardWidth,
+        orientation,
+      });
   const stillCount = stillCountInPager(urls);
   const reducedMotion = useReduceMotion();
   const { ref: inViewRef, inView } = useInViewport(
-    (stillCount >= 2 && !reducedMotion) || homeInline,
+    liveInline ? false : (stillCount >= 2 && !reducedMotion) || homeInline,
     postId,
     homeInline ? 0.5 : 0.28,
   );
-  const pageWidth = Math.max(cardWidth, 1);
   const [index, setIndex] = useState(() => rememberedPagerIndex(postId, urls.length));
   const [userPaused, setUserPaused] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
@@ -406,7 +419,8 @@ export function PostMediaCarousel({
     lightbox?.openLightbox(lightboxItems, itemIndex, lightboxOrigin);
   }
 
-  if (urls.length === 0) {
+  const slides = urls.filter((url) => Boolean(String(url ?? '').trim()));
+  if (slides.length === 0) {
     return null;
   }
 
@@ -430,10 +444,10 @@ export function PostMediaCarousel({
       }}
       style={[{ overflow: 'hidden', width: '100%' }, WEB_FEED_TOUCH]}
       {...hoverProps}>
-      {urls.length === 1 ? (
+      {slides.length === 1 ? (
         <MediaSlide
           postId={postId}
-          uri={urls[0]}
+          uri={slides[0]}
           width={pageWidth}
           height={frameH}
           active
@@ -441,7 +455,7 @@ export function PostMediaCarousel({
           homeInline={homeInline}
           lightboxOpen={Boolean(lightbox?.open)}
           caption={captions?.[0]}
-          workout={workoutSlide(urls[0])}
+          workout={workoutSlide(slides[0])}
           onOpen={lightbox ? () => openAt(0) : undefined}
           onPlayingChange={setVideoPlaying}
         />
@@ -456,11 +470,11 @@ export function PostMediaCarousel({
             <Animated.View
               style={{
                 flexDirection: 'row',
-                width: pageWidth * urls.length,
+                width: pageWidth * slides.length,
                 height: frameH,
                 transform: [{ translateX: shift }],
               }}>
-              {urls.map((uri, itemIndex) => (
+              {slides.map((uri, itemIndex) => (
                 <View key={`${uri}-${itemIndex}`} style={{ width: pageWidth, height: frameH }}>
                   <MediaSlide
                     postId={postId}
@@ -474,7 +488,7 @@ export function PostMediaCarousel({
                     caption={captions?.[itemIndex]}
                     workout={workoutSlide(uri)}
                     onOpen={
-                      lightbox && (homeInline || isStillPostMedia(uri))
+                      lightbox && (homeInline || liveInline || isStillPostMedia(uri))
                         ? () => openAt(itemIndex)
                         : undefined
                     }
@@ -486,11 +500,11 @@ export function PostMediaCarousel({
           </View>
           <View pointerEvents="box-none" style={dotBarStyle}>
             <View style={dotChipStyle}>
-              {urls.map((uri, itemIndex) => (
+              {slides.map((uri, itemIndex) => (
                 <Pressable
                   key={`${uri}-dot-${itemIndex}`}
                   accessibilityRole="button"
-                  accessibilityLabel={`Photo ${itemIndex + 1} of ${urls.length}`}
+                  accessibilityLabel={`Photo ${itemIndex + 1} of ${slides.length}`}
                   accessibilityState={{ selected: itemIndex === index }}
                   hitSlop={8}
                   onPress={() => {
@@ -536,8 +550,14 @@ function MediaSlide({
   onPlayingChange?: (playing: boolean) => void;
 }) {
   const tapStart = useRef<{ x: number; y: number; at: number } | null>(null);
+  const [failed, setFailed] = useState(!String(uri ?? '').trim());
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    setFailed(!String(uri ?? '').trim());
+    setLoaded(false);
+  }, [uri]);
   const kind = mediaKind(uri);
-  const stillOpen = kind !== 'video' ? onOpen : undefined;
+  const stillOpen = kind !== 'video' && !failed ? onOpen : undefined;
   const frameStyle = {
     width,
     height,
@@ -565,16 +585,46 @@ function MediaSlide({
         onOpen={homeInline ? onOpen : undefined}
         onPlayingChange={onPlayingChange}
       />
+    ) : failed ? (
+      <View
+        style={{
+          width: '100%',
+          height: '100%',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 12,
+        }}>
+        <AppText className="text-[12px]" style={{ color: THEME.textMuted }}>
+          Couldn’t load photo
+        </AppText>
+      </View>
     ) : (
-      <Image
-        source={{ uri }}
-        style={{ width: '100%', height: '100%' }}
-        contentFit="contain"
-        contentPosition="center"
-        cachePolicy="memory-disk"
-        recyclingKey={uri}
-        pointerEvents="none"
-      />
+      <View style={{ width: '100%', height: '100%' }}>
+        {loaded ? null : (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: THEME.surface2,
+            }}
+          />
+        )}
+        <Image
+          source={{ uri }}
+          style={{ width: '100%', height: '100%' }}
+          contentFit="contain"
+          contentPosition="center"
+          cachePolicy="memory-disk"
+          recyclingKey={uri}
+          pointerEvents="none"
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+        />
+      </View>
     );
   return (
     <View

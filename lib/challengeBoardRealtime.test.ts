@@ -15,7 +15,7 @@ import {
 const ID = '2f1d8a10-4c3b-4a91-9e2a-0b6c7d8e9f10';
 
 function mockQueryClient() {
-  return { invalidateQueries: vi.fn() };
+  return { invalidateQueries: vi.fn(), setQueriesData: vi.fn() };
 }
 
 function mockChannel(state = 'closed'): RealtimeChannel & { onCalls: number } {

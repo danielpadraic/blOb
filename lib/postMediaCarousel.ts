@@ -1,5 +1,9 @@
 import { uniqueProofUrls, mediaUrlKey } from '@/lib/challengeProofs';
+import type { CheckinProofStats } from '@/lib/checkin/proofStats';
+import { pagerUrlsWithWorkoutCard } from '@/lib/health/postWorkoutCard';
+import { WORKOUT_CARD_HEIGHT, WORKOUT_CARD_WIDTH } from '@/lib/health/workoutProofCard';
 import { hiddenMediaSet } from '@/lib/postEdit';
+import { FEED_COLUMN_MAX } from '@/lib/theme';
 import { mediaKind } from '@/utils/media';
 
 export const POST_MEDIA_CYCLE_MS = 3200;
@@ -103,6 +107,23 @@ export function pagerUrlsForViewer(input: {
   return all.filter((url) => !skip.has(mediaUrlKey(url)));
 }
 
+/** Same stills Home and Live page: user photos first, generated recap last. */
+export function mediaUrlsForPost(input: {
+  urls?: string[] | null;
+  hidden?: string[] | null;
+  isOwner?: boolean;
+  stats?: CheckinProofStats | null;
+}): string[] {
+  return pagerUrlsWithWorkoutCard(
+    pagerUrlsForViewer({
+      urls: input.urls,
+      hidden: input.hidden,
+      isOwner: input.isOwner,
+    }),
+    input.stats,
+  );
+}
+
 export function stillCountInPager(urls: string[]): number {
   return urls.filter(isStillPostMedia).length;
 }
@@ -144,6 +165,16 @@ export function pagerFrameHeight(input: {
   const floor = vh * 0.62;
   const cap = Math.min(vh * 0.72, Math.max(vh - chrome, floor));
   return Math.round(Math.min(cap, Math.max(floor, Math.min(target, cap))));
+}
+
+/** Live check-in tile: same 2:3 card shape Home uses, not the Home 65vh hero. */
+export function liveInlineFrameHeight(cardWidth: number): number {
+  return Math.round(Math.max(cardWidth, 1) * (WORKOUT_CARD_HEIGHT / WORKOUT_CARD_WIDTH));
+}
+
+/** Seed Live carousel width before onLayout so photos paint instead of an empty cream slab. */
+export function liveInlineSeedWidth(windowW: number): number {
+  return Math.max(160, Math.round(Math.min(windowW * 0.72, FEED_COLUMN_MAX)));
 }
 
 export function nextAutoCycleIndex(urls: string[], from: number): number {
