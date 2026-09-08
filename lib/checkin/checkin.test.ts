@@ -342,7 +342,7 @@ describe('check-in composer save', () => {
         p_proof_part: {
           method: 'photo',
           url: 'https://example.com/one.jpg',
-          urls: ['https://example.com/one.jpg'],
+          urls: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
           fromLibrary: false,
           contentHash: 'object:one.jpg',
           caption: null,

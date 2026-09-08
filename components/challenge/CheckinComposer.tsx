@@ -36,6 +36,11 @@ import {
   type ChallengeProof,
 } from '@/lib/challengeProofs';
 import {
+  HR_DISTANCE_STILL_CAP,
+  slotAllowsMultipleStills,
+  slotStillUris,
+} from '@/lib/checkin/slotStills';
+import {
   CHECKIN_PROOF_CAPTION_MAX,
   clampProofCaption,
   proofCaptionCounter,
@@ -68,19 +73,22 @@ export type CheckinExtra = {
 
 export type CheckinSlotDraft = {
   uri?: string;
+  uris?: string[] | null;
   mimeType?: string | null;
   text?: string;
   fromLibrary?: boolean;
   /** The blOb workout card is rasterizing for this slot. */
   building?: boolean;
   addingRoute?: boolean;
+  healthWorkoutId?: string | null;
+  health?: { source?: string | null } | null;
 };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const STRIP = 56;
 
 type ReviewPage =
-  | { key: string; kind: 'proof'; proof: ChallengeProof; uri: string; label: string }
+  | { key: string; kind: 'proof'; proof: ChallengeProof; uri: string; label: string; stillIndex: number }
   | { key: string; kind: 'extra'; extra: CheckinExtra; uri: string; label: string };
 
 type CheckinComposerProps = {
@@ -95,10 +103,12 @@ type CheckinComposerProps = {
   blockedHint?: string;
   stillNeeded?: string;
   onClose: () => void;
-  onRetake: (proof: ChallengeProof) => void;
-  onOpenGallery: (proof: ChallengeProof) => void;
+  onRetake: (proof: ChallengeProof, stillIndex: number) => void;
+  onOpenGallery: (proof: ChallengeProof, stillIndex: number) => void;
   onAddProof: (proof: ChallengeProof) => void;
+  onAddStill?: (proof: ChallengeProof) => void;
   onRemoveProof: (proof: ChallengeProof) => void;
+  onRemoveStill?: (proof: ChallengeProof, stillIndex: number) => void;
   onExtrasChange: (extras: CheckinExtra[]) => void;
   onCaptionChange: (doc: MentionDoc) => void;
   proofCaptions?: Record<string, string>;
@@ -143,7 +153,9 @@ export function CheckinComposer({
   onRetake,
   onOpenGallery,
   onAddProof,
+  onAddStill,
   onRemoveProof: _onRemoveProof,
+  onRemoveStill,
   onExtrasChange,
   onCaptionChange,
   proofCaptions = {},
@@ -238,11 +250,15 @@ export function CheckinComposer({
 
   const pages: ReviewPage[] = [
     ...proofs.flatMap((proof): ReviewPage[] => {
-      const uri = drafts[proof.id]?.uri;
-      if (!uri || uri.startsWith('health:')) {
-        return [];
-      }
-      return [{ key: `proof-${proof.id}`, kind: 'proof', proof, uri, label: proofDisplayName(proof) }];
+      const stills = slotStillUris(drafts[proof.id]);
+      return stills.map((uri, stillIndex) => ({
+        key: `proof-${proof.id}-${stillIndex}`,
+        kind: 'proof' as const,
+        proof,
+        uri,
+        stillIndex,
+        label: proofDisplayName(proof),
+      }));
     }),
     ...extras.map((item) => ({
       key: `extra-${item.id}`,
@@ -255,8 +271,17 @@ export function CheckinComposer({
   const current = pages[Math.min(pageIndex, Math.max(pages.length - 1, 0))] ?? null;
   const nextProof = proofs.find((proof) => {
     const draft = drafts[proof.id];
-    return !draft?.uri && !draft?.text;
+    return slotStillUris(draft).length === 0 && !draft?.text;
   });
+
+  const currentProofStills =
+    current?.kind === 'proof' ? slotStillUris(drafts[current.proof.id]) : [];
+  const canAddStill =
+    current?.kind === 'proof' &&
+    Boolean(onAddStill) &&
+    slotAllowsMultipleStills(current.proof, drafts[current.proof.id]) &&
+    currentProofStills.length > 0 &&
+    currentProofStills.length < HR_DISTANCE_STILL_CAP;
 
   useEffect(() => {
     if (pageIndex > pages.length - 1) {
@@ -273,10 +298,8 @@ export function CheckinComposer({
   }
 
   const photoCount =
-    proofs.filter((proof) => {
-      const uri = drafts[proof.id]?.uri;
-      return Boolean(uri && !uri.startsWith('health:'));
-    }).length + extras.filter((item) => item.kind === 'photo' || item.kind === 'gif').length;
+    proofs.reduce((count, proof) => count + (slotStillUris(drafts[proof.id]).length > 0 ? 1 : 0), 0) +
+    extras.filter((item) => item.kind === 'photo' || item.kind === 'gif').length;
   const remainingSlots = Math.max(0, CHECKIN_PHOTO_CAP - photoCount);
   const canAddPhoto = remainingSlots > 0 && !busy;
 
@@ -299,7 +322,7 @@ export function CheckinComposer({
     }
     const next = excludeRequiredSlotMedia(
       [...extras, { ...attachment, id: `${Date.now()}-${extras.length}` }],
-      proofs.map((proof) => drafts[proof.id]?.uri),
+      proofs.flatMap((proof) => slotStillUris(drafts[proof.id])),
     );
     if (next.length === extras.length) {
       return;
@@ -326,7 +349,7 @@ export function CheckinComposer({
           id: `${Date.now()}-${extras.length + index}`,
         })),
       ],
-      proofs.map((proof) => drafts[proof.id]?.uri),
+      proofs.flatMap((proof) => slotStillUris(drafts[proof.id])),
     );
     if (next.length === extras.length) {
       return;
@@ -514,15 +537,15 @@ export function CheckinComposer({
   function requiredSlotsFilled(): boolean {
     return proofs.every((proof) => {
       const draft = drafts[proof.id];
-      return Boolean(draft?.uri || draft?.text);
+      return slotStillUris(draft).length > 0 || Boolean(draft?.text);
     });
   }
 
   function canRemovePage(page: ReviewPage): boolean {
-    if (page.kind === 'proof') {
-      return false;
+    if (page.kind === 'extra') {
+      return requiredSlotsFilled();
     }
-    return requiredSlotsFilled();
+    return Boolean(onRemoveStill) && slotStillUris(drafts[page.proof.id]).length > 1;
   }
 
   function confirmRemove(page: ReviewPage) {
@@ -535,10 +558,11 @@ export function CheckinComposer({
         text: 'Remove',
         style: 'destructive',
         onPress: () => {
-          if (page.kind !== 'extra') {
+          if (page.kind === 'extra') {
+            onExtrasChange(extras.filter((item) => item.id !== page.extra.id));
             return;
           }
-          onExtrasChange(extras.filter((item) => item.id !== page.extra.id));
+          onRemoveStill?.(page.proof, page.stillIndex);
         },
       },
     ]);
@@ -682,6 +706,7 @@ export function CheckinComposer({
               right: 0,
               bottom: 12,
               flexDirection: 'row',
+              flexWrap: 'wrap',
               justifyContent: 'center',
               gap: 8,
             }}>
@@ -689,7 +714,7 @@ export function CheckinComposer({
               label="Retake"
               onPress={() => {
                 if (current.kind === 'proof') {
-                  onRetake(current.proof);
+                  onRetake(current.proof, current.stillIndex);
                 } else {
                   void retakeExtra(current.extra);
                 }
@@ -702,12 +727,15 @@ export function CheckinComposer({
               label="Gallery"
               onPress={() => {
                 if (current.kind === 'proof') {
-                  onOpenGallery(current.proof);
+                  onOpenGallery(current.proof, current.stillIndex);
                 } else {
                   void galleryReplaceExtra(current.extra);
                 }
               }}
             />
+            {canAddStill ? (
+              <OverlayChip label="Add another" onPress={() => onAddStill?.(current.proof)} />
+            ) : null}
             {nextProof ? (
               <OverlayChip label="Add more proof" onPress={() => onAddProof(nextProof)} />
             ) : null}
@@ -716,18 +744,62 @@ export function CheckinComposer({
       </View>
 
       {/* Read numbers for the slot on screen, directly under its photo. */}
-      {current?.kind === 'proof' && proofAccessories?.[current.proof.id] ? (
-        <View style={{ paddingTop: 8, paddingHorizontal: 12, backgroundColor: THEME.background }}>
-          {proofAccessories[current.proof.id]}
+      {current?.kind === 'proof' &&
+      (proofAccessories?.[`${current.proof.id}:${current.stillIndex}`] ||
+        proofAccessories?.[current.proof.id]) ? (
+        <View style={{ paddingTop: 8, paddingHorizontal: 12, backgroundColor: THEME.background, gap: 6 }}>
+          {proofAccessories[`${current.proof.id}:${current.stillIndex}`] ?? null}
+          {proofAccessories[current.proof.id] ?? null}
         </View>
       ) : null}
 
       {pages.length > 1 || nextProof || extras.length > 0 ? (
         <View style={{ paddingTop: 8, paddingHorizontal: 12, backgroundColor: THEME.background }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {pages
+              .filter((page) => page.kind === 'proof')
+              .map((page) => {
+                if (page.kind !== 'proof') {
+                  return null;
+                }
+                const selected = current?.kind === 'proof' && current.key === page.key;
+                return (
+                <Pressable
+                  key={page.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={page.label}
+                  onPress={() => {
+                    const index = pages.findIndex((row) => row.key === page.key);
+                    if (index >= 0) {
+                      goToPage(index);
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (canRemovePage(page)) {
+                      confirmRemove(page);
+                    }
+                  }}
+                  style={{
+                    width: STRIP,
+                    height: STRIP,
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                    borderWidth: 1,
+                    borderColor: selected ? THEME.accent : THEME.border,
+                    backgroundColor: THEME.surface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Image source={{ uri: page.uri }} style={{ width: STRIP, height: STRIP }} contentFit="cover" />
+                </Pressable>
+                );
+              })}
             {proofs.map((proof) => {
               const uri = drafts[proof.id]?.uri;
               const health = uri?.startsWith('health:');
+              if (!health && slotStillUris(drafts[proof.id]).length > 0) {
+                return null;
+              }
               const filled = Boolean(uri || drafts[proof.id]?.text);
               if (!filled) {
                 return null;
@@ -737,12 +809,6 @@ export function CheckinComposer({
                   key={proof.id}
                   accessibilityRole="button"
                   accessibilityLabel={proofDisplayName(proof)}
-                  onPress={() => {
-                    const index = pages.findIndex((page) => page.kind === 'proof' && page.proof.id === proof.id);
-                    if (index >= 0) {
-                      goToPage(index);
-                    }
-                  }}
                   style={{
                     width: STRIP,
                     height: STRIP,
@@ -754,20 +820,15 @@ export function CheckinComposer({
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
-                  {uri && !health ? (
-                    <Image source={{ uri }} style={{ width: STRIP, height: STRIP }} contentFit="cover" />
-                  ) : (
-                    <AppText className="px-0.5 text-center text-[9px] font-bold text-muted" numberOfLines={2}>
-                      {/* Never a bare tile: say the card is rendering. */}
-                      {drafts[proof.id]?.addingRoute
-                        ? 'Adding route…'
-                        : drafts[proof.id]?.building
-                          ? 'Building proof…'
-                          : health
-                            ? 'Health'
-                            : proofDisplayName(proof)}
-                    </AppText>
-                  )}
+                  <AppText className="px-0.5 text-center text-[9px] font-bold text-muted" numberOfLines={2}>
+                    {drafts[proof.id]?.addingRoute
+                      ? 'Adding route…'
+                      : drafts[proof.id]?.building
+                        ? 'Building proof…'
+                        : health
+                          ? 'Health'
+                          : proofDisplayName(proof)}
+                  </AppText>
                 </Pressable>
               );
             })}
@@ -860,14 +921,10 @@ export function CheckinComposer({
       {dueLine ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{dueLine}</View> : null}
       {accessory ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{accessory}</View> : null}
 
-      {proofs.some((proof) => {
-        const uri = drafts[proof.id]?.uri;
-        return Boolean(uri && !uri.startsWith('health:'));
-      }) ? (
+      {proofs.some((proof) => slotStillUris(drafts[proof.id]).length > 0) ? (
         <View style={{ paddingHorizontal: 12, paddingTop: 4 }}>
           {proofs.map((proof) => {
-            const uri = drafts[proof.id]?.uri;
-            if (!uri || uri.startsWith('health:')) {
+            if (slotStillUris(drafts[proof.id]).length === 0) {
               return null;
             }
             const value = proofCaptions[proof.id] ?? '';

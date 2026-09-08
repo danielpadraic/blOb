@@ -66,6 +66,39 @@ function isRemoteMediaUrl(uri: string): boolean {
   return /^https?:\/\//i.test(uri);
 }
 
+async function resolveProofStillUrls(
+  input: SaveCheckinProofInput,
+  userId: string,
+  upload: UploadCheckinProofFn,
+  resolveUrl: ResolveProofUrlFn,
+  proofType: string,
+): Promise<string[]> {
+  const stills = uniqueProofUrls([input.uri, ...(input.urls ?? [])]).filter(
+    (url) => url && !url.startsWith('health:'),
+  );
+  const out: string[] = [];
+  for (let i = 0; i < stills.length; i += 1) {
+    const uri = stills[i];
+    if (isRemoteMediaUrl(uri)) {
+      out.push(uri);
+      continue;
+    }
+    out.push(
+      await resolveUrl(
+        await upload({
+          uri,
+          userId,
+          challengeId: input.challengeId,
+          proofType,
+          mimeType: input.mimeType,
+          blob: i === 0 ? input.blob ?? undefined : undefined,
+        }),
+      ),
+    );
+  }
+  return uniqueProofUrls(out);
+}
+
 export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCheckin {
   const submittedAt = (row.submitted_at as string | null) ?? null;
   const parsed = asCheckinStatus(row.status);
@@ -135,24 +168,13 @@ async function proofPartFor(
   if (proof.method === 'distance') {
     const uri = input.uri?.trim() ?? '';
     const healthWorkoutId = uri.startsWith('health:') ? uri.slice('health:'.length) : null;
-    let url = '';
-    if (uri && !healthWorkoutId && isRemoteMediaUrl(uri)) {
-      url = uri;
-    } else if ((uri && !healthWorkoutId) || input.blob) {
-      url = await resolveUrl(
-        await upload({
-          uri: uri || 'blob:proof',
-          userId,
-          challengeId: input.challengeId,
-          proofType: captureTypeForMethod(proof.method),
-          mimeType: input.mimeType,
-          blob: input.blob,
-        }),
-      );
-    }
+    const uploaded = healthWorkoutId
+      ? []
+      : await resolveProofStillUrls(input, userId, upload, resolveUrl, captureTypeForMethod(proof.method));
+    const url = uploaded[0] ?? '';
     const meters = input.health?.distanceMeters ?? parseSessionDistanceText(input.text);
     const contentHash = await hashCheckinProof({
-      uri,
+      uri: uploaded[0] ?? uri,
       blob: input.blob,
       url,
       healthWorkoutId,
@@ -164,6 +186,7 @@ async function proofPartFor(
           method: 'distance',
           text: (input.text ?? '').trim() || null,
           url,
+          urls: uploaded,
           healthWorkoutId,
           health: input.health ?? null,
           distanceMeters: meters,
@@ -193,35 +216,33 @@ async function proofPartFor(
       healthWorkoutId,
     };
   }
-  if (!uri && !input.blob) {
+  if (!uri && !input.blob && !(input.urls && input.urls.length > 0)) {
     throw new Error('Add that proof to continue.');
   }
-  const url = isRemoteMediaUrl(uri)
-    ? uri
-    : await resolveUrl(
-        await upload({
-          uri: uri || 'blob:proof',
-          userId,
-          challengeId: input.challengeId,
-          proofType: captureTypeForMethod(proof.method),
-          mimeType: input.mimeType,
-          blob: input.blob,
-        }),
-      );
-  const urlOnly = uniqueProofUrls([url]);
+  const uploaded = await resolveProofStillUrls(
+    input,
+    userId,
+    upload,
+    resolveUrl,
+    captureTypeForMethod(proof.method),
+  );
+  const url = uploaded[0] ?? '';
+  if (!url) {
+    throw new Error('Add that proof to continue.');
+  }
   const healthWorkoutId = input.healthWorkoutId?.trim() || null;
   const contentHash = await hashCheckinProof({
-    uri,
+    uri: uploaded[0] ?? uri,
     blob: input.blob,
-    url: urlOnly[0] ?? url,
+    url,
   });
   return {
     id: proof.id,
     part: partWithCaption(
       {
         method: proof.method,
-        url: urlOnly[0] ?? url,
-        urls: urlOnly,
+        url,
+        urls: uploaded,
         fromLibrary: input.fromLibrary === true,
         // A generated workout card is an image AND the Health receipt for this slot. A plain
         // camera still carries neither key.

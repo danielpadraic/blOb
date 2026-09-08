@@ -233,6 +233,18 @@ describe('check-in slot hydrate', () => {
     );
   });
 
+  it('keeps extra HR screenshots on the slot instead of treating them as extras', () => {
+    expect(
+      extraProofImageUrls([hr], {
+        p_random_hr: {
+          method: 'hr',
+          url: 'https://cdn.example/watch.jpg',
+          urls: ['https://cdn.example/watch.jpg', 'https://cdn.example/hr.jpg'],
+        },
+      }),
+    ).toEqual([]);
+  });
+
   it('pins official selfie slots to pre / post / hr', () => {
     expect(namedProofsFromLegacyTypes(['pre_selfie', 'post_selfie', 'hr_monitor']).map((proof) => proof.id)).toEqual([
       'pre',

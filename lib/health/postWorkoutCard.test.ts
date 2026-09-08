@@ -3,6 +3,8 @@ import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import {
   isWorkoutCardUrl,
+  pagerUrlsWithWorkoutCard,
+  WORKOUT_CARD_SLIDE,
   workoutCardForPost,
   workoutFromPostStats,
   workoutSlideForPost,
@@ -255,8 +257,10 @@ describe('the workout slide a feed post carries', () => {
     expect(slide?.checkinId).toBe('c-1');
   });
 
-  it('is nothing when the check-in has numbers but no card on the post', () => {
-    expect(workoutSlideForPost({ stats: WALK_STATS, checkinId: 'c-1' })).toBeNull();
+  it('draws a virtual last slide when the check-in has numbers but no named card file', () => {
+    const slide = workoutSlideForPost({ stats: WALK_STATS, checkinId: 'c-1' });
+    expect(slide?.url).toBe(WORKOUT_CARD_SLIDE);
+    expect(slide?.card.distanceLine).toBe('6.24 mi');
   });
 
   it('is nothing for a post that is not a workout check-in', () => {
@@ -273,5 +277,23 @@ describe('the workout slide a feed post carries', () => {
     expect(slide?.stats?.distance_m).toBe(10042);
     expect(slide?.challengeTitle).toBe('30-Day Consistency');
     expect(slide?.timeZone).toBeTruthy();
+  });
+});
+
+describe('pager order for a workout check-in', () => {
+  const CARD = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=abc';
+  const SHOT = 'https://x.supabase.co/storage/v1/object/sign/p/watch.jpg?token=abc';
+  const SHOT2 = 'https://x.supabase.co/storage/v1/object/sign/p/hr.jpg?token=abc';
+
+  it('keeps user stills first and appends the recap last', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT, SHOT2], WALK_STATS)).toEqual([SHOT, SHOT2, WORKOUT_CARD_SLIDE]);
+  });
+
+  it('does not invent a recap slide when HealthKit media is the named card', () => {
+    expect(pagerUrlsWithWorkoutCard([CARD], { ...WALK_STATS, card_url: CARD })).toEqual([CARD]);
+  });
+
+  it('does not paint a recap over a selfie-only check-in', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT], { pronoun: 'he' })).toEqual([SHOT]);
   });
 });

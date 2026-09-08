@@ -1,3 +1,5 @@
+import { formatHealthDuration } from '@/lib/health/durationChip';
+
 /**
  * Display-safe fitness stats carried on a check-in post (`posts.checkin_stats`).
  * Derived server-side from the Health snapshot. Never carries a vendor workout id and never
@@ -79,9 +81,9 @@ export function proofStatChips(stats?: CheckinProofStats | null): ProofStatChip[
     return [];
   }
   const chips: ProofStatChip[] = [];
-  const minutes = proofStatsMinutes(stats.duration_sec);
-  if (minutes != null) {
-    chips.push({ key: 'duration', label: `${minutes} min` });
+  const duration = formatHealthDuration(stats.duration_sec);
+  if (duration) {
+    chips.push({ key: 'duration', label: duration });
   }
   const calories = positive(stats.active_cal) ?? positive(stats.total_cal);
   if (calories != null) {

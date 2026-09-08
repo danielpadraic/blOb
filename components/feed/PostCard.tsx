@@ -10,7 +10,7 @@ import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import type { WorkoutSlide } from '@/components/feed/MediaLightbox';
-import { workoutSlideForPost } from '@/lib/health/postWorkoutCard';
+import { isWorkoutCardSlide, pagerUrlsWithWorkoutCard, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import { MentionText } from '@/components/feed/MentionText';
 import { InChallengeChip, OriginChip } from '@/components/feed/OriginChip';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
@@ -953,7 +953,7 @@ function ProofMedia({
   homeInline?: boolean;
   workout?: (WorkoutSlide & { url: string }) | null;
 }) {
-  const visuals = pagerUrlsForViewer({ urls, hidden, isOwner });
+  const visuals = pagerUrlsWithWorkoutCard(pagerUrlsForViewer({ urls, hidden, isOwner }), workout?.stats);
   const others = urls.filter((url) => {
     if (!url) {
       return false;
@@ -965,6 +965,9 @@ function ProofMedia({
     return null;
   }
   const alignedCaptions = visuals.map((url) => {
+    if (isWorkoutCardSlide(url)) {
+      return null;
+    }
     const at = urls.findIndex((item) => item === url);
     const text = at >= 0 ? captions?.[at] : null;
     return text?.trim() ? text : null;

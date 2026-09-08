@@ -9,7 +9,14 @@ import { linkSessionToPost } from '@/lib/lift/share';
 import type { LiftSessionSummary } from '@/lib/lift/types';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { WorkoutStatChips } from '@/components/challenge/WorkoutStatChips';
-import { isOcrEligibleProof, shouldReadWorkoutStill, useWorkoutOcr } from '@/hooks/useWorkoutOcr';
+import { isOcrEligibleProof, ocrStillKey, shouldReadWorkoutStill, useWorkoutOcr } from '@/hooks/useWorkoutOcr';
+import { unionOcrFields } from '@/lib/health/ocrUnion';
+import {
+  HR_DISTANCE_STILL_CAP,
+  slotAllowsMultipleStills,
+  slotStillUris,
+  withSlotStills,
+} from '@/lib/checkin/slotStills';
 import { saveWorkoutSession } from '@/lib/health/workoutSessions';
 import { recordHrSignature } from '@/lib/health/hrIntegrity';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
@@ -65,6 +72,7 @@ import {
   nextEmptyRequiredProof,
   partSatisfies,
   proofDisplayName,
+  existingUrlsForProof,
   proofSlotNeedsRewrite,
   proofsAreHonorOnly,
   uniqueProofUrls,
@@ -147,6 +155,7 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
 
 type SlotDraft = {
   uri?: string;
+  uris?: string[] | null;
   mimeType?: string | null;
   text?: string;
   fromLibrary?: boolean;
@@ -234,19 +243,23 @@ function slotPart(
   }
   if (proof.method === 'distance') {
     const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
+    const stills = slotStillUris(draft);
     return {
       method: 'distance',
       text: draft?.text ?? '',
-      url: healthWorkoutId ? '' : draft?.uri ?? '',
+      url: healthWorkoutId ? '' : stills[0] ?? draft?.uri ?? '',
+      urls: healthWorkoutId ? [] : stills,
       healthWorkoutId,
       health: draft?.health ?? null,
       distanceMeters: draft?.health?.distanceMeters ?? parseSessionDistanceText(draft?.text, unit) ?? undefined,
     };
   }
   const healthWorkoutId = draft?.uri?.startsWith('health:') ? draft.uri.slice('health:'.length) : undefined;
+  const stills = slotStillUris(draft);
   return {
     method: proof.method,
-    url: healthWorkoutId ? '' : draft?.uri ?? '',
+    url: healthWorkoutId ? '' : stills[0] ?? draft?.uri ?? '',
+    urls: healthWorkoutId ? [] : stills,
     healthWorkoutId,
     health: draft?.health ?? null,
   };
@@ -280,6 +293,8 @@ function SubmitWorkoutInner() {
   const navFocused = useIsFocused();
   const checkinLogRef = useRef<string | null>(null);
   const hydrateServerRef = useRef<string | null>(null);
+  const appendStillRef = useRef<{ proofId: string } | null>(null);
+  const replaceStillRef = useRef<{ proofId: string; index: number } | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -501,15 +516,23 @@ function SubmitWorkoutInner() {
       let changed = false;
       for (const proof of steps) {
         const part = parts[proof.id];
-        const localUri = current[proof.id]?.uri;
-        const remoteUrl = existingUrlForProof(proof, parts, legacy);
+        const remoteUrls = existingUrlsForProof(proof, parts, legacy);
+        const remoteUrl = remoteUrls[0] ?? existingUrlForProof(proof, parts, legacy);
         if (!part && !remoteUrl) {
           continue;
         }
+        const localStills = slotStillUris(current[proof.id]);
+        const stills =
+          localStills.length > remoteUrls.length && localStills.some((uri) => !uri.startsWith('http'))
+            ? localStills
+            : remoteUrls.length > 0
+              ? remoteUrls
+              : localStills;
         const merged: SlotDraft = {
           // A generated workout card has an image AND Health provenance. Prefer the image so the
           // slot rehydrates as a thumb, not a "Health" chip with no preview.
-          uri: remoteUrl || (part?.healthWorkoutId ? `health:${part.healthWorkoutId}` : localUri),
+          uri: stills[0] || remoteUrl || (part?.healthWorkoutId ? `health:${part.healthWorkoutId}` : localUri),
+          uris: stills,
           mimeType: current[proof.id]?.mimeType,
           text: part?.text ?? current[proof.id]?.text,
           fromLibrary: part?.fromLibrary ?? current[proof.id]?.fromLibrary,
@@ -529,7 +552,8 @@ function SubmitWorkoutInner() {
           prior?.healthWorkoutId === merged.healthWorkoutId &&
           prior?.inFence === merged.inFence &&
           prior?.durationMs === merged.durationMs &&
-          prior?.caption === merged.caption;
+          prior?.caption === merged.caption &&
+          (prior?.uris ?? []).join('\0') === (merged.uris ?? []).join('\0');
         if (!same) {
           next[proof.id] = merged;
           changed = true;
@@ -604,7 +628,7 @@ function SubmitWorkoutInner() {
   const canSend = canSendCheckin(honorOnly, hasRequiredAttached, phase, busy);
   const firstCamera = beginCameraProof(proofSteps);
   const hasReviewDraft = proofSteps.some(
-    (proof) => drafts[proof.id]?.uri || drafts[proof.id]?.text || drafts[proof.id]?.inFence,
+    (proof) => slotStillUris(drafts[proof.id]).length > 0 || drafts[proof.id]?.text || drafts[proof.id]?.inFence,
   );
 
   function reviewPhotoProof(preferred?: ChallengeProof | null): ChallengeProof | null {
@@ -615,7 +639,7 @@ function SubmitWorkoutInner() {
       const uri = drafts[proof.id]?.uri;
       return (
         Boolean(uri && !uri.startsWith('health:')) &&
-        (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr')
+        (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr' || proof.method === 'distance')
       );
     });
     return filled ?? firstCamera ?? null;
@@ -625,7 +649,38 @@ function SubmitWorkoutInner() {
     if (busy) {
       return;
     }
-    setDrafts((current) => ({ ...current, [proofId]: { ...current[proofId], uri, mimeType, fromLibrary } }));
+    const append = appendStillRef.current;
+    const replace = replaceStillRef.current;
+    appendStillRef.current = null;
+    replaceStillRef.current = null;
+    const proof = proofSteps.find((item) => item.id === proofId);
+    setDrafts((current) => {
+      const existing = slotStillUris(current[proofId]);
+      const allows = slotAllowsMultipleStills(proof, current[proofId]);
+      let next: string[];
+      if (append?.proofId === proofId && allows) {
+        next = existing.includes(uri) ? existing : [...existing, uri].slice(0, HR_DISTANCE_STILL_CAP);
+      } else if (replace?.proofId === proofId && existing.length > 0) {
+        const index = Math.min(Math.max(replace.index, 0), existing.length - 1);
+        next = existing.map((item, i) => (i === index ? uri : item));
+      } else if (allows && existing.length > 0) {
+        next = existing.map((item, i) => (i === 0 ? uri : item));
+      } else {
+        next = [uri];
+      }
+      return {
+        ...current,
+        [proofId]: withSlotStills(
+          {
+            ...current[proofId],
+            mimeType,
+            fromLibrary,
+            healthWorkoutId: allows ? undefined : current[proofId]?.healthWorkoutId,
+          },
+          next,
+        ),
+      };
+    });
     setError(null);
   }
 
@@ -656,17 +711,19 @@ function SubmitWorkoutInner() {
   useEffect(() => {
     for (const proof of proofSteps) {
       const draft = drafts[proof.id];
-      if (
-        shouldReadWorkoutStill({
-          proof,
-          uri: draft?.uri,
-          mimeType: draft?.mimeType,
-          health: draft?.health,
-          healthWorkoutId: draft?.healthWorkoutId,
-          building: draft?.building,
-        })
-      ) {
-        void workoutOcr.read(proof.id, String(draft?.uri));
+      for (const uri of slotStillUris(draft)) {
+        if (
+          shouldReadWorkoutStill({
+            proof,
+            uri,
+            mimeType: draft?.mimeType,
+            health: draft?.health,
+            healthWorkoutId: draft?.healthWorkoutId,
+            building: draft?.building,
+          })
+        ) {
+          void workoutOcr.read(proof.id, uri);
+        }
       }
     }
   }, [drafts, proofSteps, workoutOcr]);
@@ -682,7 +739,7 @@ function SubmitWorkoutInner() {
     if (draft?.health?.source === 'health_connect') {
       return draft;
     }
-    const health = workoutOcr.healthFor(proof.id);
+    const health = workoutOcr.healthFor(proof.id, slotStillUris(draft));
     if (!health) {
       return draft;
     }
@@ -699,51 +756,47 @@ function SubmitWorkoutInner() {
       const draft = drafts[proof.id];
       // A vendor attach and our own card already show exact numbers on the card itself.
       if (
-        !draft?.uri ||
-        draft.healthWorkoutId ||
-        draft.health?.source === 'healthkit' ||
-        draft.health?.source === 'health_connect'
+        slotStillUris(draft).length === 0 ||
+        draft?.healthWorkoutId ||
+        draft?.health?.source === 'healthkit' ||
+        draft?.health?.source === 'health_connect'
       ) {
         continue;
       }
-      const entry = workoutOcr.entries[proof.id];
-      if (!entry) {
-        continue;
-      }
-      if (entry.status === 'reading') {
-        map[proof.id] = (
-          <AppText className="text-[12px] text-muted">Reading workout…</AppText>
-        );
-        continue;
-      }
-      if (entry.status === 'ready') {
+      const stills = slotStillUris(draft);
+      const stillEntries = stills.map((uri) => workoutOcr.entries[ocrStillKey(proof.id, uri)]);
+      const manual = workoutOcr.entries[proof.id];
+      const union =
+        manual?.source === 'manual'
+          ? { fields: manual.fields, clockRange: manual.clockRange, activityLabel: manual.activityLabel }
+          : unionOcrFields(stillEntries.filter(Boolean));
+      const reading = stillEntries.some((entry) => entry?.status === 'reading');
+      if (Object.keys(union.fields).length > 0) {
         map[proof.id] = (
           <View className="gap-1.5">
             <AppText className="text-[12px] text-muted">
-              {entry.source === 'manual' ? 'Entered by hand' : 'Workout screenshot'}
+              {manual?.source === 'manual' ? 'Entered by hand' : 'Workout screenshot'}
             </AppText>
             <WorkoutStatChips
-              fields={entry.fields}
+              fields={union.fields}
               distanceUnit={distanceUnit}
               onChange={(fields) => workoutOcr.edit(proof.id, fields)}
             />
           </View>
         );
-        continue;
-      }
-      if (entry.status === 'failed') {
+      } else if (reading) {
         map[proof.id] = (
-          <View className="gap-2">
-            <AppText className="text-[12px] text-muted">Couldn’t read that screen.</AppText>
-            <WorkoutStatChips
-              fields={entry.fields}
-              distanceUnit={distanceUnit}
-              allowAdd
-              onChange={(fields) => workoutOcr.edit(proof.id, fields)}
-            />
-          </View>
+          <AppText className="text-[12px] text-muted">Reading workout…</AppText>
         );
       }
+      stills.forEach((uri, index) => {
+        const entry = stillEntries[index];
+        if (entry?.status === 'failed' || entry?.status === 'empty') {
+          map[`${proof.id}:${index}`] = (
+            <AppText className="text-[12px] text-muted">Couldn’t read that screen.</AppText>
+          );
+        }
+      });
     }
     return map;
   }, [distanceUnit, drafts, proofSteps, workoutOcr]);
@@ -811,7 +864,8 @@ function SubmitWorkoutInner() {
       return await saveProof.mutateAsync({
         challengeId: id,
         proof,
-        uri: draft?.uri,
+        uri: slotStillUris(draft)[0] ?? draft?.uri,
+        urls: slotStillUris(draft),
         mimeType: draft?.mimeType,
         text: draft?.text,
         fromLibrary: draft?.fromLibrary,
@@ -935,7 +989,7 @@ function SubmitWorkoutInner() {
   function handleExtrasChange(next: CheckinExtra[]) {
     const deduped = excludeRequiredSlotMedia(
       next,
-      proofSteps.map((proof) => drafts[proof.id]?.uri),
+      proofSteps.flatMap((proof) => slotStillUris(drafts[proof.id])),
     );
     const removed = deduped.length < extras.length;
     setExtras(deduped);
@@ -1752,7 +1806,6 @@ function SubmitWorkoutInner() {
     (proof) =>
       proof.method !== 'honor' &&
       proof.method !== 'checkin' &&
-      proof.method !== 'distance' &&
       proof.method !== 'location',
   );
   const textProofs = proofSteps.filter((proof) => proof.method === 'checkin');
@@ -1780,15 +1833,49 @@ function SubmitWorkoutInner() {
         blockedHint={checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)))}
         stillNeeded={stillNeeded}
         onClose={() => router.back()}
-        onRetake={(proof) => onRetakeCurrent(proof)}
-        onOpenGallery={(proof) => void pickCurrentFromGallery(proof)}
+        onRetake={(proof, stillIndex) => {
+          replaceStillRef.current = { proofId: proof.id, index: stillIndex };
+          appendStillRef.current = null;
+          onRetakeCurrent(proof);
+        }}
+        onOpenGallery={(proof, stillIndex) => {
+          replaceStillRef.current = { proofId: proof.id, index: stillIndex };
+          appendStillRef.current = null;
+          void pickCurrentFromGallery(proof);
+        }}
         onAddProof={(proof) => {
-          if (proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr') {
+          if (
+            proof.method === 'photo' ||
+            proof.method === 'video' ||
+            proof.method === 'hr' ||
+            proof.method === 'distance'
+          ) {
             setPreferCamera(Platform.OS !== 'ios' || !proofPrefersHealthAttach(proof, challenge));
             setCaptureId(proof.id);
           }
         }}
+        onAddStill={(proof) => {
+          appendStillRef.current = { proofId: proof.id };
+          replaceStillRef.current = null;
+          setPreferCamera(true);
+          setCaptureId(proof.id);
+        }}
         onRemoveProof={(proof) => void onRemoveProof(proof)}
+        onRemoveStill={(proof, stillIndex) => {
+          setDrafts((current) => {
+            const stills = slotStillUris(current[proof.id]);
+            if (stills.length <= 1) {
+              return current;
+            }
+            return {
+              ...current,
+              [proof.id]: withSlotStills(
+                current[proof.id],
+                stills.filter((_, index) => index !== stillIndex),
+              ),
+            };
+          });
+        }}
         onExtrasChange={handleExtrasChange}
         onCaptionChange={setCaption}
         proofAccessories={proofAccessories}

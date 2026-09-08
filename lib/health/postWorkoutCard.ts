@@ -1,8 +1,12 @@
+import { uniqueProofUrls } from '@/lib/challengeProofs';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { activityTypeOf, labelFromActivityType, workoutFromStoredSession } from '@/lib/health/cardRedraw';
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { buildWorkoutProofCard, type WorkoutProofCardModel } from '@/lib/health/workoutProofCard';
 import type { HealthActivityType, HealthWorkout } from '@/services/health/types';
+
+/** Last-slide token for a recap drawn from stored numbers. Never a stored media URL. */
+export const WORKOUT_CARD_SLIDE = 'blob:workout-card';
 
 /**
  * The workout card a posted check-in shows, drawn from what is stored rather than from the picture.
@@ -31,10 +35,41 @@ import type { HealthActivityType, HealthWorkout } from '@/services/health/types'
  * Compared without the query string: proof URLs are signed, and the same file re-signed carries a
  * different token, which would otherwise stop matching its own card.
  */
+export function isWorkoutCardSlide(url?: string | null): boolean {
+  return String(url ?? '').split('?')[0] === WORKOUT_CARD_SLIDE;
+}
+
 export function isWorkoutCardUrl(url?: string | null, cardUrl?: string | null): boolean {
+  if (isWorkoutCardSlide(url)) {
+    return true;
+  }
   const file = String(url ?? '').split('?')[0];
   const card = String(cardUrl ?? '').split('?')[0];
   return file.length > 0 && file === card;
+}
+
+/**
+ * User stills first, generated recap last. Never paints the recap over a screenshot URL.
+ *
+ * HealthKit / Health Connect: the slot file is the named card and there are no user stills, so the
+ * stored URL stays and the recap draws on that slide. OCR / manual: stills stay as photos and a
+ * virtual last slide carries the recap.
+ */
+export function pagerUrlsWithWorkoutCard(
+  urls: string[],
+  stats?: CheckinProofStats | null,
+): string[] {
+  const list = uniqueProofUrls(urls);
+  const cardUrl = String(stats?.card_url ?? '').trim();
+  const stills = list.filter((url) => !isWorkoutCardUrl(url, cardUrl) && !isWorkoutCardSlide(url));
+  const hasCard = workoutFromPostStats(stats) != null;
+  if (!hasCard) {
+    return list.filter((url) => !isWorkoutCardSlide(url));
+  }
+  if (stills.length > 0) {
+    return uniqueProofUrls([...stills, WORKOUT_CARD_SLIDE]);
+  }
+  return list;
 }
 
 /**
@@ -98,9 +133,8 @@ export function workoutFromPostStats(stats?: CheckinProofStats | null): HealthWo
 /**
  * The workout slide a feed post carries: which of its media is the card, and the card to draw there.
  *
- * Null when the post is not a workout check-in, or when the server did not name a card — a Health
- * attach whose card never rasterized has numbers but no slide to put them on, and inventing one would
- * mean adding media the post does not have.
+ * Named `card_url` is the HealthKit raster. Screenshot check-ins have numbers but no named card, so
+ * the recap draws on the virtual last slide instead of replacing a user still.
  */
 export function workoutSlideForPost(input: {
   stats?: CheckinProofStats | null;
@@ -108,10 +142,6 @@ export function workoutSlideForPost(input: {
   checkinId?: string | null;
   timeZone?: string;
 }): PostWorkoutSlide | null {
-  const url = String(input.stats?.card_url ?? '').trim();
-  if (!url) {
-    return null;
-  }
   const timeZone = input.timeZone ?? deviceTimeZone();
   const card = workoutCardForPost({
     stats: input.stats,
@@ -121,6 +151,7 @@ export function workoutSlideForPost(input: {
   if (!card) {
     return null;
   }
+  const url = String(input.stats?.card_url ?? '').trim() || WORKOUT_CARD_SLIDE;
   return {
     url,
     card,

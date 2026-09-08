@@ -107,7 +107,24 @@ export function proofSlotNeedsRewrite(
 }
 
 export function proofImageUrls(part?: ChallengeProofPart | null): string[] {
-  return uniqueProofUrls([part?.url, ...(part?.urls ?? [])]);
+  return uniqueProofUrls([part?.url, ...(part?.urls ?? [])]).filter((url) => !url.startsWith('health:'));
+}
+
+export function existingUrlsForProof(
+  proof: ChallengeProof,
+  parts?: Record<string, ChallengeProofPart> | null,
+  legacy?: {
+    pre_selfie_url?: string | null;
+    post_selfie_url?: string | null;
+    hr_monitor_url?: string | null;
+  },
+): string[] {
+  const listed = proofImageUrls(parts?.[proof.id]);
+  if (listed.length > 0) {
+    return listed;
+  }
+  const one = existingUrlForProof(proof, parts, legacy);
+  return one && !one.startsWith('health:') ? [one] : [];
 }
 
 const PROOF_ROLE_ALIASES = new Set(['pre', 'post', 'hr', 'pre_selfie', 'post_selfie', 'hr_monitor']);
@@ -130,6 +147,11 @@ export function extraProofImageUrls(
     const listed = parts?.[proof.id]?.url?.trim();
     if (listed) {
       required.add(mediaUrlKey(listed));
+    }
+    if (proof.method === 'hr' || proof.method === 'distance') {
+      for (const url of proofImageUrls(parts?.[proof.id])) {
+        required.add(mediaUrlKey(url));
+      }
     }
   }
   const extras: string[] = [];

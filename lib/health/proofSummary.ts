@@ -1,5 +1,8 @@
 import { athleteDistanceUnit, formatDistance } from '@/lib/distance';
+import { formatHealthDuration } from '@/lib/health/durationChip';
 import type { HealthConfidence } from '@/services/health/types';
+
+export { formatHealthDuration } from '@/lib/health/durationChip';
 
 export function healthSourceLabel(confidence: string | null | undefined): string {
   if (confidence === 'watch') {
@@ -9,16 +12,6 @@ export function healthSourceLabel(confidence: string | null | undefined): string
     return 'iPhone';
   }
   return 'Health';
-}
-
-export function formatHealthDuration(sec: number): string {
-  const minutes = Math.max(1, Math.round(sec / 60));
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
 export function healthProofLines(input: {
@@ -32,9 +25,10 @@ export function healthProofLines(input: {
 }): { primary: string; secondary: string | null } {
   const miles =
     Number(input.distanceMeters) > 0 ? formatDistance(Number(input.distanceMeters), athleteDistanceUnit()) : null;
-  const primary = miles
-    ? `${miles} · ${formatHealthDuration(input.durationSec)} · ${healthSourceLabel(input.confidence)}`
-    : `${input.activityLabel} · ${formatHealthDuration(input.durationSec)} · ${healthSourceLabel(input.confidence)}`;
+  const duration = formatHealthDuration(input.durationSec);
+  const primary = [miles ?? input.activityLabel, duration, healthSourceLabel(input.confidence)]
+    .filter(Boolean)
+    .join(' · ');
   const bits: string[] = [];
   if (miles && input.hasRoute === false) {
     bits.push('No route on this workout.');

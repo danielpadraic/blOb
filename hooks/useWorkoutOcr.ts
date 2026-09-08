@@ -10,6 +10,7 @@ import {
   shouldReadWorkoutStill,
   type OcrSessionFields,
 } from '@/lib/health/ocrSession';
+import { ocrStillKey, unionOcrFields } from '@/lib/health/ocrUnion';
 import { hasOcrNumbers, type OcrClockRange } from '@/lib/health/workoutOcr';
 
 /**
@@ -19,7 +20,7 @@ import { hasOcrNumbers, type OcrClockRange } from '@/lib/health/workoutOcr';
  * a selfie leaves Send exactly as it was and simply shows no chips.
  */
 
-export { isOcrEligibleProof, shouldReadWorkoutStill };
+export { isOcrEligibleProof, shouldReadWorkoutStill, ocrStillKey };
 
 export type WorkoutOcrStatus = 'reading' | 'ready' | 'empty' | 'failed';
 
@@ -35,20 +36,21 @@ export type WorkoutOcrEntry = {
 
 export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: string }) {
   const [entries, setEntries] = useState<Record<string, WorkoutOcrEntry>>({});
-  /** Tracks the still each slot was last read for, so one photo is read once. */
+  /** Tracks each still that was already sent to the reader. */
   const readFor = useRef<Record<string, string>>({});
 
   const read = useCallback(async (proofId: string, uri: string) => {
     if (!proofId || !uri) {
       return;
     }
-    if (readFor.current[proofId] === uri) {
+    const key = ocrStillKey(proofId, uri);
+    if (readFor.current[key] === uri) {
       return;
     }
-    readFor.current[proofId] = uri;
+    readFor.current[key] = uri;
     setEntries((current) => ({
       ...current,
-      [proofId]: { status: 'reading', fields: {}, source: 'ocr' },
+      [key]: { status: 'reading', fields: {}, source: 'ocr' },
     }));
 
     const storageUrl = isProjectStorageImageUrl(uri) ? uri : '';
@@ -57,14 +59,13 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
       imageUrl: storageUrl || undefined,
     });
     setEntries((current) => {
-      // A newer still landed while this read was in flight; that read owns the slot now.
-      if (readFor.current[proofId] !== uri) {
+      if (readFor.current[key] !== uri) {
         return current;
       }
       if (!result.ok) {
         return {
           ...current,
-          [proofId]: {
+          [key]: {
             status: 'failed',
             fields: {},
             source: 'ocr',
@@ -75,7 +76,7 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
       if (!result.isWorkoutScreen) {
         return {
           ...current,
-          [proofId]: {
+          [key]: {
             status: 'empty',
             fields: {},
             source: 'ocr',
@@ -87,7 +88,7 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
       const found = hasOcrNumbers(result.parsed) && Object.keys(fields).length > 0;
       return {
         ...current,
-        [proofId]: {
+        [key]: {
           status: found ? 'ready' : 'empty',
           fields,
           source: 'ocr',
@@ -118,30 +119,77 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
     });
   }, []);
 
-  const forget = useCallback((proofId: string) => {
-    delete readFor.current[proofId];
+  const forgetStill = useCallback((proofId: string, uri: string) => {
+    const key = ocrStillKey(proofId, uri);
+    delete readFor.current[key];
     setEntries((current) => {
-      if (!(proofId in current)) {
+      if (!(key in current)) {
         return current;
       }
       const next = { ...current };
-      delete next[proofId];
+      delete next[key];
       return next;
     });
   }, []);
 
+  const forget = useCallback((proofId: string) => {
+    const prefix = `${proofId}::`;
+    for (const key of Object.keys(readFor.current)) {
+      if (key === proofId || key.startsWith(prefix)) {
+        delete readFor.current[key];
+      }
+    }
+    setEntries((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const key of Object.keys(next)) {
+        if (key === proofId || key.startsWith(prefix)) {
+          delete next[key];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, []);
+
+  const entryFor = useCallback(
+    (proofId: string, uri?: string | null): WorkoutOcrEntry | undefined => {
+      if (uri) {
+        return entries[ocrStillKey(proofId, uri)];
+      }
+      return entries[proofId];
+    },
+    [entries],
+  );
+
   /** The snapshot to store on this slot, or null when nothing was read. */
   const healthFor = useCallback(
-    (proofId: string): CheckinHealthProof | null => {
-      const entry = entries[proofId];
-      if (!entry || Object.keys(entry.fields).length === 0) {
+    (proofId: string, uris?: string[]): CheckinHealthProof | null => {
+      const manual = entries[proofId];
+      if (manual?.source === 'manual' && Object.keys(manual.fields).length > 0) {
+        return buildOcrHealthProof({
+          fields: manual.fields,
+          source: 'manual',
+          activityLabel: manual.activityLabel,
+          clockRange: manual.clockRange,
+          periodKey: options.periodKey,
+          timeZone: options.timeZone,
+        });
+      }
+      const prefix = `${proofId}::`;
+      const keys = uris?.length
+        ? uris.map((uri) => ocrStillKey(proofId, uri))
+        : Object.keys(entries).filter((key) => key.startsWith(prefix));
+      const reads = keys.map((key) => entries[key]).filter(Boolean);
+      const union = unionOcrFields(reads);
+      if (Object.keys(union.fields).length === 0) {
         return null;
       }
       return buildOcrHealthProof({
-        fields: entry.fields,
-        source: entry.source,
-        activityLabel: entry.activityLabel,
-        clockRange: entry.clockRange,
+        fields: union.fields,
+        source: 'ocr',
+        activityLabel: union.activityLabel,
+        clockRange: union.clockRange,
         periodKey: options.periodKey,
         timeZone: options.timeZone,
       });
@@ -149,5 +197,5 @@ export function useWorkoutOcr(options: { periodKey?: string | null; timeZone: st
     [entries, options.periodKey, options.timeZone],
   );
 
-  return { entries, read, edit, forget, healthFor };
+  return { entries, read, edit, forget, forgetStill, healthFor, entryFor };
 }

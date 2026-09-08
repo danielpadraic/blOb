@@ -1,10 +1,20 @@
-import { memo, useMemo, useRef } from 'react';
-import { Alert, Animated, PanResponder, Platform, Pressable, View } from 'react-native';
+import { memo, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  FlatList,
+  PanResponder,
+  Platform,
+  Pressable,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { Image } from 'expo-image';
 
 import { LiveReactions } from '@/components/challenge/LiveReactions';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
-import { isWorkoutCardUrl, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
+import { isWorkoutCardUrl, pagerUrlsWithWorkoutCard, workoutSlideForPost, type PostWorkoutSlide } from '@/lib/health/postWorkoutCard';
 import { WORKOUT_CARD_HEIGHT, WORKOUT_CARD_WIDTH } from '@/lib/health/workoutProofCard';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
@@ -87,7 +97,7 @@ export const LiveBubble = memo(function LiveBubble({
   const mine = Boolean(currentUserId && uid && currentUserId === uid);
   const checkin = isLiveCheckinPost(post);
   const system = isLiveSystemPost(post);
-  const visuals = liveVisualUrls(post, mine);
+  const visuals = pagerUrlsWithWorkoutCard(liveVisualUrls(post, mine), post.checkin_stats);
   const time = formatLiveClock(post.created_at);
   const caption = checkin
     ? checkinCardCaption(post.content, null, post.edited_at)
@@ -103,7 +113,6 @@ export const LiveBubble = memo(function LiveBubble({
       }),
     [post.checkin_id, post.checkin_stats],
   );
-  const workoutTile = workout && isWorkoutCardUrl(visuals[0], workout.url) ? workout : null;
   const items: LightboxItem[] = visuals.map((uri) => ({
     uri,
     label: liveProofCaption(post, uri, checkin ? headline : caption),
@@ -332,70 +341,12 @@ export const LiveBubble = memo(function LiveBubble({
                 maxWidth: '100%',
               }}>
               {visuals[0] ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open check-in proof. ${headline}`}
-                  onPress={() => openProof(0)}
-                  style={{
-                    // A generated workout card is 4:5. Cropping it into a 96px square cut the stats
-                    // and the route off it, so proof gets a portrait tile the width of the bubble —
-                    // the same weight a portrait photo gets — and the receipt line sits under it.
-                    width: '100%',
-                    aspectRatio: CHECKIN_PROOF_RATIO,
-                    borderRadius: 14,
-                    overflow: 'hidden',
-                    backgroundColor: THEME.surface2,
-                  }}>
-                  {/*
-                    The tile is already 4:5, so a card drawn from the post's own numbers fills it
-                    exactly. Showing the stored file instead would show whatever it looked like on the
-                    day it was flattened, including cards that print 0.00 mi for a walk that covered
-                    ground.
-                  */}
-                  {workoutTile ? (
-                    <WorkoutProofCard
-                      card={workoutTile.card}
-                      activityType={workoutTile.activityType}
-                      width="100%"
-                      height="100%"
-                    />
-                  ) : (
-                    <Image
-                      source={{ uri: visuals[0] }}
-                      style={{ width: '100%', height: '100%' }}
-                      contentFit="cover"
-                    />
-                  )}
-                  {mediaKind(visuals[0]) === 'video' ? (
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        ...absoluteFill,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: 'rgba(16,19,18,0.28)',
-                      }}>
-                      <Glyph name={GLYPH.play} color="#fff" size={16} />
-                    </View>
-                  ) : null}
-                  {visuals.length > 1 ? (
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
-                        top: 6,
-                        right: 6,
-                        paddingHorizontal: 7,
-                        paddingVertical: 3,
-                        borderRadius: 999,
-                        backgroundColor: 'rgba(16,19,18,0.82)',
-                      }}>
-                      <AppText className="text-[11px] font-bold" style={{ color: THEME.primaryForeground }}>
-                        {visuals.length}
-                      </AppText>
-                    </View>
-                  ) : null}
-                </Pressable>
+                <LiveCheckinPager
+                  urls={visuals}
+                  workout={workout}
+                  headline={headline}
+                  onOpen={openProof}
+                />
               ) : null}
               <View style={{ flexShrink: 1, minWidth: 0 }}>
                 <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
@@ -575,6 +526,112 @@ const absoluteFill = {
   bottom: 0,
   left: 0,
 };
+
+function LiveCheckinPager({
+  urls,
+  workout,
+  headline,
+  onOpen,
+}: {
+  urls: string[];
+  workout: PostWorkoutSlide | null;
+  headline: string;
+  onOpen: (index: number) => void;
+}) {
+  const [width, setWidth] = useState(0);
+  const [index, setIndex] = useState(0);
+  const pageWidth = Math.max(width, 1);
+
+  return (
+    <View
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{
+        width: '100%',
+        aspectRatio: CHECKIN_PROOF_RATIO,
+        borderRadius: 14,
+        overflow: 'hidden',
+        backgroundColor: THEME.surface2,
+      }}>
+      {width > 0 ? (
+        <FlatList
+          data={urls}
+          horizontal
+          pagingEnabled
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(uri, i) => `${i}:${uri}`}
+          getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
+          onMomentumScrollEnd={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
+            const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
+            setIndex(Math.max(0, Math.min(next, urls.length - 1)));
+          }}
+          renderItem={({ item: uri, index: itemIndex }) => {
+            const slide = workout && isWorkoutCardUrl(uri, workout.url) ? workout : null;
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open check-in proof. ${headline}`}
+                onPress={() => onOpen(itemIndex)}
+                style={{ width: pageWidth, height: '100%' }}>
+                {slide ? (
+                  <WorkoutProofCard
+                    card={slide.card}
+                    activityType={slide.activityType}
+                    width="100%"
+                    height="100%"
+                  />
+                ) : (
+                  <Image
+                    source={{ uri }}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="cover"
+                  />
+                )}
+                {mediaKind(uri) === 'video' ? (
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      ...absoluteFill,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: 'rgba(16,19,18,0.28)',
+                    }}>
+                    <Glyph name={GLYPH.play} color="#fff" size={16} />
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          }}
+        />
+      ) : null}
+      {urls.length > 1 ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            bottom: 8,
+            left: 0,
+            right: 0,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: 5,
+          }}>
+          {urls.map((uri, i) => (
+            <View
+              key={`${i}:${uri}`}
+              style={{
+                width: i === index ? 8 : 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: i === index ? '#fff' : 'rgba(255,255,255,0.45)',
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 function liveVisualUrls(post: PostWithMeta, isOwner: boolean): string[] {
   const fromFields = pagerUrlsForViewer({

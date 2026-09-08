@@ -26,7 +26,7 @@ const RUN: CheckinProofStats = {
 describe('proof stat chips', () => {
   it('builds compact chips for a strength workout', () => {
     expect(proofStatChips(STRENGTH).map((chip) => chip.label)).toEqual([
-      '41 min',
+      '41:10',
       '412 cal',
       '108 bpm avg',
     ]);
@@ -34,7 +34,7 @@ describe('proof stat chips', () => {
 
   it('adds miles for running, walking and cycling', () => {
     expect(proofStatChips(RUN).map((chip) => chip.label)).toEqual([
-      '30 min',
+      '30:00',
       '305 cal',
       '5.00 mi',
       '152 bpm avg',
@@ -56,7 +56,7 @@ describe('proof stat chips', () => {
 
   it('hides missing fields instead of printing zero', () => {
     expect(proofStatChips({ activity: 'strength', duration_sec: 2470 }).map((c) => c.label)).toEqual([
-      '41 min',
+      '41:10',
     ]);
     expect(proofStatChips({ activity: 'strength', duration_sec: 0, active_cal: 0, hr_avg: 0 })).toEqual([]);
     expect(proofStatChips({ activity: 'running', distance_m: 0 })).toEqual([]);
@@ -64,7 +64,7 @@ describe('proof stat chips', () => {
 
   it('falls back to total calories when active is missing', () => {
     const chips = proofStatChips({ activity: 'strength', duration_sec: 600, total_cal: 90 });
-    expect(chips.map((chip) => chip.label)).toEqual(['10 min', '90 cal']);
+    expect(chips.map((chip) => chip.label)).toEqual(['10:00', '90 cal']);
   });
 
   it('renders nothing for a Prayer or honor check-in', () => {
@@ -93,7 +93,7 @@ describe('no generated caption', () => {
 
   it('still gives Home and Live the chips, which are numbers and not a sentence', () => {
     const labels = proofStatChips(RUN).map((chip) => chip.label);
-    expect(labels).toEqual(['30 min', '305 cal', '5.00 mi', '152 bpm avg']);
+    expect(labels).toEqual(['30:00', '305 cal', '5.00 mi', '152 bpm avg']);
     for (const label of labels) {
       expect(label).not.toMatch(/burned|average heart rate|traveled/i);
     }

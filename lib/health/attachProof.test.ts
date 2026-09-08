@@ -84,7 +84,7 @@ describe('check-in health snapshot', () => {
       distanceMeters: 6200,
     });
     expect(snapshot).not.toHaveProperty('route');
-    expect(healthCompleteSummaryLine(snapshot)).toMatch(/39 min/);
+    expect(healthCompleteSummaryLine(snapshot)).toMatch(/39:00/);
     expect(healthCompleteSummaryLine(snapshot)).toMatch(/Average heart rate 148/);
   });
 
