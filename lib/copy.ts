@@ -821,6 +821,7 @@ const STRINGS = {
   'live.send': 'Send',
   'live.save': 'Save',
   'live.edit': 'Edit',
+  'live.loadFailed': 'Couldn’t load Live.',
   'pulse.noChatter': 'No chatter yet',
   'pulse.rail': 'Pulse',
   'detail.checkinDue': 'Check-in due',

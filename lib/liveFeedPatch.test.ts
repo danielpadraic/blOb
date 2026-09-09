@@ -74,7 +74,7 @@ describe('patchLiveFeedList', () => {
   it('treats an insert with the same checkin_id as an update of the oldest row', () => {
     const oldest = {
       id: 'old',
-      checkin_id: 'ck-1',
+      checkin_id: '11111111-1111-4111-8111-111111111111',
       created_at: '2026-09-08T21:55:00.000Z',
       content: 'Check-in Complete',
       media_urls: ['https://cdn.test/walk.jpg'],
@@ -85,7 +85,7 @@ describe('patchLiveFeedList', () => {
       eventType: 'INSERT',
       new: {
         id: 'dup',
-        checkin_id: 'ck-1',
+        checkin_id: '11111111-1111-4111-8111-111111111111',
         created_at: '2026-09-08T21:55:01.000Z',
         content: 'Check-in Complete',
         media_urls: [],
@@ -102,13 +102,33 @@ describe('patchLiveFeedList', () => {
       distance_m: 2188,
     });
   });
+
+  it('does not collapse lobby chat that has no checkin_id', () => {
+    const chat = { id: 'c1', checkin_id: null, content: 'hello', media_urls: [] };
+    const next = patchLiveFeedList([chat], {
+      eventType: 'INSERT',
+      new: { id: 'c2', checkin_id: null, content: 'yo', media_urls: [] },
+    }) as typeof chat[];
+    expect(next.map((row) => row.id)).toEqual(['c1', 'c2']);
+  });
+
+  it('skips a bad merge payload instead of throwing', () => {
+    const list = [A, B];
+    expect(() =>
+      patchLiveFeedList(list, {
+        eventType: 'UPDATE',
+        new: { id: 'a', media_urls: { not: 'an-array' }, checkin_stats: ['nope'] },
+      }),
+    ).not.toThrow();
+    expect(patchLiveFeedList(list, { eventType: 'INSERT' })).toBe(list);
+  });
 });
 
 describe('dedupeLivePostsByCheckinId', () => {
   it('keeps the oldest row, unions media, and hides empty Check-in Complete extras', () => {
     const empty = (id: string, at: string) => ({
       id,
-      checkin_id: 'ck-955',
+      checkin_id: '22222222-2222-4222-8222-222222222222',
       created_at: at,
       content: 'Check-in Complete',
       media_urls: [],
@@ -116,7 +136,7 @@ describe('dedupeLivePostsByCheckinId', () => {
     });
     const withMedia = {
       id: 'media',
-      checkin_id: 'ck-955',
+      checkin_id: '22222222-2222-4222-8222-222222222222',
       created_at: '2026-09-08T21:55:00.000Z',
       content: 'Check-in Complete',
       media_urls: ['https://cdn.test/fit.jpg'],
@@ -139,5 +159,13 @@ describe('dedupeLivePostsByCheckinId', () => {
       hr_avg: 87,
     });
     expect(next[1]).toBe(B);
+  });
+
+  it('leaves two lobby rows alone when checkin_id is not a uuid', () => {
+    const rows = [
+      { id: 'a', checkin_id: 'not-a-uuid', content: 'hi', media_urls: [] },
+      { id: 'b', checkin_id: 'not-a-uuid', content: 'yo', media_urls: [] },
+    ];
+    expect(dedupeLivePostsByCheckinId(rows)).toEqual(rows);
   });
 });

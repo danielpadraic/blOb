@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { authorLabel, logMissingPublishAuthor, resolveLiveAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
+import { authorLabel, logMissingPublishAuthor, resolveLiveAuthor, safeUserId, seedLiveAuthor, sessionAuthor } from '@/lib/safeIds';
 
 describe('safeUserId', () => {
   it('does not throw when the user is missing', () => {
@@ -21,6 +21,13 @@ describe('resolveLiveAuthor', () => {
     const view = resolveLiveAuthor({ id: 'p1', author: undefined, author_id: 'u-1' });
     expect(view.authorId).toBe('u-1');
     expect(view.name).toBe('Someone');
+  });
+
+  it('seeds a Member author so Live never reads .id off undefined', () => {
+    const seeded = seedLiveAuthor({ id: 'p9', author: undefined, author_id: 'u-9' });
+    expect(seeded.author?.id).toBe('u-9');
+    expect(seeded.author?.display_name).toBe('Member');
+    expect(seedLiveAuthor({ id: 'p10', author: undefined }).author?.id).toBe('member:p10');
   });
 
   it('prefers author.id then author_id', () => {

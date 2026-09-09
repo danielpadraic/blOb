@@ -97,5 +97,7 @@ describe('no generated caption', () => {
     for (const label of labels) {
       expect(label).not.toMatch(/burned|average heart rate|traveled/i);
     }
+    expect(proofStatChips(['nope'] as never)).toEqual([]);
+    expect(proofStatChips(null)).toEqual([]);
   });
 });

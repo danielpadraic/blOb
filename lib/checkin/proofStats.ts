@@ -77,7 +77,7 @@ function milesLabel(miles: number): string {
  * Order matches the composer: duration · calories · distance · average HR.
  */
 export function proofStatChips(stats?: CheckinProofStats | null): ProofStatChip[] {
-  if (!stats) {
+  if (!stats || typeof stats !== 'object' || Array.isArray(stats)) {
     return [];
   }
   const chips: ProofStatChip[] = [];

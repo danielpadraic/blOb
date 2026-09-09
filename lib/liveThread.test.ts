@@ -19,6 +19,8 @@ import {
   liveReactionCounts,
   liveScreenBackGesture,
   liveSwipeClaimsReply,
+  seedLiveFeedPosts,
+  liveRowKey,
   sortLivePosts,
   toggleLiveReactionList,
 } from '@/lib/liveThread';
@@ -32,6 +34,22 @@ describe('sortLivePosts', () => {
       { id: 'b', created_at: '2026-09-01T15:00:00.000Z' },
     ]);
     expect(rows.map((row) => row.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('seedLiveFeedPosts / liveRowKey', () => {
+  it('fills a Member author and does not throw on missing id in the key helper', () => {
+    const rows = seedLiveFeedPosts([
+      { id: 'p1', author_id: 'u-1', content: 'hi', media_urls: null, comments: [null] },
+      { id: '', content: 'drop me' },
+      null,
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].author?.id).toBe('u-1');
+    expect(rows[0].author?.display_name).toBe('Member');
+    expect(rows[0].media_urls).toEqual([]);
+    expect(liveRowKey({ id: undefined, kind: 'post' }, 3)).toBe('live:post::3');
+    expect(liveRowKey(null, 0)).toBe('live:row::0');
   });
 });
 

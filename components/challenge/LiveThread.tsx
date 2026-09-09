@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LiveBubble } from '@/components/challenge/LiveBubble';
+import { LiveFailBanner, LiveRowBoundary, LiveSafeBoundary } from '@/components/challenge/LiveSafeBoundary';
 import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
@@ -36,12 +37,14 @@ import {
   findLiveHighlightIndex,
   findLiveParent,
   liveChatText,
+  liveRowKey,
   isLiveCheckinPost,
   liveComposeFromInline,
   liveEditMediaUrls,
   liveEditPrefill,
   liveQuoteLine,
   liveQuotePreview,
+  seedLiveFeedPosts,
   type LiveThreadRow,
 } from '@/lib/liveThread';
 import {
@@ -151,10 +154,30 @@ export function LiveThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dayBreakFp],
   );
-  const rows = useMemo(() => {
-    const built = buildLiveThreadRows(dedupeLivePostsByCheckinId((posts ?? []).filter((post) => Boolean(post?.id))));
-    return stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built;
+  const [rowBanner, setRowBanner] = useState<string | null>(null);
+  const onRowError = useCallback((message: string) => {
+    setRowBanner((current) => current || message);
+  }, []);
+  const thread = useMemo(() => {
+    try {
+      const seeded = seedLiveFeedPosts(posts);
+      const built = buildLiveThreadRows(dedupeLivePostsByCheckinId(seeded));
+      return {
+        rows: stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built,
+        error: null as string | null,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? 'Couldn’t load Live.');
+      console.log('[blob:live]', {
+        reason: 'build',
+        message,
+        stack: error instanceof Error ? error.stack : null,
+      });
+      return { rows: [] as LiveThreadRow[], error: message };
+    }
   }, [posts, stableDayBreak]);
+  const rows = thread.rows;
+  const buildError = thread.error;
 
   const challengeIdRef = useRef(readCursorChallengeId);
   challengeIdRef.current = readCursorChallengeId;
@@ -587,7 +610,8 @@ export function LiveThread({
   }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: LiveThreadRow }) => {
+    ({ item, index }: { item: LiveThreadRow; index: number }) => {
+      const bubble = (() => {
       if (item.kind === 'day') {
         return <LiveDayBreakRow dateLine={item.dateLine} dayLine={item.dayLine} />;
       }
@@ -674,8 +698,14 @@ export function LiveThread({
           />
         </View>
       );
+      })();
+      return (
+        <LiveRowBoundary postId={liveRowKey(item, index)} onError={onRowError}>
+          {bubble}
+        </LiveRowBoundary>
+      );
     },
-    [canCompose, currentUserId, highlightCommentId, highlightPostId, onReact, posts, social, startEdit, startReply],
+    [canCompose, currentUserId, highlightCommentId, highlightPostId, onReact, onRowError, posts, social, startEdit, startReply],
   );
 
   const composerPad = createStickyFooterPad(
@@ -702,11 +732,21 @@ export function LiveThread({
         <MascotState kind="loading" title={loadingTitle ?? 'Loading Live'} compact />
       ) : (
         <View style={{ flex: 1, minHeight: 0 }}>
+        {buildError || rowBanner ? (
+          <LiveFailBanner
+            message={buildError || rowBanner || ''}
+            onRetry={() => {
+              setRowBanner(null);
+              onRetry?.();
+            }}
+          />
+        ) : null}
+        <LiveSafeBoundary>
         <FlatList
           ref={listRef}
           data={rows}
           extraData={currentUserId ?? ''}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => liveRowKey(item, index)}
           renderItem={renderItem}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
@@ -865,6 +905,7 @@ export function LiveThread({
             ) : null}
           </View>
         ) : null}
+        </LiveSafeBoundary>
         </View>
       )}
 

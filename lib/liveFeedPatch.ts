@@ -53,6 +53,15 @@ export function resetLiveResetLogsForTests(): void {
   loggedLiveResets.clear();
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Dedupe only real check-in ids. Lobby chat has no checkin_id and must stay its own row. */
+export function liveCheckinKey(value: unknown): string {
+  const id = String(value ?? '').trim();
+  return UUID_RE.test(id) ? id : '';
+}
+
 function asUrlList(value: unknown): string[] | null {
   if (!Array.isArray(value)) {
     return null;
@@ -226,10 +235,14 @@ function sameItemList(prev: unknown[], next: unknown[]): boolean {
 }
 
 function findOldestIndexByCheckinId(list: Array<{ id?: string; checkin_id?: string | null; created_at?: string | null }>, checkinId: string): number {
+  const key = liveCheckinKey(checkinId);
+  if (!key) {
+    return -1;
+  }
   let oldestIndex = -1;
   for (let index = 0; index < list.length; index += 1) {
     const post = list[index];
-    if (!post || String(post.checkin_id ?? '') !== checkinId) {
+    if (!post || liveCheckinKey(post.checkin_id) !== key) {
       continue;
     }
     if (oldestIndex < 0 || isOlderPost(post, list[oldestIndex]!)) {
@@ -239,97 +252,95 @@ function findOldestIndexByCheckinId(list: Array<{ id?: string; checkin_id?: stri
   return oldestIndex;
 }
 
+function logMergeFail(reason: string, error: unknown, extra?: Record<string, unknown>): void {
+  const err = error instanceof Error ? error : null;
+  console.log('[blob:live]', {
+    reason,
+    message: err?.message?.trim() || String(error ?? 'merge failed'),
+    stack: err?.stack ?? null,
+    ...extra,
+  });
+}
+
 /**
  * One Live / Home row per checkin_id. Keep the oldest id, union media, keep the richest chips.
  * Empty-media extras that share a check-in with a still are dropped after the merge.
  */
 export function dedupeLivePostsByCheckinId<T extends { id: string }>(posts: T[]): T[] {
-  if (!Array.isArray(posts) || posts.length < 2) {
-    return posts;
-  }
-  const active = posts.filter((post) => post && post.id && !(post as FeedPostRow).deleted_at);
-  const groups = new Map<string, T[]>();
-  for (const post of active) {
-    const checkinId = String((post as FeedPostRow).checkin_id ?? '').trim();
-    if (!checkinId) {
-      continue;
+  try {
+    if (!Array.isArray(posts) || posts.length < 2) {
+      return Array.isArray(posts) ? posts : [];
     }
-    const group = groups.get(checkinId) ?? [];
-    group.push(post);
-    groups.set(checkinId, group);
-  }
-  if ([...groups.values()].every((group) => group.length < 2)) {
-    return posts;
-  }
-  const keeperByCheckin = new Map<string, T>();
-  for (const [checkinId, group] of groups) {
-    const ordered = [...group].sort((left, right) => (isOlderPost(left, right) ? -1 : 1));
-    let keeper = ordered[0]!;
-    for (const extra of ordered.slice(1)) {
-      keeper = mergeCheckinDuplicate(keeper, extra);
+    const active = posts.filter((post) => post && post.id && !(post as FeedPostRow).deleted_at);
+    const groups = new Map<string, T[]>();
+    for (const post of active) {
+      const checkinId = liveCheckinKey((post as FeedPostRow).checkin_id);
+      if (!checkinId) {
+        continue;
+      }
+      const group = groups.get(checkinId) ?? [];
+      group.push(post);
+      groups.set(checkinId, group);
     }
-    keeperByCheckin.set(checkinId, keeper);
-  }
-  const used = new Set<string>();
-  const next: T[] = [];
-  for (const post of active) {
-    const checkinId = String((post as FeedPostRow).checkin_id ?? '').trim();
-    if (!checkinId) {
-      next.push(post);
-      continue;
+    if ([...groups.values()].every((group) => group.length < 2)) {
+      return posts;
     }
-    if (used.has(checkinId)) {
-      continue;
+    const keeperByCheckin = new Map<string, T>();
+    for (const [checkinId, group] of groups) {
+      const ordered = [...group].sort((left, right) => (isOlderPost(left, right) ? -1 : 1));
+      let keeper = ordered[0]!;
+      for (const extra of ordered.slice(1)) {
+        keeper = mergeCheckinDuplicate(keeper, extra);
+      }
+      keeperByCheckin.set(checkinId, keeper);
     }
-    used.add(checkinId);
-    next.push(keeperByCheckin.get(checkinId) ?? post);
+    const used = new Set<string>();
+    const next: T[] = [];
+    for (const post of active) {
+      const checkinId = liveCheckinKey((post as FeedPostRow).checkin_id);
+      if (!checkinId) {
+        next.push(post);
+        continue;
+      }
+      if (used.has(checkinId)) {
+        continue;
+      }
+      used.add(checkinId);
+      next.push(keeperByCheckin.get(checkinId) ?? post);
+    }
+    return sameItemList(posts, next) ? posts : next;
+  } catch (error) {
+    logMergeFail('dedupe', error);
+    return Array.isArray(posts) ? posts : [];
   }
-  return sameItemList(posts, next) ? posts : next;
 }
 
 /** Patch one Live row. Unchanged posts keep the same object so the list does not remount. */
 export function patchLiveFeedList(current: unknown, payload: LiveFeedRealtimePayload): unknown {
-  if (!Array.isArray(current)) {
-    return current;
-  }
-  const event = String(payload.eventType ?? '').toUpperCase();
-  const next = payload.new;
-  const prev = payload.old;
-  if (event === 'DELETE') {
-    const id = String(prev?.id ?? next?.id ?? '');
+  try {
+    if (!Array.isArray(current)) {
+      return current;
+    }
+    const event = String(payload.eventType ?? '').toUpperCase();
+    const next = payload.new;
+    const prev = payload.old;
+    if (event === 'DELETE') {
+      const id = String(prev?.id ?? next?.id ?? '');
+      if (!id) {
+        return current;
+      }
+      const removed = current.filter((post) => post && post.id !== id);
+      return dedupeLivePostsByCheckinId(removed);
+    }
+    const id = String(next?.id ?? '');
     if (!id) {
       return current;
     }
-    const removed = current.filter((post) => post && post.id !== id);
-    return dedupeLivePostsByCheckinId(removed);
-  }
-  const id = String(next?.id ?? '');
-  if (!id) {
-    return current;
-  }
-  const existingIndex = current.findIndex((post) => post && post.id === id);
-  if (existingIndex >= 0) {
-    let changed = false;
-    const patched = current.map((post) => {
-      if (!post || post.id !== id) {
-        return post;
-      }
-      const merged = mergeLiveFeedPost(post, next ?? {});
-      if (merged !== post) {
-        changed = true;
-      }
-      return merged;
-    });
-    const finished = dedupeLivePostsByCheckinId(changed ? patched : current);
-    return sameItemList(current, finished) ? current : finished;
-  }
-  const checkinId = String(next?.checkin_id ?? '').trim();
-  if (checkinId) {
-    const oldestIndex = findOldestIndexByCheckinId(current, checkinId);
-    if (oldestIndex >= 0) {
+    const existingIndex = current.findIndex((post) => post && post.id === id);
+    if (existingIndex >= 0) {
       let changed = false;
-      const patched = current.map((post, index) => {
-        if (index !== oldestIndex) {
+      const patched = current.map((post) => {
+        if (!post || post.id !== id) {
           return post;
         }
         const merged = mergeLiveFeedPost(post, next ?? {});
@@ -341,11 +352,36 @@ export function patchLiveFeedList(current: unknown, payload: LiveFeedRealtimePay
       const finished = dedupeLivePostsByCheckinId(changed ? patched : current);
       return sameItemList(current, finished) ? current : finished;
     }
+    const checkinId = liveCheckinKey(next?.checkin_id);
+    if (checkinId) {
+      const oldestIndex = findOldestIndexByCheckinId(current, checkinId);
+      if (oldestIndex >= 0) {
+        let changed = false;
+        const patched = current.map((post, index) => {
+          if (index !== oldestIndex) {
+            return post;
+          }
+          const merged = mergeLiveFeedPost(post, next ?? {});
+          if (merged !== post) {
+            changed = true;
+          }
+          return merged;
+        });
+        const finished = dedupeLivePostsByCheckinId(changed ? patched : current);
+        return sameItemList(current, finished) ? current : finished;
+      }
+    }
+    if (event === 'INSERT' || !event) {
+      return dedupeLivePostsByCheckinId([...current, next]);
+    }
+    return current;
+  } catch (error) {
+    logMergeFail('patch', error, {
+      postId: payload?.new?.id ?? payload?.old?.id ?? null,
+      checkinId: payload?.new?.checkin_id ?? null,
+    });
+    return current;
   }
-  if (event === 'INSERT' || !event) {
-    return dedupeLivePostsByCheckinId([...current, next]);
-  }
-  return current;
 }
 
 export function patchChallengeLiveFeed(

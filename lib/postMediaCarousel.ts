@@ -95,15 +95,15 @@ export function isStillPostMedia(url: string): boolean {
 
 /** Owner sees hidden frames. Everyone else only sees what they are allowed to. Order stays as stored. */
 export function pagerUrlsForViewer(input: {
-  urls?: string[] | null;
-  hidden?: string[] | null;
+  urls?: string[] | null | unknown;
+  hidden?: string[] | null | unknown;
   isOwner?: boolean;
 }): string[] {
-  const all = uniqueProofUrls(input.urls ?? []).filter(isVisualPostMedia);
+  const all = uniqueProofUrls(input.urls).filter(isVisualPostMedia);
   if (input.isOwner) {
     return all;
   }
-  const skip = hiddenMediaSet(input.hidden);
+  const skip = hiddenMediaSet(input.hidden as string[] | null | undefined);
   return all.filter((url) => !skip.has(mediaUrlKey(url)));
 }
 

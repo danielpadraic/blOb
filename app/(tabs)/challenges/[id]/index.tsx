@@ -14,6 +14,7 @@ import { Alert, Linking, Pressable, RefreshControl, ScrollView, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LiveThread } from '@/components/challenge/LiveThread';
+import { LiveSafeBoundary } from '@/components/challenge/LiveSafeBoundary';
 import { ChallengeDetailsCard } from '@/components/challenge/ChallengeDetailsCard';
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { CalloutHonorCard } from '@/components/challenge/CalloutHonorCard';
@@ -208,18 +209,25 @@ function ChallengeStackTitle({
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
+    const message = error?.message?.trim() || 'Something went wrong';
+    console.log('[blob:live]', {
+      reason: 'challenge-boundary',
+      message,
+      stack: error?.stack ?? null,
+    });
     reportAppError({
       route: 'challenge/detail-boundary',
       error,
-      payload: { errorCode: extractPostgrestCode(error) },
+      payload: { errorCode: extractPostgrestCode(error), message },
     });
   }, [error]);
+  const detail = error?.message?.trim() || '';
   return (
     <Screen>
       <MascotState
         kind="error"
         title="Something went wrong"
-        body="Try again in a moment."
+        body={detail ? `Try again in a moment.\n${detail}` : 'Try again in a moment.'}
         actionLabel="Retry"
         onAction={() => void retry()}
       />
@@ -1088,6 +1096,7 @@ export default function ChallengeDetailScreen() {
           {challenge?.is_callout ? (
             <CalloutLiveWatchChip watching={isCalloutObserver} count={watchingCount} />
           ) : null}
+          <LiveSafeBoundary>
           <LiveThread
           posts={feed.data ?? []}
           isLoading={feed.isLoading}
@@ -1118,6 +1127,7 @@ export default function ChallengeDetailScreen() {
           onCompose={(input) => createPost.mutateAsync(input)}
           onReact={(post, type, commentId) => toggleLiveReaction.mutate({ post, type, commentId })}
         />
+          </LiveSafeBoundary>
         </View>
       ) : null}
       {pageTab !== 'feed' ? (

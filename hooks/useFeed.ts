@@ -1552,7 +1552,7 @@ function stubAuthor(authorId?: string | null): PublicProfile | undefined {
   if (!id) {
     return undefined;
   }
-  return asPublicProfile({ id });
+  return asPublicProfile({ id, display_name: 'Member' });
 }
 
 function asPublicProfile(

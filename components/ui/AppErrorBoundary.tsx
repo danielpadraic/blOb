@@ -47,19 +47,30 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const pathname = usePathname();
   useEffect(() => {
     stopAllLiveMedia();
+    const path = pathname || webPathname();
+    const message = error?.message?.trim() || 'Something went wrong';
+    if (path.includes('/challenges/') && !path.includes('/submit') && !path.includes('/capture')) {
+      console.log('[blob:live]', {
+        reason: 'app-boundary',
+        message,
+        stack: error?.stack ?? null,
+        pathname: path,
+      });
+    }
     reportAppError({
       route: 'error_boundary',
       error,
-      message: error?.message?.trim() || 'Something went wrong',
-      payload: { pathname: pathname || webPathname() || null },
+      message,
+      payload: { pathname: path || null },
     });
   }, [error, pathname]);
+  const detail = error?.message?.trim() || '';
   return (
     <View className="flex-1 justify-center" style={{ backgroundColor: THEME.background }}>
       <MascotState
         kind="error"
         title="Something went wrong"
-        body="Try again in a moment."
+        body={detail ? `Try again in a moment.\n${detail}` : 'Try again in a moment.'}
         actionLabel="Retry"
         onAction={() => reloadApp(retry, pathname)}
       />

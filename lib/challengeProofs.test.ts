@@ -185,6 +185,9 @@ describe('proof slot rewrite', () => {
         'https://cdn.example/b.jpg',
       ]),
     ).toEqual(['https://cdn.example/a.jpg?token=1', 'https://cdn.example/b.jpg']);
+    expect(uniqueProofUrls(null)).toEqual([]);
+    expect(uniqueProofUrls({ 0: 'https://cdn.example/x.jpg' })).toEqual([]);
+    expect(uniqueProofUrls('https://cdn.example/solo.jpg')).toEqual(['https://cdn.example/solo.jpg']);
   });
 
   it('rewrites a slot when the draft is a new local file', () => {

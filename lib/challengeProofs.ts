@@ -72,10 +72,15 @@ export function mediaUrlKey(url: string): string {
   return url.trim().split('?')[0]?.toLowerCase() ?? url.trim().toLowerCase();
 }
 
-export function uniqueProofUrls(urls: Array<string | null | undefined>): string[] {
+export function uniqueProofUrls(urls: Array<string | null | undefined> | unknown): string[] {
+  const list = Array.isArray(urls)
+    ? urls
+    : typeof urls === 'string' && urls.trim()
+      ? [urls]
+      : [];
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const raw of urls) {
+  for (const raw of list) {
     const url = typeof raw === 'string' ? raw.trim() : '';
     if (!url) {
       continue;

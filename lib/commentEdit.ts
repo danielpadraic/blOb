@@ -19,11 +19,12 @@ export function visibleCommentCount(
 
 export function commentsForThread<
   T extends { id: string; parent_id?: string | null; deleted_at?: string | null },
->(comments: T[]): T[] {
+>(comments: T[] | null | undefined): T[] {
+  const list = Array.isArray(comments) ? comments.filter((row): row is T => Boolean(row?.id)) : [];
   const parentsWithChildren = new Set(
-    comments.map((row) => row.parent_id).filter((id): id is string => Boolean(id)),
+    list.map((row) => row.parent_id).filter((id): id is string => Boolean(id)),
   );
-  return comments.filter((row) => isLiveComment(row) || parentsWithChildren.has(row.id));
+  return list.filter((row) => isLiveComment(row) || parentsWithChildren.has(row.id));
 }
 
 export function commentHasStoredReplies(

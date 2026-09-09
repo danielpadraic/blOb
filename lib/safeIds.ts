@@ -86,6 +86,31 @@ export function logMissingPublishAuthor(input: {
   });
 }
 
+/**
+ * Every Live row gets an author object. Missing profile after publish must not throw on .id.
+ * Home / Wave use the same placeholder shape.
+ */
+export function seedLiveAuthor<T extends LivePostAuthorLike>(row: T): T {
+  if (!row || typeof row !== 'object') {
+    return row;
+  }
+  const authorId = safeUserId(row.author, row.author_id, row.user_id);
+  if (row.author && safeUserId(row.author)) {
+    return row;
+  }
+  const id = authorId || `member:${String(row.id ?? 'unknown')}`;
+  return {
+    ...row,
+    author_id: authorId || row.author_id || id,
+    author: {
+      id,
+      display_name: row.author?.display_name?.trim() || 'Member',
+      username: row.author?.username ?? null,
+      avatar_url: row.author?.avatar_url ?? null,
+    },
+  };
+}
+
 /** Session profile for an optimistic check-in / compose row. */
 export function sessionAuthor(
   profile?: LiveAuthorLike,

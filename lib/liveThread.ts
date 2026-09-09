@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 
 import { findChallengesStack, type NavLike } from '@/lib/challengeNav';
 import { uniqueProofUrls } from '@/lib/challengeProofs';
+import { seedLiveAuthor } from '@/lib/safeIds';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
 import { asReactionType, POST_REACTION_TYPES, type PostReactionType } from '@/lib/reactions';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
@@ -19,13 +20,69 @@ export function sortLivePosts<T extends LivePostLike>(posts: T[]): T[] {
   return [...posts]
     .filter((post) => Boolean(post?.id) && !post.deleted_at)
     .sort((a, b) => {
-      const left = new Date(a.created_at ?? 0).getTime();
-      const right = new Date(b.created_at ?? 0).getTime();
-      if (left !== right) {
-        return left - right;
+      const left = Date.parse(String(a.created_at ?? ''));
+      const right = Date.parse(String(b.created_at ?? ''));
+      const leftAt = Number.isFinite(left) ? left : 0;
+      const rightAt = Number.isFinite(right) ? right : 0;
+      if (leftAt !== rightAt) {
+        return leftAt - rightAt;
       }
-      return String(a.id).localeCompare(String(b.id));
+      return String(a.id ?? '').localeCompare(String(b.id ?? ''));
     });
+}
+
+/** FlatList key. Never throw. Never use checkin_id (lobby chat has none). */
+export function liveRowKey(
+  row: { id?: string | null; kind?: string | null; createdAt?: string | null } | null | undefined,
+  index = 0,
+): string {
+  try {
+    const id = String(row?.id ?? '').trim();
+    if (id) {
+      return id;
+    }
+    return `live:${row?.kind ?? 'row'}:${String(row?.createdAt ?? '')}:${index}`;
+  } catch {
+    return `live:row:${index}`;
+  }
+}
+
+function asStats(value: unknown): PostWithMeta['checkin_stats'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as PostWithMeta['checkin_stats'];
+}
+
+/** Fill author / media / stats so a bad Live row cannot throw on .id or .map. */
+export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
+  if (!Array.isArray(posts)) {
+    return [];
+  }
+  const out: PostWithMeta[] = [];
+  for (const raw of posts) {
+    if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const post = raw as PostWithMeta;
+    const id = String(post.id ?? '').trim();
+    if (!id) {
+      continue;
+    }
+    const seeded = seedLiveAuthor({ ...post, id });
+    const comments = Array.isArray(post.comments)
+      ? post.comments.filter((comment) => comment && comment.id).map((comment) => seedLiveAuthor(comment))
+      : [];
+    out.push({
+      ...seeded,
+      id,
+      media_urls: uniqueProofUrls(post.media_urls),
+      hidden_media_urls: uniqueProofUrls(post.hidden_media_urls),
+      checkin_stats: asStats(post.checkin_stats),
+      comments,
+    });
+  }
+  return out;
 }
 
 /** Clock under a Live bubble: 9:44. */
@@ -319,7 +376,11 @@ export function findLiveHighlightIndex(
 export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
   const rows: LiveThreadRow[] = [];
   for (const post of sortLivePosts(posts)) {
-    rows.push({ id: post.id, createdAt: post.created_at, kind: 'post', post });
+    const postId = String(post.id ?? '').trim();
+    if (!postId) {
+      continue;
+    }
+    rows.push({ id: postId, createdAt: post.created_at ?? '', kind: 'post', post });
     if (isCheckinPost(post)) {
       continue;
     }
@@ -329,7 +390,7 @@ export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
       }
       rows.push({
         id: `comment:${comment.id}`,
-        createdAt: comment.created_at,
+        createdAt: comment.created_at ?? '',
         kind: 'comment',
         comment,
         parent: post,
@@ -337,11 +398,13 @@ export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
     }
   }
   return rows.sort((a, b) => {
-    const left = new Date(a.createdAt).getTime();
-    const right = new Date(b.createdAt).getTime();
-    if (left !== right) {
-      return left - right;
+    const left = Date.parse(String(a.createdAt ?? ''));
+    const right = Date.parse(String(b.createdAt ?? ''));
+    const leftAt = Number.isFinite(left) ? left : 0;
+    const rightAt = Number.isFinite(right) ? right : 0;
+    if (leftAt !== rightAt) {
+      return leftAt - rightAt;
     }
-    return a.id.localeCompare(b.id);
+    return liveRowKey(a).localeCompare(liveRowKey(b));
   });
 }

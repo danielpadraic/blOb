@@ -39,6 +39,8 @@ describe('comment visibility', () => {
       ]).map((row) => row.id),
     ).toEqual(['a', 'b']);
     expect(commentsForThread([{ ...live, deleted_at: '2026-09-04T12:02:00.000Z' }])).toEqual([]);
+    expect(commentsForThread(null)).toEqual([]);
+    expect(commentsForThread([live, null as never, reply]).map((row) => row.id)).toEqual(['a', 'b']);
   });
 
   it('treats any stored child as a reply so the parent soft-deletes', () => {
