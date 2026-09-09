@@ -7,7 +7,16 @@ import {
   useState,
   type RefObject,
 } from 'react';
-import { AppState, BackHandler, Platform, Pressable, useWindowDimensions, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  BackHandler,
+  Platform,
+  Pressable,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useIsFocused, usePathname } from 'expo-router';
 import { Camera, CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -44,6 +53,7 @@ import {
   webMediaRecorderAvailable,
 } from '@/lib/mediaPermissions';
 import { clipShutterReleaseStopsRecording } from '@/lib/clipShutter';
+import { STILL_SHUTTER_HOLD_MS, stillShutterCopy, stillShutterIgnoresTap } from '@/lib/stillShutter';
 import { THEME, TAB_BAR_PEEK } from '@/lib/theme';
 import {
   EMPTY_WEB_ORIENTATION,
@@ -142,7 +152,10 @@ export function InAppCamera({
   const [retry, setRetry] = useState(0);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [stillStatus, setStillStatus] = useState<ReturnType<typeof stillShutterCopy> | null>(null);
   const recordingRef = useRef(false);
+  const capturingRef = useRef(false);
+  const holdStillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdRef = useRef(false);
   const skipPressRef = useRef(false);
   const video = !checkin && capture === 'video';
@@ -181,6 +194,12 @@ export function InAppCamera({
   useEffect(() => {
     setCapture(checkin ? 'photo' : captureProp);
   }, [captureProp, checkin]);
+
+  useEffect(() => () => {
+    if (holdStillTimerRef.current) {
+      clearTimeout(holdStillTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!checkin || !web || typeof window === 'undefined') {
@@ -498,21 +517,72 @@ export function InAppCamera({
     onCancel();
   }
 
-  async function takePhoto() {
-    if (!shutterEnabled) {
+  function clearHoldStillTimer() {
+    if (holdStillTimerRef.current) {
+      clearTimeout(holdStillTimerRef.current);
+      holdStillTimerRef.current = null;
+    }
+  }
+
+  function freezeStillPreview() {
+    if (web) {
+      webVideoRef.current?.pause();
       return;
     }
+    // Native takePictureAsync fails on Android if the preview is paused. Dim the live view instead.
+  }
+
+  function unfreezeStillPreview() {
+    if (web) {
+      void webVideoRef.current?.play().catch(() => undefined);
+    }
+  }
+
+  function beginStillCapture() {
+    capturingRef.current = true;
     setBusy(true);
+    if (!checkin) {
+      return;
+    }
+    freezeStillPreview();
+    setStillStatus(stillShutterCopy(0));
+    clearHoldStillTimer();
+    holdStillTimerRef.current = setTimeout(() => {
+      setStillStatus(stillShutterCopy(STILL_SHUTTER_HOLD_MS));
+    }, STILL_SHUTTER_HOLD_MS);
+    void capHaptic();
+  }
+
+  function endStillCapture() {
+    capturingRef.current = false;
+    clearHoldStillTimer();
+    setStillStatus(null);
+    setBusy(false);
+    unfreezeStillPreview();
+  }
+
+  function failStillCapture() {
+    setAsk('error');
+    if (checkin) {
+      Alert.alert('Couldn’t take that photo', 'Try again.');
+    }
+    endStillCapture();
+  }
+
+  async function takePhoto() {
+    let landed = false;
     try {
       if (web) {
         const node = webVideoRef.current;
         if (!node) {
+          failStillCapture();
           return;
         }
         if (node.videoWidth <= 0) {
           await waitWebVideoFrame(node);
         }
         if (node.videoWidth <= 0) {
+          failStillCapture();
           return;
         }
         const canvas = document.createElement('canvas');
@@ -533,6 +603,7 @@ export function InAppCamera({
         );
         const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86));
         if (!blob) {
+          failStillCapture();
           return;
         }
         const snapped = { uri: URL.createObjectURL(blob), mimeType: 'image/jpeg', blob };
@@ -546,6 +617,7 @@ export function InAppCamera({
               }),
             })
           : snapped;
+        landed = true;
         finishCapture({
           uri: next.uri,
           mediaType: 'image',
@@ -568,6 +640,7 @@ export function InAppCamera({
         });
         const snapped = { uri: cropped.uri, mimeType: 'image/jpeg' as const, blob: null };
         const next = checkin ? await normalizeCheckinStill(snapped) : snapped;
+        landed = true;
         finishCapture({
           uri: next.uri,
           mediaType: 'image',
@@ -576,12 +649,14 @@ export function InAppCamera({
         });
         return;
       }
-      setAsk('error');
+      failStillCapture();
     } catch (error) {
       logCameraError(error, 'takePhoto');
-      setAsk('error');
+      failStillCapture();
     } finally {
-      setBusy(false);
+      if (!landed) {
+        capturingRef.current = false;
+      }
     }
   }
 
@@ -744,6 +819,10 @@ export function InAppCamera({
       void startRecording();
       return;
     }
+    if (stillShutterIgnoresTap(capturingRef.current) || !readyPreview) {
+      return;
+    }
+    beginStillCapture();
     void takePhoto();
   }
 
@@ -821,6 +900,20 @@ export function InAppCamera({
       ) : (
         <View className="flex-1" style={{ backgroundColor: THEME.primary }} />
       )}
+      {checkin && busy && !video ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: 'rgba(16,19,18,0.28)',
+            zIndex: 2,
+          }}
+        />
+      ) : null}
       {guidedTitle || askLine ? (
         <View
           pointerEvents="box-none"
@@ -984,7 +1077,7 @@ export function InAppCamera({
           <AppText className="mb-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
             {switchToast}
           </AppText>
-        ) : liveHint ? (
+        ) : stillStatus ? null : liveHint ? (
           <AppText className="mb-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
             {liveHint}
           </AppText>
@@ -1001,10 +1094,11 @@ export function InAppCamera({
 
           <View style={{ width: 82, height: 82, alignItems: 'center', justifyContent: 'center' }}>
             {video ? <RecordingRing recording={recording} maxDuration={maxDuration} /> : null}
+            {checkin && busy && !video ? <ShutterRing progress={0.28} /> : null}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={shutterLabel}
-              disabled={!shutterEnabled && !recording}
+              accessibilityLabel={stillStatus ?? shutterLabel}
+              disabled={(!shutterEnabled && !recording) || Boolean(stillStatus)}
               delayLongPress={180}
               onPress={onShutterPress}
               onLongPress={onShutterLongPress}
@@ -1019,15 +1113,20 @@ export function InAppCamera({
                 borderWidth: 4,
                 borderColor: '#fff',
                 backgroundColor: video ? '#FF3B30' : '#fff',
-                opacity: shutterOpaque ? 1 : 0.45,
-              }}
-            />
+                opacity: shutterOpaque || stillStatus ? 1 : 0.45,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              {checkin && busy && !video ? (
+                <ActivityIndicator color={THEME.primary} />
+              ) : null}
+            </Pressable>
           </View>
 
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Flip camera"
-            disabled={showDenied}
+            disabled={showDenied || Boolean(stillStatus)}
             onPress={() => {
               const next = facing === 'back' ? 'front' : 'back';
               if (web) {
@@ -1047,13 +1146,18 @@ export function InAppCamera({
               backgroundColor: 'rgba(16,19,18,0.72)',
               borderWidth: 1,
               borderColor: 'rgba(255,255,255,0.35)',
-              opacity: showDenied ? 0.4 : 1,
+              opacity: showDenied || stillStatus ? 0.4 : 1,
             }}>
             <AppText className="text-[11px] font-extrabold" style={{ color: '#fff' }}>
               Flip
             </AppText>
           </Pressable>
         </View>
+        {stillStatus ? (
+          <AppText className="mt-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
+            {stillStatus}
+          </AppText>
+        ) : null}
       </View>
     </View>
   );
