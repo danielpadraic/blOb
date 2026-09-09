@@ -127,7 +127,7 @@
       "Yesterday: miss on {challenge}. Today: still open. Use it.",
       "You slipped on {challenge}. People slip. Check in anyway.",
       "Miss recorded on {challenge}. The next check-in is the repair.",
-      "I still believe the next day on {challenge}. Meet me there.",
+      "The next day on {challenge} is still open. Check in there.",
       "Onward. Open {challenge} and check in."
     ],
     "honest": [
@@ -163,7 +163,7 @@
       "Look at {challenge}. Then decide. Deciding in the dark is how you stay gone.",
       "I will not pile on. I will ask for one check-in on {challenge}.",
       "One check-in on {challenge}. That is the ask.",
-      "Whenever you are ready. I hope it is a {challenge} check-in today.",
+      "Whenever you are ready. A {challenge} check-in today is the return.",
       "Today is the cheapest return to {challenge} you will get."
     ],
     "honest": [
@@ -259,7 +259,7 @@
       "Status: in on {challenge}. Yesterday is a miss. Job: today.",
       "A miss, not an exit. {challenge} left you in. Check in today.",
       "Still competing on {challenge}. Check in before the window.",
-      "You can repair {challenge} with today’s check-in. I believe you will.",
+      "Today’s check-in on {challenge} repairs the miss.",
       "Make today complete on {challenge}. Do not explain yesterday.",
       "Still on the list for {challenge}. That is a gift. Use it.",
       "Still in {challenge}. Not caught up yet. Check in today.",

@@ -227,7 +227,7 @@ Rules
 - Honest: Repair on {challenge} is a check-in, not a feeling.
 
 10.
-- Gentle: I still believe the next day on {challenge}. Meet me there.
+- Gentle: The next day on {challenge} is still open. Check in there.
 - Gentle: Onward. Open {challenge} and check in.
 - Honest: The streak is gone. {challenge} is not. Check in.
 
@@ -281,7 +281,7 @@ Rules
 - Honest: One check-in on {challenge}. That is not a negotiation.
 
 10.
-- Gentle: Whenever you are ready. I hope it is a {challenge} check-in today.
+- Gentle: Whenever you are ready. A {challenge} check-in today is the return.
 - Gentle: Today is the cheapest return to {challenge} you will get.
 - Honest: Tomorrow you will say “four days” away from {challenge}. I would not.
 
@@ -413,7 +413,7 @@ Rules
 - Honest: {challenge} was kinder than your skip. Do not test it twice.
 
 4.
-- Gentle: You can repair {challenge} with today’s check-in. I believe you will.
+- Gentle: Today’s check-in on {challenge} repairs the miss.
 - Gentle: Make today complete on {challenge}. Do not explain yesterday.
 - Honest: Yesterday is a hole on {challenge}. Fill today’s check-in.
 
