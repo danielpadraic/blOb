@@ -118,6 +118,7 @@ const STRINGS = {
   'post.noChanges': 'No changes.',
   'post.discard': 'Discard',
   'post.discardConfirm': 'Discard this post?',
+  'post.createFailed': 'Couldn’t post. Try again.',
   'post.clear': 'Clear',
   'stepper.max': 'That’s the top.',
   'stepper.min': 'That’s the bottom.',

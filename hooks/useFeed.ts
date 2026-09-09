@@ -28,6 +28,17 @@ import {
   selectWithoutCircleId,
   type PostsSchema,
 } from '@/lib/postsSelect';
+import {
+  CREATE_POST_TIMEOUT_MS,
+  createPostFail,
+  feedMentionTargets,
+  hasFeedMentions,
+  logCreatePost,
+  mediaUrlCount,
+  mentionInsertRows,
+  schemaForFeedInsert,
+  withCreatePostTimeout,
+} from '@/lib/createFeedPost';
 import { supabase } from '@/lib/supabase';
 import { mentionRecordsFromChips, type MentionChip } from '@/lib/mentions';
 import type {
@@ -1658,7 +1669,7 @@ export function useCreatePost(challengeId?: string | null) {
       if (audience === 'specific' && audience_user_ids.length === 0) {
         throw new Error('Pick at least one person.');
       }
-      const schema = await resolvePostsSchema();
+      const schema = schemaForFeedInsert();
       if (quoted_post_id && !schema.hasQuote) {
         throw new Error('Repost isn’t wired on the server yet. Apply the latest migration.');
       }
@@ -1680,53 +1691,48 @@ export function useCreatePost(challengeId?: string | null) {
         parent_id: input.parentId ?? null,
         lift_session_id: liftSessionId,
       });
-      const created = await supabase.from('posts').insert(payload).select(schema.select).single();
-      if (created.error) {
-        throw new Error(getErrorMessage(created.error));
+      const started = Date.now();
+      const mediaLog = mediaUrlCount(media_urls);
+      logCreatePost({ stage: 'insert', ms: 0, ...mediaLog });
+      let createdPost: Post;
+      try {
+        const created = await withCreatePostTimeout(
+          supabase.from('posts').insert(payload).select(schema.select).single(),
+          CREATE_POST_TIMEOUT_MS,
+        );
+        if (created.error) {
+          throw new Error(getErrorMessage(created.error));
+        }
+        createdPost = created.data as unknown as Post;
+      } catch (error) {
+        logCreatePost({ stage: 'fail', ms: Date.now() - started, ...mediaLog });
+        throw createPostFail(error);
       }
-      const createdPost = created.data as unknown as Post;
-      const entities = (input.mentionedEntities ?? []).filter((row) => row.id);
-      const mentionIds = [
-        ...new Set(
-          (entities.length > 0
-            ? entities.filter((row) => row.kind === 'user').map((row) => row.id)
-            : (input.mentionedUserIds ?? [])
-          ).filter((id) => id && id !== user.id),
-        ),
-      ];
-      const challengeMentions = [...new Set(entities.filter((row) => row.kind === 'challenge').map((row) => row.id))];
-      const circleMentions = [...new Set(entities.filter((row) => row.kind === 'circle').map((row) => row.id))];
-      if ((mentionIds.length > 0 || challengeMentions.length > 0 || circleMentions.length > 0) && createdPost.id) {
+      const targets = feedMentionTargets(input, user.id);
+      if (hasFeedMentions(targets) && createdPost.id) {
+        logCreatePost({ stage: 'mentions', ms: Date.now() - started, ...mediaLog });
         try {
-          await insertMentionRowsOnce(() =>
-            supabase.from('post_mentions').insert([
-              ...mentionIds.map((mentioned_user_id) => ({
-                post_id: createdPost.id,
-                mentioned_user_id,
-                author_id: user.id,
-              })),
-              ...challengeMentions.map((challenge_id) => ({
-                post_id: createdPost.id,
-                challenge_id,
-                author_id: user.id,
-              })),
-              ...circleMentions.map((circle_id) => ({
-                post_id: createdPost.id,
-                circle_id,
-                author_id: user.id,
-              })),
-            ]),
+          await withCreatePostTimeout(
+            insertMentionRowsOnce(() =>
+              supabase.from('post_mentions').insert(mentionInsertRows(createdPost.id, user.id, targets)),
+            ),
+            2500,
           );
         } catch (error) {
-          await supabase.from('posts').delete().eq('id', createdPost.id).eq('author_id', user.id);
-          throw error;
+          console.log('[blob:post]', {
+            stage: 'mentions',
+            ms: Date.now() - started,
+            ...mediaLog,
+            error: error instanceof Error ? error.message : 'fail',
+          });
         }
       }
+      logCreatePost({ stage: 'done', ms: Date.now() - started, ...mediaLog });
       return createdPost;
     },
-    onMutate: async (input) => {
+    onMutate: (input) => {
       const listKey = feedListKey(input.circleId ? `circle:${input.circleId}` : key, user?.id);
-      await queryClient.cancelQueries({ queryKey: listKey });
+      void queryClient.cancelQueries({ queryKey: listKey });
       const previous = queryClient.getQueryData(listKey);
       const optimisticId = `optimistic-${Date.now()}`;
       if (user) {

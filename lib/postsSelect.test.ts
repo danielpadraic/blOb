@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dropCachedCircleId,
   isMissingCircleIdColumn,
+  peekPostsSchema,
   resetPostsSchemaCache,
   selectWithoutCircleId,
 } from '@/lib/postsSelect';
@@ -27,6 +28,7 @@ describe('posts select circle_id', () => {
 
   it('clears the cached circle_id flag after a live 400', async () => {
     resetPostsSchemaCache();
+    expect(peekPostsSchema()).toBeNull();
     expect(dropCachedCircleId()?.hasCircleId).not.toBe(true);
   });
 });

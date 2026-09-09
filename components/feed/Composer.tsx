@@ -43,6 +43,7 @@ import { getErrorMessage } from '@/utils/errors';
 import { asGalleryMedia, localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
 import { posterUriFor, uploadPosterFromVideo, withStoredVideoPoster } from '@/lib/videoPoster';
+import { CREATE_POST_FAIL, CREATE_POST_TIMEOUT_MS, logCreatePost, mediaUrlCount, withCreatePostTimeout } from '@/lib/createFeedPost';
 import { uploadProgressPercent } from '@/lib/uploadProgress';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -112,7 +113,8 @@ export function Composer({
   const [fieldKey, setFieldKey] = useState(0);
   const [hasText, setHasText] = useState(Boolean((stored?.doc.text ?? initialText)?.trim()));
   const [attachments, setAttachments] = useState<Attachment[]>(stored?.attachments ?? []);
-  const [uploading, setUploading] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
   const [liftOpen, setLiftOpen] = useState(false);
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(initialLift ?? null);
@@ -162,6 +164,28 @@ export function Composer({
   useEffect(() => {
     persistDraft(docRef.current, attachments);
   }, [attachments, persistDraft]);
+
+  useEffect(() => {
+    const stuckIds = attachments
+      .filter(
+        (item) =>
+          item.kind !== 'gif' && item.progress === 100 && !String(item.remoteUrl ?? '').trim() && !item.error,
+      )
+      .map((item) => item.id);
+    if (stuckIds.length === 0) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setAttachments((current) =>
+        current.map((item) =>
+          stuckIds.includes(item.id) && !String(item.remoteUrl ?? '').trim()
+            ? { ...item, error: copy('error.uploadRetry'), progress: null }
+            : item,
+        ),
+      );
+    }, CREATE_POST_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [attachments]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -225,14 +249,17 @@ export function Composer({
     ]);
   }
 
-  const busy = Boolean(submitting || uploading);
-  const uploadsReady = attachments.every(
-    (item) => item.kind === 'gif' || Boolean(item.remoteUrl),
+  const filesUploading = attachments.some(
+    (item) => item.kind !== 'gif' && !item.remoteUrl && !item.error,
   );
+  const uploadedCount = attachments.filter(
+    (item) => item.kind === 'gif' || Boolean(String(item.remoteUrl ?? '').trim()),
+  ).length;
   const canPost =
-    Boolean(hasText || attachments.length > 0 || quote || attachedChallenge || attachedLift) &&
-    uploadsReady &&
+    !filesUploading &&
+    Boolean(hasText || uploadedCount > 0 || quote || attachedChallenge || attachedLift) &&
     (audience !== 'specific' || audienceUserIds.length > 0);
+  const sendSpinning = Boolean(submitting || posting);
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
     if (attachments.length >= 4) {
@@ -264,7 +291,6 @@ export function Composer({
         );
       });
     }
-    setUploading(true);
     try {
       const url = await uploadPostAttachment({
         uri: attachment.uri,
@@ -282,6 +308,9 @@ export function Composer({
           );
         },
       });
+      if (!String(url ?? '').trim()) {
+        throw new Error(copy('error.uploadRetry'));
+      }
       setAttachments((current) =>
         current.map((item) =>
           item.id === attachment.id ? { ...item, remoteUrl: url, progress: 100, error: null } : item,
@@ -294,8 +323,6 @@ export function Composer({
           item.id === attachment.id ? { ...item, error: copy('error.uploadRetry'), progress: null } : item,
         ),
       );
-    } finally {
-      setUploading(false);
     }
   }
 
@@ -354,26 +381,32 @@ export function Composer({
   }
 
   async function handleSubmit() {
-    if (busy || !canPost) {
+    if (sendSpinning || !canPost) {
       return;
     }
     if (!user) {
       Alert.alert('Sign in first', 'You need to be signed in to post.');
       return;
     }
-    setUploading(true);
+    setSubmitError(null);
+    setPosting(true);
+    const started = Date.now();
     try {
       const mediaUrls: string[] = [];
       if (!quote) {
         for (const attachment of attachments) {
+          if (attachment.error) {
+            continue;
+          }
           if (attachment.kind === 'gif') {
             mediaUrls.push(attachment.uri);
             continue;
           }
-          if (!attachment.remoteUrl) {
+          const stored = String(attachment.remoteUrl ?? '').trim();
+          if (!stored) {
             throw new Error(copy('error.uploadRetry'));
           }
-          let remoteUrl = attachment.remoteUrl;
+          let remoteUrl = stored;
           if (attachment.kind === 'video') {
             const posterUrl = await uploadPosterFromVideo({
               videoUri: attachment.uri,
@@ -387,6 +420,8 @@ export function Composer({
           mediaUrls.push(remoteUrl);
         }
       }
+      const mediaLog = mediaUrlCount(mediaUrls);
+      logCreatePost({ stage: 'upload', ms: Date.now() - started, ...mediaLog });
       if (wallHost?.id) {
         const allowed = await supabase.rpc('can_post_on_profile', { p_host_id: wallHost.id });
         if (allowed.error || allowed.data !== true) {
@@ -395,24 +430,29 @@ export function Composer({
       }
       const latest = fieldRef.current?.getDoc() ?? docRef.current;
       const postAudience = hideAudience ? 'public' : audience;
-      await onSubmit({
-        content: latest.text.trim(),
-        mediaUrls,
-        audience: postAudience,
-        audienceUserIds: postAudience === 'specific' ? audienceUserIds : [],
-        mentionedUserIds: latest.chips
-          .filter((chip) => (chip.kind ?? 'user') === 'user')
-          .map((chip) => chip.userId),
-        mentionedEntities: latest.chips.map((chip) => ({
-          kind: chip.kind ?? 'user',
-          id: chip.userId,
-        })),
-        wallHostId: wallHost?.id ?? null,
-        quotedPostId: quote?.postId ?? null,
-        quoteSnapshot: quote?.snapshot ?? null,
-        challengeId: attachedChallenge?.id ?? null,
-        liftSessionId: attachedLift?.id ?? null,
-      });
+      await withCreatePostTimeout(
+        Promise.resolve(
+          onSubmit({
+            content: latest.text.trim(),
+            mediaUrls,
+            audience: postAudience,
+            audienceUserIds: postAudience === 'specific' ? audienceUserIds : [],
+            mentionedUserIds: latest.chips
+              .filter((chip) => (chip.kind ?? 'user') === 'user')
+              .map((chip) => chip.userId),
+            mentionedEntities: latest.chips.map((chip) => ({
+              kind: chip.kind ?? 'user',
+              id: chip.userId,
+            })),
+            wallHostId: wallHost?.id ?? null,
+            quotedPostId: quote?.postId ?? null,
+            quoteSnapshot: quote?.snapshot ?? null,
+            challengeId: attachedChallenge?.id ?? null,
+            liftSessionId: attachedLift?.id ?? null,
+          }),
+        ),
+        CREATE_POST_TIMEOUT_MS,
+      );
       setAttachedLift(initialLift ?? null);
       clearDraft();
       setAudience(hideAudience ? 'public' : wallHost ? 'public' : profileDefault);
@@ -421,9 +461,9 @@ export function Composer({
       if (getErrorMessage(error) === copy('wall.closed')) {
         throw error;
       }
-      Alert.alert('Couldn’t post that', getErrorMessage(error));
+      setSubmitError(copy('post.createFailed'));
     } finally {
-      setUploading(false);
+      setPosting(false);
     }
   }
 
@@ -503,32 +543,37 @@ export function Composer({
           ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={busy ? 'Posting…' : 'Post'}
+            accessibilityLabel={sendSpinning ? 'Posting…' : 'Post'}
             onPress={() => void handleSubmit()}
             onPressIn={() => {
               holdFocus.current = true;
               cancelCollapse();
             }}
-            disabled={!canPost || busy}
+            disabled={!canPost || sendSpinning}
             className="items-center justify-center"
             style={{
               width: 44,
               height: 44,
               borderRadius: 14,
-              backgroundColor: canPost && !busy ? THEME.primary : THEME.border,
+              backgroundColor: canPost && !sendSpinning ? THEME.primary : THEME.border,
             }}>
-            {busy ? (
+            {sendSpinning ? (
               <ActivityIndicator color={THEME.primaryForeground} size="small" />
             ) : (
             <Glyph
               name={GLYPH.send}
-              color={canPost && !busy ? THEME.primaryForeground : THEME.textMuted}
+              color={canPost && !sendSpinning ? THEME.primaryForeground : THEME.textMuted}
               size={18}
             />
             )}
           </Pressable>
         </View>
       </View>
+      {submitError ? (
+        <AppText className="mt-2 text-[13px]" style={{ color: THEME.danger }}>
+          {submitError}
+        </AppText>
+      ) : null}
 
       {expanded ? (
       <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44, zIndex: 2 }}>

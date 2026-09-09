@@ -172,6 +172,16 @@ async function loadPostsSchema(): Promise<PostsSchema> {
   return schemaFromSelect(lift.ok ? withLift : working);
 }
 
+/** Last successful probe. Send uses this so it does not wait on a hanging schema load. */
+export function peekPostsSchema(): PostsSchema | null {
+  return latest;
+}
+
+/** Insert shape for a Home post. Prefer the probed schema; otherwise the known feed columns. */
+export function postsSchemaForWrite(): PostsSchema {
+  return latest ?? schemaFromSelect(POSTS_FEED_SELECT);
+}
+
 /** No RPC. Probe with limit 0, then cache the working select list. */
 export function resolvePostsSchema(): Promise<PostsSchema> {
   if (!cached) {
