@@ -160,6 +160,10 @@ export type ScheduleChallenge = {
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+const PRESTART_STATUSES = new Set(['upcoming', 'open', 'filling', 'arming']);
+const LIVE_STATUSES = new Set(['live', 'in_progress']);
+const SETTLED_STATUSES = new Set(['settled']);
+const ENDED_STATUSES = new Set(['ended', 'settling', 'judging', 'distributing', 'cancelled', 'cancelled_underfilled']);
 
 /** Participant for Lobby Active: anything except withdrawn / refunded. */
 export function isLobbyActiveParticipantStatus(status: string | null | undefined): boolean {
@@ -168,15 +172,67 @@ export function isLobbyActiveParticipantStatus(status: string | null | undefined
 }
 
 export function isEndedLobbyStatus(status: string | null | undefined): boolean {
-  return (ENDED_LOBBY_STATUSES as readonly string[]).includes(status ?? '');
+  const value = status ?? '';
+  return (ENDED_LOBBY_STATUSES as readonly string[]).includes(value) || value === 'completed';
+}
+
+/**
+ * Lobby Ended is the challenge clock, not the viewer's participant row.
+ * Dropped / eliminated members of a still-running challenge stay on Active.
+ */
+export function isLobbyEndedChallenge(
+  row: {
+    status?: string | null;
+    ends_at?: string | null;
+    is_unlimited?: boolean | null;
+  },
+  nowMs = Date.now(),
+): boolean {
+  const status = String(row.status ?? '').toLowerCase();
+  if (isEndedLobbyStatus(status)) {
+    return true;
+  }
+  if (row.is_unlimited) {
+    return false;
+  }
+  // Only a live clock moves a still-synced "live" row. Filling / upcoming keep Active even if
+  // ends_at is stale.
+  if (!LIVE_STATUSES.has(status)) {
+    return false;
+  }
+  const end = Date.parse(String(row.ends_at ?? ''));
+  return Number.isFinite(end) && end <= nowMs;
+}
+
+/** Viewer used their misses / was dropped. Not the same as the challenge having ended. */
+export function isViewerOutOfPrize(progress?: {
+  status?: string | null;
+  eliminated?: boolean | null;
+  eliminated_at?: string | null;
+  result?: string | null;
+} | null): boolean {
+  if (!progress) {
+    return false;
+  }
+  if (progress.eliminated || progress.eliminated_at) {
+    return true;
+  }
+  const status = String(progress.status ?? '').toLowerCase();
+  if (status === 'eliminated' || status === 'failed') {
+    return true;
+  }
+  return String(progress.result ?? '').toLowerCase() === 'dropped';
 }
 
 /** Tab lock: ended → host+player Active → host-only Hosting. Official is not exclusive. */
 export function lobbyTabForChallenge(input: {
   status?: string | null;
+  ends_at?: string | null;
+  is_unlimited?: boolean | null;
   isOfficial?: boolean | null;
   isParticipant: boolean;
   isCreator: boolean;
+  nowMs?: number;
 }): LobbyTab {
   return lobbyTabsForChallenge(input)[0] ?? 'active';
 }
@@ -184,11 +240,14 @@ export function lobbyTabForChallenge(input: {
 /** Official (is_official) plus Hosting/Active from created_by / membership. Never sponsor_name. */
 export function lobbyTabsForChallenge(input: {
   status?: string | null;
+  ends_at?: string | null;
+  is_unlimited?: boolean | null;
   isOfficial?: boolean | null;
   isParticipant: boolean;
   isCreator: boolean;
+  nowMs?: number;
 }): LobbyTab[] {
-  if (isEndedLobbyStatus(input.status)) {
+  if (isLobbyEndedChallenge(input, input.nowMs)) {
     return ['ended'];
   }
   const tabs: LobbyTab[] = [];
@@ -269,11 +328,6 @@ export function challengeEndMeta(
     urgent: remaining <= HOUR_MS,
   };
 }
-
-const PRESTART_STATUSES = new Set(['upcoming', 'open', 'filling', 'arming']);
-const LIVE_STATUSES = new Set(['live', 'in_progress']);
-const SETTLED_STATUSES = new Set(['settled']);
-const ENDED_STATUSES = new Set(['ended', 'settling', 'judging', 'distributing', 'cancelled', 'cancelled_underfilled']);
 
 function parseInstant(value?: string | null): Date | null {
   if (!value) {

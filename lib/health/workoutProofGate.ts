@@ -31,12 +31,19 @@ export const STACK_GAP_MAX_SEC = 600;
 export const PROOF_MIN_MINUTES = 30;
 
 /**
+ * Inclusive average-HR floor for HealthKit / Health Connect attach.
+ *
+ * A walk at 80–90 bpm must count. Age-derived zones (Karvonen / half of estimated max) are still
+ * computed for copy, but they must not reject a workout that already clears this floor.
+ */
+export const MIN_AVG_HR_BPM = 80;
+
+/**
  * Shown when intensity cannot be judged because we do not know how old they are.
  *
  * This is a nudge, not a refusal. Almost nobody has filled in a birth year yet, so blocking on it
- * would lock most members out of heart rate challenges entirely. Without an age the rule falls back
- * to requiring that the workout recorded a heart rate at all, and asks for the birth year that would
- * let us judge intensity properly.
+ * would lock most members out of heart rate challenges entirely. Without an age the attach floor is
+ * still MIN_AVG_HR_BPM, and we ask for the birth year that would let us show a personal zone.
  */
 export const ELEVATED_HR_NEEDS_AGE = 'Add your birth year in You to verify intensity.';
 
@@ -125,6 +132,16 @@ export function elevatedHrThreshold(
     };
   }
   return { kind: 'estimated-max', bpm: Math.round(0.5 * estimatedMax), age };
+}
+
+/**
+ * Average HR a vendor workout must reach to attach on an elevated-HR challenge.
+ *
+ * Personal zone math can sit above this (a 41-year-old's half-max is ~90). The product lock is 80
+ * inclusive, so 82 attaches and 79 does not.
+ */
+export function elevatedHrAttachFloor(_threshold?: ElevatedHrThreshold | null): number {
+  return MIN_AVG_HR_BPM;
 }
 
 export type WorkoutStack = {
@@ -270,9 +287,7 @@ export function evaluateWorkoutProof(input: {
   let nudge: string | null = null;
   if (input.rules.requiresElevatedHr) {
     threshold = elevatedHrThreshold(input.hr ?? {}, input.now);
-    // Unknown age means no threshold to test against, so the bar drops to "this workout recorded a
-    // heart rate" and we ask for a birth year rather than refusing the check-in.
-    const floor = threshold.kind === 'unknown-age' ? 1 : threshold.bpm;
+    const floor = elevatedHrAttachFloor(threshold);
     if (threshold.kind === 'unknown-age') {
       nudge = ELEVATED_HR_NEEDS_AGE;
     }

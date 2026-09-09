@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ELEVATED_HR_NEEDS_AGE,
+  MIN_AVG_HR_BPM,
   ageFromBirthDate,
+  elevatedHrAttachFloor,
   elevatedHrThreshold,
   evaluateWorkoutProof,
   proofMinutesFloor,
@@ -97,8 +99,16 @@ describe('the elevated heart rate threshold', () => {
     );
   });
 
-  it('cannot judge intensity without a birth date', () => {
+  it('cannot judge a personal zone without a birth date', () => {
     expect(elevatedHrThreshold({ restingHrBpm: 60 }, NOW)).toEqual({ kind: 'unknown-age' });
+  });
+
+  it('keeps the attach floor at 80 even when the personal zone is higher', () => {
+    const ageOnly = elevatedHrThreshold({ birthDate: '1985-01-02' }, NOW);
+    const reserve = elevatedHrThreshold({ birthDate: '1985-01-02', restingHrBpm: 60 }, NOW);
+    expect(elevatedHrAttachFloor(ageOnly)).toBe(MIN_AVG_HR_BPM);
+    expect(elevatedHrAttachFloor(reserve)).toBe(MIN_AVG_HR_BPM);
+    expect(elevatedHrAttachFloor({ kind: 'unknown-age' })).toBe(MIN_AVG_HR_BPM);
   });
 });
 
@@ -248,10 +258,29 @@ describe('the proof gate', () => {
   });
 
   describe('on an elevated heart rate challenge', () => {
-    const hr = { birthDate: '1985-01-02' }; // age 41, so the threshold is 90 bpm
+    const hr = { birthDate: '1985-01-02' }; // age 41 personal zone ~90; attach floor is 80
     const rules = { minMinutes: 30, requiresElevatedHr: true };
 
-    it('counts only the segments that reached the threshold', () => {
+    it('counts a walk at 82 and rejects 79', () => {
+      expect(
+        evaluateWorkoutProof({
+          workouts: [workout('walk-82', { minutes: 40, avgHr: 82 })],
+          rules,
+          hr,
+          now: NOW,
+        }).ok,
+      ).toBe(true);
+      const low = evaluateWorkoutProof({
+        workouts: [workout('walk-79', { minutes: 40, avgHr: 79 })],
+        rules,
+        hr,
+        now: NOW,
+      });
+      expect(low.ok).toBe(false);
+      expect(low.rejected).toEqual([{ id: 'walk-79', reason: 'hr' }]);
+    });
+
+    it('counts every segment that reached 80, including an 84 bpm lift', () => {
       const result = evaluateWorkoutProof({
         workouts: [
           workout('lift', { startMin: 0, minutes: 18, avgHr: 84 }),
@@ -262,9 +291,8 @@ describe('the proof gate', () => {
         now: NOW,
       });
       expect(result.ok).toBe(true);
-      expect(result.countedIds).toEqual(['pickleball']);
-      expect(result.countedSec).toBe(32 * 60);
-      expect(result.rejected).toEqual([{ id: 'lift', reason: 'hr' }]);
+      expect(result.countedIds).toEqual(['lift', 'pickleball']);
+      expect(result.countedSec).toBe(50 * 60);
     });
 
     it('fails when the only intense segment is too short, even though the stack is long', () => {
@@ -306,10 +334,10 @@ describe('the proof gate', () => {
 
     /**
      * Almost no member has filled in a birth year, so refusing them would empty out heart rate
-     * challenges. Without an age the bar drops to "this workout recorded a heart rate" and the birth
-     * year is asked for alongside, not instead.
+     * challenges. Without an age the attach floor is still 80, and the birth year is asked for
+     * alongside, not instead.
      */
-    it('still counts the workout without a birth year, and asks for one', () => {
+    it('still counts an 80+ workout without a birth year, and asks for one', () => {
       const result = evaluateWorkoutProof({
         workouts: [workout('run', { minutes: 40, avgHr: 150 })],
         rules,
@@ -320,6 +348,17 @@ describe('the proof gate', () => {
       expect(result.reason).toBeNull();
       expect(result.nudge).toBe(ELEVATED_HR_NEEDS_AGE);
       expect(result.threshold).toEqual({ kind: 'unknown-age' });
+    });
+
+    it('without a birth year still refuses a workout below 80', () => {
+      const result = evaluateWorkoutProof({
+        workouts: [workout('easy', { minutes: 40, avgHr: 79 })],
+        rules,
+        hr: {},
+        now: NOW,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.rejected).toEqual([{ id: 'easy', reason: 'hr' }]);
     });
 
     it('without a birth year still refuses a workout that recorded no heart rate at all', () => {
@@ -344,15 +383,14 @@ describe('the proof gate', () => {
       expect(result.nudge).toBeNull();
     });
 
-    it('uses the personal reserve threshold when resting heart rate is known', () => {
-      // Threshold becomes 108, so a 100 bpm average that would pass the age-only rule now fails.
+    it('does not let a higher personal reserve zone reject an 80–90 walk', () => {
       const result = evaluateWorkoutProof({
-        workouts: [workout('tempo', { minutes: 40, avgHr: 100 })],
+        workouts: [workout('tempo', { minutes: 40, avgHr: 82 })],
         rules,
         hr: { birthDate: '1985-01-02', restingHrBpm: 60 },
         now: NOW,
       });
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(true);
       expect(result.threshold).toMatchObject({ kind: 'reserve', bpm: 108 });
     });
 

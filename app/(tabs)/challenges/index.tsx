@@ -45,9 +45,10 @@ import {
   defaultLobbyFilterStore,
   effectiveLobbyFilters,
   isDefaultLobbyFilters,
-  isEndedLobbyStatus,
   isLobbyActiveParticipantStatus,
+  isLobbyEndedChallenge,
   isOfficialLobbyRow,
+  isViewerOutOfPrize,
   loadLobbyFilterStore,
   loadLobbyLayout,
   lobbyFilterBadgeCount,
@@ -181,7 +182,10 @@ export default function ChallengesScreen() {
       map.set(row.challenge_id, {
         days: Number(row.days_completed ?? 0),
         status: row.status ?? 'joined',
-        eliminated: Boolean(row.eliminated_at),
+        eliminated:
+          Boolean(row.eliminated_at) ||
+          String(row.status ?? '').toLowerCase() === 'eliminated' ||
+          String(row.result ?? '').toLowerCase() === 'dropped',
         result: row.result,
         place: row.place,
       });
@@ -204,25 +208,25 @@ export default function ChallengesScreen() {
         ...(officialQuery.data ?? []).filter(isOfficialLobbyRow),
         ...(activeQuery.data ?? []).filter(isOfficialLobbyRow),
         ...(hostingQuery.data ?? []).filter(isOfficialLobbyRow),
-      ]).filter((row) => !isEndedLobbyStatus(row.status)),
-    [activeQuery.data, hostingQuery.data, officialQuery.data],
+      ]).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+    [activeQuery.data, hostingQuery.data, nowMs, officialQuery.data],
   );
 
   const activeAll = useMemo(
-    () => (activeQuery.data ?? []).filter((row) => !isEndedLobbyStatus(row.status)),
-    [activeQuery.data],
+    () => (activeQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+    [activeQuery.data, nowMs],
   );
   const activeIds = useMemo(() => new Set(activeAll.map((row) => row.id)), [activeAll]);
 
   const hostingAll = useMemo(
-    () => (hostingQuery.data ?? []).filter((row) => !isEndedLobbyStatus(row.status)),
-    [hostingQuery.data],
+    () => (hostingQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+    [hostingQuery.data, nowMs],
   );
   const hostingIds = useMemo(() => new Set(hostingAll.map((row) => row.id)), [hostingAll]);
 
   const endedAll = useMemo(
-    () => (endedQuery.data ?? []).filter((row) => isEndedLobbyStatus(row.status)),
-    [endedQuery.data],
+    () => (endedQuery.data ?? []).filter((row) => isLobbyEndedChallenge(row, nowMs)),
+    [endedQuery.data, nowMs],
   );
 
   const friendsAll = useMemo(
@@ -233,10 +237,10 @@ export default function ChallengesScreen() {
           !activeIds.has(row.challenge.id) &&
           !hostingIds.has(row.challenge.id) &&
           !isOfficialLobbyRow(row.challenge) &&
-          !isEndedLobbyStatus(row.challenge.status) &&
+          !isLobbyEndedChallenge(row.challenge, nowMs) &&
           isLobbyDiscoverCard(row.challenge, false),
       ),
-    [activeIds, friendsQuery.data, hostingIds, progressById],
+    [activeIds, friendsQuery.data, hostingIds, nowMs, progressById],
   );
 
   const todaySource = useMemo(
@@ -843,10 +847,13 @@ function LobbyListCard({
   onPress: (id: string, snapshot?: ChallengeWithStats) => void;
 }) {
   const hosting = Boolean(currentUserId && challenge.created_by === currentUserId);
+  const out = isViewerOutOfPrize(progress);
   const resultLine =
     section === 'ended' && progress
       ? lobbyResultLine({ result: progress.result, place: progress.place })
-      : null;
+      : out
+        ? copy('board.out')
+        : null;
   function open() {
     if (!challenge.id) {
       return;
@@ -874,7 +881,7 @@ function LobbyListCard({
       section={section === 'ended' ? 'ended' : section === 'official' ? 'official' : section === 'hosting' ? 'hosting' : 'active'}
       joined={Boolean(progress)}
       hosting={hosting}
-      eliminated={Boolean(progress?.eliminated)}
+      eliminated={out}
       host={host}
       calloutParty={calloutParty}
       resultLine={resultLine}

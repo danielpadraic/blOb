@@ -13,6 +13,8 @@ import {
   formatEndCountdown,
   formatStartsLine,
   isLobbyActiveParticipantStatus,
+  isLobbyEndedChallenge,
+  isViewerOutOfPrize,
   lobbyCardClock,
   lobbyFilterBadgeCount,
   lobbyFilterChips,
@@ -92,6 +94,61 @@ describe('lobby tabs', () => {
     expect(isLobbyActiveParticipantStatus('eliminated')).toBe(true);
     expect(isLobbyActiveParticipantStatus('withdrawn')).toBe(false);
     expect(isLobbyActiveParticipantStatus('refunded_pre_start')).toBe(false);
+  });
+
+  it('keeps a dropped member on Active while the challenge is still live', () => {
+    expect(
+      lobbyTabForChallenge({
+        status: 'live',
+        isOfficial: false,
+        isParticipant: true,
+        isCreator: false,
+      }),
+    ).toBe('active');
+    expect(isViewerOutOfPrize({ status: 'eliminated', eliminated: true })).toBe(true);
+    expect(isViewerOutOfPrize({ result: 'dropped' })).toBe(true);
+    expect(isViewerOutOfPrize({ status: 'joined' })).toBe(false);
+  });
+
+  it('moves cancelled, settled, and a live row past ends_at onto Ended', () => {
+    expect(
+      lobbyTabForChallenge({
+        status: 'cancelled',
+        isOfficial: true,
+        isParticipant: true,
+        isCreator: false,
+      }),
+    ).toBe('ended');
+    expect(isLobbyEndedChallenge({ status: 'completed' })).toBe(true);
+    const now = Date.parse('2026-09-08T12:00:00.000Z');
+    expect(
+      isLobbyEndedChallenge(
+        { status: 'live', ends_at: '2026-09-08T11:00:00.000Z' },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isLobbyEndedChallenge(
+        { status: 'live', ends_at: '2026-09-09T12:00:00.000Z' },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isLobbyEndedChallenge(
+        { status: 'filling', ends_at: '2026-09-08T11:00:00.000Z' },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      lobbyTabsForChallenge({
+        status: 'live',
+        ends_at: '2026-09-08T11:00:00.000Z',
+        isOfficial: false,
+        isParticipant: true,
+        isCreator: false,
+        nowMs: now,
+      }),
+    ).toEqual(['ended']);
   });
 });
 

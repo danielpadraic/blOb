@@ -159,9 +159,9 @@ describe('which challenges get offered after a Home post', () => {
     expect(targets.map((target) => target.challengeId)).toEqual(['c-1', 'c-2']);
     // The photo challenge counts the whole stack.
     expect(targets[0].countedSec).toBe(50 * 60);
-    // The heart rate challenge counts only the segment that cleared the bar.
-    expect(targets[1].countedIds).toEqual(['ball']);
-    expect(targets[1].countedSec).toBe(32 * 60);
+    // The heart rate challenge now counts both segments (84 and 130 both clear 80).
+    expect(targets[1].countedIds).toEqual(['lift', 'ball']);
+    expect(targets[1].countedSec).toBe(50 * 60);
   });
 
   it('drops an elevated-HR challenge when nothing reached the intensity', () => {

@@ -118,7 +118,7 @@ export function HealthWorkoutPicker({
   const [error, setError] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
 
-  // The intensity bar is personal, so an HR challenge is judged against this member's own age.
+  // The intensity bar uses the same 80 bpm attach floor as /submit.
   const { user } = useAuth();
   const profile = useProfile(user?.id);
   const rules: HealthAttachRules = healthAttachRulesFor(

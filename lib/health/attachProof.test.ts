@@ -9,6 +9,7 @@ import {
   toCheckinHealthProof,
   workoutAttachBlockReason,
 } from '@/lib/health/attachProof';
+import { MIN_AVG_HR_BPM } from '@/lib/health/workoutProofGate';
 import { parseCheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { last24Hours } from '@/lib/health/period';
 import { parseProofParts } from '@/lib/challengeProofs';
@@ -64,7 +65,18 @@ describe('workoutAttachBlockReason', () => {
       minMinutes: 45,
       hrRequired: true,
       minDistanceMeters: null,
+      elevatedHrBpm: MIN_AVG_HR_BPM,
+      elevatedHrUnknownAge: true,
     });
+  });
+
+  it('accepts a walk at 82 and blocks 79 when heart rate is required', () => {
+    const rules = { minMinutes: 30, hrRequired: true, elevatedHrBpm: MIN_AVG_HR_BPM };
+    expect(workoutAttachBlockReason({ ...run, hrAvg: 82, activityType: 'walking' }, rules)).toBeNull();
+    expect(workoutAttachBlockReason({ ...run, hrAvg: 80, activityType: 'walking' }, rules)).toBeNull();
+    expect(workoutAttachBlockReason({ ...run, hrAvg: 79, activityType: 'walking' }, rules)).toBe(
+      'Needs average heart rate 80+',
+    );
   });
 });
 

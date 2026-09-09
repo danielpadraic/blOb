@@ -15,6 +15,8 @@ import {
 import { meetsMinMinutes } from '@/lib/health/period';
 import {
   ELEVATED_HR_NEEDS_AGE,
+  MIN_AVG_HR_BPM,
+  elevatedHrAttachFloor,
   elevatedHrThreshold,
   type ElevatedHrInput,
 } from '@/lib/health/workoutProofGate';
@@ -31,8 +33,8 @@ export type HealthAttachRules = {
   hrRequired?: boolean;
   minDistanceMeters?: number | null;
   /**
-   * Average heart rate this person must reach for the workout to count, derived from their age and
-   * resting rate. Null when the challenge does not ask for heart rate, or when we cannot work it out.
+   * Average heart rate this person must reach for the workout to count. Always MIN_AVG_HR_BPM when
+   * the challenge asks for heart rate.
    */
   elevatedHrBpm?: number | null;
   /** The challenge needs intensity but we do not know their age, so it cannot be judged. */
@@ -117,12 +119,11 @@ export function healthAttachRulesFor(
     hrRequired,
     minDistanceMeters: proof?.method === 'distance' ? proofDistanceMeters(proof) : null,
   };
-  if (hrRequired && hr) {
-    const threshold = elevatedHrThreshold(hr);
+  if (hrRequired) {
+    const threshold = elevatedHrThreshold(hr ?? {});
+    rules.elevatedHrBpm = elevatedHrAttachFloor(threshold);
     if (threshold.kind === 'unknown-age') {
       rules.elevatedHrUnknownAge = true;
-    } else {
-      rules.elevatedHrBpm = threshold.bpm;
     }
   }
   return rules;
@@ -148,13 +149,10 @@ export function workoutAttachBlockReason(
     if (!(avg > 0 || Number(workout.hrMax) > 0)) {
       return 'No heart rate on this workout';
     }
-    // A missing birth year is a nudge, not a block — see workoutAttachNote. Without an age there is
-    // no threshold to test, so having recorded a heart rate is enough.
-    // Intensity is measured against this person rather than a flat bump, so the same workout can
-    // qualify for one member and not another.
     const need = Number(rules.elevatedHrBpm);
-    if (Number.isFinite(need) && need > 0 && !(avg >= need)) {
-      return `Needs average heart rate ${Math.round(need)}+`;
+    const floor = Number.isFinite(need) && need > 0 ? need : MIN_AVG_HR_BPM;
+    if (!(avg >= floor)) {
+      return `Needs average heart rate ${Math.round(floor)}+`;
     }
   }
   return null;

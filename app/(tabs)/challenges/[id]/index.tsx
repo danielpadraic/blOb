@@ -170,6 +170,7 @@ import { challengeHasDurationHint, resolveChallengeHero } from '@/lib/challengeO
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
+import { isViewerOutOfPrize } from '@/lib/lobbyChallenge';
 import { getErrorMessage } from '@/utils/errors';
 
 const BODY_METRICS_JOIN_COPY =
@@ -413,6 +414,7 @@ export default function ChallengeDetailScreen() {
     [roster.data, user?.id],
   );
   const isJoined = Boolean(participation);
+  const viewerOut = isViewerOutOfPrize(participation);
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
   const mentionMemberIds = useMemo(() => {
     const ids = new Set<string>();
@@ -994,19 +996,26 @@ export default function ChallengeDetailScreen() {
     isJoined &&
     !isCalloutObserver &&
     challenge.status === 'live' &&
-    !participation?.eliminated_at &&
+    !viewerOut &&
     !waitingToStart &&
     !logsClosed;
+  const stickyOut =
+    isJoined &&
+    !isCalloutObserver &&
+    viewerOut &&
+    (challenge.status === 'live' || challenge.status === 'in_progress');
   const showStickyCta =
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
-    (stickyJoin || stickyCheckin);
+    (stickyJoin || stickyCheckin || stickyOut);
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
-  const stickyBlock = showStickyCta
-    ? JOIN_CTA_HEIGHT +
-      (!checkinLocked && watch.visible ? 44 : 12) +
-      (!checkinLocked && periodDueClock ? 40 : 0)
-    : 0;
+  const stickyBlock = stickyOut
+    ? 56
+    : showStickyCta
+      ? JOIN_CTA_HEIGHT +
+        (!checkinLocked && watch.visible ? 44 : 12) +
+        (!checkinLocked && periodDueClock ? 40 : 0)
+      : 0;
 
   return (
     <ChallengeNotesProvider>
@@ -1069,12 +1078,12 @@ export default function ChallengeDetailScreen() {
             isCalloutObserver
               ? CALLOUT_WATCHING_LINE
               : isJoined
-              ? participation?.eliminated_at
-                ? 'You’re out, but you can still watch the check-ins.'
+              ? viewerOut
+                ? copy('challenge.outWatchLive')
                 : copy('checkin.emptyBob')
               : 'Join the challenge to post in Live.'
           }
-          canCompose={(isCalloutObserver || isJoined) && !participation?.eliminated_at}
+          canCompose={isCalloutObserver || isJoined}
           composing={createPost.isPending}
           dayBreakChallenge={challenge ?? null}
           readCursorChallengeId={id || null}
@@ -1164,7 +1173,7 @@ export default function ChallengeDetailScreen() {
         {pageTab === 'overview' && calloutQuery.data && isCalloutFighterViewer ? (
           <CalloutWatchers callout={calloutQuery.data} me={user?.id} isFighter />
         ) : null}
-        {pageTab === 'overview' && !loggedToday && !isCalloutObserver ? (
+        {pageTab === 'overview' && !loggedToday && !isCalloutObserver && !viewerOut ? (
           <View className="mt-3">
             <PeriodCheckinDue challenge={challenge} submitted={false} nowMs={nowMs} />
           </View>
@@ -1176,6 +1185,7 @@ export default function ChallengeDetailScreen() {
         ) : null}
 
         {isJoined &&
+        !viewerOut &&
         !loggedToday &&
         (checkinPhase === 'in_progress' || checkinPhase === 'ready') &&
         isOfficialSeriesChallenge(challenge) &&
@@ -1552,7 +1562,13 @@ export default function ChallengeDetailScreen() {
           paddingTop: 8,
           backgroundColor: THEME.background,
         }}>
-        {stickyJoin ? (
+        {stickyOut ? (
+          <AppText
+            className="text-center text-[13px] leading-5"
+            style={{ color: THEME.textMuted, paddingBottom: 12 }}>
+            {copy('challenge.outWatchLive')}
+          </AppText>
+        ) : stickyJoin ? (
           <View className="gap-1.5">
             {actionError ? (
               <AppText className="text-center text-sm leading-5 text-coral-dark">{actionError}</AppText>
