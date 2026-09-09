@@ -248,8 +248,6 @@ export function useSubmitWorkout() {
           ),
         );
       }
-      void queryClient.invalidateQueries({ queryKey: ['feed', input.challengeId] });
-      void queryClient.invalidateQueries({ queryKey: ['feed', 'global'] });
       void reportBadgeActivity();
     },
     onSettled: (_data, _error, input) => {
@@ -338,8 +336,6 @@ export function useSubmitHealthWorkout() {
           ),
         );
       }
-      void queryClient.invalidateQueries({ queryKey: ['feed', input.challengeId] });
-      void queryClient.invalidateQueries({ queryKey: ['feed', 'global'] });
       void reportBadgeActivity();
     },
     onSettled: (_data, _error, input) => {

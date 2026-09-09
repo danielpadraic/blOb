@@ -48,6 +48,7 @@ import { useStalled } from '@/hooks/useStalled';
 import { BODY_METRICS_HREF, captureHref, challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
 import { applyLiveBackGesture, liveScreenBackGesture } from '@/lib/liveThread';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { useLiveThreadFocus } from '@/hooks/useLiveThreadFocus';
 import {
   CALLOUT_CHEER_PLACEHOLDER,
@@ -365,6 +366,12 @@ export default function ChallengeDetailScreen() {
     }, [liveTabFocused, navigation]),
   );
   useLiveThreadFocus(id, liveTabFocused && screenFocused);
+
+  useEffect(() => {
+    // Live / Overview / Board are not camera screens. Leaving Check In must kill leftover tracks
+    // or Safari keeps the status-bar camera light on.
+    stopAllLiveMedia();
+  }, [pageTab, screenFocused]);
 
   useEffect(() => {
     if (noticeParam) {

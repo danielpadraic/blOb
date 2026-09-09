@@ -85,11 +85,13 @@ function bindBoardChannel(
   const refreshFeed = () => {
     void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
   };
-  const patchOrRefreshFeed = (payload: { eventType?: string; new?: { id?: string }; old?: { id?: string } }) => {
-    if (patchChallengeLiveFeed(queryClient, challengeId, payload)) {
-      return;
-    }
-    refreshFeed();
+  const patchOrRefreshFeed = (payload: {
+    eventType?: string;
+    new?: { id?: string; checkin_id?: string | null };
+    old?: { id?: string; checkin_id?: string | null };
+  }) => {
+    // Stats / media / card writes patch in place. A feed invalidate remounts Live.
+    patchChallengeLiveFeed(queryClient, challengeId, payload);
   };
   const refreshSettlement = () => {
     void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });

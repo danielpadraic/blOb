@@ -350,8 +350,8 @@ export const LiveBubble = memo(function LiveBubble({
                   </View>
                 ) : null}
                 {/* Fitness stats only. The caption above stays whatever the user typed. */}
-                <View className="mt-1">
-                  <CheckinProofStatsRow stats={post.checkin_stats} />
+                <View style={{ marginTop: 4, minHeight: visuals.length > 0 ? 26 : 0 }}>
+                  <CheckinProofStatsRow stats={post.checkin_stats} align={alignEnd ? 'right' : 'left'} />
                 </View>
                 {time || post.edited_at ? (
                   <View className="mt-0.5 flex-row items-center" style={{ gap: 6 }}>

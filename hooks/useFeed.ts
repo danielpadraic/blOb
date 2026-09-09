@@ -78,6 +78,7 @@ import {
   type HomeFeedAllowContext,
   type HomeFeedCursor,
 } from '@/lib/homeFeed';
+import { dedupeLivePostsByCheckinId } from '@/lib/liveFeedPatch';
 import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
@@ -199,14 +200,16 @@ async function queryPosts(scope: FeedScope, page?: PostPage): Promise<PostWithMe
   if (error) {
     throw new Error(rawFeedError(error));
   }
-  return ((data ?? []) as unknown as PostWithMeta[])
-    .filter(
-      (post) =>
-        !post.deleted_at &&
-        post.moderation_status !== 'under_review' &&
-        post.moderation_status !== 'removed',
-    )
-    .map(withQuoteSnapshot);
+  return dedupeLivePostsByCheckinId(
+    ((data ?? []) as unknown as PostWithMeta[])
+      .filter(
+        (post) =>
+          !post.deleted_at &&
+          post.moderation_status !== 'under_review' &&
+          post.moderation_status !== 'removed',
+      )
+      .map(withQuoteSnapshot),
+  );
 }
 
 function isMissingDeletedAt(error: { message?: string }): boolean {
@@ -307,6 +310,7 @@ function postInsertPayload(
     quoted_post_id?: string | null;
     quote_snapshot?: PostWithMeta['quote_snapshot'];
     wall_host_id?: string | null;
+    checkin_id?: string | null;
     source?: Post['source'];
     type?: Post['type'];
     duration_ms?: number | null;
@@ -352,6 +356,9 @@ function postInsertPayload(
   }
   if (schema.hasLiftSession && base.lift_session_id) {
     payload.lift_session_id = base.lift_session_id;
+  }
+  if (schema.hasCheckin && base.checkin_id) {
+    payload.checkin_id = base.checkin_id;
   }
   return payload;
 }
@@ -1069,7 +1076,7 @@ async function fetchHomeFeedPage(input: {
       hasMore = false;
       break;
     }
-    scanned = uniquePostsById([...scanned, ...raw]);
+    scanned = dedupeLivePostsByCheckinId(uniquePostsById([...scanned, ...raw]));
     hasMore = raw.length >= HOME_RAW_WINDOW;
     cursor = homeFeedCursorFrom(raw);
     if (!cursor) {
@@ -1118,7 +1125,7 @@ async function fetchHomeFeedPage(input: {
       // First 15 cards paint with author_id; names fill after first paint.
       const page = first ? visible : await hydrateAuthors(visible);
       return {
-        posts: page,
+        posts: dedupeLivePostsByCheckinId(page),
         cursor: homeFeedCursorFrom(page) ?? cursor,
         hasMore: hasMore || filtered.length > visible.length,
       };
@@ -1161,7 +1168,7 @@ async function fetchHomeFeedPage(input: {
   const visible = takeHomeVisiblePage(filtered, input.seenIds);
   const page = first ? visible : await hydrateAuthors(visible);
   return {
-    posts: page,
+    posts: dedupeLivePostsByCheckinId(page),
     cursor: homeFeedCursorFrom(page) ?? homeFeedCursorFrom(scanned),
     hasMore: hasMore || filtered.length > visible.length,
   };
@@ -1209,9 +1216,11 @@ export async function insertWorkoutCheckInPost(input: {
   challengeId: string;
   challengeTitle?: string | null;
   mediaUrls?: string[];
+  checkInId?: string | null;
 }): Promise<Post | null> {
   const content = checkinPostBody();
   const media_urls = input.mediaUrls ?? [];
+  const checkinId = String(input.checkInId ?? '').trim() || null;
 
   const schema = await resolvePostsSchema();
   const payload = postInsertPayload(schema, {
@@ -1222,19 +1231,40 @@ export async function insertWorkoutCheckInPost(input: {
     audience: DEFAULT_POST_AUDIENCE,
     audience_user_ids: [],
     source: 'checkin',
+    checkin_id: checkinId,
   });
 
   const created = await supabase.from('posts').insert(payload).select(schema.select).single();
   if (!created.error) {
-    const post = created.data as unknown as Post;
-    return post;
+    return created.data as unknown as Post;
+  }
+
+  const duplicate =
+    created.error.code === '23505' || /duplicate|unique/i.test(String(created.error.message ?? ''));
+  if (checkinId && duplicate) {
+    const existing = await supabase
+      .from('posts')
+      .select(schema.select)
+      .eq('checkin_id', checkinId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (existing.data && (existing.data as { id?: string }).id) {
+      const row = existing.data as unknown as Post;
+      const nextMedia = unionCheckinMedia(row.media_urls, media_urls);
+      await supabase
+        .from('posts')
+        .update({ content, media_urls: nextMedia, source: 'checkin' })
+        .eq('id', row.id);
+      return { ...row, content, media_urls: nextMedia };
+    }
   }
 
   if (media_urls.length > 0) {
     const retry = await supabase.from('posts').insert(payload).select(schema.select).single();
     if (!retry.error) {
-      const post = retry.data as unknown as Post;
-      return post;
+      return retry.data as unknown as Post;
     }
     const missingMedia =
       retry.error.message.toLowerCase().includes('media_urls') ||
@@ -1245,27 +1275,21 @@ export async function insertWorkoutCheckInPost(input: {
     }
   }
 
-  const withoutMedia = await supabase
-    .from('posts')
-    .insert(
-      postInsertPayload(schema, {
-        author_id: input.userId,
-        challenge_id: input.challengeId,
-        content,
-        media_urls: [],
-        audience: DEFAULT_POST_AUDIENCE,
-        audience_user_ids: [],
-        source: 'checkin',
-      }),
-    )
-    .select(schema.select)
-    .single();
-  if (withoutMedia.error) {
-    console.log('[blob:submit] auto-post failed', withoutMedia.error.message);
-    return null;
+  console.log('[blob:submit] auto-post failed', created.error.message);
+  return null;
+}
+
+function unionCheckinMedia(existing: unknown, incoming: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const url of [...(Array.isArray(existing) ? existing : []), ...incoming]) {
+    if (typeof url !== 'string' || !url.trim() || seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+    out.push(url);
   }
-  const post = withoutMedia.data as unknown as Post;
-  return post;
+  return out;
 }
 
 export function useFeed(challengeId?: string | null) {
@@ -1321,7 +1345,8 @@ export function useFeed(challengeId?: string | null) {
   });
 
   const homePosts = useMemo(
-    () => uniquePostsById(homeQuery.data?.pages.flatMap((page) => page.posts) ?? []),
+    () =>
+      dedupeLivePostsByCheckinId(uniquePostsById(homeQuery.data?.pages.flatMap((page) => page.posts) ?? [])),
     [homeQuery.data],
   );
 
@@ -1819,7 +1844,11 @@ export function useCreatePost(challengeId?: string | null) {
       const listKey =
         context?.listKey ??
         feedListKey(input.circleId ? `circle:${input.circleId}` : key, user?.id);
-      void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
+      const scope = String(listKey[1] ?? '');
+      // Challenge Live is patched in place. A list invalidate remounts the thread.
+      if (home || scope === 'global' || scope.startsWith('circle')) {
+        void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
+      }
       void reportBadgeActivity();
     },
   });

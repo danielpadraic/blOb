@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { patchLiveFeedList } from '@/lib/liveFeedPatch';
+import { dedupeLivePostsByCheckinId, patchLiveFeedList } from '@/lib/liveFeedPatch';
 
 const A = { id: 'a', content: 'hi', media_urls: ['https://cdn.test/one.jpg'], checkin_stats: { duration_sec: 2100 } };
 const B = { id: 'b', content: 'yo', media_urls: ['https://cdn.test/two.jpg'] };
@@ -69,5 +69,75 @@ describe('patchLiveFeedList', () => {
         new: { id: 'a', checkin_stats: { duration_sec: 2100 } },
       }),
     ).toBe(list);
+  });
+
+  it('treats an insert with the same checkin_id as an update of the oldest row', () => {
+    const oldest = {
+      id: 'old',
+      checkin_id: 'ck-1',
+      created_at: '2026-09-08T21:55:00.000Z',
+      content: 'Check-in Complete',
+      media_urls: ['https://cdn.test/walk.jpg'],
+      checkin_stats: { duration_sec: 2215 },
+    };
+    const list = [oldest, B];
+    const next = patchLiveFeedList(list, {
+      eventType: 'INSERT',
+      new: {
+        id: 'dup',
+        checkin_id: 'ck-1',
+        created_at: '2026-09-08T21:55:01.000Z',
+        content: 'Check-in Complete',
+        media_urls: [],
+        checkin_stats: { duration_sec: 2215, hr_avg: 87, distance_m: 2188 },
+      },
+    }) as typeof list;
+    expect(next).toHaveLength(2);
+    expect(next[1]).toBe(B);
+    expect(next[0].id).toBe('old');
+    expect(next[0].media_urls).toEqual(['https://cdn.test/walk.jpg']);
+    expect(next[0].checkin_stats).toEqual({
+      duration_sec: 2215,
+      hr_avg: 87,
+      distance_m: 2188,
+    });
+  });
+});
+
+describe('dedupeLivePostsByCheckinId', () => {
+  it('keeps the oldest row, unions media, and hides empty Check-in Complete extras', () => {
+    const empty = (id: string, at: string) => ({
+      id,
+      checkin_id: 'ck-955',
+      created_at: at,
+      content: 'Check-in Complete',
+      media_urls: [],
+      checkin_stats: null,
+    });
+    const withMedia = {
+      id: 'media',
+      checkin_id: 'ck-955',
+      created_at: '2026-09-08T21:55:00.000Z',
+      content: 'Check-in Complete',
+      media_urls: ['https://cdn.test/fit.jpg'],
+      checkin_stats: { duration_sec: 2215, distance_m: 2188, hr_avg: 87 },
+    };
+    const next = dedupeLivePostsByCheckinId([
+      empty('e1', '2026-09-08T21:55:01.000Z'),
+      empty('e2', '2026-09-08T21:55:02.000Z'),
+      withMedia,
+      empty('e3', '2026-09-08T21:55:03.000Z'),
+      empty('e4', '2026-09-08T21:55:04.000Z'),
+      B,
+    ]);
+    expect(next).toHaveLength(2);
+    expect(next[0].id).toBe('media');
+    expect(next[0].media_urls).toEqual(['https://cdn.test/fit.jpg']);
+    expect(next[0].checkin_stats).toEqual({
+      duration_sec: 2215,
+      distance_m: 2188,
+      hr_avg: 87,
+    });
+    expect(next[1]).toBe(B);
   });
 });

@@ -59,6 +59,8 @@ import type { MentionChip } from '@/lib/mentions';
 import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { backfillLatestFitnessOcr } from '@/lib/health/runPostSendOcr';
+import { dedupeLivePostsByCheckinId, logUnexpectedLiveReset } from '@/lib/liveFeedPatch';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
 import type { PostAudience } from '@/lib/postAudience';
 import type { CommentWithAuthor, ComposeInput, PostSource, PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -150,7 +152,7 @@ export function LiveThread({
     [dayBreakFp],
   );
   const rows = useMemo(() => {
-    const built = buildLiveThreadRows((posts ?? []).filter((post) => Boolean(post?.id)));
+    const built = buildLiveThreadRows(dedupeLivePostsByCheckinId((posts ?? []).filter((post) => Boolean(post?.id))));
     return stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built;
   }, [posts, stableDayBreak]);
 
@@ -159,9 +161,37 @@ export function LiveThread({
   const queryClient = useQueryClient();
   const hadRowsRef = useRef(false);
   const newestPostIdRef = useRef<string | null>(null);
+  /**
+   * Scroll position is tracked in refs, not state.
+   *
+   * These are read from scroll and content-size callbacks that fire many times per gesture. Holding
+   * them in state would re-render the list on every frame of a drag, which is how the thread ends up
+   * fighting the user in the first place.
+   */
+  const atEndRef = useRef(false);
+  const draggingRef = useRef(false);
+  const firstPaintPendingRef = useRef(true);
+  /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
+  const lastOffsetRef = useRef(0);
+  const [listViewportH, setListViewportH] = useState(0);
+  const [listContentH, setListContentH] = useState(0);
+  const packToBottom = listViewportH > 0 && listContentH > 0 && listContentH < listViewportH - 1;
+  const listContentStyle = useMemo(
+    () => ({
+      flexGrow: packToBottom ? 1 : 0,
+      justifyContent: packToBottom ? ('flex-end' as const) : undefined,
+      gap: 12,
+      paddingTop: 12,
+      paddingBottom: 8,
+      overflow: 'visible' as const,
+    }),
+    [packToBottom],
+  );
   useEffect(() => {
+    stopAllLiveMedia();
     console.log('[blob:live]', { reason: 'mount', challengeId: challengeIdRef.current ?? null });
     return () => {
+      stopAllLiveMedia();
       console.log('[blob:live]', { reason: 'unmount', challengeId: challengeIdRef.current ?? null });
     };
   }, []);
@@ -174,8 +204,8 @@ export function LiveThread({
       if (!found) {
         return post;
       }
-      const left = new Date(found.created_at ?? 0).getTime();
-      const right = new Date(post.created_at ?? 0).getTime();
+      const left = Date.parse(String(found.created_at ?? ''));
+      const right = Date.parse(String(post.created_at ?? ''));
       if (right > left) {
         return post;
       }
@@ -185,11 +215,12 @@ export function LiveThread({
       return found;
     }, null);
     if (hadRowsRef.current && list.length === 0) {
-      console.log('[blob:live]', {
+      logUnexpectedLiveReset({
         reason: 'reset',
         postId: newestPostIdRef.current,
-        media: 0,
-        stats: false,
+        checkinId: newest?.checkin_id ?? null,
+        mediaCount: 0,
+        y: lastOffsetRef.current,
       });
     }
     if (list.length > 0) {
@@ -214,18 +245,6 @@ export function LiveThread({
       ? `post:${highlightPostId}`
       : null;
 
-  /**
-   * Scroll position is tracked in refs, not state.
-   *
-   * These are read from scroll and content-size callbacks that fire many times per gesture. Holding
-   * them in state would re-render the list on every frame of a drag, which is how the thread ends up
-   * fighting the user in the first place.
-   */
-  const atEndRef = useRef(true);
-  const draggingRef = useRef(false);
-  const firstPaintPendingRef = useRef(true);
-  /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
-  const lastOffsetRef = useRef(0);
   /** The newest row the user has actually been parked on, for the "new below" count. */
   const bottomAnchorRef = useRef<string | null>(null);
   const [notAtEnd, setNotAtEnd] = useState(false);
@@ -271,7 +290,18 @@ export function LiveThread({
         logLive(`skip-pin:${why}`);
         return;
       }
+      if (why !== 'first-paint' && why !== 'new-post' && why !== 'composer-open') {
+        const newest = postsRef.current?.[postsRef.current.length - 1];
+        logUnexpectedLiveReset({
+          reason: why,
+          postId: newest?.id ?? null,
+          checkinId: newest?.checkin_id ?? null,
+          mediaCount: Array.isArray(newest?.media_urls) ? newest.media_urls.length : 0,
+          y: lastOffsetRef.current,
+        });
+      }
       logLive(`pin:${why}`);
+      atEndRef.current = true;
       requestAnimationFrame(() => {
         listRef.current?.scrollToEnd({ animated });
       });
@@ -675,11 +705,18 @@ export function LiveThread({
         <FlatList
           ref={listRef}
           data={rows}
+          extraData={currentUserId ?? ''}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
+          onLayout={(event) => {
+            const height = Math.round(event.nativeEvent.layout.height);
+            if (height > 0 && height !== listViewportH) {
+              setListViewportH(height);
+            }
+          }}
           onScroll={onScroll}
           scrollEventThrottle={16}
           onScrollBeginDrag={() => {
@@ -695,24 +732,25 @@ export function LiveThread({
           }}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          onContentSizeChange={() => {
+          onContentSizeChange={(_width, height) => {
+            const next = Math.round(height);
+            if (next > 0 && next !== listContentH) {
+              setListContentH(next);
+            }
             if (highlightKey && highlightedOnce.current === highlightKey) {
               return;
             }
             if (!firstPaintPendingRef.current) {
               return;
             }
-            pinToLiveEdge(false, 'content-size');
+            pinToLiveEdge(false, 'first-paint');
           }}
-          onScrollToIndexFailed={() => pinToLiveEdge(false, 'index-failed')}
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: 'flex-end',
-            gap: 12,
-            paddingTop: 12,
-            paddingBottom: 8,
-            overflow: 'visible',
+          onScrollToIndexFailed={() => {
+            if (firstPaintPendingRef.current) {
+              pinToLiveEdge(false, 'first-paint');
+            }
           }}
+          contentContainerStyle={listContentStyle}
           ListEmptyComponent={
             <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
           }
