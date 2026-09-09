@@ -1182,6 +1182,12 @@ export type Database = {
           Relationship<'challenge_payouts_user_id_fkey', 'user_id', 'profiles', 'id'>,
         ]
       >;
+      challenge_moderators: TableDef<
+        { challenge_id: string; user_id: string; assigned_at?: string; assigned_by?: string | null },
+        Partial<{ challenge_id: string; user_id: string; assigned_at?: string; assigned_by?: string | null }>,
+        Partial<{ challenge_id: string; user_id: string }>,
+        []
+      >;
       coin_transfers: TableDef<
         CoinTransfer,
         Partial<CoinTransfer>,
@@ -2231,6 +2237,19 @@ export type Database = {
       };
       submit_checkin: {
         Args: { p_challenge_id: string };
+        Returns: Record<string, unknown>;
+      };
+      host_adjust_board_days: {
+        Args: { p_challenge_id: string; p_user_id: string };
+        Returns: Record<string, unknown>;
+      };
+      host_adjust_checkin: {
+        Args: {
+          p_challenge_id: string;
+          p_user_id: string;
+          p_action: string;
+          p_period_start: string;
+        };
         Returns: Record<string, unknown>;
       };
       publish_scoring_change: {

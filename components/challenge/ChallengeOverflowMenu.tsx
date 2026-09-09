@@ -17,9 +17,11 @@ export type ChallengeOverflowAction = {
 export function ChallengeOverflowButton({
   onPress,
   light = false,
+  accessibilityLabel = 'Challenge menu',
 }: {
   onPress: (anchor: MenuAnchor) => void;
   light?: boolean;
+  accessibilityLabel?: string;
 }) {
   const ref = useRef<View>(null);
 
@@ -28,7 +30,7 @@ export function ChallengeOverflowButton({
       ref={ref}
       collapsable={false}
       accessibilityRole="button"
-      accessibilityLabel="Challenge menu"
+      accessibilityLabel={accessibilityLabel}
       hitSlop={8}
       onPress={() => {
         measureInWindowSafe(ref.current, ({ x, y, width, height }) => {

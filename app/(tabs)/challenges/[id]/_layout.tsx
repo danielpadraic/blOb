@@ -6,6 +6,7 @@ import {
   ChallengeDetailOverflowHost,
   useChallengeDetailOverflow,
 } from '@/components/challenge/ChallengeDetailOverflow';
+import { HostAdjustProvider } from '@/components/challenge/HostAdjustHost';
 import { BindChallengesStack } from '@/components/navigation/BindChallengesStack';
 import { StackBackButton } from '@/components/navigation/StackBackButton';
 import { WalletBar } from '@/components/wallet/WalletBar';
@@ -18,6 +19,7 @@ export default function ChallengeIdLayout() {
   const id = firstRouteParam(params.id);
 
   return (
+    <HostAdjustProvider>
     <View key={id || 'challenge'} style={{ flex: 1 }} pointerEvents="box-none">
       <BindChallengesStack />
       <Stack
@@ -83,5 +85,6 @@ export default function ChallengeIdLayout() {
       </Stack>
       <ChallengeDetailOverflowHost overflow={overflow} />
     </View>
+    </HostAdjustProvider>
   );
 }

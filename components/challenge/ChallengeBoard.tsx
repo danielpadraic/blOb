@@ -6,6 +6,7 @@ import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { ProfileLink } from '@/components/profile/ProfileLink';
+import { BoardAdjustButton, useHostAdjustUi } from '@/components/challenge/HostAdjustHost';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
@@ -102,7 +103,9 @@ export function ChallengeBoard({
   );
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;
+  const { isActor } = useHostAdjustUi();
   const pointsBoard = usesPointsBoard(challenge);
+  const quantityOrPoints = quantityBoard || pointsBoard;
   const requiredDays = challengeTargetCount(challenge);
   const progressByUser = useMemo(() => {
     const map = new Map<string, ReturnType<typeof boardQuantityProgress>>();
@@ -188,6 +191,11 @@ export function ChallengeBoard({
       <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
         {headerLine}
       </AppText>
+      {isActor && quantityOrPoints ? (
+        <AppText className="text-[12px] leading-5" style={{ color: THEME.textMuted }}>
+          {copy('board.adjustMilesHidden')}
+        </AppText>
+      ) : null}
       {quantityBoard ? null : <MissBudgetLines challenge={challenge} used={missesUsed} />}
 
       {view.settled ? (
@@ -258,6 +266,8 @@ export function ChallengeBoard({
               muted={row.bucket === 'dropped'}
               payout={view.settled ? row.payout : null}
               currency={challenge.currency}
+              showAdjust={!quantityOrPoints && !view.settled}
+              participantStatus={(roster ?? []).find((item) => item.user_id === row.userId)?.status}
             />
           ))}
         </View>
@@ -326,6 +336,8 @@ function BoardRankRow({
   muted,
   payout,
   currency,
+  showAdjust,
+  participantStatus,
 }: {
   rank: string;
   name: string;
@@ -337,40 +349,48 @@ function BoardRankRow({
   muted?: boolean;
   payout?: number | null;
   currency?: string | null;
+  showAdjust?: boolean;
+  participantStatus?: string | null;
 }) {
   const ink = muted ? THEME.textMuted : THEME.textPrimary;
+  const displayName = name.replace(/ \(You\)$/, '');
   return (
-    <ProfileLink username={username} userId={userId} style={{ minHeight: 52 }}>
-      <View className="flex-row items-center" style={{ gap: 10, minHeight: 52 }}>
-        <AppText
-          className="w-6 text-center text-[13px] font-extrabold"
-          style={{ color: ink }}>
-          {rank}
-        </AppText>
-        <Avatar uri={avatarUrl} name={name} size={36} />
-        <View className="min-w-0 flex-1">
-          <AppText className="text-[15px] font-semibold" style={{ color: ink }} numberOfLines={1}>
-            {name}
+    <View className="flex-row items-center" style={{ gap: 4, minHeight: 52 }}>
+      <ProfileLink username={username} userId={userId} style={{ flex: 1, minHeight: 52, minWidth: 0 }}>
+        <View className="flex-row items-center" style={{ gap: 10, minHeight: 52 }}>
+          <AppText
+            className="w-6 text-center text-[13px] font-extrabold"
+            style={{ color: ink }}>
+            {rank}
           </AppText>
-          <AppText className="text-[12px] font-semibold" style={{ color: muted ? THEME.textMuted : THEME.accent }}>
-            {status}
-          </AppText>
+          <Avatar uri={avatarUrl} name={displayName} size={36} />
+          <View className="min-w-0 flex-1">
+            <AppText className="text-[15px] font-semibold" style={{ color: ink }} numberOfLines={1}>
+              {name}
+            </AppText>
+            <AppText className="text-[12px] font-semibold" style={{ color: muted ? THEME.textMuted : THEME.accent }}>
+              {status}
+            </AppText>
+          </View>
+          <View className="items-end">
+            <AppText className="text-[15px] font-extrabold" style={{ color: ink }}>
+              {score}
+            </AppText>
+            {payout != null && Number(payout) > 0 ? (
+              <StakeAmount
+                amount={payout}
+                currency={currency}
+                size={12}
+                zeroAsNumber
+                textClassName="text-[12px] font-bold text-charcoal"
+              />
+            ) : null}
+          </View>
         </View>
-        <View className="items-end">
-          <AppText className="text-[15px] font-extrabold" style={{ color: ink }}>
-            {score}
-          </AppText>
-          {payout != null && Number(payout) > 0 ? (
-            <StakeAmount
-              amount={payout}
-              currency={currency}
-              size={12}
-              zeroAsNumber
-              textClassName="text-[12px] font-bold text-charcoal"
-            />
-          ) : null}
-        </View>
-      </View>
-    </ProfileLink>
+      </ProfileLink>
+      {showAdjust ? (
+        <BoardAdjustButton userId={userId} displayName={displayName} status={participantStatus} />
+      ) : null}
+    </View>
   );
 }
