@@ -1,7 +1,7 @@
 import { zonedDateTimeToUtc } from '@/lib/challengeTimezone';
 import type { CheckinHealthProof, CheckinHealthSource } from '@/lib/health/checkinHealthProof';
 import type { ChallengeProof } from '@/lib/types';
-import type { OcrClockRange, ParsedWorkoutOcr } from '@/lib/health/workoutOcr';
+import { dropOcrAvgIfAboveMax, type OcrClockRange, type ParsedWorkoutOcr } from '@/lib/health/workoutOcr';
 
 /**
  * Turns a screenshot read into the shape the check-in already stores.
@@ -159,27 +159,28 @@ export function ocrFieldsFromParse(parsed?: ParsedWorkoutOcr | null): OcrSession
   if (!parsed) {
     return {};
   }
+  const sane = dropOcrAvgIfAboveMax(parsed);
   const fields: OcrSessionFields = {};
-  if (parsed.durationSec != null) {
-    fields.durationSec = parsed.durationSec;
+  if (sane.durationSec != null) {
+    fields.durationSec = sane.durationSec;
   }
-  if (parsed.activeEnergyKcal != null) {
-    fields.activeEnergyKcal = parsed.activeEnergyKcal;
+  if (sane.activeEnergyKcal != null) {
+    fields.activeEnergyKcal = sane.activeEnergyKcal;
   }
-  if (parsed.totalEnergyKcal != null) {
-    fields.totalEnergyKcal = parsed.totalEnergyKcal;
+  if (sane.totalEnergyKcal != null) {
+    fields.totalEnergyKcal = sane.totalEnergyKcal;
   }
-  if (parsed.minHrBpm != null) {
-    fields.minHrBpm = parsed.minHrBpm;
+  if (sane.minHrBpm != null) {
+    fields.minHrBpm = sane.minHrBpm;
   }
-  if (parsed.avgHrBpm != null) {
-    fields.avgHrBpm = parsed.avgHrBpm;
+  if (sane.avgHrBpm != null) {
+    fields.avgHrBpm = sane.avgHrBpm;
   }
-  if (parsed.maxHrBpm != null) {
-    fields.maxHrBpm = parsed.maxHrBpm;
+  if (sane.maxHrBpm != null) {
+    fields.maxHrBpm = sane.maxHrBpm;
   }
-  if (parsed.distanceMeters != null) {
-    fields.distanceMeters = parsed.distanceMeters;
+  if (sane.distanceMeters != null) {
+    fields.distanceMeters = sane.distanceMeters;
   }
   return fields;
 }

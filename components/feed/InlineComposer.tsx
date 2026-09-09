@@ -66,6 +66,9 @@ type InlineComposerProps = {
   onAttachLift?: () => void;
   onRemoveLift?: () => void;
   onSubmit: (content: string, mentionedUserIds: string[], chips: MentionChip[]) => Promise<unknown> | void;
+  /** Host Board note: Send stays on even with an empty caption and no media. */
+  allowEmpty?: boolean;
+  failTitle?: string;
 };
 
 export function InlineComposer({
@@ -89,6 +92,8 @@ export function InlineComposer({
   onAttachLift,
   onRemoveLift,
   onSubmit,
+  allowEmpty = false,
+  failTitle,
 }: InlineComposerProps) {
   const { user } = useAuth();
   const scope = draftKey ? composerDraftKey(draftKey) : null;
@@ -117,7 +122,7 @@ export function InlineComposer({
       ? fieldFocused || hasText || attachments.length > 0 || gifOpen || Boolean(replyTo) || expanded
       : expanded;
   const busy = Boolean(submitting || uploading);
-  const canSend = hasText || attachments.length > 0;
+  const canSend = allowEmpty || hasText || attachments.length > 0;
   const fieldCollapsed = collapseWhenIdle
     ? !fieldFocused && !gifOpen
     : bar
@@ -311,7 +316,7 @@ export function InlineComposer({
   async function submit() {
     const latest = fieldRef.current?.getDoc() ?? docRef.current;
     const trimmed = latest.text.trim();
-    if ((!trimmed && attachments.length === 0) || busy) {
+    if ((!trimmed && attachments.length === 0 && !allowEmpty) || busy) {
       return;
     }
     if (!user) {
@@ -342,7 +347,7 @@ export function InlineComposer({
       }
       const content = [trimmed, ...mediaUrls].filter(Boolean).join('\n');
       // An attached lift is a message on its own — the card carries it, so no caption is needed.
-      if (!content && !attachedLift) {
+      if (!content && !attachedLift && !allowEmpty) {
         return;
       }
       await onSubmit(
@@ -362,7 +367,7 @@ export function InlineComposer({
       }
       Keyboard.dismiss();
     } catch (error) {
-      Alert.alert('Couldn’t post that reply', getErrorMessage(error));
+      Alert.alert(failTitle ?? 'Couldn’t post that reply', getErrorMessage(error));
     } finally {
       setUploading(false);
     }

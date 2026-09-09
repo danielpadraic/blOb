@@ -141,6 +141,51 @@ export function parseHostAdjustDays(value: unknown): HostAdjustDays {
   };
 }
 
+/** Default Live line when the host skips a caption. Never a system_kind row. */
+export function hostAdjustLiveBody(input: {
+  action: HostAdjustAction;
+  displayName: string;
+  dayN?: number | null;
+  caption?: string | null;
+}): string {
+  const caption = String(input.caption ?? '').trim();
+  if (caption) {
+    return caption;
+  }
+  const name = String(input.displayName ?? '').trim() || 'Someone';
+  const day = Math.max(Math.trunc(Number(input.dayN) || 0), 0);
+  if (input.action === 'excuse_miss') {
+    return `Host excused a miss for ${name}.`;
+  }
+  if (input.action === 'remove_counted') {
+    return day > 0 ? `Host removed Day ${day} for ${name}.` : `Host removed a counted day for ${name}.`;
+  }
+  return day > 0 ? `Host counted Day ${day} for ${name}.` : `Host counted a day for ${name}.`;
+}
+
+/**
+ * One lobby/Live post after a Board adjust. Home off. No system_kind — that used
+ * posts_system_kind_uidx and blocked a second Count in the same challenge.
+ */
+export function hostAdjustLivePostRow(input: {
+  authorId: string;
+  challengeId: string;
+  content: string;
+  mediaUrls?: string[];
+}): Record<string, unknown> {
+  return {
+    author_id: input.authorId,
+    challenge_id: input.challengeId,
+    content: input.content,
+    media_urls: (input.mediaUrls ?? []).filter(Boolean),
+    audience: 'public',
+    audience_user_ids: [],
+    source: 'challenge',
+    type: 'feed',
+    hidden_from_home: true,
+  };
+}
+
 export function parseHostAdjustResult(value: unknown): HostAdjustResult {
   const row = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const action = String(row.action ?? '') as HostAdjustAction;

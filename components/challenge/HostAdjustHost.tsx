@@ -1,7 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
   ChallengeMenuPopover,
@@ -9,6 +9,7 @@ import {
   type ChallengeOverflowAction,
   type MenuAnchor,
 } from '@/components/challenge/ChallengeOverflowMenu';
+import { InlineComposer } from '@/components/feed/InlineComposer';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
@@ -20,6 +21,8 @@ import {
   challengeIsOfficialLocked,
   challengeTracksMissesForExcuse,
   hostAdjustErrorMessage,
+  hostAdjustLiveBody,
+  hostAdjustLivePostRow,
   parseHostAdjustDays,
   parseHostAdjustResult,
   participantCanBeAdjusted,
@@ -28,6 +31,7 @@ import {
   type HostAdjustDay,
   type HostAdjustResult,
 } from '@/lib/hostAdjust';
+import { liveComposeFromInline } from '@/lib/liveThread';
 import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
 import type { ChallengeParticipantWithProfile } from '@/lib/types';
@@ -150,6 +154,18 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   );
 }
 
+function adjustSheetTitle(sheet: { action: HostAdjustAction; day?: HostAdjustDay; target: Target } | null): string {
+  const name = sheet?.target.displayName ?? 'Someone';
+  const n = sheet?.day?.day_n ?? '';
+  if (sheet?.action === 'excuse_miss') {
+    return copy('board.excuseMissTitle', 'gentle', { name });
+  }
+  if (sheet?.action === 'remove_counted') {
+    return copy('board.removeDayTitle', 'gentle', { n, name });
+  }
+  return copy('board.countDayTitle', 'gentle', { n, name });
+}
+
 function HostAdjustSheets({
   challengeId,
   menu,
@@ -168,6 +184,16 @@ function HostAdjustSheets({
   onCloseSheet: () => void;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const { user } = useAuth();
+  const [noteStep, setNoteStep] = useState(false);
+
+  useEffect(() => {
+    if (!sheet) {
+      setNoteStep(false);
+    }
+  }, [sheet]);
+
   const days = useQuery({
     queryKey: ['host-adjust-days', challengeId, sheet?.target.userId ?? menu?.userId],
     enabled: Boolean(sheet || menu),
@@ -188,7 +214,13 @@ function HostAdjustSheets({
   });
 
   const mutate = useMutation({
-    mutationFn: async (input: { target: Target; action: HostAdjustAction; day?: HostAdjustDay }) => {
+    mutationFn: async (input: {
+      target: Target;
+      action: HostAdjustAction;
+      day?: HostAdjustDay;
+      caption?: string;
+      mediaUrls?: string[];
+    }) => {
       const { data, error } = await supabase.rpc('host_adjust_checkin', {
         p_challenge_id: challengeId,
         p_user_id: input.target.userId,
@@ -198,7 +230,28 @@ function HostAdjustSheets({
       if (error) {
         throw new Error(hostAdjustErrorMessage(getErrorMessage(error)));
       }
-      return parseHostAdjustResult(data);
+      const result = parseHostAdjustResult(data);
+      const displayName = result.display_name || input.target.displayName;
+      const content = hostAdjustLiveBody({
+        action: input.action,
+        displayName,
+        dayN: result.day_n ?? input.day?.day_n ?? null,
+        caption: input.caption,
+      });
+      if (user?.id) {
+        const { error: postError } = await supabase.from('posts').insert(
+          hostAdjustLivePostRow({
+            authorId: user.id,
+            challengeId,
+            content,
+            mediaUrls: input.mediaUrls,
+          }),
+        );
+        if (postError) {
+          console.warn('[blob:host-adjust] live note', postError.message);
+        }
+      }
+      return result;
     },
     onSuccess: (result) => {
       patchParticipant(queryClient, challengeId, result);
@@ -206,7 +259,9 @@ function HostAdjustSheets({
       void queryClient.invalidateQueries({ queryKey: ['period-misses', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['host-adjust-days', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
       onCloseSheet();
+      router.setParams({ tab: 'feed' });
     },
   });
 
@@ -248,13 +303,14 @@ function HostAdjustSheets({
         actions={actions}
       />
       <ChromeOverlay visible={Boolean(sheet)} onClose={mutate.isPending ? undefined : onCloseSheet}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable
           className="px-5 pb-10 pt-6"
           style={{
             backgroundColor: THEME.background,
             borderTopLeftRadius: THEME.radiusLg,
             borderTopRightRadius: THEME.radiusLg,
-            maxHeight: 520,
+            maxHeight: noteStep ? 640 : 520,
           }}
           onPress={(event) => event.stopPropagation()}>
           {picking ? (
@@ -306,15 +362,47 @@ function HostAdjustSheets({
                 <Button title={copy('board.adjustCancel')} variant="ghost" onPress={onCloseSheet} />
               </View>
             </>
+          ) : noteStep && sheet ? (
+            <>
+              <AppText className="text-2xl font-bold text-charcoal">{adjustSheetTitle(sheet)}</AppText>
+              {mutate.error ? (
+                <AppText className="mt-3 text-sm text-coral-dark">
+                  {hostAdjustErrorMessage(getErrorMessage(mutate.error))}
+                </AppText>
+              ) : null}
+              <View className="mt-4">
+                <InlineComposer
+                  pinned
+                  allowEmpty
+                  placeholder={copy('board.adjustNotePlaceholder')}
+                  submitLabel={copy('live.send')}
+                  submitting={mutate.isPending}
+                  failTitle="Couldn’t update the Board."
+                  draftKey={`host-adjust:${challengeId}:${sheet.target.userId}:${sheet.action}`}
+                  onSubmit={async (content) => {
+                    const split = liveComposeFromInline(content);
+                    await mutate.mutateAsync({
+                      ...sheet,
+                      caption: split.text,
+                      mediaUrls: split.mediaUrls,
+                    });
+                  }}
+                />
+              </View>
+              <View className="mt-3">
+                <Button
+                  title={copy('board.adjustSkipSend')}
+                  variant="ghost"
+                  disabled={mutate.isPending}
+                  onPress={() => {
+                    mutate.mutate({ ...sheet, caption: '', mediaUrls: [] });
+                  }}
+                />
+              </View>
+            </>
           ) : (
             <>
-              <AppText className="text-2xl font-bold text-charcoal">
-                {sheet?.action === 'excuse_miss'
-                  ? copy('board.excuseMiss')
-                  : sheet?.action === 'remove_counted'
-                    ? copy('board.removeCountedDay')
-                    : copy('board.countMissedDay')}
-              </AppText>
+              <AppText className="text-2xl font-bold text-charcoal">{adjustSheetTitle(sheet)}</AppText>
               <AppText className="mt-2 text-muted">
                 {sheet?.action === 'excuse_miss'
                   ? copy('board.excuseMissConfirm', 'gentle', { name })
@@ -328,11 +416,6 @@ function HostAdjustSheets({
                         name,
                       })}
               </AppText>
-              {mutate.error ? (
-                <AppText className="mt-3 text-sm text-coral-dark">
-                  {hostAdjustErrorMessage(getErrorMessage(mutate.error))}
-                </AppText>
-              ) : null}
               <View className="mt-6 gap-3">
                 <Button
                   title={
@@ -343,24 +426,18 @@ function HostAdjustSheets({
                         : copy('board.countDay')
                   }
                   size="lg"
-                  loading={mutate.isPending}
-                  onPress={() => {
-                    if (!sheet) {
-                      return;
-                    }
-                    mutate.mutate(sheet);
-                  }}
+                  onPress={() => setNoteStep(true)}
                 />
                 <Button
                   title={copy('board.adjustCancel')}
                   variant="ghost"
-                  disabled={mutate.isPending}
                   onPress={onCloseSheet}
                 />
               </View>
             </>
           )}
         </Pressable>
+        </KeyboardAvoidingView>
       </ChromeOverlay>
     </>
   );

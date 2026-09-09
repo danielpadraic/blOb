@@ -237,8 +237,93 @@ export function parseOcrCalories(text: string): { active?: number; total?: numbe
   return out;
 }
 
+const AVG_HR_LABEL =
+  /\b(?:avg\.?\s*heart\s*rate|average\s*heart\s*rate|avg\.?\s*hr|average\s*hr)\b/i;
+const MAX_HR_LABEL =
+  /\b(?:max(?:imum)?(?:\s*\.?\s*heart\s*rate|\s*hr)|peak(?:\s*heart\s*rate|\s*hr)|highest)\b/i;
+const MIN_HR_LABEL = /\b(?:min(?:imum)?(?:\s*\.?\s*heart\s*rate|\s*hr)|lowest)\b/i;
+
+function isAvgHrLabel(line: string): boolean {
+  return AVG_HR_LABEL.test(line);
+}
+
+function isMaxHrLabel(line: string): boolean {
+  return MAX_HR_LABEL.test(line);
+}
+
+function isMinHrLabel(line: string): boolean {
+  return MIN_HR_LABEL.test(line);
+}
+
+function isSplitHeader(line: string): boolean {
+  if (isAvgHrLabel(line) || isMaxHrLabel(line) || isMinHrLabel(line)) {
+    return false;
+  }
+  if (/^\s*splits?\s*$/i.test(line) || /\bsplits?\b/i.test(line)) {
+    return true;
+  }
+  return /\bheart\s*rate\b/i.test(line) && /\b(km|mi\b|miles?|pace|split|lap)\b/i.test(line);
+}
+
+/** Lines inside an Apple Fitness splits table must never become the workout average. */
+function splitLineMask(lines: string[]): boolean[] {
+  const mask = lines.map(() => false);
+  let inSplits = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (isAvgHrLabel(line) || isMaxHrLabel(line) || isMinHrLabel(line)) {
+      inSplits = false;
+      continue;
+    }
+    if (isSplitHeader(line)) {
+      inSplits = true;
+      mask[index] = true;
+      continue;
+    }
+    if (inSplits) {
+      mask[index] = true;
+    }
+  }
+  return mask;
+}
+
+function bpmFromWindow(window: string): number | undefined {
+  const value =
+    numberNear(window, /\b(\d{2,3})\s*bpm\b/i) ?? numberNear(window, /\b(\d{2,3})\b/);
+  return value == null ? undefined : accept(value, OCR_LIMITS.hrBpm.min, OCR_LIMITS.hrBpm.max);
+}
+
+export function ocrAvgExceedsMax(parsed: ParsedWorkoutOcr | null | undefined): boolean {
+  const avg = parsed?.avgHrBpm;
+  const max = parsed?.maxHrBpm;
+  return avg != null && max != null && avg > max;
+}
+
+/** Drop a misread average (often a split or max) so chips never show avg > max. */
+export function dropOcrAvgIfAboveMax(parsed: ParsedWorkoutOcr): ParsedWorkoutOcr {
+  if (!ocrAvgExceedsMax(parsed)) {
+    return parsed;
+  }
+  const next = { ...parsed };
+  delete next.avgHrBpm;
+  return next;
+}
+
+export function mergeWorkoutOcr(base: ParsedWorkoutOcr, overlay: ParsedWorkoutOcr): ParsedWorkoutOcr {
+  const next: ParsedWorkoutOcr = { ...base };
+  (Object.keys(overlay) as Array<keyof ParsedWorkoutOcr>).forEach((key) => {
+    const value = overlay[key];
+    if (value != null) {
+      (next as ParsedWorkoutOcr)[key] = value as never;
+    }
+  });
+  next.confidence = Math.max(base.confidence ?? 0, overlay.confidence ?? 0);
+  return dropOcrAvgIfAboveMax(next);
+}
+
 export function parseOcrHeartRate(text: string): { min?: number; avg?: number; max?: number } {
   const lines = usableLines(text);
+  const split = splitLineMask(lines);
   const out: { min?: number; avg?: number; max?: number } = {};
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -247,24 +332,44 @@ export function parseOcrHeartRate(text: string): { min?: number; avg?: number; m
       continue;
     }
     const window = `${line} ${lines[index + 1] ?? ''}`;
-    const hasHrWord = /(heart ?rate|\bhr\b|\bbpm\b)/i.test(line);
-    if (!hasHrWord) {
-      continue;
-    }
-    const value =
-      numberNear(window, /\b(\d{2,3})\s*bpm\b/i) ?? numberNear(window, /\b(\d{2,3})\b/);
-    const ok = value == null ? undefined : accept(value, OCR_LIMITS.hrBpm.min, OCR_LIMITS.hrBpm.max);
+    const ok = bpmFromWindow(window);
     if (ok == null) {
       continue;
     }
-    if (/\b(max|peak|high)\b/i.test(line)) {
+    if (isMaxHrLabel(line)) {
       out.max = out.max ?? ok;
-    } else if (/\b(min|low|lowest)\b/i.test(line)) {
+      continue;
+    }
+    if (isMinHrLabel(line)) {
       out.min = out.min ?? ok;
-    } else if (/\b(avg|average|mean)\b/i.test(line) || out.avg == null) {
+      continue;
+    }
+    if (isAvgHrLabel(line) && !split[index]) {
       out.avg = out.avg ?? ok;
     }
   }
+
+  if (out.avg == null) {
+    for (let index = 0; index < lines.length; index += 1) {
+      if (split[index]) {
+        continue;
+      }
+      const line = lines[index];
+      if (BANNED_LINE.test(line) || isMaxHrLabel(line) || isMinHrLabel(line)) {
+        continue;
+      }
+      if (!/(heart ?rate|\bhr\b|\bbpm\b)/i.test(line)) {
+        continue;
+      }
+      const ok = bpmFromWindow(`${line} ${lines[index + 1] ?? ''}`);
+      if (ok == null) {
+        continue;
+      }
+      out.avg = ok;
+      break;
+    }
+  }
+
   return out;
 }
 

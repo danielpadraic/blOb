@@ -7,6 +7,8 @@ import {
   challengeUsesConsistencyAdjustBoard,
   HOST_ADJUST_HONOR_SOURCE,
   hostAdjustErrorMessage,
+  hostAdjustLiveBody,
+  hostAdjustLivePostRow,
   participantCanBeAdjusted,
   viewerCanAdjustBoard,
 } from '@/lib/hostAdjust';
@@ -89,5 +91,44 @@ describe('host Board adjust gates', () => {
     expect(
       hostAdjustErrorMessage('23505 duplicate key value violates unique constraint "posts_system_kind_uidx"'),
     ).toBe('Couldn’t update the Board.');
+  });
+});
+
+describe('host adjust Live note', () => {
+  it('uses the caption when the host typed one', () => {
+    expect(
+      hostAdjustLiveBody({
+        action: 'excuse_miss',
+        displayName: 'Josh',
+        caption: '  Weather delay.  ',
+      }),
+    ).toBe('Weather delay.');
+  });
+
+  it('prints Count / Excuse / Remove defaults', () => {
+    expect(hostAdjustLiveBody({ action: 'count_honor', displayName: 'Silas', dayN: 3 })).toBe(
+      'Host counted Day 3 for Silas.',
+    );
+    expect(hostAdjustLiveBody({ action: 'excuse_miss', displayName: 'Josh' })).toBe(
+      'Host excused a miss for Josh.',
+    );
+    expect(hostAdjustLiveBody({ action: 'remove_counted', displayName: 'Silas', dayN: 3 })).toBe(
+      'Host removed Day 3 for Silas.',
+    );
+  });
+
+  it('does not write system_kind host_counted_day', () => {
+    const row = hostAdjustLivePostRow({
+      authorId: 'host',
+      challengeId: 'c1',
+      content: 'Host counted Day 3 for Silas.',
+      mediaUrls: ['https://cdn.test/note.jpg'],
+    });
+    expect(row.hidden_from_home).toBe(true);
+    expect(row.source).toBe('challenge');
+    expect(row.type).toBe('feed');
+    expect(row).not.toHaveProperty('system_kind');
+    expect(row).not.toHaveProperty('system_key');
+    expect(JSON.stringify(row)).not.toContain('host_counted_day');
   });
 });

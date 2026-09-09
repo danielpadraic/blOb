@@ -1,7 +1,10 @@
 import { isAllowedOcrImageUrl } from '../lib/health/ocrAllowlist';
 import {
   classifyWorkoutScreen,
+  dropOcrAvgIfAboveMax,
   hasOcrNumbers,
+  mergeWorkoutOcr,
+  ocrAvgExceedsMax,
   parseWorkoutOcrText,
   type ParsedWorkoutOcr,
 } from '../lib/health/workoutOcr';
@@ -99,14 +102,31 @@ export type OcrWorkoutRead = OcrWorkoutResponse & { inverted: boolean; pass: 1 |
 export async function ocrWorkoutFromBuffer(bytes: Buffer): Promise<OcrWorkoutRead> {
   const pass1 = await ocrImageBuffer(bytes, 'never');
   const parsed1 = parseWorkoutOcrText(pass1.text);
-  if (hasOcrNumbers(parsed1)) {
+  if (hasOcrNumbers(parsed1) && !ocrAvgExceedsMax(parsed1)) {
     return { ok: true, isWorkoutScreen: true, reason: 'ok', parsed: parsed1, inverted: false, pass: 1 };
   }
 
   const pass2 = await ocrImageBuffer(bytes, 'always');
   const parsed2 = parseWorkoutOcrText(pass2.text);
+  if (ocrAvgExceedsMax(parsed1) && (hasOcrNumbers(parsed1) || hasOcrNumbers(parsed2))) {
+    return {
+      ok: true,
+      isWorkoutScreen: true,
+      reason: 'ok',
+      parsed: mergeWorkoutOcr(dropOcrAvgIfAboveMax(parsed1), parsed2),
+      inverted: true,
+      pass: 2,
+    };
+  }
   if (hasOcrNumbers(parsed2)) {
-    return { ok: true, isWorkoutScreen: true, reason: 'ok', parsed: parsed2, inverted: true, pass: 2 };
+    return {
+      ok: true,
+      isWorkoutScreen: true,
+      reason: 'ok',
+      parsed: dropOcrAvgIfAboveMax(parsed2),
+      inverted: true,
+      pass: 2,
+    };
   }
 
   const classification = classifyWorkoutScreen(`${pass1.text}\n${pass2.text}`);
@@ -119,7 +139,14 @@ export async function ocrWorkoutFromBuffer(bytes: Buffer): Promise<OcrWorkoutRea
       pass: 2,
     };
   }
-  return { ok: true, isWorkoutScreen: true, reason: 'ok', parsed: parsed2, inverted: true, pass: 2 };
+  return {
+    ok: true,
+    isWorkoutScreen: true,
+    reason: 'ok',
+    parsed: dropOcrAvgIfAboveMax(parsed1),
+    inverted: true,
+    pass: 2,
+  };
 }
 
 /**

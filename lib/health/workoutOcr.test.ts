@@ -7,7 +7,9 @@ import {
   hasOcrNumbers,
   METERS_PER_MILE,
   parseOcrDuration,
+  parseOcrHeartRate,
   parseWorkoutOcrText,
+  dropOcrAvgIfAboveMax,
 } from './workoutOcr';
 
 /** Apple Fitness workout summary. The clock range above the elapsed time is the classic trap. */
@@ -45,6 +47,22 @@ Outdoor Walk
 O:36:55
 1.36MI
 87 bpm
+`;
+
+/**
+ * Sep 8 Outdoor Walk layout: labeled Avg 87, split-2 Heart Rate 90.
+ * 90 must never win as the workout average.
+ */
+const APPLE_OUTDOOR_WALK_SPLITS = `
+Outdoor Walk
+0:36:55
+1.36MI
+Avg. Heart Rate
+87 BPM
+Splits
+KM  Time  Heart Rate
+1   18:20  87
+2   18:35  90
 `;
 
 const STRAVA = `
@@ -132,6 +150,36 @@ describe('distance-carrying screens', () => {
     expect(parsed.distanceMeters).toBe(Math.round(1.36 * METERS_PER_MILE));
     expect(parsed.avgHrBpm).toBe(87);
     expect(parsed.activityLabel).toBe('Walk');
+  });
+
+  it('uses labeled Avg. Heart Rate 87, never split 90', () => {
+    const parsed = parseWorkoutOcrText(APPLE_OUTDOOR_WALK_SPLITS);
+    expect(parsed.avgHrBpm).toBe(87);
+    expect(parsed.maxHrBpm).toBeUndefined();
+    expect(parseOcrHeartRate(APPLE_OUTDOOR_WALK_SPLITS)).toEqual({ avg: 87 });
+  });
+
+  it('never treats Max / Peak / Highest as average', () => {
+    const parsed = parseWorkoutOcrText(`
+Outdoor Walk
+Avg. Heart Rate 87 BPM
+Max Heart Rate 142 BPM
+Peak HR 140
+Highest 150
+`);
+    expect(parsed.avgHrBpm).toBe(87);
+    expect(parsed.maxHrBpm).toBe(142);
+  });
+
+  it('drops a parsed avg that is higher than max', () => {
+    const parsed = parseWorkoutOcrText(`
+Outdoor Walk
+Avg. Heart Rate 160 BPM
+Max Heart Rate 90 BPM
+`);
+    expect(parsed.maxHrBpm).toBe(90);
+    expect(parsed.avgHrBpm).toBe(160);
+    expect(dropOcrAvgIfAboveMax(parsed).avgHrBpm).toBeUndefined();
   });
 });
 

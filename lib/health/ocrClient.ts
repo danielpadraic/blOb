@@ -3,7 +3,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from '@/lib/supabase';
 import { isOcrSpaHtml, isProjectStorageImageUrl } from '@/lib/health/ocrAllowlist';
 import { ocrEndpoint } from '@/lib/health/ocrEndpoint';
-import { hasOcrNumbers, type ParsedWorkoutOcr } from '@/lib/health/workoutOcr';
+import { dropOcrAvgIfAboveMax, hasOcrNumbers, type ParsedWorkoutOcr } from '@/lib/health/workoutOcr';
 
 /**
  * Client for the workout-screenshot reader.
@@ -157,7 +157,7 @@ export async function readWorkoutScreenshot(input: {
           : `http_${response.status}`;
       return miss(reason, started, urls, slot, response.status, true);
     }
-    const parsed = body?.parsed;
+    const parsed = body?.parsed ? dropOcrAvgIfAboveMax(body.parsed) : body?.parsed;
     const result: OcrReadResult = {
       ok: Boolean(body?.ok),
       isWorkoutScreen: Boolean(body?.isWorkoutScreen),
