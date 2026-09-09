@@ -14,6 +14,7 @@ import { formatDate } from '@/utils/format';
 type LedgerRow = {
   id: string;
   challenge_id: string | null;
+  challenge_title?: string | null;
   currency: string | null;
   amount: number | null;
   entry_type: string | null;
@@ -29,16 +30,27 @@ export function WalletHistory() {
     queryKey: ['wallet-ledger', user?.id],
     enabled: Boolean(user?.id),
     queryFn: async (): Promise<WalletReceiptRow[]> => {
-      const { data, error } = await supabase
+      const withTitle = await supabase
         .from('wallet_ledger')
-        .select('id, challenge_id, currency, amount, entry_type, reason, created_at')
+        .select('id, challenge_id, challenge_title, currency, amount, entry_type, reason, created_at')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(20);
-      if (error) {
-        throw error;
+      const missingTitle =
+        Boolean(withTitle.error) &&
+        /challenge_title|42703|pgrst204/i.test(String(withTitle.error?.message ?? ''));
+      const result = missingTitle
+        ? await supabase
+            .from('wallet_ledger')
+            .select('id, challenge_id, currency, amount, entry_type, reason, created_at')
+            .eq('user_id', user!.id)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        : withTitle;
+      if (result.error) {
+        throw result.error;
       }
-      const rows = (data ?? []) as LedgerRow[];
+      const rows = (result.data ?? []) as LedgerRow[];
       const challengeIds = [...new Set(rows.map((row) => row.challenge_id).filter(Boolean))] as string[];
       const titles = new Map<string, { title: string | null; task: string | null }>();
       const places = new Map<string, number>();
@@ -63,6 +75,7 @@ export function WalletHistory() {
       return rows.map((row) =>
         asWalletReceiptRow({
           ...row,
+          challenge_title: row.challenge_title,
           title: row.challenge_id ? titles.get(row.challenge_id)?.title : null,
           task: row.challenge_id ? titles.get(row.challenge_id)?.task : null,
           place: row.challenge_id ? places.get(row.challenge_id) ?? null : null,

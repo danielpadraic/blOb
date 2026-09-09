@@ -61,10 +61,24 @@ describe('wallet settlement receipt', () => {
     expect(row.headline).toBe('Refund · Daily Prayer');
     expect(row.amount).toBe(10);
     expect(walletReceiptHeadline({ entryType: 'distribute_win', title: 'Official Weekly', place: 1 })).toBe(
-      'Official Weekly · 1st',
+      'Official Weekly · Prize',
     );
     expect(walletReceiptHeadline({ entryType: 'distribute_win', title: 'Workout Group #2' })).toBe(
       'Workout Group #2 · Prize',
     );
+    expect(
+      walletReceiptHeadline({
+        entryType: 'distribute_win',
+        title: 'this challenge',
+        challengeTitle: '30-Day Consistency',
+      }),
+    ).toBe('30-Day Consistency · Prize');
+    expect(walletReceiptHeadline({ entryType: 'distribute_win' })).toBe('Challenge prize · Prize');
+    expect(
+      walletReceiptHeadline({
+        entryType: 'refund_pre_start',
+        title: 'Kids Chore & Bible Points',
+      }),
+    ).toBe('Refund · Kids Chore & Bible Points');
   });
 });

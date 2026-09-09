@@ -2,6 +2,7 @@ import { isEndedPrizeStatus } from '@/lib/challengePot';
 import { isLiveOrUpcoming } from '@/lib/challengeDiscoverability';
 import { fetchCompetingChallenges, fetchHostingChallenges } from '@/lib/challenges';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { isLobbyEndedChallenge } from '@/lib/lobbyChallenge';
 import {
   calloutCardMetaLine,
   calloutPartyFaces,
@@ -63,6 +64,8 @@ export type PulseChallengeLike = {
   title?: string | null;
   task?: string | null;
   status?: string | null;
+  ends_at?: string | null;
+  is_unlimited?: boolean | null;
   is_callout?: boolean | null;
   watching?: boolean | null;
   joined?: boolean | null;
@@ -82,14 +85,14 @@ export function isPulseEndedStatus(status: string | null | undefined): boolean {
 
 /**
  * Home Pulse membership lock:
- * 1. Joined participant + live/upcoming (existing upcoming statuses — no new rule)
- * 2. Host + not Ended/Settled (same live/upcoming set as today)
+ * 1. Joined participant + live/upcoming (product Active)
+ * 2. Host + not Ended/Settled (Lobby Ended clock, including live + ends_at in the past)
  * 3. Observer on a Callout via callout_observers, not Ended
- * Never public Active the viewer did not join. Never Ended.
+ * Never public Active the viewer did not join. Never Ended / settled / cancelled.
  */
 export function isPulsePillEligible(row: PulseChallengeLike, viewerId?: string | null): boolean {
   const id = String(row?.id ?? '').trim();
-  if (!id || isPulseEndedStatus(row.status) || !isLiveOrUpcoming(pulseStatus(row.status))) {
+  if (!id || isLobbyEndedChallenge(row) || isPulseEndedStatus(row.status) || !isLiveOrUpcoming(pulseStatus(row.status))) {
     return false;
   }
   const hosting = Boolean(row.hosting) || Boolean(viewerId && String(row.created_by ?? '') === viewerId);

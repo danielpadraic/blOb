@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, PanResponder, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SendWalletButton, WalletBalances } from '@/components/currency/WalletBalances';
 import { WalletHistory } from '@/components/wallet/WalletHistory';
@@ -14,7 +15,7 @@ import { useWallet } from '@/hooks/useWallet';
 import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { copy } from '@/lib/copy';
 import { hasPayoutAddress } from '@/lib/payoutAddress';
-import { THEME } from '@/lib/theme';
+import { tabBarLift, THEME } from '@/lib/theme';
 
 const EARN_WAYS = [
   { icon: GLYPH.check, title: copy('wallet.finishChallenges'), body: copy('wallet.finishChallengesBody') },
@@ -26,12 +27,14 @@ const EARN_WAYS = [
 
 export function WalletSheet() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { profile } = useMyProfile();
   const { sheetOpen, scrollToLatest, closeWallet, openSend, openTopUp } = useWallet();
   const geo = useGeoCashOptional();
   const scrollRef = useRef<ScrollView>(null);
   const receiptsY = useRef(0);
   const [cashOutNote, setCashOutNote] = useState<string | null>(null);
+  const tabLift = tabBarLift(insets.bottom, 'overlay');
 
   useEffect(() => {
     if (!sheetOpen || !scrollToLatest) {
@@ -43,6 +46,31 @@ export function WalletSheet() {
     return () => clearTimeout(timer);
   }, [scrollToLatest, sheetOpen]);
 
+  useEffect(() => {
+    if (!sheetOpen) {
+      return;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeWallet();
+      return true;
+    });
+    return () => sub.remove();
+  }, [closeWallet, sheetOpen]);
+
+  const swipe = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 56 || gesture.vy > 0.85) {
+            closeWallet();
+          }
+        },
+      }),
+    [closeWallet],
+  );
+
   if (!profile || !sheetOpen) {
     return null;
   }
@@ -53,18 +81,31 @@ export function WalletSheet() {
   }
 
   return (
-    <ChromeOverlay visible onClose={closeWallet}>
+    <ChromeOverlay visible onClose={closeWallet} insetBottom={tabLift}>
       <View
-        className="max-h-[88%] px-5 pt-4"
+        className="max-h-[88%] px-5 pt-3"
         style={{
           backgroundColor: THEME.background,
           borderTopLeftRadius: THEME.radiusLg,
           borderTopRightRadius: THEME.radiusLg,
-          paddingBottom: 16,
+          paddingBottom: 12,
         }}>
-          <View className="mb-3 items-center">
-            <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
-            <AppText className="mt-3 text-lg font-bold text-charcoal">Wallet</AppText>
+          <View {...swipe.panHandlers}>
+            <View className="items-center pb-1">
+              <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+            </View>
+            <View className="mb-2 flex-row items-center" style={{ minHeight: 44 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={8}
+                onPress={closeWallet}
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Glyph name={GLYPH.close} color={THEME.textPrimary} size={16} />
+              </Pressable>
+              <AppText className="flex-1 text-center text-lg font-bold text-charcoal">Wallet</AppText>
+              <View style={{ width: 44, height: 44 }} />
+            </View>
           </View>
 
           <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
@@ -137,7 +178,6 @@ export function WalletSheet() {
                   openSend();
                 }}
               />
-              <Button title="Close" variant="ghost" onPress={closeWallet} />
             </View>
           </ScrollView>
       </View>

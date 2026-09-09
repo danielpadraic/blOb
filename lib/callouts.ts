@@ -757,7 +757,15 @@ async function fetchCalloutInvitePool(userId: string): Promise<{
 }
 
 export async function fetchWatchedCalloutChallenges(userId: string): Promise<
-  { id: string; title: string | null; task: string | null; status: string | null; is_callout: boolean }[]
+  {
+    id: string;
+    title: string | null;
+    task: string | null;
+    status: string | null;
+    is_callout: boolean;
+    ends_at: string | null;
+    is_unlimited: boolean | null;
+  }[]
 > {
   const { data, error } = await supabase
     .from('callout_observers')
@@ -786,7 +794,7 @@ export async function fetchWatchedCalloutChallenges(userId: string): Promise<
   }
   const challenges = await supabase
     .from('challenges')
-    .select('id, title, task, status, is_callout')
+    .select('id, title, task, status, is_callout, ends_at, is_unlimited')
     .in('id', challengeIds);
   if (challenges.error) {
     throw new Error(getErrorMessage(challenges.error));
@@ -797,6 +805,8 @@ export async function fetchWatchedCalloutChallenges(userId: string): Promise<
     task: row.task ?? null,
     status: row.status ?? null,
     is_callout: true,
+    ends_at: row.ends_at == null ? null : String(row.ends_at),
+    is_unlimited: row.is_unlimited == null ? null : Boolean(row.is_unlimited),
   }));
 }
 

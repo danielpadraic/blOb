@@ -36,6 +36,26 @@ describe('selectPulseChallenges', () => {
     expect(rows.map((row) => row.id)).toEqual(['host-live']);
   });
 
+  it('drops Official / peer that the Lobby Ended clock already moved', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    expect(
+      isPulsePillEligible({
+        id: 'week-ended',
+        status: 'live',
+        title: 'Official Weekly',
+        joined: true,
+        ends_at: yesterday,
+      }),
+    ).toBe(false);
+    expect(
+      selectPulseChallenges([
+        { id: 'week-ended', status: 'live', title: 'Official Weekly', joined: true, ends_at: yesterday },
+        { id: 'peer-ended', status: 'ended', title: 'Peer', joined: true },
+        { id: 'live-30', status: 'live', title: '30-Day Consistency', joined: true },
+      ]).map((row) => row.id),
+    ).toEqual(['live-30']);
+  });
+
   it('keeps observer Callout pills and drops ended watching', () => {
     const rows = selectPulseChallenges([
       { id: 'watch-live', status: 'live', title: 'Sit-ups', is_callout: true, watching: true },

@@ -221,6 +221,7 @@ export interface WalletLedgerEntry {
   id: string;
   user_id: string | null;
   challenge_id?: string | null;
+  challenge_title?: string | null;
   currency: WalletCurrency | string;
   amount: number;
   entry_type?: string;

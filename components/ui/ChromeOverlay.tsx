@@ -9,6 +9,8 @@ type ChromeOverlayProps = {
   dim?: boolean | 'heavy';
   /** Stack above tab-bar chrome (ComposeTabButton is zIndex 80–90). */
   zIndex?: number;
+  /** Leave the floating tab bar tappable. Wallet uses this so the sheet is not a dead stack. */
+  insetBottom?: number;
 };
 
 /** Fills the parent. Never use RN Modal for in-app sheets. */
@@ -19,6 +21,7 @@ export function ChromeOverlay({
   align = 'end',
   dim = true,
   zIndex,
+  insetBottom = 0,
 }: ChromeOverlayProps) {
   if (!visible) {
     return null;
@@ -34,6 +37,7 @@ export function ChromeOverlay({
       style={[
         styles.host,
         zIndex != null ? { zIndex, elevation: zIndex } : null,
+        insetBottom > 0 ? { bottom: insetBottom } : null,
       ]}>
       <View
         accessibilityRole="none"
