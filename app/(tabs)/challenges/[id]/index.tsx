@@ -46,9 +46,9 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { useStalled } from '@/hooks/useStalled';
-import { BODY_METRICS_HREF, captureHref, challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
+import { BODY_METRICS_HREF, captureHref, challengeDetailHref, errorRetryHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
-import { applyLiveBackGesture, liveScreenBackGesture } from '@/lib/liveThread';
+import { applyLiveBackGesture, liveErrorFile, liveScreenBackGesture } from '@/lib/liveThread';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { useLiveThreadFocus } from '@/hooks/useLiveThreadFocus';
 import {
@@ -208,17 +208,20 @@ function ChallengeStackTitle({
 }
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const pathname = usePathname();
+  const router = useRouter();
   useEffect(() => {
     const message = error?.message?.trim() || 'Something went wrong';
     console.log('[blob:live]', {
       reason: 'challenge-boundary',
-      message,
+      error: message,
+      file: liveErrorFile(error),
       stack: error?.stack ?? null,
     });
     reportAppError({
       route: 'challenge/detail-boundary',
       error,
-      payload: { errorCode: extractPostgrestCode(error), message },
+      payload: { errorCode: extractPostgrestCode(error), message, file: liveErrorFile(error) },
     });
   }, [error]);
   const detail = error?.message?.trim() || '';
@@ -229,7 +232,19 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         title="Something went wrong"
         body={detail ? `Try again in a moment.\n${detail}` : 'Try again in a moment.'}
         actionLabel="Retry"
-        onAction={() => void retry()}
+        onAction={() => {
+          stopAllLiveMedia();
+          console.log('[blob:live]', {
+            error: error?.message?.trim() || 'retry',
+            file: liveErrorFile(error),
+          });
+          const next = errorRetryHref(pathname);
+          if (next && !next.includes('/capture') && !next.includes('/submit')) {
+            router.replace(next as never);
+            return;
+          }
+          void retry();
+        }}
       />
     </Screen>
   );

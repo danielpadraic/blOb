@@ -143,7 +143,7 @@ import { firstRouteParam } from '@/lib/challengeLoad';
 import { isChallengeRouteId } from '@/lib/challengeTimezone';
 import { parseDoneIds } from '@/lib/multiCheckin';
 import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
-import { challengeDetailHref, checkinSubmitHref, LOBBY_HREF, multiCheckinHref } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref, leaveCheckinHref, LOBBY_HREF, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getCheckinSubmitMessage, getErrorMessage, withFailureReason } from '@/utils/errors';
@@ -266,8 +266,17 @@ function slotPart(
   };
 }
 
+function closeCheckinToChallenge(
+  router: { replace: (href: never) => void },
+  id: string,
+  extra?: { from?: string | null; tab?: string | null },
+) {
+  stopAllLiveMedia();
+  router.replace(leaveCheckinHref(id, extra) as never);
+}
+
 export default function SubmitWorkoutScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; from?: string; tab?: string }>();
   const id = firstRouteParam(params.id);
   const router = useRouter();
   const pathname = usePathname();
@@ -275,7 +284,7 @@ export default function SubmitWorkoutScreen() {
   return (
     <View key={id || 'submit'} style={{ flex: 1 }}>
       <CheckinSafeBoundary
-        onBack={() => router.back()}
+        onBack={() => closeCheckinToChallenge(router, id, { from: firstRouteParam(params.from), tab: firstRouteParam(params.tab) })}
         href={id ? String(checkinSubmitHref(id)) : pathname}
         id={id || null}
         focused={checkinCameraFocused({ navFocused, pathname })}>
@@ -286,7 +295,7 @@ export default function SubmitWorkoutScreen() {
 }
 
 function SubmitWorkoutInner() {
-  const params = useLocalSearchParams<{ id: string; from?: string; done?: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; done?: string; tab?: string }>();
   const rawId = firstRouteParam(params.id);
   const id = isChallengeRouteId(rawId) ? rawId : '';
   const router = useRouter();
@@ -296,6 +305,12 @@ function SubmitWorkoutInner() {
   const hydrateServerRef = useRef<string | null>(null);
   const appendStillRef = useRef<{ proofId: string } | null>(null);
   const replaceStillRef = useRef<{ proofId: string; index: number } | null>(null);
+  const leaveCheckin = useCallback(() => {
+    closeCheckinToChallenge(router, id, {
+      from: firstRouteParam(params.from),
+      tab: firstRouteParam(params.tab),
+    });
+  }, [id, params.from, params.tab, router]);
 
   useEffect(() => {
     if (!id) {
@@ -1625,7 +1640,7 @@ function SubmitWorkoutInner() {
           title={copy('challenge.joinFirst')}
           body="Join this challenge before you check in."
           actionLabel="Back"
-          onAction={() => router.back()}
+          onAction={() => leaveCheckin()}
         />
       </Screen>
     );
@@ -1639,7 +1654,7 @@ function SubmitWorkoutInner() {
           title={copy('challenge.eliminated')}
           body="New check-ins are not accepted."
           actionLabel="Back to challenge"
-          onAction={() => router.back()}
+          onAction={() => leaveCheckin()}
         />
       </Screen>
     );
@@ -1653,7 +1668,7 @@ function SubmitWorkoutInner() {
           title={copy('challenge.notStarted')}
           body={loggingOpensHelper(challenge) || copy('checkin.notLiveBob')}
           actionLabel="Back to challenge"
-          onAction={() => router.back()}
+          onAction={() => leaveCheckin()}
         />
       </Screen>
     );
@@ -1667,7 +1682,7 @@ function SubmitWorkoutInner() {
           title={copy('challenge.logClosed')}
           body="This challenge has ended. New check-ins are not accepted."
           actionLabel="Back to challenge"
-          onAction={() => router.back()}
+          onAction={() => leaveCheckin()}
         />
       </Screen>
     );
@@ -1782,7 +1797,7 @@ function SubmitWorkoutInner() {
             setSkippedAuto(true);
             setPreferCamera(false);
             if (!hasReviewDraft && !captureId) {
-              router.back();
+              leaveCheckin();
             }
           }}
         />
@@ -1826,7 +1841,7 @@ function SubmitWorkoutInner() {
             setSkippedAuto(true);
             setPreferCamera(false);
             if (!hasReviewDraft) {
-              router.back();
+              leaveCheckin();
             }
           }}
         />
@@ -1864,7 +1879,7 @@ function SubmitWorkoutInner() {
         canSend={canSend}
         blockedHint={checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)))}
         stillNeeded={stillNeeded}
-        onClose={() => router.back()}
+        onClose={() => leaveCheckin()}
         onRetake={(proof, stillIndex) => {
           replaceStillRef.current = { proofId: proof.id, index: stillIndex };
           appendStillRef.current = null;

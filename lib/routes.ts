@@ -190,7 +190,22 @@ export function checkinSubmitHref(
   return done.length > 0 ? (`${path}?from=multi&done=${done.join(',')}` as Href) : (`${path}?from=multi` as Href);
 }
 
-/** Bob Retry after a crash. Never reload `/capture` (that reopens Wave). */
+const CHALLENGE_RETRY_SKIP = new Set(['new', 'create', 'callout']);
+
+function challengeRetryId(path: string): string | null {
+  const match = String(path ?? '').match(/\/challenges\/([^/?#]+)/);
+  const id = String(match?.[1] ?? '').trim();
+  if (!id || CHALLENGE_RETRY_SKIP.has(id)) {
+    return null;
+  }
+  return id;
+}
+
+/**
+ * Bob Retry after a crash.
+ * Challenge Live: remount that Live list. Never `/capture`, never `/submit`, never Home.
+ * Wave capture still leaves the camera for Home.
+ */
 export function errorRetryHref(pathname: string | null | undefined): string {
   const path = String(pathname ?? '');
   if (path.includes('/capture') || path.includes('/feed/compose') || path === '/compose') {
@@ -200,15 +215,29 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   if (watch && !clipRouteId(watch[2])) {
     return '/feed';
   }
-  const submit = path.match(/\/challenges\/([^/?#]+)\/submit/);
-  if (submit?.[1]) {
-    return `/challenges/${submit[1]}/submit`;
-  }
-  const live = path.match(/\/challenges\/([^/?#]+)/);
-  if (live?.[1]) {
-    return `/challenges/${live[1]}?tab=feed`;
+  const challengeId = challengeRetryId(path);
+  if (challengeId) {
+    const tab = path.match(/[?&]tab=(overview|board)\b/)?.[1];
+    return `/challenges/${challengeId}?tab=${tab ?? 'feed'}`;
   }
   return path || '/feed';
+}
+
+/** X / Close on Check In. Live, or Overview/Board if they came from there. Never Home. */
+export function leaveCheckinHref(
+  id: string | null | undefined,
+  extra?: { from?: string | null; tab?: string | null },
+): string {
+  if (String(extra?.from ?? '').trim() === 'multi') {
+    return String(MULTI_CHECKIN_HREF);
+  }
+  const challengeId = String(id ?? '').trim();
+  if (!challengeId) {
+    return String(LOBBY_HREF);
+  }
+  const tab =
+    extra?.tab === 'overview' || extra?.tab === 'board' ? extra.tab : 'feed';
+  return `/challenges/${challengeId}?tab=${tab}`;
 }
 
 export function inviteHref(token: string) {

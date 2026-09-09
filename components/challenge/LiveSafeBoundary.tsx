@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { copy } from '@/lib/copy';
+import { liveErrorFile } from '@/lib/liveThread';
 import { reportAppError } from '@/lib/appErrors';
 import { THEME } from '@/lib/theme';
 
@@ -24,7 +25,8 @@ export function logLiveThrow(
   const err = error instanceof Error ? error : null;
   console.log('[blob:live]', {
     reason,
-    message,
+    error: message,
+    file: liveErrorFile(error),
     postId: extra?.postId ?? null,
     stack: err?.stack ?? null,
     componentStack: extra?.componentStack ?? null,
@@ -109,6 +111,10 @@ export class LiveSafeBoundary extends Component<BoundaryProps, BoundaryState> {
   }
 
   retry = () => {
+    console.log('[blob:live]', {
+      error: liveThrowMessage(this.state.error),
+      file: liveErrorFile(this.state.error),
+    });
     this.setState((current) => ({ error: null, nonce: current.nonce + 1 }));
   };
 

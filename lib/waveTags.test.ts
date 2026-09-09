@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { challengeHref, checkinSubmitHref, clipRouteId, errorRetryHref, publishedRowId, waveHref } from '@/lib/routes';
+import { challengeHref, checkinSubmitHref, clipRouteId, errorRetryHref, leaveCheckinHref, publishedRowId, waveHref } from '@/lib/routes';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 
@@ -26,12 +26,13 @@ describe('checkinSubmitHref', () => {
     URL.createObjectURL = original;
   });
 
-  it('retries Check In submit and never reloads Wave capture', () => {
+  it('retries Check In submit onto that Live list and never reloads Wave capture', () => {
     expect(errorRetryHref('/capture')).toBe('/feed');
     expect(errorRetryHref('/capture?mode=story')).toBe('/feed');
-    expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1/submit');
+    expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/challenges/abc-1?postId=p1')).toBe('/challenges/abc-1?tab=feed');
+    expect(errorRetryHref('/challenges/abc-1?tab=overview')).toBe('/challenges/abc-1?tab=overview');
     expect(errorRetryHref('/feed')).toBe('/feed');
     expect(errorRetryHref('/feed/compose')).toBe('/feed');
     expect(errorRetryHref('/compose')).toBe('/feed');
@@ -40,6 +41,13 @@ describe('checkinSubmitHref', () => {
     expect(errorRetryHref('/wave/2ca49850-b978-45d8-a282-2b644913c538')).toBe(
       '/wave/2ca49850-b978-45d8-a282-2b644913c538',
     );
+  });
+
+  it('closes Check In onto that challenge Live, not Home', () => {
+    expect(leaveCheckinHref('abc-1')).toBe('/challenges/abc-1?tab=feed');
+    expect(leaveCheckinHref('abc-1', { tab: 'overview' })).toBe('/challenges/abc-1?tab=overview');
+    expect(leaveCheckinHref('abc-1', { from: 'multi' })).toBe('/checkin');
+    expect(leaveCheckinHref('')).toBe('/challenges');
   });
 });
 

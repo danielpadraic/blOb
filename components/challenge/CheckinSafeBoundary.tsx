@@ -6,7 +6,7 @@ import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { reportAppError } from '@/lib/appErrors';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
-import { errorRetryHref } from '@/lib/routes';
+import { errorRetryHref, leaveCheckinHref } from '@/lib/routes';
 
 function checkinIdFromHref(href?: string | null): string | null {
   const match = String(href ?? '').match(/\/challenges\/([^/?#]+)\/submit/);
@@ -102,13 +102,14 @@ export function CheckinRouteErrorBoundary({ error, retry }: ErrorBoundaryProps) 
     <CheckinFail
       onBack={() => {
         stopAllLiveMedia();
-        const next = errorRetryHref(pathname);
-        if (!next || next.includes('/capture')) {
-          router.replace('/feed' as Href);
+        const id = checkinIdFromHref(pathname);
+        const live = id ? leaveCheckinHref(id) : errorRetryHref(pathname);
+        if (!live || live.includes('/capture') || live.includes('/submit')) {
+          router.replace('/challenges' as Href);
           return;
         }
-        if (next !== pathname) {
-          router.replace(next as Href);
+        if (live !== pathname) {
+          router.replace(live as Href);
           return;
         }
         void retry();

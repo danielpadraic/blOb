@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { useAuth } from '@/hooks/useAuth';
 import { isHomeSocialFeedKey } from '@/hooks/useFeed';
 import {
   checkinCtaTitle,

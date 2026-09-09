@@ -4,6 +4,7 @@ import { router, usePathname, type ErrorBoundaryProps } from 'expo-router';
 
 import { MascotState } from '@/components/mascot/MascotState';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { liveErrorFile } from '@/lib/liveThread';
 import { TABS_HREF, errorRetryHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
@@ -12,14 +13,28 @@ function webPathname(): string {
   if (typeof window === 'undefined') {
     return '';
   }
-  return String(window.location?.pathname ?? '');
+  return String(window.location?.pathname ?? '') + String(window.location?.search ?? '');
 }
 
-function reloadApp(retry: () => Promise<void>, pathname: string) {
+function liveRetryHref(pathname: string): string {
+  const next = errorRetryHref(pathname);
+  const id = String(pathname ?? '').match(/\/challenges\/([^/?#]+)/)?.[1] ?? '';
+  const skip = id === 'new' || id === 'create' || id === 'callout';
+  if (id && !skip && (!next || next === '/feed' || next.includes('/capture') || next.includes('/submit'))) {
+    return `/challenges/${id}?tab=feed`;
+  }
+  return next;
+}
+
+function reloadApp(retry: () => Promise<void>, pathname: string, error?: unknown) {
   stopAllLiveMedia();
   const current = pathname || webPathname();
-  const next = errorRetryHref(current);
-  if (!next || next.includes('/capture')) {
+  const next = liveRetryHref(current);
+  console.log('[blob:live]', {
+    error: error instanceof Error ? error.message : String(error ?? 'retry'),
+    file: liveErrorFile(error),
+  });
+  if (!next || next.includes('/capture') || next.includes('/submit')) {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
       window.location.replace('/feed');
       return;
@@ -52,7 +67,8 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
     if (path.includes('/challenges/') && !path.includes('/submit') && !path.includes('/capture')) {
       console.log('[blob:live]', {
         reason: 'app-boundary',
-        message,
+        error: message,
+        file: liveErrorFile(error),
         stack: error?.stack ?? null,
         pathname: path,
       });
@@ -61,7 +77,7 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       route: 'error_boundary',
       error,
       message,
-      payload: { pathname: path || null },
+      payload: { pathname: path || null, file: liveErrorFile(error) },
     });
   }, [error, pathname]);
   const detail = error?.message?.trim() || '';
@@ -72,7 +88,7 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         title="Something went wrong"
         body={detail ? `Try again in a moment.\n${detail}` : 'Try again in a moment.'}
         actionLabel="Retry"
-        onAction={() => reloadApp(retry, pathname)}
+        onAction={() => reloadApp(retry, pathname, error)}
       />
     </View>
   );

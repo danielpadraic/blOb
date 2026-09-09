@@ -21,6 +21,7 @@ import {
   liveSwipeClaimsReply,
   seedLiveFeedPosts,
   liveRowKey,
+  liveErrorFile,
   sortLivePosts,
   toggleLiveReactionList,
 } from '@/lib/liveThread';
@@ -50,6 +51,12 @@ describe('seedLiveFeedPosts / liveRowKey', () => {
     expect(rows[0].media_urls).toEqual([]);
     expect(liveRowKey({ id: undefined, kind: 'post' }, 3)).toBe('live:post::3');
     expect(liveRowKey(null, 0)).toBe('live:row::0');
+  });
+
+  it('reads the throwing file from a stack for Retry logs', () => {
+    const err = new Error("Can't find variable useAuth");
+    err.stack = `ReferenceError: Can't find variable useAuth\n    at usePeriodCheckin (hooks/useChallengeCheckin.ts:312:20)`;
+    expect(liveErrorFile(err)).toBe('hooks/useChallengeCheckin.ts');
   });
 });
 

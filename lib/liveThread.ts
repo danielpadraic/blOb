@@ -15,6 +15,17 @@ export type LivePostLike = CheckinPostLike & {
   deleted_at?: string | null;
 };
 
+/** First app file in a throw stack. Safari “Can't find variable” logs use this. */
+export function liveErrorFile(error: unknown): string | null {
+  const stack = error instanceof Error ? String(error.stack ?? '') : String(error ?? '');
+  const match = stack.match(/((?:hooks|app|components|lib)\/[^:\s)]+\.(?:tsx?|jsx?))/i);
+  if (match?.[1]) {
+    return match[1];
+  }
+  const named = stack.match(/\/((?:hooks|app|components|lib)\/[^:?\s)]+\.(?:tsx?|jsx?))/i);
+  return named?.[1] ?? null;
+}
+
 /** Oldest first so the live edge is the bottom of the thread. */
 export function sortLivePosts<T extends LivePostLike>(posts: T[]): T[] {
   return [...posts]
