@@ -47,8 +47,8 @@ if (categoryIndex >= 0) {
 
 for (const key of CATEGORIES) {
   const row = catalog[key];
-  if (!row || row.gentle.length !== 10 || row.honest.length !== 10) {
-    throw new Error(`${key} expected 10+10 lines, got ${row?.gentle.length}/${row?.honest.length}`);
+  if (!row || row.gentle.length !== 20 || row.honest.length !== 10) {
+    throw new Error(`${key} expected 20 gentle + 10 honest, got ${row?.gentle.length}/${row?.honest.length}`);
   }
 }
 
@@ -58,4 +58,29 @@ writeFileSync(
   new URL('../copy/bobCatalog.generated.ts', import.meta.url),
   `/** Generated from docs/blOb_Bob_Notification_Copy.md. Do not edit by hand. */\nexport const BOB_CATALOG = ${JSON.stringify(catalog, null, 2)} as const;\n`,
 );
-console.log('wrote copy/bobCatalog.generated.ts');
+
+const sql = `-- Bob encouragement copy only (2026-09-09).
+-- Concrete event + {challenge}. Neutral folded into Gentle (20). Honest stays 10.
+-- Does not change miss gate, pick_bob_line, settlement, or write_coin_ledger.
+-- Apply in SQL Editor on blOb-app (tguzdtwsajnnczdxjqyq). Do not db push --include-all.
+
+delete from public.bob_encouragement_catalog;
+
+insert into public.bob_encouragement_catalog (category, tone, lines)
+select
+  cat.key,
+  tone.key,
+  (
+    select array_agg(elem order by ord)
+    from jsonb_array_elements_text(tone.value) with ordinality as t(elem, ord)
+  )
+from jsonb_each($bobcat$${JSON.stringify(catalog)}$bobcat$::jsonb) as cat(key, value)
+cross join lateral jsonb_each(cat.value) as tone(key, value);
+
+select category, tone, array_length(lines, 1) as line_count
+from public.bob_encouragement_catalog
+order by category, tone;
+`;
+writeFileSync(new URL('../supabase/migrations/20260909220000_bob_encouragement_copy.sql', import.meta.url), sql);
+console.log('wrote copy/bobCatalog.generated.ts and supabase/migrations/20260909220000_bob_encouragement_copy.sql');
+

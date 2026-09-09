@@ -1,610 +1,613 @@
 # Bob LeBlob — notification copy
 
-Running list. Last updated: 2026-08-31 (name the challenge; Neutral → Gentle)
+Running list. Last updated: 2026-09-09 (concrete event; Neutral folded into Gentle)
 
 Use: in-app alerts and push. Pick **Gentle / Honest**. Stored Neutral maps to Gentle. Never mix tones in one send.
-Every Bob / miss / settle-Bob line must include `{challenge}` after substitution. No nameless “the field.”
+Every line names the event and `{challenge}` after substitution. No nameless “the field.” No “show up.”
 
 Rules
 - ≤140 characters including spaces (counted as a tweet, not a thread).
-- Bob voice: sincere first, specific, ends on the next action. Snark is about avoidance, never worth.
+- Bob voice: sincere, specific, kind. Says what happened. Ends on the next action.
+- Snark is about avoidance, never worth.
 - No “skin in the game.” No odds. No body-shame. No “HR.”
 - Cash is `$`. Do not write “Bucks.”
 - `{name}`, `{n}`, `{challenge}` are tokens. Keep the line under 140 after typical substitution.
+- Do not write “show up,” “showing up,” or “showed up.”
+- Gentle has two lines per slot (20 total). Honest stays at 10.
 
 ---
 
 ## 1. 5+ day challenge check-in streak
 
 1.
-- Gentle: You showed up again. That is a real streak. I am proud of you.
-- Neutral: Day {n}. This is not luck. Do it again tomorrow.
-- Honest: {n} days in a row. You stopped negotiating. Keep going.
+- Gentle: You checked in on {challenge} again — {n} days in a row. I am proud of you.
+- Gentle: Day {n} on {challenge} is in. Check in again tomorrow.
+- Honest: {n} days in a row on {challenge}. Check in tomorrow.
 
 2.
-- Gentle: Another check-in. I saw it. Tomorrow can be simple too.
-- Neutral: Streaks are just days you did not skip. Add one more.
-- Honest: The streak is the work. Not a mood. Check in tomorrow.
+- Gentle: Another check-in on {challenge}. I saw it. Tomorrow can be simple too.
+- Gentle: Your streak on {challenge} is still alive. Add tomorrow’s check-in.
+- Honest: {n} check-ins on {challenge} is the work. Not a mood. Check in tomorrow.
 
 3.
-- Gentle: You kept the promise again. That matters to me.
-- Neutral: Five-plus days. The field can see you. Stay in it.
-- Honest: You keep arriving. Most humans talk. You checked in.
+- Gentle: You kept the check-in going on {challenge}. That matters to me.
+- Gentle: Five-plus days on {challenge}. Stay with it.
+- Honest: You checked in on {challenge} again. Most people talk. You posted.
 
 4.
-- Gentle: Quiet consistency. I like this version of you.
-- Neutral: Same task. Another day. That is the whole sport.
-- Honest: Nobody clapped. You did it anyway. That is the point.
+- Gentle: Another quiet day on {challenge}. I like this version of you.
+- Gentle: Same check-in, another day on {challenge}. That is the whole sport.
+- Honest: Nobody clapped for {challenge}. You checked in anyway. That is the point.
 
 5.
-- Gentle: I am still here. So are you. One more day.
-- Neutral: Streak of {n}. Protect it with tomorrow’s proof.
-- Honest: Missing tomorrow wastes {n} honest days. Do not do that.
+- Gentle: I am still here for {challenge}. So are you. Check in again tomorrow.
+- Gentle: Streak of {n} on {challenge}. Protect it with tomorrow’s check-in.
+- Honest: Skip tomorrow and {n} days on {challenge} go to waste. Do not.
 
 6.
-- Gentle: You made this look ordinary. It is not. Well done.
-- Neutral: Ordinary days stacked. That is how finishers look.
-- Honest: Boring on purpose. Champions are often boring.
+- Gentle: You made {challenge} look ordinary. It is not. Well done.
+- Gentle: Ordinary check-ins stacked on {challenge}. That is how finishers look.
+- Honest: Keep {challenge} boring on purpose. That is how you finish.
 
 7.
-- Gentle: Another check. Breathe. You are doing the thing.
-- Neutral: Proof is in. Streak holds. See you tomorrow.
-- Honest: Checked in. Not a speech. Tomorrow, same.
+- Gentle: Check-in is in on {challenge}. Breathe. You are doing the thing.
+- Gentle: Proof is in for {challenge}. Streak holds. See you tomorrow.
+- Honest: Checked in on {challenge}. No speech needed. Tomorrow, same.
 
 8.
-- Gentle: I noticed the streak. I am glad you did too.
-- Neutral: {n} check-ins. The next one is the only one that counts.
-- Honest: Yesterday does not check in tomorrow. You know this.
+- Gentle: I noticed your {n}-day streak on {challenge}. I am glad you did too.
+- Gentle: {n} check-ins on {challenge}. Tomorrow’s is the one that keeps it.
+- Honest: Yesterday’s check-in on {challenge} does not cover tomorrow.
 
 9.
-- Gentle: Soft streak. Strong habit. Keep treating it gently.
-- Neutral: Habit beat motivation. Do not get cute now.
-- Honest: You are good at this now. Do not get bored and vanish.
+- Gentle: Your streak on {challenge} is a habit now. Keep it kind and steady.
+- Gentle: Habit is beating motivation on {challenge}. Do not get cute now.
+- Honest: You are good at {challenge} now. Do not get bored and skip.
 
 10.
-- Gentle: I will be here for day {n}+1. No rush. Just show up.
-- Neutral: Add tomorrow. That is the only instruction.
-- Honest: The couch is patient. Be less patient with the skip.
+- Gentle: I will be here for day {n}+1 on {challenge}. Check in when you can.
+- Gentle: Tomorrow’s check-in is the only next step on {challenge}.
+- Honest: Skipping {challenge} is easy. Check in anyway.
 
 ---
 
 ## 2. 2-day check-in streak
 
 1.
-- Gentle: Two days. A start I respect. Let’s make it three.
-- Neutral: Two in a row. Third is where it becomes a streak.
-- Honest: Two days is a beginning. Three is a decision.
+- Gentle: Two days in a row on {challenge}. I respect that. Let’s make it three.
+- Gentle: Two check-ins on {challenge}. Day three is where it becomes a streak.
+- Honest: Two days on {challenge} is a start. Three is a decision.
 
 2.
-- Gentle: You came back. That was the hard one. I saw it.
-- Neutral: Day two is checked in. Day three is the test.
-- Honest: Anyone can do one. You did two. Do not stop for applause.
+- Gentle: You came back to {challenge}. That second day was the hard one.
+- Gentle: Day two is checked in on {challenge}. Day three is the test.
+- Honest: Anyone can do one day. You did two on {challenge}. Check in tomorrow.
 
 3.
-- Gentle: Two proofs. Kind of beautiful. One more when you can.
-- Neutral: Two days. Keep the chain short and alive.
-- Honest: Two is not a personality yet. Check in tomorrow.
+- Gentle: Two check-ins on {challenge}. Kind of beautiful. One more when you can.
+- Gentle: Two days on {challenge}. Keep the chain short and alive.
+- Honest: Two days on {challenge} is not a habit yet. Check in tomorrow.
 
 4.
-- Gentle: I like this. Small and real. See you soon.
-- Neutral: Streak: 2. Next action: the same thing again.
-- Honest: Do not celebrate two days like a parade. Just repeat.
+- Gentle: Two real check-ins on {challenge}. Small and good. See you soon.
+- Gentle: Streak: 2 on {challenge}. Next: the same check-in again.
+- Honest: Do not celebrate two days on {challenge}. Just check in again.
 
 5.
-- Gentle: You showed up twice. That is how it starts.
-- Neutral: Second day done. Protect it tonight: plan tomorrow.
-- Honest: You know day three is where humans flake. Be worse at flaking.
+- Gentle: You checked in twice on {challenge}. That is how a streak starts.
+- Gentle: Second day done on {challenge}. Plan tomorrow’s check-in tonight.
+- Honest: Day three is where people flake on {challenge}. Don’t.
 
 6.
-- Gentle: Two quiet check-ins. I am with you.
-- Neutral: Two. Not five. Still counts. Keep stacking.
-- Honest: Cute streak. Make it less cute. Make it longer.
+- Gentle: Two quiet check-ins on {challenge}. I am with you.
+- Gentle: Two days on {challenge} still counts. Keep stacking.
+- Honest: Cute two-day streak on {challenge}. Make it longer.
 
 7.
-- Gentle: That second day was brave. Thank you for doing it.
-- Neutral: Day 2/∞. The work is the same size tomorrow.
-- Honest: The second day does not forgive a skip. Check in.
+- Gentle: That second check-in on {challenge} was brave. Thank you.
+- Gentle: Day 2 on {challenge}. Tomorrow’s check-in is the same size.
+- Honest: Day two on {challenge} does not forgive a skip. Check in.
 
 8.
-- Gentle: Two days of you keeping a promise. I noticed.
-- Neutral: Check-in. Check-in. Now the third.
-- Honest: Two check-ins. The couch is already writing day three off. Surprise it.
+- Gentle: Two days of keeping the {challenge} check-in. I noticed.
+- Gentle: Check-in. Check-in. Now the third on {challenge}.
+- Honest: Two check-ins on {challenge}. The skip is already hoping. Surprise it.
 
 9.
-- Gentle: Soft start. Good start. Let’s continue.
-- Neutral: Two-day streak on {challenge}. Stay on it.
-- Honest: You started. Starting is cheap. Continuing is the skill.
+- Gentle: Soft start on {challenge}. Good start. Let’s continue.
+- Gentle: Two-day streak on {challenge}. Stay on it.
+- Honest: You started {challenge}. Starting is cheap. Check in tomorrow.
 
 10.
-- Gentle: I will look for you tomorrow. No pressure. I hope you come.
-- Neutral: Tomorrow is day three. Put it on the calendar.
-- Honest: If you skip tomorrow, this was a weekend, not a streak.
+- Gentle: I will look for your check-in on {challenge} tomorrow. No pressure.
+- Gentle: Tomorrow is day three on {challenge}. Put the check-in on the calendar.
+- Honest: Skip tomorrow on {challenge} and this was two days, not a streak.
 
 ---
 
 ## 3. First login in 2+ days
 
 1.
-- Gentle: You came back. I am glad. No lecture. Want to check in?
-- Neutral: You are here. Two days is not gone. Check in if the day still counts.
-- Honest: You wandered. You returned. That is allowed. Now do the task.
+- Gentle: You are back. I am glad. Want to check in on {challenge}?
+- Gentle: You opened blOb after a couple of days. Check in on {challenge} if today still counts.
+- Honest: You were gone. You are back. Now check in on {challenge}.
 
 2.
-- Gentle: Hi. I saved your spot. One small action is enough.
-- Neutral: Welcome back. Open {challenge} and see what today needs.
-- Honest: You did not disappear forever. Good. The check-in is still the check-in.
+- Gentle: Hi. I saved your spot on {challenge}. One check-in is enough.
+- Gentle: Welcome back. Open {challenge} and see what today needs.
+- Honest: You did not disappear forever. Good. {challenge} still needs a check-in.
 
 3.
-- Gentle: I missed you a little. The door was not locked.
-- Neutral: First open in a couple of days. Check today’s proof window.
-- Honest: The app did not miss you. The streak might have. Check it.
+- Gentle: I missed you a little. {challenge} is still here.
+- Gentle: First open in a couple of days. Check today’s window on {challenge}.
+- Honest: Opening the app is nice. {challenge} still needs the check-in.
 
 4.
-- Gentle: You showed up. That is the whole greeting.
-- Neutral: You are in. If you owe a check-in, do it before the day ends.
-- Honest: Opening the app is not a check-in. If you owe proof, go.
+- Gentle: You opened blOb. If you owe a check-in on {challenge}, that is next.
+- Gentle: You are in. If you owe a check-in on {challenge}, do it before the day ends.
+- Honest: Opening blOb is not a check-in. If {challenge} needs proof, go.
 
 5.
-- Gentle: No quiz. Just glad you opened this.
-- Neutral: Back after a gap. Catch up on {challenge} if you are still in.
-- Honest: You opened blOb. The work is not the home screen. Prove it.
+- Gentle: No quiz. Glad you opened this. Check in on {challenge} if you can.
+- Gentle: Back after a gap. Catch up on {challenge} if you are still in.
+- Honest: You opened blOb. Home is not the work. Check in on {challenge}.
 
 6.
-- Gentle: Come in. Sit. Then one check-in if you have it in you.
-- Neutral: Gap noted. Today can still count. Open the challenge.
-- Honest: Two days off is a nap. Treat it like a nap. Wake up.
+- Gentle: Come in. Then one check-in on {challenge} if you have it in you.
+- Gentle: Gap noted. Today can still count on {challenge}. Open it.
+- Honest: Two days off is a nap. Wake up and check in on {challenge}.
 
 7.
-- Gentle: I am not mad. I am here. Whenever you are ready to check in.
-- Neutral: Session after a break. Your board did not reset itself.
-- Honest: I will not clap for opening the app. I will clap for a check-in.
+- Gentle: I am not mad. Whenever you are ready, check in on {challenge}.
+- Gentle: Back after a break. Your board on {challenge} did not reset itself.
+- Honest: I will not clap for opening the app. I will clap for a {challenge} check-in.
 
 8.
-- Gentle: The couch let you go for a bit. You can leave it again.
-- Neutral: You are back. One check-in beats a long apology.
-- Honest: Humans apologize to apps. Do not. Just check in.
+- Gentle: You can leave the pause behind. One check-in on {challenge} beats an apology.
+- Gentle: You are back. One check-in on {challenge} is enough.
+- Honest: Do not apologize to the app. Check in on {challenge}.
 
 9.
-- Gentle: Soft landing. You found us. Next tap is yours.
-- Neutral: Re-entry. Check notifications, then the task.
-- Honest: You remembered the app exists. Remember the workout.
+- Gentle: Soft landing. Next tap: {challenge}.
+- Gentle: Re-entry. Check today’s task on {challenge}.
+- Honest: You remembered the app. Remember the {challenge} check-in.
 
 10.
-- Gentle: Welcome back. We can go slow.
-- Neutral: You're back. Now finish what today requires.
-- Honest: You returned. Returning is cheap. The camera is the fee.
+- Gentle: Welcome back. We can go slow. Start with {challenge}.
+- Gentle: You are back. Finish what today requires on {challenge}.
+- Honest: You returned. Returning is cheap. Check in on {challenge}.
 
 ---
 
 ## 4. 2+ day streak, then missed one day
 
 1.
-- Gentle: You missed a day. The next one still wants you.
-- Neutral: Streak broke. You are not. Check in today.
-- Honest: You skipped. It happens. Today is how you refuse a second skip.
+- Gentle: You missed a check-in on {challenge}. Today still wants you.
+- Gentle: Your streak on {challenge} broke. You did not. Check in today.
+- Honest: You skipped {challenge}. It happens. Do not skip a second day.
 
 2.
-- Gentle: One miss is a bump. I am still with you.
-- Neutral: Yesterday is empty. Today is not written yet.
-- Honest: The streak died. You did not. Stop having a funeral. Check in.
+- Gentle: One miss on {challenge} is a bump. I am still with you.
+- Gentle: Yesterday is empty on {challenge}. Today is not written yet.
+- Honest: The streak on {challenge} ended. You did not. Check in today.
 
 3.
-- Gentle: I saw the gap. Come back kindly. One check-in.
-- Neutral: Missed day on {challenge}. If you are still in, check in now.
-- Honest: You had a streak and you dropped it. Pick up the work, not the story.
+- Gentle: I saw the missed day on {challenge}. Come back kindly. One check-in.
+- Gentle: Missed day on {challenge}. If you are still in, check in now.
+- Honest: You had a streak on {challenge} and dropped it. Check in today.
 
 4.
-- Gentle: You were doing so well. You still can. Start this morning.
-- Neutral: Broken chain. Build a two-day chain again.
-- Honest: Mourning two days of success is how it becomes a week off.
+- Gentle: You were doing well on {challenge}. You still can. Check in this morning.
+- Gentle: Broken chain on {challenge}. Build a two-day chain again.
+- Honest: One miss on {challenge} becomes a week off if you sit in it.
 
 5.
-- Gentle: Missed one. Forgiven. Not forgotten. Today, please.
-- Neutral: One miss. Status: still competing? Then prove today.
-- Honest: The miss already happened. A second miss is a choice.
+- Gentle: Missed one on {challenge}. Forgiven. Today, please.
+- Gentle: One miss on {challenge}. Still competing? Then check in today.
+- Honest: The miss on {challenge} already happened. A second miss is a choice.
 
 6.
-- Gentle: Soft reset. Same person. New day.
-- Neutral: Reset the streak counter. Do not reset the habit.
-- Honest: Streaks are decorations. The task is the sport. Do the task.
+- Gentle: Soft reset on {challenge}. Same person. New check-in.
+- Gentle: Reset the streak counter on {challenge}. Do not reset the habit.
+- Honest: The streak was a decoration. Check in on {challenge}.
 
 7.
-- Gentle: I saved yesterday as a miss, not as a verdict.
-- Neutral: Gap of one. Close it by checking in before the window ends.
-- Honest: You know what you did not do. I will not narrate it. Camera.
+- Gentle: Yesterday on {challenge} was a miss, not a verdict.
+- Gentle: Gap of one on {challenge}. Check in before the window ends.
+- Honest: You know you missed {challenge}. I will not narrate it. Check in.
 
 8.
-- Gentle: We can be gentle with yesterday. Strict with today.
-- Neutral: Yesterday: miss. Today: available. Use it.
-- Honest: Do not write a novel about one empty day. Fill this one.
+- Gentle: We can be gentle with yesterday on {challenge}. Strict with today.
+- Gentle: Yesterday: miss on {challenge}. Today: still open. Use it.
+- Honest: Do not write a novel about one empty day on {challenge}. Check in.
 
 9.
-- Gentle: You slipped. People slip. Walk anyway.
-- Neutral: Miss recorded. Next check-in is the only repair.
-- Honest: Repair is a check-in, not a feeling.
+- Gentle: You slipped on {challenge}. People slip. Check in anyway.
+- Gentle: Miss recorded on {challenge}. The next check-in is the repair.
+- Honest: Repair on {challenge} is a check-in, not a feeling.
 
 10.
-- Gentle: I still believe the next day. Meet me there.
-- Neutral: Onward. Open {challenge}.
-- Honest: The streak is gone. The challenge is not. Act like it.
+- Gentle: I still believe the next day on {challenge}. Meet me there.
+- Gentle: Onward. Open {challenge} and check in.
+- Honest: The streak is gone. {challenge} is not. Check in.
 
 ---
 
 ## 5. Gone 3 days
 
 1.
-- Gentle: Three days. I kept your seat. One check-in if you can.
-- Neutral: Three days away. Check if {challenge} still has today’s window.
-- Honest: Three days is a pattern forming. Break it this afternoon.
+- Gentle: Three days away. I kept your seat on {challenge}. One check-in if you can.
+- Gentle: Three days away. See if {challenge} still has today’s window.
+- Honest: Three days away from {challenge} is a pattern. Break it this afternoon.
 
 2.
-- Gentle: I did not take it personally. Come do a small thing.
-- Neutral: 72 hours quiet. The field moved. You can still show up.
-- Honest: Three days. The couch won a series. Steal one game.
+- Gentle: I did not take it personally. Come do a small check-in on {challenge}.
+- Gentle: 72 hours quiet. {challenge} moved. You can still check in.
+- Honest: Three days. The pause won. Steal one check-in on {challenge}.
 
 3.
-- Gentle: Hey. Still here. No essay required.
-- Neutral: Absent 3 days. Open the task list before you think.
-- Honest: You did not forget how. You delayed. Delay is done.
+- Gentle: Hey. Still here. No essay. Check in on {challenge} if you can.
+- Gentle: Absent 3 days. Open {challenge} before you overthink it.
+- Honest: You did not forget {challenge}. You delayed. Check in now.
 
 4.
-- Gentle: Three quiet days. We can make the fourth loud in a good way.
-- Neutral: Day four can still be a check-in. Start there.
-- Honest: If you wait for inspiration you will be gone seven. Check in now.
+- Gentle: Three quiet days. Make the fourth a check-in on {challenge}.
+- Gentle: Day four can still be a check-in on {challenge}. Start there.
+- Honest: If you wait for a mood, {challenge} will be seven days gone. Check in now.
 
 5.
-- Gentle: I saved you a simple return: one check-in.
-- Neutral: Status: away 3d. Action: today’s required check-in.
-- Honest: Three days is long enough to invent reasons. I do not need them.
+- Gentle: Simple return: one check-in on {challenge}.
+- Gentle: Away 3 days. Action: today’s check-in on {challenge}.
+- Honest: Three days is long enough to invent reasons. {challenge} does not need them.
 
 6.
-- Gentle: Come back soft. The work can be short today.
-- Neutral: Window may still be open. Do not assume it is not.
-- Honest: Check the clock. Then the camera. Not the feelings first.
+- Gentle: Come back soft. The check-in on {challenge} can be short today.
+- Gentle: The window on {challenge} may still be open. Do not assume it is not.
+- Honest: Check the clock on {challenge}. Then check in. Not the feelings first.
 
 7.
-- Gentle: Missed you. The door is ordinary. Walk through it.
-- Neutral: Three-day gap. If you are still in the field, check in.
-- Honest: You are not “resting.” You are postponing. Those differ.
+- Gentle: Missed you. {challenge} is still ordinary to walk back into.
+- Gentle: Three-day gap. If you are still in {challenge}, check in.
+- Honest: You are not resting. You are postponing {challenge}. Check in.
 
 8.
-- Gentle: Three days is allowed. A fourth without a look-in is lonelier.
-- Neutral: Look in. Then decide. Deciding in the dark is how you stay gone.
-- Honest: Open the app for the task, not the vibe.
+- Gentle: Three days is allowed. A fourth with no look at {challenge} is lonelier.
+- Gentle: Look at {challenge}. Then decide. Deciding in the dark is how you stay gone.
+- Honest: Open {challenge} for the check-in, not the vibe.
 
 9.
-- Gentle: I will not pile on. I will ask for one thing.
-- Neutral: One check-in. That is the ask.
-- Honest: One check-in. That is not a negotiation.
+- Gentle: I will not pile on. I will ask for one check-in on {challenge}.
+- Gentle: One check-in on {challenge}. That is the ask.
+- Honest: One check-in on {challenge}. That is not a negotiation.
 
 10.
-- Gentle: Whenever you are ready. I hope it is today.
-- Neutral: Today is the cheapest return you will get.
-- Honest: Tomorrow you will say “four days.” I would not.
+- Gentle: Whenever you are ready. I hope it is a {challenge} check-in today.
+- Gentle: Today is the cheapest return to {challenge} you will get.
+- Honest: Tomorrow you will say “four days” away from {challenge}. I would not.
 
 ---
 
 ## 6. Gone 7 days
 
 1.
-- Gentle: A week. I am still on your side. Come see what is left.
-- Neutral: Seven days away. Open {challenge}. If you are in, check in. If not, the next field.
-- Honest: A week is not rest. It is a new default. Change it today.
+- Gentle: A week away. I am still on your side. Come see what is left on {challenge}.
+- Gentle: Seven days away. Open {challenge}. Check in if you are still in.
+- Honest: A week away from {challenge} is a new default. Change it today.
 
 2.
-- Gentle: I kept the light on. No shame in walking back in.
-- Neutral: Week off. Your board will tell you the truth. Look.
-- Honest: You vanished for seven. The work did not. Catch it or join the next.
+- Gentle: I kept the light on. No shame in walking back into {challenge}.
+- Gentle: Week off. Your board on {challenge} will tell you the truth. Look.
+- Honest: You vanished for seven. {challenge} did not. Catch up or join the next.
 
 3.
-- Gentle: Welcome, if you are reading this. We can start small.
-- Neutral: Seven-day silence. Next tap: challenge or Official week.
-- Honest: A week. Humans call it busy. The check-in calls it empty.
+- Gentle: Welcome, if you are reading this. We can start small on {challenge}.
+- Gentle: Seven-day silence. Next tap: {challenge}.
+- Honest: A week. Busy is the story. {challenge} still has empty check-in days.
 
 4.
-- Gentle: I am not keeping score to punish you. I am inviting you.
-- Neutral: If the week ended without you, the next one has not.
-- Honest: If you were removed, that is the rule. Next tournament. Enter.
+- Gentle: I am not keeping score to punish you. I am inviting you back to {challenge}.
+- Gentle: If this week on {challenge} ended without you, the next one has not.
+- Honest: If you were removed from {challenge}, that is the rule. Join the next.
 
 5.
-- Gentle: Soft week. Hard week. Either way, I will take a hello.
-- Neutral: Check finish / out / still in. Then one action.
-- Honest: Do not open this to feel worse. Open it to do the next thing.
+- Gentle: Soft week or hard week. Either way, I will take a hello on {challenge}.
+- Gentle: Check whether you are still in {challenge}. Then one action.
+- Honest: Do not open this to feel worse. Open {challenge} and do the next thing.
 
 6.
-- Gentle: Seven days is a long nap. Stretch. Then a short workout.
-- Neutral: Return path: proof if eligible, else browse Official.
-- Honest: The streak is archaeology. Today is not.
+- Gentle: Seven days is a long nap. Then a short check-in on {challenge}.
+- Gentle: Return path: check in on {challenge} if you can, else browse a new one.
+- Honest: The old streak is gone. Today’s check-in on {challenge} is not.
 
 7.
-- Gentle: I missed your check-ins. I did not miss your worth.
-- Neutral: Worth is fine. The field needs a check-in. If you can, give it.
-- Honest: I will not soothe you into another empty week.
+- Gentle: I missed your check-ins on {challenge}. I did not miss your worth.
+- Gentle: Worth is fine. {challenge} still needs a check-in if you can give it.
+- Honest: I will not soothe you into another empty week on {challenge}.
 
 8.
-- Gentle: Come back as you are. We will find a task that fits today.
-- Neutral: Official week is still a clean start if this one is done.
-- Honest: Clean starts are just entry fees and a date. Take one.
+- Gentle: Come back as you are. We will find today’s check-in on {challenge}.
+- Gentle: If {challenge} is done, Official week is still a clean start.
+- Honest: A clean start after {challenge} is a join. Take one.
 
 9.
-- Gentle: A week away. You are allowed to return without a speech.
-- Neutral: No speech. Check in or join.
-- Honest: Speeches are how week two happens. Camera or entry fee.
+- Gentle: A week away. You can return to {challenge} without a speech.
+- Gentle: No speech. Check in on {challenge} or join a new one.
+- Honest: Speeches are how week two happens. Check in on {challenge}.
 
 10.
-- Gentle: I am patient. I would love to see you today.
-- Neutral: Seven days. Act today so it does not become fourteen.
-- Honest: Fourteen starts as seven you did not interrupt.
+- Gentle: I am patient. I would love a {challenge} check-in today.
+- Gentle: Seven days. Act today on {challenge} so it does not become fourteen.
+- Honest: Fourteen starts as seven you did not interrupt on {challenge}.
 
 ---
 
 ## 7. Gone 14+ days
 
 1.
-- Gentle: I still know you. The door still works. One small return.
-- Neutral: Two weeks quiet. Official week does not care about the gap. Join if you want in.
-- Honest: Fourteen days. You are a visitor again. That is fine. Enter a field.
+- Gentle: I still know you. One small return to {challenge} is enough.
+- Gentle: Two weeks quiet. Join {challenge} if you want back in.
+- Honest: Fourteen days. You are a visitor again. That is fine. Join {challenge}.
 
 2.
-- Gentle: Long time. No lecture. Want a short challenge?
-- Neutral: Re-entry. Browse Official or a friend’s challenge.
-- Honest: You left. Come play. Or don’t pretend you will “later.”
+- Gentle: Long time. No lecture. Want a short check-in on {challenge}?
+- Gentle: Re-entry. Browse {challenge} or a friend’s challenge.
+- Honest: You left. Come check in on {challenge} — or don’t pretend “later.”
 
 3.
-- Gentle: I saved you a seat that does not require an apology.
-- Neutral: New week, new entry. Old guilt is unused equipment.
-- Honest: Guilt is not a check-in. Pay the entry or go outside without me.
+- Gentle: I saved you a seat on {challenge} that does not need an apology.
+- Gentle: New week, new entry. Old guilt does not check in on {challenge}.
+- Honest: Guilt is not a check-in. Join {challenge} or go outside without me.
 
 4.
-- Gentle: We can be strangers for one tap, then teammates again.
-- Neutral: Tap Join on a live-eligible week. Start from zero.
-- Honest: Starting from zero is honest. Reliving day fourteen is not.
+- Gentle: We can be strangers for one tap, then teammates on {challenge} again.
+- Gentle: Tap Join on {challenge}. Start from zero.
+- Honest: Starting {challenge} from zero is honest. Reliving day fourteen is not.
 
 5.
-- Gentle: I did not replace you. I just kept hosting.
-- Neutral: Bob is still hosting. The week still needs bodies who move.
-- Honest: I host whether you come. I prefer you come.
+- Gentle: I did not replace you. I just kept hosting {challenge}.
+- Gentle: Bob is still hosting. {challenge} still needs people who check in.
+- Honest: I host {challenge} whether you come. I prefer you come.
 
 6.
-- Gentle: Two weeks is a season in human time. Welcome back anyway.
-- Neutral: If you open this, pick a tournament or close it. Do not hover.
-- Honest: Hovering is how month one happens. Choose.
+- Gentle: Two weeks is a long time. Welcome back to {challenge} anyway.
+- Gentle: If you opened this, join {challenge} or close it. Do not hover.
+- Honest: Hovering is how month one happens. Join {challenge} or don’t.
 
 7.
-- Gentle: Soft hello from far away. I am glad you looked.
-- Neutral: Looking is step one. Entry is step two.
-- Honest: A look is not participation. You knew that at day one.
+- Gentle: Soft hello from far away. I am glad you looked at {challenge}.
+- Gentle: Looking is step one. Joining {challenge} is step two.
+- Honest: A look is not a check-in. You knew that on day one of {challenge}.
 
 8.
-- Gentle: Come for the people if the work feels heavy.
-- Neutral: Friends are checking in. The field is public to the field.
-- Honest: Social is not a substitute for the workout. But it can pull you in.
+- Gentle: Come for the people if {challenge} feels heavy today.
+- Gentle: Friends may still be checking in on {challenge}.
+- Honest: Chat is not a substitute for the {challenge} check-in. But it can pull you in.
 
 9.
-- Gentle: No streak to protect. Just a first day, again.
-- Neutral: First day again. Treat it like day one, not a comeback tour.
-- Honest: Comeback tours are how you delay day one. Just start.
+- Gentle: No streak to protect. Just day one on {challenge} again.
+- Gentle: First day again on {challenge}. Treat it like day one, not a comeback.
+- Honest: A comeback speech delays day one. Just check in on {challenge}.
 
 10.
-- Gentle: I will take any version of you that shows up.
-- Neutral: Show up. Join. Check in.
-- Honest: I like you. I will not pretend fourteen empty days were training.
+- Gentle: I will take any version of you that checks in on {challenge}.
+- Gentle: Join {challenge}. Then check in.
+- Honest: I like you. I will not pretend fourteen empty days were training for {challenge}.
 
 ---
 
-## 8. Missed a challenge entry, still in the field
+## 8. Missed a check-in, still in the challenge
 
 1.
-- Gentle: You missed a check-in. You are still in. Today still counts.
-- Neutral: Miss recorded. You remain. Submit today’s check-in.
-- Honest: You missed. You were not removed. Do not waste that.
+- Gentle: You missed a check-in on {challenge}. You are still in. Today still counts.
+- Gentle: Miss recorded on {challenge}. You remain. Submit today’s check-in.
+- Honest: You missed {challenge}. You were not removed. Do not waste that.
 
 2.
-- Gentle: Still here. Still allowed. Let’s cover today.
-- Neutral: Status: in. Debt: yesterday. Job: today.
-- Honest: Grace exists until it does not. Use it.
+- Gentle: Still in {challenge}. Still allowed. Let’s cover today.
+- Gentle: Status: in on {challenge}. Yesterday is a miss. Job: today.
+- Honest: You still have grace on {challenge}. Use it.
 
 3.
-- Gentle: A miss, not an exit. I am glad the rules left you in.
-- Neutral: Still competing on {challenge}. Check in before the window.
-- Honest: The rule was kinder than your skip. Do not test it twice.
+- Gentle: A miss, not an exit. {challenge} left you in. Check in today.
+- Gentle: Still competing on {challenge}. Check in before the window.
+- Honest: {challenge} was kinder than your skip. Do not test it twice.
 
 4.
-- Gentle: You can repair this with today’s check-in. I believe you will.
-- Neutral: Make today complete. Do not explain yesterday.
-- Honest: Yesterday is a hole. Today is a board. Fill the board.
+- Gentle: You can repair {challenge} with today’s check-in. I believe you will.
+- Gentle: Make today complete on {challenge}. Do not explain yesterday.
+- Honest: Yesterday is a hole on {challenge}. Fill today’s check-in.
 
 5.
-- Gentle: Still on the list. That is a gift. Use it kindly.
-- Neutral: Remaining: yes. Caught up: not yet. Fix that.
-- Honest: “Still in” is not a couch pass. It is a deadline.
+- Gentle: Still on the list for {challenge}. That is a gift. Use it.
+- Gentle: Still in {challenge}. Not caught up yet. Check in today.
+- Honest: “Still in” on {challenge} is a deadline, not a pass.
 
 6.
-- Gentle: Come do the next required thing. We will not re-litigate the miss.
-- Neutral: Next required check-in. Then you are caught up.
-- Honest: Caught up is a check-in, not a feeling.
+- Gentle: Do the next required check-in on {challenge}. We will not relitigate the miss.
+- Gentle: Next required check-in on {challenge}. Then you are caught up.
+- Honest: Caught up on {challenge} is a check-in, not a feeling.
 
 7.
-- Gentle: I kept you in the story. Add a page today.
-- Neutral: Field position: in, behind. Action: today’s three proofs.
-- Honest: Behind is honest. Staying behind is optional.
+- Gentle: You are still in {challenge}. Add today’s check-in.
+- Gentle: Still in {challenge}, behind one day. Action: today’s check-in.
+- Honest: Behind on {challenge} is honest. Staying behind is optional.
 
 8.
-- Gentle: Missed a check-in. Not missed as a person. Check in when you can — today.
-- Neutral: Window is still yours. Camera, then heart-rate proof.
-- Honest: If you wait until tonight you will wait until out. Go now.
+- Gentle: Missed a check-in on {challenge}. Not missed as a person. Check in today.
+- Gentle: The window on {challenge} is still yours. Check in now.
+- Honest: If you wait until tonight on {challenge}, you will wait until out. Go now.
 
 9.
-- Gentle: You have another chance built into the rules. Take it.
-- Neutral: Miss ≠ out (yet). Read the day rule. Then post.
-- Honest: Yet is doing a lot of work. Beat yet.
+- Gentle: {challenge} built another chance into the rules. Take it.
+- Gentle: Miss is not out yet on {challenge}. Read the day rule. Then post.
+- Honest: “Yet” on {challenge} is doing a lot of work. Check in now.
 
 10.
-- Gentle: I want you on the finish list. Today is how.
-- Neutral: Finishers check in on the days they did not feel like it. This is one.
-- Honest: This is the day that decides if the miss was a dip or an exit.
+- Gentle: I want you on the finish list for {challenge}. Today is how.
+- Gentle: Finishers check in on days they did not feel like it. This is {challenge}.
+- Honest: Today decides if the miss on {challenge} was a dip or an exit.
 
 ---
 
 ## 9. Missed a check-in and removed from the competition
 
 1.
-- Gentle: This week let you go. The next one will not mind that. Join when you are ready.
-- Neutral: Removed from {challenge}. Entry fees stay. Next Official week is open.
-- Honest: Out is the rule you agreed to. It is not a verdict on you. Enter the next field.
+- Gentle: You missed a check-in and {challenge} let you go. Join the next when you are ready.
+- Gentle: Removed from {challenge}. Entry fees stay. Next Official week is open.
+- Honest: Out of {challenge} is the rule you agreed to. Not a verdict on you. Join the next.
 
 2.
-- Gentle: I am sorry this one ended for you. You can start clean soon.
-- Neutral: Status: out. Prize: not yours this time. Action: next tournament.
-- Honest: You missed. You are out. That sentence is finished. Next sentence: join.
+- Gentle: I am sorry {challenge} ended for you. You can start clean soon.
+- Gentle: Status: out of {challenge}. Prize: not this time. Action: next challenge.
+- Honest: You missed. You are out of {challenge}. Next sentence: join.
 
 3.
-- Gentle: Removed, not banished. Come sit with the next week.
-- Neutral: Out of this field. Friends may still be in. Cheer. Then enter your own.
-- Honest: Cheering is kind. Competing is how you get a different ending.
+- Gentle: Removed from {challenge}, not banished. Come sit with the next week.
+- Gentle: Out of {challenge}. Friends may still be in. Cheer. Then enter your own.
+- Honest: Cheering is kind. Joining after {challenge} is how you get a different ending.
 
 4.
-- Gentle: The rule is blunt. I am not. I want you in the next one.
-- Neutral: Rule: miss / no proof / bad proof → out. You hit it. Next week.
-- Honest: Do not argue the rule in the comments. Use it as a calendar.
+- Gentle: The miss rule is blunt. I am not. I want you in the next {challenge}.
+- Gentle: Miss / no proof → out of {challenge}. You hit it. Next week.
+- Honest: Do not argue {challenge} in the comments. Use it as a calendar.
 
 5.
-- Gentle: This one got away. You did not.
-- Neutral: Tournament over for you. Official filling: joinable.
-- Honest: “I’ll do the next one” is only true if you pay the entry.
+- Gentle: {challenge} got away. You did not.
+- Gentle: {challenge} is over for you. Official week is joinable.
+- Honest: “I’ll do the next one” after {challenge} is only true if you join.
 
 6.
-- Gentle: Hard screen. Soft next step: pick a new start date.
-- Neutral: Join the next challenge. Same work. New field.
-- Honest: Same work. You already know it. Stop shopping for easier rules.
+- Gentle: Hard news on {challenge}. Soft next step: pick a new start date.
+- Gentle: Join the next one after {challenge}. Same work. New start.
+- Honest: You already know {challenge}. Stop shopping for easier rules.
 
 7.
-- Gentle: I watched you try. Trying again is allowed.
-- Neutral: Retry is the product. Enter.
-- Honest: Retry is not a vibe. It is a button.
+- Gentle: I watched you try on {challenge}. Trying again is allowed.
+- Gentle: Retry is the product. Enter the next one after {challenge}.
+- Honest: Retry after {challenge} is not a vibe. It is Join.
 
 8.
-- Gentle: You are welcome at the next start line.
-- Neutral: Next start: when the field fills. Get in early.
-- Honest: Early is how you stop missing day one later.
+- Gentle: You are welcome at the next start line after {challenge}.
+- Gentle: Next start after {challenge}: get in early.
+- Honest: After {challenge}, early is how you stop missing day one later.
 
 9.
-- Gentle: Out of this prize. Not out of the sport.
-- Neutral: Prize split is for finishers. You were not one. Change that next week.
-- Honest: Finishers got paid. You got a lesson. Spend it.
+- Gentle: Out of this prize on {challenge}. Not out of the sport.
+- Gentle: Prize is for finishers of {challenge}. You were not one. Change that next week.
+- Honest: Finishers of {challenge} got paid. You got a lesson. Spend it.
 
 10.
-- Gentle: Come back when the sting is smaller. I will be hosting.
-- Neutral: Bob hosts again. Bring the camera.
-- Honest: Sting fades. Habits do not, unless you replace them. Enter.
+- Gentle: Come back when the sting of {challenge} is smaller. I will be hosting.
+- Gentle: Bob hosts again after {challenge}. Bring a check-in.
+- Honest: The sting of {challenge} fades. The skip does not, unless you join again.
 
 ---
 
 ## 10. Within 1 week of finishing, still competing
 
 1.
-- Gentle: Last stretch. I am staying with you. One day at a time.
-- Neutral: ≤7 days left. You are still in. Do not get poetic. Check in.
-- Honest: The end is close enough to ruin. Do not get cute.
+- Gentle: Last stretch of {challenge}. I am staying with you. Check in today.
+- Gentle: 7 or fewer days left on {challenge}. You are still in. Check in.
+- Honest: {challenge} is close enough to ruin. Do not get cute. Check in.
 
 2.
-- Gentle: You can see the finish. Walk, don’t sprint into a skip.
-- Neutral: Final week. Same proofs. Same window.
-- Honest: Final week is where streaks go to die of confidence. Check in.
+- Gentle: You can see the finish of {challenge}. Walk. Do not skip.
+- Gentle: Final week of {challenge}. Same check-in. Same window.
+- Honest: Final week is where streaks on {challenge} die of confidence. Check in.
 
 3.
-- Gentle: Almost there. I am proud already. Still need today.
-- Neutral: Pride is not a substitute check-in. Post today.
-- Honest: I will be proud when the last day is not empty.
+- Gentle: Almost there on {challenge}. I am proud already. Still need today.
+- Gentle: Pride is not a check-in. Post today’s on {challenge}.
+- Honest: I will be proud of {challenge} when the last day is not empty.
 
 4.
-- Gentle: Soft last week. Steady. You know the route.
-- Neutral: Route unchanged. Duration almost done. Keep submitting.
-- Honest: Do not invent a new plan. Finish the old one.
+- Gentle: Soft last week on {challenge}. Steady. You know the route.
+- Gentle: Route unchanged on {challenge}. Almost done. Keep submitting.
+- Honest: Do not invent a new plan. Finish {challenge}.
 
 5.
-- Gentle: I will not jinx you. I will remind you: today.
-- Neutral: Reminder: today’s task + check-in. Then rest.
-- Honest: Rest after the check-in. Not instead.
+- Gentle: I will not jinx {challenge}. I will remind you: check in today.
+- Gentle: Reminder: today’s check-in on {challenge}. Then rest.
+- Honest: Rest after the {challenge} check-in. Not instead.
 
 6.
-- Gentle: You have carried this far. Let me carry the reminder.
-- Neutral: {n} days left on {challenge}. Status: in. Action: check in.
-- Honest: Carrying it this far and dropping it would be a very human trick. Don’t.
+- Gentle: You have carried {challenge} this far. Today still needs a check-in.
+- Gentle: {n} days left on {challenge}. Status: in. Action: check in.
+- Honest: Carrying {challenge} this far and dropping it would be a very human trick. Don’t.
 
 7.
-- Gentle: Close. Close is not closed. One more honest day.
-- Neutral: Close ≠ done. Board still has boxes.
-- Honest: Close is where people take a “tiny break.” It is not tiny.
+- Gentle: Close on {challenge} is not closed. One more honest check-in.
+- Gentle: Close ≠ done. {challenge} still has boxes.
+- Honest: Close is where people take a “tiny break” on {challenge}. It is not tiny.
 
 8.
-- Gentle: I like how this is ending — if you keep showing up.
-- Neutral: Ending is a sequence of days. Do the next.
-- Honest: Endings are just Tuesdays until they are not.
+- Gentle: I like how {challenge} is ending — if you keep checking in.
+- Gentle: Ending {challenge} is a sequence of days. Do the next check-in.
+- Honest: Endings of {challenge} are just Tuesdays until they are not.
 
 9.
-- Gentle: You belong on the finishers list. Help me put you there.
-- Neutral: Finishers list is still being written. Add today’s name.
-- Honest: The list does not save you a seat. You post or you don’t.
+- Gentle: You belong on the finishers list for {challenge}. Help me put you there.
+- Gentle: The finishers list for {challenge} is still being written. Add today’s check-in.
+- Honest: {challenge} does not save you a seat. You check in or you don’t.
 
 10.
-- Gentle: Last week. We go together. Short messages. Real check-ins.
-- Neutral: Short: check in. Then go live your day.
-- Honest: If you can read this you can post the selfie.
+- Gentle: Last week of {challenge}. Short reminder. Real check-in.
+- Gentle: Short: check in on {challenge}. Then go live your day.
+- Honest: If you can read this, you can check in on {challenge}.
 
 ---
 
 ## 11. Top 3 on the board, 3 days from completion
 
 1.
-- Gentle: You are near the front. I am cheering quietly. Still check in.
-- Neutral: Top 3. Three days left. The board can move. Check in today.
-- Honest: Podium is a rumor until day last. Check in.
+- Gentle: You are near the front of {challenge}. I am cheering quietly. Still check in.
+- Gentle: Top 3 on {challenge}. Three days left. The board can move. Check in today.
+- Honest: Top 3 on {challenge} is a rumor until the last day. Check in.
 
 2.
-- Gentle: Look at you. Near the top. Be kind to the last three days.
-- Neutral: Rank is not a lock. Caught up still has to mean today.
-- Honest: People in fourth would like your skip. Do not donate.
+- Gentle: Near the top of {challenge}. Be kind to the last three days.
+- Gentle: Rank on {challenge} is not a lock. Today still has to be a check-in.
+- Honest: People in fourth would like your skip on {challenge}. Do not donate.
 
 3.
-- Gentle: I am impressed. I will be more impressed on the last day.
-- Neutral: Three days. Same rules as day one.
-- Honest: Day one you were hungry. Do not get full now.
+- Gentle: I am impressed. I will be more impressed on the last day of {challenge}.
+- Gentle: Three days left on {challenge}. Same rules as day one.
+- Honest: Day one of {challenge} you were hungry. Do not get full now.
 
 4.
-- Gentle: Soft lead. Hold it with ordinary work.
-- Neutral: Ordinary proofs. Extraordinary week. Keep ordinary.
-- Honest: Fancy last days are how leads vanish. Be boring.
+- Gentle: Soft lead on {challenge}. Hold it with today’s ordinary check-in.
+- Gentle: Ordinary check-ins. Extraordinary week on {challenge}. Keep ordinary.
+- Honest: Fancy last days are how leads vanish on {challenge}. Be boring. Check in.
 
 5.
-- Gentle: You have company at the front. That is beautiful. Stay in it.
-- Neutral: Top 3 is a group. Group still checks in.
-- Honest: Do not look sideways. Look at the camera.
+- Gentle: You have company at the front of {challenge}. Stay in it.
+- Gentle: Top 3 is a group. {challenge} still needs your check-in.
+- Honest: Do not look sideways. Check in on {challenge}.
 
 6.
-- Gentle: Almost a finish at the front. I see the care.
-- Neutral: Care + three proofs. Then we talk finishing.
-- Honest: I see the rank. I do not see tomorrow yet.
+- Gentle: Almost a finish at the front of {challenge}. I see the care.
+- Gentle: Care plus today’s check-in on {challenge}. Then we talk finishing.
+- Honest: I see your rank on {challenge}. I do not see tomorrow’s check-in yet.
 
 7.
-- Gentle: You earned this place. Earning continues for 72 hours.
-- Neutral: 72 hours. Window, proof, sleep.
-- Honest: 72 hours is enough time to throw it away. It is also enough to keep it.
+- Gentle: You earned this place on {challenge}. Earning continues for 3 days.
+- Gentle: 3 days left. Window, check-in, sleep. {challenge}.
+- Honest: 72 hours is enough to throw {challenge} away. It is also enough to keep it.
 
 8.
-- Gentle: Quiet pride from me. Loud consistency from you.
-- Neutral: Consistency. That is the whole instruction.
-- Honest: If you skip now I will still like you. I will also say you skipped.
+- Gentle: Quiet pride from me. Your job is today’s check-in on {challenge}.
+- Gentle: Consistency. That is the whole instruction on {challenge}.
+- Honest: If you skip {challenge} now I will still like you. I will also say you skipped.
 
 9.
-- Gentle: Front of the field. Stay gentle with your body. Stay honest with the check-in.
-- Neutral: Post the work you actually did. The field can still flag it.
-- Honest: Rank does not excuse a lazy proof. The field can flag you.
+- Gentle: Front of {challenge}. Be kind to your body. Be honest with the check-in.
+- Gentle: Post the work you actually did on {challenge}. Others can still flag it.
+- Honest: Rank does not excuse a lazy proof on {challenge}. Others can flag you.
 
 10.
-- Gentle: Three days. I will be here for each one.
-- Neutral: D-3. Top 3. Today’s check-in.
-- Honest: Podium photos are for after the last check-in. Not before.
+- Gentle: Three days left on {challenge}. I will be here for each one.
+- Gentle: Three days left. Top 3 on {challenge}. Today’s check-in.
+- Honest: Podium photos are for after the last check-in on {challenge}. Not before.
 
 ---
 
@@ -636,9 +639,10 @@ Add these when we lock the eleven above:
 
 ## Notes for the later Cursor pass
 
-- Store tone on `profiles.encouragement_tone` = `gentle` | `neutral` | `honest` (default `neutral`).
-- Pick one line at random from the matching category + tone. Do not rotate through all 10 in order if it feels like a campaign.
+- Store tone on `profiles.encouragement_tone` = `gentle` | `honest`. Stored `neutral` maps to Gentle.
+- Pick one line at random from the matching category + tone. Do not rotate in order if it feels like a campaign.
 - Dedup: same category+line id not twice in 7 days.
 - Tokens must be inserted before the 140 check.
 - Coin alerts stay coin-icon; these are Bob/people events.
 - Challenge action word is **check-in** (never “log” — that is login).
+- Every Bob / miss / settle-Bob line must include `{challenge}` after substitution.

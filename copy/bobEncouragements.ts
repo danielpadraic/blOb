@@ -25,7 +25,7 @@ export const BOB_LINE_MAX = 140;
 
 type ToneLines = Record<BobEncouragementTone, readonly string[]>;
 
-/** 2026-08-31 catalog. Gentle | Honest only. Neutral maps to Gentle. */
+/** 2026-09-09 catalog. Gentle (20) | Honest (10). Neutral maps to Gentle. */
 export const BOB_ENCOURAGEMENTS = BOB_CATALOG as Record<BobEncouragementCategory, ToneLines>;
 
 export type PickBobLineInput = {

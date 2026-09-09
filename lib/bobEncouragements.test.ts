@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { BOB_CATALOG } from '@/copy/bobCatalog.generated';
 import {
+  BOB_ENCOURAGEMENT_CATEGORIES,
   BOB_ENCOURAGEMENT_TONES,
   BOB_LINE_MAX,
   interpolateBobLine,
@@ -49,5 +51,23 @@ describe('Bob encouragement catalog', () => {
     });
     expect(picked?.text).toContain('Daily sit-ups');
     expect(picked?.text.length).toBeLessThanOrEqual(BOB_LINE_MAX);
+  });
+
+  it('ships 20 Gentle and 10 Honest per category, names the event, and never says show up', () => {
+    const longTitle = 'A'.repeat(80);
+    for (const category of BOB_ENCOURAGEMENT_CATEGORIES) {
+      const row = BOB_CATALOG[category];
+      expect(row.gentle).toHaveLength(20);
+      expect(row.honest).toHaveLength(10);
+      for (const tone of BOB_ENCOURAGEMENT_TONES) {
+        for (const template of row[tone]) {
+          expect(template.toLowerCase()).not.toMatch(/show(?:ed|ing)? up/);
+          expect(template).toContain('{challenge}');
+          const text = interpolateBobLine(template, { n: 14, challenge: longTitle });
+          expect(text, `${category} ${tone}: ${template}`).toBeTruthy();
+          expect(text.length).toBeLessThanOrEqual(BOB_LINE_MAX);
+        }
+      }
+    }
   });
 });
