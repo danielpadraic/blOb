@@ -1,10 +1,11 @@
 import { isAllowedOcrImageUrl } from '../lib/health/ocrAllowlist';
 import {
   classifyWorkoutScreen,
+  hasOcrNumbers,
   parseWorkoutOcrText,
   type ParsedWorkoutOcr,
 } from '../lib/health/workoutOcr';
-import { ocrImageBuffer, ocrImageFromUrl } from './_lib/ocrRunner';
+import { downloadImageBytes, ocrImageBuffer } from './_lib/ocrRunner';
 
 /** Tesseract needs Node, not Edge. */
 export const runtime = 'nodejs';
@@ -88,6 +89,39 @@ export type OcrWorkoutResponse = {
   parsed?: ParsedWorkoutOcr;
 };
 
+export type OcrWorkoutRead = OcrWorkoutResponse & { inverted: boolean; pass: 1 | 2 };
+
+/**
+ * Pass 1: original polarity (current parser). Pass 2: grayscale + invert + contrast, in memory only.
+ * Never writes the inverted pixels. Numbers from either pass are enough to treat the still as a
+ * workout screen — the 2-signal classifier must not hide a compact Fitness summary.
+ */
+export async function ocrWorkoutFromBuffer(bytes: Buffer): Promise<OcrWorkoutRead> {
+  const pass1 = await ocrImageBuffer(bytes, 'never');
+  const parsed1 = parseWorkoutOcrText(pass1.text);
+  if (hasOcrNumbers(parsed1)) {
+    return { ok: true, isWorkoutScreen: true, reason: 'ok', parsed: parsed1, inverted: false, pass: 1 };
+  }
+
+  const pass2 = await ocrImageBuffer(bytes, 'always');
+  const parsed2 = parseWorkoutOcrText(pass2.text);
+  if (hasOcrNumbers(parsed2)) {
+    return { ok: true, isWorkoutScreen: true, reason: 'ok', parsed: parsed2, inverted: true, pass: 2 };
+  }
+
+  const classification = classifyWorkoutScreen(`${pass1.text}\n${pass2.text}`);
+  if (!classification.isWorkoutScreen) {
+    return {
+      ok: true,
+      isWorkoutScreen: false,
+      reason: classification.reason,
+      inverted: true,
+      pass: 2,
+    };
+  }
+  return { ok: true, isWorkoutScreen: true, reason: 'ok', parsed: parsed2, inverted: true, pass: 2 };
+}
+
 /**
  * Exported as a named method so Vercel hands us a web-standard `Request`. A default export would be
  * invoked with Node's `IncomingMessage` instead, which has no `headers.get`.
@@ -120,15 +154,14 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const { text } = bytes ? await ocrImageBuffer(bytes) : await ocrImageFromUrl(imageUrl);
-    const classification = classifyWorkoutScreen(text);
-    if (!classification.isWorkoutScreen) {
+    const image = bytes ?? (await downloadImageBytes(imageUrl));
+    const read = await ocrWorkoutFromBuffer(image);
+    if (!read.isWorkoutScreen) {
       // A selfie or social photo in an HR slot is an expected outcome, not an error. The caller
       // shows no chips and Send stays available.
-      return json({ ok: true, isWorkoutScreen: false, reason: classification.reason });
+      return json({ ok: true, isWorkoutScreen: false, reason: read.reason });
     }
-    const parsed = parseWorkoutOcrText(text);
-    return json({ ok: true, isWorkoutScreen: true, reason: 'ok', parsed });
+    return json({ ok: true, isWorkoutScreen: true, reason: 'ok', parsed: read.parsed });
   } catch (error) {
     // Soft failure: the photo is still valid proof, so the client must not block Send on this.
     return json(

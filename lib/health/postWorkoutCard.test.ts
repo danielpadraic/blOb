@@ -243,7 +243,8 @@ describe('matching a post’s media against the card the server named', () => {
 });
 
 describe('the workout slide a feed post carries', () => {
-  const CARD = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=abc';
+  const CARD = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.png?token=abc';
+  const SHOT = 'https://x.supabase.co/storage/v1/object/sign/p/watch.jpg?token=abc';
 
   it('names the media it replaces and draws the stored miles', () => {
     const slide = workoutSlideForPost({
@@ -261,6 +262,14 @@ describe('the workout slide a feed post carries', () => {
     const slide = workoutSlideForPost({ stats: WALK_STATS, checkinId: 'c-1' });
     expect(slide?.url).toBe(WORKOUT_CARD_SLIDE);
     expect(slide?.card.distanceLine).toBe('6.24 mi');
+  });
+
+  it('does not paint the recap over a Fitness screenshot that was stored as card_url', () => {
+    const slide = workoutSlideForPost({
+      stats: { ...WALK_STATS, card_url: SHOT },
+      checkinId: 'c-1',
+    });
+    expect(slide?.url).toBe(WORKOUT_CARD_SLIDE);
   });
 
   it('is nothing for a post that is not a workout check-in', () => {
@@ -281,7 +290,7 @@ describe('the workout slide a feed post carries', () => {
 });
 
 describe('pager order for a workout check-in', () => {
-  const CARD = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=abc';
+  const CARD = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.png?token=abc';
   const SHOT = 'https://x.supabase.co/storage/v1/object/sign/p/watch.jpg?token=abc';
   const SHOT2 = 'https://x.supabase.co/storage/v1/object/sign/p/hr.jpg?token=abc';
 
@@ -291,6 +300,17 @@ describe('pager order for a workout check-in', () => {
 
   it('does not invent a recap slide when HealthKit media is the named card', () => {
     expect(pagerUrlsWithWorkoutCard([CARD], { ...WALK_STATS, card_url: CARD })).toEqual([CARD]);
+  });
+
+  it('keeps the Fitness screenshot first when an old write named it as card_url', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT], { ...WALK_STATS, card_url: SHOT })).toEqual([
+      SHOT,
+      WORKOUT_CARD_SLIDE,
+    ]);
+  });
+
+  it('hides a flattened recap PNG and draws the live recap last', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT, CARD], WALK_STATS)).toEqual([SHOT, WORKOUT_CARD_SLIDE]);
   });
 
   it('does not paint a recap over a selfie-only check-in', () => {

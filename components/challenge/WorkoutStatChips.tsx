@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
+import { formatHealthDuration, parseHealthDurationInput } from '@/lib/health/durationChip';
 import { METERS_PER_MILE, clampOcrDistance, clampOcrField, OCR_LIMITS } from '@/lib/health/workoutOcr';
 import type { OcrSessionFields } from '@/lib/health/ocrSession';
 import { THEME } from '@/lib/theme';
@@ -26,15 +27,10 @@ type Props = {
   allowAdd?: boolean;
 };
 
-function minutesFrom(durationSec?: number): number | undefined {
-  return durationSec == null ? undefined : Math.round(durationSec / 60);
-}
-
 /** What each chip shows when it is not being edited. */
 function chipLabel(key: ChipKey, fields: OcrSessionFields, unit: 'mi' | 'km'): string | null {
   if (key === 'durationSec') {
-    const minutes = minutesFrom(fields.durationSec);
-    return minutes == null ? null : `${minutes} min`;
+    return formatHealthDuration(fields.durationSec);
   }
   if (key === 'activeEnergyKcal') {
     const kcal = fields.activeEnergyKcal ?? fields.totalEnergyKcal;
@@ -56,7 +52,7 @@ function chipLabel(key: ChipKey, fields: OcrSessionFields, unit: 'mi' | 'km'): s
 /** The value the editor starts with, in the unit the user types. */
 function editValue(key: ChipKey, fields: OcrSessionFields, unit: 'mi' | 'km'): string {
   if (key === 'durationSec') {
-    return String(minutesFrom(fields.durationSec) ?? '');
+    return formatHealthDuration(fields.durationSec) ?? '';
   }
   if (key === 'distanceMeters') {
     if (fields.distanceMeters == null) {
@@ -73,7 +69,7 @@ function editValue(key: ChipKey, fields: OcrSessionFields, unit: 'mi' | 'km'): s
 }
 
 const HINTS: Record<ChipKey, string> = {
-  durationSec: `1–${Math.round(OCR_LIMITS.durationSec.max / 60)} min`,
+  durationSec: 'mm:ss',
   activeEnergyKcal: `0–${OCR_LIMITS.kcal.max} cal`,
   avgHrBpm: `${OCR_LIMITS.hrBpm.min}–${OCR_LIMITS.hrBpm.max} bpm`,
   maxHrBpm: `${OCR_LIMITS.hrBpm.min}–${OCR_LIMITS.hrBpm.max} bpm`,
@@ -82,7 +78,7 @@ const HINTS: Record<ChipKey, string> = {
 
 const ORDER: ChipKey[] = ['durationSec', 'activeEnergyKcal', 'distanceMeters', 'avgHrBpm'];
 const ADD_LABEL: Record<ChipKey, string> = {
-  durationSec: 'Add min',
+  durationSec: 'Add time',
   activeEnergyKcal: 'Add cal',
   avgHrBpm: 'Add bpm',
   maxHrBpm: 'Add bpm',
@@ -124,7 +120,8 @@ export function WorkoutStatChips({
       }
       next.distanceMeters = metres;
     } else if (key === 'durationSec') {
-      const seconds = clampOcrField('durationSec', typed * 60);
+      const parsed = parseHealthDurationInput(raw);
+      const seconds = parsed == null ? null : clampOcrField('durationSec', parsed);
       if (seconds == null) {
         setEditing(null);
         return;
@@ -165,7 +162,7 @@ export function WorkoutStatChips({
                 onChangeText={setDraft}
                 onBlur={() => commit(key)}
                 onSubmitEditing={() => commit(key)}
-                keyboardType="numeric"
+                keyboardType={key === 'durationSec' ? 'numbers-and-punctuation' : 'numeric'}
                 autoFocus
                 returnKeyType="done"
                 placeholder={HINTS[key]}
@@ -219,7 +216,7 @@ export function WorkoutStatChips({
                 onChangeText={setDraft}
                 onBlur={() => commit(key)}
                 onSubmitEditing={() => commit(key)}
-                keyboardType="numeric"
+                keyboardType={key === 'durationSec' ? 'numbers-and-punctuation' : 'numeric'}
                 autoFocus
                 returnKeyType="done"
                 placeholder={HINTS[key]}

@@ -71,12 +71,20 @@ const ACTIVITY_HINTS: Array<{ pattern: RegExp; label: string }> = [
 ];
 
 function normalize(raw: string): string {
-  return String(raw ?? '')
-    // OCR routinely reads O/o for zero inside digit runs and l/I for one next to colons.
-    .replace(/\u00a0/g, ' ')
-    .replace(/[\u2013\u2014]/g, '-')
-    .replace(/[·•]/g, ' ')
-    .replace(/\r/g, '\n');
+  return (
+    String(raw ?? '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/[·•]/g, ' ')
+      .replace(/\r/g, '\n')
+      // Apple Fitness dark OCR often reads 0:36:55 as O:36:55.
+      .replace(/\b[Oo][:.](\d{2})[:.](\d{2})\b/g, '0:$1:$2')
+      .replace(/\b(\d{1,2})[:.](\d{2})[:.](\d{2})\b/g, (token) =>
+        token.replace(/[Oo]/g, '0').replace(/[Il]/g, '1'),
+      )
+      // "1.36MI" with no space still has to land as miles.
+      .replace(/(\d+(?:\.\d+)?)(MI|Mi)\b/g, '$1 MI')
+  );
 }
 
 function usableLines(text: string): string[] {
@@ -370,6 +378,8 @@ export function classifyWorkoutScreen(text: string): { isWorkoutScreen: boolean;
     /workout/i,
     /\b\d{1,2}:\d{2}:\d{2}\b/,
     /(apple ?watch|apple ?fitness|strava|garmin|whoop|fitbit|samsung health|google fit|health app)/i,
+    /outdoor (walk|run)|indoor (walk|run)/i,
+    /\d+(?:\.\d+)?\s*mi\b/i,
   ].filter((pattern) => pattern.test(scrubbed)).length;
 
   if (signals < 2) {

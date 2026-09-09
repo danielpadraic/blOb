@@ -7,6 +7,7 @@
 
 import { isFitnessShapedChallenge } from '@/lib/health/fitnessShaped';
 import { isOcrEligibleProof } from '@/lib/health/ocrSession';
+import { isGeneratedWorkoutCardFile } from '@/lib/health/postWorkoutCard';
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 
 const VENDOR = new Set(['healthkit', 'health_connect']);
@@ -127,6 +128,9 @@ export function pickStillUrls(part: {
   const mime = part.mimeType ?? part.mime ?? null;
   const push = (raw: string) => {
     if (!raw || raw.startsWith('health:') || isVideoStillUrl(raw, mime) || seen.has(raw)) {
+      return;
+    }
+    if (isGeneratedWorkoutCardFile(raw)) {
       return;
     }
     seen.add(raw);

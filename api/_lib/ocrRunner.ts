@@ -32,12 +32,21 @@ async function getWorker(): Promise<Worker> {
 
 export type PreparedImage = { buffer: Buffer; inverted: boolean; width: number; height: number };
 
+/** Pass 1 keeps polarity. Pass 2 always inverts dark Fitness UI. `auto` is tests / legacy. */
+export type OcrInvertMode = 'never' | 'always' | 'auto';
+
 /**
  * Apple Fitness, the Watch summary and Strava all render light text on near-black. Tesseract is
  * trained on dark-on-light, so a dark screenshot is inverted before recognition. Without this step
  * the numerals we care about are frequently missed entirely.
+ *
+ * Colorful rings on a Fitness still can pull mean brightness above the auto threshold, so the live
+ * pipeline runs original pixels first and only force-inverts when that pass found no numbers.
  */
-export async function prepareImage(input: ArrayBuffer | Buffer): Promise<PreparedImage> {
+export async function prepareImage(
+  input: ArrayBuffer | Buffer,
+  invert: OcrInvertMode = 'auto',
+): Promise<PreparedImage> {
   const image = await Jimp.read(Buffer.isBuffer(input) ? input : Buffer.from(input));
 
   if (image.bitmap.width < TARGET_WIDTH) {
@@ -45,12 +54,13 @@ export async function prepareImage(input: ArrayBuffer | Buffer): Promise<Prepare
   }
   image.greyscale();
 
-  const inverted = meanBrightness(image) < 110;
+  const inverted =
+    invert === 'always' ? true : invert === 'never' ? false : meanBrightness(image) < 110;
   if (inverted) {
     image.invert();
   }
   // Push mid grays apart so anti-aliased numerals resolve to solid strokes.
-  image.contrast(0.35);
+  image.contrast(invert === 'always' ? 0.45 : 0.35);
 
   const buffer = await image.getBuffer('image/png');
   return { buffer, inverted, width: image.bitmap.width, height: image.bitmap.height };
@@ -74,8 +84,8 @@ export function meanBrightness(image: { bitmap: { data: Buffer | Uint8Array; wid
 
 export type OcrResult = { text: string; inverted: boolean };
 
-/** Downloads, preprocesses and recognizes one image. Throws only on unusable input. */
-export async function ocrImageFromUrl(url: string): Promise<OcrResult> {
+/** Downloads one image. Throws only on unusable input. Invert retry uses these bytes twice. */
+export async function downloadImageBytes(url: string): Promise<Buffer> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`could not fetch image (${response.status})`);
@@ -91,11 +101,19 @@ export async function ocrImageFromUrl(url: string): Promise<OcrResult> {
   if (bytes.byteLength > MAX_BYTES) {
     throw new Error('image too large');
   }
-  return ocrImageBuffer(bytes);
+  return Buffer.from(bytes);
 }
 
-export async function ocrImageBuffer(bytes: ArrayBuffer | Buffer): Promise<OcrResult> {
-  const prepared = await prepareImage(bytes);
+/** Downloads, preprocesses and recognizes one image. Throws only on unusable input. */
+export async function ocrImageFromUrl(url: string): Promise<OcrResult> {
+  return ocrImageBuffer(await downloadImageBytes(url));
+}
+
+export async function ocrImageBuffer(
+  bytes: ArrayBuffer | Buffer,
+  invert: OcrInvertMode = 'auto',
+): Promise<OcrResult> {
+  const prepared = await prepareImage(bytes, invert);
   const worker = await getWorker();
   // Sparse-text segmentation: workout summaries are scattered stat cards, not paragraphs.
   await worker.setParameters({

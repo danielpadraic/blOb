@@ -40,7 +40,7 @@ import {
 } from '@/lib/health/ocrBackfill';
 import { buildOcrHealthProof, ocrFieldsFromParse } from '@/lib/health/ocrSession';
 import { unionOcrFields } from '@/lib/health/ocrUnion';
-import { classifyWorkoutScreen, hasOcrNumbers, parseWorkoutOcrText } from '@/lib/health/workoutOcr';
+import { hasOcrNumbers, parseWorkoutOcrText } from '@/lib/health/workoutOcr';
 
 const ROOT = resolve(process.cwd());
 const PAGE = 100;
@@ -320,11 +320,23 @@ async function applyOne(
     if (!imageUrl || !isAllowedOcrImageUrl(imageUrl, supabaseUrl)) {
       continue;
     }
-    let text = '';
     try {
-      const { ocrImageFromUrl } = await import('../api/_lib/ocrRunner');
-      const read = await ocrImageFromUrl(imageUrl);
-      text = String(read.text ?? '');
+      const { downloadImageBytes } = await import('../api/_lib/ocrRunner');
+      const { ocrWorkoutFromBuffer } = await import('../api/ocr-workout');
+      const bytes = await downloadImageBytes(imageUrl);
+      const read = await ocrWorkoutFromBuffer(bytes);
+      if (!read.isWorkoutScreen) {
+        continue;
+      }
+      sawWorkout = true;
+      if (!hasOcrNumbers(read.parsed)) {
+        continue;
+      }
+      reads.push({
+        fields: ocrFieldsFromParse(read.parsed),
+        clockRange: read.parsed?.clockRange ?? null,
+        activityLabel: read.parsed?.activityLabel ?? null,
+      });
     } catch (error) {
       if (isHtmlOrAuthFailure(error)) {
         counts.failed_ocr += 1;
@@ -333,20 +345,6 @@ async function applyOne(
       }
       continue;
     }
-    const classified = classifyWorkoutScreen(text);
-    if (!classified.isWorkoutScreen) {
-      continue;
-    }
-    sawWorkout = true;
-    const parsed = parseWorkoutOcrText(text);
-    if (!hasOcrNumbers(parsed)) {
-      continue;
-    }
-    reads.push({
-      fields: ocrFieldsFromParse(parsed),
-      clockRange: parsed.clockRange ?? null,
-      activityLabel: parsed.activityLabel ?? null,
-    });
   }
   if (reads.length === 0) {
     counts.skipped_not_workout += 1;

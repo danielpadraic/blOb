@@ -44,6 +44,12 @@ describe('preprocessing', () => {
     expect(prepared.width).toBeGreaterThanOrEqual(1080);
   }, 60_000);
 
+  it('can skip invert on pass 1 and force invert on pass 2', async () => {
+    const dark = await appleFitnessLikeScreen();
+    expect((await prepareImage(dark, 'never')).inverted).toBe(false);
+    expect((await prepareImage(dark, 'always')).inverted).toBe(true);
+  }, 60_000);
+
   it('leaves an already light screenshot alone', async () => {
     const light = await new Jimp({ width: 800, height: 800, color: 0xf7f7f5ff }).getBuffer('image/png');
     const prepared = await prepareImage(light);

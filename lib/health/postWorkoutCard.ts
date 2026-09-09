@@ -49,19 +49,36 @@ export function isWorkoutCardUrl(url?: string | null, cardUrl?: string | null): 
 }
 
 /**
+ * Rasterized recap files are PNG. Phone Fitness / vendor screenshots are JPEG or HEIC.
+ * A JPEG named in card_url is the user still, not a card to paint over.
+ */
+export function isGeneratedWorkoutCardFile(url?: string | null): boolean {
+  if (isWorkoutCardSlide(url)) {
+    return true;
+  }
+  const path = String(url ?? '').split('?')[0].toLowerCase();
+  return path.endsWith('.png');
+}
+
+function namedGeneratedCardUrl(stats?: CheckinProofStats | null): string {
+  const cardUrl = String(stats?.card_url ?? '').trim();
+  return cardUrl && isGeneratedWorkoutCardFile(cardUrl) ? cardUrl : '';
+}
+
+/**
  * User stills first, generated recap last. Never paints the recap over a screenshot URL.
  *
- * HealthKit / Health Connect: the slot file is the named card and there are no user stills, so the
+ * HealthKit / Health Connect: the slot file is the named PNG card and there are no user stills, so the
  * stored URL stays and the recap draws on that slide. OCR / manual: stills stay as photos and a
- * virtual last slide carries the recap.
+ * virtual last slide carries the recap — even when an old write stored the JPEG as card_url.
  */
 export function pagerUrlsWithWorkoutCard(
   urls: string[],
   stats?: CheckinProofStats | null,
 ): string[] {
   const list = uniqueProofUrls(urls);
-  const cardUrl = String(stats?.card_url ?? '').trim();
-  const stills = list.filter((url) => !isWorkoutCardUrl(url, cardUrl) && !isWorkoutCardSlide(url));
+  const cardUrl = namedGeneratedCardUrl(stats);
+  const stills = list.filter((url) => !isGeneratedWorkoutCardFile(url) && !isWorkoutCardSlide(url));
   const hasCard = workoutFromPostStats(stats) != null;
   if (!hasCard) {
     return list.filter((url) => !isWorkoutCardSlide(url));
@@ -69,7 +86,10 @@ export function pagerUrlsWithWorkoutCard(
   if (stills.length > 0) {
     return uniqueProofUrls([...stills, WORKOUT_CARD_SLIDE]);
   }
-  return list;
+  if (cardUrl) {
+    return list;
+  }
+  return uniqueProofUrls([...list.filter((url) => !isWorkoutCardSlide(url)), WORKOUT_CARD_SLIDE]);
 }
 
 /**
@@ -151,7 +171,7 @@ export function workoutSlideForPost(input: {
   if (!card) {
     return null;
   }
-  const url = String(input.stats?.card_url ?? '').trim() || WORKOUT_CARD_SLIDE;
+  const url = namedGeneratedCardUrl(input.stats) || WORKOUT_CARD_SLIDE;
   return {
     url,
     card,

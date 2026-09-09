@@ -30,6 +30,8 @@ const TIMEOUT_MS = 45_000;
 const OCR_MAX_WIDTH = 1400;
 
 function logOcr(input: {
+  reachable: boolean;
+  status: number;
   ok: boolean;
   ms: number;
   slot?: string | null;
@@ -38,6 +40,8 @@ function logOcr(input: {
   reason?: string;
 }) {
   console.log('[blob:ocr]', {
+    reachable: input.reachable,
+    status: input.status,
     ok: input.ok,
     ms: input.ms,
     slot: input.slot ?? null,
@@ -53,8 +57,17 @@ function miss(
   urls: string[],
   slot?: string | null,
   status = 0,
+  reachable = false,
 ): OcrReadResult {
-  logOcr({ ok: false, ms: Date.now() - started, slot, urls, reason });
+  logOcr({
+    reachable,
+    status,
+    ok: false,
+    ms: Date.now() - started,
+    slot,
+    urls,
+    reason,
+  });
   return { ok: false, isWorkoutScreen: false, reason, status };
 }
 
@@ -103,7 +116,7 @@ export async function readWorkoutScreenshot(input: {
   }
 
   if (!imageBase64 && !storageUrl) {
-    return miss(localUri ? 'unreadable_image' : 'no_image', started, urls, slot);
+    return miss(localUri ? 'unreadable_image' : 'no_image', started, urls, slot, 0, false);
   }
 
   let token: string | undefined;
@@ -114,7 +127,7 @@ export async function readWorkoutScreenshot(input: {
     token = undefined;
   }
   if (!token) {
-    return miss('unauthorized', started, urls, slot);
+    return miss('unauthorized', started, urls, slot, 0, false);
   }
 
   const endpoint = ocrEndpoint();
@@ -129,20 +142,20 @@ export async function readWorkoutScreenshot(input: {
     });
     const raw = await response.text();
     if (isOcrSpaHtml(response.headers.get('content-type'), raw)) {
-      return miss('spa_html', started, urls, slot, response.status);
+      return miss('spa_html', started, urls, slot, response.status, false);
     }
     let body: OcrReadResult;
     try {
       body = JSON.parse(raw) as OcrReadResult;
     } catch {
-      return miss('bad_json', started, urls, slot, response.status);
+      return miss('bad_json', started, urls, slot, response.status, response.status !== 404);
     }
     if (!response.ok) {
       const reason =
         typeof body?.reason === 'string' && body.reason.trim()
           ? body.reason
           : `http_${response.status}`;
-      return miss(reason, started, urls, slot, response.status);
+      return miss(reason, started, urls, slot, response.status, true);
     }
     const parsed = body?.parsed;
     const result: OcrReadResult = {
@@ -154,6 +167,8 @@ export async function readWorkoutScreenshot(input: {
     };
     const ok = result.ok && result.isWorkoutScreen && hasOcrNumbers(parsed);
     logOcr({
+      reachable: true,
+      status: response.status,
       ok,
       ms: Date.now() - started,
       slot,
@@ -170,7 +185,7 @@ export async function readWorkoutScreenshot(input: {
     return result;
   } catch (error) {
     const aborted = error instanceof Error && error.name === 'AbortError';
-    return miss(aborted ? 'timeout' : 'network', started, urls, slot);
+    return miss(aborted ? 'timeout' : 'network', started, urls, slot, 0, false);
   } finally {
     clearTimeout(timer);
   }

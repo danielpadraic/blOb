@@ -39,6 +39,14 @@ Max Heart Rate
 171 BPM
 `;
 
+/** Compact Apple Fitness still from the 2026-09-09 tape (Outdoor Walk 0:36:55 / 1.36MI / 87 bpm). */
+const APPLE_OUTDOOR_WALK_COMPACT = `
+Outdoor Walk
+O:36:55
+1.36MI
+87 bpm
+`;
+
 const STRAVA = `
 Morning Run
 Distance 5.02 km
@@ -117,6 +125,14 @@ describe('distance-carrying screens', () => {
     const parsed = parseWorkoutOcrText(STRAVA);
     expect(parsed.distanceMeters).toBe(5020);
   });
+
+  it('reads a compact dark Fitness walk: 36:55, 1.36 mi, 87 bpm', () => {
+    const parsed = parseWorkoutOcrText(APPLE_OUTDOOR_WALK_COMPACT);
+    expect(parsed.durationSec).toBe(36 * 60 + 55);
+    expect(parsed.distanceMeters).toBe(Math.round(1.36 * METERS_PER_MILE));
+    expect(parsed.avgHrBpm).toBe(87);
+    expect(parsed.activityLabel).toBe('Walk');
+  });
 });
 
 describe('body metrics are never read as workout stats', () => {
@@ -159,8 +175,8 @@ describe('classifier', () => {
     expect(result.reason).toBe('not_a_workout_screen');
   });
 
-  it('accepts a Whoop summary that names the tracker and shows BPM', () => {
-    expect(classifyWorkoutScreen('WHOOP  ·  142 bpm avg').isWorkoutScreen).toBe(true);
+  it('accepts a compact Outdoor Walk still even without Total Time / BPM labels', () => {
+    expect(classifyWorkoutScreen(APPLE_OUTDOOR_WALK_COMPACT).isWorkoutScreen).toBe(true);
   });
 
   it('still rejects a selfie even if the word workout appears once', () => {
