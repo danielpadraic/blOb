@@ -41,7 +41,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
-import { seedChallengeLivePost } from '@/hooks/useFeed';
+import { isHomeSocialFeedKey, seedChallengeLivePost } from '@/hooks/useFeed';
+import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
@@ -845,7 +846,9 @@ function SubmitWorkoutInner() {
     });
     setDrafts((current) => ({ ...current, [proof.id]: { ...current[proof.id], inFence: true } }));
     void checkinQuery.refetch();
-    void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    void queryClient.invalidateQueries({
+      predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+    });
     return row;
   }
 
@@ -1191,12 +1194,13 @@ function SubmitWorkoutInner() {
         try {
           const post = await supabase
             .from('posts')
-            .select('id, media_urls')
+            .select('id, media_urls, checkin_stats')
             .eq('checkin_id', checkinId)
             .is('deleted_at', null)
             .maybeSingle();
           postId = (post.data as { id?: string } | null)?.id;
           const mediaUrls = (post.data as { media_urls?: string[] } | null)?.media_urls ?? [];
+          const checkinStats = (post.data as { checkin_stats?: unknown } | null)?.checkin_stats ?? null;
           const mentionIds = [
             ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
           ];
@@ -1234,6 +1238,7 @@ function SubmitWorkoutInner() {
                 challenge_id: id,
                 content: body,
                 media_urls: mediaUrls,
+                checkin_stats: checkinStats,
                 source: 'checkin',
                 checkin_id: checkinId,
                 checkin_stage: readyNow ? 'complete' : 'started',
@@ -1246,6 +1251,31 @@ function SubmitWorkoutInner() {
         } catch {
           // Social line already saved; Home hide / mentions are best-effort.
         }
+      }
+      if (uid) {
+        void runPostSendOcr({
+          challengeId: id,
+          postId,
+          periodKey: checkinPeriodKey(challenge),
+          timeZone: challengeClockTz(challenge),
+          slots: proofSteps.map((proof) => {
+            const draft = draftWithReadStats(proof, drafts[proof.id]);
+            const saved = savedParts[proof.id];
+            return {
+              proof,
+              urls: uniqueProofUrls([
+                ...(Array.isArray(saved?.urls) ? saved.urls : []),
+                saved?.url,
+                ...slotStillUris(draft),
+              ]),
+              caption: proofCaptions[proof.id] ?? saved?.caption ?? null,
+              mimeType: draft?.mimeType,
+              health: draft?.health ?? saved?.health ?? null,
+              healthWorkoutId: draft?.healthWorkoutId ?? saved?.healthWorkoutId ?? null,
+            };
+          }),
+          queryClient,
+        }).catch(() => undefined);
       }
       if (shareWave && uid && !wavePublishedRef.current) {
         const wave = pickCheckinWaveSource({
@@ -1287,7 +1317,9 @@ function SubmitWorkoutInner() {
         }
       }
       await successHaptic();
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({
+        predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+      });
       // A failed extra never rolls back the required slot — warn, do not block.
       if (extraWarning) {
         setFailKind(null);

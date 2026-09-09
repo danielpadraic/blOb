@@ -18,6 +18,37 @@ describe('patchLiveFeedList', () => {
     expect(next[0].checkin_stats).toEqual({ duration_sec: 2100, active_cal: 218 });
   });
 
+  it('merges an insert onto a row already on screen', () => {
+    const list = [A, B];
+    const next = patchLiveFeedList(list, {
+      eventType: 'INSERT',
+      new: { id: 'a', checkin_stats: { duration_sec: 2100, hr_avg: 142 } },
+    }) as typeof list;
+    expect(next[1]).toBe(B);
+    expect(next[0].media_urls).toEqual(['https://cdn.test/one.jpg']);
+    expect(next[0].checkin_stats).toEqual({ duration_sec: 2100, hr_avg: 142 });
+  });
+
+  it('appends a new posts.id instead of replacing the list', () => {
+    const list = [A];
+    const next = patchLiveFeedList(list, {
+      eventType: 'INSERT',
+      new: { id: 'c', content: 'Check-in Complete', media_urls: ['https://cdn.test/c.jpg'] },
+    }) as typeof list;
+    expect(next[0]).toBe(A);
+    expect(next[1]?.id).toBe('c');
+    expect(next[1]?.media_urls).toEqual(['https://cdn.test/c.jpg']);
+  });
+
+  it('does not blank media_urls when a stats write sends an empty array', () => {
+    const next = patchLiveFeedList([A], {
+      eventType: 'UPDATE',
+      new: { id: 'a', media_urls: [], checkin_stats: { duration_sec: 2100, hr_avg: 142 } },
+    }) as typeof A[];
+    expect(next[0].media_urls).toEqual(['https://cdn.test/one.jpg']);
+    expect(next[0].checkin_stats).toEqual({ duration_sec: 2100, hr_avg: 142 });
+  });
+
   it('does not drop media_urls when the patch omitted them', () => {
     const next = patchLiveFeedList([A], {
       eventType: 'UPDATE',
@@ -28,11 +59,6 @@ describe('patchLiveFeedList', () => {
 
   it('removes a deleted row', () => {
     expect(patchLiveFeedList([A, B], { eventType: 'DELETE', old: { id: 'a' } })).toEqual([B]);
-  });
-
-  it('leaves the list alone on insert so the caller can fetch the full post', () => {
-    const list = [A];
-    expect(patchLiveFeedList(list, { eventType: 'INSERT', new: { id: 'c' } })).toBe(list);
   });
 
   it('keeps the same array when the update already matches the row', () => {

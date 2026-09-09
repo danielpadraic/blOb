@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useAuth } from '@/hooks/useAuth';
+import { isHomeSocialFeedKey } from '@/hooks/useFeed';
 import {
   checkinCtaTitle,
   isCheckinPrimary,
@@ -335,7 +335,9 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
         return;
       }
       writeCheckinCache(queryClient, challengeId, user.id, row);
-      void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
+      void queryClient.invalidateQueries({
+        predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+      });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
       const cached = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
@@ -413,7 +415,9 @@ export function useSubmitCheckin(challengeId: string | undefined) {
           (current) => incrementDaysCompleted(Number(current) || 0, false),
         );
       }
-      void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
+      void queryClient.invalidateQueries({
+        predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+      });
       void queryClient.invalidateQueries({ queryKey: ['workout-submission', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-completions', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['submitted-checkins', challengeId] });

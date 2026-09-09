@@ -39,6 +39,7 @@ import {
   type OcrBackfillPart,
 } from '@/lib/health/ocrBackfill';
 import { buildOcrHealthProof, ocrFieldsFromParse } from '@/lib/health/ocrSession';
+import { unionOcrFields } from '@/lib/health/ocrUnion';
 import { classifyWorkoutScreen, hasOcrNumbers, parseWorkoutOcrText } from '@/lib/health/workoutOcr';
 
 const ROOT = resolve(process.cwd());
@@ -87,6 +88,7 @@ type Candidate = {
   slotId: string;
   method: 'hr' | 'distance';
   stillUrl: string;
+  stillUrls: string[];
 };
 
 type Counts = {
@@ -241,6 +243,7 @@ async function fetchCandidates(
         slotId: slot.slotId,
         method: slot.method,
         stillUrl: slot.url,
+        stillUrls: slot.urls.length ? slot.urls : [slot.url],
       });
     }
 
@@ -305,42 +308,58 @@ async function applyOne(
     return;
   }
 
-  const imageUrl = await signedStillUrl(supabase, supabaseUrl, row.stillUrl);
-  if (!imageUrl || !isAllowedOcrImageUrl(imageUrl, supabaseUrl)) {
-    counts.failed_ocr += 1;
-    logSkip(row.checkinId, 'blocked_url');
-    return;
+  const stills = row.stillUrls.length ? row.stillUrls : [row.stillUrl];
+  const reads: Array<{
+    fields: ReturnType<typeof ocrFieldsFromParse>;
+    clockRange: ReturnType<typeof parseWorkoutOcrText>['clockRange'];
+    activityLabel: string | null;
+  }> = [];
+  let sawWorkout = false;
+  for (const still of stills) {
+    const imageUrl = await signedStillUrl(supabase, supabaseUrl, still);
+    if (!imageUrl || !isAllowedOcrImageUrl(imageUrl, supabaseUrl)) {
+      continue;
+    }
+    let text = '';
+    try {
+      const { ocrImageFromUrl } = await import('../api/_lib/ocrRunner');
+      const read = await ocrImageFromUrl(imageUrl);
+      text = String(read.text ?? '');
+    } catch (error) {
+      if (isHtmlOrAuthFailure(error)) {
+        counts.failed_ocr += 1;
+        logSkip(row.checkinId, 'ocr_http');
+        return;
+      }
+      continue;
+    }
+    const classified = classifyWorkoutScreen(text);
+    if (!classified.isWorkoutScreen) {
+      continue;
+    }
+    sawWorkout = true;
+    const parsed = parseWorkoutOcrText(text);
+    if (!hasOcrNumbers(parsed)) {
+      continue;
+    }
+    reads.push({
+      fields: ocrFieldsFromParse(parsed),
+      clockRange: parsed.clockRange ?? null,
+      activityLabel: parsed.activityLabel ?? null,
+    });
   }
-
-  let text = '';
-  try {
-    const { ocrImageFromUrl } = await import('../api/_lib/ocrRunner');
-    const read = await ocrImageFromUrl(imageUrl);
-    text = String(read.text ?? '');
-  } catch (error) {
-    counts.failed_ocr += 1;
-    logSkip(row.checkinId, isHtmlOrAuthFailure(error) ? 'ocr_http' : 'ocr_throw');
-    return;
-  }
-
-  const classified = classifyWorkoutScreen(text);
-  if (!classified.isWorkoutScreen) {
+  if (reads.length === 0) {
     counts.skipped_not_workout += 1;
-    logSkip(row.checkinId, classified.reason);
+    logSkip(row.checkinId, sawWorkout ? 'no_numbers' : 'blocked_url');
     return;
   }
-  const parsed = parseWorkoutOcrText(text);
-  if (!hasOcrNumbers(parsed)) {
-    counts.skipped_not_workout += 1;
-    logSkip(row.checkinId, 'no_numbers');
-    return;
-  }
+  const union = unionOcrFields(reads);
 
   const snapshot = buildOcrHealthProof({
-    fields: ocrFieldsFromParse(parsed),
+    fields: union.fields,
     source: 'ocr',
-    activityLabel: parsed.activityLabel ?? null,
-    clockRange: parsed.clockRange ?? null,
+    activityLabel: union.activityLabel,
+    clockRange: union.clockRange,
     periodKey: row.periodKey || null,
     timeZone: row.timeZone || null,
   });

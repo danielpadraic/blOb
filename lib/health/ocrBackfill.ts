@@ -92,18 +92,52 @@ function urlFromUnknown(item: unknown): string {
 }
 
 export function pickStillUrl(part: { url?: string | null; urls?: unknown[] | null }): string {
-  const first = String(part.url ?? '').trim();
-  if (first && !first.startsWith('health:')) {
-    return first;
+  return pickStillUrls(part)[0] ?? '';
+}
+
+/** A posted HR / distance screenshot slot that Send should send to the reader. */
+export function shouldPostSendOcrSlot(input: {
+  proof?: { method?: string | null } | null;
+  urls?: string[] | null;
+  health?: { source?: string | null; startedAt?: string | null; endedAt?: string | null } | null;
+  healthWorkoutId?: string | null;
+}): boolean {
+  const method = String(input.proof?.method ?? '').trim().toLowerCase();
+  if (method !== 'hr' && method !== 'distance') {
+    return false;
   }
+  if (isVendorHealthSlot(input)) {
+    return false;
+  }
+  return (input.urls ?? []).some((url) => {
+    const value = String(url ?? '').trim();
+    return value.length > 0 && !value.startsWith('health:');
+  });
+}
+
+/** Every screenshot on the slot, in stored order. Videos and health: placeholders stay out. */
+export function pickStillUrls(part: {
+  url?: string | null;
+  urls?: unknown[] | null;
+  mimeType?: string | null;
+  mime?: string | null;
+}): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const mime = part.mimeType ?? part.mime ?? null;
+  const push = (raw: string) => {
+    if (!raw || raw.startsWith('health:') || isVideoStillUrl(raw, mime) || seen.has(raw)) {
+      return;
+    }
+    seen.add(raw);
+    out.push(raw);
+  };
+  push(String(part.url ?? '').trim());
   const extra = Array.isArray(part.urls) ? part.urls : [];
   for (const item of extra) {
-    const url = urlFromUnknown(item);
-    if (url && !url.startsWith('health:')) {
-      return url;
-    }
+    push(urlFromUnknown(item));
   }
-  return '';
+  return out;
 }
 
 export function slotMethodOf(
@@ -191,6 +225,7 @@ export type OcrBackfillPart = {
 export type OcrBackfillSlot = {
   slotId: string;
   url: string;
+  urls: string[];
   method: 'hr' | 'distance';
 };
 
@@ -271,7 +306,52 @@ export function pickOcrBackfillSlot(input: {
     ) {
       continue;
     }
-    return { slotId, url: pickStillUrl(part), method };
+    const urls = pickStillUrls({ ...part, mimeType: part.mimeType ?? part.mime });
+    return { slotId, url: urls[0] ?? pickStillUrl(part), urls, method };
   }
   return null;
+}
+
+/** Every HR / distance screenshot slot that is safe to read, each with every still. */
+export function pickOcrBackfillSlots(input: {
+  challenge?: Parameters<typeof isFitnessBackfillChallenge>[0];
+  proofs?: Array<{ id?: string; method?: string | null }> | null;
+  parts?: Record<string, OcrBackfillPart> | null;
+  postStats?: Parameters<typeof hasUsablePostStats>[0];
+}): OcrBackfillSlot[] {
+  if (!isFitnessBackfillChallenge(input.challenge)) {
+    return [];
+  }
+  if (hasUsablePostStats(input.postStats)) {
+    return [];
+  }
+  const parts = input.parts ?? {};
+  const proofs = Array.isArray(input.proofs) ? input.proofs : [];
+  const found: OcrBackfillSlot[] = [];
+  for (const slotId of Object.keys(parts).sort()) {
+    const part = parts[slotId];
+    if (!part) {
+      continue;
+    }
+    const challengeProof = proofs.find((proof) => proof.id === slotId) ?? null;
+    const method = slotMethodOf(part, challengeProof);
+    if (method !== 'hr' && method !== 'distance') {
+      continue;
+    }
+    if (
+      !isOcrBackfillSlot({
+        ...part,
+        method,
+        mimeType: part.mimeType ?? part.mime,
+      })
+    ) {
+      continue;
+    }
+    const urls = pickStillUrls({ ...part, mimeType: part.mimeType ?? part.mime });
+    if (urls.length === 0) {
+      continue;
+    }
+    found.push({ slotId, url: urls[0], urls, method });
+  }
+  return found;
 }

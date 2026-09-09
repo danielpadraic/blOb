@@ -334,6 +334,13 @@ export default function ChallengeDetailScreen() {
     highlightPostId || highlightCommentId ? 'feed' : asChallengePageTab(tabParam),
   );
   const [receiptOpen, setReceiptOpen] = useState(receiptParam === '1');
+  const [liveMounted, setLiveMounted] = useState(() => pageTab === 'feed');
+
+  useEffect(() => {
+    if (pageTab === 'feed') {
+      setLiveMounted(true);
+    }
+  }, [pageTab]);
 
   useEffect(() => {
     if (isCalloutObserver) {
@@ -1060,8 +1067,17 @@ export default function ChallengeDetailScreen() {
           </AppText>
         </Pressable>
       ) : null}
-      {pageTab === 'feed' ? (
-        <View style={{ flex: 1, minHeight: 0 }}>
+      {liveMounted ? (
+        <View
+          collapsable={false}
+          pointerEvents={pageTab === 'feed' ? 'auto' : 'none'}
+          style={{
+            flex: pageTab === 'feed' ? 1 : 0,
+            minHeight: pageTab === 'feed' ? 0 : 0,
+            height: pageTab === 'feed' ? undefined : 0,
+            overflow: 'hidden',
+            opacity: pageTab === 'feed' ? 1 : 0,
+          }}>
           {challenge?.is_callout ? (
             <CalloutLiveWatchChip watching={isCalloutObserver} count={watchingCount} />
           ) : null}
@@ -1096,7 +1112,8 @@ export default function ChallengeDetailScreen() {
           onReact={(post, type, commentId) => toggleLiveReaction.mutate({ post, type, commentId })}
         />
         </View>
-      ) : (
+      ) : null}
+      {pageTab !== 'feed' ? (
       <ScrollView
         ref={scrollRef}
         className="flex-1"
@@ -1547,7 +1564,7 @@ export default function ChallengeDetailScreen() {
         ) : null}
 
       </ScrollView>
-      )}
+      ) : null}
 
       {showStickyCta && (pageTab !== 'feed' || stickyJoin) ? (
       <View

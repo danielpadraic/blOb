@@ -8,8 +8,12 @@ import {
   isVendorHealthSlot,
   isVideoStillUrl,
   pickOcrBackfillSlot,
+  pickOcrBackfillSlots,
   pickStillUrl,
+  pickStillUrls,
+  shouldPostSendOcrSlot,
 } from '@/lib/health/ocrBackfill';
+import { unionOcrFields } from '@/lib/health/ocrUnion';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -77,6 +81,68 @@ describe('OCR backfill slot picker', () => {
     expect(pickStillUrl({ url: '', urls: [{ url: 'https://x/c.jpg' }] })).toBe('https://x/c.jpg');
   });
 
+  it('returns every still on the slot so OCR can union them', () => {
+    expect(
+      pickStillUrls({
+        url: 'https://x/a.jpg',
+        urls: ['https://x/a.jpg', 'https://x/b.jpg', { url: 'https://x/c.jpg' }],
+      }),
+    ).toEqual(['https://x/a.jpg', 'https://x/b.jpg', 'https://x/c.jpg']);
+  });
+
+  it('fires post-send OCR on HR stills and skips HealthKit / selfies', () => {
+    expect(
+      shouldPostSendOcrSlot({
+        proof: { method: 'hr' },
+        urls: ['https://x/a.jpg', 'https://x/b.jpg'],
+      }),
+    ).toBe(true);
+    expect(
+      shouldPostSendOcrSlot({
+        proof: { method: 'hr' },
+        urls: ['https://x/a.jpg'],
+        health: { source: 'healthkit', startedAt: '2026-09-08T12:00:00.000Z', endedAt: '2026-09-08T12:40:00.000Z' },
+      }),
+    ).toBe(false);
+    expect(
+      shouldPostSendOcrSlot({
+        proof: { method: 'photo' },
+        urls: ['https://x/face.jpg'],
+      }),
+    ).toBe(false);
+  });
+
+  it('unions every still instead of keeping only the first read', () => {
+    expect(
+      unionOcrFields([
+        { fields: { durationSec: 2100 } },
+        { fields: { avgHrBpm: 142, distanceMeters: 2237 } },
+      ]).fields,
+    ).toEqual({
+      durationSec: 2100,
+      avgHrBpm: 142,
+      distanceMeters: 2237,
+    });
+  });
+
+  it('unions every HR still when picking backfill slots', () => {
+    expect(
+      pickOcrBackfillSlots({
+        challenge: { category: 'fitness' },
+        parts: {
+          hr: { method: 'hr', url: 'https://x/a.jpg', urls: ['https://x/a.jpg', 'https://x/b.jpg'] },
+        },
+      }),
+    ).toEqual([
+      {
+        slotId: 'hr',
+        url: 'https://x/a.jpg',
+        urls: ['https://x/a.jpg', 'https://x/b.jpg'],
+        method: 'hr',
+      },
+    ]);
+  });
+
   it('only signs objects on this project’s proofs bucket', () => {
     const project = 'https://tguzdtwsajnnczdxjqyq.supabase.co';
     expect(
@@ -129,7 +195,7 @@ describe('pickOcrBackfillSlot', () => {
         parts: { p_hr: { method: 'hr', url: screenshot } },
         postStats: null,
       }),
-    ).toEqual({ slotId: 'p_hr', url: screenshot, method: 'hr' });
+    ).toEqual({ slotId: 'p_hr', url: screenshot, urls: [screenshot], method: 'hr' });
   });
 
   it('skips HealthKit and a post that already has chips', () => {

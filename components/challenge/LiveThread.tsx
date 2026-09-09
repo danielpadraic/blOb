@@ -24,6 +24,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useEditPost } from '@/hooks/usePostEdit';
 import { useLiveThreadReads } from '@/hooks/useLiveThreadReads';
+import { useQueryClient } from '@tanstack/react-query';
 import { copy } from '@/lib/copy';
 import {
   insertLiveDayBreaks,
@@ -57,6 +58,7 @@ import { COMMENT_UNAVAILABLE, commentTargetMissing } from '@/lib/commentHighligh
 import type { MentionChip } from '@/lib/mentions';
 import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
 import { tabBarLift, THEME } from '@/lib/theme';
+import { backfillLatestFitnessOcr } from '@/lib/health/runPostSendOcr';
 import type { PostAudience } from '@/lib/postAudience';
 import type { CommentWithAuthor, ComposeInput, PostSource, PostWithMeta, ReactionType } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -154,12 +156,57 @@ export function LiveThread({
 
   const challengeIdRef = useRef(readCursorChallengeId);
   challengeIdRef.current = readCursorChallengeId;
+  const queryClient = useQueryClient();
+  const hadRowsRef = useRef(false);
+  const newestPostIdRef = useRef<string | null>(null);
   useEffect(() => {
     console.log('[blob:live]', { reason: 'mount', challengeId: challengeIdRef.current ?? null });
     return () => {
       console.log('[blob:live]', { reason: 'unmount', challengeId: challengeIdRef.current ?? null });
     };
   }, []);
+  useEffect(() => {
+    const list = posts ?? [];
+    const newest = list.reduce<PostWithMeta | null>((found, post) => {
+      if (!post?.id) {
+        return found;
+      }
+      if (!found) {
+        return post;
+      }
+      const left = new Date(found.created_at ?? 0).getTime();
+      const right = new Date(post.created_at ?? 0).getTime();
+      if (right > left) {
+        return post;
+      }
+      if (right === left && String(post.id) > String(found.id)) {
+        return post;
+      }
+      return found;
+    }, null);
+    if (hadRowsRef.current && list.length === 0) {
+      console.log('[blob:live]', {
+        reason: 'reset',
+        postId: newestPostIdRef.current,
+        media: 0,
+        stats: false,
+      });
+    }
+    if (list.length > 0) {
+      hadRowsRef.current = true;
+    }
+    newestPostIdRef.current = newest?.id ?? newestPostIdRef.current;
+  }, [posts]);
+  useEffect(() => {
+    const userId = String(currentUserId ?? '').trim();
+    if (!userId) {
+      return;
+    }
+    void backfillLatestFitnessOcr({
+      userId,
+      queryClient,
+    }).catch(() => undefined);
+  }, [currentUserId, queryClient]);
   const commentsReady = !isLoading;
   const highlightKey = highlightCommentId
     ? `comment:${highlightCommentId}`
@@ -283,6 +330,23 @@ export function LiveThread({
     // dragged readers back to the bottom.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentsReady, highlightCommentId, highlightKey, highlightPostId, pinToLiveEdge, rows.length === 0]);
+
+  const lastNewestIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    let newestId: string | null = null;
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      const row = rows[i];
+      if (row.kind === 'post') {
+        newestId = row.post.id;
+        break;
+      }
+    }
+    const previous = lastNewestIdRef.current;
+    lastNewestIdRef.current = newestId;
+    if (previous && newestId && newestId !== previous) {
+      pinToLiveEdge(false, 'new-post');
+    }
+  }, [pinToLiveEdge, rows]);
 
   // If the list never reports reaching the bottom, the opening pin still expires, so a stalled
   // measurement cannot leave the thread permanently snapping downward.
@@ -597,14 +661,14 @@ export function LiveThread({
         backgroundColor: THEME.background,
         marginBottom: keyboardOverlap,
       }}>
-      {error && rows.length === 0 && !isLoading ? (
+      {error && rows.length === 0 && !isLoading && !hadRowsRef.current ? (
         <MascotState
           kind="error"
           title={copy('home.error')}
           actionLabel="Try again"
           onAction={onRetry}
         />
-      ) : isLoading && rows.length === 0 ? (
+      ) : isLoading && rows.length === 0 && !hadRowsRef.current ? (
         <MascotState kind="loading" title={loadingTitle ?? 'Loading Live'} compact />
       ) : (
         <View style={{ flex: 1, minHeight: 0 }}>
@@ -635,12 +699,9 @@ export function LiveThread({
             if (highlightKey && highlightedOnce.current === highlightKey) {
               return;
             }
-            // Guarded, unlike the version this replaces: content grows on every new message, image
-            // load and wrapped reaction row, and none of those may move a reader's viewport.
-            //
-            // The opening pin is deliberately not spent here. Rows measure in batches, so the first
-            // pin lands on a bottom that is still growing; re-pinning on each growth is what makes a
-            // cold open finish on the newest row instead of a few hundred pixels short.
+            if (!firstPaintPendingRef.current) {
+              return;
+            }
             pinToLiveEdge(false, 'content-size');
           }}
           onScrollToIndexFailed={() => pinToLiveEdge(false, 'index-failed')}
