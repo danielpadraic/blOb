@@ -159,17 +159,40 @@ export function parseHostAdjustResult(value: unknown): HostAdjustResult {
 
 export function hostAdjustErrorMessage(message: string): string {
   const text = message.trim();
-  if (text.includes('Official')) {
+  const lower = text.toLowerCase();
+  if (
+    lower.includes('don’t have a miss') ||
+    lower.includes("don't have a miss") ||
+    lower.includes('55000') ||
+    lower.includes('not assigned') ||
+    lower.includes('indeterminate')
+  ) {
+    return 'They don’t have a miss to excuse.';
+  }
+  if (lower.includes('official')) {
     return 'This Official challenge can’t be adjusted.';
   }
-  if (text.includes('already ended')) {
+  if (lower.includes('already ended')) {
     return 'This challenge has already ended.';
   }
-  if (text.includes('already counts')) {
+  if (lower.includes('already counts')) {
     return 'That day already counts.';
   }
-  if (text.includes('Only the host')) {
+  if (lower.includes('only the host')) {
     return 'Only the host can change the Board.';
   }
-  return text || 'Only the host can change the Board.';
+  if (
+    lower.includes('23505') ||
+    lower.includes('duplicate key') ||
+    lower.includes('posts_system_kind') ||
+    lower.includes('sqlstate') ||
+    lower.includes('pl/pgsql') ||
+    /^\d{5}\b/.test(text)
+  ) {
+    return 'Couldn’t update the Board.';
+  }
+  if (!text) {
+    return 'Couldn’t update the Board.';
+  }
+  return text;
 }

@@ -67,7 +67,7 @@ describe('host Board adjust gates', () => {
     expect(challengeTracksMissesForExcuse({ ...liveUser, format: 'cumulative' })).toBe(false);
   });
 
-  it('maps RPC errors to the four locked lines', () => {
+  it('maps RPC errors to the locked lines and never dumps SQLSTATE', () => {
     expect(hostAdjustErrorMessage('Only the host can change the Board.')).toBe(
       'Only the host can change the Board.',
     );
@@ -78,5 +78,16 @@ describe('host Board adjust gates', () => {
     expect(hostAdjustErrorMessage('This challenge has already ended.')).toBe(
       'This challenge has already ended.',
     );
+    expect(hostAdjustErrorMessage('They don’t have a miss to excuse.')).toBe(
+      'They don’t have a miss to excuse.',
+    );
+    expect(
+      hostAdjustErrorMessage(
+        '55000 record "v_win" is not assigned yet The tuple structure of a not-yet-assigned record is indeterminate.',
+      ),
+    ).toBe('They don’t have a miss to excuse.');
+    expect(
+      hostAdjustErrorMessage('23505 duplicate key value violates unique constraint "posts_system_kind_uidx"'),
+    ).toBe('Couldn’t update the Board.');
   });
 });

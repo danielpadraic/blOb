@@ -270,7 +270,9 @@ function HostAdjustSheets({
                   : copy('board.pickMissedDay')}
               </AppText>
               {days.error ? (
-                <AppText className="mt-3 text-sm text-coral-dark">{getErrorMessage(days.error)}</AppText>
+                <AppText className="mt-3 text-sm text-coral-dark">
+                  {hostAdjustErrorMessage(getErrorMessage(days.error))}
+                </AppText>
               ) : null}
               <ScrollView style={{ marginTop: 12, maxHeight: 280 }}>
                 {list.length === 0 && !days.isPending ? (
@@ -327,7 +329,9 @@ function HostAdjustSheets({
                       })}
               </AppText>
               {mutate.error ? (
-                <AppText className="mt-3 text-sm text-coral-dark">{getErrorMessage(mutate.error)}</AppText>
+                <AppText className="mt-3 text-sm text-coral-dark">
+                  {hostAdjustErrorMessage(getErrorMessage(mutate.error))}
+                </AppText>
               ) : null}
               <View className="mt-6 gap-3">
                 <Button
