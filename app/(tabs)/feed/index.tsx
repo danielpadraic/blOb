@@ -15,13 +15,15 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { useCopyTone } from '@/hooks/useCopy';
-import { useCreateComment, useCreatePost, useFeed, useToggleReaction } from '@/hooks/useFeed';
-import { socialKeys } from '@/hooks/useSocial';
+import { useFeedActiveChallenges } from '@/hooks/useChallenge';
+import { useCreateComment, useCreatePost, useHomeFeed, useToggleReaction } from '@/hooks/useFeed';
+import { useHomePulse } from '@/hooks/useHomePulse';
+import { socialKeys, useFriends } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { clearLastOpenChallenge } from '@/lib/challengeNav';
 import { copy } from '@/lib/copy';
 import { firstSearchParam } from '@/lib/commentDeepLink';
-import { homeFeedFirstPaintLoading } from '@/lib/homeFeed';
+import { homeFeedFirstPaintLoading, homeFeedHasSocialGraph } from '@/lib/homeFeed';
 import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
 import type { MentionChip } from '@/lib/mentions';
@@ -29,12 +31,6 @@ import { THEME } from '@/lib/theme';
 import type { ComposeInput, PostWithMeta, ReactionType } from '@/lib/types';
 
 export default function FeedScreen() {
-  useFocusEffect(
-    useCallback(() => {
-      stopAllLiveMedia();
-      clearLastOpenChallenge();
-    }, []),
-  );
   useEffect(() => {
     logHomeFirstPaintQueries();
   }, []);
@@ -44,12 +40,34 @@ export default function FeedScreen() {
   const params = useLocalSearchParams<{ postId?: string; commentId?: string; comments?: string }>();
   const highlightPostId = firstSearchParam(params.postId);
   const highlightCommentId = firstSearchParam(params.commentId);
-  const feed = useFeed();
+  const feed = useHomeFeed();
+  const friends = useFriends();
+  const pulse = useHomePulse();
+  const activeChallenges = useFeedActiveChallenges();
+  const refetchHome = feed.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      stopAllLiveMedia();
+      clearLastOpenChallenge();
+      if ((feed.data?.length ?? 0) === 0) {
+        void refetchHome();
+      }
+    }, [feed.data?.length, refetchHome]),
+  );
   const createPost = useCreatePost();
   const createComment = useCreateComment();
   const toggleReaction = useToggleReaction();
   const posts = feed.data ?? [];
-  const showFeedBanner = Boolean(feed.error);
+  const friendCount = friends.data?.length ?? 0;
+  const liveChallengeCount = Math.max(pulse.data?.length ?? 0, activeChallenges.data?.length ?? 0);
+  const hasSocialGraph = homeFeedHasSocialGraph({ friendCount, liveChallengeCount });
+  const graphReady = Boolean(
+    (friends.isFetched || friends.isError) &&
+      (pulse.isFetched || pulse.isError) &&
+      (activeChallenges.isFetched || activeChallenges.isError),
+  );
+  const feedMiss = Boolean(feed.error) || (feed.isFetched && posts.length === 0 && hasSocialGraph);
+  const showFeedBanner = feedMiss;
   const refreshing = feed.isRefetching && !feed.isLoading && !feed.isFetchingNextPage;
 
   const onRefresh = useCallback(() => {
@@ -83,7 +101,7 @@ export default function FeedScreen() {
 
   const headerTop = useMemo(
     () =>
-      showFeedBanner && posts.length > 0 ? (
+      showFeedBanner ? (
         <View className="flex-row items-center" style={{ marginBottom: 8, gap: 10, minHeight: 44 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <AppText className="text-[13px] text-muted">{copy('home.refreshFailed')}</AppText>
@@ -99,7 +117,7 @@ export default function FeedScreen() {
           </Pressable>
         </View>
       ) : undefined,
-    [feed, posts.length, showFeedBanner],
+    [feed, showFeedBanner],
   );
 
   const onCompose = useCallback(
@@ -138,16 +156,19 @@ export default function FeedScreen() {
           postCount: posts.length,
           isPending: feed.isLoading,
           isFetched: feed.isFetched,
-          failed: Boolean(feed.error),
+          failed: feedMiss,
         })}
         isRefreshing={refreshing}
+        isFetched={feed.isFetched}
+        hasSocialGraph={hasSocialGraph}
+        graphReady={graphReady}
         isFetchingNextPage={feed.isFetchingNextPage}
         onEndReached={() => {
           if (feed.hasNextPage && !feed.isFetchingNextPage) {
             void feed.fetchNextPage();
           }
         }}
-        error={feed.error ? copy('home.refreshFailed') : null}
+        error={feedMiss ? copy('home.refreshFailed') : null}
         currentUserId={user?.id}
         emptyTitle={copy('home.empty', tone)}
         emptyBody=""

@@ -97,21 +97,40 @@ export function homeFeedFirstPaintLoading(input: {
   return !input.isFetched;
 }
 
-/** Bob + stretch copy is the failed-posts empty, never first paint. */
+/** Friends or joined/hosted live challenges — first-run Bob is illegal when this is true. */
+export function homeFeedHasSocialGraph(input: {
+  friendCount?: number;
+  liveChallengeCount?: number;
+}): boolean {
+  return (input.friendCount ?? 0) > 0 || (input.liveChallengeCount ?? 0) > 0;
+}
+
+/** Successful 0-row Home while the viewer already has a graph is a miss, not first-run. */
+export function homeFeedPageIsMiss(input: {
+  postCount: number;
+  friendCount?: number;
+  liveChallengeCount?: number;
+}): boolean {
+  return input.postCount === 0 && homeFeedHasSocialGraph(input);
+}
+
+/** Bob first-run empty is ONLY zero friends, zero live challenges, zero posts after success. */
 export function homeFeedEmptyPhase(input: {
   postCount: number;
   isLoading?: boolean;
   isFetched?: boolean;
   failed?: boolean;
+  hasSocialGraph?: boolean;
+  graphReady?: boolean;
 }): HomeFeedEmptyPhase {
   if (input.postCount > 0) {
     return 'ready';
   }
-  if (input.failed) {
-    return 'error';
-  }
-  if (input.isLoading || input.isFetched === false) {
+  if (input.isLoading || input.isFetched === false || input.graphReady === false) {
     return 'shimmer';
+  }
+  if (input.failed || input.hasSocialGraph) {
+    return 'error';
   }
   return 'empty';
 }

@@ -13,6 +13,14 @@ import { Alert } from 'react-native';
 import { clipPostsQueryKey } from '@/lib/clipPost';
 import { isHomeExcludedClipType } from '@/lib/clipPost';
 import { checkinPostBody } from '@/lib/checkin/captions';
+import {
+  circleFeedListKey,
+  composerListKey,
+  feedListKey,
+  HOME_FEED_SCOPE,
+  homeFeedListKey,
+  isHomeSocialFeedKey,
+} from '@/lib/feedListKeys';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { isClipSharePost } from '@/lib/roundShare';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
@@ -72,6 +80,7 @@ import {
   circleFofCandidateIds,
   filterHomeFeedPosts,
   homeFeedCursorFrom,
+  homeFeedPageIsMiss,
   takeHomeVisiblePage,
   uniquePostsById,
   withSatelliteTimeout,
@@ -83,10 +92,6 @@ import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 const REACTION_COLUMNS_LEGACY = 'id, user_id, post_id, reaction_type, created_at';
-
-function feedListKey(scope: string, userId?: string | null) {
-  return ['feed', scope, userId] as const;
-}
 
 export { rawFeedError } from '@/lib/feedError';
 
@@ -1036,6 +1041,30 @@ async function queryHomeSources(input: {
   return dedupePosts([people, challengePosts, circlePosts, discoverCircles, wall]);
 }
 
+function finishHomeFeedPage(input: {
+  first: boolean;
+  posts: PostWithMeta[];
+  cursor: HomeFeedCursor | null;
+  hasMore: boolean;
+  friendCount: number;
+  liveChallengeCount: number;
+}): HomeFeedPage {
+  const posts = dedupeLivePostsByCheckinId(input.posts);
+  if (
+    input.first &&
+    homeFeedPageIsMiss({
+      postCount: posts.length,
+      friendCount: input.friendCount,
+      liveChallengeCount: input.liveChallengeCount,
+    })
+  ) {
+    const message = lastHomeFeedWarning || 'Home feed miss';
+    console.log('[blob:feed]', message);
+    throw new Error(message);
+  }
+  return { posts, cursor: input.cursor, hasMore: input.hasMore };
+}
+
 async function fetchHomeFeedPage(input: {
   userId: string;
   cursor: HomeFeedCursor | null;
@@ -1124,11 +1153,14 @@ async function fetchHomeFeedPage(input: {
     if (visible.length >= HOME_PAGE_SIZE || !hasMore) {
       // First 15 cards paint with author_id; names fill after first paint.
       const page = first ? visible : await hydrateAuthors(visible);
-      return {
-        posts: dedupeLivePostsByCheckinId(page),
+      return finishHomeFeedPage({
+        first,
+        posts: page,
         cursor: homeFeedCursorFrom(page) ?? cursor,
         hasMore: hasMore || filtered.length > visible.length,
-      };
+        friendCount: base.friendIds.length,
+        liveChallengeCount: base.challengeIds.length,
+      });
     }
   }
 
@@ -1167,11 +1199,14 @@ async function fetchHomeFeedPage(input: {
   const filtered = filterHomeFeedPosts(preview, allow);
   const visible = takeHomeVisiblePage(filtered, input.seenIds);
   const page = first ? visible : await hydrateAuthors(visible);
-  return {
-    posts: dedupeLivePostsByCheckinId(page),
+  return finishHomeFeedPage({
+    first,
+    posts: page,
     cursor: homeFeedCursorFrom(page) ?? homeFeedCursorFrom(scanned),
     hasMore: hasMore || filtered.length > visible.length,
-  };
+    friendCount: base.friendIds.length,
+    liveChallengeCount: base.challengeIds.length,
+  });
 }
 
 async function fetchPosts(input: {
@@ -1179,8 +1214,9 @@ async function fetchPosts(input: {
   circleId?: string | null;
   userId?: string;
 }): Promise<PostWithMeta[]> {
-  if (input.circleId) {
-    const rows = await queryPosts({ kind: 'circle', circleId: input.circleId });
+  const circleId = String(input.circleId ?? '').trim();
+  if (circleId) {
+    const rows = await queryPosts({ kind: 'circle', circleId });
     return hydrateCircles(
       await hydrateAuthors(
         await withSocial(
@@ -1292,13 +1328,24 @@ function unionCheckinMedia(existing: unknown, incoming: string[]): string[] {
   return out;
 }
 
+/** Home route. Scope is always home — never a leftover circleId. */
+export function useHomeFeed() {
+  return useFeed();
+}
+
 export function useFeed(challengeId?: string | null) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const key = challengeId ?? 'global';
   const home = !challengeId;
-  const homeKey = feedListKey('global', user?.id);
+  const homeKey = homeFeedListKey(user?.id);
   const hydratedSocial = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!home) {
+      return;
+    }
+    console.log('[blob:feed]', { scope: 'home', circleId: null, key: homeKey });
+  }, [home, homeKey]);
 
   const homeQuery = useInfiniteQuery({
     queryKey: homeKey,
@@ -1334,7 +1381,7 @@ export function useFeed(challengeId?: string | null) {
   });
 
   const challengeQuery = useQuery({
-    queryKey: feedListKey(key, user?.id),
+    queryKey: feedListKey(challengeId || 'challenge', user?.id),
     enabled: !home,
     staleTime: 30_000,
     retry: 1,
@@ -1433,11 +1480,12 @@ export function useFeed(challengeId?: string | null) {
 
 export function useCircleFeed(circleId?: string | null) {
   const { user } = useAuth();
+  const id = String(circleId ?? '').trim();
   return useQuery({
-    queryKey: feedListKey(circleId ? `circle:${circleId}` : 'circle', user?.id),
-    enabled: Boolean(circleId),
+    queryKey: id ? circleFeedListKey(id, user?.id) : (['feed', 'circle', 'none', user?.id] as const),
+    enabled: Boolean(id),
     staleTime: 30_000,
-    queryFn: () => fetchPosts({ circleId, userId: user?.id }),
+    queryFn: () => fetchPosts({ circleId: id, userId: user?.id }),
   });
 }
 
@@ -1653,7 +1701,7 @@ export function seedPublishedPost(
   }
   queryClient.setQueryData(['feed', 'post', seeded.id], seeded);
   if (!isHomeExcludedClipType(seeded.type)) {
-    queryClient.setQueryData(feedListKey('global', userId), (current) =>
+    queryClient.setQueryData(homeFeedListKey(userId), (current) =>
       prependFeedCache(current ?? [], seeded),
     );
   }
@@ -1663,7 +1711,7 @@ export function useCreatePost(challengeId?: string | null) {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const queryClient = useQueryClient();
-  const key = challengeId ?? 'global';
+  const isHomeComposer = !challengeId;
 
   return useMutation({
     mutationFn: async (input: ComposeInput) => {
@@ -1756,7 +1804,7 @@ export function useCreatePost(challengeId?: string | null) {
       return createdPost;
     },
     onMutate: (input) => {
-      const listKey = feedListKey(input.circleId ? `circle:${input.circleId}` : key, user?.id);
+      const listKey = composerListKey(input, challengeId, user?.id);
       void queryClient.cancelQueries({ queryKey: listKey });
       const previous = queryClient.getQueryData(listKey);
       const optimisticId = `optimistic-${Date.now()}`;
@@ -1841,13 +1889,14 @@ export function useCreatePost(challengeId?: string | null) {
       }
     },
     onSettled: (_data, _error, input, context) => {
-      const listKey =
-        context?.listKey ??
-        feedListKey(input.circleId ? `circle:${input.circleId}` : key, user?.id);
+      const listKey = context?.listKey ?? composerListKey(input, challengeId, user?.id);
       const scope = String(listKey[1] ?? '');
       // Challenge Live is patched in place. A list invalidate remounts the thread.
-      if (home || scope === 'global' || scope.startsWith('circle')) {
+      if (isHomeComposer || scope === HOME_FEED_SCOPE || scope === 'global' || scope === 'circle') {
         void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
+      }
+      if (scope === 'circle') {
+        void queryClient.invalidateQueries({ queryKey: homeFeedListKey(user?.id), exact: true });
       }
       void reportBadgeActivity();
     },
@@ -2139,12 +2188,7 @@ function prependFeedCache(current: unknown, post: PostWithMeta): unknown {
   return current;
 }
 
-export function isHomeSocialFeedKey(queryKey: readonly unknown[]): boolean {
-  return (
-    queryKey[0] === 'feed' &&
-    (queryKey[1] === 'global' || queryKey[1] === 'author' || queryKey[1] === 'post')
-  );
-}
+export { circleFeedListKey, homeFeedListKey, isHomeSocialFeedKey } from '@/lib/feedListKeys';
 
 export function removePostFromHomeFeeds(queryClient: QueryClient, postId: string) {
   queryClient.setQueriesData(

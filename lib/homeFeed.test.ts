@@ -9,6 +9,8 @@ import {
   homeFeedCursorFrom,
   homeFeedEmptyPhase,
   homeFeedFirstPaintLoading,
+  homeFeedHasSocialGraph,
+  homeFeedPageIsMiss,
   shouldShowHomeSplash,
   takeHomeVisiblePage,
   uniquePostsById,
@@ -66,6 +68,21 @@ describe('home feed empty phase', () => {
     expect(shouldShowHomeSplash({ postCount: 0, isLoading: true, waitedMs: 4000 })).toBe(false);
     expect(homeFeedEmptyPhase({ postCount: 0, isLoading: false, isFetched: true })).toBe('empty');
     expect(homeFeedEmptyPhase({ postCount: 3, isLoading: true, failed: true })).toBe('ready');
+  });
+
+  it('never uses first-run empty when the viewer has friends or Live pills', () => {
+    expect(
+      homeFeedEmptyPhase({
+        postCount: 0,
+        isLoading: false,
+        isFetched: true,
+        graphReady: true,
+        hasSocialGraph: true,
+      }),
+    ).toBe('error');
+    expect(homeFeedHasSocialGraph({ friendCount: 0, liveChallengeCount: 2 })).toBe(true);
+    expect(homeFeedPageIsMiss({ postCount: 0, friendCount: 1, liveChallengeCount: 0 })).toBe(true);
+    expect(homeFeedPageIsMiss({ postCount: 0, friendCount: 0, liveChallengeCount: 0 })).toBe(false);
   });
 });
 

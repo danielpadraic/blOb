@@ -34,6 +34,9 @@ type FeedListProps = {
   posts: PostWithMeta[];
   isLoading?: boolean;
   isRefreshing?: boolean;
+  isFetched?: boolean;
+  hasSocialGraph?: boolean;
+  graphReady?: boolean;
   error?: string | null;
   currentUserId?: string;
   emptyTitle: string;
@@ -173,6 +176,9 @@ export function FeedList({
   posts,
   isLoading,
   isRefreshing,
+  isFetched,
+  hasSocialGraph,
+  graphReady,
   error,
   currentUserId,
   emptyTitle,
@@ -273,7 +279,10 @@ export function FeedList({
     ? homeFeedEmptyPhase({
         postCount: visiblePosts.length,
         isLoading,
+        isFetched,
         failed: Boolean(error),
+        hasSocialGraph,
+        graphReady,
       })
     : null;
 
@@ -516,6 +525,7 @@ export function FeedList({
             emptyTitle={emptyTitle}
             emptyBody={emptyBody}
             onRetry={onRetry}
+            bannerShown={Boolean(headerTop)}
           />
         }
         keyboardShouldPersistTaps="always"
@@ -562,6 +572,7 @@ const HomeListEmpty = memo(function HomeListEmpty({
   emptyTitle,
   emptyBody,
   onRetry,
+  bannerShown,
 }: {
   homeChrome?: boolean;
   emptyPhase: ReturnType<typeof homeFeedEmptyPhase> | null;
@@ -571,16 +582,20 @@ const HomeListEmpty = memo(function HomeListEmpty({
   emptyTitle: string;
   emptyBody: string;
   onRetry?: () => void;
+  bannerShown?: boolean;
 }) {
   if (homeChrome) {
     if (emptyPhase === 'shimmer' || (isLoading && emptyPhase !== 'error')) {
       return <HomeFeedShimmer />;
     }
     if (emptyPhase === 'error' || error) {
+      if (bannerShown) {
+        return null;
+      }
       return (
         <MascotState
           kind="error"
-          title={copy('home.loadingSlow')}
+          title={copy('home.refreshFailed')}
           actionLabel="Retry"
           onAction={onRetry}
         />
