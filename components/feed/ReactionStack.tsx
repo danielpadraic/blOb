@@ -5,6 +5,7 @@ import { reactionNoSelectProps, reactionNoSelectStyle } from '@/components/feed/
 import { AppText } from '@/components/ui/AppText';
 import {
   cornerReactionChips,
+  LIVE_HANG_OVERLAP,
   REACTION_MARK_CORNER,
 } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
@@ -14,7 +15,10 @@ type ReactionStackProps = {
   reactions?: Reaction[];
   currentUserId?: string;
   corner: 'start' | 'end';
-  onToggle: (type: ReactionType) => void;
+  /** Live hangs off the bubble edge. Home stays inset. */
+  placement?: 'inset' | 'hang';
+  onToggle?: (type: ReactionType) => void;
+  onOpenWho?: (type: ReactionType) => void;
 };
 
 /** Corner counts. Not the Like button. */
@@ -22,21 +26,24 @@ export function ReactionStack({
   reactions,
   currentUserId,
   corner,
+  placement = 'inset',
   onToggle,
+  onOpenWho,
 }: ReactionStackProps) {
   const shown = cornerReactionChips(reactions, currentUserId);
   if (shown.length === 0) {
     return null;
   }
+  const hang = placement === 'hang';
   return (
     <View
       pointerEvents="box-none"
       style={[
         {
           position: 'absolute',
-          bottom: 4,
-          left: corner === 'start' ? 4 : undefined,
-          right: corner === 'end' ? 4 : undefined,
+          bottom: hang ? -LIVE_HANG_OVERLAP : 4,
+          left: corner === 'start' ? (hang ? 8 : 4) : undefined,
+          right: corner === 'end' ? (hang ? 8 : 4) : undefined,
           flexDirection: 'row',
           flexWrap: 'nowrap',
           alignItems: 'center',
@@ -51,7 +58,18 @@ export function ReactionStack({
           key={row.type}
           accessibilityRole="button"
           accessibilityLabel={`${row.type}${row.count > 1 ? ` ${row.count}` : ''}`}
-          onPress={() => onToggle(row.type as ReactionType)}
+          onPress={() => {
+            if (onOpenWho) {
+              onOpenWho(row.type as ReactionType);
+              return;
+            }
+            onToggle?.(row.type as ReactionType);
+          }}
+          onLongPress={
+            onOpenWho
+              ? () => onOpenWho(row.type as ReactionType)
+              : undefined
+          }
           {...reactionNoSelectProps()}
           style={{
             minHeight: 28,

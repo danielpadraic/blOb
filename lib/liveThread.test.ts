@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyLiveBackGesture,
   applyLiveReaction,
+  applyLiveReactionAction,
   buildLiveThreadRows,
   findLiveHighlightIndex,
   formatLiveClock,
@@ -419,6 +420,28 @@ describe('applyLiveReaction', () => {
       'like',
     );
     expect(post.reactions?.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
+  });
+
+  it('adds or removes one key without replacing the list', () => {
+    const withLike = applyLiveReactionAction(
+      {
+        id: 'p1',
+        author_id: 'a',
+        challenge_id: 'c',
+        content: 'Hi',
+        media_urls: [],
+        created_at: '2026-09-01T12:00:00.000Z',
+        reactions: [
+          { id: 'r1', user_id: 'me', post_id: 'p1', reaction_type: 'fire', created_at: '2026-09-01T12:00:00.000Z' },
+        ],
+      },
+      'add',
+      'me',
+      'like',
+    );
+    expect(withLike.reactions?.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
+    const withoutFire = applyLiveReactionAction(withLike, 'remove', 'me', 'fire');
+    expect(withoutFire.reactions?.map((row) => row.reaction_type)).toEqual(['like']);
   });
 });
 

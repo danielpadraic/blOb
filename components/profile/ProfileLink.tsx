@@ -34,7 +34,7 @@ export function ProfileLink({ username, userId, children, style, ...props }: Pro
   );
 }
 
-function profileHref(pathname: string, handle: string): Href {
+export function profileHref(pathname: string, handle: string): Href {
   if (pathname.startsWith('/challenges')) {
     return { pathname: '/challenges/u/[username]', params: { username: handle } };
   }

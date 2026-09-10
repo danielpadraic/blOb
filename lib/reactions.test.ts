@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyStackedReaction,
   cornerReactionChips,
   displayReactionType,
+  isFreshOptimisticReactionKey,
   isWritableReactionType,
+  LIKE_MARK_REV,
+  LIVE_BUBBLE_INNER_GUTTER,
+  LIVE_HANG_OVERLAP,
+  markOptimisticReactionWrite,
+  mergeReactionListsByKey,
   PICKER_REACTION_TYPES,
+  reactionFlightKey,
   reactionMarkFile,
   reactionPickerLabel,
+  reactionSetKey,
+  resetOptimisticReactionWritesForTests,
   toggleStackedReactionList,
   userHasReactionType,
   userReactionTypes,
@@ -49,6 +59,47 @@ describe('shared reactions', () => {
     expect(userHasReactionType(withoutLol, 'me', 'like')).toBe(true);
     expect(userHasReactionType(withoutLol, 'me', 'laugh')).toBe(false);
     expect(userReactionTypes(withoutLol, 'me')).toEqual(['like', 'fire']);
+  });
+
+  it('keys one user + type and toggles only that key', () => {
+    expect(reactionSetKey({ postId: 'p', userId: 'me', type: 'like' })).toBe('p::me:like');
+    expect(reactionFlightKey('p', null, 'laugh')).toBe('p::laugh');
+    const added = applyStackedReaction([], 'add', 'me', 'like', 'p', null);
+    const alsoLol = applyStackedReaction(added, 'add', 'me', 'laugh', 'p', null);
+    expect(alsoLol.map((row) => row.reaction_type)).toEqual(['like', 'laugh']);
+    const unlike = applyStackedReaction(alsoLol, 'remove', 'me', 'like', 'p', null);
+    expect(unlike.map((row) => row.reaction_type)).toEqual(['laugh']);
+  });
+
+  it('does not replace other types when merging one incoming reaction', () => {
+    const existing = [
+      { id: '1', user_id: 'me', post_id: 'p', reaction_type: 'like' as const, created_at: '2026-09-01T12:00:00.000Z' },
+      { id: '2', user_id: 'a', post_id: 'p', reaction_type: 'fire' as const, created_at: '2026-09-01T12:00:01.000Z' },
+    ];
+    const merged = mergeReactionListsByKey(existing, [
+      { id: '3', user_id: 'b', post_id: 'p', reaction_type: 'laugh' as const, created_at: '2026-09-01T12:00:02.000Z' },
+    ]);
+    expect(merged.map((row) => row.reaction_type)).toEqual(['like', 'fire', 'laugh']);
+  });
+
+  it('ignores a realtime row that matches a fresh optimistic key', () => {
+    resetOptimisticReactionWritesForTests();
+    markOptimisticReactionWrite(reactionSetKey({ postId: 'p', userId: 'me', type: 'like' }));
+    expect(isFreshOptimisticReactionKey(reactionSetKey({ postId: 'p', userId: 'me', type: 'like' }))).toBe(true);
+    const existing = [
+      { id: 'opt', user_id: 'me', post_id: 'p', reaction_type: 'like' as const, created_at: '2026-09-01T12:00:00.000Z' },
+    ];
+    const merged = mergeReactionListsByKey(existing, [
+      { id: 'server', user_id: 'me', post_id: 'p', reaction_type: 'like' as const, created_at: '2026-09-01T12:00:00.000Z' },
+    ]);
+    expect(merged[0]?.id).toBe('opt');
+    resetOptimisticReactionWritesForTests();
+  });
+
+  it('reserves a Live hang gutter and overlaps ~40% of the mark', () => {
+    expect(LIVE_BUBBLE_INNER_GUTTER).toBe(20);
+    expect(LIVE_HANG_OVERLAP).toBe(8);
+    expect(LIKE_MARK_REV).toBeGreaterThan(1);
   });
 
   it('shows up to six types in the corner stack', () => {

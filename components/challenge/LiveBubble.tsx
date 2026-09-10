@@ -38,6 +38,7 @@ import { mediaUrlsForPost } from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
 import { CheckinProofStatsRow } from '@/components/challenge/CheckinProofStats';
 import { LiftPostCard } from '@/components/lift/LiftPostCard';
+import { LIVE_BUBBLE_INNER_GUTTER, LIVE_HANG_CLEARANCE } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia, mediaKind } from '@/utils/media';
@@ -57,6 +58,7 @@ type LiveBubbleProps = {
   reactions?: Reaction[];
   comment?: CommentWithAuthor | null;
   onReact: (type: ReactionType) => void;
+  onOpenWho?: (type: ReactionType) => void;
   onReply?: () => void;
   onEdit?: () => void;
   onHistory?: () => void;
@@ -70,6 +72,7 @@ export const LiveBubble = memo(function LiveBubble({
   reactions,
   comment,
   onReact,
+  onOpenWho,
   onReply,
   onEdit,
   onHistory,
@@ -319,11 +322,18 @@ export const LiveBubble = memo(function LiveBubble({
               />
             </View>
           ) : checkin ? (
-            <View style={{ position: 'relative', maxWidth: '100%' }}>
+            <View
+              style={{
+                position: 'relative',
+                maxWidth: '100%',
+                marginBottom: (reactions ?? post.reactions)?.length ? LIVE_HANG_CLEARANCE : 0,
+                overflow: 'visible',
+              }}>
             <View
               style={{
                 gap: 8,
-                paddingVertical: 8,
+                paddingTop: 8,
+                paddingBottom: LIVE_BUBBLE_INNER_GUTTER,
                 paddingHorizontal: 10,
                 borderRadius: 16,
                 backgroundColor: THEME.surface,
@@ -392,12 +402,19 @@ export const LiveBubble = memo(function LiveBubble({
                 reactions={reactions ?? post.reactions}
                 currentUserId={currentUserId}
                 corner={alignEnd ? 'start' : 'end'}
-                onToggle={onReact}
+                placement="hang"
+                onOpenWho={onOpenWho}
               />
             )}
             </View>
           ) : (
-            <View style={{ position: 'relative', maxWidth: '100%' }}>
+            <View
+              style={{
+                position: 'relative',
+                maxWidth: '100%',
+                marginBottom: (reactions ?? post.reactions)?.length ? LIVE_HANG_CLEARANCE : 0,
+                overflow: 'visible',
+              }}>
             <View
               style={{
                 backgroundColor: mine ? THEME.primary : THEME.surface,
@@ -407,6 +424,7 @@ export const LiveBubble = memo(function LiveBubble({
                 borderWidth: mine ? 0 : 1,
                 borderColor: THEME.border,
                 overflow: 'hidden',
+                paddingBottom: LIVE_BUBBLE_INNER_GUTTER,
                 maxWidth: '100%',
               }}>
               {visuals[0] ? (
@@ -446,7 +464,7 @@ export const LiveBubble = memo(function LiveBubble({
                   />
                 </View>
               ) : caption ? (
-                <View className="px-3 py-2">
+                <View className="px-3" style={{ paddingTop: 8, paddingBottom: 0 }}>
                   <MentionText
                     content={caption}
                     mentions={post.mentions}
@@ -461,7 +479,8 @@ export const LiveBubble = memo(function LiveBubble({
                 reactions={reactions ?? post.reactions}
                 currentUserId={currentUserId}
                 corner={alignEnd ? 'start' : 'end'}
-                onToggle={onReact}
+                placement="hang"
+                onOpenWho={onOpenWho}
               />
             )}
             </View>

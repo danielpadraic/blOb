@@ -7,6 +7,8 @@ import { checkinComposerPrefill } from '@/lib/checkin/captions';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
 import { liveCheckinKey } from '@/lib/liveFeedPatch';
 import {
+  applyStackedReaction,
+  findUserReactionOfType,
   reactionCounts,
   toggleStackedReactionList,
   type ReactionCount,
@@ -357,10 +359,38 @@ export function applyLiveReaction(
   type: ReactionType,
   commentId?: string | null,
 ): PostWithMeta {
+  return applyLiveReactionAction(post, 'toggle', userId, type, commentId);
+}
+
+/** Add or remove one reaction key. `toggle` keeps the old stacked flip. */
+export function applyLiveReactionAction(
+  post: PostWithMeta,
+  action: 'add' | 'remove' | 'toggle',
+  userId: string,
+  type: ReactionType,
+  commentId?: string | null,
+  server?: Reaction | null,
+): PostWithMeta {
+  const nextAction =
+    action === 'toggle'
+      ? findUserReactionOfType(commentId
+          ? post.comments?.find((row) => row.id === commentId)?.reactions
+          : post.reactions, userId, type)
+        ? 'remove'
+        : 'add'
+      : action;
   if (!commentId) {
     return {
       ...post,
-      reactions: toggleLiveReactionList(post.reactions ?? [], userId, type, post.id, null),
+      reactions: applyStackedReaction(
+        post.reactions ?? [],
+        nextAction,
+        userId,
+        type,
+        post.id,
+        null,
+        server,
+      ),
     };
   }
   return {
@@ -369,7 +399,15 @@ export function applyLiveReaction(
       comment.id === commentId
         ? {
             ...comment,
-            reactions: toggleLiveReactionList(comment.reactions ?? [], userId, type, null, commentId),
+            reactions: applyStackedReaction(
+              comment.reactions ?? [],
+              nextAction,
+              userId,
+              type,
+              null,
+              commentId,
+              server,
+            ),
           }
         : comment,
     ),

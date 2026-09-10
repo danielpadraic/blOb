@@ -211,6 +211,27 @@ describe('dedupeLivePostsByCheckinId', () => {
     })).toBe(1);
   });
 
+  it('upserts one incoming reaction type and keeps the others', () => {
+    const list = [
+      {
+        id: 'a',
+        reactions: [
+          { id: 'r1', user_id: 'me', post_id: 'a', reaction_type: 'like', created_at: '2026-09-01T12:00:00.000Z' },
+        ],
+      },
+    ];
+    const next = patchLiveFeedList(list, {
+      eventType: 'UPDATE',
+      new: {
+        id: 'a',
+        reactions: [
+          { id: 'r2', user_id: 'you', post_id: 'a', reaction_type: 'laugh', created_at: '2026-09-01T12:00:01.000Z' },
+        ],
+      },
+    }) as typeof list;
+    expect(next[0].reactions?.map((row) => row.reaction_type)).toEqual(['like', 'laugh']);
+  });
+
   it('leaves two lobby rows alone when checkin_id is not a uuid', () => {
     const rows = [
       { id: 'a', checkin_id: 'not-a-uuid', content: 'hi', media_urls: [] },

@@ -53,10 +53,13 @@ import {
   schemaForFeedInsert,
   withCreatePostTimeout,
 } from '@/lib/createFeedPost';
+import { applyLiveReactionAction } from '@/lib/liveThread';
 import {
   displayReactionType,
   findUserReactionOfType,
-  toggleStackedReactionList,
+  markOptimisticReactionWrite,
+  reactionFlightKey,
+  reactionSetKey,
 } from '@/lib/reactions';
 import { supabase } from '@/lib/supabase';
 import { mentionRecordsFromChips, type MentionChip } from '@/lib/mentions';
@@ -2000,6 +2003,14 @@ type ToggleReactionInput = {
   post: PostWithMeta;
   type: ReactionType;
   commentId?: string | null;
+  action: 'add' | 'remove';
+  existingId?: string | null;
+};
+
+type PublicToggleReactionInput = {
+  post: PostWithMeta;
+  type: ReactionType;
+  commentId?: string | null;
 };
 
 type ToggleReactionResult =
@@ -2010,31 +2021,33 @@ type ToggleReactionResult =
 export function useToggleReaction() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const inflight = useRef(new Set<string>());
+  const flights = useRef(new Map<string, { queuedInverse: boolean }>());
+  const startRef = useRef<(input: PublicToggleReactionInput) => void>(() => undefined);
   const mutation = useMutation({
     mutationFn: async (input: ToggleReactionInput): Promise<ToggleReactionResult> => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
       const nextType = displayReactionType(input.type);
-      let existing = findUserReactionOfTypeOn(input.post, user.id, nextType, input.commentId);
-      if (input.commentId && (!existing || !isPersistedId(existing.id))) {
-        const fetched = await supabase
-          .from('reactions')
-          .select(REACTION_COLUMNS)
-          .eq('user_id', user.id)
-          .eq('comment_id', input.commentId)
-          .eq('reaction_type', nextType)
-          .maybeSingle();
-        if (fetched.data) {
-          existing = fetched.data as Reaction;
-        }
-      }
-
-      if (existing && isPersistedId(existing.id)) {
-        const { error } = await supabase.from('reactions').delete().eq('id', existing.id);
-        if (error) {
-          throw new Error(getErrorMessage(error));
+      if (input.action === 'remove') {
+        if (input.existingId && isPersistedId(input.existingId)) {
+          const { error } = await supabase.from('reactions').delete().eq('id', input.existingId);
+          if (error) {
+            throw new Error(getErrorMessage(error));
+          }
+        } else {
+          let query = supabase
+            .from('reactions')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('reaction_type', nextType);
+          query = input.commentId
+            ? query.eq('comment_id', input.commentId)
+            : query.eq('post_id', input.post.id);
+          const { error } = await query;
+          if (error) {
+            throw new Error(getErrorMessage(error));
+          }
         }
         return { action: 'removed' };
       }
@@ -2083,53 +2096,82 @@ export function useToggleReaction() {
       }
       return { action: 'added', reaction: inserted.data as Reaction };
     },
-    onMutate: async (input) => {
+    onMutate: (input) => {
       if (!user) {
         return;
       }
-      await queryClient.cancelQueries({ queryKey: ['feed'] });
-      const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
+      const previous = [
+        ...queryClient.getQueriesData({ queryKey: ['feed'] }),
+        ...queryClient.getQueriesData({ queryKey: ['live'] }),
+      ];
+      markOptimisticReactionWrite(
+        reactionSetKey({
+          postId: input.commentId ? null : input.post.id,
+          commentId: input.commentId,
+          userId: user.id,
+          type: input.type,
+        }),
+      );
       patchFeedPosts(queryClient, input.post.id, (post) =>
-        applyOptimisticReaction(post, user.id, input.type, input.commentId),
+        applyLiveReactionAction(post, input.action, user.id, input.type, input.commentId),
       );
       return { previous };
     },
     onSuccess: (result, input) => {
-      if (!user || result.action === 'removed') {
+      if (!user || result.action !== 'added') {
         return;
       }
-      const optimisticId = optimisticReactionId(input.type, input.commentId ?? input.post.id, user.id);
       patchFeedPosts(queryClient, input.post.id, (post) =>
-        replaceReactionId(post, optimisticId, result.reaction, input.commentId, user.id),
+        applyLiveReactionAction(post, 'add', user.id, input.type, input.commentId, result.reaction),
       );
     },
     onError: (error, _variables, context) => {
       for (const [key, data] of context?.previous ?? []) {
         queryClient.setQueryData(key, data);
       }
-      Alert.alert('Couldn’t save reaction', getErrorMessage(error));
+      Alert.alert('Couldn’t react.', getErrorMessage(error));
     },
   });
 
+  startRef.current = (input: PublicToggleReactionInput) => {
+    if (!user) {
+      return;
+    }
+    const key = reactionFlightKey(input.post.id, input.commentId, input.type);
+    const flight = flights.current.get(key);
+    if (flight) {
+      flight.queuedInverse = !flight.queuedInverse;
+      return;
+    }
+    const cached = findCachedFeedPost(queryClient, input.post.id) ?? input.post;
+    const mine = findUserReactionOfTypeOn(cached, user.id, input.type, input.commentId);
+    const action = mine ? ('remove' as const) : ('add' as const);
+    const entry = { queuedInverse: false };
+    flights.current.set(key, entry);
+    mutation.mutate(
+      {
+        ...input,
+        action,
+        existingId: mine && isPersistedId(mine.id) ? mine.id : null,
+      },
+      {
+        onSettled: (_data, error) => {
+          flights.current.delete(key);
+          if (error || !entry.queuedInverse) {
+            return;
+          }
+          startRef.current(input);
+        },
+      },
+    );
+  };
+
   return {
     ...mutation,
-    mutate(input: ToggleReactionInput) {
-      const guard = `${input.post.id}:${input.commentId ?? ''}:${input.type}`;
-      if (inflight.current.has(guard)) {
-        return;
-      }
-      inflight.current.add(guard);
-      mutation.mutate(input, {
-        onSettled: () => {
-          inflight.current.delete(guard);
-        },
-      });
+    mutate(input: PublicToggleReactionInput) {
+      startRef.current(input);
     },
   };
-}
-
-function optimisticReactionId(type: ReactionType, targetId: string, userId: string) {
-  return `optimistic-${type}-${targetId}-${userId}`;
 }
 
 function isInfiniteHomeData(value: unknown): value is InfiniteData<HomeFeedPage, HomePageParam | null> {
@@ -2230,6 +2272,24 @@ function patchCachedPostLists(
   }
 }
 
+export function findCachedFeedPost(queryClient: QueryClient, postId: string): PostWithMeta | undefined {
+  for (const root of ['live', 'feed'] as const) {
+    for (const [, data] of queryClient.getQueriesData({ queryKey: [root] })) {
+      let found: PostWithMeta | undefined;
+      mapFeedCache(data, (posts) => {
+        if (!found) {
+          found = posts.find((post) => post?.id === postId);
+        }
+        return posts;
+      });
+      if (found) {
+        return found;
+      }
+    }
+  }
+  return undefined;
+}
+
 export function patchFeedPosts(
   queryClient: QueryClient,
   postId: string,
@@ -2285,59 +2345,6 @@ function findUserReactionOfTypeOn(
     ? post.comments?.find((comment) => comment.id === commentId)?.reactions
     : post.reactions;
   return findUserReactionOfType(pool, userId, type);
-}
-
-function applyOptimisticReaction(
-  post: PostWithMeta,
-  userId: string,
-  type: ReactionType,
-  commentId?: string | null,
-): PostWithMeta {
-  if (!commentId) {
-    return { ...post, reactions: toggleStackedReactionList(post.reactions ?? [], userId, type, post.id, null) };
-  }
-  return {
-    ...post,
-    comments: (post.comments ?? []).map((comment) =>
-      comment.id === commentId
-        ? {
-            ...comment,
-            reactions: toggleStackedReactionList(comment.reactions ?? [], userId, type, null, commentId),
-          }
-        : comment,
-    ),
-  };
-}
-
-function replaceReactionId(
-  post: PostWithMeta,
-  optimisticId: string,
-  reaction: Reaction,
-  commentId?: string | null,
-  userId?: string,
-): PostWithMeta {
-  function swap(list: Reaction[]) {
-    const byOptimistic = list.some((row) => row.id === optimisticId);
-    if (byOptimistic) {
-      return list.map((row) => (row.id === optimisticId ? reaction : row));
-    }
-    if (userId) {
-      const want = displayReactionType(reaction.reaction_type);
-      return list.map((row) =>
-        row.user_id === userId && displayReactionType(row.reaction_type) === want ? reaction : row,
-      );
-    }
-    return list;
-  }
-  if (!commentId) {
-    return { ...post, reactions: swap(post.reactions ?? []) };
-  }
-  return {
-    ...post,
-    comments: (post.comments ?? []).map((comment) =>
-      comment.id === commentId ? { ...comment, reactions: swap(comment.reactions ?? []) } : comment,
-    ),
-  };
 }
 
 function isPersistedId(id: string): boolean {

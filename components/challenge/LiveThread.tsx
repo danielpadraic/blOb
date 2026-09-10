@@ -15,6 +15,7 @@ import {
 import { LiveBubble } from '@/components/challenge/LiveBubble';
 import { LiveFailBanner, LiveRowBoundary, LiveSafeBoundary } from '@/components/challenge/LiveSafeBoundary';
 import { InlineComposer } from '@/components/feed/InlineComposer';
+import { WhoReactedSheet, type WhoReactedTarget } from '@/components/feed/WhoReactedSheet';
 import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
 import type { LiftSessionSummary } from '@/lib/lift/types';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -171,6 +172,10 @@ export function LiveThread({
   const [highlightFlash, setHighlightFlash] = useState(false);
   const [liftOpen, setLiftOpen] = useState(false);
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
+  const [whoReacted, setWhoReacted] = useState<WhoReactedTarget | null>(null);
+  const openWho = useCallback((postId: string, type: ReactionType, commentId?: string | null, reactions?: PostWithMeta['reactions']) => {
+    setWhoReacted({ postId, commentId: commentId ?? null, type, reactions });
+  }, []);
   const dayBreakFp = liveDayBreakFingerprint(dayBreakChallenge);
   const stableDayBreak = useMemo(
     () => dayBreakChallenge ?? null,
@@ -756,6 +761,9 @@ export function LiveThread({
               }}
               reactions={item.comment.deleted_at ? [] : item.comment.reactions}
               onReact={(type) => onReact(item.parent, type, item.comment.id)}
+              onOpenWho={(type) =>
+                openWho(item.parent.id, type, item.comment.id, item.comment.reactions)
+              }
               onReply={
                 canCompose && !item.comment.deleted_at
                   ? () =>
@@ -792,6 +800,7 @@ export function LiveThread({
             highlighted={highlightFlash && highlightPostId === item.post.id && !highlightCommentId}
             quote={quote}
             onReact={(type) => onReact(item.post, type)}
+            onOpenWho={(type) => openWho(item.post.id, type, null, item.post.reactions)}
             onEdit={
               currentUserId && postAuthor.authorId === currentUserId
                 ? () => startEdit(item.post)
@@ -824,7 +833,7 @@ export function LiveThread({
         </LiveRowBoundary>
       );
     },
-    [canCompose, currentUserId, highlightCommentId, highlightFlash, highlightPostId, onReact, onRowError, posts, social, startEdit, startReply],
+    [canCompose, currentUserId, highlightCommentId, highlightFlash, highlightPostId, onReact, onRowError, openWho, posts, social, startEdit, startReply],
   );
 
   const renderQuietEmpty = useCallback(
@@ -1091,6 +1100,22 @@ export function LiveThread({
           setAttachedLift(session);
           setLiftOpen(false);
         }}
+      />
+      <WhoReactedSheet
+        target={
+          whoReacted
+            ? {
+                ...whoReacted,
+                reactions: whoReacted.commentId
+                  ? posts.find((post) => post.id === whoReacted.postId)?.comments?.find(
+                      (comment) => comment.id === whoReacted.commentId,
+                    )?.reactions ?? whoReacted.reactions
+                  : posts.find((post) => post.id === whoReacted.postId)?.reactions ??
+                    whoReacted.reactions,
+              }
+            : null
+        }
+        onClose={() => setWhoReacted(null)}
       />
     </View>
   );

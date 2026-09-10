@@ -1,5 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { mergeReactionListsByKey } from '@/lib/reactions';
+
 type FeedPostRow = {
   id?: string;
   author_id?: string | null;
@@ -224,7 +226,7 @@ function mergeLiveFeedPost<T extends { id: string }>(post: T, row: FeedPostRow):
     assign('comments', merged, sameJson((post as FeedPostRow).comments, merged));
   }
   if (Array.isArray(row.reactions) && row.reactions.length > 0) {
-    const merged = unionById((post as FeedPostRow).reactions, row.reactions);
+    const merged = mergeReactionListsByKey((post as FeedPostRow).reactions, row.reactions);
     assign('reactions', merged, sameJson((post as FeedPostRow).reactions, merged));
   }
   return next;

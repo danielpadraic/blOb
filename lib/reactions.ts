@@ -76,6 +76,138 @@ export const REACTION_STACK_MAX = 6;
 /** @deprecated Use REACTION_MARK_BUTTON. Kept so Wave rail files do not churn. */
 export const REACTION_MARK_COMPACT = REACTION_MARK_BUTTON;
 
+/** Live bubble: empty padding under caption / photo so marks never sit on the text. 18–22pt. */
+export const LIVE_BUBBLE_INNER_GUTTER = 20;
+/** ~40% of the 20pt hang mark overlaps the bubble’s bottom border. */
+export const LIVE_HANG_OVERLAP = 8;
+/** Space under the bubble so the action row and next bubble miss the hang. */
+export const LIVE_HANG_CLEARANCE = 14;
+/** Bust Metro / web cache when like.png is replaced in place. */
+export const LIKE_MARK_REV = 2;
+
+const OPTIMISTIC_IGNORE_MS = 2000;
+const recentOptimisticKeys = new Map<string, number>();
+
+/** `${postId}:${commentId}:${userId}:${type}` — commentId is empty on posts. */
+export function reactionSetKey(input: {
+  postId?: string | null;
+  commentId?: string | null;
+  userId: string;
+  type: string;
+}): string {
+  return `${input.postId ?? ''}:${input.commentId ?? ''}:${input.userId}:${displayReactionType(input.type)}`;
+}
+
+export function reactionSetKeyFromRow(
+  row: Pick<Reaction, 'post_id' | 'comment_id' | 'user_id' | 'reaction_type'>,
+): string {
+  return reactionSetKey({
+    postId: row.post_id,
+    commentId: row.comment_id,
+    userId: row.user_id,
+    type: row.reaction_type,
+  });
+}
+
+/** In-flight toggle: one write at a time per (post, comment, type). */
+export function reactionFlightKey(
+  postId: string,
+  commentId: string | null | undefined,
+  type: string,
+): string {
+  return `${postId}:${commentId ?? ''}:${displayReactionType(type)}`;
+}
+
+export function markOptimisticReactionWrite(key: string): void {
+  recentOptimisticKeys.set(key, Date.now());
+}
+
+export function isFreshOptimisticReactionKey(key: string): boolean {
+  const at = recentOptimisticKeys.get(key);
+  if (at == null) {
+    return false;
+  }
+  if (Date.now() - at > OPTIMISTIC_IGNORE_MS) {
+    recentOptimisticKeys.delete(key);
+    return false;
+  }
+  return true;
+}
+
+export function resetOptimisticReactionWritesForTests(): void {
+  recentOptimisticKeys.clear();
+}
+
+export function upsertReactionInList(list: Reaction[], next: Reaction): Reaction[] {
+  const key = reactionSetKeyFromRow(next);
+  let found = false;
+  const out = list.map((row) => {
+    if (reactionSetKeyFromRow(row) !== key) {
+      return row;
+    }
+    found = true;
+    return { ...row, ...next };
+  });
+  return found ? out : [...list, next];
+}
+
+export function removeReactionKeyFromList(list: Reaction[], key: string): Reaction[] {
+  return list.filter((row) => reactionSetKeyFromRow(row) !== key);
+}
+
+/** Add or remove one `${postId}:{userId}:{type}` key. Never replaces other types. */
+export function applyStackedReaction(
+  current: Reaction[],
+  action: 'add' | 'remove',
+  userId: string,
+  type: ReactionType,
+  postId: string | null,
+  commentId: string | null,
+  server?: Reaction | null,
+): Reaction[] {
+  const nextType = displayReactionType(type) as ReactionType;
+  const key = reactionSetKey({ postId, commentId, userId, type: nextType });
+  if (action === 'remove') {
+    return removeReactionKeyFromList(current, key);
+  }
+  const draft: Reaction = server ?? {
+    id: `optimistic-${nextType}-${commentId ?? postId ?? userId}-${userId}`,
+    user_id: userId,
+    post_id: postId,
+    comment_id: commentId,
+    reaction_type: nextType,
+    created_at: new Date().toISOString(),
+  };
+  return upsertReactionInList(current, draft);
+}
+
+export function mergeReactionListsByKey(existing: unknown, incoming: unknown): Reaction[] {
+  const left = Array.isArray(existing) ? (existing as Reaction[]) : [];
+  const right = Array.isArray(incoming) ? (incoming as Reaction[]) : [];
+  if (right.length === 0) {
+    return left;
+  }
+  const byKey = new Map<string, Reaction>();
+  for (const row of left) {
+    if (!row?.user_id) {
+      continue;
+    }
+    byKey.set(reactionSetKeyFromRow(row), row);
+  }
+  for (const row of right) {
+    if (!row?.user_id) {
+      continue;
+    }
+    const key = reactionSetKeyFromRow(row);
+    if (isFreshOptimisticReactionKey(key)) {
+      continue;
+    }
+    const prev = byKey.get(key);
+    byKey.set(key, prev ? { ...prev, ...row } : row);
+  }
+  return [...byKey.values()];
+}
+
 export function reactionPickerLabel(type: string): string {
   if (type === 'laugh') {
     return 'LOL';
