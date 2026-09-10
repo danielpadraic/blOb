@@ -655,122 +655,6 @@ export function SimpleCreateForm() {
         {view === 'form' ? (
         <>
 
-        <TourAnchor id="create-simple-currency">
-        <View className="gap-2">
-          <SectionLabel>{copy('create.currency')}</SectionLabel>
-          <SegmentedControl
-            accessibilityLabel={copy('create.currency')}
-            value={draft.currency}
-            options={[
-              { value: 'coins' as SimpleCurrency, label: copy('create.coins') },
-              { value: 'bucks' as SimpleCurrency, label: '$' },
-            ]}
-            onChange={(value) => {
-              if (value === 'bucks') {
-                if (draft.currency === 'coins') {
-                  coinBuyInRef.current = draft.buy_in;
-                }
-                patch({
-                  currency: value,
-                  buy_in: 0,
-                  friends_of_friends: false,
-                });
-                return;
-              }
-              patch({
-                currency: value,
-                buy_in: draft.currency === 'bucks' ? coinBuyInRef.current : draft.buy_in,
-                friends_of_friends:
-                  draft.privacy_mode === 'private_corporate'
-                    ? false
-                    : draft.visibility === 'invite' && value === 'coins',
-              });
-            }}
-          />
-          <TourAnchor id="create-simple-buyin">
-          <View
-            className="gap-3"
-            collapsable={false}
-            nativeID="create-simple-buyin"
-            ref={(node) => {
-              sectionRefs.current['create-simple-buyin'] = node;
-            }}>
-            {corporate ? (
-              <AppText className="text-[13px] leading-5 text-muted">
-                Private / Corporate Skill Tournaments do not charge an entry fee. The host funds the prize.
-              </AppText>
-            ) : cash ? null : (
-              <StepperField
-                label={copy('create.buyIn')}
-                value={draft.buy_in}
-                min={0}
-                max={10_000}
-                onChange={(buy_in) => patch({ buy_in })}
-              />
-            )}
-              <StepperField
-                label={copy('create.hostPrize')}
-                value={draft.host_budget}
-                min={0}
-                max={10_000}
-                step={draft.currency === 'bucks' ? 0.01 : 1}
-                formatValue={draft.currency === 'bucks' ? formatCash : undefined}
-                onChange={(host_budget) => patch({ host_budget })}
-              />
-            <AppText className="text-[13px] leading-5 text-muted">
-              {cash ? copy('create.youFundPrize') : copy('create.realMoneyFund')}
-            </AppText>
-            {cash ? (
-              <AppText className="text-[13px] leading-5 text-muted">
-                {copy('geo.cashBuyInOfficials')}
-              </AppText>
-            ) : null}
-            <AppText className="text-[13px] leading-5 text-muted">{copy('create.hostContributionHelp')}</AppText>
-            {draft.currency === 'bucks' ? (
-              <Pressable
-                accessibilityRole="switch"
-                accessibilityState={{ checked: draft.guarantee_enabled === true }}
-                accessibilityLabel={copy('create.guaranteePrize')}
-                onPress={() => patch({ guarantee_enabled: draft.guarantee_enabled !== true })}
-                className="flex-row items-center justify-between"
-                style={{ minHeight: 44 }}>
-                <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }} className="mr-3">
-                  <AppText className="text-sm font-semibold text-charcoal">
-                    {copy('create.guaranteePrize')}
-                  </AppText>
-                  <AppText className="mt-0.5 text-[13px] leading-5 text-muted">
-                    {draft.privacy_mode === 'private_corporate'
-                      ? 'Off for Private Corporate unless you turn it on.'
-                      : copy('create.guaranteePrizeHelp')}
-                  </AppText>
-                </View>
-                <Switch
-                  value={draft.guarantee_enabled === true}
-                  onValueChange={(guarantee_enabled) => patch({ guarantee_enabled })}
-                  trackColor={{ true: THEME.accent, false: THEME.border }}
-                  thumbColor={THEME.surface}
-                  ios_backgroundColor={THEME.border}
-                />
-              </Pressable>
-            ) : null}
-            {poolShortfall > 0 ? (
-              <View className="gap-2">
-                <AppText className="text-sm text-coral-dark">
-                  Add {formatCash(poolShortfall)}
-                </AppText>
-                <Button
-                  title={`Add ${formatCash(poolShortfall)}`}
-                  onPress={() => {
-                    walletSheet?.openTopUp({ amount: poolShortfall, returnCreate: true });
-                  }}
-                />
-              </View>
-            ) : null}
-          </View>
-          </TourAnchor>
-        </View>
-        </TourAnchor>
-
         <TourAnchor id="create-simple-type">
         <View className="gap-2">
           <SectionLabel>{copy('create.type')}</SectionLabel>
@@ -1163,6 +1047,122 @@ export function SimpleCreateForm() {
               </View>
             </Pressable>
           ) : null}
+        </View>
+        </TourAnchor>
+
+        <TourAnchor id="create-simple-currency">
+        <View className="gap-2">
+          <SectionLabel>{copy('create.currency')}</SectionLabel>
+          <SegmentedControl
+            accessibilityLabel={copy('create.currency')}
+            value={draft.currency}
+            options={[
+              { value: 'coins' as SimpleCurrency, label: copy('create.coins') },
+              { value: 'bucks' as SimpleCurrency, label: '$' },
+            ]}
+            onChange={(value) => {
+              if (value === 'bucks') {
+                if (draft.currency === 'coins') {
+                  coinBuyInRef.current = draft.buy_in;
+                }
+                patch({
+                  currency: value,
+                  buy_in: 0,
+                  friends_of_friends: false,
+                });
+                return;
+              }
+              patch({
+                currency: value,
+                buy_in: draft.currency === 'bucks' ? coinBuyInRef.current : draft.buy_in,
+                friends_of_friends:
+                  draft.privacy_mode === 'private_corporate'
+                    ? false
+                    : draft.visibility === 'invite' && value === 'coins',
+              });
+            }}
+          />
+          <TourAnchor id="create-simple-buyin">
+          <View
+            className="gap-3"
+            collapsable={false}
+            nativeID="create-simple-buyin"
+            ref={(node) => {
+              sectionRefs.current['create-simple-buyin'] = node;
+            }}>
+            {corporate ? (
+              <AppText className="text-[13px] leading-5 text-muted">
+                Private / Corporate Skill Tournaments do not charge an entry fee. The host funds the prize.
+              </AppText>
+            ) : cash ? null : (
+              <StepperField
+                label={copy('create.buyIn')}
+                value={draft.buy_in}
+                min={0}
+                max={10_000}
+                onChange={(buy_in) => patch({ buy_in })}
+              />
+            )}
+              <StepperField
+                label={copy('create.hostPrize')}
+                value={draft.host_budget}
+                min={0}
+                max={10_000}
+                step={draft.currency === 'bucks' ? 0.01 : 1}
+                formatValue={draft.currency === 'bucks' ? formatCash : undefined}
+                onChange={(host_budget) => patch({ host_budget })}
+              />
+            <AppText className="text-[13px] leading-5 text-muted">
+              {cash ? copy('create.youFundPrize') : copy('create.realMoneyFund')}
+            </AppText>
+            {cash ? (
+              <AppText className="text-[13px] leading-5 text-muted">
+                {copy('geo.cashBuyInOfficials')}
+              </AppText>
+            ) : null}
+            <AppText className="text-[13px] leading-5 text-muted">{copy('create.hostContributionHelp')}</AppText>
+            {draft.currency === 'bucks' ? (
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: draft.guarantee_enabled === true }}
+                accessibilityLabel={copy('create.guaranteePrize')}
+                onPress={() => patch({ guarantee_enabled: draft.guarantee_enabled !== true })}
+                className="flex-row items-center justify-between"
+                style={{ minHeight: 44 }}>
+                <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 120 }} className="mr-3">
+                  <AppText className="text-sm font-semibold text-charcoal">
+                    {copy('create.guaranteePrize')}
+                  </AppText>
+                  <AppText className="mt-0.5 text-[13px] leading-5 text-muted">
+                    {draft.privacy_mode === 'private_corporate'
+                      ? 'Off for Private Corporate unless you turn it on.'
+                      : copy('create.guaranteePrizeHelp')}
+                  </AppText>
+                </View>
+                <Switch
+                  value={draft.guarantee_enabled === true}
+                  onValueChange={(guarantee_enabled) => patch({ guarantee_enabled })}
+                  trackColor={{ true: THEME.accent, false: THEME.border }}
+                  thumbColor={THEME.surface}
+                  ios_backgroundColor={THEME.border}
+                />
+              </Pressable>
+            ) : null}
+            {poolShortfall > 0 ? (
+              <View className="gap-2">
+                <AppText className="text-sm text-coral-dark">
+                  Add {formatCash(poolShortfall)}
+                </AppText>
+                <Button
+                  title={`Add ${formatCash(poolShortfall)}`}
+                  onPress={() => {
+                    walletSheet?.openTopUp({ amount: poolShortfall, returnCreate: true });
+                  }}
+                />
+              </View>
+            ) : null}
+          </View>
+          </TourAnchor>
         </View>
         </TourAnchor>
 

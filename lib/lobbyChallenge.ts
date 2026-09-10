@@ -1223,7 +1223,7 @@ export function lobbyFilterChips(tab: LobbyTab, filters: LobbyFilterState): Lobb
   for (const currency of filters.currencies) {
     chips.push({
       id: `currency:${currency}`,
-      label: currency === 'coins' ? 'Coins' : currency === 'bucks' ? 'Bucks' : 'Free',
+      label: currency === 'coins' ? 'Coins' : currency === 'bucks' ? '$' : 'Free',
     });
   }
   for (const cost of filters.costs) {

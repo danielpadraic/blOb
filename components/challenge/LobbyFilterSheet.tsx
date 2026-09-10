@@ -343,7 +343,7 @@ export function LobbyFilterSheet({
           <Section title="Currency">
             {([
               ['coins', 'Coins'],
-              ['bucks', 'Bucks'],
+              ['bucks', '$'],
               ['free', 'Free'],
             ] as const).map(([value, label]) => (
               <Chip

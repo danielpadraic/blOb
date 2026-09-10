@@ -427,6 +427,17 @@ describe('lobby filters', () => {
     ]);
   });
 
+  it('labels cash filter chips $ and never Bucks', () => {
+    const filters = {
+      ...defaultFiltersForTab('active'),
+      currencies: ['bucks' as const, 'coins' as const],
+    };
+    expect(lobbyFilterChips('active', filters)).toEqual([
+      { id: 'currency:bucks', label: '$' },
+      { id: 'currency:coins', label: 'Coins' },
+    ]);
+  });
+
   it('opens Official with a zero badge and drops saved filters that hide every row', () => {
     expect(lobbyFilterBadgeCount('official', defaultFiltersForTab('official'))).toBe(0);
     const rows = [

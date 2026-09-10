@@ -511,7 +511,7 @@ export function Composer({
               initialText={docRef.current.text}
               compact
               collapsed={!expanded && !hasText}
-              pickerPlacement="flow"
+              pickerPlacement="above"
               audience={audience}
               audienceUserIds={audienceUserIds}
               onChange={onDocChange}
@@ -576,7 +576,7 @@ export function Composer({
       ) : null}
 
       {expanded ? (
-      <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44, zIndex: 2 }}>
+      <View className="mt-1 flex-row items-center" style={{ gap: 2, minHeight: 44, zIndex: 30 }}>
         <ComposerIcon
           glyph={GLYPH.camera}
           label="Camera"
