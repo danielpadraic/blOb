@@ -65,7 +65,7 @@ describe('shared reactions', () => {
 
   it('keys one user + type and toggles only that key', () => {
     expect(reactionSetKey({ postId: 'p', userId: 'me', type: 'like' })).toBe('p::me:like');
-    expect(reactionFlightKey('p', null, 'laugh')).toBe('p::laugh');
+    expect(reactionFlightKey('p', null, 'me', 'laugh')).toBe('p::me:laugh');
     const added = applyStackedReaction([], 'add', 'me', 'like', 'p', null);
     const alsoLol = applyStackedReaction(added, 'add', 'me', 'laugh', 'p', null);
     expect(alsoLol.map((row) => row.reaction_type)).toEqual(['like', 'laugh']);

@@ -121,13 +121,14 @@ export function reactionSetKeyFromRow(
   });
 }
 
-/** In-flight toggle: one write at a time per (post, comment, type). */
+/** In-flight toggle: one write at a time per (post, comment, user, type). */
 export function reactionFlightKey(
   postId: string,
   commentId: string | null | undefined,
+  userId: string,
   type: string,
 ): string {
-  return `${postId}:${commentId ?? ''}:${displayReactionType(type)}`;
+  return reactionSetKey({ postId, commentId, userId, type });
 }
 
 export function markOptimisticReactionWrite(key: string): void {

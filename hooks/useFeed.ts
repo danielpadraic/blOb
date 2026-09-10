@@ -55,12 +55,17 @@ import {
 } from '@/lib/createFeedPost';
 import { applyLiveReactionAction } from '@/lib/liveThread';
 import {
-  displayReactionType,
   findUserReactionOfType,
   markOptimisticReactionWrite,
   reactionFlightKey,
   reactionSetKey,
 } from '@/lib/reactions';
+import {
+  deleteReactionRow,
+  REACT_FAIL_COPY,
+  reactionWriteIsAlreadyOn,
+  upsertReactionRow,
+} from '@/lib/reactionWrite';
 import { supabase } from '@/lib/supabase';
 import { mentionRecordsFromChips, type MentionChip } from '@/lib/mentions';
 import type {
@@ -81,7 +86,6 @@ import {
   getErrorMessage,
   isMentionAccessDenied,
   isMissingRelationError,
-  isReactionConflict,
   isUnknownColumnError,
 } from '@/utils/errors';
 import { useAuth } from '@/hooks/useAuth';
@@ -2028,73 +2032,40 @@ export function useToggleReaction() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      const nextType = displayReactionType(input.type);
       if (input.action === 'remove') {
-        if (input.existingId && isPersistedId(input.existingId)) {
-          const { error } = await supabase.from('reactions').delete().eq('id', input.existingId);
-          if (error) {
-            throw new Error(getErrorMessage(error));
-          }
-        } else {
-          let query = supabase
-            .from('reactions')
-            .delete()
-            .eq('user_id', user.id)
-            .eq('reaction_type', nextType);
-          query = input.commentId
-            ? query.eq('comment_id', input.commentId)
-            : query.eq('post_id', input.post.id);
-          const { error } = await query;
-          if (error) {
-            throw new Error(getErrorMessage(error));
-          }
-        }
+        await deleteReactionRow({
+          userId: user.id,
+          postId: input.post.id,
+          commentId: input.commentId,
+          type: input.type,
+          existingId: input.existingId,
+        });
         return { action: 'removed' };
       }
-
-      const inserted = input.commentId
-        ? await supabase
-            .from('reactions')
-            .insert({
+      try {
+        const reaction = await upsertReactionRow({
+          userId: user.id,
+          postId: input.post.id,
+          commentId: input.commentId,
+          type: input.type,
+        });
+        return { action: 'added', reaction };
+      } catch (error) {
+        if (reactionWriteIsAlreadyOn(error)) {
+          return {
+            action: 'added' as const,
+            reaction: {
+              id: `existing-${input.type}-${input.commentId ?? input.post.id}-${user.id}`,
               user_id: user.id,
-              comment_id: input.commentId,
-              reaction_type: nextType,
-            })
-            .select(REACTION_COLUMNS)
-            .single()
-        : await supabase
-            .from('reactions')
-            .insert({
-              user_id: user.id,
-              post_id: input.post.id,
-              reaction_type: nextType,
-            })
-            .select(REACTION_COLUMNS)
-            .single();
-      if (inserted.error && isReactionConflict(inserted.error)) {
-        const again = input.commentId
-          ? await supabase
-              .from('reactions')
-              .select(REACTION_COLUMNS)
-              .eq('user_id', user.id)
-              .eq('comment_id', input.commentId)
-              .eq('reaction_type', nextType)
-              .maybeSingle()
-          : await supabase
-              .from('reactions')
-              .select(REACTION_COLUMNS)
-              .eq('user_id', user.id)
-              .eq('post_id', input.post.id)
-              .eq('reaction_type', nextType)
-              .maybeSingle();
-        if (again.data) {
-          return { action: 'added', reaction: again.data as Reaction };
+              post_id: input.commentId ? null : input.post.id,
+              comment_id: input.commentId ?? null,
+              reaction_type: input.type,
+              created_at: new Date().toISOString(),
+            } satisfies Reaction,
+          };
         }
+        throw error;
       }
-      if (inserted.error) {
-        throw new Error(getErrorMessage(inserted.error));
-      }
-      return { action: 'added', reaction: inserted.data as Reaction };
     },
     onMutate: (input) => {
       if (!user) {
@@ -2125,11 +2096,17 @@ export function useToggleReaction() {
         applyLiveReactionAction(post, 'add', user.id, input.type, input.commentId, result.reaction),
       );
     },
-    onError: (error, _variables, context) => {
+    onError: (error, input, context) => {
+      if (user && reactionWriteIsAlreadyOn(error)) {
+        patchFeedPosts(queryClient, input.post.id, (post) =>
+          applyLiveReactionAction(post, 'add', user.id, input.type, input.commentId),
+        );
+        return;
+      }
       for (const [key, data] of context?.previous ?? []) {
         queryClient.setQueryData(key, data);
       }
-      Alert.alert('Couldn’t react.', getErrorMessage(error));
+      Alert.alert(REACT_FAIL_COPY);
     },
   });
 
@@ -2137,7 +2114,7 @@ export function useToggleReaction() {
     if (!user) {
       return;
     }
-    const key = reactionFlightKey(input.post.id, input.commentId, input.type);
+    const key = reactionFlightKey(input.post.id, input.commentId, user.id, input.type);
     const flight = flights.current.get(key);
     if (flight) {
       flight.queuedInverse = !flight.queuedInverse;

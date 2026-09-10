@@ -5,18 +5,19 @@ import { Alert } from 'react-native';
 import { findCachedFeedPost, patchFeedPosts } from '@/hooks/useFeed';
 import { applyLiveReactionAction } from '@/lib/liveThread';
 import {
-  displayReactionType,
   findUserReactionOfType,
   markOptimisticReactionWrite,
   reactionFlightKey,
   reactionSetKey,
 } from '@/lib/reactions';
-import { supabase } from '@/lib/supabase';
+import {
+  deleteReactionRow,
+  REACT_FAIL_COPY,
+  reactionWriteIsAlreadyOn,
+  upsertReactionRow,
+} from '@/lib/reactionWrite';
 import type { PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
-import { getErrorMessage } from '@/utils/errors';
-
-const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
 
 type ToggleLiveReactionInput = {
   post: PostWithMeta;
@@ -43,34 +44,6 @@ function isPersistedId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
-async function deleteReaction(input: {
-  userId: string;
-  postId: string;
-  commentId?: string | null;
-  type: string;
-  existingId?: string | null;
-}) {
-  if (input.existingId && isPersistedId(input.existingId)) {
-    const { error } = await supabase.from('reactions').delete().eq('id', input.existingId);
-    if (error) {
-      throw new Error(getErrorMessage(error));
-    }
-    return;
-  }
-  let query = supabase
-    .from('reactions')
-    .delete()
-    .eq('user_id', input.userId)
-    .eq('reaction_type', input.type);
-  query = input.commentId
-    ? query.eq('comment_id', input.commentId)
-    : query.eq('post_id', input.postId);
-  const { error } = await query;
-  if (error) {
-    throw new Error(getErrorMessage(error));
-  }
-}
-
 /** Live + Circles: stack types. Same type again clears only that type. */
 export function useToggleLiveReaction() {
   const { user } = useAuth();
@@ -83,40 +56,40 @@ export function useToggleLiveReaction() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      const nextType = displayReactionType(input.type);
       if (input.action === 'remove') {
-        await deleteReaction({
+        await deleteReactionRow({
           userId: user.id,
           postId: input.post.id,
           commentId: input.commentId,
-          type: nextType,
+          type: input.type,
           existingId: input.existingId,
         });
         return { action: 'removed' as const };
       }
-      const inserted = input.commentId
-        ? await supabase
-            .from('reactions')
-            .insert({
+      try {
+        const reaction = await upsertReactionRow({
+          userId: user.id,
+          postId: input.post.id,
+          commentId: input.commentId,
+          type: input.type,
+        });
+        return { action: 'added' as const, reaction };
+      } catch (error) {
+        if (reactionWriteIsAlreadyOn(error)) {
+          return {
+            action: 'added' as const,
+            reaction: {
+              id: `existing-${input.type}-${input.commentId ?? input.post.id}-${user.id}`,
               user_id: user.id,
-              comment_id: input.commentId,
-              reaction_type: nextType,
-            })
-            .select(REACTION_COLUMNS)
-            .single()
-        : await supabase
-            .from('reactions')
-            .insert({
-              user_id: user.id,
-              post_id: input.post.id,
-              reaction_type: nextType,
-            })
-            .select(REACTION_COLUMNS)
-            .single();
-      if (inserted.error) {
-        throw new Error(getErrorMessage(inserted.error));
+              post_id: input.commentId ? null : input.post.id,
+              comment_id: input.commentId ?? null,
+              reaction_type: input.type,
+              created_at: new Date().toISOString(),
+            } satisfies Reaction,
+          };
+        }
+        throw error;
       }
-      return { action: 'added' as const, reaction: inserted.data as Reaction };
     },
     onMutate: (input) => {
       if (!user) {
@@ -147,11 +120,17 @@ export function useToggleLiveReaction() {
         applyLiveReactionAction(post, 'add', user.id, input.type, input.commentId, result.reaction),
       );
     },
-    onError: (error, _input, context) => {
+    onError: (error, input, context) => {
+      if (user && reactionWriteIsAlreadyOn(error)) {
+        patchFeedPosts(queryClient, input.post.id, (post) =>
+          applyLiveReactionAction(post, 'add', user.id, input.type, input.commentId),
+        );
+        return;
+      }
       for (const [key, data] of context?.previous ?? []) {
         queryClient.setQueryData(key, data);
       }
-      Alert.alert('Couldn’t react.', getErrorMessage(error));
+      Alert.alert(REACT_FAIL_COPY);
     },
   });
 
@@ -159,7 +138,7 @@ export function useToggleLiveReaction() {
     if (!user) {
       return;
     }
-    const key = reactionFlightKey(input.post.id, input.commentId, input.type);
+    const key = reactionFlightKey(input.post.id, input.commentId, user.id, input.type);
     const flight = flights.current.get(key);
     if (flight) {
       flight.queuedInverse = !flight.queuedInverse;

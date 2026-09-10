@@ -708,6 +708,14 @@ function humanize(raw: string): string {
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
   }
+  if (
+    message.includes('reactions_user_post_type_unique') ||
+    message.includes('reactions_user_comment_type_unique') ||
+    ((message.includes('23505') || message.includes('duplicate key')) &&
+      message.includes('reaction'))
+  ) {
+    return 'Couldn’t complete that just now. Try again.';
+  }
   if (message.includes('rate_limited')) {
     return copy('friends.searchWait');
   }
