@@ -1,5 +1,5 @@
 import { type ReactNode, type Ref } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
@@ -72,7 +72,7 @@ export function CommentNameRow({
         <ProfileLink
           username={username}
           userId={authorId}
-          style={{ flexGrow: 0, flexShrink: 1, minWidth: 0, maxWidth: '58%' }}>
+          style={{ flexGrow: 0, flexShrink: 1, minWidth: 0, maxWidth: '42%' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 }}>
             <AppText
               className="text-[13px] font-semibold"
@@ -87,11 +87,17 @@ export function CommentNameRow({
           <ProfileLink
             username={username}
             userId={authorId}
-            style={{ flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
+            style={{
+              flexGrow: 1,
+              flexShrink: 1,
+              minWidth: 0,
+              ...(Platform.OS === 'web' ? { display: 'flex', maxWidth: '100%' } : null),
+            }}>
             <AppText
               className="text-[12px]"
-              style={{ color: metaColor }}
-              numberOfLines={1}>
+              style={{ color: metaColor, flexShrink: 1, overflow: 'hidden' }}
+              numberOfLines={1}
+              ellipsizeMode="tail">
               @{tag}
             </AppText>
           </ProfileLink>
@@ -99,7 +105,7 @@ export function CommentNameRow({
         {meta ? (
           <AppText
             className="text-[11px]"
-            style={{ color: metaColor, flexShrink: 0 }}
+            style={{ color: metaColor, flexGrow: 0, flexShrink: 0 }}
             numberOfLines={1}>
             {meta}
           </AppText>

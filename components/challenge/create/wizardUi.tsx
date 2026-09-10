@@ -403,6 +403,8 @@ export function createStickyFooterPad(keyboardOpen: boolean, closedPad: number):
   return keyboardOpen ? 0 : closedPad;
 }
 
+export { CREATE_FIELD_ALIGN_MAX, createFieldScrollDelta } from '@/lib/createFieldScroll';
+
 export function CreateModeSwitch({
   mode,
   onSimple,

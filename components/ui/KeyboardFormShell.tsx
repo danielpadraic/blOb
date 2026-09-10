@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { shouldRunScrollToTop } from '@/lib/authScroll';
+import { createFieldScrollDelta } from '@/lib/createFieldScroll';
 import { THEME } from '@/lib/theme';
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 
@@ -125,31 +126,17 @@ export function KeyboardFormShell({
   const scrollFieldIntoView = useCallback((node: View) => {
     lastFieldNode.current = node;
     const run = () => {
-      if (Platform.OS === 'web' && typeof document !== 'undefined') {
-        const active = document.activeElement;
-        if (
-          active instanceof HTMLElement &&
-          (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
-        ) {
-          active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-          return;
-        }
-      }
       node.measureInWindow((_x, y, _w, h) => {
-        if (!h || y == null || Number.isNaN(y)) {
+        if (y == null || Number.isNaN(y)) {
           return;
         }
-        const windowH = Dimensions.get('window').height;
-        const reserved = footerHeight.current + overlapRef.current + 24;
-        const visibleBottom = windowH - reserved;
-        const fieldBottom = y + h;
-        const topGuard = 24;
-        let delta = 0;
-        if (fieldBottom > visibleBottom) {
-          delta = fieldBottom - visibleBottom;
-        } else if (y < topGuard && overlapRef.current <= 0) {
-          delta = y - topGuard;
-        }
+        const delta = createFieldScrollDelta({
+          fieldY: y,
+          fieldH: h,
+          windowH: Dimensions.get('window').height,
+          footerH: footerHeight.current,
+          keyboardOverlap: overlapRef.current,
+        });
         if (delta !== 0) {
           scrollRef.current?.scrollTo({
             y: Math.max(0, scrollY.current + delta),
@@ -167,18 +154,8 @@ export function KeyboardFormShell({
     if (overlap <= 0 || !lastFieldNode.current) {
       return;
     }
-    if (protectFieldFocus && fieldFocusedRef.current && Platform.OS === 'web') {
-      const active = typeof document !== 'undefined' ? document.activeElement : null;
-      if (
-        active instanceof HTMLElement &&
-        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
-      ) {
-        active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-        return;
-      }
-    }
     scrollFieldIntoView(lastFieldNode.current);
-  }, [overlap, protectFieldFocus, scrollFieldIntoView]);
+  }, [overlap, scrollFieldIntoView]);
 
   useEffect(() => {
     if (

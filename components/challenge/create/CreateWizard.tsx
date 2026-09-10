@@ -14,6 +14,7 @@ import {
   ContinueDraftCard,
   CreateActionsFooter,
   CreateModeSwitch,
+  createFieldScrollDelta,
   createScrollBottomPad,
   createStickyFooterPad,
   FieldAnchor,
@@ -390,16 +391,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       requestAnimationFrame(() => {
         setTimeout(() => {
           node.measureInWindow((_x, y, _w, h) => {
-            const windowH = Dimensions.get('window').height;
-            const reserved = footerDockHeight.current + keyboardHeightRef.current + 24;
-            const visibleBottom = windowH - reserved;
-            const fieldBottom = y + h;
-            let delta = 0;
-            if (fieldBottom > visibleBottom) {
-              delta = fieldBottom - visibleBottom;
-            } else if (y < 24) {
-              delta = y - 24;
-            }
+            const delta = createFieldScrollDelta({
+              fieldY: y,
+              fieldH: h,
+              windowH: Dimensions.get('window').height,
+              footerH: footerDockHeight.current,
+              keyboardOverlap: keyboardHeightRef.current,
+            });
             if (delta !== 0) {
               scrollRef.current?.scrollTo({
                 y: Math.max(0, scrollY.current + delta),
@@ -1180,17 +1178,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
     const run = () => {
       node.measureInWindow((_x, y, _w, h) => {
-        const windowH = Dimensions.get('window').height;
-        const reserved = footerDockHeight.current + keyboardHeightRef.current + 24;
-        const visibleBottom = windowH - reserved;
-        const fieldBottom = y + h;
-        const topGuard = 24;
-        let delta = 0;
-        if (fieldBottom > visibleBottom) {
-          delta = fieldBottom - visibleBottom;
-        } else if (y < topGuard) {
-          delta = y - topGuard;
-        }
+        const delta = createFieldScrollDelta({
+          fieldY: y,
+          fieldH: h,
+          windowH: Dimensions.get('window').height,
+          footerH: footerDockHeight.current,
+          keyboardOverlap: keyboardHeightRef.current,
+        });
         if (delta !== 0) {
           scroll.scrollTo({
             y: Math.max(0, scrollY.current + delta),
@@ -1575,17 +1569,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           pendingAnchor.current = null;
           const run = () => {
             node.measureInWindow((_x, y, _w, h) => {
-              const windowH = Dimensions.get('window').height;
-              const reserved = footerDockHeight.current + keyboardHeightRef.current + 24;
-              const visibleBottom = windowH - reserved;
-              const fieldBottom = y + h;
-              const topGuard = 24;
-              let delta = 0;
-              if (fieldBottom > visibleBottom) {
-                delta = fieldBottom - visibleBottom;
-              } else if (y < topGuard) {
-                delta = y - topGuard;
-              }
+              const delta = createFieldScrollDelta({
+                fieldY: y,
+                fieldH: h,
+                windowH: Dimensions.get('window').height,
+                footerH: footerDockHeight.current,
+                keyboardOverlap: keyboardHeightRef.current,
+              });
               if (delta !== 0) {
                 scrollRef.current?.scrollTo({
                   y: Math.max(0, scrollY.current + delta),

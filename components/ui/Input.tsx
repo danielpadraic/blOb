@@ -102,7 +102,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       }
       return;
     }
-    if (Platform.OS !== 'web' && boxRef.current) {
+    if (boxRef.current) {
       form?.scrollFieldIntoView(boxRef.current);
     }
   }

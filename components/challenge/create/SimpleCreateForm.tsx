@@ -11,6 +11,7 @@ import {
   CREATE_FOOTER_BODY,
   CreateActionsFooter,
   CreateModeSwitch,
+  createFieldScrollDelta,
   createScrollBottomPad,
   createStickyFooterPad,
 } from '@/components/challenge/create/wizardUi';
@@ -194,21 +195,22 @@ export function SimpleCreateForm() {
   overlapRef.current = keyboardOverlap;
   const keyboardOpen = keyboardOverlap > 0;
   const [footerH, setFooterH] = useState(CREATE_FOOTER_BODY);
+  const footerHRef = useRef(footerH);
+  footerHRef.current = footerH;
   const scrollFieldIntoView = useCallback((node: View) => {
     lastFieldNode.current = node;
     const run = () => {
       node.measureInWindow((_x, y, _w, h) => {
-        const windowH = Dimensions.get('window').height;
-        const reserved = 88 + overlapRef.current + 24;
-        const visibleBottom = windowH - reserved;
-        const fieldBottom = y + h;
-        const topGuard = 24;
-        let delta = 0;
-        if (fieldBottom > visibleBottom) {
-          delta = fieldBottom - visibleBottom;
-        } else if (y < topGuard) {
-          delta = y - topGuard;
+        if (y == null || Number.isNaN(y)) {
+          return;
         }
+        const delta = createFieldScrollDelta({
+          fieldY: y,
+          fieldH: h,
+          windowH: Dimensions.get('window').height,
+          footerH: footerHRef.current,
+          keyboardOverlap: overlapRef.current,
+        });
         if (delta !== 0) {
           scrollRef.current?.scrollTo({
             y: Math.max(0, scrollY.current + delta),
@@ -402,7 +404,7 @@ export function SimpleCreateForm() {
 
   function scrollToSection(id: string) {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
     const node = sectionRefs.current[id];
@@ -791,6 +793,107 @@ export function SimpleCreateForm() {
           onClear={() => patch({ cover_image_url: '' })}
         />
 
+        <TourAnchor id="create-simple-task">
+        <View
+          collapsable={false}
+          nativeID="create-simple-task"
+          ref={(node) => {
+            sectionRefs.current['create-simple-task'] = node;
+          }}>
+        <Input
+          label={copy('create.taskLabel')}
+          placeholder={copy('create.taskPlaceholder')}
+          value={draft.task}
+          onChangeText={(task) =>
+            patch({
+              task,
+              proofs: syncProofNameWithTask(draft.proofs, draft.task, task),
+            })
+          }
+          grow
+          maxLength={80}
+        />
+        </View>
+        </TourAnchor>
+        <TourAnchor id="create-simple-proof">
+        <View
+          className="gap-2"
+          collapsable={false}
+          nativeID="create-simple-proof"
+          ref={(node) => {
+            sectionRefs.current['create-simple-proof'] = node;
+          }}>
+          <SimpleProofsEditor
+            proofs={draft.proofs}
+            onChange={(proofs) => patch({ proofs })}
+            distanceUnit={draft.distance_unit ?? 'mi'}
+            onDistanceUnitChange={(distance_unit) => patch({ distance_unit })}
+          />
+        </View>
+        </TourAnchor>
+        <ExtraTasksEditor
+          tasks={draft.extra_tasks ?? []}
+          onChange={(extra_tasks) => patch({ extra_tasks })}
+        />
+
+        {simpleHowYouWin(draft) === 'cumulative' ? null : (
+        <TourAnchor id="create-simple-frequency">
+        <View
+          className="gap-2"
+          collapsable={false}
+          nativeID="create-simple-frequency"
+          ref={(node) => {
+            sectionRefs.current['create-simple-frequency'] = node;
+          }}>
+          <SectionLabel>{copy('create.frequency')}</SectionLabel>
+          <View className="flex-row flex-wrap gap-2">
+            {SIMPLE_FREQUENCY_CHIPS.map((item) => (
+              <CreateIconChip
+                key={item.value}
+                icon=""
+                label={item.label}
+                selected={draft.frequency === item.value}
+                onPress={() => patch({ frequency: item.value as SimpleFrequency })}
+              />
+            ))}
+          </View>
+          {draft.frequency === 'custom' ? (
+            <View className="gap-2">
+              <StepperField
+                label={customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
+                value={draft.custom_checkins}
+                min={1}
+                max={100}
+                onChange={(custom_checkins) => patch({ custom_checkins })}
+              />
+              <View className="flex-row flex-wrap gap-2">
+                {SIMPLE_CUSTOM_PERIODS.map((item) => (
+                  <CreateIconChip
+                    key={item.value}
+                    icon=""
+                    label={item.label}
+                    selected={draft.custom_period === item.value}
+                    onPress={() => patch({ custom_period: item.value as SimpleCustomPeriod })}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : (
+            <AppText className="text-[12px] leading-5 text-muted">{frequencyHintOf(draft)}</AppText>
+          )}
+          <StepperField
+            label={copy('create.allowedMisses')}
+            hint={copy('create.allowedMissesHint')}
+            value={draft.allowed_misses ?? 0}
+            min={0}
+            max={allowedMissesMax(draft)}
+            step={1}
+            onChange={(allowed_misses) => patch({ allowed_misses })}
+          />
+        </View>
+        </TourAnchor>
+        )}
+
         <TourAnchor id="create-simple-start">
         <View
           className="gap-2"
@@ -882,108 +985,6 @@ export function SimpleCreateForm() {
           ) : null}
         </View>
         </TourAnchor>
-
-        <TourAnchor id="create-simple-task">
-        <View
-          className="gap-3"
-          collapsable={false}
-          nativeID="create-simple-task"
-          ref={(node) => {
-            sectionRefs.current['create-simple-task'] = node;
-          }}>
-        <Input
-          label={copy('create.taskLabel')}
-          placeholder={copy('create.taskPlaceholder')}
-          value={draft.task}
-          onChangeText={(task) =>
-            patch({
-              task,
-              proofs: syncProofNameWithTask(draft.proofs, draft.task, task),
-            })
-          }
-          grow
-          maxLength={80}
-        />
-        <TourAnchor id="create-simple-proof">
-        <View
-          className="gap-2"
-          collapsable={false}
-          nativeID="create-simple-proof"
-          ref={(node) => {
-            sectionRefs.current['create-simple-proof'] = node;
-          }}>
-          <SimpleProofsEditor
-            proofs={draft.proofs}
-            onChange={(proofs) => patch({ proofs })}
-            distanceUnit={draft.distance_unit ?? 'mi'}
-            onDistanceUnitChange={(distance_unit) => patch({ distance_unit })}
-          />
-        </View>
-        </TourAnchor>
-        <ExtraTasksEditor
-          tasks={draft.extra_tasks ?? []}
-          onChange={(extra_tasks) => patch({ extra_tasks })}
-        />
-        </View>
-        </TourAnchor>
-
-        {simpleHowYouWin(draft) === 'cumulative' ? null : (
-        <TourAnchor id="create-simple-frequency">
-        <View
-          className="gap-2"
-          collapsable={false}
-          nativeID="create-simple-frequency"
-          ref={(node) => {
-            sectionRefs.current['create-simple-frequency'] = node;
-          }}>
-          <SectionLabel>{copy('create.frequency')}</SectionLabel>
-          <View className="flex-row flex-wrap gap-2">
-            {SIMPLE_FREQUENCY_CHIPS.map((item) => (
-              <CreateIconChip
-                key={item.value}
-                icon=""
-                label={item.label}
-                selected={draft.frequency === item.value}
-                onPress={() => patch({ frequency: item.value as SimpleFrequency })}
-              />
-            ))}
-          </View>
-          {draft.frequency === 'custom' ? (
-            <View className="gap-2">
-              <StepperField
-                label={customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
-                value={draft.custom_checkins}
-                min={1}
-                max={100}
-                onChange={(custom_checkins) => patch({ custom_checkins })}
-              />
-              <View className="flex-row flex-wrap gap-2">
-                {SIMPLE_CUSTOM_PERIODS.map((item) => (
-                  <CreateIconChip
-                    key={item.value}
-                    icon=""
-                    label={item.label}
-                    selected={draft.custom_period === item.value}
-                    onPress={() => patch({ custom_period: item.value as SimpleCustomPeriod })}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : (
-            <AppText className="text-[12px] leading-5 text-muted">{frequencyHintOf(draft)}</AppText>
-          )}
-          <StepperField
-            label={copy('create.allowedMisses')}
-            hint={copy('create.allowedMissesHint')}
-            value={draft.allowed_misses ?? 0}
-            min={0}
-            max={allowedMissesMax(draft)}
-            step={1}
-            onChange={(allowed_misses) => patch({ allowed_misses })}
-          />
-        </View>
-        </TourAnchor>
-        )}
 
         <TourAnchor id="create-simple-visibility">
         <View
