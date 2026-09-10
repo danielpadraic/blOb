@@ -552,7 +552,10 @@ function SubmitWorkoutInner() {
         const merged: SlotDraft = {
           // A generated workout card has an image AND Health provenance. Prefer the image so the
           // slot rehydrates as a thumb, not a "Health" chip with no preview.
-          uri: stills[0] || remoteUrl || (part?.healthWorkoutId ? `health:${part.healthWorkoutId}` : localUri),
+          uri:
+            stills[0] ||
+            remoteUrl ||
+            (part?.healthWorkoutId ? `health:${part.healthWorkoutId}` : (current[proof.id]?.uri ?? '')),
           uris: stills,
           mimeType: current[proof.id]?.mimeType,
           text: part?.text ?? current[proof.id]?.text,
