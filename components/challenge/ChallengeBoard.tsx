@@ -266,7 +266,7 @@ export function ChallengeBoard({
               muted={row.bucket === 'dropped'}
               payout={view.settled ? row.payout : null}
               currency={challenge.currency}
-              showAdjust={!quantityOrPoints && !view.settled}
+              showAdjust={!view.settled}
               participantStatus={(roster ?? []).find((item) => item.user_id === row.userId)?.status}
             />
           ))}

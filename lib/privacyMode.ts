@@ -95,11 +95,12 @@ export function canChangePrivacyMode(input: {
   current: PrivacyMode;
   next: PrivacyMode;
   participantCount: number;
+  officialOps?: boolean | null;
 }): { ok: true } | { ok: false; message: string } {
   if (input.current === input.next) {
     return { ok: true };
   }
-  if (input.participantCount < 1) {
+  if (input.officialOps || input.participantCount < 1) {
     return { ok: true };
   }
   return { ok: false, message: PRIVACY_MODE_LOCKED_MESSAGE };
@@ -111,12 +112,14 @@ export function rejectLockedAfterJoinField(input: {
   participantCount: number;
   current: unknown;
   next: unknown;
+  officialOps?: boolean | null;
 }): { ok: true } | { ok: false; message: string } {
   if (input.field === 'privacy_mode') {
     return canChangePrivacyMode({
       current: asPrivacyMode(input.current),
       next: asPrivacyMode(input.next),
       participantCount: input.participantCount,
+      officialOps: input.officialOps,
     });
   }
   return { ok: true };

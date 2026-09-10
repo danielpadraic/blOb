@@ -32,6 +32,27 @@ export function heroRingDays(input: {
   return Math.max(0, Math.floor(Number(input.submitted) || 0));
 }
 
+const HOUSE_EDIT_BLOCKED = new Set([
+  'ended',
+  'settled',
+  'settling',
+  'judging',
+  'distributing',
+  'cancelled',
+  'cancelled_underfilled',
+]);
+
+/** Signed-in @blob House session. Not testers / is_official / is_admin. */
+export function canHouseEditChallenge(input: {
+  challenge: Pick<Challenge, 'status'> | null | undefined;
+  officialOps?: boolean | null;
+}): boolean {
+  if (!input.officialOps || !input.challenge) {
+    return false;
+  }
+  return !HOUSE_EDIT_BLOCKED.has(String(input.challenge.status ?? '').toLowerCase());
+}
+
 export function canHostQuickEdit(input: {
   challenge: Pick<Challenge, 'status' | 'created_by' | 'is_official' | 'series_id'> | null | undefined;
   viewerId?: string | null;

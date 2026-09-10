@@ -11,6 +11,8 @@ export type ChallengeOverflowAction = {
   key: string;
   label: string;
   danger?: boolean;
+  disabled?: boolean;
+  section?: string;
   onPress: () => void;
 };
 
@@ -75,7 +77,8 @@ export function ChallengeMenuPopover({
   const hostW = host?.width || windowSize.width;
   const hostH = host?.height || windowSize.height;
   const popW = 188;
-  const popH = 8 + actions.length * 44;
+  const sectionCount = new Set(actions.map((action) => action.section).filter(Boolean)).size;
+  const popH = 8 + actions.length * 44 + sectionCount * 28;
   const gap = 6;
   const localX = anchor.x - hostX;
   const localY = anchor.y - hostY;
@@ -113,23 +116,36 @@ export function ChallengeMenuPopover({
             ...themeShadow('card'),
           },
         ]}>
-        {actions.map((action) => (
-          <Pressable
-            key={action.key}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-            onPress={() => {
-              onClose();
-              action.onPress();
-            }}
-            className="justify-center px-3"
-            style={{ minHeight: 44 }}>
-            <AppText
-              className="text-[14px] font-semibold"
-              style={{ color: action.danger ? THEME.danger : THEME.textPrimary }}>
-              {action.label}
-            </AppText>
-          </Pressable>
+        {actions.map((action, index) => (
+          <View key={action.key}>
+            {action.section && action.section !== actions[index - 1]?.section ? (
+              <AppText
+                className="px-3 pt-2 text-[11px] font-extrabold uppercase"
+                style={{ color: THEME.textMuted, letterSpacing: 0.4 }}>
+                {action.section}
+              </AppText>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              accessibilityState={{ disabled: Boolean(action.disabled) }}
+              disabled={action.disabled}
+              onPress={() => {
+                if (action.disabled) {
+                  return;
+                }
+                onClose();
+                action.onPress();
+              }}
+              className="justify-center px-3"
+              style={{ minHeight: 44, opacity: action.disabled ? 0.45 : 1 }}>
+              <AppText
+                className="text-[14px] font-semibold"
+                style={{ color: action.danger ? THEME.danger : THEME.textPrimary }}>
+                {action.label}
+              </AppText>
+            </Pressable>
+          </View>
         ))}
       </View>
     </View>

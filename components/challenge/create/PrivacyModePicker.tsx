@@ -21,6 +21,7 @@ export function PrivacyModePicker({
   visibility,
   challengeLane,
   participantCount = 0,
+  officialOps = false,
   error,
   showFieldLabel = true,
   onChange,
@@ -30,6 +31,7 @@ export function PrivacyModePicker({
   visibility: Visibility;
   challengeLane: 'coins' | 'private';
   participantCount?: number;
+  officialOps?: boolean;
   error?: string;
   showFieldLabel?: boolean;
   onChange: (next: {
@@ -41,13 +43,14 @@ export function PrivacyModePicker({
 }) {
   const isPrivateLane = challengeLane === 'private';
   const corporate = privacyMode === 'private_corporate';
-  const joinedLock = participantCount >= 1;
+  const joinedLock = participantCount >= 1 && !officialOps;
 
   function select(next: PrivacyMode, nextVisibility?: Visibility) {
     const gate = canChangePrivacyMode({
       current: privacyMode,
       next,
       participantCount,
+      officialOps,
     });
     if (!gate.ok) {
       onLockedAttempt?.(gate.message);

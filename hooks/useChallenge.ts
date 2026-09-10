@@ -1178,11 +1178,13 @@ export function useUpdateUserChallenge() {
         await publishScoringChange(challengeId, scoring);
       }
       if (user?.id) {
+        const ops = await supabase.rpc('is_official_ops');
         await persistPrivacyMode({
           challengeId,
           createdBy: user.id,
           next: privacyMode,
           current: challenge.privacy_mode,
+          officialOps: ops.data === true,
         });
       }
       return { ...challenge, privacy_mode: privacyMode };

@@ -1714,6 +1714,7 @@ export async function persistPrivacyMode(input: {
   next: PrivacyMode;
   current?: string | null;
   participantCount?: number;
+  officialOps?: boolean | null;
 }): Promise<void> {
   let participantCount = input.participantCount;
   if (participantCount == null) {
@@ -1741,15 +1742,16 @@ export async function persistPrivacyMode(input: {
     current,
     next: input.next,
     participantCount,
+    officialOps: input.officialOps,
   });
   if (!gate.ok) {
     throw new Error(gate.message);
   }
-  const { error } = await supabase
-    .from('challenges')
-    .update({ privacy_mode: input.next })
-    .eq('id', input.challengeId)
-    .eq('created_by', input.createdBy);
+  let update = supabase.from('challenges').update({ privacy_mode: input.next }).eq('id', input.challengeId);
+  if (!input.officialOps) {
+    update = update.eq('created_by', input.createdBy);
+  }
+  const { error } = await update;
   if (error) {
     logDev('[blob:create] privacy_mode skipped', error.message);
   }

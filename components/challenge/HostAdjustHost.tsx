@@ -13,8 +13,10 @@ import { InlineComposer } from '@/components/feed/InlineComposer';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
+import { HouseRemovePersonSheet } from '@/components/challenge/HouseRemovePersonSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallenge } from '@/hooks/useChallenge';
+import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { copy } from '@/lib/copy';
 import {
   challengeIsEndedForAdjust,
@@ -27,6 +29,7 @@ import {
   parseHostAdjustResult,
   participantCanBeAdjusted,
   viewerCanAdjustBoard,
+  viewerCanHouseRemove,
   type HostAdjustAction,
   type HostAdjustDay,
   type HostAdjustResult,
@@ -42,6 +45,7 @@ type Target = { userId: string; displayName: string };
 
 type HostAdjustContextValue = {
   canAdjust: boolean;
+  canHouseRemove: boolean;
   isActor: boolean;
   showExcuse: boolean;
   openRowMenu: (target: Target, anchor: MenuAnchor) => void;
@@ -49,6 +53,7 @@ type HostAdjustContextValue = {
 
 const HostAdjustContext = createContext<HostAdjustContextValue>({
   canAdjust: false,
+  canHouseRemove: false,
   isActor: false,
   showExcuse: false,
   openRowMenu: () => {},
@@ -100,21 +105,24 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   const params = useLocalSearchParams<{ id?: string }>();
   const id = firstRouteParam(params.id);
   const { user } = useAuth();
+  const officialOps = useOfficialOps().data === true;
   const challengeQuery = useChallenge(id);
   const challenge = challengeQuery.data ?? null;
   const mods = useQuery({
     queryKey: ['challenge-moderators', id, user?.id],
-    enabled: Boolean(id && user?.id && challenge?.created_by !== user?.id),
+    enabled: Boolean(id && user?.id && challenge?.created_by !== user?.id && !officialOps),
     queryFn: () => fetchModeratorIds(id!, user!.id),
   });
   const isActor = Boolean(
-    user?.id &&
-      challenge &&
-      !challengeIsOfficialLocked(challenge) &&
-      !challengeIsEndedForAdjust(challenge) &&
-      (challenge.created_by === user.id || Boolean(mods.data?.includes(user.id))),
+    officialOps ||
+      (user?.id &&
+        challenge &&
+        !challengeIsOfficialLocked(challenge) &&
+        !challengeIsEndedForAdjust(challenge) &&
+        (challenge.created_by === user.id || Boolean(mods.data?.includes(user.id)))),
   );
-  const canAdjust = viewerCanAdjustBoard(challenge, user?.id, mods.data);
+  const canAdjust = viewerCanAdjustBoard(challenge, user?.id, mods.data, officialOps);
+  const canHouseRemove = viewerCanHouseRemove(challenge, officialOps);
   const showExcuse = challengeTracksMissesForExcuse(challenge);
 
   const [menu, setMenu] = useState<(Target & { anchor: MenuAnchor }) | null>(null);
@@ -129,19 +137,22 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ canAdjust, isActor, showExcuse, openRowMenu }),
-    [canAdjust, isActor, openRowMenu, showExcuse],
+    () => ({ canAdjust, canHouseRemove, isActor, showExcuse, openRowMenu }),
+    [canAdjust, canHouseRemove, isActor, openRowMenu, showExcuse],
   );
 
   return (
     <HostAdjustContext.Provider value={value}>
       {children}
-      {canAdjust && id && challenge ? (
+      {(canAdjust || canHouseRemove) && id && challenge ? (
         <HostAdjustSheets
           challengeId={id}
           menu={menu}
           sheet={sheet}
           showExcuse={showExcuse}
+          canAdjust={canAdjust}
+          canHouseRemove={canHouseRemove}
+          houseDisabled={challengeIsEndedForAdjust(challenge)}
           onCloseMenu={() => setMenu(null)}
           onOpenSheet={(next) => {
             setMenu(null);
@@ -171,6 +182,9 @@ function HostAdjustSheets({
   menu,
   sheet,
   showExcuse,
+  canAdjust,
+  canHouseRemove,
+  houseDisabled,
   onCloseMenu,
   onOpenSheet,
   onCloseSheet,
@@ -179,6 +193,9 @@ function HostAdjustSheets({
   menu: (Target & { anchor: MenuAnchor }) | null;
   sheet: { target: Target; action: HostAdjustAction; day?: HostAdjustDay } | null;
   showExcuse: boolean;
+  canAdjust: boolean;
+  canHouseRemove: boolean;
+  houseDisabled: boolean;
   onCloseMenu: () => void;
   onOpenSheet: (next: { target: Target; action: HostAdjustAction; day?: HostAdjustDay }) => void;
   onCloseSheet: () => void;
@@ -187,6 +204,7 @@ function HostAdjustSheets({
   const router = useRouter();
   const { user } = useAuth();
   const [noteStep, setNoteStep] = useState(false);
+  const [houseRemove, setHouseRemove] = useState<Target | null>(null);
 
   useEffect(() => {
     if (!sheet) {
@@ -267,25 +285,43 @@ function HostAdjustSheets({
 
   const actions: ChallengeOverflowAction[] = menu
     ? [
-        {
-          key: 'count',
-          label: copy('board.countMissedDay'),
-          onPress: () => onOpenSheet({ target: menu, action: 'count_honor' }),
-        },
-        ...(showExcuse
+        ...(canAdjust
           ? [
               {
-                key: 'excuse',
-                label: copy('board.excuseMiss'),
-                onPress: () => onOpenSheet({ target: menu, action: 'excuse_miss' }),
+                key: 'count',
+                label: copy('board.countMissedDay'),
+                onPress: () => onOpenSheet({ target: menu, action: 'count_honor' }),
+              },
+              ...(showExcuse
+                ? [
+                    {
+                      key: 'excuse',
+                      label: copy('board.excuseMiss'),
+                      onPress: () => onOpenSheet({ target: menu, action: 'excuse_miss' }),
+                    },
+                  ]
+                : []),
+              {
+                key: 'remove',
+                label: copy('board.removeCountedDay'),
+                onPress: () => onOpenSheet({ target: menu, action: 'remove_counted' }),
               },
             ]
           : []),
-        {
-          key: 'remove',
-          label: copy('board.removeCountedDay'),
-          onPress: () => onOpenSheet({ target: menu, action: 'remove_counted' }),
-        },
+        ...(canHouseRemove
+          ? [
+              {
+                key: 'house-remove',
+                section: copy('house.section'),
+                label: copy('house.remove'),
+                disabled: houseDisabled,
+                danger: true,
+                onPress: () => {
+                  setHouseRemove({ userId: menu.userId, displayName: menu.displayName });
+                },
+              },
+            ]
+          : []),
       ]
     : [];
 
@@ -301,6 +337,14 @@ function HostAdjustSheets({
         anchor={menu?.anchor ?? null}
         onClose={onCloseMenu}
         actions={actions}
+      />
+      <HouseRemovePersonSheet
+        visible={Boolean(houseRemove)}
+        challengeId={challengeId}
+        userId={houseRemove?.userId ?? ''}
+        displayName={houseRemove?.displayName ?? 'Someone'}
+        disabled={houseDisabled}
+        onClose={() => setHouseRemove(null)}
       />
       <ChromeOverlay visible={Boolean(sheet)} onClose={mutate.isPending ? undefined : onCloseSheet}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -460,8 +504,8 @@ export function BoardAdjustButton({
   displayName: string;
   status?: string | null;
 }) {
-  const { canAdjust, openRowMenu } = useHostAdjustUi();
-  if (!canAdjust || !participantCanBeAdjusted(status)) {
+  const { canAdjust, canHouseRemove, openRowMenu } = useHostAdjustUi();
+  if ((!canAdjust && !canHouseRemove) || !participantCanBeAdjusted(status)) {
     return null;
   }
   return (

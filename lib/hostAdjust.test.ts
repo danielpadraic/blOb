@@ -45,7 +45,11 @@ describe('host Board adjust gates', () => {
     expect(viewerCanAdjustBoard({ ...liveUser, is_official: true, series_id: 'week_10' }, 'host')).toBe(
       false,
     );
+    expect(
+      viewerCanAdjustBoard({ ...liveUser, is_official: true, series_id: 'week_10' }, 'blob', [], true),
+    ).toBe(true);
     expect(viewerCanAdjustBoard({ ...liveUser, status: 'ended' }, 'host')).toBe(false);
+    expect(viewerCanAdjustBoard({ ...liveUser, status: 'settled' }, 'blob', [], true)).toBe(false);
   });
 
   it('hides miles and points Boards', () => {

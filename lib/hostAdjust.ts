@@ -90,15 +90,29 @@ export function challengeUsesConsistencyAdjustBoard(challenge?: HostAdjustChalle
   return true;
 }
 
+export function viewerCanHouseRemove(
+  challenge?: HostAdjustChallenge | null,
+  officialOps?: boolean | null,
+): boolean {
+  return Boolean(officialOps && challenge && !challengeIsEndedForAdjust(challenge));
+}
+
 export function viewerCanAdjustBoard(
   challenge?: HostAdjustChallenge | null,
   viewerId?: string | null,
   moderatorIds?: readonly string[] | null,
+  officialOps?: boolean | null,
 ): boolean {
   if (!challenge || !viewerId) {
     return false;
   }
-  if (challengeIsOfficialLocked(challenge) || challengeIsEndedForAdjust(challenge)) {
+  if (challengeIsEndedForAdjust(challenge)) {
+    return false;
+  }
+  if (officialOps && challengeUsesConsistencyAdjustBoard(challenge)) {
+    return true;
+  }
+  if (challengeIsOfficialLocked(challenge)) {
     return false;
   }
   if (!challengeUsesConsistencyAdjustBoard(challenge)) {

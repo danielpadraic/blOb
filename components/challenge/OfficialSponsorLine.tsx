@@ -15,6 +15,7 @@ export function OfficialSponsorLine({
     organization_name?: string | null;
     organization?: string | null;
     is_official?: boolean | null;
+    created_by?: string | null;
   };
   muted: string;
   titleColor?: string;

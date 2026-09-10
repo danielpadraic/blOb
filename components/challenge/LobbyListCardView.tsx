@@ -13,7 +13,7 @@ import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
-import { namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
+import { isBlobCreatedOfficial, namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
 import { displayChallengePot } from '@/lib/challengePot';
 import {
   challengeTypeIconKey,
@@ -135,7 +135,7 @@ export function LobbyListCardView({
     ? { chip: null as string | null, gate: null as string | null }
     : challengeScheduleState(challenge, nowMs);
   const primary = lobbyListPrimaryAction({ canCheckIn, canJoin, status });
-  const hostLabel = host?.name?.trim() || (official ? 'Bob' : 'Host');
+  const hostLabel = host?.name?.trim() || (isBlobCreatedOfficial(challenge) ? 'Bob' : 'Host');
   const wash = official
     ? THEME.primary
     : callout
@@ -550,6 +550,7 @@ function OfficialHostBlock({
     organization_name?: string | null;
     organization?: string | null;
     is_official?: boolean | null;
+    created_by?: string | null;
   };
   hostLabel: string;
   host?: LobbyListCardHost | null;
@@ -577,35 +578,37 @@ function OfficialHostBlock({
             <BlobMascot variant="logo" size={36} />
           )}
         </View>
-      ) : null}
-      <View style={{ width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.16)' }} />
-      {asHttpUrl(host?.avatarUrl) ? (
-        <Avatar uri={host?.avatarUrl} name={hostLabel} size={22} />
       ) : (
-        <View
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 11,
-            overflow: 'hidden',
-            backgroundColor: 'rgba(255,255,255,0.08)',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-          <Image
-            source={BOB_WAVE}
-            style={{ width: 20, height: 20, backgroundColor: 'transparent' }}
-            contentFit="contain"
-            accessibilityLabel={hostLabel}
-          />
-        </View>
+        <>
+          {asHttpUrl(host?.avatarUrl) ? (
+            <Avatar uri={host?.avatarUrl} name={hostLabel} size={22} />
+          ) : (
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                overflow: 'hidden',
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Image
+                source={BOB_WAVE}
+                style={{ width: 20, height: 20, backgroundColor: 'transparent' }}
+                contentFit="contain"
+                accessibilityLabel={hostLabel}
+              />
+            </View>
+          )}
+          <AppText
+            className="text-[12px] font-semibold"
+            style={{ color: THEME.primaryForeground, flexShrink: 1 }}
+            numberOfLines={1}>
+            Hosted by {hostLabel}
+          </AppText>
+        </>
       )}
-      <AppText
-        className="text-[12px] font-semibold"
-        style={{ color: THEME.primaryForeground, flexShrink: 1 }}
-        numberOfLines={1}>
-        {hostLabel}
-      </AppText>
     </View>
   );
 }

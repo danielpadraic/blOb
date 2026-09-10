@@ -2261,6 +2261,26 @@ export type Database = {
         };
         Returns: Record<string, unknown>;
       };
+      is_official_ops: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      official_add_participant: {
+        Args: {
+          p_challenge_id: string;
+          p_user_id: string;
+          p_buy_in: 'charge' | 'house' | 'none';
+        };
+        Returns: Record<string, unknown>;
+      };
+      official_remove_participant: {
+        Args: {
+          p_challenge_id: string;
+          p_user_id: string;
+          p_mode: 'out_of_pot' | 'leave_room';
+        };
+        Returns: Record<string, unknown>;
+      };
       publish_scoring_change: {
         Args: { p_challenge_id: string; p_config: unknown; p_summary?: string | null };
         Returns: Record<string, unknown>;

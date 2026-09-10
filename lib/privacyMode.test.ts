@@ -45,5 +45,13 @@ describe('canChangePrivacyMode', () => {
     expect(
       canChangePrivacyMode({ current: saved, next: saved, participantCount: 3 }).ok,
     ).toBe(true);
+    expect(
+      canChangePrivacyMode({
+        current: saved,
+        next: 'private_corporate',
+        participantCount: 3,
+        officialOps: true,
+      }).ok,
+    ).toBe(true);
   });
 });

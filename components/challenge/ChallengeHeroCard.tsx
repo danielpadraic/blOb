@@ -10,6 +10,7 @@ import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
+import { isBlobCreatedOfficial, officialSponsorName } from '@/lib/challengeSponsor';
 import { ChallengeHeroOverflowButton } from '@/components/challenge/ChallengeDetailOverflow';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
@@ -82,6 +83,8 @@ export function ChallengeHeroCard({
   children,
 }: ChallengeHeroCardProps) {
   const official = Boolean(challenge.is_official);
+  const blobOfficial = isBlobCreatedOfficial(challenge);
+  const sponsorName = officialSponsorName(challenge);
   const callout = Boolean(challenge.is_callout) && !official;
   const chrome = calloutCardChrome(callout);
   const vsLine = calloutPartySubtitle(calloutParty, viewerId);
@@ -126,7 +129,7 @@ export function ChallengeHeroCard({
         tone={official ? 'dark' : 'light'}
         hideClock
       />
-      {official ? (
+      {sponsorName ? (
         <OfficialSponsorLine
           challenge={challenge}
           muted={muted}
@@ -159,7 +162,7 @@ export function ChallengeHeroCard({
             ) : null}
           </View>
         </View>
-      ) : host ? (
+      ) : host && !blobOfficial ? (
         <ProfileLink username={host.username} userId={host.id}>
           <AppText className="text-[13px]" style={{ color: muted }}>
             Hosted by{' '}

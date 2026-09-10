@@ -1,4 +1,14 @@
+import { OFFICIAL_BOB_ID } from '@/lib/official';
+
 const UNNAMED_SPONSORS = new Set(['blob', 'official']);
+
+/** Official Weekly / house cards created by @blob. Not a user or corporate owner. */
+export function isBlobCreatedOfficial(challenge?: {
+  is_official?: boolean | null;
+  created_by?: string | null;
+} | null): boolean {
+  return Boolean(challenge?.is_official) && challenge?.created_by === OFFICIAL_BOB_ID;
+}
 
 function cleanName(value?: string | null): string {
   const name = value?.trim() ?? '';
@@ -25,12 +35,19 @@ export function officialSponsorName(challenge: {
   organization_name?: string | null;
   organization?: string | null;
   is_official?: boolean | null;
+  created_by?: string | null;
 } | null | undefined): string {
+  if (!challenge?.is_official) {
+    return '';
+  }
+  if (challenge.created_by && challenge.created_by !== OFFICIAL_BOB_ID) {
+    return '';
+  }
   const named = namedOfficialSponsor(challenge);
   if (named) {
     return named;
   }
-  return challenge?.is_official ? 'blOb' : '';
+  return 'blOb';
 }
 
 export function isDefaultOfficialSponsor(name: string): boolean {

@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
 import { CancelChallengeSheet } from '@/components/challenge/CancelChallengeSheet';
+import { HouseAddPersonSheet } from '@/components/challenge/HouseAddPersonSheet';
 import { LeaveChallengeSheet } from '@/components/challenge/LeaveChallengeSheet';
 import { LiveMuteSheet, publishLiveMuteControl } from '@/components/challenge/LiveMuteSheet';
 import { StartRollSheet } from '@/components/challenge/StartRollSheet';
@@ -27,7 +28,9 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
 import { canParticipantLeave } from '@/lib/challengeLeave';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
-import { canHostQuickEdit } from '@/lib/challengeStart';
+import { canHouseEditChallenge, canHostQuickEdit } from '@/lib/challengeStart';
+import { useOfficialOps } from '@/hooks/useOfficialOps';
+import { canHouseActOnChallenge } from '@/lib/officialOps';
 import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { asLiveMute, type LiveMute } from '@/lib/livePush';
@@ -53,6 +56,8 @@ export function useChallengeDetailOverflow() {
   const router = useRouter();
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const officialOpsQuery = useOfficialOps();
+  const officialOps = officialOpsQuery.data === true;
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
   const queryClient = useQueryClient();
@@ -64,6 +69,7 @@ export function useChallengeDetailOverflow() {
   const [menu, setMenu] = useState<MenuAnchor | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [houseAddOpen, setHouseAddOpen] = useState(false);
   const [muteOpen, setMuteOpen] = useState(false);
   const [rollDismissed, setRollDismissed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +82,11 @@ export function useChallengeDetailOverflow() {
   const myRow = roster.data?.find((row) => row.user_id === user?.id);
   const liveMute = asLiveMute(myRow?.live_mute);
   const canMute = Boolean(user?.id && myRow && isLiveCompetitor(myRow));
-  const canEdit = canHostQuickEdit({ challenge, viewerId: user?.id });
+  const canHostEdit = canHostQuickEdit({ challenge, viewerId: user?.id });
+  const canHouseEdit = canHouseEditChallenge({ challenge, officialOps });
+  const canEdit = canHostEdit || canHouseEdit;
+  const houseReady = officialOps;
+  const houseDisabled = !canHouseActOnChallenge(challenge);
   const canDetails = canEditOfficialDetails({ challenge, viewerId: user?.id, profile }) && !canEdit;
   const canTools = canOpenOfficialTools({ challenge, viewerId: user?.id, profile });
   const canCancel = canCancelChallenge({
@@ -87,8 +97,8 @@ export function useChallengeDetailOverflow() {
     rosterReady: roster.data != null,
   });
   const canLeave = canParticipantLeave({ challenge, joined });
-  const showOverflow = canEdit || canDetails || canTools || canCancel || canLeave || canMute;
-  const rollPending = Boolean(challenge?.start_roll_pending) && canEdit;
+  const showOverflow = canEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady;
+  const rollPending = Boolean(challenge?.start_roll_pending) && canHostEdit;
   const rollOpen = rollPending && !rollDismissed;
 
   const openMenu = useCallback((anchor: MenuAnchor) => {
@@ -188,7 +198,7 @@ export function useChallengeDetailOverflow() {
       },
     });
   }
-  if (canEdit) {
+  if (canHostEdit) {
     actions.push({
       key: 'tomorrow',
       label: copy('challenge.startTomorrow'),
@@ -203,6 +213,8 @@ export function useChallengeDetailOverflow() {
         });
       },
     });
+  }
+  if (canEdit) {
     actions.push({
       key: 'edit',
       label: copy('challenge.editChallenge'),
@@ -216,6 +228,18 @@ export function useChallengeDetailOverflow() {
             ? { editId: id, mode: 'advanced' }
             : { editId: id },
         });
+      },
+    });
+  }
+  if (houseReady) {
+    actions.push({
+      key: 'house-add',
+      section: copy('house.section'),
+      label: copy('house.addPerson'),
+      disabled: houseDisabled,
+      onPress: () => {
+        setError(null);
+        setHouseAddOpen(true);
       },
     });
   }
@@ -253,6 +277,8 @@ export function useChallengeDetailOverflow() {
     },
     closeCancel: () => setCancelOpen(false),
     leaveOpen,
+    houseAddOpen,
+    closeHouseAdd: () => setHouseAddOpen(false),
     closeLeave: () => setLeaveOpen(false),
     muteOpen,
     closeMute: () => setMuteOpen(false),
@@ -368,6 +394,14 @@ export function ChallengeDetailOverflowHost({
           error={overflow.leaveOpen ? overflow.error : null}
           onClose={overflow.closeLeave}
           onConfirm={overflow.confirmLeave}
+        />
+      ) : null}
+      {overflow.challenge ? (
+        <HouseAddPersonSheet
+          visible={overflow.houseAddOpen}
+          challengeId={overflow.challenge.id}
+          disabled={!canHouseActOnChallenge(overflow.challenge)}
+          onClose={overflow.closeHouseAdd}
         />
       ) : null}
       {overflow.challenge ? (

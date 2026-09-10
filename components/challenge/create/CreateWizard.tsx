@@ -31,6 +31,7 @@ import { RulesSlide } from '@/components/challenge/create/RulesSlide';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { ExtraTasksEditor, TaskFrequencyField } from '@/components/challenge/create/ExtraTasksEditor';
 import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
+import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { ComparablePointsEditor } from '@/components/challenge/create/comparablePoints/ComparablePointsEditor';
 import { ComparablePointsMethodCard } from '@/components/challenge/create/comparablePoints/ComparablePointsMethodCard';
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
@@ -2169,6 +2170,7 @@ function GoalSlide({
   onCoverChange: (url: string) => void;
   onCoverClear: () => void;
 }) {
+  const officialOps = useOfficialOps().data === true;
   const [privacyLockMessage, setPrivacyLockMessage] = useState<string | null>(null);
   const onTitleFocus = useWizardFieldFocus('title');
   const onDescriptionFocus = useWizardFieldFocus('description');
@@ -2289,6 +2291,7 @@ function GoalSlide({
           privacyMode={privacyMode}
           visibility={visibility}
           challengeLane={normalizeUserChallengeLane(challengeLane)}
+          officialOps={officialOps}
           participantCount={participantCount}
           error={errors.visibility?.message ?? errors.privacy_mode?.message ?? privacyLockMessage ?? undefined}
           onChange={(next) => {

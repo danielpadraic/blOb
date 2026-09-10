@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatStartMovedDate, startMovedBody } from '@/lib/challengeStart';
+import { canHouseEditChallenge, formatStartMovedDate, startMovedBody } from '@/lib/challengeStart';
+
+describe('House edit', () => {
+  it('lets official_ops edit a live challenge they do not host, not after settled', () => {
+    expect(canHouseEditChallenge({ challenge: { status: 'live' }, officialOps: true })).toBe(true);
+    expect(canHouseEditChallenge({ challenge: { status: 'live' }, officialOps: false })).toBe(false);
+    expect(canHouseEditChallenge({ challenge: { status: 'settled' }, officialOps: true })).toBe(false);
+  });
+});
 
 describe('start-rolled copy', () => {
   it('prints Sep 6 for a 7pm Denver start stored as Sep 7 UTC', () => {

@@ -81,7 +81,8 @@ import {
 import { simpleDraftFromStarter, starterFromCreateParams } from '@/lib/interestsMatch';
 import { milesToMeters } from '@/lib/distance';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
-import { canHostQuickEdit } from '@/lib/challengeStart';
+import { canHouseEditChallenge, canHostQuickEdit } from '@/lib/challengeStart';
+import { useOfficialOps } from '@/hooks/useOfficialOps';
 import {
   challengeScheduleTimezone,
   formatChallengeEndLine,
@@ -147,6 +148,8 @@ export function SimpleCreateForm() {
     [params.days, params.freq, params.src, params.template, params.title, params.vis],
   );
   const { user } = useAuth();
+  const officialOpsQuery = useOfficialOps();
+  const officialOps = officialOpsQuery.data === true;
   const { profile, refetch, isFetched } = useMyProfile();
   const walletSheet = useWalletOptional();
   const geo = useGeoCashOptional();
@@ -350,13 +353,19 @@ export function SimpleCreateForm() {
     if (hydratedEdit.current) {
       return;
     }
-    if (!canHostQuickEdit({ challenge: editing.data, viewerId: user?.id })) {
+    if (officialOpsQuery.isPending) {
+      return;
+    }
+    if (
+      !canHostQuickEdit({ challenge: editing.data, viewerId: user?.id }) &&
+      !canHouseEditChallenge({ challenge: editing.data, officialOps })
+    ) {
       setError(copy('challenge.notStarted'));
       return;
     }
     hydratedEdit.current = true;
     setDraft(simpleDraftFromChallenge(editing.data));
-  }, [editId, editing.data, returnTo, router, user?.id]);
+  }, [editId, editing.data, officialOps, officialOpsQuery.isPending, returnTo, router, user?.id]);
 
   useEffect(() => {
     if (funded !== '1' && draft.currency !== 'bucks') {
@@ -969,6 +978,7 @@ export function SimpleCreateForm() {
             privacyMode={draft.privacy_mode}
             visibility={draft.visibility === 'invite' ? 'invite' : draft.visibility}
             challengeLane="coins"
+            officialOps={officialOps}
             participantCount={editId ? editing.data?.participant_count ?? 0 : 0}
             onChange={(next) =>
               patch({

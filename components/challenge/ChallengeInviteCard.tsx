@@ -41,6 +41,7 @@ import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challen
 import { pushChallengeHref, pushCheckinSubmit } from '@/lib/challengeNav';
 import { BODY_METRICS_HREF, challengeHref } from '@/lib/routes';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
+import { isBlobCreatedOfficial, officialSponsorName } from '@/lib/challengeSponsor';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { challengeScheduleState, isLobbyEndedChallenge, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { copy } from '@/lib/copy';
@@ -524,7 +525,7 @@ export function ChallengeInviteCard({
               {resultLine}
             </AppText>
           ) : null}
-          {official ? (
+          {officialSponsorName(challenge) ? (
             <OfficialSponsorLine
               challenge={challenge}
               muted={THEME.textMuted}
@@ -549,7 +550,7 @@ export function ChallengeInviteCard({
                 {[vsLine, watchingLine].filter(Boolean).join(' · ')}
               </AppText>
             </View>
-          ) : host ? (
+          ) : host && !isBlobCreatedOfficial(challenge) ? (
             <View className="flex-row items-center" style={{ gap: 6, minHeight: 18 }}>
               {host.avatarUrl ? <Avatar uri={host.avatarUrl} name={hostLabel} size={16} /> : null}
               <AppText className="text-[11px]" style={{ color: THEME.textMuted }} numberOfLines={1}>
