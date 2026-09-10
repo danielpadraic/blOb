@@ -12,13 +12,12 @@ import { useCopyTone } from '@/hooks/useCopy';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useStalled } from '@/hooks/useStalled';
 import { reportAppError } from '@/lib/appErrors';
-import { blobAuthCallbackDeepLink, loginHrefWithAuthError } from '@/lib/authRedirect';
+import { blobAuthCallbackDeepLink, loginHrefWithAuthError, stripWebAuthCallbackUrl } from '@/lib/authRedirect';
 import { hasAuthCallbackPayload, parseAuthRedirectParams } from '@/lib/authRedirectParams';
 import { copy } from '@/lib/copy';
 import { nativeCallbackUrlFromParams, pickCanonicalAuthCallbackUrl } from '@/lib/oauthRedirect';
 import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
-import { supabase } from '@/lib/supabase';
 import { apexBlobUrl, canonicalizeWwwBlobHost } from '@/lib/webHost';
 import { getAuthCallbackMessage, getErrorMessage } from '@/utils/errors';
 
@@ -105,6 +104,7 @@ export default function AuthCallbackScreen() {
         if (cancelled) {
           return;
         }
+        stripWebAuthCallbackUrl();
         clearTimeout(timer);
         setExchanging(false);
         if (parsed.type === 'recovery') {
@@ -121,7 +121,7 @@ export default function AuthCallbackScreen() {
       .catch((error) => {
         const message = getAuthCallbackMessage(error) || copy('auth.confirmLinkBad');
         reportAppError({ route: 'auth/callback', error });
-        console.log('[blob:auth-callback]', message);
+        stripWebAuthCallbackUrl();
         if (!cancelled) {
           clearTimeout(timer);
           setExchanging(false);
@@ -148,14 +148,9 @@ export default function AuthCallbackScreen() {
 
   async function openBlob() {
     setOpenError(null);
-    const current = session ?? (await supabase.auth.getSession()).data.session;
-    const deepLink = blobAuthCallbackDeepLink(
-      current
-        ? { access_token: current.access_token, refresh_token: current.refresh_token }
-        : null,
-    );
+    stripWebAuthCallbackUrl();
     try {
-      await Linking.openURL(deepLink);
+      await Linking.openURL(blobAuthCallbackDeepLink());
     } catch (error) {
       setOpenError(getErrorMessage(error) || copy('auth.confirmLinkBad'));
     }

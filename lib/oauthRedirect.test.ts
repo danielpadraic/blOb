@@ -98,7 +98,14 @@ describe('isNativeOAuthCallbackUrl', () => {
     expect(nativeCallbackUrlFromParams({ code: 'abc' })).toBe('blob://auth/callback?code=abc');
     expect(
       nativeCallbackUrlFromParams({ token_hash: 'hash', type: 'recovery' }),
-    ).toBe('blob://auth/callback?token_hash=hash&type=recovery');
+    ).toBe('blob://auth/callback?type=recovery');
+    expect(
+      nativeCallbackUrlFromParams({
+        access_token: 'tok',
+        refresh_token: 'ref',
+        email: 'ada@blob.app',
+      }),
+    ).toBeNull();
     expect(nativeCallbackUrlFromParams({})).toBeNull();
   });
 

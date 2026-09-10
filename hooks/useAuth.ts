@@ -42,7 +42,7 @@ import {
   markPasswordRecoveryPending,
 } from '@/lib/passwordRecovery';
 import { GOOGLE_SIGN_IN_RETRY } from '@/lib/googleSignInConfig';
-import { emailAuthRedirectTo } from '@/lib/authRedirect';
+import { emailAuthRedirectTo, stripWebAuthCallbackUrl } from '@/lib/authRedirect';
 import { signInWithNativeGoogle } from '@/lib/googleNativeAuth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getErrorMessage } from '@/utils/errors';
@@ -112,15 +112,7 @@ function stripWebAuthHash() {
   if (Platform.OS !== 'web') {
     return;
   }
-  try {
-    if (typeof window === 'undefined' || !window.location.hash) {
-      return;
-    }
-    const next = `${window.location.pathname}${window.location.search}`;
-    window.history.replaceState(window.history.state, '', next);
-  } catch {
-    // Hash cleanup is best-effort on web.
-  }
+  stripWebAuthCallbackUrl();
 }
 
 type AuthContextValue = {

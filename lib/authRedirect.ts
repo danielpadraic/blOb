@@ -124,18 +124,41 @@ export function authRedirectUrl(): string | null {
   return emailAuthRedirectTo();
 }
 
-export function blobAuthCallbackDeepLink(session?: {
+/** Native already has SecureStore once setSession ran on that device. Never put bearer tokens in the URL. */
+export function blobAuthCallbackDeepLink(_session?: {
   access_token: string;
   refresh_token?: string | null;
 } | null): string {
-  if (!session?.access_token) {
-    return NATIVE_EMAIL_CALLBACK;
+  return NATIVE_EMAIL_CALLBACK;
+}
+
+const WEB_AUTH_QUERY_KEYS = new Set([
+  'code',
+  'access_token',
+  'refresh_token',
+  'token_hash',
+  'token',
+  'email',
+  'type',
+]);
+
+/** After exchange, keep pathname only. Tokens and email must not stay in history. */
+export function stripWebAuthCallbackUrl(): void {
+  try {
+    if (typeof window === 'undefined' || !window.location) {
+      return;
+    }
+    const { pathname, search, hash } = window.location;
+    if (!search && !hash) {
+      return;
+    }
+    const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+    const hasAuthQuery = [...params.keys()].some((key) => WEB_AUTH_QUERY_KEYS.has(key));
+    if (!hasAuthQuery && !hash) {
+      return;
+    }
+    window.history.replaceState(window.history.state, '', pathname);
+  } catch {
+    // URL cleanup is best-effort on web.
   }
-  const hash = new URLSearchParams();
-  hash.set('access_token', session.access_token);
-  if (session.refresh_token) {
-    hash.set('refresh_token', session.refresh_token);
-  }
-  hash.set('type', 'signup');
-  return `${NATIVE_EMAIL_CALLBACK}#${hash.toString()}`;
 }

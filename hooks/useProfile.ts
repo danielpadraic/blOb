@@ -112,12 +112,7 @@ export function useProfile(userId?: string) {
     retry: isSelf ? false : 1,
     queryFn: async (): Promise<Profile | PublicProfile | null> => {
       if (isSelf) {
-        const profile = await fetchCurrentUserProfile(id!);
-        console.log('[blob:profile] query result', {
-          userId: id,
-          profile,
-        });
-        return profile;
+        return fetchCurrentUserProfile(id!);
       }
 
       const profile = await fetchPublicProfileById(id!);
@@ -149,33 +144,11 @@ export function useMyProfile() {
   }
 
   useEffect(() => {
-    if (path === 'boot') {
-      console.log('[blob:gate] still checking', {
-        authLoading,
-        hasSession: Boolean(session),
-        profileFetched: query.isFetched,
-      });
+    if (!__DEV__) {
       return;
     }
-
-    console.log('[blob:session]', session
-      ? { id: session.user.id, email: session.user.email }
-      : null);
-    console.log('[blob:profile]', {
-      status: query.status,
-      profile,
-      error: query.error?.message ?? null,
-    });
-    console.log('[blob:gate] path', path);
-  }, [
-    authLoading,
-    path,
-    profile,
-    query.error,
-    query.isFetched,
-    query.status,
-    session,
-  ]);
+    console.log('[blob:gate]', { path, authLoading, hasSession: Boolean(session) });
+  }, [authLoading, path, session]);
 
   return {
     ...query,

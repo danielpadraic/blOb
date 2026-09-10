@@ -35,7 +35,7 @@ const RPC_MESSAGES: Record<string, string> = {
   LMS_REQUIRES_CONSISTENCY: 'Last Man Standing only works with a consistency challenge.',
   FULL_LOBBY_REQUIRES_MAX: 'A full-lobby start needs a max number of competitors.',
   INSUFFICIENT_FUNDS: 'Not enough in your wallet to participate.',
-  NOT_HOST: 'Only the host can add to the prize.',
+  NOT_HOST: 'Only the host can do that.',
   INVALID_AMOUNT: 'Enter an amount to add.',
   LEAVE_NOT_ALLOWED: 'You can’t leave after this Skill Tournament is live.',
   PROFILE_NOT_FOUND: 'Finish setting up your profile first.',

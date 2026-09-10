@@ -10,15 +10,39 @@ type Body = {
   cancel_url?: string;
 };
 
-function json(status: number, payload: Record<string, unknown>, extra?: HeadersInit) {
+const ALLOWED_RETURN_HOSTS = new Set(['blob.mobi', 'www.blob.mobi']);
+
+function corsOrigin(req: Request): string {
+  const origin = req.headers.get('Origin') ?? '';
+  try {
+    const url = new URL(origin);
+    if (url.protocol === 'https:' && ALLOWED_RETURN_HOSTS.has(url.hostname)) {
+      return origin;
+    }
+    if (url.protocol === 'blob:') {
+      return origin;
+    }
+  } catch {
+    // Native callers often send no Origin.
+  }
+  return '';
+}
+
+function json(status: number, payload: Record<string, unknown>, req?: Request, extra?: HeadersInit) {
+  const origin = req ? corsOrigin(req) : '';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    ...(extra as Record<string, string> | undefined),
+  };
+  if (origin) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Vary'] = 'Origin';
+  }
   return new Response(JSON.stringify(payload), {
     status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      ...extra,
-    },
+    headers,
   });
 }
 
@@ -29,10 +53,13 @@ function dollarsToCents(amount: number): number {
 function isAllowedReturnUrl(value: string): boolean {
   try {
     const url = new URL(value.replace('{CHECKOUT_SESSION_ID}', 'cs_test'));
-    if (['javascript:', 'data:', 'file:', 'vbscript:'].includes(url.protocol)) {
+    if (url.protocol === 'blob:') {
+      return true;
+    }
+    if (url.protocol !== 'https:') {
       return false;
     }
-    return url.protocol.endsWith(':') && Boolean(url.host || url.pathname);
+    return ALLOWED_RETURN_HOSTS.has(url.hostname);
   } catch {
     return false;
   }
@@ -107,27 +134,27 @@ async function createCheckoutSession(input: {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return json(200, { ok: true });
+    return json(200, { ok: true }, req);
   }
   if (req.method !== 'POST') {
-    return json(405, { error: 'UNAVAILABLE' });
+    return json(405, { error: 'UNAVAILABLE' }, req);
   }
 
   try {
     const userId = await userIdFromRequest(req);
     if (!userId) {
-      return json(401, { error: 'NOT_AUTHENTICATED' });
+      return json(401, { error: 'NOT_AUTHENTICATED' }, req);
     }
 
     const input = (await req.json()) as Body;
     const creditCents = dollarsToCents(Number(input.amount));
     if (!Number.isFinite(creditCents) || creditCents < MIN_CENTS || creditCents > MAX_CENTS) {
-      return json(400, { error: 'AMOUNT_LIMIT' });
+      return json(400, { error: 'AMOUNT_LIMIT' }, req);
     }
     const successUrl = String(input.success_url ?? '');
     const cancelUrl = String(input.cancel_url ?? '');
     if (!isAllowedReturnUrl(successUrl) || !isAllowedReturnUrl(cancelUrl)) {
-      return json(400, { error: 'UNAVAILABLE' });
+      return json(400, { error: 'UNAVAILABLE' }, req);
     }
 
     const supabase = serviceClient();
@@ -147,7 +174,7 @@ Deno.serve(async (req) => {
       0,
     );
     if (usedCents + creditCents > DAILY_MAX_CENTS) {
-      return json(400, { error: 'DAILY_LIMIT' });
+      return json(400, { error: 'DAILY_LIMIT' }, req);
     }
 
     const session = await createCheckoutSession({
@@ -181,7 +208,7 @@ Deno.serve(async (req) => {
         creditAmount: amount,
         chargeAmount: amount,
       },
-    });
+    }, req);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNAVAILABLE';
     const code = message.includes('DAILY')
@@ -190,6 +217,6 @@ Deno.serve(async (req) => {
         ? 'AMOUNT_LIMIT'
         : 'UNAVAILABLE';
     console.error('[create-top-up]', message);
-    return json(400, { error: code });
+    return json(400, { error: code }, req);
   }
 });

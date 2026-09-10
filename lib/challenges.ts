@@ -1799,7 +1799,17 @@ export async function applyChallengeStart(
     p_starts_at: startsAt,
     p_mode: mode,
   });
-  console.log('[blob:start-roll]', { challengeId, startsAt, mode, data, error });
+  if (__DEV__) {
+    const message =
+      error && typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message?: unknown }).message ?? '')
+        : '';
+    const code =
+      error && typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+    console.log('[blob:start-roll]', { challengeId, startsAt, mode, code, message });
+  }
   if (error) {
     logPostgrestError('start-roll', error);
     throw new Error(getStartUpdateMessage(error));
@@ -1816,7 +1826,17 @@ export async function nudgeChallengeStart(challengeId: string): Promise<Challeng
   const { data, error } = await supabase.rpc('nudge_challenge_start', {
     p_challenge_id: challengeId,
   });
-  console.log('[blob:start-nudge]', { challengeId, data, error });
+  if (__DEV__) {
+    const message =
+      error && typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message?: unknown }).message ?? '')
+        : '';
+    const code =
+      error && typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+    console.log('[blob:start-nudge]', { challengeId, code, message });
+  }
   if (error) {
     logPostgrestError('start-nudge', error);
     throw new Error(getStartUpdateMessage(error));

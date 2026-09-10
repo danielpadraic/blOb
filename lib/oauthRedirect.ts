@@ -49,11 +49,6 @@ export function nativeCallbackUrlFromParams(params: {
   const query = new URLSearchParams();
   for (const key of [
     'code',
-    'access_token',
-    'refresh_token',
-    'token_hash',
-    'token',
-    'email',
     'type',
     'error',
     'error_description',

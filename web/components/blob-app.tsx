@@ -1054,7 +1054,9 @@ function CheckInScreen({ challengeId, userId }: { challengeId: string; userId: s
     setChallenge((ch.data as ChallengeRow | null) ?? null);
     const rows = await supabase
       .from('challenge_checkins')
-      .select('*')
+      .select(
+        'id, user_id, challenge_id, period_key, status, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, health_workout_id, workout_submission_id, started_at, submitted_at, created_at, updated_at',
+      )
       .eq('challenge_id', challengeId)
       .eq('user_id', userId)
       .order('period_key', { ascending: false })

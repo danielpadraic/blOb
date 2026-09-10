@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
 const SENSITIVE =
-  /token|password|secret|authorization|apikey|api_key|refresh|jwt|body_fat|weight|height_cm|fitness_profile|current_weight|goal_weight/i;
+  /token|password|secret|authorization|apikey|api_key|refresh|jwt|body_fat|weight|height_cm|fitness_profile|current_weight|goal_weight|email|phone|date_of_birth|address|postal|zip|display_name|location_lat|location_lng|profile|session/i;
 
 function asRecord(error: unknown): Record<string, unknown> | null {
   if (!error || typeof error !== 'object') {
@@ -92,8 +92,12 @@ export function reportAppError(input: ReportAppErrorInput): void {
         lastAppErrorCode = code;
       }
       const message = (input.message ?? extractMessage(input.error)).slice(0, 500);
+      const rawPayload = { ...(input.payload ?? {}) };
+      delete rawPayload.profile;
+      delete rawPayload.session;
+      delete rawPayload.user;
       const payload = scrubValue({
-        ...(input.payload ?? {}),
+        ...rawPayload,
         details: asRecord(input.error)?.details ?? null,
         hint: asRecord(input.error)?.hint ?? null,
       });

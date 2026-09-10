@@ -11,6 +11,7 @@ import {
   loginHrefWithAuthError,
   registerHrefWithForm,
   registerStartsOnForm,
+  stripWebAuthCallbackUrl,
 } from '@/lib/authRedirect';
 
 const ENV_KEY = 'EXPO_PUBLIC_AUTH_REDIRECT_URL';
@@ -119,6 +120,37 @@ describe('emailAuthRedirectTo', () => {
     expect(blobAuthCallbackDeepLink(null)).toBe('blob://auth/callback');
     expect(
       blobAuthCallbackDeepLink({ access_token: 'tok', refresh_token: 'ref' }),
-    ).toBe('blob://auth/callback#access_token=tok&refresh_token=ref&type=signup');
+    ).toBe('blob://auth/callback');
+  });
+
+  it('strips auth query and hash from the web address bar', () => {
+    const previousWindow = (globalThis as { window?: unknown }).window;
+    const calls: string[] = [];
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: {
+          location: {
+            pathname: '/auth/callback',
+            search: '?code=abc&email=ada%40blob.app',
+            hash: '#access_token=tok',
+          },
+          history: {
+            state: {},
+            replaceState: (_s: unknown, _t: string, url: string) => {
+              calls.push(url);
+            },
+          },
+        },
+      });
+      stripWebAuthCallbackUrl();
+      expect(calls).toEqual(['/auth/callback']);
+    } finally {
+      if (previousWindow === undefined) {
+        Reflect.deleteProperty(globalThis, 'window');
+      } else {
+        Object.defineProperty(globalThis, 'window', { configurable: true, value: previousWindow });
+      }
+    }
   });
 });

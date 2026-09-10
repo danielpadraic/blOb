@@ -3,6 +3,9 @@ import { AppState, Platform } from 'react-native';
 import { webCameraVideoConstraints, type CameraFovKind } from '@/lib/cameraFov';
 
 export function logCameraError(error: unknown, extra?: string) {
+  if (!__DEV__) {
+    return;
+  }
   const name =
     error && typeof error === 'object' && 'name' in error
       ? String((error as { name?: string }).name)
@@ -11,7 +14,11 @@ export function logCameraError(error: unknown, extra?: string) {
     error && typeof error === 'object' && 'message' in error
       ? String((error as { message?: string }).message)
       : String(error ?? '');
-  console.log('[blob:camera]', extra ?? '', name, message, error);
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: string }).code ?? '')
+      : '';
+  console.log('[blob:camera]', extra ?? '', name, message, code);
 }
 
 export function cameraErrorKind(error: unknown): 'denied' | 'missing' | 'other' {
