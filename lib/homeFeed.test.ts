@@ -5,7 +5,9 @@ import {
   HOME_PAGE_MIN,
   HOME_PAGE_SIZE,
   HOME_RAW_WINDOW,
+  asIdSet,
   filterHomeFeedPosts,
+  homeFeedAllowsPost,
   homeFeedCursorFrom,
   homeFeedEmptyPhase,
   homeFeedFirstPaintLoading,
@@ -123,6 +125,45 @@ describe('home feed pages', () => {
     expect(
       filterHomeFeedPosts(raw.slice(0, 4), ctx({ friends, blocked: new Set(['blocked-user']) })),
     ).toEqual([]);
+  });
+});
+
+describe('asIdSet', () => {
+  it('keeps a real Set of ids and does not empty it', () => {
+    const kept = asIdSet(new Set(['friend', 'hidden-post']));
+    expect(kept.has('friend')).toBe(true);
+    expect(kept.has('hidden-post')).toBe(true);
+    expect(kept.size).toBe(2);
+  });
+
+  it('reads FriendEdge[] as the other person, not the viewer or friendship id', () => {
+    const ids = asIdSet(
+      [
+        {
+          id: 'friendship-row',
+          user_a_id: 'me',
+          user_b_id: 'courtney',
+        },
+      ],
+      'me',
+    );
+    expect([...ids]).toEqual(['courtney']);
+  });
+
+  it('does not throw .has when hidden or friends is an array', () => {
+    const hiddenArr = ['secret'] as unknown as Set<string>;
+    const friendEdges = [
+      { id: 'edge', user_a_id: 'me', user_b_id: 'friend' },
+    ] as unknown as Set<string>;
+    expect(() =>
+      homeFeedAllowsPost(post('ok'), ctx({ hidden: hiddenArr, friends: friendEdges })),
+    ).not.toThrow();
+    expect(homeFeedAllowsPost(post('secret', { author_id: 'friend' }), ctx({ hidden: hiddenArr }))).toBe(
+      false,
+    );
+    expect(
+      homeFeedAllowsPost(post('ok'), ctx({ friends: friendEdges })),
+    ).toBe(true);
   });
 });
 

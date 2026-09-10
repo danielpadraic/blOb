@@ -95,6 +95,8 @@ import {
   HOME_PAGE_SIZE,
   HOME_QUERY_TYPE_OR,
   HOME_RAW_WINDOW,
+  asHomeFeedAllowContext,
+  asIdSet,
   circleFofCandidateIds,
   filterHomeFeedPosts,
   homeFeedCursorFrom,
@@ -758,7 +760,8 @@ function viewerCanSeeProfilePost(
     hidden: Set<string>;
   },
 ): boolean {
-  if (input.hidden.has(post.id)) {
+  const hidden = asIdSet(input.hidden);
+  if (hidden.has(post.id)) {
     return false;
   }
   if (post.hidden_from_home && post.author_id !== input.viewerId) {
@@ -844,7 +847,11 @@ async function friendIdsForUser(userId: string): Promise<string[]> {
       queryFn: () => fetchFriends(userId),
       staleTime: 30_000,
     });
-    return friendIdsFromEdges(userId, edges);
+    const fromEdges = asIdSet(edges, userId);
+    if (fromEdges.size > 0) {
+      return [...fromEdges];
+    }
+    return friendIdsFromEdges(userId, Array.isArray(edges) ? edges : []);
   } catch (error) {
     console.log(
       '[blob:feed] friends lookup failed',
@@ -1100,14 +1107,14 @@ async function fetchHomeFeedPage(input: {
   const schema = await resolvePostsSchema();
   const authorIds = [...new Set([input.userId, ...base.friendIds, ...base.officialIds, ...base.recommendedIds])];
   const wallHostIds = [...new Set([input.userId, ...base.friendIds])];
-  const friends = new Set(base.friendIds);
-  const official = new Set(base.officialIds);
-  const recommended = new Set(base.recommendedIds);
-  const challengeIdSet = new Set(base.challengeIds);
-  const circleIdSet = new Set(base.circleIds);
-  const hidden = new Set(base.hiddenIds);
-  const muted = new Set(base.mutedIds);
-  const blocked = new Set(base.blockedIds);
+  const friends = asIdSet(base.friendIds, input.userId);
+  const official = asIdSet(base.officialIds);
+  const recommended = asIdSet(base.recommendedIds);
+  const challengeIdSet = asIdSet(base.challengeIds);
+  const circleIdSet = asIdSet(base.circleIds);
+  const hidden = asIdSet(base.hiddenIds);
+  const muted = asIdSet(base.mutedIds);
+  const blocked = asIdSet(base.blockedIds);
 
   let cursor = input.cursor;
   let scanned: PostWithMeta[] = [];
@@ -1157,7 +1164,7 @@ async function fetchHomeFeedPage(input: {
     } catch (error) {
       console.log('[blob:feed]', rawFeedError(error));
     }
-    const allow: HomeFeedAllowContext = {
+    const allow: HomeFeedAllowContext = asHomeFeedAllowContext({
       viewerId: input.userId,
       hidden,
       muted,
@@ -1167,9 +1174,9 @@ async function fetchHomeFeedPage(input: {
       recommended,
       challengeIds: challengeIdSet,
       circleIds: circleIdSet,
-      corporateIds,
-      fofAuthors,
-    };
+      corporateIds: asIdSet(corporateIds),
+      fofAuthors: asIdSet(fofAuthors, input.userId),
+    });
     const filtered = filterHomeFeedPosts(preview, allow);
     const visible = takeHomeVisiblePage(filtered, input.seenIds);
     if (visible.length >= HOME_PAGE_SIZE || !hasMore) {
@@ -1205,7 +1212,7 @@ async function fetchHomeFeedPage(input: {
   } catch {
     fofAuthors = new Set();
   }
-  const allow: HomeFeedAllowContext = {
+  const allow: HomeFeedAllowContext = asHomeFeedAllowContext({
     viewerId: input.userId,
     hidden,
     muted,
@@ -1215,9 +1222,9 @@ async function fetchHomeFeedPage(input: {
     recommended,
     challengeIds: challengeIdSet,
     circleIds: circleIdSet,
-    corporateIds,
-    fofAuthors,
-  };
+    corporateIds: asIdSet(corporateIds),
+    fofAuthors: asIdSet(fofAuthors, input.userId),
+  });
   const filtered = filterHomeFeedPosts(preview, allow);
   const visible = takeHomeVisiblePage(filtered, input.seenIds);
   const page = first ? visible : await hydrateAuthors(visible);
@@ -1540,11 +1547,11 @@ export function useAuthorFeed(authorId?: string | null) {
         user?.id ? fetchMutedUserIds(user.id) : Promise.resolve([] as string[]),
         user?.id ? fetchBlockedUserIds(user.id) : Promise.resolve([] as string[]),
       ]);
-      const hidden = new Set(hiddenIds);
-      const friends = new Set(friendIds);
-      const official = new Set(officialIds);
+      const hidden = asIdSet(hiddenIds);
+      const friends = asIdSet(friendIds, user?.id);
+      const official = asIdSet(officialIds);
       // A muted or blocked author stays out of every wall, not just Home.
-      const silenced = new Set([...mutedIds, ...blockedIds]);
+      const silenced = asIdSet([...asIdSet(mutedIds), ...asIdSet(blockedIds)]);
       const visible = rows.filter(
         (post) =>
           !silenced.has(post.author_id) &&

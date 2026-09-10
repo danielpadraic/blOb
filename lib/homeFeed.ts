@@ -80,6 +80,79 @@ export type HomeFeedAllowContext = {
   fofAuthors: Set<string>;
 };
 
+/**
+ * Home / profile allow lists. Friends cache is FriendEdge[] (`['friends', userId]`).
+ * Never call `.has` on the raw value — arrays have no `.has`.
+ * FriendEdge → the other person, not the viewer, not the friendship row id.
+ */
+export function asIdSet(input: unknown, viewerId?: string | null): Set<string> {
+  if (input instanceof Set) {
+    return new Set([...input].map(String).filter(Boolean));
+  }
+  if (!Array.isArray(input)) {
+    return new Set();
+  }
+  const ids: string[] = [];
+  const viewer = typeof viewerId === 'string' ? viewerId : '';
+  for (const row of input) {
+    if (typeof row === 'string' && row) {
+      ids.push(row);
+      continue;
+    }
+    if (!row || typeof row !== 'object') {
+      continue;
+    }
+    const rec = row as Record<string, unknown>;
+    const userA = rec.user_a_id;
+    const userB = rec.user_b_id;
+    if (typeof userA === 'string' && userA && typeof userB === 'string' && userB) {
+      if (viewer && (userA === viewer || userB === viewer)) {
+        ids.push(userA === viewer ? userB : userA);
+      } else {
+        ids.push(userA, userB);
+      }
+      continue;
+    }
+    const nested =
+      rec.profile && typeof rec.profile === 'object'
+        ? (rec.profile as { id?: unknown }).id
+        : undefined;
+    const id =
+      rec.id ??
+      rec.user_id ??
+      rec.friend_id ??
+      rec.other_user_id ??
+      rec.following_id ??
+      rec.follower_id ??
+      rec.blocked_id ??
+      rec.post_id ??
+      rec.muted_user_id ??
+      rec.challenge_id ??
+      rec.circle_id ??
+      nested;
+    if (typeof id === 'string' && id) {
+      ids.push(id);
+    }
+  }
+  return new Set(ids);
+}
+
+export function asHomeFeedAllowContext(ctx: HomeFeedAllowContext): HomeFeedAllowContext {
+  return {
+    viewerId: String(ctx.viewerId ?? ''),
+    hidden: asIdSet(ctx.hidden),
+    muted: asIdSet(ctx.muted),
+    blocked: asIdSet(ctx.blocked),
+    friends: asIdSet(ctx.friends, ctx.viewerId),
+    official: asIdSet(ctx.official),
+    recommended: asIdSet(ctx.recommended),
+    challengeIds: asIdSet(ctx.challengeIds),
+    circleIds: asIdSet(ctx.circleIds),
+    corporateIds: asIdSet(ctx.corporateIds),
+    fofAuthors: asIdSet(ctx.fofAuthors),
+  };
+}
+
 export type HomeFeedEmptyPhase = 'shimmer' | 'error' | 'empty' | 'ready';
 
 export function homeFeedFirstPaintLoading(input: {
@@ -215,6 +288,16 @@ export function isBeforeHomeCursor(
 
 /** Privacy / hide / block / wave-round. Empty after this is empty — never fall back to raw merge. */
 export function homeFeedAllowsPost(post: HomeFeedPost, ctx: HomeFeedAllowContext): boolean {
+  const hidden = asIdSet(ctx.hidden);
+  const muted = asIdSet(ctx.muted);
+  const blocked = asIdSet(ctx.blocked);
+  const friends = asIdSet(ctx.friends, ctx.viewerId);
+  const official = asIdSet(ctx.official);
+  const recommended = asIdSet(ctx.recommended);
+  const challengeIds = asIdSet(ctx.challengeIds);
+  const circleIds = asIdSet(ctx.circleIds);
+  const corporateIds = asIdSet(ctx.corporateIds);
+  const fofAuthors = asIdSet(ctx.fofAuthors);
   const userId = ctx.viewerId;
   if (post.circle_id) {
     if (
@@ -225,9 +308,9 @@ export function homeFeedAllowsPost(post: HomeFeedPost, ctx: HomeFeedAllowContext
         visibility: post.circle?.visibility,
         authorId: post.author_id,
         viewerId: userId,
-        viewerIsMember: ctx.circleIds.has(post.circle_id),
-        friendsWithAuthor: ctx.friends.has(post.author_id),
-        friendsOfFriendsWithAuthor: ctx.fofAuthors.has(post.author_id),
+        viewerIsMember: circleIds.has(post.circle_id),
+        friendsWithAuthor: friends.has(post.author_id),
+        friendsOfFriendsWithAuthor: fofAuthors.has(post.author_id),
       })
     ) {
       return false;
@@ -241,16 +324,16 @@ export function homeFeedAllowsPost(post: HomeFeedPost, ctx: HomeFeedAllowContext
   if (post.source === 'challenge') {
     return false;
   }
-  if (post.challenge_id && ctx.corporateIds.has(post.challenge_id)) {
+  if (post.challenge_id && corporateIds.has(post.challenge_id)) {
     return false;
   }
-  if (ctx.hidden.has(post.id)) {
+  if (hidden.has(post.id)) {
     return false;
   }
-  if (post.author_id !== userId && ctx.muted.has(post.author_id) && !ctx.official.has(post.author_id)) {
+  if (post.author_id !== userId && muted.has(post.author_id) && !official.has(post.author_id)) {
     return false;
   }
-  if (post.author_id !== userId && ctx.blocked.has(post.author_id)) {
+  if (post.author_id !== userId && blocked.has(post.author_id)) {
     return false;
   }
   const circleHomePass = Boolean(post.circle_id);
@@ -261,39 +344,41 @@ export function homeFeedAllowsPost(post: HomeFeedPost, ctx: HomeFeedAllowContext
       authorId: post.author_id,
       audience: post.audience,
       audienceUserIds: post.audience_user_ids,
-      friendsWithAuthor: ctx.friends.has(post.author_id),
-      officialAuthor: ctx.official.has(post.author_id),
+      friendsWithAuthor: friends.has(post.author_id),
+      officialAuthor: official.has(post.author_id),
       wallHostId: post.wall_host_id,
     })
   ) {
     return false;
   }
-  if (ctx.official.has(post.author_id) || post.author_id === userId || ctx.friends.has(post.author_id)) {
+  if (official.has(post.author_id) || post.author_id === userId || friends.has(post.author_id)) {
     return true;
   }
-  if (post.wall_host_id && (post.wall_host_id === userId || ctx.friends.has(post.wall_host_id))) {
+  if (post.wall_host_id && (post.wall_host_id === userId || friends.has(post.wall_host_id))) {
     return asPostAudience(post.audience) === 'public' || post.wall_host_id === userId;
   }
-  if (post.challenge_id && ctx.challengeIds.has(post.challenge_id)) {
+  if (post.challenge_id && challengeIds.has(post.challenge_id)) {
     return true;
   }
   if (post.circle_id) {
     return true;
   }
-  if (ctx.recommended.has(post.author_id)) {
+  if (recommended.has(post.author_id)) {
     return asPostAudience(post.audience) === 'public';
   }
   return false;
 }
 
 export function filterHomeFeedPosts<T extends HomeFeedPost>(posts: T[], ctx: HomeFeedAllowContext): T[] {
-  return posts.filter((post) => homeFeedAllowsPost(post, ctx));
+  return posts.filter((post) => homeFeedAllowsPost(post, asHomeFeedAllowContext(ctx)));
 }
 
 export function circleFofCandidateIds<T extends HomeFeedPost>(
   posts: T[],
   ctx: Pick<HomeFeedAllowContext, 'viewerId' | 'friends' | 'circleIds'>,
 ): string[] {
+  const friends = asIdSet(ctx.friends, ctx.viewerId);
+  const circleIds = asIdSet(ctx.circleIds);
   return [
     ...new Set(
       posts
@@ -301,7 +386,7 @@ export function circleFofCandidateIds<T extends HomeFeedPost>(
           if (!post.circle_id || post.author_id === ctx.viewerId) {
             return false;
           }
-          if (ctx.circleIds.has(post.circle_id) || ctx.friends.has(post.author_id)) {
+          if (circleIds.has(post.circle_id) || friends.has(post.author_id)) {
             return false;
           }
           return asCircleVisibility(post.circle?.visibility) === 'friends_of_friends';
