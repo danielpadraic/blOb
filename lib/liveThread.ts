@@ -220,6 +220,8 @@ export const REPLY_SWIPE_MAX = 72;
 export type LiveBackGestureOptions = {
   gestureEnabled: boolean;
   fullScreenGestureEnabled: false;
+  /** Live owns the composer inset. Do not also let the stack lift the scene. */
+  keyboardHandlingEnabled: boolean;
 };
 
 /** Live keeps swipe-to-reply. Overview/Board keep a normal stack back. */
@@ -227,6 +229,7 @@ export function liveScreenBackGesture(liveFocused: boolean): LiveBackGestureOpti
   return {
     gestureEnabled: !liveFocused,
     fullScreenGestureEnabled: false,
+    keyboardHandlingEnabled: !liveFocused,
   };
 }
 

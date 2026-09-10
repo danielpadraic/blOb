@@ -20,7 +20,9 @@ import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
 import type { LiftSessionSummary } from '@/lib/lift/types';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
-import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
+import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
+import { liveComposerInset, liveComposerKeyboardOpen } from '@/lib/liveComposerInset';
+import { setLiveComposerKeyboardOpen } from '@/lib/liveComposerKeyboard';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useEditPost } from '@/hooks/usePostEdit';
@@ -159,9 +161,17 @@ export function LiveThread({
   onCompose,
   onReact,
 }: LiveThreadProps) {
-  const keyboardOverlap = useKeyboardOverlap();
-  // Safari chrome is a small occlusion. Only a real keyboard should lift the composer.
-  const keyboardOpen = keyboardOverlap > 100;
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardOpen = liveComposerKeyboardOpen(keyboardHeight);
+  useEffect(() => {
+    const liveKeys = Boolean(focused && keyboardOpen);
+    setLiveComposerKeyboardOpen(liveKeys);
+    return () => {
+      if (liveKeys) {
+        setLiveComposerKeyboardOpen(false);
+      }
+    };
+  }, [focused, keyboardOpen]);
   const social = useSocialSheetsOptional();
   const editPost = useEditPost();
   const listRef = useRef<FlatList<LiveThreadRow>>(null);
@@ -845,7 +855,12 @@ export function LiveThread({
     [collapseComposer, emptyBody, emptyTitle],
   );
 
-  const composerPad = keyboardOpen ? 0 : Math.max(footerReserve, 0);
+  const composerPad = liveComposerInset({
+    keyboardHeight,
+    closedPad: Math.max(footerReserve, 0),
+    layoutAlreadyAvoidsKeyboard: Platform.OS === 'android',
+  });
+  const composerHRef = useRef(0);
 
   return (
     <View
@@ -853,7 +868,6 @@ export function LiveThread({
         flex: 1,
         minHeight: 0,
         backgroundColor: THEME.background,
-        marginBottom: keyboardOpen ? keyboardOverlap : 0,
       }}>
       {showBootSpinner ? (
         <MascotState kind="loading" title={loadingTitle ?? 'Loading Live'} compact />
@@ -877,6 +891,7 @@ export function LiveThread({
           renderItem={renderItem}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
+          automaticallyAdjustKeyboardInsets={false}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -1009,6 +1024,16 @@ export function LiveThread({
 
       {canCompose ? (
         <View
+          onLayout={(event) => {
+            const next = event.nativeEvent.layout.height;
+            if (next === composerHRef.current) {
+              return;
+            }
+            composerHRef.current = next;
+            if (atEndRef.current) {
+              pinToLiveEdge(false, 'composer-open');
+            }
+          }}
           style={{
             borderTopWidth: 1,
             borderTopColor: THEME.border,
@@ -1077,7 +1102,8 @@ export function LiveThread({
             memberIds={memberIds}
             draftKey={`live:${readCursorChallengeId || composeSource}`}
             initialText={editing ? liveEditPrefill(editing) : undefined}
-            replyTo={editing ? null : replyTo?.mention}
+            // Quote chip is the reply. Never seed @.
+            replyTo={null}
             onExpandedChange={setComposerOpen}
             onSubmit={async (content, mentionedUserIds) => {
               try {

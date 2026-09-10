@@ -166,10 +166,12 @@ describe('liveScreenBackGesture', () => {
     expect(liveScreenBackGesture(true)).toEqual({
       gestureEnabled: false,
       fullScreenGestureEnabled: false,
+      keyboardHandlingEnabled: false,
     });
     expect(liveScreenBackGesture(false)).toEqual({
       gestureEnabled: true,
       fullScreenGestureEnabled: false,
+      keyboardHandlingEnabled: true,
     });
   });
 
@@ -197,10 +199,12 @@ describe('liveScreenBackGesture', () => {
     expect(live.setOptions).toHaveBeenCalledWith({
       gestureEnabled: false,
       fullScreenGestureEnabled: false,
+      keyboardHandlingEnabled: false,
     });
     expect(challenges.setOptions).toHaveBeenCalledWith({
       gestureEnabled: false,
       fullScreenGestureEnabled: false,
+      keyboardHandlingEnabled: false,
     });
     expect(tabs.setOptions).not.toHaveBeenCalled();
   });

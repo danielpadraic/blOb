@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { usePathname, useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
@@ -7,6 +8,7 @@ import { ComposeTabButton } from '@/components/navigation/ComposeTabButton';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
 import { Avatar } from '@/components/ui/Avatar';
+import { isLiveComposerKeyboardOpen, subscribeLiveComposerKeyboard } from '@/lib/liveComposerKeyboard';
 import { useMyInterests, interestRoomStates } from '@/hooks/useInterests';
 import { useMyProfile } from '@/hooks/useProfile';
 import { roomsNeedYouDot } from '@/lib/interests';
@@ -29,7 +31,9 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
   const insets = useSafeAreaInsets();
   const tour = useTourOptional();
   const tourLocked = Boolean(tour?.active);
-  const tabBottom = Math.max(insets.bottom, 10);
+  const [liveKeys, setLiveKeys] = useState(isLiveComposerKeyboardOpen);
+  useEffect(() => subscribeLiveComposerKeyboard(() => setLiveKeys(isLiveComposerKeyboardOpen())), []);
+  const tabBottom = liveKeys ? 0 : Math.max(insets.bottom, 10);
   const active = activeTab(pathname);
 
   function go(href: '/feed' | typeof LOBBY_HREF | '/friends' | '/profile') {
@@ -69,12 +73,14 @@ export function BlobTabBar({ composeOpen = false, onToggleCompose, onTabPress }:
 
   return (
     <View
-      pointerEvents="box-none"
+      pointerEvents={liveKeys ? 'none' : 'box-none'}
       style={{
         paddingHorizontal: 10,
         paddingBottom: tabBottom,
-        paddingTop: 18,
-        marginTop: -18,
+        paddingTop: liveKeys ? 0 : 18,
+        marginTop: liveKeys ? 0 : -18,
+        height: liveKeys ? 0 : undefined,
+        overflow: liveKeys ? 'hidden' : undefined,
         backgroundColor: 'transparent',
         zIndex: 130,
         elevation: 130,

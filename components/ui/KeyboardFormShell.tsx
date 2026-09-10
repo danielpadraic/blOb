@@ -73,6 +73,35 @@ export function useKeyboardOverlap(): number {
   return overlap;
 }
 
+/** Keyboard height only. Web uses visualViewport — never a guessed 300. */
+export function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (event) => setHeight(Math.max(0, event.endCoordinates.height)),
+    );
+    const change = Keyboard.addListener('keyboardDidChangeFrame', (event) =>
+      setHeight(Math.max(0, event.endCoordinates.height)),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setHeight(0),
+    );
+    const unsubViewport =
+      Platform.OS === 'web' ? subscribeVisualViewport((occlusion) => setHeight(occlusion)) : () => undefined;
+    return () => {
+      show.remove();
+      change.remove();
+      hide.remove();
+      unsubViewport();
+    };
+  }, []);
+
+  return height;
+}
+
 type KeyboardFormShellProps = {
   children: ReactNode;
   footer?: ReactNode;
