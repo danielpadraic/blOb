@@ -435,35 +435,37 @@ export function FeedList({
 
   if (embedded) {
     return (
-      <View className="gap-3">
-        {listHeader}
-        {composer}
-        {visiblePosts.length === 0 ? (
-          empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
-        ) : (
-          visiblePosts.map((post) => (
-            <View
-              key={post.id}
-              onLayout={(event) => {
-                if (highlightPostId === post.id) {
-                  onHighlightedLayout?.(event.nativeEvent.layout.y);
-                }
-              }}>
-              <FeedRow
-                post={post}
-                currentUserId={currentUserId}
-                hideAudience={hideAudience}
-                challengeFeed={challengeFeed}
-                highlighted={highlightPostId === post.id}
-                highlightCommentId={highlightPostId === post.id ? highlightCommentId : undefined}
-                commentsReady={!isLoading}
-                onReact={onReact}
-                onComment={onComment}
-              />
-            </View>
-          ))
-        )}
-      </View>
+      <VisiblePostsProvider ids={visibleIds}>
+        <View className="gap-3">
+          {listHeader}
+          {composer}
+          {visiblePosts.length === 0 ? (
+            empty ?? <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
+          ) : (
+            visiblePosts.map((post) => (
+              <View
+                key={post.id}
+                onLayout={(event) => {
+                  if (highlightPostId === post.id) {
+                    onHighlightedLayout?.(event.nativeEvent.layout.y);
+                  }
+                }}>
+                <FeedRow
+                  post={post}
+                  currentUserId={currentUserId}
+                  hideAudience={hideAudience}
+                  challengeFeed={challengeFeed}
+                  highlighted={highlightPostId === post.id}
+                  highlightCommentId={highlightPostId === post.id ? highlightCommentId : undefined}
+                  commentsReady={!isLoading}
+                  onReact={onReact}
+                  onComment={onComment}
+                />
+              </View>
+            ))
+          )}
+        </View>
+      </VisiblePostsProvider>
     );
   }
 

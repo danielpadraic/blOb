@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { challengeHref, checkinSubmitHref, clipRouteId, errorBoundaryRetryHref, errorRetryHref, leaveCheckinHref, publishedRowId, waveHref } from '@/lib/routes';
+import { challengeHref, checkinSubmitHref, clipRouteId, errorBoundaryRetryHref, errorRetryHref, leaveCheckinHref, profileRetryHref, publishedRowId, waveHref } from '@/lib/routes';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 
@@ -42,6 +42,11 @@ describe('checkinSubmitHref', () => {
       '/wave/2ca49850-b978-45d8-a282-2b644913c538',
     );
     expect(errorBoundaryRetryHref('/feed')).toBe('/feed');
+    expect(errorBoundaryRetryHref('/feed/u/courtney')).toBe('/feed/u/courtney');
+    expect(errorBoundaryRetryHref('/messages')).toBe('/messages');
+    expect(profileRetryHref('/feed/u/courtney')).toBe('/feed/u/courtney');
+    expect(profileRetryHref('/friends/u/courtney')).toBe('/friends/u/courtney');
+    expect(profileRetryHref('/capture')).toBe('');
     expect(errorBoundaryRetryHref('/')).toBe('/');
     expect(errorBoundaryRetryHref('/capture')).toBe('/feed');
     expect(errorBoundaryRetryHref('/capture?mode=story')).toBe('/feed');

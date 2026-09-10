@@ -242,6 +242,24 @@ export function errorBoundaryRetryHref(pathname: string | null | undefined): str
   return next;
 }
 
+const PROFILE_RETRY_RE = /^\/(feed|friends|challenges|profile)\/u\/([^/?#]+)/;
+
+/**
+ * Public profile Retry. Same `/feed/u/{username}` (or friends/challenges/profile copy).
+ * Empty string → Back. Never `/capture`, never Wave.
+ */
+export function profileRetryHref(pathname: string | null | undefined): string {
+  const path = String(pathname ?? '');
+  if (path.includes('/capture')) {
+    return '';
+  }
+  const match = path.match(PROFILE_RETRY_RE);
+  if (!match) {
+    return '';
+  }
+  return `/${match[1]}/u/${match[2]}`;
+}
+
 /** X / Close on Check In review. That challenge Live (or Overview/Board). Never Home, never /feed, never last-open. */
 export function leaveCheckinHref(
   id: string | null | undefined,

@@ -188,7 +188,11 @@ function useInViewport(enabled: boolean, postId: string, minRatio = 0.28) {
     }
 
     const tick = () => {
-      ref.current?.measureInWindow((x, y, width, height) => {
+      const measure = ref.current?.measureInWindow;
+      if (typeof measure !== 'function') {
+        return;
+      }
+      measure((x, y, width, height) => {
         const visible = Math.min(y + height, winH) - Math.max(y, 0);
         const ratio = height > 0 ? visible / height : 0;
         const onScreen = y < winH && y + height > 0 && x < winW && x + width > 0;

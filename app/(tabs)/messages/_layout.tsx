@@ -1,6 +1,11 @@
-import { Stack } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 
+import { MessagesRouteErrorBoundary } from '@/components/messages/MessagesSafeBoundary';
 import { THEME } from '@/lib/theme';
+
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <MessagesRouteErrorBoundary {...props} />;
+}
 
 export default function MessagesStackLayout() {
   return (

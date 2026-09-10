@@ -19,7 +19,10 @@ export function ConversationListItem({
   compact = false,
   onPress,
 }: ConversationListItemProps) {
-  const name = conversationTitle(conversation);
+  const name = conversationTitle({
+    ...conversation,
+    people: Array.isArray(conversation.people) ? conversation.people : [],
+  });
   const stamp = conversation.last_message?.created_at ?? conversation.updated_at;
   return (
     <Pressable

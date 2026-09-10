@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
 import { ConversationListItem } from '@/components/messages/ConversationListItem';
+import { MessagesSafeBoundary } from '@/components/messages/MessagesSafeBoundary';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
@@ -131,7 +132,7 @@ export function TabChromeHeader({
   const unread = useUnreadNotificationCount();
   const conversations = useConversations();
   const unreadCount = unread.data ?? 0;
-  const rows = conversations.data ?? [];
+  const rows = Array.isArray(conversations.data) ? conversations.data : [];
   const unreadMessages = rows.filter((row) => row.unread).length;
   const tourLocked = Boolean(useTourOptional()?.active);
   const clusterPad = Math.max(insets.right, 4);
@@ -297,6 +298,7 @@ export function TabChromeHeader({
                     zIndex: 4,
                     ...themeShadow('card'),
                   }}>
+                  <MessagesSafeBoundary compact>
                   {rows.length === 0 ? (
                     <Pressable
                       accessibilityRole="button"
@@ -328,6 +330,7 @@ export function TabChromeHeader({
                       ))}
                     </ScrollView>
                   )}
+                  </MessagesSafeBoundary>
                 </View>
               ) : null}
             </View>

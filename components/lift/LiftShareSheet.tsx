@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
 import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyCircles } from '@/hooks/useCircles';
@@ -22,6 +23,7 @@ import { postShareUrl } from '@/lib/postShare';
 import { DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
 import type { LiftSessionDraft } from '@/lib/lift/types';
 import type { ComposeInput } from '@/lib/types';
+import { liftShareKeyboardOpen } from '@/lib/liftShareInset';
 import { THEME } from '@/lib/theme';
 
 /**
@@ -97,6 +99,8 @@ export function LiftShareSheet({
   const [recipientQuery, setRecipientQuery] = useState('');
   const [home, setHome] = useState(true);
   const peopleListRef = useRef<ScrollView>(null);
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardOpen = liftShareKeyboardOpen(keyboardHeight);
 
   const recap = useMemo(() => (draft ? buildRecap(draft) : null), [draft]);
   const completedCard = useMemo(() => (draft ? buildCompletedCard(draft) : null), [draft]);
@@ -122,7 +126,12 @@ export function LiftShareSheet({
   }, [visible]);
 
   useEffect(() => {
-    peopleListRef.current?.scrollTo({ y: 0, animated: false });
+    const node = peopleListRef.current;
+    const scrollTo = node?.scrollTo;
+    if (typeof scrollTo !== 'function') {
+      return;
+    }
+    scrollTo.call(node, { y: 0, animated: false });
   }, [recipientQuery]);
 
   if (!recap) {
@@ -172,6 +181,7 @@ export function LiftShareSheet({
           borderTopRightRadius: 22,
           minHeight: 0,
           flexGrow: 1,
+          flex: destination === 'message' || keyboardOpen ? 1 : undefined,
         }}>
         <View
           style={{
@@ -260,8 +270,116 @@ export function LiftShareSheet({
           </View>
         ) : null}
 
+        {destination === 'message' && !sharedPostId ? (
+          <ScrollView
+            ref={peopleListRef}
+            style={{ flex: 1, minHeight: 0 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: 18,
+              paddingBottom: keyboardOpen ? 8 : 10,
+              flexGrow: 1,
+            }}>
+            {keyboardOpen ? null : completedCard ? (
+              <LiftCompletedCard card={completedCard} />
+            ) : recap ? (
+              <LiftRecapCard recap={recap} />
+            ) : null}
+            {people.length ? (
+              <>
+                <SectionLabel text="SEND TO" />
+                <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                  {recipientIds.length > 1
+                    ? 'Everyone you pick lands in one group chat.'
+                    : 'Only the people you pick can open this lift.'}
+                </AppText>
+                {chosen.length ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {chosen.map((person) => (
+                      <Pressable
+                        key={person.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${person.display_name || person.username}`}
+                        onPress={() =>
+                          setRecipientIds((current) => current.filter((id) => id !== person.id))
+                        }
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          minHeight: 34,
+                          paddingLeft: 8,
+                          paddingRight: 10,
+                          borderRadius: 999,
+                          backgroundColor: THEME.accentSoft,
+                        }}>
+                        <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.accent }}>
+                          {person.display_name || person.username}
+                        </AppText>
+                        <Glyph name={GLYPH.close} color={THEME.accent} size={11} />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+                <View style={{ gap: 6, marginTop: 10 }}>
+                  {matches.length === 0 ? (
+                    <AppText style={{ fontSize: 14, color: THEME.textMuted, paddingVertical: 8 }}>
+                      No friends match “{recipientQuery.trim()}”.
+                    </AppText>
+                  ) : null}
+                  {matches.map((friend) => {
+                    const name = friend.display_name || friend.username;
+                    const picked = recipientIds.includes(friend.id);
+                    return (
+                      <Pressable
+                        key={friend.id}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={name}
+                        accessibilityState={{ checked: picked }}
+                        onPress={() =>
+                          setRecipientIds((current) =>
+                            current.includes(friend.id)
+                              ? current.filter((id) => id !== friend.id)
+                              : [...current, friend.id],
+                          )
+                        }
+                        style={{
+                          minHeight: 56,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          paddingHorizontal: 10,
+                          borderRadius: 12,
+                          backgroundColor: picked ? THEME.accentSoft : 'transparent',
+                        }}>
+                        <Avatar uri={friend.avatar_url} name={name} size={34} />
+                        <AppText
+                          numberOfLines={1}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: 15,
+                            fontWeight: '600',
+                            color: THEME.textPrimary,
+                          }}>
+                          {name}
+                        </AppText>
+                        <Checkbox checked={picked} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
+                Add a friend first and they will show up here.
+              </AppText>
+            )}
+          </ScrollView>
+        ) : (
         <ScrollView
-          ref={peopleListRef}
           style={{ flexGrow: 1, minHeight: 0 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
@@ -338,105 +456,6 @@ export function LiftShareSheet({
                   textAlignVertical: 'top',
                 }}
               />
-
-              {destination === 'message' ? (
-                people.length ? (
-                  <>
-                    <SectionLabel text="SEND TO" />
-                    <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
-                      {recipientIds.length > 1
-                        ? 'Everyone you pick lands in one group chat.'
-                        : 'Only the people you pick can open this lift.'}
-                    </AppText>
-
-                    {chosen.length ? (
-                      <View
-                        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                        {chosen.map((person) => (
-                          <Pressable
-                            key={person.id}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Remove ${person.display_name || person.username}`}
-                            onPress={() =>
-                              setRecipientIds((current) =>
-                                current.filter((id) => id !== person.id),
-                              )
-                            }
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 6,
-                              minHeight: 34,
-                              paddingLeft: 8,
-                              paddingRight: 10,
-                              borderRadius: 999,
-                              backgroundColor: THEME.accentSoft,
-                            }}>
-                            <AppText
-                              style={{ fontSize: 13, fontWeight: '700', color: THEME.accent }}>
-                              {person.display_name || person.username}
-                            </AppText>
-                            <Glyph name={GLYPH.close} color={THEME.accent} size={11} />
-                          </Pressable>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    <View style={{ gap: 6, marginTop: 10 }}>
-                      {matches.length === 0 ? (
-                        <AppText style={{ fontSize: 14, color: THEME.textMuted, paddingVertical: 8 }}>
-                          No friends match “{recipientQuery.trim()}”.
-                        </AppText>
-                      ) : null}
-                      {matches.map((friend) => {
-                        const name = friend.display_name || friend.username;
-                        const picked = recipientIds.includes(friend.id);
-                        return (
-                          <Pressable
-                            key={friend.id}
-                            accessibilityRole="checkbox"
-                            accessibilityLabel={name}
-                            accessibilityState={{ checked: picked }}
-                            onPress={() =>
-                              setRecipientIds((current) =>
-                                current.includes(friend.id)
-                                  ? current.filter((id) => id !== friend.id)
-                                  : [...current, friend.id],
-                              )
-                            }
-                            style={{
-                              minHeight: 56,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 10,
-                              paddingHorizontal: 10,
-                              borderRadius: 12,
-                              backgroundColor: picked ? THEME.accentSoft : 'transparent',
-                            }}>
-                            <Avatar uri={friend.avatar_url} name={name} size={34} />
-                            <AppText
-                              numberOfLines={1}
-                              style={{
-                                flex: 1,
-                                minWidth: 0,
-                                fontSize: 15,
-                                fontWeight: '600',
-                                color: THEME.textPrimary,
-                              }}>
-                              {name}
-                            </AppText>
-                            <Checkbox checked={picked} />
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </>
-                ) : (
-                  <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
-                    Add a friend first and they will show up here.
-                  </AppText>
-                )
-              ) : null}
 
               {/* A challenge and a Circle are both "somewhere my people are", so they share one
                   screen. They are mutually exclusive because a post row can only carry one of the
@@ -537,6 +556,35 @@ export function LiftShareSheet({
             </>
           )}
         </ScrollView>
+        )}
+
+        {destination === 'message' && !sharedPostId ? (
+          <View style={{ paddingHorizontal: 18, paddingTop: 8, flexGrow: 0 }}>
+            <TextInput
+              value={caption}
+              onChangeText={setCaption}
+              multiline
+              placeholder="Say something about it (optional)"
+              placeholderTextColor={THEME.textMuted}
+              accessibilityLabel="Caption"
+              selectionColor={THEME.accent}
+              style={{
+                minHeight: 56,
+                maxHeight: 88,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: THEME.border,
+                backgroundColor: THEME.background,
+                paddingHorizontal: 14,
+                paddingTop: 10,
+                paddingBottom: 10,
+                fontSize: 15,
+                color: THEME.textPrimary,
+                textAlignVertical: 'top',
+              }}
+            />
+          </View>
+        ) : null}
 
         <View style={{ paddingHorizontal: 18, paddingTop: 12, gap: 8 }}>
           {error ? (

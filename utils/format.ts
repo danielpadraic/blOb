@@ -93,18 +93,30 @@ export function formatFeedTime(date: string | Date): string {
     return '';
   }
   const now = new Date();
-  const minutes = Math.max(differenceInMinutes(now, then), 0);
+  const minutesFn = differenceInMinutes;
+  const hoursFn = differenceInHours;
+  const daysFn = differenceInCalendarDays;
+  const formatFn = format;
+  if (
+    typeof minutesFn !== 'function' ||
+    typeof hoursFn !== 'function' ||
+    typeof daysFn !== 'function' ||
+    typeof formatFn !== 'function'
+  ) {
+    return '';
+  }
+  const minutes = Math.max(minutesFn(now, then), 0);
   if (minutes < 1) {
     return 'now';
   }
   if (minutes < 60) {
     return `${minutes}m`;
   }
-  const hours = differenceInHours(now, then);
+  const hours = hoursFn(now, then);
   if (hours < 24) {
     return `${hours}h`;
   }
-  const days = differenceInCalendarDays(now, then);
+  const days = daysFn(now, then);
   if (days === 1) {
     return 'Yesterday';
   }
@@ -112,9 +124,9 @@ export function formatFeedTime(date: string | Date): string {
     return `${days}d`;
   }
   if (then.getFullYear() === now.getFullYear()) {
-    return format(then, 'MMM d');
+    return formatFn(then, 'MMM d');
   }
-  return format(then, 'MMM d, yyyy');
+  return formatFn(then, 'MMM d, yyyy');
 }
 
 export function formatDate(date: string | Date, pattern = 'MMM d'): string {

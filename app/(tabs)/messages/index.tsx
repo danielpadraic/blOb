@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type ErrorBoundaryProps } from 'expo-router';
 
 import { ConversationListItem } from '@/components/messages/ConversationListItem';
 import { EmptyConversations } from '@/components/messages/EmptyConversations';
+import { MessagesRouteErrorBoundary, MessagesSafeBoundary } from '@/components/messages/MessagesSafeBoundary';
 import { NewConversationModal } from '@/components/messages/NewConversationModal';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -16,21 +17,30 @@ import { conversationHref } from '@/lib/routes';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <MessagesRouteErrorBoundary {...props} />;
+}
+
 export default function MessagesScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const conversations = useConversations();
   const [composeOpen, setComposeOpen] = useState(false);
-  const rows = conversations.data ?? [];
+  const rows = Array.isArray(conversations.data) ? conversations.data : [];
   const unread = rows.filter((row) => row.unread).length;
   const refreshing = conversations.isRefetching && !conversations.isLoading;
 
   function close() {
-    if (router.canGoBack()) {
-      router.back();
+    const canGoBack = router.canGoBack;
+    const back = router.back;
+    if (typeof canGoBack === 'function' && canGoBack() && typeof back === 'function') {
+      back();
       return;
     }
-    router.replace('/friends');
+    const replace = router.replace;
+    if (typeof replace === 'function') {
+      replace('/friends');
+    }
   }
 
   return (
@@ -66,6 +76,7 @@ export default function MessagesScreen() {
         </View>
       </View>
 
+      <MessagesSafeBoundary>
       {conversations.isLoading ? (
         <MascotState kind="loading" title={copy('messages.loading')} compact />
       ) : conversations.error ? (
@@ -105,6 +116,7 @@ export default function MessagesScreen() {
           ))}
         </ScrollView>
       )}
+      </MessagesSafeBoundary>
       <NewConversationModal visible={composeOpen} onClose={() => setComposeOpen(false)} />
     </Screen>
   );

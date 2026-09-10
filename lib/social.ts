@@ -187,7 +187,8 @@ export function conversationTitle(
   conversation: Pick<ConversationPreview, 'is_group' | 'peer' | 'people'>,
 ): string {
   if (conversation.is_group) {
-    const names = conversation.people.map(personDisplayName).filter(Boolean);
+    const list = Array.isArray(conversation.people) ? conversation.people : [];
+    const names = list.map(personDisplayName).filter(Boolean);
     if (names.length === 0) {
       return 'Group';
     }

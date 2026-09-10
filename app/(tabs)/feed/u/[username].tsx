@@ -1,1 +1,1 @@
-export { default } from '@/components/profile/PublicProfileScreen';
+export { default, ErrorBoundary } from '@/components/profile/PublicProfileScreen';

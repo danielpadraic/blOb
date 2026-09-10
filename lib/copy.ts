@@ -869,10 +869,17 @@ type CopyNode =
   | { readonly gentle: string; readonly honest: string; readonly neutral?: string };
 
 export function interpolateCopy(template: string, vars?: Record<string, string | number>): string {
+  if (typeof template !== 'string') {
+    return '';
+  }
   if (!vars) {
     return template;
   }
-  return template.replace(/\{(\w+)\}/g, (_, name: string) =>
+  const replace = template.replace;
+  if (typeof replace !== 'function') {
+    return template;
+  }
+  return replace.call(template, /\{(\w+)\}/g, (_, name: string) =>
     vars[name] == null ? `{${name}}` : String(vars[name]),
   );
 }
@@ -898,9 +905,13 @@ export function profileSetupTone(value: unknown): CopyTone {
 }
 
 export function copy(key: CopyKey, tone: CopyTone = 'gentle', vars?: Record<string, string | number>): string {
-  const node = STRINGS[key] as CopyNode;
-  const template = typeof node === 'string' ? node : (node[tone] ?? node.gentle ?? node.neutral);
-  return interpolate(template, vars);
+  const node = STRINGS[key] as CopyNode | undefined;
+  if (node == null) {
+    return '';
+  }
+  const template =
+    typeof node === 'string' ? node : (node[tone] ?? node.gentle ?? node.neutral ?? '');
+  return interpolate(typeof template === 'string' ? template : '', vars);
 }
 
 export const COPY_TONE_OPTIONS: { value: CopyTone; key: CopyKey }[] = [
