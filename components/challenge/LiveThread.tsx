@@ -1115,6 +1115,17 @@ export function LiveThread({
               }
             : null
         }
+        currentUserId={currentUserId}
+        onToggle={(type) => {
+          if (!whoReacted) {
+            return;
+          }
+          const post = posts.find((row) => row.id === whoReacted.postId);
+          if (!post) {
+            return;
+          }
+          onReact(post, type, whoReacted.commentId);
+        }}
         onClose={() => setWhoReacted(null)}
       />
     </View>

@@ -26,10 +26,14 @@ export type WhoReactedTarget = {
 
 export function WhoReactedSheet({
   target,
+  currentUserId,
   onClose,
+  onToggle,
 }: {
   target: WhoReactedTarget | null;
+  currentUserId?: string;
   onClose: () => void;
+  onToggle?: (type: ReactionType) => void;
 }) {
   const [type, setType] = useState<ReactionType>(target?.type ?? 'like');
 
@@ -145,17 +149,10 @@ export function WhoReactedSheet({
           ) : (
             people.map((person) => {
               const handle = person.username?.trim() || person.userId;
+              const mine = Boolean(currentUserId && person.userId === currentUserId);
               return (
-                <Pressable
+                <View
                   key={`${person.userId}-${person.createdAt}`}
-                  accessibilityRole="link"
-                  accessibilityLabel={person.displayName}
-                  onPress={() => {
-                    onClose();
-                    if (handle) {
-                      router.push(profileHref(pathname, handle));
-                    }
-                  }}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -163,24 +160,56 @@ export function WhoReactedSheet({
                     minHeight: 52,
                     paddingVertical: 6,
                   }}>
-                  <Avatar uri={person.avatarUrl} name={person.displayName} size={36} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <AppText
-                      className="text-[15px] font-semibold"
-                      numberOfLines={1}
-                      style={{ color: THEME.textPrimary }}>
-                      {person.displayName}
-                    </AppText>
-                    {person.username ? (
+                  <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel={person.displayName}
+                    onPress={() => {
+                      onClose();
+                      if (handle) {
+                        router.push(profileHref(pathname, handle));
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}>
+                    <Avatar uri={person.avatarUrl} name={person.displayName} size={36} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <AppText
-                        className="text-[13px]"
+                        className="text-[15px] font-semibold"
                         numberOfLines={1}
-                        style={{ color: THEME.textMuted }}>
-                        @{person.username}
+                        style={{ color: THEME.textPrimary }}>
+                        {person.displayName}
                       </AppText>
-                    ) : null}
-                  </View>
-                </Pressable>
+                      {person.username ? (
+                        <AppText
+                          className="text-[13px]"
+                          numberOfLines={1}
+                          style={{ color: THEME.textMuted }}>
+                          @{person.username}
+                        </AppText>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                  {mine && onToggle ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${title}`}
+                      onPress={() => onToggle(type)}
+                      {...reactionNoSelectProps()}
+                      style={{
+                        minHeight: 40,
+                        minWidth: 40,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                      <ReactionMark type={type} size={REACTION_MARK_CORNER} />
+                    </Pressable>
+                  ) : null}
+                </View>
               );
             })
           )}

@@ -7,8 +7,10 @@ import {
   isFreshOptimisticReactionKey,
   isWritableReactionType,
   LIKE_MARK_REV,
-  LIVE_BUBBLE_INNER_GUTTER,
-  LIVE_HANG_OVERLAP,
+  LIVE_BUBBLE_PILL_INSET,
+  LIVE_PILL_HEIGHT,
+  LIVE_PILL_OVERLAP,
+  liveReactionPill,
   markOptimisticReactionWrite,
   mergeReactionListsByKey,
   PICKER_REACTION_TYPES,
@@ -96,9 +98,19 @@ describe('shared reactions', () => {
     resetOptimisticReactionWritesForTests();
   });
 
-  it('reserves a Live hang gutter and overlaps ~40% of the mark', () => {
-    expect(LIVE_BUBBLE_INNER_GUTTER).toBe(20);
-    expect(LIVE_HANG_OVERLAP).toBe(8);
+  it('builds one WhatsApp pill with a combined reactor count', () => {
+    const reactions = [
+      { id: '1', user_id: 'me', post_id: 'p', reaction_type: 'like' as const, created_at: '2026-09-01T12:00:00.000Z' },
+      { id: '2', user_id: 'me', post_id: 'p', reaction_type: 'fire' as const, created_at: '2026-09-01T12:00:01.000Z' },
+      { id: '3', user_id: 'a', post_id: 'p', reaction_type: 'like' as const, created_at: '2026-09-01T12:00:02.000Z' },
+    ];
+    const pill = liveReactionPill(reactions, 'me');
+    expect(pill.types.map((row) => row.type)).toEqual(['like', 'fire']);
+    expect(pill.types.find((row) => row.type === 'like')?.mine).toBe(true);
+    expect(pill.reactorCount).toBe(2);
+    expect(LIVE_BUBBLE_PILL_INSET).toBe(14);
+    expect(LIVE_PILL_OVERLAP).toBe(13);
+    expect(LIVE_PILL_HEIGHT).toBe(26);
     expect(LIKE_MARK_REV).toBeGreaterThan(1);
   });
 

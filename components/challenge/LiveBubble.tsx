@@ -1,9 +1,9 @@
-import { memo, useMemo, useRef } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, PanResponder, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
+import { LiveReactionChip } from '@/components/challenge/LiveReactionChip';
 import { LiveReactions } from '@/components/challenge/LiveReactions';
-import { ReactionStack } from '@/components/feed/ReactionStack';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
@@ -38,7 +38,7 @@ import { mediaUrlsForPost } from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
 import { CheckinProofStatsRow } from '@/components/challenge/CheckinProofStats';
 import { LiftPostCard } from '@/components/lift/LiftPostCard';
-import { LIVE_BUBBLE_INNER_GUTTER, LIVE_HANG_CLEARANCE } from '@/lib/reactions';
+import { LIVE_BUBBLE_PILL_INSET, LIVE_PILL_CLEARANCE } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia, mediaKind } from '@/utils/media';
@@ -171,6 +171,14 @@ export const LiveBubble = memo(function LiveBubble({
 
   const commentBody = comment ? commentTextWithoutMedia(comment.content) : '';
   const commentMedia = comment ? commentMediaUrls(comment.content) : [];
+  const pool = reactions ?? post.reactions;
+  const hasPill = Boolean(pool?.length);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pillCorner = alignEnd ? ('end' as const) : ('start' as const);
+
+  function openPicker() {
+    setPickerOpen(true);
+  }
 
   return (
     <View
@@ -326,20 +334,23 @@ export const LiveBubble = memo(function LiveBubble({
               style={{
                 position: 'relative',
                 maxWidth: '100%',
-                marginBottom: (reactions ?? post.reactions)?.length ? LIVE_HANG_CLEARANCE : 0,
+                marginBottom: hasPill ? LIVE_PILL_CLEARANCE : 0,
                 overflow: 'visible',
               }}>
-            <View
+            <Pressable
+              delayLongPress={280}
+              onLongPress={openPicker}
               style={{
                 gap: 8,
                 paddingTop: 8,
-                paddingBottom: LIVE_BUBBLE_INNER_GUTTER,
+                paddingBottom: hasPill ? LIVE_BUBBLE_PILL_INSET : 8,
                 paddingHorizontal: 10,
                 borderRadius: 16,
                 backgroundColor: THEME.surface,
                 borderWidth: 1,
                 borderColor: THEME.border,
                 maxWidth: '100%',
+                ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null),
               }}>
               <View style={{ flexShrink: 1, minWidth: 0 }}>
                 <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
@@ -396,14 +407,14 @@ export const LiveBubble = memo(function LiveBubble({
                   }
                 />
               ) : null}
-            </View>
+            </Pressable>
             {removed || editing ? null : (
-              <ReactionStack
-                reactions={reactions ?? post.reactions}
+              <LiveReactionChip
+                reactions={pool}
                 currentUserId={currentUserId}
-                corner={alignEnd ? 'start' : 'end'}
-                placement="hang"
-                onOpenWho={onOpenWho}
+                corner={pillCorner}
+                onPhoto={visuals.length > 0}
+                onOpenWho={onOpenWho ?? (() => undefined)}
               />
             )}
             </View>
@@ -412,10 +423,12 @@ export const LiveBubble = memo(function LiveBubble({
               style={{
                 position: 'relative',
                 maxWidth: '100%',
-                marginBottom: (reactions ?? post.reactions)?.length ? LIVE_HANG_CLEARANCE : 0,
+                marginBottom: hasPill ? LIVE_PILL_CLEARANCE : 0,
                 overflow: 'visible',
               }}>
-            <View
+            <Pressable
+              delayLongPress={280}
+              onLongPress={openPicker}
               style={{
                 backgroundColor: mine ? THEME.primary : THEME.surface,
                 borderRadius: 18,
@@ -424,14 +437,17 @@ export const LiveBubble = memo(function LiveBubble({
                 borderWidth: mine ? 0 : 1,
                 borderColor: THEME.border,
                 overflow: 'hidden',
-                paddingBottom: LIVE_BUBBLE_INNER_GUTTER,
+                paddingBottom: hasPill ? LIVE_BUBBLE_PILL_INSET : 0,
                 maxWidth: '100%',
+                ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null),
               }}>
               {visuals[0] ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Open photo"
                   onPress={() => openProof(0)}
+                  onLongPress={openPicker}
+                  delayLongPress={280}
                   style={{ width: 200, maxWidth: '100%', aspectRatio: 1, backgroundColor: THEME.surface2 }}>
                   <Image
                     source={{ uri: visuals[0] }}
@@ -464,7 +480,7 @@ export const LiveBubble = memo(function LiveBubble({
                   />
                 </View>
               ) : caption ? (
-                <View className="px-3" style={{ paddingTop: 8, paddingBottom: 0 }}>
+                <View className="px-3" style={{ paddingTop: 8, paddingBottom: hasPill ? 0 : 8 }}>
                   <MentionText
                     content={caption}
                     mentions={post.mentions}
@@ -473,14 +489,14 @@ export const LiveBubble = memo(function LiveBubble({
                   />
                 </View>
               ) : null}
-            </View>
+            </Pressable>
             {removed || editing ? null : (
-              <ReactionStack
-                reactions={reactions ?? post.reactions}
+              <LiveReactionChip
+                reactions={pool}
                 currentUserId={currentUserId}
-                corner={alignEnd ? 'start' : 'end'}
-                placement="hang"
-                onOpenWho={onOpenWho}
+                corner={pillCorner}
+                onPhoto={visuals.length > 0}
+                onOpenWho={onOpenWho ?? (() => undefined)}
               />
             )}
             </View>
@@ -489,9 +505,12 @@ export const LiveBubble = memo(function LiveBubble({
           {removed || editing ? null : (
           <View style={{ marginTop: 2, maxWidth: '100%', alignSelf: 'stretch' }}>
             <LiveReactions
-              reactions={reactions ?? post.reactions}
+              reactions={pool}
               currentUserId={currentUserId}
               align={alignEnd ? 'end' : 'start'}
+              pickerOpen={pickerOpen}
+              onPickerOpen={openPicker}
+              onPickerClose={() => setPickerOpen(false)}
               onReact={onReact}
               onReply={onReply}
               onEdit={onEdit}

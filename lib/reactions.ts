@@ -76,12 +76,24 @@ export const REACTION_STACK_MAX = 6;
 /** @deprecated Use REACTION_MARK_BUTTON. Kept so Wave rail files do not churn. */
 export const REACTION_MARK_COMPACT = REACTION_MARK_BUTTON;
 
-/** Live bubble: empty padding under caption / photo so marks never sit on the text. 18–22pt. */
-export const LIVE_BUBBLE_INNER_GUTTER = 20;
-/** ~40% of the 20pt hang mark overlaps the bubble’s bottom border. */
-export const LIVE_HANG_OVERLAP = 8;
-/** Space under the bubble so the action row and next bubble miss the hang. */
-export const LIVE_HANG_CLEARANCE = 14;
+/** Live WhatsApp pill. Home still uses the inset corner stack. */
+export const LIVE_PILL_HEIGHT = 26;
+export const LIVE_PILL_MARK = 17;
+export const LIVE_PILL_MARK_MINE = 19;
+export const LIVE_PILL_GAP = 2;
+export const LIVE_PILL_PAD_X = 7;
+/** Half the pill hangs off the bubble edge. */
+export const LIVE_PILL_OVERLAP = 13;
+/** Empty padding inside the bubble above the pill so text / dots stay clear. */
+export const LIVE_BUBBLE_PILL_INSET = 14;
+/** Space under the bubble so the action row misses the hanging half. */
+export const LIVE_PILL_CLEARANCE = 16;
+/** @deprecated Live now uses LIVE_BUBBLE_PILL_INSET. */
+export const LIVE_BUBBLE_INNER_GUTTER = LIVE_BUBBLE_PILL_INSET;
+/** @deprecated Live now uses LIVE_PILL_OVERLAP. */
+export const LIVE_HANG_OVERLAP = LIVE_PILL_OVERLAP;
+/** @deprecated Live now uses LIVE_PILL_CLEARANCE. */
+export const LIVE_HANG_CLEARANCE = LIVE_PILL_CLEARANCE;
 /** Bust Metro / web cache when like.png is replaced in place. */
 export const LIKE_MARK_REV = 2;
 
@@ -347,4 +359,35 @@ export function cornerReactionChips(
   userId?: string,
 ): ReactionCount[] {
   return reactionCounts(reactions, userId).slice(0, REACTION_STACK_MAX);
+}
+
+export type LiveReactionPillSummary = {
+  types: { type: string; mine: boolean }[];
+  reactorCount: number;
+  total: number;
+};
+
+/** One WhatsApp pill: unique types left-to-right, combined people count. */
+export function liveReactionPill(
+  reactions: Reaction[] | undefined,
+  userId?: string,
+): LiveReactionPillSummary {
+  const types = cornerReactionChips(reactions, userId).map((row) => ({
+    type: row.type,
+    mine: row.mine,
+  }));
+  const reactors = new Set<string>();
+  let total = 0;
+  for (const row of reactions ?? []) {
+    if (!row?.user_id) {
+      continue;
+    }
+    total += 1;
+    reactors.add(row.user_id);
+  }
+  return {
+    types,
+    reactorCount: reactors.size,
+    total,
+  };
 }

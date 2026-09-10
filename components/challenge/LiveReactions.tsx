@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -22,6 +21,9 @@ type LiveReactionsProps = {
   reactions?: Reaction[];
   currentUserId?: string;
   align?: 'start' | 'end';
+  pickerOpen: boolean;
+  onPickerOpen: () => void;
+  onPickerClose: () => void;
   onReact: (type: ReactionType) => void;
   onReply?: () => void;
   onEdit?: () => void;
@@ -32,19 +34,21 @@ export function LiveReactions({
   reactions,
   currentUserId,
   align = 'start',
+  pickerOpen,
+  onPickerOpen,
+  onPickerClose,
   onReact,
   onReply,
   onEdit,
   onOverflow,
 }: LiveReactionsProps) {
-  const [pickerOpen, setPickerOpen] = useState(false);
   const liked = userHasReactionType(reactions, currentUserId, 'like');
   const mineTypes = userReactionTypes(reactions, currentUserId);
   const justify = align === 'end' ? ('flex-end' as const) : ('flex-start' as const);
 
   return (
     <View style={{ position: 'relative', zIndex: pickerOpen ? 42 : 1, maxWidth: '100%' }}>
-      {pickerOpen ? <ReactionDismissScrim onClose={() => setPickerOpen(false)} /> : null}
+      {pickerOpen ? <ReactionDismissScrim onClose={onPickerClose} /> : null}
       {pickerOpen ? (
         <ReactionPicker selected={mineTypes} align={align} onPick={onReact} />
       ) : null}
@@ -66,12 +70,12 @@ export function LiveReactions({
           delayLongPress={280}
           onPress={() => {
             if (pickerOpen) {
-              setPickerOpen(false);
+              onPickerClose();
               return;
             }
             onReact('like');
           }}
-          onLongPress={() => setPickerOpen((open) => !open)}
+          onLongPress={onPickerOpen}
           {...reactionNoSelectProps()}
           style={[
             {
