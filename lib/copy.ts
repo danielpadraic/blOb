@@ -661,6 +661,7 @@ const STRINGS = {
   'wave.hint': 'Nobody has waved yet.',
   'wave.shutter': 'Tap to wave',
   'wave.shutterStop': 'Tap to stop',
+  'wave.recordFailed': 'Couldn’t keep recording',
   'wave.cameraNeed': 'blOb needs the camera for Waves.',
   'wave.gone': 'This clip isn’t available.',
   'wave.goneBody': 'It may have expired, or the link is no longer valid.',

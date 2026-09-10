@@ -40,10 +40,13 @@ import {
   stopMedia,
   stopPrimedCameraStream,
   takePrimedCameraStream,
+  shouldIgnoreViewportResize,
   stopAllLiveMedia,
   unwatchLiveMedia,
   watchLiveMedia,
   webCameraGrantedThisSession,
+  webCameraStreamAlive,
+  webWavePreviewTouchStyle,
 } from '@/lib/cameraSession';
 import { holdCheckinBlob } from '@/lib/checkin/heldBlob';
 import { copy } from '@/lib/copy';
@@ -182,6 +185,7 @@ export function InAppCamera({
   const [ask, setAsk] = useState<CameraAsk>('prompt');
   const [retry, setRetry] = useState(0);
   const [recording, setRecording] = useState(false);
+  const [recordFail, setRecordFail] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stillStatus, setStillStatus] = useState<ReturnType<typeof stillShutterCopy> | null>(null);
   const recordingRef = useRef(false);
@@ -233,6 +237,21 @@ export function InAppCamera({
       clearTimeout(holdStillTimerRef.current);
     }
   }, []);
+
+  useEffect(() => {
+    if (checkin || !web || typeof document === 'undefined') {
+      return;
+    }
+    const blockPinch = (event: Event) => {
+      event.preventDefault();
+    };
+    document.addEventListener('gesturestart', blockPinch, { passive: false });
+    document.addEventListener('gesturechange', blockPinch, { passive: false });
+    return () => {
+      document.removeEventListener('gesturestart', blockPinch);
+      document.removeEventListener('gesturechange', blockPinch);
+    };
+  }, [checkin, web]);
 
   useEffect(() => {
     if (!checkin || !web || typeof window === 'undefined') {
@@ -459,6 +478,49 @@ export function InAppCamera({
     });
   }
 
+  function failSoftWaveRecord() {
+    clearClipTimer();
+    const recorder = recorderRef.current;
+    if (recorder) {
+      try {
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+      } catch {
+        // Already stopped.
+      }
+      unwatchLiveMedia({ recorder });
+      recorderRef.current = null;
+    }
+    sessionActiveRef.current = false;
+    recordingRef.current = false;
+    setRecording(false);
+    if (webCameraStreamAlive(webStreamRef.current)) {
+      setRecordFail(true);
+      return;
+    }
+    setAsk('error');
+  }
+
+  function retryWaveRecord() {
+    setRecordFail(false);
+    if (!webCameraStreamAlive(webStreamRef.current)) {
+      setAsk('error');
+      setSessionOn(true);
+      setRetry((value) => value + 1);
+      return;
+    }
+    discardedRef.current = false;
+    sessionActiveRef.current = true;
+    recordingRef.current = true;
+    setRecording(true);
+    void startWebClipRecorder().then((ok) => {
+      if (!ok) {
+        failSoftWaveRecord();
+      }
+    });
+  }
+
   async function startWebClipRecorder(): Promise<boolean> {
     if (discardedRef.current || !sessionActiveRef.current) {
       return false;
@@ -492,6 +554,10 @@ export function InAppCamera({
       if (event.data.size > 0) {
         chunksRef.current.push(event.data);
       }
+    };
+    recorder.onerror = (event) => {
+      logCameraError(event, 'MediaRecorder.error');
+      failSoftWaveRecord();
     };
     try {
       recorder.start(250);
@@ -536,8 +602,7 @@ export function InAppCamera({
     }
     const started = await startWebClipRecorder();
     if (!started) {
-      sessionActiveRef.current = false;
-      finishWaveSession();
+      failSoftWaveRecord();
     }
   }
 
@@ -1060,10 +1125,7 @@ export function InAppCamera({
         }
         const started = await startWebClipRecorder();
         if (!started) {
-          sessionActiveRef.current = false;
-          recordingRef.current = false;
-          setRecording(false);
-          onUnavailable?.();
+          failSoftWaveRecord();
         }
         return;
       }
@@ -1286,8 +1348,11 @@ export function InAppCamera({
   return (
     <View
       className="flex-1 overflow-hidden"
-      style={{ flex: 1, minHeight: 0, backgroundColor: THEME.primary }}
+      style={{ flex: 1, minHeight: 0, backgroundColor: THEME.primary, ...webWavePreviewTouchStyle(checkin) }}
       onLayout={(event) => {
+        if (shouldIgnoreViewportResize({ recording: recordingRef.current, checkin })) {
+          return;
+        }
         const { width, height } = event.nativeEvent.layout;
         setPreviewBox((prev) =>
           prev.width === width && prev.height === height ? prev : { width, height },
@@ -1333,7 +1398,7 @@ export function InAppCamera({
           }}
         />
       ) : null}
-      {guidedTitle || askLine ? (
+      {guidedTitle || askLine || recordFail ? (
         <View
           pointerEvents="box-none"
           className="absolute left-6 right-6 items-center"
@@ -1392,6 +1457,23 @@ export function InAppCamera({
                 Retry
               </AppText>
             </Pressable>
+          ) : null}
+          {recordFail && !showDenied && !showRetry ? (
+            <View className="mt-3 items-center" style={{ gap: 10 }}>
+              <AppText className="text-center text-[15px] font-semibold" style={{ color: '#fff' }}>
+                {copy('wave.recordFailed')}
+              </AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry"
+                onPress={retryWaveRecord}
+                className="items-center justify-center rounded-full px-4"
+                style={{ minHeight: 44, backgroundColor: 'rgba(255,255,255,0.16)' }}>
+                <AppText className="text-[13px] font-bold" style={{ color: '#fff' }}>
+                  Retry
+                </AppText>
+              </Pressable>
+            </View>
           ) : null}
         </View>
       ) : null}
@@ -1652,15 +1734,18 @@ const WebCameraPreview = memo(function WebCameraPreview({
   rotateDeg?: number;
   box?: { width: number; height: number };
 }) {
+  const attachRef = useRef(attach);
+  attachRef.current = attach;
+  const setVideoNode = useCallback((node: HTMLVideoElement | null) => {
+    applyWebVideoLock(node);
+    attachRef.current(node);
+  }, []);
   const rotate = rotateDeg !== 0 && !!box?.width && !!box?.height;
   const transform = webPreviewCssTransform({ facing, zoom, rotateDeg: rotate ? rotateDeg : 0 });
   return (
-    <View style={{ flex: 1, overflow: 'hidden' }}>
+    <View style={{ flex: 1, overflow: 'hidden', ...(Platform.OS === 'web' ? { touchAction: 'manipulation' } : null) }}>
       {createElement('video', {
-        ref: (node: HTMLVideoElement | null) => {
-          applyWebVideoLock(node);
-          attach(node);
-        },
+        ref: setVideoNode,
         autoPlay: true,
         muted: true,
         playsInline: true,
@@ -1677,11 +1762,18 @@ const WebCameraPreview = memo(function WebCameraPreview({
           backgroundColor: '#101312',
           transformOrigin: 'center center',
           transform,
+          touchAction: 'manipulation',
         },
       })}
     </View>
   );
-});
+}, (prev, next) =>
+  prev.facing === next.facing &&
+  prev.zoom === next.zoom &&
+  prev.rotateDeg === next.rotateDeg &&
+  (next.rotateDeg === 0 ||
+    (prev.box?.width === next.box?.width && prev.box?.height === next.box?.height)),
+);
 
 const NativeCameraPreview = memo(function NativeCameraPreview({
   cameraRef,

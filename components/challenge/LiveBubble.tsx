@@ -127,8 +127,8 @@ export const LiveBubble = memo(function LiveBubble({
         onStartShouldSetPanResponderCapture: () => false,
         onMoveShouldSetPanResponder: (_, gesture) =>
           swipeLive.current && liveSwipeClaimsReply(gesture.dx, gesture.dy),
-        onMoveShouldSetPanResponderCapture: (_, gesture) =>
-          swipeLive.current && liveSwipeClaimsReply(gesture.dx, gesture.dy),
+        // Do not capture. The check-in pager must own L/R pans; Capture here opened the lightbox.
+        onMoveShouldSetPanResponderCapture: () => false,
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
         onPanResponderMove: (_, gesture) => {
@@ -337,9 +337,7 @@ export const LiveBubble = memo(function LiveBubble({
                 marginBottom: hasPill ? LIVE_PILL_CLEARANCE : 0,
                 overflow: 'visible',
               }}>
-            <Pressable
-              delayLongPress={280}
-              onLongPress={openPicker}
+            <View
               style={{
                 gap: 8,
                 paddingTop: 8,
@@ -352,6 +350,7 @@ export const LiveBubble = memo(function LiveBubble({
                 maxWidth: '100%',
                 ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null),
               }}>
+              <Pressable delayLongPress={280} onLongPress={openPicker}>
               <View style={{ flexShrink: 1, minWidth: 0 }}>
                 <AppText className="text-[13px] font-semibold" style={{ color: THEME.textPrimary }}>
                   {headline}
@@ -389,6 +388,7 @@ export const LiveBubble = memo(function LiveBubble({
                   </View>
                 ) : null}
               </View>
+              </Pressable>
               {visuals.length > 0 ? (
                 <PostMediaCarousel
                   postId={post.id}
@@ -407,7 +407,7 @@ export const LiveBubble = memo(function LiveBubble({
                   }
                 />
               ) : null}
-            </Pressable>
+            </View>
             {removed || editing ? null : (
               <LiveReactionChip
                 reactions={pool}

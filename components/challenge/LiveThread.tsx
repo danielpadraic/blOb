@@ -891,6 +891,7 @@ export function LiveThread({
           renderItem={renderItem}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
+          nestedScrollEnabled
           automaticallyAdjustKeyboardInsets={false}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}

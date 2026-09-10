@@ -155,6 +155,27 @@ export function registerNativeCameraStop(stop: () => void): () => void {
   };
 }
 
+/** Safari pinch must not page-zoom the Wave / Round preview. Check-in stills stay unchanged. */
+export function webWavePreviewTouchStyle(checkin: boolean): object | undefined {
+  if (Platform.OS !== 'web' || checkin) {
+    return undefined;
+  }
+  return { touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' };
+}
+
+/** Pinch / visualViewport resize must not reopen getUserMedia while a Wave is rolling. */
+export function shouldIgnoreViewportResize(input: { recording: boolean; checkin: boolean }): boolean {
+  return Boolean(input.recording && !input.checkin);
+}
+
+export function webCameraStreamAlive(stream?: { getTracks: () => Array<{ readyState?: string; kind?: string }> } | null): boolean {
+  return Boolean(
+    stream
+      ?.getTracks()
+      .some((track) => track.readyState === 'live' || track.readyState == null),
+  );
+}
+
 /** Wave / Round / check-in camera. Also hides the Home tab bar so the shutter is not under +. */
 export function isLiveCameraPath(pathname: string | null | undefined): boolean {
   const path = String(pathname ?? '');

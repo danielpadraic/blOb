@@ -374,7 +374,8 @@ export function PostMediaCarousel({
           carouselClaimsHorizontal(gesture.dx, gesture.dy),
         onMoveShouldSetPanResponderCapture: (_, gesture) =>
           carouselClaimsHorizontal(gesture.dx, gesture.dy),
-        onPanResponderTerminationRequest: () => !dragging.current,
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           dragging.current = true;
           markUserPaused();

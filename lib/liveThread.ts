@@ -208,7 +208,7 @@ export function liveProofCaption(
 
 const REPLY_SWIPE_SLOP = 14;
 
-/** Swipe right to reply. Vertical scroll wins unless the drag is clearly sideways. */
+/** Swipe right to reply on the text. Do not Capture — the check-in pager owns L/R. */
 export function liveSwipeClaimsReply(dx: number, dy: number): boolean {
   return dx > REPLY_SWIPE_SLOP && dx > Math.abs(dy) * 1.6;
 }
