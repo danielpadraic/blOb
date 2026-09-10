@@ -42,7 +42,7 @@ import {
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
-import { snapLightboxIndex } from '@/lib/postMediaCarousel';
+import { snapLightboxIndex, lightboxEdgeStep, rubberPagerOffset } from '@/lib/postMediaCarousel';
 import type { HealthActivityType } from '@/services/health/types';
 import { mediaKind } from '@/utils/media';
 
@@ -198,6 +198,7 @@ function MediaLightboxOverlay({
   const pageRef = useRef(0);
   const dragOriginRef = useRef(0);
   const draggingRef = useRef(false);
+  const pagedAtRef = useRef(0);
   const [page, setPage] = useState(0);
   const pageWidth = Math.max(width, 1);
   const pageHeight = Math.max(height, 1);
@@ -223,6 +224,12 @@ function MediaLightboxOverlay({
     const win = window;
     win.history.pushState({ blobLightbox: true }, '', win.location.href);
     const onPop = () => {
+      // A mid-screen page pan must not close. Browser / hardware back still closes
+      // when we did not just snap a still.
+      if (draggingRef.current || Date.now() - pagedAtRef.current < 480) {
+        win.history.pushState({ blobLightbox: true }, '', win.location.href);
+        return;
+      }
       onClose();
     };
     win.addEventListener('popstate', onPop);
@@ -276,9 +283,22 @@ function MediaLightboxOverlay({
   }
 
   const goTo = useCallback((index: number, animated = true) => {
+    pagedAtRef.current = Date.now();
     setPage(index);
     pager.current?.scrollTo({ x: index * pageWidth, animated });
   }, [pageWidth]);
+
+  const stepPage = useCallback((dir: -1 | 0 | 1) => {
+    if (!dir) {
+      return;
+    }
+    const last = Math.max((state?.items.length ?? 1) - 1, 0);
+    const next = Math.min(Math.max(pageRef.current + dir, 0), last);
+    if (next === pageRef.current) {
+      return;
+    }
+    goTo(next, true);
+  }, [goTo, state?.items.length]);
 
   const onPageDragStart = useCallback(() => {
     draggingRef.current = true;
@@ -287,13 +307,18 @@ function MediaLightboxOverlay({
 
   const onPageDrag = useCallback((dx: number) => {
     pager.current?.scrollTo({
-      x: dragOriginRef.current * pageWidth - dx,
+      x: rubberPagerOffset(
+        dragOriginRef.current * pageWidth - dx,
+        pageWidth,
+        state?.items.length ?? 1,
+      ),
       animated: false,
     });
-  }, [pageWidth]);
+  }, [pageWidth, state?.items.length]);
 
   const onPageDragEnd = useCallback((dx: number, velocityX: number) => {
     draggingRef.current = false;
+    pagedAtRef.current = Date.now();
     const next = snapLightboxIndex({
       from: dragOriginRef.current,
       dx,
@@ -336,7 +361,18 @@ function MediaLightboxOverlay({
   return (
         <View
           pointerEvents="auto"
-          style={[styles.layer, { width: pageWidth, height: pageHeight }]}>
+          style={[
+            styles.layer,
+            { width: pageWidth, height: pageHeight },
+            Platform.OS === 'web'
+              ? ({
+                  overscrollBehavior: 'none',
+                  overscrollBehaviorX: 'none',
+                  overscrollBehaviorY: 'none',
+                  touchAction: 'none',
+                } as object)
+              : null,
+          ]}>
           <ScrollView
             ref={pager}
             horizontal
@@ -366,6 +402,7 @@ function MediaLightboxOverlay({
                 onPageDrag={onPageDrag}
                 onPageDragEnd={onPageDragEnd}
                 onPageDragCancel={onPageDragCancel}
+                onEdgeStep={stepPage}
               />
             ))}
           </ScrollView>
@@ -407,11 +444,13 @@ function MediaLightboxOverlay({
 
 function useOneFingerPageGestures(input: {
   enabled: boolean;
+  width: number;
   onClose: () => void;
   onPageDragStart?: () => void;
   onPageDrag?: (dx: number) => void;
   onPageDragEnd?: (dx: number, velocityX: number) => void;
   onPageDragCancel?: () => void;
+  onEdgeStep?: (dir: -1 | 0 | 1) => void;
 }) {
   const settled = useSharedValue(0);
   const start = input.onPageDragStart;
@@ -419,7 +458,9 @@ function useOneFingerPageGestures(input: {
   const end = input.onPageDragEnd;
   const cancel = input.onPageDragCancel;
   const close = input.onClose;
+  const edge = input.onEdgeStep;
   const enabled = input.enabled;
+  const width = input.width;
 
   return useMemo(() => {
     const pagePan = Gesture.Pan()
@@ -452,7 +493,6 @@ function useOneFingerPageGestures(input: {
         }
       });
     const dismiss = Gesture.Pan()
-      .enabled(enabled)
       .maxPointers(1)
       .activeOffsetY(24)
       .failOffsetX([-28, 28])
@@ -461,8 +501,17 @@ function useOneFingerPageGestures(input: {
           runOnJS(close)();
         }
       });
-    return Gesture.Race(pagePan, dismiss);
-  }, [cancel, close, drag, enabled, end, settled, start]);
+    const edgeTap = Gesture.Tap()
+      .enabled(enabled)
+      .maxDistance(12)
+      .onEnd((event) => {
+        if (!edge) {
+          return;
+        }
+        runOnJS(edge)(lightboxEdgeStep(event.x, width));
+      });
+    return Gesture.Exclusive(Gesture.Race(pagePan, dismiss), edgeTap);
+  }, [cancel, close, drag, edge, enabled, end, settled, start, width]);
 }
 
 function LightboxPage({
@@ -478,6 +527,7 @@ function LightboxPage({
   onPageDrag,
   onPageDragEnd,
   onPageDragCancel,
+  onEdgeStep,
 }: {
   item: LightboxItem;
   width: number;
@@ -491,6 +541,7 @@ function LightboxPage({
   onPageDrag?: (dx: number) => void;
   onPageDragEnd?: (dx: number, velocityX: number) => void;
   onPageDragCancel?: () => void;
+  onEdgeStep?: (dir: -1 | 0 | 1) => void;
 }) {
   const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
@@ -525,7 +576,7 @@ function LightboxPage({
         style={[styles.pageDim, { width, height }]}
       />
       <View
-        pointerEvents={kind === 'video' || zoomable ? 'auto' : 'none'}
+        pointerEvents="auto"
         style={[styles.mediaSlot, { width, height: mediaHeight }]}>
         {zoomable ? (
           <ZoomableStill
@@ -537,7 +588,8 @@ function LightboxPage({
             onPageDragStart={onPageDragStart}
             onPageDrag={onPageDrag}
             onPageDragEnd={onPageDragEnd}
-            onPageDragCancel={onPageDragCancel}>
+            onPageDragCancel={onPageDragCancel}
+            onEdgeStep={onEdgeStep}>
             {media}
           </ZoomableStill>
         ) : (
@@ -549,7 +601,8 @@ function LightboxPage({
             onPageDragStart={onPageDragStart}
             onPageDrag={onPageDrag}
             onPageDragEnd={onPageDragEnd}
-            onPageDragCancel={onPageDragCancel}>
+            onPageDragCancel={onPageDragCancel}
+            onEdgeStep={onEdgeStep}>
             {media}
           </PagerSwipe>
         )}
@@ -567,6 +620,7 @@ function PagerSwipe({
   onPageDrag,
   onPageDragEnd,
   onPageDragCancel,
+  onEdgeStep,
   children,
 }: {
   width: number;
@@ -577,15 +631,18 @@ function PagerSwipe({
   onPageDrag?: (dx: number) => void;
   onPageDragEnd?: (dx: number, velocityX: number) => void;
   onPageDragCancel?: () => void;
+  onEdgeStep?: (dir: -1 | 0 | 1) => void;
   children: ReactNode;
 }) {
   const composed = useOneFingerPageGestures({
     enabled,
+    width,
     onClose,
     onPageDragStart,
     onPageDrag,
     onPageDragEnd,
     onPageDragCancel,
+    onEdgeStep,
   });
   return (
     <GestureDetector gesture={composed} touchAction="none">
@@ -604,6 +661,7 @@ function ZoomableStill({
   onPageDrag,
   onPageDragEnd,
   onPageDragCancel,
+  onEdgeStep,
   children,
 }: {
   width: number;
@@ -615,6 +673,7 @@ function ZoomableStill({
   onPageDrag?: (dx: number) => void;
   onPageDragEnd?: (dx: number, velocityX: number) => void;
   onPageDragCancel?: () => void;
+  onEdgeStep?: (dir: -1 | 0 | 1) => void;
   children: ReactNode;
 }) {
   const scale = useSharedValue(1);
@@ -624,6 +683,7 @@ function ZoomableStill({
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
   const pageSettled = useSharedValue(1);
+  const overflowDx = useSharedValue(0);
 
   const resetZoom = useCallback(() => {
     scale.value = withTiming(1);
@@ -641,6 +701,7 @@ function ZoomableStill({
   const drag = onPageDrag;
   const end = onPageDragEnd;
   const cancel = onPageDragCancel;
+  const edge = onEdgeStep;
 
   const composed = useMemo(() => {
     const pinch = Gesture.Pinch()
@@ -668,6 +729,8 @@ function ZoomableStill({
 
     const imagePan = Gesture.Pan()
       .maxPointers(1)
+      .activeOffsetX([-16, 16])
+      .activeOffsetY([-16, 16])
       .onTouchesDown((_event, state) => {
         if (scale.value <= 1.01) {
           state.fail();
@@ -676,10 +739,39 @@ function ZoomableStill({
       .onBegin(() => {
         startX.value = translateX.value;
         startY.value = translateY.value;
+        overflowDx.value = 0;
       })
       .onUpdate((event) => {
-        translateX.value = startX.value + event.translationX;
-        translateY.value = startY.value + event.translationY;
+        const maxX = (width * (scale.value - 1)) / 2;
+        const maxY = (height * (scale.value - 1)) / 2;
+        const nextY = Math.min(maxY, Math.max(-maxY, startY.value + event.translationY));
+        const rawX = startX.value + event.translationX;
+        if (rawX > maxX) {
+          translateX.value = maxX;
+          overflowDx.value = rawX - maxX;
+        } else if (rawX < -maxX) {
+          translateX.value = -maxX;
+          overflowDx.value = rawX + maxX;
+        } else {
+          translateX.value = rawX;
+          overflowDx.value = 0;
+        }
+        translateY.value = nextY;
+      })
+      .onEnd((event) => {
+        if (!pageEnabled || !end) {
+          overflowDx.value = 0;
+          return;
+        }
+        const extra = overflowDx.value;
+        overflowDx.value = 0;
+        if (Math.abs(extra) < 8) {
+          return;
+        }
+        if (start) {
+          runOnJS(start)();
+        }
+        runOnJS(end)(extra, event.velocityX);
       });
 
     const doubleTap = Gesture.Tap()
@@ -693,6 +785,16 @@ function ZoomableStill({
           return;
         }
         scale.value = withTiming(2.4);
+      });
+
+    const edgeTap = Gesture.Tap()
+      .enabled(pageEnabled)
+      .maxDistance(12)
+      .onEnd((event) => {
+        if (!edge || scale.value > 1.01) {
+          return;
+        }
+        runOnJS(edge)(lightboxEdgeStep(event.x, width));
       });
 
     const pagePan = Gesture.Pan()
@@ -731,7 +833,6 @@ function ZoomableStill({
       });
 
     const dismiss = Gesture.Pan()
-      .enabled(pageEnabled)
       .maxPointers(1)
       .activeOffsetY(24)
       .failOffsetX([-28, 28])
@@ -746,12 +847,19 @@ function ZoomableStill({
         }
       });
 
-    return Gesture.Simultaneous(pinch, doubleTap, Gesture.Race(pagePan, dismiss, imagePan));
+    return Gesture.Simultaneous(
+      pinch,
+      Gesture.Exclusive(doubleTap, edgeTap),
+      Gesture.Race(pagePan, dismiss, imagePan),
+    );
   }, [
     cancel,
     drag,
+    edge,
     end,
+    height,
     onClose,
+    overflowDx,
     pageEnabled,
     pageSettled,
     scale,
@@ -761,6 +869,7 @@ function ZoomableStill({
     startY,
     translateX,
     translateY,
+    width,
   ]);
 
   const style = useAnimatedStyle(() => ({
@@ -914,7 +1023,7 @@ const styles = StyleSheet.create({
   },
   close: {
     position: 'absolute',
-    left: 12,
+    right: 12,
     zIndex: 4,
   },
   bottomBand: {

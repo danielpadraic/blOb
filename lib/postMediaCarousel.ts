@@ -27,13 +27,46 @@ export function snapCarouselIndex(input: {
 }): number {
   const width = Math.max(input.pageWidth, 1);
   const last = Math.max(input.length - 1, 0);
+  const threshold = width * 0.22;
   let next = input.from;
-  if (input.dx < -width * 0.22 || input.vx < -0.45) {
+  // Displacement wins when the finger clearly moved. Do not let inverted / tiny
+  // web velocity send the pager the other way.
+  if (input.dx < -threshold) {
     next += 1;
-  } else if (input.dx > width * 0.22 || input.vx > 0.45) {
+  } else if (input.dx > threshold) {
+    next -= 1;
+  } else if (input.vx < -0.45) {
+    next += 1;
+  } else if (input.vx > 0.45) {
     next -= 1;
   }
   return Math.min(Math.max(next, 0), last);
+}
+
+/** Resist past the first / last still so the ends do not feel stuck. */
+export function rubberPagerOffset(x: number, pageWidth: number, length: number): number {
+  const width = Math.max(pageWidth, 1);
+  const min = 0;
+  const max = Math.max(length - 1, 0) * width;
+  if (x < min) {
+    return min - Math.min(72, (min - x) * 0.28);
+  }
+  if (x > max) {
+    return max + Math.min(72, (x - max) * 0.28);
+  }
+  return x;
+}
+
+/** Left 22% of the still → previous. Right 22% → next. Center does not advance. */
+export function lightboxEdgeStep(x: number, width: number): -1 | 0 | 1 {
+  const w = Math.max(width, 1);
+  if (x < w * 0.22) {
+    return -1;
+  }
+  if (x > w * 0.78) {
+    return 1;
+  }
+  return 0;
 }
 
 /** Lightbox pan uses Gesture Handler velocity (px/s). Same snap as the in-feed pager. */

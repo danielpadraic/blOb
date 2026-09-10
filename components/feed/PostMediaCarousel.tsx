@@ -135,6 +135,12 @@ const WEB_FEED_TOUCH =
     ? ({ touchAction: 'pan-y pinch-zoom' } as object)
     : undefined;
 
+/** Multi-still strip: allow sideways paging without handing swipe-right to the browser. */
+const WEB_PAGER_TOUCH =
+  Platform.OS === 'web'
+    ? ({ touchAction: 'pan-x pan-y' } as object)
+    : undefined;
+
 function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
@@ -468,7 +474,7 @@ export function PostMediaCarousel({
             {...pan.panHandlers}
             style={[
               { width: pageWidth, height: frameH, overflow: 'hidden' },
-              WEB_FEED_TOUCH,
+              WEB_PAGER_TOUCH,
             ]}>
             <Animated.View
               style={{
@@ -490,6 +496,7 @@ export function PostMediaCarousel({
                     lightboxOpen={Boolean(lightbox?.open)}
                     caption={captions?.[itemIndex]}
                     workout={workoutSlide(uri)}
+                    pagerTouch
                     onOpen={
                       lightbox && (homeInline || liveInline || isStillPostMedia(uri))
                         ? () => openAt(itemIndex)
@@ -536,6 +543,7 @@ function MediaSlide({
   lightboxOpen,
   caption,
   workout,
+  pagerTouch,
   onOpen,
   onPlayingChange,
 }: {
@@ -549,6 +557,7 @@ function MediaSlide({
   lightboxOpen?: boolean;
   caption?: string | null;
   workout?: WorkoutSlide | null;
+  pagerTouch?: boolean;
   onOpen?: () => void;
   onPlayingChange?: (playing: boolean) => void;
 }) {
@@ -654,7 +663,7 @@ function MediaSlide({
         }
         stillOpen();
       }}
-      style={[frameStyle, WEB_FEED_TOUCH]}>
+      style={[frameStyle, pagerTouch ? WEB_PAGER_TOUCH : WEB_FEED_TOUCH]}>
       {body}
       {caption?.trim() ? (
         <View

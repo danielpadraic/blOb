@@ -5,6 +5,8 @@ import {
   carouselClaimsHorizontal,
   clearPagerIndexMemory,
   snapLightboxIndex,
+  lightboxEdgeStep,
+  rubberPagerOffset,
   nextAutoCycleIndex,
   snapCarouselIndex,
   orientationFromSize,
@@ -80,9 +82,20 @@ describe('post media carousel', () => {
     expect(snapCarouselIndex({ from: 0, dx: -90, vx: 0, pageWidth: 390, length: 3 })).toBe(1);
     expect(snapCarouselIndex({ from: 1, dx: 90, vx: 0, pageWidth: 390, length: 3 })).toBe(0);
     expect(snapCarouselIndex({ from: 0, dx: -20, vx: 0, pageWidth: 390, length: 3 })).toBe(0);
+    expect(snapCarouselIndex({ from: 0, dx: 40, vx: 0, pageWidth: 390, length: 3 })).toBe(0);
+    expect(snapCarouselIndex({ from: 2, dx: -40, vx: 0, pageWidth: 390, length: 3 })).toBe(2);
+    expect(
+      snapCarouselIndex({ from: 1, dx: 90, vx: -2, pageWidth: 390, length: 3 }),
+    ).toBe(0);
     expect(
       snapLightboxIndex({ from: 0, dx: -90, velocityX: 0, pageWidth: 390, length: 3 }),
     ).toBe(1);
+    expect(
+      snapLightboxIndex({ from: 1, dx: 90, velocityX: 0, pageWidth: 390, length: 3 }),
+    ).toBe(0);
+    expect(
+      snapLightboxIndex({ from: 1, dx: 90, velocityX: -2000, pageWidth: 390, length: 3 }),
+    ).toBe(0);
     expect(
       snapLightboxIndex({ from: 1, dx: 10, velocityX: 800, pageWidth: 390, length: 3 }),
     ).toBe(0);
@@ -128,6 +141,17 @@ describe('post media carousel', () => {
     ).toBe(false);
     expect(nextAutoCycleIndex(['https://a.jpg', 'https://b.jpg', 'https://c.mp4'], 0)).toBe(1);
     expect(nextAutoCycleIndex(['https://a.jpg', 'https://b.jpg', 'https://c.mp4'], 1)).toBe(0);
+  });
+
+  it('pages from lightbox tap zones and rubber-bands past the ends', () => {
+    expect(lightboxEdgeStep(20, 390)).toBe(-1);
+    expect(lightboxEdgeStep(195, 390)).toBe(0);
+    expect(lightboxEdgeStep(360, 390)).toBe(1);
+    expect(rubberPagerOffset(-80, 390, 3)).toBeLessThan(0);
+    expect(rubberPagerOffset(-80, 390, 3)).toBeGreaterThan(-80);
+    expect(rubberPagerOffset(390, 390, 3)).toBe(390);
+    expect(rubberPagerOffset(390 * 2 + 80, 390, 3)).toBeGreaterThan(390 * 2);
+    expect(rubberPagerOffset(390 * 2 + 80, 390, 3)).toBeLessThan(390 * 2 + 80);
   });
 
   it('puts user stills first and the recap last, same as Home', () => {
