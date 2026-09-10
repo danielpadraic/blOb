@@ -11,14 +11,14 @@ import {
   type ExerciseOption,
 } from '@/lib/lift/catalog';
 import { matchesRest, searchCardioMethods } from '@/lib/lift/session';
-import { muscleLabel, muscleShortLabel, type MuscleKey } from '@/lib/lift/muscles';
+import { MUSCLE_KEYS, muscleLabel, muscleShortLabel, type MuscleKey } from '@/lib/lift/muscles';
 import type { LiftCardioMethod } from '@/lib/lift/types';
 import { THEME, themeShadow } from '@/lib/theme';
 
 /**
- * Typeahead over the official catalog filtered to the session's muscles, plus this user's own
- * exercises. Suggestions start at one character. "Add '{query}'" creates a private exercise — it
- * never touches the official catalog.
+ * Typeahead over the full official catalog plus this user's own exercises. Group chips filter
+ * the list; they are never required. "Add '{query}'" creates a private exercise — it never
+ * touches the official catalog.
  *
  * Cardio and rest are offered here too. They are not strength exercises and are logged by a
  * different sheet, but this is where people come to add something to a section, so this is where
@@ -36,12 +36,13 @@ export type AddExerciseResult = {
 
 type AddExerciseSheetProps = {
   visible: boolean;
-  /** The section the sheet opened from; also the muscle a new custom is filed under. */
-  muscle: MuscleKey;
-  /** Every muscle in the session, so they can move the exercise to another section. */
-  muscles: readonly MuscleKey[];
+  /** Optional filter. Null means the full catalog. Never required to add. */
+  muscle?: MuscleKey | null;
+  /** Unused: chips always list every group as a filter, not a gate. */
+  muscles?: readonly MuscleKey[];
   customs: readonly ExerciseOption[];
-  /** Name of the exercise a superset would pair with, or null when the section is empty. */
+  recents?: readonly ExerciseOption[];
+  /** Name of the exercise a superset would pair with, or null when the roster is empty. */
   supersetPartnerName: string | null;
   /** The official cardio catalog, so Treadmill is findable from the same search box. */
   methods: readonly LiftCardioMethod[];
@@ -56,9 +57,9 @@ type AddExerciseSheetProps = {
 
 export function AddExerciseSheet({
   visible,
-  muscle,
-  muscles,
+  muscle = null,
   customs,
+  recents = [],
   supersetPartnerName,
   methods,
   swapping,
@@ -68,14 +69,14 @@ export function AddExerciseSheet({
   onPickTimed,
 }: AddExerciseSheetProps) {
   const [query, setQuery] = useState('');
-  const [target, setTarget] = useState<MuscleKey>(muscle);
+  const [filter, setFilter] = useState<MuscleKey | null>(muscle ?? null);
   const [superset, setSuperset] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (visible) {
       setQuery('');
-      setTarget(muscle);
+      setFilter(muscle ?? null);
       setSuperset(false);
       const handle = setTimeout(() => inputRef.current?.focus(), 120);
       return () => clearTimeout(handle);
@@ -84,9 +85,22 @@ export function AddExerciseSheet({
   }, [muscle, visible]);
 
   const results = useMemo(
-    () => searchExercises({ query, muscles: [target], customs, limit: 40 }),
-    [customs, query, target],
+    () =>
+      searchExercises({
+        query,
+        muscles: filter ? [filter] : [],
+        customs,
+        limit: 40,
+      }),
+    [customs, filter, query],
   );
+  const recentRows = useMemo(() => {
+    if (query.trim() || !recents.length) {
+      return [];
+    }
+    return recents.filter((row) => !filter || row.muscle === filter || row.secondaries.includes(filter));
+  }, [filter, query, recents]);
+  const customMuscle = filter ?? 'core';
 
   const trimmed = query.trim();
   const canCreate = trimmed.length >= 2 && !exerciseNameTaken(trimmed, customs);
@@ -98,7 +112,11 @@ export function AddExerciseSheet({
   const restMatches = matchesRest(query);
 
   function pick(option: ExerciseOption) {
-    onSubmit({ option, createName: null, muscle: target, superset });
+    onSubmit({ option, createName: null, muscle: option.muscle, superset });
+  }
+
+  function toggleFilter(key: MuscleKey) {
+    setFilter((current) => (current === key ? null : key));
   }
 
   return (
@@ -145,41 +163,42 @@ export function AddExerciseSheet({
           </Pressable>
         </View>
 
-        {muscles.length > 1 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 10 }}>
-            {muscles.map((key) => (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 10 }}>
+          {MUSCLE_KEYS.map((key) => {
+            const on = filter === key;
+            return (
               <Pressable
                 key={key}
                 accessibilityRole="button"
-                accessibilityLabel={`File under ${muscleLabel(key)}`}
-                accessibilityState={{ selected: key === target }}
-                onPress={() => setTarget(key)}
+                accessibilityLabel={`Filter ${muscleLabel(key)}`}
+                accessibilityState={{ selected: on }}
+                onPress={() => toggleFilter(key)}
                 style={{
                   minHeight: 36,
                   paddingHorizontal: 14,
                   borderRadius: 999,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: key === target ? THEME.accent : THEME.surface,
+                  backgroundColor: on ? THEME.accent : THEME.surface,
                   borderWidth: 1,
-                  borderColor: key === target ? THEME.accent : THEME.border,
+                  borderColor: on ? THEME.accent : THEME.border,
                 }}>
                 <AppText
                   style={{
                     fontSize: 13,
                     fontWeight: '700',
-                    color: key === target ? THEME.accentForeground : THEME.textPrimary,
+                    color: on ? THEME.accentForeground : THEME.textPrimary,
                   }}>
                   {muscleShortLabel(key)}
                 </AppText>
               </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
+            );
+          })}
+        </ScrollView>
 
         <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
           <View
@@ -199,7 +218,11 @@ export function AddExerciseSheet({
               ref={inputRef}
               value={query}
               onChangeText={setQuery}
-              placeholder={`Search ${muscleShortLabel(target)}, cardio, or rest`}
+              placeholder={
+                filter
+                  ? `Search ${muscleShortLabel(filter)}, cardio, or rest`
+                  : 'Search exercises, cardio, or rest'
+              }
               placeholderTextColor={THEME.textMuted}
               autoCorrect={false}
               autoCapitalize="words"
@@ -239,18 +262,46 @@ export function AddExerciseSheet({
             <>
               <ResultRow
                 title="Cardio"
-                subtitle={`Treadmill, bike, rower — logged in minutes · goes in ${muscleShortLabel(target)}`}
+                subtitle="Treadmill, bike, rower — logged in minutes"
                 icon={GLYPH.anyExercise}
                 disabled={busy}
-                onPress={() => onPickTimed({ kind: 'cardio', methodId: null, muscle: target })}
+                onPress={() =>
+                  onPickTimed({ kind: 'cardio', methodId: null, muscle: filter ?? 'cardio' })
+                }
               />
               <ResultRow
                 title="Rest"
-                subtitle={`A break between sets · goes in ${muscleShortLabel(target)}`}
+                subtitle="A break between sets"
                 icon={GLYPH.clock}
                 disabled={busy}
-                onPress={() => onPickTimed({ kind: 'rest', methodId: null, muscle: target })}
+                onPress={() =>
+                  onPickTimed({ kind: 'rest', methodId: null, muscle: filter ?? 'rest' })
+                }
               />
+              {recentRows.length ? (
+                <AppText
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingTop: 8,
+                    paddingBottom: 4,
+                    fontSize: 12,
+                    fontWeight: '800',
+                    letterSpacing: 0.6,
+                    color: THEME.textMuted,
+                  }}>
+                  RECENTS
+                </AppText>
+              ) : null}
+              {recentRows.map((option) => (
+                <ResultRow
+                  key={`recent-${option.id}`}
+                  title={option.name}
+                  subtitle={subtitleFor(option)}
+                  badge="Recent"
+                  disabled={busy}
+                  onPress={() => pick(option)}
+                />
+              ))}
             </>
           ) : null}
 
@@ -260,40 +311,44 @@ export function AddExerciseSheet({
             <ResultRow
               key={`cardio-${method.id}`}
               title={method.name}
-              subtitle={`Cardio · logged in minutes, not pounds · goes in ${muscleShortLabel(target)}`}
+              subtitle="Cardio · logged in minutes, not pounds"
               icon={GLYPH.anyExercise}
               disabled={busy}
-              onPress={() => onPickTimed({ kind: 'cardio', methodId: method.id, muscle: target })}
+              onPress={() =>
+                onPickTimed({ kind: 'cardio', methodId: method.id, muscle: filter ?? 'cardio' })
+              }
             />
           ))}
 
           {restMatches ? (
             <ResultRow
               title="Rest"
-              subtitle={`A break between sets · goes in ${muscleShortLabel(target)}`}
+              subtitle="A break between sets"
               icon={GLYPH.clock}
               disabled={busy}
-              onPress={() => onPickTimed({ kind: 'rest', methodId: null, muscle: target })}
+              onPress={() => onPickTimed({ kind: 'rest', methodId: null, muscle: filter ?? 'rest' })}
             />
           ) : null}
 
           {canCreate ? (
             <ResultRow
               title={`Add “${trimmed}”`}
-              subtitle={`Your own exercise, filed under ${muscleShortLabel(target)}. Only you will see it.`}
+              subtitle={`Your own exercise, filed under ${muscleShortLabel(customMuscle)}. Only you will see it.`}
               icon={GLYPH.plus}
               disabled={busy}
               onPress={() =>
-                onSubmit({ option: null, createName: trimmed, muscle: target, superset })
+                onSubmit({ option: null, createName: trimmed, muscle: customMuscle, superset })
               }
             />
           ) : null}
 
-          {results.map((option) => (
+          {results
+            .filter((option) => !recentRows.some((recent) => recent.id === option.id))
+            .map((option) => (
             <ResultRow
               key={option.id}
               title={option.name}
-              subtitle={subtitleFor(option, target)}
+              subtitle={subtitleFor(option)}
               badge={option.official ? null : 'Yours'}
               disabled={busy}
               onPress={() => pick(option)}
@@ -357,10 +412,8 @@ export function AddExerciseSheet({
   );
 }
 
-function subtitleFor(option: ExerciseOption, target: MuscleKey): string {
-  const parts = [option.muscle, ...option.secondaries].map(muscleShortLabel);
-  const line = parts.join(' · ');
-  return option.muscle === target ? line : `${line} · added to ${muscleShortLabel(target)}`;
+function subtitleFor(option: ExerciseOption): string {
+  return [option.muscle, ...option.secondaries].map(muscleShortLabel).join(' · ');
 }
 
 function ResultRow({

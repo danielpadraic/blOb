@@ -1,37 +1,24 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import {
-  useLastSessionForMuscles,
-  useLiftSession,
   useLiftUnit,
   useOpenLiftSession,
-  useSaveLiftSession,
   useStartLiftSession,
 } from '@/hooks/useLift';
-import { fetchLiftSession } from '@/lib/lift/api';
-import { MUSCLE_KEYS, muscleLabel, muscleSummary, type MuscleKey } from '@/lib/lift/muscles';
-import { applyOverload } from '@/lib/lift/overload';
-import { repeatSession, shortDate } from '@/lib/lift/session';
-import { recalledLiftMuscles, rememberLiftMuscles } from '@/lib/lift/startMemory';
-import type { LiftOverloadPlan } from '@/lib/lift/types';
 import { LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 /**
- * Start a lift: pick muscles, then either repeat the last session that covered them or start new.
- *
- * Both buttons create the session row up front, so a session survives a reload mid-workout and the
- * user never loses sets to a dropped connection. Only one session is ever open at a time — picking
- * more muscles while one is in progress widens it rather than starting a rival.
+ * Start a lift. The first tap on a new session is Add exercise — muscle chips never gate create.
+ * An already-open draft is resumed so Save / tab blur cannot spawn a second session.
  */
 export default function LiftStartScreen() {
   const router = useRouter();
@@ -39,67 +26,20 @@ export default function LiftStartScreen() {
   const unit = useLiftUnit();
   const open = useOpenLiftSession();
   const start = useStartLiftSession();
-  const save = useSaveLiftSession();
-  const [selected, setSelected] = useState<MuscleKey[]>(() => recalledLiftMuscles());
   const [error, setError] = useState<string | null>(null);
-  const [overloadOpen, setOverloadOpen] = useState(false);
-  const last = useLastSessionForMuscles(selected);
 
-  const picked = selected.length > 0;
-  const summary = muscleSummary(selected);
-  const busy = save.isPending || start.isPending;
-
-  function toggle(key: MuscleKey) {
-    setError(null);
-    setSelected((current) => {
-      const next = current.includes(key)
-        ? current.filter((value) => value !== key)
-        : [...current, key];
-      rememberLiftMuscles(next);
-      return next;
-    });
-  }
+  const busy = start.isPending;
+  const openSession = open.data ?? null;
 
   async function startNew() {
     setError(null);
     try {
-      rememberLiftMuscles(selected);
-      // The server decides which session this is. Asking it, rather than inventing an id here, is
-      // what stops a second Continue from opening a session the first one's sets will never reach.
-      const id = await start.mutateAsync({ muscles: selected, unit });
+      const id = await start.mutateAsync({ muscles: [], unit });
       router.push(liftSessionHref(id));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not start that lift.');
     }
   }
-
-  /** Copies the last matching session, optionally bumped by the Overload sheet first. */
-  async function repeatLast(plan?: LiftOverloadPlan) {
-    setError(null);
-    const sourceId = last.data?.id;
-    if (!sourceId) {
-      return;
-    }
-    try {
-      const source = await fetchLiftSession(sourceId);
-      if (!source) {
-        setError('That session is no longer there. Start new instead.');
-        return;
-      }
-      rememberLiftMuscles(selected);
-      const draft = plan ? applyOverload(source, plan) : repeatSession(source);
-      await save.mutateAsync({ draft });
-      router.push(liftSessionHref(draft.id));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not copy that lift.');
-    }
-  }
-
-  // The sheet previews "52.5 → 55" against real sets, so the source session is read in full rather
-  // than stubbed from the history summary.
-  const overloadSource = useLiftSession(last.data?.id);
-
-  const openSession = open.data && open.data.exerciseCount > 0 ? open.data : null;
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
@@ -113,7 +53,7 @@ export default function LiftStartScreen() {
                 fontWeight: '800',
                 color: THEME.textPrimary,
               }}>
-              What are you training?
+              Lift
             </AppText>
             <Pressable
               accessibilityRole="button"
@@ -139,84 +79,41 @@ export default function LiftStartScreen() {
             </Pressable>
           </View>
           <AppText style={{ marginTop: 4, fontSize: 14, color: THEME.textMuted }}>
-            Pick as many as you like. Each one becomes a section you can collapse.
+            Add any exercise. Filter by group only if you want to.
           </AppText>
         </View>
 
-        {openSession ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Resume ${openSession.title}`}
-            onPress={() => router.push(liftSessionHref(openSession.id))}
-            style={{
-              marginHorizontal: 16,
-              marginBottom: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-              padding: 12,
-              borderRadius: 16,
-              backgroundColor: THEME.accentSoft,
-              borderWidth: 1,
-              borderColor: THEME.accentBright,
-            }}>
-            <Glyph name={GLYPH.lift} color={THEME.accent} size={18} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <AppText
-                numberOfLines={1}
-                style={{ fontSize: 14, fontWeight: '800', color: THEME.accent }}>
-                Pick up {openSession.title}
-              </AppText>
-              <AppText style={{ fontSize: 12, color: THEME.textMuted }}>
-                Still open · {openSession.setCount} sets logged
-              </AppText>
-            </View>
-            <Glyph name={GLYPH.chevronRight} color={THEME.accent} size={14} />
-          </Pressable>
-        ) : null}
-
-        <ScrollView
-          style={{ flex: 1, minHeight: 0 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 8,
-            }}>
-            {MUSCLE_KEYS.map((key) => {
-              const on = selected.includes(key);
-              return (
-                <Pressable
-                  key={key}
-                  accessibilityRole="button"
-                  accessibilityLabel={muscleLabel(key)}
-                  accessibilityState={{ selected: on }}
-                  onPress={() => toggle(key)}
-                  style={{
-                    minHeight: 44,
-                    paddingHorizontal: 16,
-                    borderRadius: 999,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: on ? THEME.accent : THEME.surface,
-                    borderWidth: 1,
-                    borderColor: on ? THEME.accent : THEME.border,
-                  }}>
-                  <AppText
-                    style={{
-                      fontSize: 15,
-                      fontWeight: '700',
-                      color: on ? THEME.accentForeground : THEME.textPrimary,
-                    }}>
-                    {muscleLabel(key)}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
+        <View style={{ flex: 1, paddingHorizontal: 16, gap: 12 }}>
+          {openSession ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Resume ${openSession.title}`}
+              onPress={() => router.push(liftSessionHref(openSession.id))}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                padding: 12,
+                borderRadius: 16,
+                backgroundColor: THEME.accentSoft,
+                borderWidth: 1,
+                borderColor: THEME.accentBright,
+              }}>
+              <Glyph name={GLYPH.lift} color={THEME.accent} size={18} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <AppText
+                  numberOfLines={1}
+                  style={{ fontSize: 14, fontWeight: '800', color: THEME.accent }}>
+                  Pick up {openSession.title}
+                </AppText>
+                <AppText style={{ fontSize: 12, color: THEME.textMuted }}>
+                  Still open · {openSession.setCount} sets
+                </AppText>
+              </View>
+              <Glyph name={GLYPH.chevronRight} color={THEME.accent} size={14} />
+            </Pressable>
+          ) : null}
+        </View>
 
         <View
           style={{
@@ -234,90 +131,13 @@ export default function LiftStartScreen() {
               {error}
             </AppText>
           ) : null}
-
-          {picked ? (
-            <>
-              {last.data ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Use last ${summary} session`}
-                  accessibilityState={{ disabled: busy }}
-                  disabled={busy}
-                  onPress={() => void repeatLast()}
-                  style={({ pressed }) => ({
-                    minHeight: 56,
-                    paddingHorizontal: 16,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: THEME.accent,
-                    backgroundColor: pressed ? THEME.accentSoft : THEME.surface,
-                    justifyContent: 'center',
-                    opacity: busy ? 0.5 : 1,
-                  })}>
-                  <AppText style={{ fontSize: 15, fontWeight: '700', color: THEME.accent }}>
-                    Use last {summary} session
-                  </AppText>
-                  <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
-                    {shortDate(last.data.performedAt)} · {last.data.exerciseCount} exercises ·{' '}
-                    {last.data.setCount} sets
-                  </AppText>
-                </Pressable>
-              ) : null}
-
-              {/* Only offered next to a real previous session — there is nothing to bump otherwise. */}
-              {last.data ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Go heavier than last time"
-                  accessibilityState={{ disabled: busy }}
-                  disabled={busy}
-                  onPress={() => setOverloadOpen(true)}
-                  style={({ pressed }) => ({
-                    minHeight: 48,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    borderRadius: 14,
-                    backgroundColor: pressed ? THEME.accentSoft : 'transparent',
-                    opacity: busy ? 0.5 : 1,
-                  })}>
-                  <Glyph name={GLYPH.trendUp} color={THEME.accent} size={14} />
-                  <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
-                    Go heavier than last time
-                  </AppText>
-                </Pressable>
-              ) : null}
-              <Button
-                title={busy ? 'Starting…' : 'Continue'}
-                loading={busy}
-                onPress={() => void startNew()}
-              />
-            </>
-          ) : (
-            <AppText
-              style={{
-                fontSize: 14,
-                color: THEME.textMuted,
-                textAlign: 'center',
-                paddingVertical: 14,
-              }}>
-              Pick at least one muscle to begin.
-            </AppText>
-          )}
+          <Button
+            title={busy ? 'Starting…' : 'Start lift'}
+            loading={busy}
+            onPress={() => void startNew()}
+          />
         </View>
       </View>
-
-      <OverloadSheet
-        visible={overloadOpen}
-        source={overloadSource.data ?? null}
-        busy={busy}
-        onClose={() => setOverloadOpen(false)}
-        onApply={(plan) => {
-          setOverloadOpen(false);
-          void repeatLast(plan);
-        }}
-      />
     </Screen>
   );
 }

@@ -5,7 +5,14 @@ import {
   splitDuration,
 } from '@/lib/lift/duration';
 import { newId, newLocalKey } from '@/lib/lift/ids';
-import { isMuscleKey, muscleShortLabel, orderMuscles, type MuscleKey } from '@/lib/lift/muscles';
+import {
+  isLegsMuscle,
+  isMuscleKey,
+  muscleShortLabel,
+  orderMuscles,
+  type MuscleKey,
+} from '@/lib/lift/muscles';
+import { officialExercise } from '@/lib/lift/catalog';
 import { parseOverloadSummary } from '@/lib/lift/overload';
 import {
   cardioRowSeconds,
@@ -111,14 +118,16 @@ export function newSetDraft(kind: LiftSetKind, seed?: Partial<LiftSetDraft>): Li
 }
 
 export function newSessionDraft(input: {
-  muscleKeys: readonly MuscleKey[];
+  muscleKeys?: readonly MuscleKey[];
   unit: WeightUnit;
   performedAt?: string;
 }): LiftSessionDraft {
+  const performedAt = input.performedAt ?? new Date().toISOString();
   return {
     id: newId(),
-    title: null,
-    performedAt: input.performedAt ?? new Date().toISOString(),
+    title: shortDate(performedAt) || null,
+    titleIsAuto: true,
+    performedAt,
     completedAt: null,
     status: 'open',
     favorite: false,
@@ -216,7 +225,7 @@ export function addTimedRow(
   const next = draft.exercises.slice();
   const lastIndex = lastIndexForMuscle(next, input.muscleKey);
   next.splice(lastIndex + 1, 0, added);
-  return withMuscle({ ...draft, exercises: next }, input.muscleKey);
+  return refreshSessionMeta(withMuscle({ ...draft, exercises: next }, input.muscleKey));
 }
 
 export function updateTimedRow(
@@ -360,17 +369,12 @@ export type LiftSection = {
 };
 
 /**
- * Sections in the order the muscles were picked. Every selected muscle gets a section even with no
- * exercises yet, so "Add exercise" always has a home and the picker's promise is kept on screen.
+ * Sections from the roster only. Empty groups are not shown — Add exercise is the empty-session
+ * CTA, and a filter chip is not a section.
  */
 export function sessionSections(draft: LiftSessionDraft): LiftSection[] {
-  const order = draft.muscleKeys.length
-    ? draft.muscleKeys
-    : orderMuscles(draft.exercises.map((row) => row.muscleKey));
-  const extras = draft.exercises
-    .map((row) => row.muscleKey)
-    .filter((key) => !order.includes(key));
-  return [...order, ...orderMuscles(extras)].map((muscle) => ({
+  const order = orderMuscles(draft.exercises.map((row) => row.muscleKey));
+  return order.map((muscle) => ({
     muscle,
     exercises: draft.exercises.filter((row) => row.muscleKey === muscle),
   }));
@@ -407,13 +411,13 @@ export function supersetLabels(draft: LiftSessionDraft): Record<string, string> 
   return labels;
 }
 
-/** The exercise a new one would pair with: the last one already in that muscle section. */
+/** The exercise a new one would pair with: the last strength row, any muscle. */
 export function supersetPartner(
   draft: LiftSessionDraft,
-  muscle: MuscleKey,
+  _muscle?: MuscleKey,
 ): LiftExerciseDraft | null {
-  const inSection = draft.exercises.filter((row) => row.muscleKey === muscle);
-  return inSection.length ? inSection[inSection.length - 1] : null;
+  const strength = draft.exercises.filter((row) => isStrengthRow(row));
+  return strength.length ? strength[strength.length - 1] : null;
 }
 
 function nextSupersetGroup(draft: LiftSessionDraft): number {
@@ -436,7 +440,7 @@ export function addExercise(
     superset?: boolean;
   },
 ): LiftSessionDraft {
-  const partner = input.superset ? supersetPartner(draft, input.muscleKey) : null;
+  const partner = input.superset ? supersetPartner(draft) : null;
   let exercises = draft.exercises;
   let group: number | null = null;
 
@@ -463,10 +467,7 @@ export function addExercise(
   const next = exercises.slice();
   next.splice(lastIndex + 1, 0, added);
 
-  return withMuscle(
-    { ...draft, exercises: next },
-    input.muscleKey,
-  );
+  return refreshSessionMeta(withMuscle({ ...draft, exercises: next }, input.muscleKey));
 }
 
 function lastIndexForMuscle(exercises: LiftExerciseDraft[], muscle: MuscleKey): number {
@@ -488,7 +489,7 @@ function withMuscle(draft: LiftSessionDraft, muscle: MuscleKey): LiftSessionDraf
 }
 
 export function removeExercise(draft: LiftSessionDraft, key: string): LiftSessionDraft {
-  return { ...draft, exercises: draft.exercises.filter((row) => row.key !== key) };
+  return refreshSessionMeta({ ...draft, exercises: draft.exercises.filter((row) => row.key !== key) });
 }
 
 /**
@@ -536,15 +537,17 @@ export function swapExercise(
     muscleKey?: MuscleKey;
   },
 ): LiftSessionDraft {
-  return mapExercise(draft, key, (row) => ({
-    ...row,
-    exerciseId: input.exerciseId ?? null,
-    customExerciseId: input.customExerciseId ?? null,
-    name: input.name,
-    muscleKey: input.muscleKey ?? row.muscleKey,
-    // The clip belonged to the old movement, so it does not describe this one any more.
-    demoUrl: null,
-  }));
+  return refreshSessionMeta(
+    mapExercise(draft, key, (row) => ({
+      ...row,
+      exerciseId: input.exerciseId ?? null,
+      customExerciseId: input.customExerciseId ?? null,
+      name: input.name,
+      muscleKey: input.muscleKey ?? row.muscleKey,
+      // The clip belonged to the old movement, so it does not describe this one any more.
+      demoUrl: null,
+    })),
+  );
 }
 
 /**
@@ -594,8 +597,11 @@ export function canMoveExercise(
 }
 
 export function renameSession(draft: LiftSessionDraft, title: string): LiftSessionDraft {
-  const trimmed = String(title ?? '').trim();
-  return { ...draft, title: trimmed ? trimmed.slice(0, 120) : null };
+  const trimmed = String(title ?? '').trim().slice(0, 120);
+  if (!trimmed) {
+    return refreshSessionMeta({ ...draft, title: null, titleIsAuto: true });
+  }
+  return { ...draft, title: trimmed, titleIsAuto: false };
 }
 
 function mapExercise(
@@ -712,20 +718,162 @@ export function shortDate(iso: string): string {
   return `${MONTHS[date.getMonth()]} ${date.getDate()}`;
 }
 
-/** "Chest · Triceps · Sep 5". A renamed session returns its own title untouched. */
+const AUTO_TITLE_LABELS = new Set<string>([
+  'Legs',
+  ...MUSCLE_SHORT_LABELS(),
+]);
+
+function MUSCLE_SHORT_LABELS(): string[] {
+  return [
+    'Chest',
+    'Back',
+    'Shoulders',
+    'Traps',
+    'Biceps',
+    'Triceps',
+    'Forearms',
+    'Quads',
+    'Hamstrings',
+    'Glutes',
+    'Calves',
+    'Core',
+    'Olympic',
+    'Cardio',
+    'Rest',
+  ];
+}
+
+/** True when the stored title is still the app-written “Chest · Triceps · Sep 6” shape. */
+export function looksLikeAutoLiftTitle(
+  title?: string | null,
+  performedAt?: string,
+): boolean {
+  const custom = String(title ?? '').trim();
+  if (!custom) {
+    return true;
+  }
+  const date = performedAt ? shortDate(performedAt) : '';
+  if (date && custom === date) {
+    return true;
+  }
+  const parts = custom.split(/\s*·\s*/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0 || parts.length > 4) {
+    return false;
+  }
+  const last = parts[parts.length - 1] ?? '';
+  const groups = date && last === date ? parts.slice(0, -1) : parts;
+  if (date && last !== date) {
+    return false;
+  }
+  if (groups.length > 3) {
+    return false;
+  }
+  return groups.every((part) => AUTO_TITLE_LABELS.has(part));
+}
+
+export function isTitleAuto(input: {
+  title?: string | null;
+  titleIsAuto?: boolean;
+  performedAt?: string;
+}): boolean {
+  if (input.titleIsAuto === false) {
+    return false;
+  }
+  if (input.titleIsAuto === true) {
+    return true;
+  }
+  return looksLikeAutoLiftTitle(input.title, input.performedAt);
+}
+
+/**
+ * Tags from the roster. Unknown catalog ids keep the row and skip a junk tag.
+ * Cardio / rest are tags only when they are on the roster.
+ */
+export function muscleTagsFromRoster(
+  exercises: ReadonlyArray<{
+    exerciseId?: string | null;
+    muscleKey?: string | null;
+    kind?: string | null;
+    name?: string | null;
+  }>,
+): MuscleKey[] {
+  const keys: string[] = [];
+  for (const row of exercises) {
+    if (isMuscleKey(row.muscleKey)) {
+      keys.push(row.muscleKey);
+      continue;
+    }
+    const official = row.exerciseId ? officialExercise(row.exerciseId) : null;
+    if (official) {
+      keys.push(official.muscle);
+    }
+  }
+  return orderMuscles(keys);
+}
+
+function titleGroupNames(tags: readonly MuscleKey[]): string[] {
+  const strength = tags.filter((key) => key !== 'cardio' && key !== 'rest');
+  if (strength.length === 0) {
+    return [];
+  }
+  if (strength.every(isLegsMuscle)) {
+    return ['Legs'];
+  }
+  return strength.slice(0, 3).map(muscleShortLabel);
+}
+
+export function autoSessionTitle(input: {
+  muscleKeys?: readonly string[] | null;
+  performedAt: string;
+  exercises?: ReadonlyArray<{
+    exerciseId?: string | null;
+    muscleKey?: string | null;
+    kind?: string | null;
+  }>;
+}): string {
+  const date = shortDate(input.performedAt);
+  // A live draft always has an exercises array. Empty roster → date only, even if leftover
+  // group chips are still on the session. History cards that omit exercises still use tags.
+  const tags =
+    input.exercises !== undefined
+      ? muscleTagsFromRoster(input.exercises)
+      : orderMuscles(input.muscleKeys);
+  const groups = titleGroupNames(tags);
+  const parts = [...groups, date].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Lift';
+}
+
+/** Refresh tags from the roster. Auto titles follow; a penciled name does not. */
+export function refreshSessionMeta(draft: LiftSessionDraft): LiftSessionDraft {
+  const muscleKeys = muscleTagsFromRoster(draft.exercises);
+  const auto = isTitleAuto(draft);
+  return {
+    ...draft,
+    muscleKeys,
+    titleIsAuto: auto,
+    title: auto ? autoSessionTitle({ ...draft, muscleKeys, exercises: draft.exercises }) : draft.title,
+  };
+}
+
+/**
+ * Header / History title.
+ *
+ * A penciled name is returned as-is. An auto title uses the string already on the draft — that is
+ * what History stored, and refreshSessionMeta rewrites it when the roster changes. Empty title
+ * falls back to the date / group formula so a copy with title null still has something to show.
+ */
 export function sessionTitle(input: {
   title?: string | null;
+  titleIsAuto?: boolean;
   muscleKeys: readonly string[];
   performedAt: string;
+  exercises?: LiftSessionDraft['exercises'];
 }): string {
-  const custom = String(input.title ?? '').trim();
-  if (custom) {
-    return custom;
+  const stored = String(input.title ?? '').trim();
+  if (stored) {
+    return stored;
   }
-  const muscles = orderMuscles(input.muscleKeys).map(muscleShortLabel);
-  const date = shortDate(input.performedAt);
-  const parts = [...muscles, date].filter(Boolean);
-  return parts.length ? parts.join(' · ') : 'Lift';
+  return autoSessionTitle(input);
 }
 
 export function countWorkSets(draft: LiftSessionDraft): number {
@@ -863,8 +1011,10 @@ export function rowsToDraft(
       kind: (row.kind === 'cardio' || row.kind === 'rest' ? row.kind : 'strength') as LiftRowKind,
       exerciseId: row.exercise_id,
       customExerciseId: row.custom_exercise_id,
-      name: row.name,
-      muscleKey: (isMuscleKey(row.muscle_key) ? row.muscle_key : 'core') as MuscleKey,
+      name: row.name || officialExercise(String(row.exercise_id ?? ''))?.name || 'Exercise',
+      muscleKey: (isMuscleKey(row.muscle_key)
+        ? row.muscle_key
+        : officialExercise(String(row.exercise_id ?? ''))?.muscle ?? 'core') as MuscleKey,
       supersetGroup: row.superset_group,
       cardioMethod: row.cardio_method ?? null,
       cardioCustomName: row.cardio_custom_name ?? null,
@@ -885,17 +1035,29 @@ export function rowsToDraft(
         })),
     }));
 
+  const storedKeys = orderMuscles(session.muscle_keys);
+  // Tags from the original row keys / catalog, not a display fallback like "core".
+  const derivedKeys = muscleTagsFromRoster(
+    [...exerciseRows]
+      .sort((a, b) => a.sort - b.sort)
+      .map((row) => ({
+        exerciseId: row.exercise_id,
+        muscleKey: isMuscleKey(row.muscle_key) ? row.muscle_key : null,
+        name: row.name,
+      })),
+  );
   return {
     id: session.id,
     ownerUserId: session.user_id,
     title: session.title,
+    titleIsAuto: looksLikeAutoLiftTitle(session.title, session.performed_at),
     performedAt: session.performed_at,
     completedAt: session.completed_at,
     status: session.status ?? (session.completed_at ? 'completed' : 'open'),
     favorite: Boolean(session.favorite),
     weightMoved: toNumber(session.weight_moved ?? null) ?? 0,
     healthkitWorkoutUuid: session.healthkit_workout_uuid ?? null,
-    muscleKeys: orderMuscles(session.muscle_keys),
+    muscleKeys: storedKeys.length ? storedKeys : derivedKeys,
     unit: session.unit === 'kg' ? 'kg' : 'lb',
     exercises,
     sourceSessionId: session.source_session_id ?? null,
@@ -921,6 +1083,7 @@ export function copySession(
   return {
     id: newId(),
     title: null,
+    titleIsAuto: true,
     performedAt: new Date().toISOString(),
     completedAt: null,
     status: 'open',

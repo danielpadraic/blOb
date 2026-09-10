@@ -7,7 +7,7 @@ import {
   recapFallbackText,
   sessionVolume,
 } from '@/lib/lift/recap';
-import { addExercise, addTimedRow, newSessionDraft } from '@/lib/lift/session';
+import { addExercise, addTimedRow, newSessionDraft, refreshSessionMeta } from '@/lib/lift/session';
 import type { LiftExerciseDraft, LiftSessionDraft, LiftSetDraft } from '@/lib/lift/types';
 
 const DONE = '2026-09-05T19:00:00Z';
@@ -35,11 +35,14 @@ function exercise(name: string, sets: LiftSetDraft[], supersetGroup: number | nu
 }
 
 function session(exercises: LiftExerciseDraft[]): LiftSessionDraft {
-  return {
-    ...newSessionDraft({ muscleKeys: ['chest', 'triceps'], unit: 'lb' }),
-    performedAt: '2026-09-05T18:00:00Z',
+  return refreshSessionMeta({
+    ...newSessionDraft({
+      muscleKeys: ['chest', 'triceps'],
+      unit: 'lb',
+      performedAt: '2026-09-05T18:00:00Z',
+    }),
     exercises,
-  };
+  });
 }
 
 describe('exercise detail line', () => {
@@ -90,8 +93,8 @@ describe('exercise detail line', () => {
 describe('recap card', () => {
   it('titles itself from the muscles and date when unnamed', () => {
     const recap = buildRecap(session([exercise('Flat DB Bench', [set(52.5, 10)])]));
-    expect(recap.title).toBe('Chest · Triceps · Sep 5');
-    expect(recap.muscles).toBe('Chest · Triceps');
+    expect(recap.title).toBe('Chest · Sep 5');
+    expect(recap.muscles).toBe('Chest');
   });
 
   it('collapses a superset pair into a single block', () => {
@@ -168,7 +171,7 @@ describe('fallback text on the post', () => {
       session([exercise('Flat DB Bench', [set(52.5, 10)]), exercise('Cable Fly', [set(25, 15)])]),
     );
     expect(recapFallbackText(recap)).toBe(
-      'Chest · Triceps · Sep 5\nFlat DB Bench · 1 × 52.5 lb × 10\nCable Fly · 1 × 25 lb × 15',
+      'Chest · Sep 5\nFlat DB Bench · 1 × 52.5 lb × 10\nCable Fly · 1 × 25 lb × 15',
     );
   });
 });

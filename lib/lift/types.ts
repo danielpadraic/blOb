@@ -80,6 +80,11 @@ export type LiftSessionDraft = {
   ownerName?: string | null;
   /** Null means the app titles it from the muscles and the date. */
   title: string | null;
+  /**
+   * True while the header still follows the roster. Missing on old rows — inferred from the
+   * stored title looking like “Chest · Triceps · Sep 6”. Never a required column.
+   */
+  titleIsAuto?: boolean;
   performedAt: string;
   completedAt: string | null;
   /** open = Draft. completed / saved = finished. */

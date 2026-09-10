@@ -83,3 +83,13 @@ export function orderMuscles(keys: readonly string[] | null | undefined): Muscle
 export function muscleSummary(keys: readonly string[] | null | undefined): string {
   return orderMuscles(keys).map(muscleShortLabel).join(' · ');
 }
+
+/**
+ * Catalog primaries that are one region. Title collapsing only — not a second exercise list.
+ * Air Squat / Box Jump / Leg Press sit on quads; hamstrings and glutes share this parent.
+ */
+export const LEGS_MUSCLE_KEYS = ['quads', 'hamstrings', 'glutes', 'calves'] as const;
+
+export function isLegsMuscle(key: MuscleKey): boolean {
+  return (LEGS_MUSCLE_KEYS as readonly string[]).includes(key);
+}

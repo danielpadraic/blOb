@@ -53,7 +53,8 @@ import {
   useSendMessage,
 } from '@/hooks/useSocial';
 import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
-import { isTimedMuscle, muscleLabel, type MuscleKey } from '@/lib/lift/muscles';
+import { MUSCLE_KEYS, isTimedMuscle, muscleLabel, muscleShortLabel, type MuscleKey } from '@/lib/lift/muscles';
+import { recentExerciseOptions, rememberRecentExercise } from '@/lib/lift/recents';
 import {
   addExercise,
   addSet,
@@ -145,6 +146,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
   const [collapsedMuscles, setCollapsedMuscles] = useState<Set<string>>(new Set());
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
   /** The exercise being pointed at a different movement, keeping its sets. */
   const [swapFor, setSwapFor] = useState<string | null>(null);
@@ -323,6 +325,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       }
 
       if (identity) {
+        rememberRecentExercise(identity.exerciseId);
         edit((current) =>
           swapKey
             ? swapExercise(current, swapKey, { ...identity, muscleKey: result.muscle })
@@ -333,6 +336,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
               }),
         );
       }
+      setPickerOpen(false);
       setSheetMuscle(null);
       setSwapFor(null);
     } catch (caught) {
@@ -770,6 +774,82 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
             </Pressable>
           ) : null}
 
+          {!readOnly && draft.exercises.length === 0 ? (
+            <View style={{ gap: 12, marginBottom: 18 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add exercise"
+                onPress={() => {
+                  setSheetMuscle(null);
+                  setPickerOpen(true);
+                }}
+                style={({ pressed }) => ({
+                  minHeight: 56,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: pressed ? THEME.accentSoft : THEME.accent,
+                })}>
+                <AppText style={{ fontSize: 16, fontWeight: '800', color: THEME.accentForeground }}>
+                  Add exercise
+                </AppText>
+              </Pressable>
+              <AppText style={{ fontSize: 12, fontWeight: '800', letterSpacing: 0.6, color: THEME.textMuted }}>
+                FILTER (OPTIONAL)
+              </AppText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {MUSCLE_KEYS.map((key) => (
+                  <Pressable
+                    key={key}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter ${muscleLabel(key)}`}
+                    onPress={() => {
+                      setSheetMuscle(key);
+                      setPickerOpen(true);
+                    }}
+                    style={{
+                      minHeight: 36,
+                      paddingHorizontal: 14,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: THEME.border,
+                      backgroundColor: THEME.surface,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                    <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.textPrimary }}>
+                      {muscleShortLabel(key)}
+                    </AppText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {!readOnly && draft.exercises.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add exercise"
+              onPress={() => {
+                setSheetMuscle(null);
+                setPickerOpen(true);
+              }}
+              style={({ pressed }) => ({
+                minHeight: 44,
+                marginBottom: 14,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: THEME.accent,
+                backgroundColor: pressed ? THEME.accentSoft : THEME.surface,
+              })}>
+              <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
+                Add exercise
+              </AppText>
+            </Pressable>
+          ) : null}
+
           {sections.map((section) => {
             const collapsed = collapsedMuscles.has(section.muscle);
             return (
@@ -827,6 +907,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                           return;
                         }
                         setSheetMuscle(section.muscle);
+                        setPickerOpen(true);
                       }}
                       style={({ pressed }) => ({
                         minHeight: 44,
@@ -860,7 +941,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                         }}>
                         <AppText style={{ fontSize: 13, color: THEME.textMuted }}>
                           {readOnly
-                            ? 'Nothing logged for this one.'
+                            ? 'Nothing added for this one.'
                             : isTimedMuscle(section.muscle)
                               ? `Nothing here yet. Tap Add to log ${section.muscle === 'rest' ? 'a rest' : 'cardio'}.`
                               : `No ${muscleLabel(section.muscle)} exercises yet. Tap Add to search the catalog.`}
@@ -1059,22 +1140,22 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       </View>
 
       <AddExerciseSheet
-        visible={sheetMuscle != null || swapFor != null}
+        visible={pickerOpen || swapFor != null}
         swapping={swapFor ? (swapRow?.name ?? null) : null}
-        muscle={swapRow?.muscleKey ?? sheetMuscle ?? draft.muscleKeys[0] ?? 'chest'}
-        muscles={draft.muscleKeys.length ? draft.muscleKeys : [sheetMuscle ?? 'chest']}
+        muscle={swapRow?.muscleKey ?? sheetMuscle ?? null}
         customs={customs.data ?? []}
-        supersetPartnerName={
-          swapFor || !sheetMuscle ? null : (supersetPartner(draft, sheetMuscle)?.name ?? null)
-        }
+        recents={recentExerciseOptions()}
+        supersetPartnerName={swapFor ? null : (supersetPartner(draft)?.name ?? null)}
         methods={cardioMethods.data ?? []}
         busy={createCustom.isPending}
         onClose={() => {
+          setPickerOpen(false);
           setSheetMuscle(null);
           setSwapFor(null);
         }}
         onSubmit={(result) => void onAddExercise(result)}
         onPickTimed={(result) => {
+          setPickerOpen(false);
           setSheetMuscle(null);
           setSwapFor(null);
           setTimedSheet(result);

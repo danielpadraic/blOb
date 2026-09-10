@@ -14,6 +14,9 @@ import {
   removeSet,
   renameSession,
   repeatSession,
+  isTitleAuto,
+  looksLikeAutoLiftTitle,
+  muscleTagsFromRoster,
   rowsToDraft,
   sessionPreview,
   sessionSections,
@@ -98,10 +101,8 @@ describe('field clamps', () => {
 });
 
 describe('sections', () => {
-  it('gives every picked muscle a section, even an empty one', () => {
-    const sections = sessionSections(chestAndTriceps());
-    expect(sections.map((row) => row.muscle)).toEqual(['chest', 'triceps']);
-    expect(sections[0].exercises).toEqual([]);
+  it('has no sections on an empty session — Add exercise is the first tap', () => {
+    expect(sessionSections(chestAndTriceps())).toEqual([]);
   });
 
   it('files an exercise under the muscle it was added to', () => {
@@ -155,9 +156,9 @@ describe('supersets', () => {
     expect(supersetLabels(alone)).toEqual({});
   });
 
-  it('names the partner a superset would attach to', () => {
+  it('names the partner a superset would attach to, in any group', () => {
     expect(supersetPartner(withBench(), 'chest')?.name).toBe('Incline BB Bench Press');
-    expect(supersetPartner(withBench(), 'triceps')).toBeNull();
+    expect(supersetPartner(withBench(), 'triceps')?.name).toBe('Incline BB Bench Press');
   });
 });
 
@@ -223,18 +224,19 @@ describe('sets', () => {
 });
 
 describe('titles', () => {
-  it('titles an unnamed session from its muscles and date', () => {
-    expect(sessionTitle(chestAndTriceps())).toMatch(/^Chest · Triceps · [A-Z][a-z]{2} \d{1,2}$/);
+  it('titles an empty unnamed session from the date only', () => {
+    expect(sessionTitle(chestAndTriceps())).toBe('Sep 5');
   });
 
   it('uses the name once they rename it', () => {
     expect(sessionTitle(renameSession(chestAndTriceps(), '  Push day  '))).toBe('Push day');
   });
 
-  it('falls back to the auto title when the name is cleared', () => {
+  it('falls back to the date when the name is cleared on an empty session', () => {
     const cleared = renameSession(renameSession(chestAndTriceps(), 'Push day'), '   ');
-    expect(cleared.title).toBeNull();
-    expect(sessionTitle(cleared)).toContain('Chest');
+    expect(cleared.title).toBe('Sep 5');
+    expect(cleared.titleIsAuto).toBe(true);
+    expect(sessionTitle(cleared)).toBe('Sep 5');
   });
 
   it('previews two lines and counts the rest', () => {
@@ -377,5 +379,181 @@ describe('history opens the same logging route', () => {
     expect(liftSessionHref('9f1c2e0a-0000-4000-8000-000000000000', { from: 'history' })).toBe(
       '/lift/9f1c2e0a-0000-4000-8000-000000000000?from=history',
     );
+  });
+});
+
+describe('read adapter for old sessions', () => {
+  const performedAt = '2026-09-06T17:00:00.000Z';
+
+  it('opens an old Chest · Triceps · Sep 6 row with those tags and keeps the title', () => {
+    const draft = rowsToDraft(
+      {
+        id: 'old-1',
+        user_id: 'user-1',
+        title: 'Chest · Triceps · Sep 6',
+        performed_at: performedAt,
+        completed_at: performedAt,
+        muscle_keys: ['chest', 'triceps'],
+        unit: 'lb',
+        created_at: performedAt,
+        updated_at: performedAt,
+      },
+      [
+        {
+          id: 'ex-1',
+          session_id: 'old-1',
+          exercise_id: 'incline-bb-bench-press',
+          custom_exercise_id: null,
+          name: 'Incline BB Bench Press',
+          muscle_key: 'chest',
+          sort: 0,
+          superset_group: null,
+        },
+      ],
+      [],
+    );
+    expect(draft.exercises.map((row) => row.name)).toEqual(['Incline BB Bench Press']);
+    expect(draft.muscleKeys).toEqual(['chest', 'triceps']);
+    expect(draft.title).toBe('Chest · Triceps · Sep 6');
+    expect(isTitleAuto(draft)).toBe(true);
+    expect(looksLikeAutoLiftTitle(draft.title, draft.performedAt)).toBe(true);
+  });
+
+  it('opens an old empty roster with stored groups so Add exercise still works', () => {
+    const draft = rowsToDraft(
+      {
+        id: 'old-empty',
+        user_id: 'user-1',
+        title: 'Chest · Sep 6',
+        performed_at: performedAt,
+        completed_at: null,
+        muscle_keys: ['chest'],
+        unit: 'lb',
+        created_at: performedAt,
+        updated_at: performedAt,
+      },
+      [],
+      [],
+    );
+    expect(draft.exercises).toEqual([]);
+    expect(draft.muscleKeys).toEqual(['chest']);
+    expect(sessionSections(draft)).toEqual([]);
+    const next = addExercise(draft, {
+      exerciseId: 'incline-bb-bench-press',
+      name: 'Incline BB Bench Press',
+      muscleKey: 'chest',
+    });
+    expect(next.exercises).toHaveLength(1);
+    expect(next.muscleKeys).toContain('chest');
+  });
+
+  it('titles a new empty session with the date, then tags legs/quads after a squat', () => {
+    const draft = newSessionDraft({
+      muscleKeys: [],
+      unit: 'lb',
+      performedAt: '2026-09-10T17:00:00.000Z',
+    });
+    expect(sessionTitle(draft)).toBe('Sep 10');
+    const withSquat = addExercise(draft, {
+      exerciseId: 'bodyweight-squat',
+      name: 'Bodyweight Squat',
+      muscleKey: 'quads',
+    });
+    expect(withSquat.muscleKeys).toEqual(['quads']);
+    expect(muscleTagsFromRoster(withSquat.exercises)).toEqual(['quads']);
+    expect(sessionTitle(withSquat)).toBe('Legs · Sep 10');
+  });
+
+  it('keeps a penciled title when another exercise is added', () => {
+    let draft = addExercise(
+      newSessionDraft({ unit: 'lb', performedAt: '2026-09-10T17:00:00.000Z' }),
+      { exerciseId: 'bb-curl', name: 'BB Curl', muscleKey: 'biceps' },
+    );
+    draft = renameSession(draft, 'Thursday AM');
+    expect(isTitleAuto(draft)).toBe(false);
+    draft = addExercise(draft, {
+      exerciseId: 'ez-bar-skull-crusher',
+      name: 'EZ-Bar Skull Crusher',
+      muscleKey: 'triceps',
+    });
+    expect(draft.title).toBe('Thursday AM');
+    expect(draft.muscleKeys).toEqual(['biceps', 'triceps']);
+  });
+
+  it('supersets a curl with a skull crusher across groups', () => {
+    let draft = addExercise(
+      newSessionDraft({ unit: 'lb', performedAt: '2026-09-10T17:00:00.000Z' }),
+      { exerciseId: 'bb-curl', name: 'BB Curl', muscleKey: 'biceps' },
+    );
+    draft = addExercise(draft, {
+      exerciseId: 'ez-bar-skull-crusher',
+      name: 'EZ-Bar Skull Crusher',
+      muscleKey: 'triceps',
+      superset: true,
+    });
+    expect(supersetPartner(draft)?.name).toBe('EZ-Bar Skull Crusher');
+    expect(draft.exercises[0].supersetGroup).toBe(draft.exercises[1].supersetGroup);
+    expect(sessionTitle(draft)).toBe('Biceps · Triceps · Sep 10');
+  });
+
+  it('keeps an unknown exercise id, shows the saved name, and skips a junk tag', () => {
+    const draft = rowsToDraft(
+      {
+        id: 'old-unknown',
+        user_id: 'user-1',
+        title: 'Sep 6',
+        performed_at: performedAt,
+        completed_at: null,
+        muscle_keys: [],
+        unit: 'lb',
+        created_at: performedAt,
+        updated_at: performedAt,
+      },
+      [
+        {
+          id: 'ex-gone',
+          session_id: 'old-unknown',
+          exercise_id: 'deleted-old-id',
+          custom_exercise_id: null,
+          name: 'Mystery Press',
+          muscle_key: 'not-a-muscle',
+          sort: 0,
+          superset_group: null,
+        },
+      ],
+      [],
+    );
+    expect(draft.exercises).toHaveLength(1);
+    expect(draft.exercises[0].name).toBe('Mystery Press');
+    expect(draft.muscleKeys).toEqual([]);
+  });
+
+  it('titles squat + box jump + leg press + leg extension as Legs', () => {
+    let draft = newSessionDraft({
+      unit: 'lb',
+      performedAt: '2026-09-10T17:00:00.000Z',
+    });
+    draft = addExercise(draft, {
+      exerciseId: 'bodyweight-squat',
+      name: 'Bodyweight Squat',
+      muscleKey: 'quads',
+    });
+    draft = addExercise(draft, {
+      exerciseId: 'box-jump',
+      name: 'Box Jump',
+      muscleKey: 'quads',
+    });
+    draft = addExercise(draft, {
+      exerciseId: 'leg-press',
+      name: 'Leg Press',
+      muscleKey: 'quads',
+    });
+    draft = addExercise(draft, {
+      exerciseId: 'leg-extension',
+      name: 'Leg Extension',
+      muscleKey: 'quads',
+    });
+    expect(draft.muscleKeys).toEqual(['quads']);
+    expect(sessionTitle(draft)).toBe('Legs · Sep 10');
   });
 });

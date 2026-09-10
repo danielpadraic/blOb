@@ -205,6 +205,10 @@ async function displayNameFor(userId: string | null | undefined): Promise<string
 }
 
 function titleFor(row: LiftSessionRow): string {
+  const stored = String(row.title ?? '').trim();
+  if (stored) {
+    return stored;
+  }
   return sessionTitle({
     title: row.title,
     muscleKeys: row.muscle_keys,
@@ -373,7 +377,7 @@ export async function saveLiftSession(
   const completed = options?.completed ?? Boolean(draft.completedAt);
   const { data, error } = await supabase.rpc('save_lift_session', {
     p_id: draft.id,
-    p_title: draft.title,
+    p_title: sessionTitle(draft),
     p_performed_at: draft.performedAt,
     p_muscle_keys: draft.muscleKeys,
     p_unit: draft.unit,

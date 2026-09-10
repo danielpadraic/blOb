@@ -5,6 +5,7 @@ import {
   cardioTypeLabel,
   formatDuration,
   formatLiftNumber,
+  muscleTagsFromRoster,
   sessionTitle,
   shortDate,
   timedRowLabel,
@@ -224,7 +225,9 @@ export function buildRecap(draft: LiftSessionDraft, maxLines = RECAP_MAX_LINES):
   return {
     sessionId: draft.id,
     title: sessionTitle(draft),
-    muscles: muscleSummary(draft.muscleKeys),
+    muscles: muscleSummary(
+      draft.exercises.length ? muscleTagsFromRoster(draft.exercises) : draft.muscleKeys,
+    ),
     date: shortDate(draft.performedAt),
     unit: draft.unit,
     lines,
