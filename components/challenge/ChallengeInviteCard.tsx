@@ -47,7 +47,9 @@ import { copy } from '@/lib/copy';
 import { cashJoinUi, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { isOfficialChallenge } from '@/lib/official';
 import { armingCountdownLabel, officialContestantsNeeded, officialGuaranteeAmount } from '@/lib/officialSeries';
-import { isClosedForLogs, isJoinWindowOpen } from '@/lib/settlement';
+import { isLoggable } from '@/lib/loggable';
+import type { ExperienceChallenge } from '@/lib/challengeExperience';
+import { isJoinWindowOpen } from '@/lib/settlement';
 import { flexChildMin, THEME, themeShadow } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { compactCountdown } from '@/utils/format';
@@ -100,6 +102,10 @@ export type InviteChallenge = {
   organization?: string | null;
   task?: string | null;
   tasks?: Array<{ title?: string | null }> | null;
+  format?: string | null;
+  cumulative_metric?: string | null;
+  cumulative_target?: number | string | null;
+  metrics?: unknown;
 };
 
 export type InviteHost = {
@@ -267,16 +273,18 @@ export function inviteCardCanCheckIn(input: {
   challenge: InviteChallenge;
   joined?: boolean;
   eliminated?: boolean;
+  submittedThisPeriod?: boolean;
 }): boolean {
-  if (!input.joined) {
-    return false;
-  }
-  return !isClosedForLogs({
-    status: input.challenge.status,
-    ends_at: input.challenge.ends_at,
-    is_unlimited: input.challenge.is_unlimited,
-    eliminated: input.eliminated,
-  });
+  return isLoggable(
+    input.challenge as ExperienceChallenge & {
+      status?: string | null;
+      starts_at?: string | null;
+      ends_at?: string | null;
+      is_unlimited?: boolean | null;
+    },
+    { isParticipant: input.joined, eliminated: input.eliminated },
+    { submittedThisPeriod: input.submittedThisPeriod },
+  );
 }
 
 export function ChallengeInviteCard({
@@ -357,8 +365,12 @@ export function ChallengeInviteCard({
       : periodCheckin.data?.phase === 'submitted' || Boolean(periodCheckin.data?.submitted_at);
   const canCheckIn =
     checkinEnabled &&
-    inviteCardCanCheckIn({ challenge, joined, eliminated }) &&
-    !checkedIn;
+    inviteCardCanCheckIn({
+      challenge,
+      joined,
+      eliminated,
+      submittedThisPeriod: checkedIn,
+    });
   const tags = challengeCardTags({ challenge, hosting, joined });
   const displayTitle = challengeDisplayTitle(challenge);
   const chrome = calloutCardChrome(challenge.is_callout);

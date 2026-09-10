@@ -813,7 +813,7 @@ const STRINGS = {
   'checkin.submitUnconfirmed': 'Couldn’t confirm this check-in. Nothing was sent — try Submit again.',
   'checkin.extraFailed': 'Couldn’t add that extra photo. Your check-in still counts.',
   'checkin.extraFailedMany': 'Couldn’t add {n} extra photos. Your check-in still counts.',
-  'checkin.alreadyBob': 'Already counted today. Come back for the next window.',
+  'checkin.alreadyBob': 'You already checked in for this period.',
   'checkin.notLiveBob': 'This challenge isn’t taking check-ins right now.',
   'checkin.submitBanner': 'You started. Submit before 11:59 p.m. Central.',
   'checkin.post': 'Post',

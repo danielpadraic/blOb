@@ -101,6 +101,7 @@ import {
   usesPointsBoard,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
+import { allowsMultiCheckin, usesPeriodCheckinGate } from '@/lib/loggable';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
 import { parseLocationPlace } from '@/lib/locationProof';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
@@ -926,6 +927,8 @@ export default function ChallengeDetailScreen() {
   const isPoints = isPointsChallenge(challenge) && !comparable;
   const isUnlimited = isUnlimitedChallenge(challenge);
   const totalCount = usesTotalCountCheckins(challenge);
+  const multiSubmit = allowsMultiCheckin(challenge);
+  const periodGate = usesPeriodCheckinGate(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
   const previewHero = Boolean(challenge.preview_hero);
   const checkinTarget = challengeTargetCount(challenge);
@@ -939,7 +942,11 @@ export default function ChallengeDetailScreen() {
     submittedCheckins.data ?? 0,
     loggedToday && !totalCount ? 1 : 0,
   );
-  const checkinLocked = totalCount ? submittedCount >= checkinTarget : loggedToday;
+  const checkinLocked = totalCount
+    ? submittedCount >= checkinTarget
+    : multiSubmit
+      ? false
+      : loggedToday;
   const logTitle = checkinLocked
     ? copy('checkin.checkedIn')
     : (periodCheckin.data?.ctaTitle ?? copy('checkin.begin'));
@@ -1222,7 +1229,7 @@ export default function ChallengeDetailScreen() {
         {pageTab === 'overview' && calloutQuery.data && isCalloutFighterViewer ? (
           <CalloutWatchers callout={calloutQuery.data} me={user?.id} isFighter />
         ) : null}
-        {pageTab === 'overview' && !loggedToday && !isCalloutObserver && !viewerOut ? (
+        {pageTab === 'overview' && periodGate && !loggedToday && !isCalloutObserver && !viewerOut ? (
           <View className="mt-3">
             <PeriodCheckinDue challenge={challenge} submitted={false} nowMs={nowMs} />
           </View>
@@ -1653,24 +1660,31 @@ export default function ChallengeDetailScreen() {
               />
             )}
             {checkinLocked ? (
-              <View
-                accessibilityRole="button"
-                accessibilityLabel={copy('checkin.checkedIn')}
-                accessibilityState={{ disabled: true }}
-                style={{
-                  height: JOIN_CTA_HEIGHT,
-                  width: '100%',
-                  backgroundColor: THEME.accent,
-                  borderRadius: THEME.radiusSm,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}>
-                <Glyph name={GLYPH.check} color={THEME.accentForeground} size={18} />
-                <AppText className="text-[16px] font-semibold" style={{ color: THEME.accentForeground }}>
-                  {copy('checkin.checkedIn')}
-                </AppText>
+              <View className="gap-1.5">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={copy('checkin.checkedIn')}
+                  onPress={() => setPageTab('feed')}
+                  style={{
+                    height: JOIN_CTA_HEIGHT,
+                    width: '100%',
+                    backgroundColor: THEME.accent,
+                    borderRadius: THEME.radiusSm,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}>
+                  <Glyph name={GLYPH.check} color={THEME.accentForeground} size={18} />
+                  <AppText className="text-[16px] font-semibold" style={{ color: THEME.accentForeground }}>
+                    {copy('checkin.checkedIn')}
+                  </AppText>
+                </Pressable>
+                {periodGate ? (
+                  <AppText className="text-center text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+                    {copy('checkin.alreadyBob')}
+                  </AppText>
+                ) : null}
               </View>
             ) : (
               <Button

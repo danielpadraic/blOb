@@ -94,6 +94,23 @@ describe('which challenges get offered after a Home post', () => {
     expect(workoutPromptTargets({ workouts, candidates: [done], now: NOW })).toEqual([]);
   });
 
+  it('still offers a miles race after a log today', () => {
+    const race = candidate(
+      {
+        title: 'Run 128 Miles by January 1',
+        metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+        cumulative_target: 128,
+        cumulative_metric: 'distance_m',
+      },
+      {
+        status: 'submitted',
+        submitted_at: NOW.toISOString(),
+        period_key: checkinPeriodKey(challenge() as never, NOW),
+      },
+    );
+    expect(workoutPromptTargets({ workouts, candidates: [race], now: NOW })).toHaveLength(1);
+  });
+
   it('still offers when the period check-in was started but not submitted', () => {
     const draft = candidate({}, {
       status: 'draft',

@@ -2,13 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { checkinPeriodCacheStamp, checkinPeriodKey, normalizePeriodKey } from '@/lib/checkinPeriod';
-import { isClosedForLogs } from '@/lib/settlement';
+import { isLoggable, loggableStatusLine } from '@/lib/loggable';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { checkinTaskLabel } from '@/lib/checkin';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
-import { loggableStatusLine } from '@/lib/loggable';
 import { getErrorMessage } from '@/utils/errors';
 
 export { asLoggableList, loggableStatusLine } from '@/lib/loggable';
@@ -32,6 +31,16 @@ export type LoggableChallenge = Pick<
   | 'proofs'
   | 'proof_type'
   | 'proof_requirements'
+  | 'format'
+  | 'challenge_type'
+  | 'cumulative_metric'
+  | 'cumulative_target'
+  | 'metrics'
+  | 'scoring_method'
+  | 'scoring_config'
+  | 'comparable_points_config'
+  | 'target_count'
+  | 'length_value'
 > & {
   checkinPhase?: CheckinPhase;
   ctaTitle?: string;
@@ -53,6 +62,9 @@ const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at, days
 const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at, days_completed';
 
 const CHALLENGE_SELECTS = [
+  'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows, format, challenge_type, cumulative_metric, cumulative_target, metrics, scoring_method, scoring_config, comparable_points_config, target_count, length_value',
+  'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows, format, challenge_type, cumulative_metric, cumulative_target, metrics, scoring_method, target_count, length_value',
+  'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows, format, challenge_type, cumulative_target, metrics',
   'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, task, tasks, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
   'id, title, task, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows',
@@ -91,22 +103,20 @@ export function useLoggableChallenges() {
       );
       const now = Date.now();
 
+      const clock = new Date(now);
+
       return challenges
         .filter((challenge) => {
-          const expected = checkinPeriodKey(challenge);
-          if (loggedRows.get(challenge.id)?.has(expected)) {
-            return false;
-          }
-          if (submittedThisPeriod(challenge, checkinRows)) {
-            return false;
-          }
-          if (new Date(challenge.starts_at).getTime() > now) {
-            return false;
-          }
-          if (String(challenge.status ?? '') !== 'live') {
-            return false;
-          }
-          return !isClosedForLogs(challenge);
+          const expected = checkinPeriodKey(challenge, clock);
+          return isLoggable(
+            challenge,
+            { isParticipant: true },
+            {
+              now: clock,
+              submittedThisPeriod: submittedThisPeriod(challenge, checkinRows),
+              loggedThisPeriod: loggedRows.get(challenge.id)?.has(expected) ?? false,
+            },
+          );
         })
         .sort((a, b) => {
           const aDue = a.ends_at ? new Date(a.ends_at).getTime() : Number.POSITIVE_INFINITY;

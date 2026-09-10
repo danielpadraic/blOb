@@ -14,7 +14,8 @@ import { checkinPointValue } from '@/lib/challengePoints';
 import { parseChallengeCheckin, saveCheckinProof, submitCheckin } from '@/lib/challenges/stagedCheckin';
 import { parseProofParts, proofImageUrls } from '@/lib/challengeProofs';
 import { cancelCheckoutReminder, scheduleCheckoutReminder } from '@/lib/health/localNudges';
-import { usesComparablePointsScoring, usesPointsBoard, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesComparablePointsScoring, usesPointsBoard } from '@/lib/challengeExperience';
+import { allowsMultiCheckin } from '@/lib/loggable';
 import { heroRingActive } from '@/lib/challengeStart';
 import { supabase } from '@/lib/supabase';
 import type { Challenge } from '@/lib/types';
@@ -190,7 +191,7 @@ export async function fetchCurrentPeriodCheckin(
 ): Promise<ChallengeCheckin | null> {
   const key = normalizePeriodKey(date ?? periodKeyFor(challenge));
   const exact = key ? await fetchPeriodCheckin(challengeId, userId, key) : null;
-  if (exact && !(usesTotalCountCheckins(challenge) && isSubmittedCheckin(exact))) {
+  if (exact && !(allowsMultiCheckin(challenge) && isSubmittedCheckin(exact))) {
     return exact;
   }
   const recent = await supabase
@@ -232,7 +233,7 @@ export async function fetchCurrentPeriodCheckin(
   if (!match) {
     return null;
   }
-  if (usesTotalCountCheckins(challenge) && isSubmittedCheckin(match)) {
+  if (allowsMultiCheckin(challenge) && isSubmittedCheckin(match)) {
     return null;
   }
   return hydrateCheckin(match);
@@ -379,7 +380,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
       }
       if (row && user?.id) {
         const cachedChallenge = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
-        if (usesTotalCountCheckins(cachedChallenge)) {
+        if (allowsMultiCheckin(cachedChallenge)) {
           queryClient.setQueriesData({ queryKey: checkinQueryKey(challengeId, user.id) }, asView(null));
         } else {
           writeCheckinCache(queryClient, challengeId, user.id, row);

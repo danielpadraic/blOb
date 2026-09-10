@@ -133,8 +133,8 @@ import { challengeClockTz, checkinPeriodKey } from '@/lib/checkinPeriod';
 import { getHealthProvider, healthProviderAvailable } from '@/services/health';
 import {
   distanceProofIsSessionLog,
-  usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
+import { allowsMultiCheckin } from '@/lib/loggable';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
@@ -398,9 +398,9 @@ function SubmitWorkoutInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [proofShape],
   );
-  const totalCount = usesTotalCountCheckins(challenge);
+  const multiSubmit = allowsMultiCheckin(challenge);
   const rawPhase = checkinQuery.data?.phase ?? 'none';
-  const phase = totalCount && rawPhase === 'submitted' ? 'none' : rawPhase;
+  const phase = multiSubmit && rawPhase === 'submitted' ? 'none' : rawPhase;
   const honorOnly = proofsAreHonorOnly(proofSteps);
   /**
    * Prayer needs a photo and a written note. Auto-opening the camera hides the note requirement
@@ -441,11 +441,16 @@ function SubmitWorkoutInner() {
   }, [uid, profile?.checkin_share_home, profile?.checkin_share_wave]);
 
   useEffect(() => {
-    if (!id || totalCount || !checkinQuery.isFetched || checkinQuery.data?.phase !== 'submitted') {
+    if (!id || !challenge || multiSubmit || !checkinQuery.isFetched || checkinQuery.data?.phase !== 'submitted') {
       return;
     }
-    router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'feed' }) as never);
-  }, [checkinQuery.data?.phase, checkinQuery.isFetched, id, router, totalCount]);
+    router.replace(
+      challengeDetailHref(id, 'lobby', null, {
+        tab: 'feed',
+        notice: copy('checkin.alreadyBob'),
+      }) as never,
+    );
+  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, id, multiSubmit, router]);
 
   useEffect(() => {
     if (!id || challengeQuery.isLoading || !checkinQuery.isFetched) {
@@ -500,7 +505,7 @@ function SubmitWorkoutInner() {
   ]);
 
   useEffect(() => {
-    if (usesTotalCountCheckins(challenge) && checkinQuery.data?.phase === 'submitted') {
+    if (allowsMultiCheckin(challenge) && checkinQuery.data?.phase === 'submitted') {
       return;
     }
     if (!checkinQuery.data) {
@@ -1587,7 +1592,7 @@ function SubmitWorkoutInner() {
     );
   }
 
-  if (!totalCount && checkinQuery.isFetched && checkinQuery.data?.phase === 'submitted') {
+  if (!multiSubmit && checkinQuery.isFetched && checkinQuery.data?.phase === 'submitted') {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
@@ -1944,7 +1949,7 @@ function SubmitWorkoutInner() {
         dueLine={
           <PeriodCheckinDue
             challenge={challenge}
-            submitted={rawPhase === 'submitted' && !totalCount}
+            submitted={rawPhase === 'submitted' && !multiSubmit}
             compact
           />
         }

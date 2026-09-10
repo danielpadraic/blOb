@@ -9,6 +9,7 @@
  */
 
 import { isCorporateChallenge } from '@/lib/challengeExperience';
+import { usesPeriodCheckinGate } from '@/lib/loggable';
 import { challengeAcceptsWorkoutProof } from '@/lib/health/acceptsWorkout';
 import { resolveChallengeProofs } from '@/lib/challengeProofs';
 import { checkedInForCurrentPeriod } from '@/lib/lobbyChallenge';
@@ -49,6 +50,12 @@ export type PromptChallenge = {
   proof_type?: unknown;
   proof_requirements?: unknown;
   challenge_type?: string | null;
+  format?: string | null;
+  metrics?: unknown;
+  cumulative_target?: number | string | null;
+  cumulative_metric?: string | null;
+  target_count?: number | null;
+  length_value?: number | null;
   tasks?: unknown;
   scoring_method?: string | null;
   scoring_config?: unknown;
@@ -115,9 +122,11 @@ export function workoutPromptTargets(input: {
     if (!challengeAcceptsWorkoutProof(challenge as never)) {
       continue;
     }
-    // Already done for this period: the incremental proof lock owns that post, and a second prompt
-    // would invite them to redo work they have finished.
-    if (checkedInForCurrentPeriod(candidate.checkin ?? null, challenge as never, now)) {
+    // Already done for this period on a daily-stamp challenge. Quantity / points races stay open.
+    if (
+      usesPeriodCheckinGate(challenge as never) &&
+      checkedInForCurrentPeriod(candidate.checkin ?? null, challenge as never, now)
+    ) {
       continue;
     }
 
