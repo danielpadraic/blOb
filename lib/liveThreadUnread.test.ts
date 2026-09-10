@@ -188,31 +188,36 @@ describe('the cursor that gets persisted', () => {
 
 describe('new messages below the fold', () => {
   const rows = [postRow('a', 0), postRow('b', 10), postRow('c', 20), postRow('d', 30)];
+  const readAtB = rows[1].createdAt;
 
-  it('counts what arrived after the row they left the bottom on', () => {
-    expect(liveNewBelowCount(rows, 'b', ME)).toBe(2);
+  it('counts what arrived after the last-read cursor, below the fold', () => {
+    expect(liveNewBelowCount(rows, 'b', ME, readAtB)).toBe(2);
   });
 
   it('is zero at the newest row', () => {
-    expect(liveNewBelowCount(rows, 'd', ME)).toBe(0);
+    expect(liveNewBelowCount(rows, 'd', ME, readAtB)).toBe(0);
   });
 
   it('is zero without an anchor, instead of claiming the thread is new', () => {
-    expect(liveNewBelowCount(rows, null, ME)).toBe(0);
+    expect(liveNewBelowCount(rows, null, ME, readAtB)).toBe(0);
   });
 
   it('is zero for an anchor that is no longer in the thread', () => {
-    expect(liveNewBelowCount(rows, 'gone', ME)).toBe(0);
+    expect(liveNewBelowCount(rows, 'gone', ME, readAtB)).toBe(0);
+  });
+
+  it('is zero without a last-read cursor', () => {
+    expect(liveNewBelowCount(rows, 'b', ME, null)).toBe(0);
   });
 
   it('does not count the reader’s own new message', () => {
     const mine = [...rows, postRow('mine', 40, ME)];
-    expect(liveNewBelowCount(mine, 'd', ME)).toBe(0);
+    expect(liveNewBelowCount(mine, 'd', ME, rows[3].createdAt)).toBe(0);
   });
 
   it('does not count day separators', () => {
     const withDay = [...rows, dayRow('day:2', 35), postRow('e', 40)];
-    expect(liveNewBelowCount(withDay, 'd', ME)).toBe(1);
+    expect(liveNewBelowCount(withDay, 'd', ME, rows[3].createdAt)).toBe(1);
   });
 });
 

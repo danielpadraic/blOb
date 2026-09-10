@@ -97,7 +97,11 @@ export function useToggleLiveReaction() {
         return;
       }
       await queryClient.cancelQueries({ queryKey: ['feed'] });
-      const previous = queryClient.getQueriesData({ queryKey: ['feed'] });
+      await queryClient.cancelQueries({ queryKey: ['live'] });
+      const previous = [
+        ...queryClient.getQueriesData({ queryKey: ['feed'] }),
+        ...queryClient.getQueriesData({ queryKey: ['live'] }),
+      ];
       patchFeedPosts(queryClient, input.post.id, (post) =>
         applyLiveReaction(post, user.id, input.type, input.commentId),
       );

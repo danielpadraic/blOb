@@ -69,9 +69,17 @@ export function liveErrorFile(error: unknown): string | null {
 
 /** Oldest first so the live edge is the bottom of the thread. */
 export function sortLivePosts<T extends LivePostLike>(posts: T[]): T[] {
-  return [...posts]
-    .filter((post) => Boolean(post?.id) && !post.deleted_at)
-    .sort((a, b) => {
+  const unique = new Map<string, T>();
+  for (const post of posts) {
+    const id = String(post?.id ?? '').trim();
+    if (!id || post.deleted_at) {
+      continue;
+    }
+    if (!unique.has(id)) {
+      unique.set(id, post);
+    }
+  }
+  return [...unique.values()].sort((a, b) => {
       const left = Date.parse(String(a.created_at ?? ''));
       const right = Date.parse(String(b.created_at ?? ''));
       const leftAt = Number.isFinite(left) ? left : 0;
@@ -107,9 +115,9 @@ export function liveRowKey(
     if (id) {
       return id;
     }
-    return `live:${row?.kind ?? 'row'}:${String(row?.createdAt ?? '')}:${index}`;
+    return `live:${row?.kind ?? 'row'}:${String(row?.createdAt ?? '')}`;
   } catch {
-    return `live:row:${index}`;
+    return `live:row`;
   }
 }
 

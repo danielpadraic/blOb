@@ -475,14 +475,22 @@ export function LiveThread({
     }
   }, [pinToLiveEdge, rows]);
 
-  // If the list never reports reaching the bottom, the opening pin still expires, so a stalled
-  // measurement cannot leave the thread permanently snapping downward.
+  // If the first scrollToEnd ran before the list finished measuring, try once more, then stop.
+  // Do not treat “800ms passed” as parked — that left people on Day 2.
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const retry = setTimeout(() => {
+      if (firstPaintPendingRef.current && !draggingRef.current) {
+        pinToLiveEdge(false, 'first-paint');
+      }
+    }, 400);
+    const stop = setTimeout(() => {
       firstPaintPendingRef.current = false;
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []);
+    }, 1600);
+    return () => {
+      clearTimeout(retry);
+      clearTimeout(stop);
+    };
+  }, [pinToLiveEdge]);
 
   const reads = useLiveThreadReads(readCursorChallengeId);
   /** Rows confirmed on screen this visit. A row seen here is not unread, whatever its timestamp. */
@@ -613,12 +621,17 @@ export function LiveThread({
         // Parked at the newest row: nothing is waiting below, and this is the anchor new arrivals
         // are counted against once they scroll away again.
         bottomAnchorRef.current = rows[rows.length - 1]?.id ?? null;
+        firstPaintPendingRef.current = false;
+        const latestAt = rows[rows.length - 1]?.createdAt;
+        if (latestAt) {
+          reads.markRead(latestAt);
+        }
         if (newBelow !== 0) {
           setNewBelow(0);
         }
       }
     },
-    [newBelow, rows],
+    [newBelow, reads, rows],
   );
 
   // New rows arriving while the reader is scrolled up become a count on the jump control, never a
@@ -627,8 +640,8 @@ export function LiveThread({
     if (atEndRef.current) {
       return;
     }
-    setNewBelow(liveNewBelowCount(rows, bottomAnchorRef.current, currentUserId));
-  }, [currentUserId, rows]);
+    setNewBelow(liveNewBelowCount(rows, bottomAnchorRef.current, currentUserId, reads.cursor));
+  }, [currentUserId, reads.cursor, rows]);
 
   const submitLine = useCallback(
     async (content: string, mentionedUserIds: string[] = [], parentId?: string | null) => {
@@ -843,7 +856,7 @@ export function LiveThread({
           ref={listRef}
           data={rows}
           extraData={currentUserId ?? ''}
-          keyExtractor={(item, index) => liveRowKey(item, index)}
+          keyExtractor={(item) => liveRowKey(item)}
           renderItem={renderItem}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
@@ -867,15 +880,14 @@ export function LiveThread({
             if (emptyList) {
               return;
             }
-            if (hasLiveInitialScroll(readCursorChallengeId)) {
-              return;
-            }
             if (highlightKey && highlightedOnce.current === highlightKey) {
               return;
             }
             if (!firstPaintPendingRef.current) {
               return;
             }
+            // Keep pinning until the newest row is actually on screen. Marking the visit
+            // “scrolled” on the first incomplete scrollToEnd is how Live parked on Day 2.
             pinToLiveEdge(false, 'first-paint');
           }}
           onScrollToIndexFailed={() => {
@@ -948,7 +960,7 @@ export function LiveThread({
           </View>
         ) : null}
 
-        {notAtEnd ? (
+        {notAtEnd && newBelow > 0 ? (
           <View
             pointerEvents="box-none"
             style={{ position: 'absolute', left: 0, right: 0, bottom: 10, alignItems: 'center' }}>
@@ -966,7 +978,7 @@ export function LiveThread({
                 backgroundColor: THEME.primary,
               }}>
               <AppText className="text-[12px] font-semibold" style={{ color: '#FFFFFF' }}>
-                {newBelow > 0 ? `New · ${newBelow > 99 ? '99+' : newBelow}` : 'New'}
+                {`New · ${newBelow > 99 ? '99+' : newBelow}`}
               </AppText>
             </Pressable>
           </View>

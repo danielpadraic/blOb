@@ -17,6 +17,8 @@ import {
   circleFeedListKey,
   composerListKey,
   feedListKey,
+  isLiveListKey,
+  liveListKey,
   HOME_FEED_SCOPE,
   homeFeedListKey,
   isHomeSocialFeedKey,
@@ -87,7 +89,7 @@ import {
   type HomeFeedAllowContext,
   type HomeFeedCursor,
 } from '@/lib/homeFeed';
-import { dedupeLivePostsByCheckinId } from '@/lib/liveFeedPatch';
+import { dedupeLivePostsByCheckinId, uniqueLivePostsById, upsertLiveFeedPost } from '@/lib/liveFeedPatch';
 import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
@@ -1381,7 +1383,7 @@ export function useFeed(challengeId?: string | null) {
   });
 
   const challengeQuery = useQuery({
-    queryKey: feedListKey(challengeId || 'challenge', user?.id),
+    queryKey: challengeId ? liveListKey(challengeId, user?.id) : feedListKey('challenge', user?.id),
     enabled: !home,
     staleTime: 30_000,
     retry: 1,
@@ -1390,7 +1392,8 @@ export function useFeed(challengeId?: string | null) {
     refetchOnReconnect: false,
     refetchInterval: false,
     queryFn: async () => {
-      return await fetchPosts({ challengeId, userId: user?.id });
+      const posts = await fetchPosts({ challengeId, userId: user?.id });
+      return uniqueLivePostsById(dedupeLivePostsByCheckinId(posts));
     },
   });
 
@@ -1665,8 +1668,8 @@ export function seedChallengeLivePost(
     comments: post.comments ?? [],
     reactions: post.reactions ?? [],
   };
-  queryClient.setQueryData(feedListKey(id, userId), (current) =>
-    prependFeedCache(current ?? [], seeded),
+  queryClient.setQueryData(liveListKey(id, userId), (current) =>
+    upsertLiveFeedPost(current ?? [], seeded),
   );
 }
 
@@ -1810,7 +1813,7 @@ export function useCreatePost(challengeId?: string | null) {
       const listKey = composerListKey(input, challengeId, user?.id);
       void queryClient.cancelQueries({ queryKey: listKey });
       const previous = queryClient.getQueryData(listKey);
-      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       if (user) {
         const authorId = safeUserId(profile, user.id) ?? user.id;
         const optimistic: PostWithMeta = {
@@ -1841,7 +1844,12 @@ export function useCreatePost(challengeId?: string | null) {
           reactions: [],
         };
         if (!isHomeExcludedClipType(optimistic.type)) {
-          queryClient.setQueryData(listKey, prependFeedCache(previous, optimistic));
+          queryClient.setQueryData(
+            listKey,
+            isLiveListKey(listKey)
+              ? upsertLiveFeedPost(previous ?? [], optimistic)
+              : prependFeedCache(previous, optimistic),
+          );
         }
       }
       return { previous, optimisticId, listKey };
@@ -1863,6 +1871,9 @@ export function useCreatePost(challengeId?: string | null) {
           return;
         }
         queryClient.setQueryData(context.listKey, (current) => {
+          if (isLiveListKey(context.listKey)) {
+            return upsertLiveFeedPost(current ?? [], posted, context.optimisticId);
+          }
           let replaced = false;
           const mapped = mapFeedCache(current, (posts) => {
             const defined = posts.filter((post): post is PostWithMeta => Boolean(post?.id));
@@ -1873,7 +1884,9 @@ export function useCreatePost(challengeId?: string | null) {
               replaced = true;
               return { ...posted, comments: post.comments ?? [], reactions: post.reactions ?? [] };
             });
-            return replaced ? next : [posted, ...defined.filter((post) => post.id !== posted.id)];
+            return replaced
+              ? next.filter((post, index, list) => list.findIndex((row) => row.id === post.id) === index)
+              : [posted, ...defined.filter((post) => post.id !== posted.id && post.id !== context.optimisticId)];
           });
           return mapped ?? prependFeedCache(current, posted);
         });
@@ -2191,7 +2204,7 @@ function prependFeedCache(current: unknown, post: PostWithMeta): unknown {
   return current;
 }
 
-export { circleFeedListKey, homeFeedListKey, isHomeSocialFeedKey } from '@/lib/feedListKeys';
+export { circleFeedListKey, homeFeedListKey, isHomeSocialFeedKey, liveListKey } from '@/lib/feedListKeys';
 
 export function removePostFromHomeFeeds(queryClient: QueryClient, postId: string) {
   queryClient.setQueriesData(
@@ -2201,24 +2214,31 @@ export function removePostFromHomeFeeds(queryClient: QueryClient, postId: string
   );
 }
 
+function patchCachedPostLists(
+  queryClient: QueryClient,
+  mapPosts: (posts: PostWithMeta[]) => PostWithMeta[],
+) {
+  for (const root of ['feed', 'live'] as const) {
+    queryClient.setQueriesData({ queryKey: [root] }, (current) => mapFeedCache(current, mapPosts));
+  }
+}
+
 export function patchFeedPosts(
   queryClient: QueryClient,
   postId: string,
   updater: (post: PostWithMeta) => PostWithMeta,
 ) {
-  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) =>
-    mapFeedCache(current, (posts) => {
-      let changed = false;
-      const next = posts.map((post) => {
-        if (!post || post.id !== postId) {
-          return post;
-        }
-        changed = true;
-        return updater(post);
-      });
-      return changed ? next : posts;
-    }),
-  );
+  patchCachedPostLists(queryClient, (posts) => {
+    let changed = false;
+    const next = posts.map((post) => {
+      if (!post || post.id !== postId) {
+        return post;
+      }
+      changed = true;
+      return updater(post);
+    });
+    return changed ? next : posts;
+  });
 }
 
 export function patchFeedComments(
@@ -2226,8 +2246,7 @@ export function patchFeedComments(
   commentId: string,
   updater: (comment: CommentWithAuthor, post: PostWithMeta) => CommentWithAuthor | null,
 ) {
-  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) =>
-    mapFeedCache(current, (posts) => {
+  patchCachedPostLists(queryClient, (posts) => {
       let changed = false;
       const next = posts.map((post) => {
         if (!post?.comments?.some((comment) => comment.id === commentId)) {
@@ -2246,8 +2265,7 @@ export function patchFeedComments(
         };
       });
       return changed ? next : posts;
-    }),
-  );
+  });
 }
 
 function findUserReaction(

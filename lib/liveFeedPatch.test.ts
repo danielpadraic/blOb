@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { dedupeLivePostsByCheckinId, patchLiveFeedList } from '@/lib/liveFeedPatch';
+import {
+  dedupeLivePostsByCheckinId,
+  matchOptimisticLiveIndex,
+  patchLiveFeedList,
+  uniqueLivePostsById,
+  upsertLiveFeedPost,
+} from '@/lib/liveFeedPatch';
 
 const A = { id: 'a', content: 'hi', media_urls: ['https://cdn.test/one.jpg'], checkin_stats: { duration_sec: 2100 } };
 const B = { id: 'b', content: 'yo', media_urls: ['https://cdn.test/two.jpg'] };
@@ -159,6 +165,50 @@ describe('dedupeLivePostsByCheckinId', () => {
       hr_avg: 87,
     });
     expect(next[1]).toBe(B);
+  });
+
+  it('replaces an optimistic lobby row on realtime insert instead of adding a third', () => {
+    const optimistic = {
+      id: 'optimistic-1',
+      author_id: 'me',
+      content: '@Courtney we stopped our watch',
+      created_at: '2026-09-10T17:21:00.000Z',
+    };
+    const list = [A, optimistic];
+    const next = patchLiveFeedList(list, {
+      eventType: 'INSERT',
+      new: {
+        id: 'real-1',
+        author_id: 'me',
+        content: '@Courtney we stopped our watch',
+        created_at: '2026-09-10T17:21:02.000Z',
+      },
+    }) as Array<{ id: string }>;
+    expect(next.map((row) => row.id)).toEqual(['a', 'real-1']);
+  });
+
+  it('ignores a realtime insert when that posts.id is already in the list', () => {
+    const list = [A, { id: 'real-1', content: 'hi' }];
+    const next = patchLiveFeedList(list, {
+      eventType: 'INSERT',
+      new: { id: 'real-1', content: 'hi' },
+    });
+    expect(next).toBe(list);
+  });
+
+  it('upserts by replacing the optimistic id', () => {
+    const list = [A, { id: 'optimistic-9', content: 'x' }];
+    const next = upsertLiveFeedPost(list, { id: 'real-9', content: 'x' }, 'optimistic-9');
+    expect(next.map((row) => row.id)).toEqual(['a', 'real-9']);
+  });
+
+  it('uniqueLivePostsById keeps the first copy', () => {
+    expect(uniqueLivePostsById([A, { ...A }, B]).map((row) => row.id)).toEqual(['a', 'b']);
+    expect(matchOptimisticLiveIndex([A, { id: 'optimistic-2', author_id: 'me', content: 'hi', created_at: '2026-09-10T17:21:00.000Z' }], {
+      author_id: 'me',
+      content: 'hi',
+      created_at: '2026-09-10T17:21:03.000Z',
+    })).toBe(1);
   });
 
   it('leaves two lobby rows alone when checkin_id is not a uuid', () => {

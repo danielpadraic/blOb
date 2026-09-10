@@ -1,37 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { laterLiveTimestamp, peekLiveLastRead, writeLiveLastRead } from '@/lib/liveLastRead';
 import { supabase } from '@/lib/supabase';
 
 /**
  * The read cursor for one challenge Live thread.
  *
- * `baseline` is the cursor as it stood when this visit began, and it deliberately never changes while
- * the thread is open — the "N new since you were here" count is measured against it, so letting it
- * follow our own writes would make the chip erase itself.
- *
- * A person with no stored cursor has never opened this thread. That is seeded immediately and
- * `baseline` stays null for the visit, so the chip does not greet a first-time reader by calling the
- * entire backlog unread.
+ * Memory + device storage are the source the thread paints from. The server row is a backup so a
+ * new device can catch up. Sitting on latest writes “now” immediately so old Day 3–10 rows cannot
+ * keep a New pill.
  */
 export function useLiveThreadReads(challengeId?: string | null) {
   const { user } = useAuth();
   const userId = user?.id;
   const enabled = Boolean(challengeId && userId);
 
-  const [baseline, setBaseline] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
-  /** Last value written, so repeated saves of the same cursor do not hit the network. */
-  const savedRef = useRef<string | null>(null);
-  const seededRef = useRef(false);
+  const [cursor, setCursor] = useState<string | null>(() =>
+    enabled ? peekLiveLastRead(userId, challengeId) : null,
+  );
+  const [ready, setReady] = useState(() => Boolean(peekLiveLastRead(userId, challengeId)));
+  const savedRef = useRef<string | null>(cursor);
 
   useEffect(() => {
     if (!enabled) {
       setReady(false);
-      setBaseline(null);
+      setCursor(null);
       savedRef.current = null;
-      seededRef.current = false;
       return;
+    }
+    const local = peekLiveLastRead(userId, challengeId);
+    if (local) {
+      setCursor(local);
+      savedRef.current = local;
+      setReady(true);
     }
     let cancelled = false;
     void (async () => {
@@ -45,14 +47,13 @@ export function useLiveThreadReads(challengeId?: string | null) {
         if (cancelled) {
           return;
         }
-        const cursor = typeof data?.last_read_at === 'string' ? data.last_read_at : null;
-        setBaseline(cursor);
-        savedRef.current = cursor;
-        seededRef.current = Boolean(cursor);
+        const remote = typeof data?.last_read_at === 'string' ? data.last_read_at : null;
+        const next = writeLiveLastRead(userId, challengeId, laterLiveTimestamp(local, remote));
+        setCursor(next);
+        savedRef.current = next;
       } catch {
-        // A cursor we cannot read means no chip this visit. Never block the thread on it.
-        if (!cancelled) {
-          setBaseline(null);
+        if (!cancelled && !local) {
+          setCursor(null);
         }
       } finally {
         if (!cancelled) {
@@ -65,50 +66,65 @@ export function useLiveThreadReads(challengeId?: string | null) {
     };
   }, [challengeId, enabled, userId]);
 
-  /**
-   * Moves the stored cursor forward. Older values are ignored here and clamped again by the table's
-   * forward-only trigger, so a late write from a backgrounded tab cannot reopen read messages.
-   */
-  const saveCursor = useCallback(
-    async (cursor: string | null) => {
-      if (!enabled || !cursor) {
+  const persistRemote = useCallback(
+    async (at: string | null) => {
+      if (!enabled || !at) {
         return;
       }
       const previous = savedRef.current;
-      if (previous && Date.parse(cursor) <= Date.parse(previous)) {
+      if (previous && Date.parse(at) <= Date.parse(previous)) {
         return;
       }
-      savedRef.current = cursor;
+      savedRef.current = at;
       try {
         await supabase
           .from('live_thread_reads')
           .upsert(
-            { user_id: userId!, challenge_id: challengeId!, last_read_at: cursor },
+            { user_id: userId!, challenge_id: challengeId!, last_read_at: at },
             { onConflict: 'user_id,challenge_id' },
           );
       } catch {
-        // Losing a cursor write costs a repeated chip next visit, which is the safe direction.
         savedRef.current = previous;
       }
     },
     [challengeId, enabled, userId],
   );
 
-  /** Gives a first-time reader a starting point so their next visit can measure "new". */
-  const seedIfMissing = useCallback(
-    (newestAt: string | null) => {
-      if (!enabled || seededRef.current) {
+  /** Forward-only. Used when the newest row is on screen. */
+  const markRead = useCallback(
+    (at: string | null) => {
+      if (!enabled || !at) {
         return;
       }
-      seededRef.current = true;
-      void saveCursor(newestAt ?? new Date().toISOString());
+      const next = writeLiveLastRead(userId, challengeId, at);
+      if (!next) {
+        return;
+      }
+      setCursor((current) => laterLiveTimestamp(current, next) ?? next);
+      void persistRemote(next);
     },
-    [enabled, saveCursor],
+    [challengeId, enabled, persistRemote, userId],
   );
 
-  // Memoized so callers can depend on this object without re-running their effects every render.
+  const seedIfMissing = useCallback(
+    (newestAt: string | null) => {
+      if (!enabled || peekLiveLastRead(userId, challengeId)) {
+        return;
+      }
+      markRead(newestAt ?? new Date().toISOString());
+    },
+    [challengeId, enabled, markRead, userId],
+  );
+
   return useMemo(
-    () => ({ baseline, ready, saveCursor, seedIfMissing }),
-    [baseline, ready, saveCursor, seedIfMissing],
+    () => ({
+      baseline: cursor,
+      cursor,
+      ready,
+      saveCursor: persistRemote,
+      markRead,
+      seedIfMissing,
+    }),
+    [cursor, markRead, persistRemote, ready, seedIfMissing],
   );
 }

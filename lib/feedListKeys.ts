@@ -10,6 +10,15 @@ export function circleFeedListKey(circleId: string, userId?: string | null) {
   return ['feed', 'circle', circleId, userId] as const;
 }
 
+/** Challenge Live thread. Isolated so invalidateQueries(['feed']) cannot refetch the room. */
+export function liveListKey(challengeId: string, userId?: string | null) {
+  return ['live', challengeId, userId] as const;
+}
+
+export function isLiveListKey(queryKey: readonly unknown[]): boolean {
+  return queryKey[0] === 'live';
+}
+
 export function feedListKey(scope: string, userId?: string | null) {
   if (scope === 'global' || scope === HOME_FEED_SCOPE) {
     return homeFeedListKey(userId);
@@ -28,7 +37,7 @@ export function composerListKey(
   }
   const id = String(input.challengeId ?? hookedChallengeId ?? '').trim();
   if (id) {
-    return feedListKey(id, userId);
+    return liveListKey(id, userId);
   }
   return homeFeedListKey(userId);
 }

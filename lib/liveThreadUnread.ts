@@ -182,8 +182,13 @@ export function liveNewBelowCount(
   rows: LiveThreadRow[],
   anchorId: string | null,
   currentUserId?: string | null,
+  lastReadAt?: string | null,
 ): number {
   if (!anchorId) {
+    return 0;
+  }
+  const cursor = lastReadAt ? Date.parse(lastReadAt) : NaN;
+  if (!Number.isFinite(cursor)) {
     return 0;
   }
   const anchor = rows.findIndex((row) => row.id === anchorId);
@@ -192,9 +197,17 @@ export function liveNewBelowCount(
   }
   let count = 0;
   for (let index = anchor + 1; index < rows.length; index += 1) {
-    if (countsAsUnread(rows[index], currentUserId)) {
-      count += 1;
+    const row = rows[index];
+    if (!countsAsUnread(row, currentUserId)) {
+      continue;
     }
+    if (Number.isFinite(cursor)) {
+      const at = Date.parse(row.createdAt);
+      if (!Number.isFinite(at) || at <= cursor) {
+        continue;
+      }
+    }
+    count += 1;
   }
   return count;
 }

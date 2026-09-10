@@ -29,6 +29,16 @@ import {
 } from '@/lib/liveThread';
 
 describe('sortLivePosts', () => {
+  it('keeps one row per posts.id', () => {
+    const rows = sortLivePosts([
+      { id: 'same', created_at: '2026-09-10T17:21:00.000Z', content: 'hello' },
+      { id: 'same', created_at: '2026-09-10T17:21:00.000Z', content: 'hello' },
+      { id: 'same', created_at: '2026-09-10T17:21:00.000Z', content: 'hello' },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('same');
+  });
+
   it('puts newest at the end and drops deleted rows', () => {
     const rows = sortLivePosts([
       { id: 'c', created_at: '2026-09-01T16:00:00.000Z' },
@@ -51,8 +61,8 @@ describe('seedLiveFeedPosts / liveRowKey', () => {
     expect(rows[0].author?.id).toBe('u-1');
     expect(rows[0].author?.display_name).toBe('Member');
     expect(rows[0].media_urls).toEqual([]);
-    expect(liveRowKey({ id: undefined, kind: 'post' }, 3)).toBe('live:post::3');
-    expect(liveRowKey(null, 0)).toBe('live:row::0');
+    expect(liveRowKey({ id: undefined, kind: 'post' }, 3)).toBe('live:post:');
+    expect(liveRowKey(null, 0)).toBe('live:row:');
     expect(
       liveRowKey(
         {

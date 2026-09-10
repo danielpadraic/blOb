@@ -234,6 +234,85 @@ function sameItemList(prev: unknown[], next: unknown[]): boolean {
   return prev.length === next.length && prev.every((item, index) => item === next[index]);
 }
 
+export function isOptimisticLiveId(id?: string | null): boolean {
+  return String(id ?? '').startsWith('optimistic-');
+}
+
+const OPTIMISTIC_MATCH_MS = 5000;
+
+/** Same author + body + created_at ±5s. Used when realtime arrives before onSuccess swaps the id. */
+export function matchOptimisticLiveIndex(
+  list: ReadonlyArray<{
+    id?: string | null;
+    author_id?: string | null;
+    content?: string | null;
+    created_at?: string | null;
+  }>,
+  incoming: {
+    author_id?: string | null;
+    content?: string | null;
+    created_at?: string | null;
+  },
+): number {
+  const author = String(incoming.author_id ?? '').trim();
+  const body = String(incoming.content ?? '').trim();
+  const at = Date.parse(String(incoming.created_at ?? ''));
+  if (!author || !Number.isFinite(at)) {
+    return -1;
+  }
+  return list.findIndex((row) => {
+    if (!isOptimisticLiveId(row.id)) {
+      return false;
+    }
+    if (String(row.author_id ?? '').trim() !== author) {
+      return false;
+    }
+    if (String(row.content ?? '').trim() !== body) {
+      return false;
+    }
+    const rowAt = Date.parse(String(row.created_at ?? ''));
+    return Number.isFinite(rowAt) && Math.abs(rowAt - at) <= OPTIMISTIC_MATCH_MS;
+  });
+}
+
+/** One row per posts.id. First write wins so a refetch cannot reprint the bubble. */
+export function uniqueLivePostsById<T extends { id?: string | null }>(posts: readonly T[]): T[] {
+  const seen = new Map<string, T>();
+  for (const post of posts) {
+    const id = String(post?.id ?? '').trim();
+    if (!id) {
+      continue;
+    }
+    if (!seen.has(id)) {
+      seen.set(id, post);
+    }
+  }
+  return [...seen.values()];
+}
+
+function finishLiveList<T extends { id: string }>(list: T[]): T[] {
+  return dedupeLivePostsByCheckinId(uniqueLivePostsById(list));
+}
+
+/**
+ * Replace an optimistic row (or an existing posts.id) instead of appending a twin.
+ * New lobby lines append at the end — Live is oldest-first.
+ */
+export function upsertLiveFeedPost<T extends { id: string }>(
+  current: unknown,
+  post: T,
+  optimisticId?: string | null,
+): T[] {
+  const list = Array.isArray(current) ? (current as T[]) : [];
+  const id = String(post?.id ?? '').trim();
+  if (!id) {
+    return list;
+  }
+  const skip = new Set([id, String(optimisticId ?? '').trim()].filter(Boolean));
+  const next = list.filter((row) => !skip.has(String(row?.id ?? '')));
+  return finishLiveList([...next, post]);
+}
+
 function findOldestIndexByCheckinId(list: Array<{ id?: string; checkin_id?: string | null; created_at?: string | null }>, checkinId: string): number {
   const key = liveCheckinKey(checkinId);
   if (!key) {
@@ -330,7 +409,7 @@ export function patchLiveFeedList(current: unknown, payload: LiveFeedRealtimePay
         return current;
       }
       const removed = current.filter((post) => post && post.id !== id);
-      return dedupeLivePostsByCheckinId(removed);
+      return finishLiveList(removed);
     }
     const id = String(next?.id ?? '');
     if (!id) {
@@ -349,7 +428,7 @@ export function patchLiveFeedList(current: unknown, payload: LiveFeedRealtimePay
         }
         return merged;
       });
-      const finished = dedupeLivePostsByCheckinId(changed ? patched : current);
+      const finished = finishLiveList(changed ? patched : current);
       return sameItemList(current, finished) ? current : finished;
     }
     const checkinId = liveCheckinKey(next?.checkin_id);
@@ -367,12 +446,19 @@ export function patchLiveFeedList(current: unknown, payload: LiveFeedRealtimePay
           }
           return merged;
         });
-        const finished = dedupeLivePostsByCheckinId(changed ? patched : current);
+        const finished = finishLiveList(changed ? patched : current);
         return sameItemList(current, finished) ? current : finished;
       }
     }
     if (event === 'INSERT' || !event) {
-      return dedupeLivePostsByCheckinId([...current, next]);
+      const optimisticAt = matchOptimisticLiveIndex(current, next ?? {});
+      if (optimisticAt >= 0) {
+        const patched = current.map((post, index) =>
+          index === optimisticAt ? mergeLiveFeedPost({ ...post, id }, next ?? {}) : post,
+        );
+        return finishLiveList(patched);
+      }
+      return finishLiveList([...current, next]);
     }
     return current;
   } catch (error) {
@@ -397,7 +483,7 @@ export function patchChallengeLiveFeed(
     return false;
   }
   let sawList = false;
-  queryClient.setQueriesData({ queryKey: ['feed', challengeId] }, (current) => {
+  queryClient.setQueriesData({ queryKey: ['live', challengeId] }, (current) => {
     if (!Array.isArray(current)) {
       return current;
     }
@@ -418,7 +504,8 @@ export function patchFeedPostFields(
     return;
   }
   const payload: LiveFeedRealtimePayload = { eventType: 'UPDATE', new: { id, ...row } };
-  queryClient.setQueriesData({ queryKey: ['feed'] }, (current) => {
+  for (const root of ['feed', 'live'] as const) {
+  queryClient.setQueriesData({ queryKey: [root] }, (current) => {
     if (Array.isArray(current)) {
       return patchLiveFeedList(current, payload);
     }
@@ -440,4 +527,5 @@ export function patchFeedPostFields(
     }
     return current;
   });
+  }
 }
