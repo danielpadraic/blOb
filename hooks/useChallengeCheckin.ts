@@ -183,6 +183,40 @@ function isSubmittedToday(
   return dateStampInZone(submitted, tz) === checkinPeriodKey(challenge);
 }
 
+export async function fetchCheckinHistory(
+  challengeId: string,
+  userId: string,
+): Promise<Array<{ period_key: string | null; status: string | null; submitted_at: string | null; proof_parts: unknown }>> {
+  const recent = await supabase
+    .from('challenge_checkins')
+    .select('period_key, status, submitted_at, proof_parts')
+    .eq('challenge_id', challengeId)
+    .eq('user_id', userId)
+    .order('period_key', { ascending: false })
+    .limit(60);
+  if (recent.error) {
+    if (isMissingRelation(recent.error.message)) {
+      return [];
+    }
+    throw new Error(getErrorMessage(recent.error));
+  }
+  return (recent.data ?? []) as Array<{
+    period_key: string | null;
+    status: string | null;
+    submitted_at: string | null;
+    proof_parts: unknown;
+  }>;
+}
+
+export function useCheckinHistory(challengeId: string | undefined, enabled = true) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['checkin-history', challengeId, user?.id],
+    enabled: Boolean(challengeId && user?.id && enabled),
+    queryFn: () => fetchCheckinHistory(challengeId!, user!.id),
+  });
+}
+
 export async function fetchCurrentPeriodCheckin(
   challengeId: string,
   userId: string,
@@ -342,6 +376,7 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
       });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
+      void queryClient.invalidateQueries({ queryKey: ['checkin-history'] });
       const cached = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
       if (row.post_selfie_url || row.status === 'submitted') {
         void cancelCheckoutReminder(row.id);
@@ -430,6 +465,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
+      void queryClient.invalidateQueries({ queryKey: ['checkin-history'] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
     },

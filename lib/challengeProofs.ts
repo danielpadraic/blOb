@@ -33,6 +33,8 @@ export type ChallengeProof = {
   minutes?: number;
   distance_meters?: number;
   place?: LocationPlace | null;
+  /** Extra / primary task this slot belongs to. Missing on older rows. */
+  taskId?: string | null;
 };
 
 export type ChallengeProofPart = {
@@ -403,6 +405,7 @@ export function signupProofLines(challenge: {
       id?: unknown;
       title?: unknown;
       once?: unknown;
+      frequency?: unknown;
       proof_required?: unknown;
       proof_types?: unknown;
     };
@@ -424,7 +427,11 @@ export function signupProofLines(challenge: {
     }
     const method = methodFromProofType(types[0]);
     const sentence = defaultSentenceForMethod(method, minutes);
-    lines.push(row.once ? `Once, for “${title}”: ${sentence}` : `For “${title}”: ${sentence}`);
+    const freq = String(row.frequency ?? '').toLowerCase();
+    const once = row.once === true || freq === 'once';
+    const cadence =
+      once ? 'Once' : freq === 'daily' ? 'Daily' : freq === '3x_week' ? '3×/week' : freq === 'custom' ? 'Custom' : '';
+    lines.push(cadence ? `${cadence}, for “${title}”: ${sentence}` : `For “${title}”: ${sentence}`);
   }
   if (listed.some((proof) => proof.method === 'photo' || proof.method === 'video')) {
     lines.push('Extra photos or videos are welcome.');
@@ -987,7 +994,15 @@ export function parseChallengeProofs(value: unknown): ChallengeProof[] {
     const distance_meters =
       method === 'distance' ? proofDistanceMeters({ method, distance_meters: Number(rawMeters) }) : undefined;
     const place = method === 'location' ? parseLocationPlace(row.place ?? row) : undefined;
-    parsed.push({ id, name, method, minutes, distance_meters, place });
+    parsed.push({
+      id,
+      name,
+      method,
+      minutes,
+      distance_meters,
+      place,
+      taskId: typeof row.taskId === 'string' && row.taskId.trim() ? row.taskId : undefined,
+    });
   }
   return parsed;
 }

@@ -17,6 +17,7 @@ import {
   type ExtraRule,
 } from '@/lib/consistencyRules';
 import { persistTasksForPublish, minMinutesForPublish, namedProofsForPublish } from '@/lib/challengeCreatePublish';
+import { resolveTaskCadence } from '@/lib/taskCadence';
 import { pointsWinRulesSentence } from '@/lib/ruleActivityCopy';
 import { formatDistance, milesToMeters } from '@/lib/distance';
 import {
@@ -134,6 +135,8 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   ...defaultSchedule(),
   target_count: '6',
   frequency: 'weekly',
+  custom_checkins: 1,
+  custom_period: 'week',
   rule_activity: '',
   points_to_win: '',
     extra_rules: [],
@@ -387,13 +390,27 @@ export function cloneTemplateValues(source: CreateChallengeValues): CreateChalle
       }))
     : [];
   const extra_tasks = Array.isArray(source?.extra_tasks)
-    ? source.extra_tasks.map((item, index) => ({
-        id: item?.id || `xtask-${index + 1}`,
-        title: typeof item?.title === 'string' ? item.title : '',
-        once: Boolean(item?.once),
-        proof_method: item?.proof_method ?? 'photo',
-        hr_minutes: Math.max(Math.round(Number(item?.hr_minutes) || 30), 1),
-      }))
+    ? source.extra_tasks.map((item, index) => {
+        const cadence = resolveTaskCadence(
+          {
+            once: Boolean(item?.once),
+            frequency: item?.frequency,
+            custom_checkins: item?.custom_checkins,
+            custom_period: item?.custom_period,
+          },
+          source?.frequency,
+        );
+        return {
+          id: item?.id || `xtask-${index + 1}`,
+          title: typeof item?.title === 'string' ? item.title : '',
+          once: cadence.once,
+          frequency: cadence.frequency,
+          custom_checkins: cadence.custom_checkins,
+          custom_period: cadence.custom_period,
+          proof_method: item?.proof_method ?? 'photo',
+          hr_minutes: Math.max(Math.round(Number(item?.hr_minutes) || 30), 1),
+        };
+      })
     : [];
   const scoring_config = parseComparablePointsConfig(source?.scoring_config);
   return {

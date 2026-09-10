@@ -41,8 +41,9 @@ import {
 import { resolveDiscoverability } from '@/lib/challengeDiscoverability';
 import { extraTasksFromStored, filledExtraTasks } from '@/lib/challengeCreatePublish';
 import { storedDurationDays } from '@/lib/challengeGoal';
-import { isUnlimitedChallenge, normalizeFrequency, normalizeTasks } from '@/lib/challenges';
+import { isUnlimitedChallenge, normalizeTasks } from '@/lib/challenges';
 import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
+import { resolveTaskCadence } from '@/lib/taskCadence';
 import type { CreateChallengeValues, ExtraCreateTask } from '@/utils/validators';
 import { challengeRulesFromCreateValues } from '@/lib/challengeRuleCopy';
 import { copy } from '@/lib/copy';
@@ -645,6 +646,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     duration_days: String(days),
     target_count: String(days),
     frequency: publishFrequencyOf(draft),
+    custom_checkins: draft.custom_checkins,
+    custom_period: draft.custom_period,
     rule_activity: type.activity,
     points_to_win: '',
     extra_rules: [],
@@ -709,9 +712,13 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
   }
   days = Math.min(365, Math.max(days || 7, 1));
   const duration_preset: SimpleDurationPreset = days === 1 || days === 7 || days === 30 ? days : 'custom';
-  const freq = normalizeFrequency(challenge.frequency);
-  const frequency: SimpleFrequency =
-    freq === 'once' || freq === 'daily' || freq === '3x_week' ? freq : 'custom';
+  const storedTasks = normalizeTasks(challenge.tasks);
+  const primaryStored =
+    storedTasks.find((item) => item.id === 'primary') ??
+    storedTasks.find((item) => item.title.trim().toLowerCase() === String(challenge.task ?? '').trim().toLowerCase()) ??
+    storedTasks[0];
+  const primaryCadence = resolveTaskCadence(primaryStored, challenge.frequency);
+  const frequency: SimpleFrequency = primaryCadence.frequency;
   const type =
     SIMPLE_TYPES.find((item) => item.activity === String(challenge.task ?? '').toLowerCase()) ??
     SIMPLE_TYPES.find((item) => item.category === challenge.category) ??
@@ -739,15 +746,15 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
     duration_days: days,
     task: challenge.task ?? '',
     frequency,
-    custom_checkins: Math.max(Number(challenge.required_checkins ?? challenge.target_count) || days, 1),
-    custom_period: 'duration',
+    custom_checkins: primaryCadence.custom_checkins,
+    custom_period: primaryCadence.custom_period,
     proofs: resolveChallengeProofs({
       proofs: challenge.proofs,
       proof_type: challenge.proof_type,
       proof_requirements: challenge.proof_requirements,
       min_minutes: challenge.min_minutes,
     }),
-    extra_tasks: extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task),
+    extra_tasks: extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task, challenge.frequency),
     visibility,
     privacy_mode,
     friends_of_friends:
@@ -831,9 +838,16 @@ export function createValuesToSimpleDraft(values: CreateChallengeValues): Simple
     Math.max(Math.floor(Number(values.duration_days || values.duration_value) || 7), 1),
   );
   const duration_preset: SimpleDurationPreset = days === 1 || days === 7 || days === 30 ? days : 'custom';
-  const freq = values.frequency;
-  const frequency: SimpleFrequency =
-    freq === 'once' || freq === 'daily' || freq === '3x_week' ? freq : 'custom';
+  const primaryCadence = resolveTaskCadence(
+    {
+      frequency: values.frequency,
+      custom_checkins: values.custom_checkins,
+      custom_period: values.custom_period,
+      once: values.frequency === 'once',
+    },
+    values.frequency,
+  );
+  const frequency: SimpleFrequency = primaryCadence.frequency;
   const visibility: SimpleVisibility =
     values.visibility === 'friends' ? 'friends' : values.visibility === 'invite' || values.visibility === 'private' ? 'invite' : 'public';
   const type =
@@ -860,8 +874,8 @@ export function createValuesToSimpleDraft(values: CreateChallengeValues): Simple
     duration_days: days,
     task: values.task?.trim() ?? '',
     frequency,
-    custom_checkins: Math.max(Number(values.required_checkins ?? values.target_count) || days, 1),
-    custom_period: frequency === 'custom' ? 'duration' : base.custom_period,
+    custom_checkins: primaryCadence.custom_checkins,
+    custom_period: primaryCadence.custom_period,
     proofs,
     extra_tasks: Array.isArray(values.extra_tasks) ? values.extra_tasks : [],
     visibility,

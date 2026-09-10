@@ -188,6 +188,7 @@ export function challengeRulesSentence(
 export type RuleTaskInput = {
   title: string;
   once?: boolean;
+  frequency?: string | null;
 };
 
 export function challengeRulesFromTasks(
@@ -198,28 +199,33 @@ export function challengeRulesFromTasks(
   const named = tasks
     .map((item) => ({
       title: humanizeActivity(item.title),
-      once: Boolean(item.once),
+      once: Boolean(item.once) || String(item.frequency ?? '').toLowerCase() === 'once',
+      frequency: item.frequency ?? frequency,
     }))
     .filter((item) => item.title);
   if (named.length <= 1) {
-    return challengeRulesSentence(named[0]?.title ?? 'the task', named[0]?.once ? 'once' : frequency, honor);
+    return challengeRulesSentence(
+      named[0]?.title ?? 'the task',
+      named[0]?.once ? 'once' : named[0]?.frequency ?? frequency,
+      honor,
+    );
   }
-  const daily = named.filter((item) => !item.once);
-  const once = named.filter((item) => item.once);
-  const quoted = (items: { title: string }[]) => items.map((item) => `“${item.title}”`).join('; ');
   const proof = honor ? 'Proof is on your honor.' : 'Submit proof where required.';
-  if (frequency === 'once' || daily.length === 0) {
-    return `Complete: ${quoted(named)}. ${proof}`;
-  }
-  if (once.length === 0) {
-    return `Each day, complete: ${quoted(named)}. ${proof}`;
-  }
-  return `Each day, complete: ${quoted(daily)}. Also complete ${quoted(once)} once. ${proof}`;
+  const bits = named.map((item) => {
+    const cadence = frequencyClause(item.once ? 'once' : item.frequency);
+    return `“${item.title}” ${cadence}`;
+  });
+  return `Complete ${bits.join('; ')}. ${proof}`;
 }
 
 export function challengeRulesFromCreateValues(values: {
   task?: string | null;
-  extra_tasks?: Array<{ title?: string | null; once?: boolean | null; proof_method?: string | null }> | null;
+  extra_tasks?: Array<{
+    title?: string | null;
+    once?: boolean | null;
+    frequency?: string | null;
+    proof_method?: string | null;
+  }> | null;
   frequency?: string | null;
   proofs?: string[] | null;
   challenge_proofs?: Array<{ method?: string | null }> | null;
@@ -229,15 +235,16 @@ export function challengeRulesFromCreateValues(values: {
     .map((item) => ({
       title: String(item.title ?? '').trim(),
       once: Boolean(item.once),
+      frequency: item.frequency ?? null,
       proof_method: item.proof_method ?? null,
     }))
     .filter((item) => item.title);
   const primary = String(values.task ?? '').trim();
   const tasks: RuleTaskInput[] = primary
-    ? [{ title: primary, once: false }, ...extra]
+    ? [{ title: primary, once: false, frequency: values.frequency }, ...extra]
     : extra.length > 0
       ? extra
-      : [{ title: humanizeActivity(values.rule_activity) || 'the task', once: false }];
+      : [{ title: humanizeActivity(values.rule_activity) || 'the task', once: false, frequency: values.frequency }];
   const named = values.challenge_proofs ?? [];
   const primaryHonor =
     named.length > 0

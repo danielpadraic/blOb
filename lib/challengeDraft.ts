@@ -35,6 +35,7 @@ import {
 } from '@/lib/challengeSchedule';
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { extraTasksFromStored } from '@/lib/challengeCreatePublish';
+import { resolveTaskCadence } from '@/lib/taskCadence';
 import { clearPersistedSimpleDraft, parseSimpleChallengeDraft, type SimpleChallengeDraft } from '@/lib/simpleChallenge';
 import { emptyChallengeTask, type CreateChallengeValues, type ExtraCreateTask } from '@/utils/validators';
 import type { ChallengeProof } from '@/lib/challengeProofs';
@@ -292,11 +293,23 @@ function asExtraTasks(value: unknown): ExtraCreateTask[] {
         ? method
         : 'photo';
     const meters = Number(row.distance_meters);
+    const cadence = resolveTaskCadence(
+      {
+        once: Boolean(row.once),
+        frequency: typeof row.frequency === 'string' ? row.frequency : undefined,
+        custom_checkins: Number(row.custom_checkins) || undefined,
+        custom_period: typeof row.custom_period === 'string' ? row.custom_period : undefined,
+      },
+      undefined,
+    );
     return [
       {
         id: id || `xtask-${index + 1}`,
         title,
-        once: Boolean(row.once),
+        once: cadence.once,
+        frequency: cadence.frequency,
+        custom_checkins: cadence.custom_checkins,
+        custom_period: cadence.custom_period,
         proof_method,
         hr_minutes: Math.max(Math.round(Number(row.hr_minutes) || 30), 1),
         distance_meters: Number.isFinite(meters) && meters > 0 ? meters : undefined,
@@ -664,7 +677,7 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     extra_tasks:
       challenge.challenge_type === 'points'
         ? []
-        : extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task),
+        : extraTasksFromStored(normalizeTasks(challenge.tasks), challenge.task, challenge.frequency),
     proofs: proofs.length > 0 ? proofs : challenge.challenge_type === 'points' ? ['photo'] : [...DEFAULT_CREATE_VALUES.proofs],
     tasks:
       tasks.length > 0

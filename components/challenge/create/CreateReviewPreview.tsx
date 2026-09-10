@@ -13,6 +13,7 @@ import { challengeGoalLabel } from '@/lib/challengeGoal';
 import { entryFieldNote, prizeFieldNote, userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { isPointsChallenge } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
+import { resolveTaskCadence, taskCadenceLabel } from '@/lib/taskCadence';
 import { previewFromValues } from '@/lib/challengeTemplates';
 import {
   activityQtyLabel,
@@ -130,11 +131,9 @@ export function CreateReviewPreview({
                     <AppText className="text-[13px] leading-5 text-muted">
                       {isPoints
                         ? `${task.points} pts${task.proof_required ? ' · proof required' : ''}`
-                        : task.once
-                          ? 'Once'
-                          : task.proof_required
-                            ? 'Each day · proof required'
-                            : 'On your honor'}
+                        : `${taskCadenceLabel(resolveTaskCadence(task, values.frequency))}${
+                            task.proof_required ? ' · proof required' : ' · on your honor'
+                          }`}
                     </AppText>
                   </View>
                 </View>

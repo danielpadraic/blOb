@@ -40,7 +40,7 @@ import { useChallenge, useChallengeParticipants, useMyParticipation } from '@/ho
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin } from '@/hooks/useChallengeCheckin';
+import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin, useCheckinHistory } from '@/hooks/useChallengeCheckin';
 import { isHomeSocialFeedKey, seedChallengeLivePost } from '@/hooks/useFeed';
 import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
@@ -61,6 +61,7 @@ import {
 } from '@/lib/checkin';
 import { checkinCameraFocused } from '@/lib/cameraAsk';
 import { requiredChallengeProofs } from '@/lib/challenges';
+import { blockingProofsForCheckin, dueProofsForCheckin, hasOpenDueTask } from '@/lib/taskCadence';
 import {
   beginCameraProof,
   captureTypeForMethod,
@@ -326,6 +327,7 @@ function SubmitWorkoutInner() {
   const distanceUnit = athleteDistanceUnit(profile?.weight_unit);
   const sessionDistance = distanceProofIsSessionLog(challengeQuery.data);
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
+  const historyQuery = useCheckinHistory(id, Boolean(challengeQuery.data));
   const saveProof = useSaveCheckinProof(id);
   const submitCheckin = useSubmitCheckin(id);
   const queryClient = useQueryClient();
@@ -389,14 +391,40 @@ function SubmitWorkoutInner() {
         challenge.is_official ?? null,
         challenge.series_id ?? null,
         challenge.category ?? null,
+        challenge.frequency ?? null,
+        historyQuery.data ?? [],
+        checkinQuery.data?.proof_parts ?? null,
+        checkinQuery.data?.period_key ?? null,
       ])
     : '';
-  const proofSteps = useMemo(
+  const checkinHistory = historyQuery.data ?? [];
+  const allProofs = useMemo(
     () => (challenge ? requiredChallengeProofs(challenge) : []),
     // Keyed on the proof shape so a refetch returning an equal challenge keeps the same proof ids.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [proofShape],
   );
+  const dueCtx = useMemo(
+    () =>
+      challenge
+        ? {
+            periodKey: checkinPeriodKey(challenge),
+            history: checkinHistory,
+            proofs: allProofs,
+            now: new Date(),
+          }
+        : null,
+    [allProofs, challenge, checkinHistory],
+  );
+  const proofSteps = useMemo(
+    () => (challenge && dueCtx ? dueProofsForCheckin(allProofs, challenge, dueCtx) : []),
+    [allProofs, challenge, dueCtx],
+  );
+  const blockingProofs = useMemo(
+    () => (challenge && dueCtx ? blockingProofsForCheckin(allProofs, challenge, dueCtx) : proofSteps),
+    [allProofs, challenge, dueCtx, proofSteps],
+  );
+  const dueTasksOpen = Boolean(challenge && dueCtx && hasOpenDueTask(challenge, dueCtx));
   const multiSubmit = allowsMultiCheckin(challenge);
   const rawPhase = checkinQuery.data?.phase ?? 'none';
   const phase = multiSubmit && rawPhase === 'submitted' ? 'none' : rawPhase;
@@ -443,13 +471,16 @@ function SubmitWorkoutInner() {
     if (!id || !challenge || multiSubmit || !checkinQuery.isFetched || checkinQuery.data?.phase !== 'submitted') {
       return;
     }
+    if (dueTasksOpen) {
+      return;
+    }
     router.replace(
       challengeDetailHref(id, 'lobby', null, {
         tab: 'feed',
         notice: copy('checkin.alreadyBob'),
       }) as never,
     );
-  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, id, multiSubmit, router]);
+  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, dueTasksOpen, id, multiSubmit, router]);
 
   useEffect(() => {
     if (!id || challengeQuery.isLoading || !checkinQuery.isFetched) {
@@ -460,7 +491,7 @@ function SubmitWorkoutInner() {
       return;
     }
     checkinLogRef.current = token;
-    const next = nextEmptyRequiredProof(proofSteps, (proof) => Boolean(drafts[proof.id]?.uri));
+    const next = nextEmptyRequiredProof(blockingProofs, (proof) => Boolean(drafts[proof.id]?.uri));
     const nextPhotoEmpty = Boolean(next && isGuidedCameraProof(next) && !drafts[next.id]?.uri);
     const hasExistingFrames =
       extras.length > 0 ||
@@ -641,14 +672,14 @@ function SubmitWorkoutInner() {
     checkinQuery.data?.updated_at,
   ]);
 
-  const filledCount = proofSteps.filter((proof) =>
+  const filledCount = blockingProofs.filter((proof) =>
     partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
   ).length;
-  const allReady = proofSteps.length > 0 && filledCount === proofSteps.length;
+  const allReady = blockingProofs.length > 0 && filledCount === blockingProofs.length;
   const busy = saveProof.isPending || submitCheckin.isPending;
   const hasRequiredAttached = honorOnly || filledCount > 0;
   const canSend = canSendCheckin(honorOnly, hasRequiredAttached, phase, busy);
-  const firstCamera = beginCameraProof(proofSteps);
+  const firstCamera = beginCameraProof(blockingProofs.length ? blockingProofs : proofSteps);
   const hasReviewDraft = proofSteps.some(
     (proof) => slotStillUris(drafts[proof.id]).length > 0 || drafts[proof.id]?.text || drafts[proof.id]?.inFence,
   );
@@ -1042,7 +1073,7 @@ function SubmitWorkoutInner() {
   }
 
   function explainSendBlocked() {
-    const remaining = proofSteps
+    const remaining = blockingProofs
       .filter((proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }))
       .map((proof) => proofDisplayName(proof));
     const names = checkinSendWhyNot(remaining);
@@ -1061,7 +1092,7 @@ function SubmitWorkoutInner() {
     if (busy) {
       return;
     }
-    for (const proof of proofSteps.filter((item) => item.method === 'location')) {
+    for (const proof of blockingProofs.filter((item) => item.method === 'location')) {
       if (partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit))) {
         continue;
       }
@@ -1078,9 +1109,10 @@ function SubmitWorkoutInner() {
     }
     const readyNow =
       honorOnly ||
-      proofSteps.every((proof) =>
-        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
-      );
+      (blockingProofs.length > 0 &&
+        blockingProofs.every((proof) =>
+          partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
+        ));
     const attachedNow =
       honorOnly ||
       proofSteps.some((proof) =>
@@ -1593,7 +1625,7 @@ function SubmitWorkoutInner() {
     );
   }
 
-  if (!multiSubmit && checkinQuery.isFetched && checkinQuery.data?.phase === 'submitted') {
+  if (!multiSubmit && checkinQuery.isFetched && checkinQuery.data?.phase === 'submitted' && !dueTasksOpen) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
@@ -1694,7 +1726,7 @@ function SubmitWorkoutInner() {
     );
   }
 
-  const missing = proofSteps.filter(
+  const missing = blockingProofs.filter(
     (proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
   );
   const iosHealthReady = Platform.OS === 'ios' && healthProviderAvailable();

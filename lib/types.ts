@@ -298,6 +298,9 @@ export interface ChallengeTask {
   proof_required: boolean;
   proof_types?: string[];
   once?: boolean;
+  frequency?: string;
+  custom_checkins?: number;
+  custom_period?: string;
 }
 
 /** Extends auth.users. Credits are owner-private. */

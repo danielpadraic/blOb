@@ -52,6 +52,8 @@ export type LoggableOptions = {
   submittedThisPeriod?: boolean;
   /** `workout_submissions.submission_date` matching the current challenge-tz period. */
   loggedThisPeriod?: boolean;
+  /** When set, replaces the submitted-this-period gate (per-task cadence). */
+  dueTasksOpen?: boolean | null;
 };
 
 /**
@@ -189,8 +191,14 @@ export function isLoggable(
     return false;
   }
 
-  if (usesPeriodCheckinGate(challenge) && (opts?.submittedThisPeriod || opts?.loggedThisPeriod)) {
-    return false;
+  if (usesPeriodCheckinGate(challenge)) {
+    if (opts?.dueTasksOpen != null) {
+      if (!opts.dueTasksOpen) {
+        return false;
+      }
+    } else if (opts?.submittedThisPeriod || opts?.loggedThisPeriod) {
+      return false;
+    }
   }
 
   return true;

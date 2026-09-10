@@ -1,10 +1,18 @@
 import { Pressable, View } from 'react-native';
 
+import { CreateIconChip } from '@/components/challenge/create/CreateIconChip';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
-import { SIMPLE_PROOF_METHODS } from '@/lib/simpleChallenge';
+import {
+  SIMPLE_CUSTOM_PERIODS,
+  SIMPLE_FREQUENCY_CHIPS,
+  SIMPLE_PROOF_METHODS,
+  customFrequencyCopy,
+  type SimpleCustomPeriod,
+  type SimpleFrequency,
+} from '@/lib/simpleChallenge';
 import { heartRateMinutesLabel, type ChallengeProofMethod } from '@/lib/challengeProofs';
 import { copy } from '@/lib/copy';
 import {
@@ -16,6 +24,7 @@ import {
   snapDistanceAmount,
   type DistanceUnit,
 } from '@/lib/distance';
+import { patchTaskCadence, resolveTaskCadence, taskFrequencyHint } from '@/lib/taskCadence';
 import { THEME } from '@/lib/theme';
 import { taskLetterLabel } from '@/lib/taskLabels';
 import { emptyExtraCreateTask, type ExtraCreateTask } from '@/utils/validators';
@@ -73,18 +82,88 @@ export function DistanceMilesRow({
   );
 }
 
+export function TaskFrequencyField({
+  cadence,
+  inheritFrequency,
+  onChange,
+}: {
+  cadence: Partial<ExtraCreateTask> | { frequency?: string | null; custom_checkins?: number; custom_period?: SimpleCustomPeriod; once?: boolean };
+  inheritFrequency?: string | null;
+  onChange: (next: {
+    frequency: SimpleFrequency;
+    custom_checkins: number;
+    custom_period: SimpleCustomPeriod;
+    once: boolean;
+  }) => void;
+}) {
+  const resolved = resolveTaskCadence(cadence, inheritFrequency);
+  return (
+    <View className="gap-2">
+      <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+        {copy('create.frequency')}
+      </AppText>
+      <View className="flex-row flex-wrap gap-2">
+        {SIMPLE_FREQUENCY_CHIPS.map((item) => (
+          <CreateIconChip
+            key={item.value}
+            icon=""
+            label={item.label}
+            selected={resolved.frequency === item.value}
+            onPress={() => onChange(patchTaskCadence(item.value as SimpleFrequency, resolved))}
+          />
+        ))}
+      </View>
+      {resolved.frequency === 'custom' ? (
+        <View className="gap-2">
+          <StepperField
+            label={customFrequencyCopy(resolved.custom_checkins, resolved.custom_period)}
+            value={resolved.custom_checkins}
+            min={1}
+            max={100}
+            onChange={(custom_checkins) =>
+              onChange({ ...resolved, frequency: 'custom', custom_checkins, once: false })
+            }
+          />
+          <View className="flex-row flex-wrap gap-2">
+            {SIMPLE_CUSTOM_PERIODS.map((item) => (
+              <CreateIconChip
+                key={item.value}
+                icon=""
+                label={item.label}
+                selected={resolved.custom_period === item.value}
+                onPress={() =>
+                  onChange({
+                    ...resolved,
+                    frequency: 'custom',
+                    custom_period: item.value as SimpleCustomPeriod,
+                    once: false,
+                  })
+                }
+              />
+            ))}
+          </View>
+        </View>
+      ) : (
+        <AppText className="text-[12px] leading-5 text-muted">{taskFrequencyHint(resolved)}</AppText>
+      )}
+    </View>
+  );
+}
+
 export function ExtraTasksEditor({
   tasks,
   onChange,
   onTitleFocus,
   hint,
   startLetterIndex = 1,
+  inheritFrequency,
 }: {
   tasks: ExtraCreateTask[];
   onChange: (next: ExtraCreateTask[]) => void;
   onTitleFocus?: () => void;
   hint?: string;
   startLetterIndex?: number;
+  inheritFrequency?: string | null;
 }) {
   function patch(index: number, partial: Partial<ExtraCreateTask>) {
     onChange(tasks.map((item, itemIndex) => (itemIndex === index ? { ...item, ...partial } : item)));
@@ -141,13 +220,11 @@ export function ExtraTasksEditor({
               <AppText className="text-[18px] font-semibold text-muted">×</AppText>
             </Pressable>
           </View>
-          <ChipRow>
-            <Chip
-              label={copy('create.taskOnce')}
-              selected={task.once}
-              onPress={() => patch(index, { once: !task.once })}
-            />
-          </ChipRow>
+          <TaskFrequencyField
+            cadence={task}
+            inheritFrequency={inheritFrequency}
+            onChange={(next) => patch(index, next)}
+          />
           <View className="flex-row flex-wrap gap-2">
             {SIMPLE_PROOF_METHODS.map((item) => (
               <Chip

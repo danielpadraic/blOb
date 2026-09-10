@@ -8,6 +8,9 @@ import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { checkinTaskLabel } from '@/lib/checkin';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
+import { requiredChallengeProofs } from '@/lib/challenges';
+import { blockingProofsForCheckin, hasOpenDueTask } from '@/lib/taskCadence';
+import { parseProofParts, partSatisfies, proofDisplayName } from '@/lib/challengeProofs';
 import { getErrorMessage } from '@/utils/errors';
 
 export { asLoggableList, loggableStatusLine } from '@/lib/loggable';
@@ -105,9 +108,19 @@ export function useLoggableChallenges() {
 
       const clock = new Date(now);
 
+      const historyByChallenge = historyFromCheckins(checkinRows);
+
       return challenges
         .filter((challenge) => {
           const expected = checkinPeriodKey(challenge, clock);
+          const history = historyByChallenge.get(challenge.id) ?? [];
+          const proofs = requiredChallengeProofs(challenge as never);
+          const dueOpen = hasOpenDueTask(challenge, {
+            now: clock,
+            periodKey: expected,
+            history,
+            proofs,
+          });
           return isLoggable(
             challenge,
             { isParticipant: true },
@@ -115,6 +128,7 @@ export function useLoggableChallenges() {
               now: clock,
               submittedThisPeriod: submittedThisPeriod(challenge, checkinRows),
               loggedThisPeriod: loggedRows.get(challenge.id)?.has(expected) ?? false,
+              dueTasksOpen: dueOpen,
             },
           );
         })
@@ -132,7 +146,21 @@ export function useLoggableChallenges() {
           return new Date(bJoined).getTime() - new Date(aJoined).getTime();
         })
         .map((challenge) => {
+          const expected = checkinPeriodKey(challenge, clock);
+          const history = historyByChallenge.get(challenge.id) ?? [];
+          const proofs = requiredChallengeProofs(challenge as never);
           const phase = phaseForPeriod(challenge, checkinRows);
+          const parts = partsForPeriod(challenge, checkinRows);
+          const blocking = blockingProofsForCheckin(proofs, challenge, {
+            now: clock,
+            periodKey: expected,
+            history,
+            proofs,
+          });
+          const remaining = blocking
+            .filter((proof) => proof.method !== 'honor')
+            .filter((proof) => !partSatisfies(proof, parseProofParts(parts)[proof.id]))
+            .map((proof) => proofDisplayName(proof));
           const completed = daysCompleted.get(challenge.id) ?? 0;
           const taskLabel = checkinTaskLabel(challenge);
           return {
@@ -141,11 +169,10 @@ export function useLoggableChallenges() {
             checkinPhase: phase,
             ctaTitle: checkinCtaTitle(phase),
             taskLabel,
-            remainingProofLabels: remainingProofLabelsOf(
-              { ...challenge, taskLabel },
-              partsForPeriod(challenge, checkinRows),
-              phase,
-            ),
+            remainingProofLabels:
+              remaining.length > 0
+                ? remaining
+                : remainingProofLabelsOf({ ...challenge, taskLabel }, parts, phase === 'submitted' && remaining.length === 0 ? 'submitted' : phase),
             statusLine: loggableStatusLine({
               ends_at: challenge.ends_at,
               days_required: challenge.days_required,
@@ -168,6 +195,29 @@ export function useLoggableChallenge() {
 }
 
 type CheckinPeriodState = { phase: CheckinPhase; parts: unknown };
+
+function historyFromCheckins(
+  checkinRows: Map<string, CheckinPeriodState>,
+): Map<string, { period_key: string; status: string; submitted_at: string | null; proof_parts: unknown }[]> {
+  const history = new Map<string, { period_key: string; status: string; submitted_at: string | null; proof_parts: unknown }[]>();
+  for (const [key, state] of checkinRows) {
+    const colon = key.indexOf(':');
+    if (colon < 0) {
+      continue;
+    }
+    const challengeId = key.slice(0, colon);
+    const periodKey = key.slice(colon + 1);
+    const list = history.get(challengeId) ?? [];
+    list.push({
+      period_key: periodKey,
+      status: state.phase === 'submitted' ? 'submitted' : String(state.phase),
+      submitted_at: state.phase === 'submitted' ? '1' : null,
+      proof_parts: state.parts,
+    });
+    history.set(challengeId, list);
+  }
+  return history;
+}
 
 function submittedThisPeriod(
   challenge: LoggableChallenge,

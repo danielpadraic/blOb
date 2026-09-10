@@ -22,7 +22,7 @@ import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/chal
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
 import { CumulativeMetricsEditor } from '@/components/challenge/create/CumulativeMetricsEditor';
 import { CreateIconChip } from '@/components/challenge/create/CreateIconChip';
-import { ExtraTasksEditor } from '@/components/challenge/create/ExtraTasksEditor';
+import { ExtraTasksEditor, TaskFrequencyField } from '@/components/challenge/create/ExtraTasksEditor';
 import { SimpleProofsEditor } from '@/components/challenge/create/SimpleProofsEditor';
 import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
@@ -57,18 +57,14 @@ import {
   pickSimpleDraft,
 } from '@/lib/challengeDraft';
 import {
-  SIMPLE_CUSTOM_PERIODS,
   SIMPLE_DURATION_CHIPS,
-  SIMPLE_FREQUENCY_CHIPS,
   SIMPLE_SCORING,
   SIMPLE_TYPES,
-  clearPersistedSimpleDraft,
-  customFrequencyCopy,
   allowedMissesMax,
   clampAllowedMisses,
+  clearPersistedSimpleDraft,
   defaultSimpleDraft,
   endsAtOf,
-  frequencyHintOf,
   isLeftoverSimplePointsDraft,
   simpleDraftFromChallenge,
   simpleDraftToCreateValues,
@@ -80,9 +76,7 @@ import {
   type SimpleChallengeDraft,
   type SimpleChallengeType,
   type SimpleCurrency,
-  type SimpleCustomPeriod,
   type SimpleDurationPreset,
-  type SimpleFrequency,
 } from '@/lib/simpleChallenge';
 import { simpleDraftFromStarter, starterFromCreateParams } from '@/lib/interestsMatch';
 import { milesToMeters } from '@/lib/distance';
@@ -820,11 +814,6 @@ export function SimpleCreateForm() {
           />
         </View>
         </TourAnchor>
-        <ExtraTasksEditor
-          tasks={draft.extra_tasks ?? []}
-          onChange={(extra_tasks) => patch({ extra_tasks })}
-        />
-
         {simpleHowYouWin(draft) === 'cumulative' ? null : (
         <TourAnchor id="create-simple-frequency">
         <View
@@ -833,53 +822,40 @@ export function SimpleCreateForm() {
           ref={(node) => {
             sectionRefs.current['create-simple-frequency'] = node;
           }}>
-          <SectionLabel>{copy('create.frequency')}</SectionLabel>
-          <View className="flex-row flex-wrap gap-2">
-            {SIMPLE_FREQUENCY_CHIPS.map((item) => (
-              <CreateIconChip
-                key={item.value}
-                icon=""
-                label={item.label}
-                selected={draft.frequency === item.value}
-                onPress={() => patch({ frequency: item.value as SimpleFrequency })}
-              />
-            ))}
-          </View>
-          {draft.frequency === 'custom' ? (
-            <View className="gap-2">
-              <StepperField
-                label={customFrequencyCopy(draft.custom_checkins, draft.custom_period)}
-                value={draft.custom_checkins}
-                min={1}
-                max={100}
-                onChange={(custom_checkins) => patch({ custom_checkins })}
-              />
-              <View className="flex-row flex-wrap gap-2">
-                {SIMPLE_CUSTOM_PERIODS.map((item) => (
-                  <CreateIconChip
-                    key={item.value}
-                    icon=""
-                    label={item.label}
-                    selected={draft.custom_period === item.value}
-                    onPress={() => patch({ custom_period: item.value as SimpleCustomPeriod })}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : (
-            <AppText className="text-[12px] leading-5 text-muted">{frequencyHintOf(draft)}</AppText>
-          )}
-          <StepperField
-            label={copy('create.allowedMisses')}
-            hint={copy('create.allowedMissesHint')}
-            value={draft.allowed_misses ?? 0}
-            min={0}
-            max={allowedMissesMax(draft)}
-            step={1}
-            onChange={(allowed_misses) => patch({ allowed_misses })}
+          <TaskFrequencyField
+            cadence={{
+              frequency: draft.frequency,
+              custom_checkins: draft.custom_checkins,
+              custom_period: draft.custom_period,
+              once: draft.frequency === 'once',
+            }}
+            onChange={(next) =>
+              patch({
+                frequency: next.frequency,
+                custom_checkins: next.custom_checkins,
+                custom_period: next.custom_period,
+              })
+            }
           />
         </View>
         </TourAnchor>
+        )}
+        <ExtraTasksEditor
+          tasks={draft.extra_tasks ?? []}
+          onChange={(extra_tasks) => patch({ extra_tasks })}
+          inheritFrequency={draft.frequency}
+        />
+
+        {simpleHowYouWin(draft) === 'cumulative' ? null : (
+        <StepperField
+          label={copy('create.allowedMisses')}
+          hint={copy('create.allowedMissesHint')}
+          value={draft.allowed_misses ?? 0}
+          min={0}
+          max={allowedMissesMax(draft)}
+          step={1}
+          onChange={(allowed_misses) => patch({ allowed_misses })}
+        />
         )}
 
         <TourAnchor id="create-simple-start">

@@ -349,7 +349,13 @@ export function RulesSlide({
             </View>
           ) : null}
 
-          {isCumulative ? null : (
+          {isCumulative ? null : !isPoints ? (
+            (values.extra_tasks?.length ?? 0) > 0 ? (
+              <AppText className="text-[12px] leading-5 text-muted">
+                Each task has its own frequency on Goal.
+              </AppText>
+            ) : null
+          ) : (
           <FieldAnchor name="rules">
           <FieldAnchor name="target_count">
             <View className="gap-3">

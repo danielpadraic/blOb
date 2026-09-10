@@ -373,6 +373,9 @@ export function normalizeTasks(value: unknown): ChallengeTask[] {
       proof_required: Boolean(row.proof_required),
       proof_types: proofTypes,
       once: Boolean(row.once),
+      frequency: typeof row.frequency === 'string' ? row.frequency : undefined,
+      custom_checkins: Number(row.custom_checkins) > 0 ? Math.floor(Number(row.custom_checkins)) : undefined,
+      custom_period: typeof row.custom_period === 'string' ? String(row.custom_period) : undefined,
     };
   });
 }

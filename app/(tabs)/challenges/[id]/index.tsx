@@ -103,6 +103,7 @@ import {
 } from '@/lib/challengeExperience';
 import { allowsMultiCheckin, usesPeriodCheckinGate } from '@/lib/loggable';
 import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
+import { resolveTaskCadence, taskCadenceLabel } from '@/lib/taskCadence';
 import { parseLocationPlace } from '@/lib/locationProof';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import {
@@ -1306,7 +1307,7 @@ export default function ChallengeDetailScreen() {
           </>
         ) : null}
 
-        {challenge.is_official ? null : signupLines.length > 0 || isPoints ? (
+        {challenge.is_official ? null : signupLines.length > 0 || isPoints || tasks.length > 1 ? (
           <Card className="mt-4">
             <AppText
               className="text-[11px] font-semibold uppercase tracking-widest"
@@ -1325,7 +1326,7 @@ export default function ChallengeDetailScreen() {
                 ))}
               </View>
             ) : null}
-            {isPoints ? (
+            {isPoints || tasks.length > 1 ? (
               <View className="mt-3 gap-2.5">
                 {tasks.map((task, index) => (
                   <View key={task.id} className="flex-row gap-3">
@@ -1339,7 +1340,11 @@ export default function ChallengeDetailScreen() {
                     <View className="flex-1">
                       <AppText className="font-semibold text-charcoal">{task.title}</AppText>
                       <AppText className="text-[13px] leading-5 text-muted">
-                        {task.points} pts{task.proof_required ? ' · proof required' : ''}
+                        {isPoints
+                          ? `${task.points} pts${task.proof_required ? ' · proof required' : ''}`
+                          : `${taskCadenceLabel(resolveTaskCadence(task, challenge.frequency))}${
+                              task.proof_required ? ' · proof required' : ' · on your honor'
+                            }`}
                       </AppText>
                     </View>
                   </View>

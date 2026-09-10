@@ -29,7 +29,7 @@ import {
 } from '@/components/challenge/create/wizardUi';
 import { RulesSlide } from '@/components/challenge/create/RulesSlide';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
-import { ExtraTasksEditor } from '@/components/challenge/create/ExtraTasksEditor';
+import { ExtraTasksEditor, TaskFrequencyField } from '@/components/challenge/create/ExtraTasksEditor';
 import { PrivacyModePicker } from '@/components/challenge/create/PrivacyModePicker';
 import { ComparablePointsEditor } from '@/components/challenge/create/comparablePoints/ComparablePointsEditor';
 import { ComparablePointsMethodCard } from '@/components/challenge/create/comparablePoints/ComparablePointsMethodCard';
@@ -137,7 +137,10 @@ import {
   canRoundTripToSimple,
   stageSimpleFromAdvanced,
   peekAdvancedFromSimple,
+  type SimpleCustomPeriod,
+  type SimpleFrequency,
 } from '@/lib/simpleChallenge';
+import { createFrequencyFromTask, inheritFrequencyFromChallenge } from '@/lib/taskCadence';
 import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
 import { getCreateChallengeMessage, getErrorMessage, logDev } from '@/utils/errors';
@@ -1713,8 +1716,12 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               challengeLane={values.challenge_lane}
               participantCount={isEditing ? editing.data?.participant_count ?? 0 : 0}
               extraTasks={values.extra_tasks ?? []}
+              frequency={values.frequency}
+              customCheckins={values.custom_checkins}
+              customPeriod={values.custom_period}
               coverUrl={values.cover_image_url}
               isPoints={isPoints}
+              isCumulative={isCumulative}
               onCategoryChange={onCategoryChange}
               onPrivacyChange={(next) => {
                 setValue('privacy_mode', next.privacy_mode, { shouldValidate: true, shouldDirty: true });
@@ -1725,6 +1732,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
                 }
               }}
               onExtraTasksChange={(extra_tasks) => setValue('extra_tasks', extra_tasks, { shouldDirty: true })}
+              onFrequencyChange={onFrequencyChange}
+              onTaskCadenceChange={(next) => {
+                setValue('custom_checkins', next.custom_checkins, { shouldDirty: true });
+                setValue('custom_period', next.custom_period, { shouldDirty: true });
+              }}
               onCoverChange={(cover_image_url) =>
                 setValue('cover_image_url', cover_image_url, { shouldDirty: true, shouldValidate: true })
               }
@@ -2112,11 +2124,17 @@ function GoalSlide({
   challengeLane,
   participantCount = 0,
   extraTasks,
+  frequency,
+  customCheckins,
+  customPeriod,
   coverUrl,
   isPoints,
+  isCumulative,
   onCategoryChange,
   onPrivacyChange,
   onExtraTasksChange,
+  onFrequencyChange,
+  onTaskCadenceChange,
   onCoverChange,
   onCoverClear,
 }: {
@@ -2128,8 +2146,12 @@ function GoalSlide({
   challengeLane: CreateChallengeValues['challenge_lane'];
   participantCount?: number;
   extraTasks: CreateChallengeValues['extra_tasks'];
+  frequency: ChallengeFrequency;
+  customCheckins?: number;
+  customPeriod?: 'day' | 'week' | 'month' | 'duration';
   coverUrl?: string | null;
   isPoints: boolean;
+  isCumulative?: boolean;
   onCategoryChange: (next: CreateChallengeValues['category']) => void;
   onPrivacyChange: (next: {
     privacy_mode: PrivacyMode;
@@ -2137,6 +2159,13 @@ function GoalSlide({
     discoverability: 'invite_only' | 'friends_of_friends' | null;
   }) => void;
   onExtraTasksChange: (next: NonNullable<CreateChallengeValues['extra_tasks']>) => void;
+  onFrequencyChange: (next: ChallengeFrequency) => void;
+  onTaskCadenceChange?: (next: {
+    frequency: SimpleFrequency;
+    custom_checkins: number;
+    custom_period: SimpleCustomPeriod;
+    once: boolean;
+  }) => void;
   onCoverChange: (url: string) => void;
   onCoverClear: () => void;
 }) {
@@ -2230,11 +2259,27 @@ function GoalSlide({
           )}
         />
       </FieldAnchor>
+      {isPoints || isCumulative ? null : (
+        <TaskFrequencyField
+          cadence={{
+            frequency: inheritFrequencyFromChallenge(frequency).frequency,
+            custom_checkins: customCheckins,
+            custom_period: customPeriod,
+            once: frequency === 'once',
+          }}
+          inheritFrequency={frequency}
+          onChange={(next) => {
+            onFrequencyChange(createFrequencyFromTask(next.frequency));
+            onTaskCadenceChange?.(next);
+          }}
+        />
+      )}
       {isPoints ? null : (
         <View className="mt-3">
           <ExtraTasksEditor
             tasks={extraTasks ?? []}
             onChange={onExtraTasksChange}
+            inheritFrequency={frequency}
             hint={copy('create.addTaskHint')}
           />
         </View>

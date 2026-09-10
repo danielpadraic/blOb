@@ -11,6 +11,7 @@ import {
 } from '@/lib/challengeProofs';
 import { extraHasMinMinutes } from '@/lib/consistencyRules';
 import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
+import { resolveTaskCadence } from '@/lib/taskCadence';
 import type { ChallengeTask } from '@/lib/types';
 import type { CreateChallengeValues, ExtraCreateTask } from '@/utils/validators';
 import { emptyExtraCreateTask } from '@/utils/validators';
@@ -46,20 +47,23 @@ export function filledExtraTasks(values: Pick<CreateChallengeValues, 'extra_task
 
 export function extraTaskNamedProofs(tasks: ExtraCreateTask[]): ChallengeProof[] {
   return tasks.flatMap((task) => {
-    if (task.once || !task.proof_method || task.proof_method === 'honor') {
+    if (!task.proof_method || task.proof_method === 'honor') {
       return [];
     }
     const minutes = Math.max(Math.round(Number(task.hr_minutes) || DEFAULT_MIN_MINUTES), 1);
     return [
-      ensureProofSentence(
-        makeProof(
-          defaultSentenceForMethod(task.proof_method, minutes, { distanceMeters: task.distance_meters }),
-          task.proof_method,
+      {
+        ...ensureProofSentence(
+          makeProof(
+            defaultSentenceForMethod(task.proof_method, minutes, { distanceMeters: task.distance_meters }),
+            task.proof_method,
+            minutes,
+            task.distance_meters,
+          ),
           minutes,
-          task.distance_meters,
         ),
-        minutes,
-      ),
+        taskId: task.id,
+      },
     ];
   });
 }
@@ -88,7 +92,8 @@ export function namedProofsForPublish(values: CreateChallengeValues): ChallengeP
   const place = values.location_place ?? base.find((proof) => proof.method === 'location')?.place ?? null;
   const withPlace = (proof: ChallengeProof) =>
     proof.method === 'location' ? { ...proof, place: proof.place ?? place } : proof;
-  return [...base.map(withPlace), ...extraTaskNamedProofs(filledExtraTasks(values)).map(withPlace)];
+  const primary = base.map(withPlace).map((proof) => ({ ...proof, taskId: proof.taskId ?? 'primary' }));
+  return [...primary, ...extraTaskNamedProofs(filledExtraTasks(values)).map(withPlace)];
 }
 
 /**
@@ -138,6 +143,15 @@ export function persistTasksForPublish(values: CreateChallengeValues, isPoints: 
   }
   const extra = filledExtraTasks(values);
   const primary = values.task?.trim() || '';
+  const inherited = resolveTaskCadence(
+    {
+      frequency: values.frequency,
+      custom_checkins: values.custom_checkins,
+      custom_period: values.custom_period,
+      once: values.frequency === 'once',
+    },
+    values.frequency,
+  );
   const rows: ChallengeTask[] = [];
   if (primary) {
     const types = proofRequirementsFrom(
@@ -151,10 +165,14 @@ export function persistTasksForPublish(values: CreateChallengeValues, isPoints: 
       points: 0,
       proof_required: types.length > 0,
       proof_types: types.length > 0 ? types : undefined,
-      once: false,
+      once: inherited.once,
+      frequency: inherited.frequency,
+      custom_checkins: inherited.custom_checkins,
+      custom_period: inherited.custom_period,
     });
   }
   for (const task of extra) {
+    const cadence = resolveTaskCadence(task, values.frequency);
     const type = extraTaskProofType(task.proof_method);
     rows.push({
       id: task.id,
@@ -162,7 +180,10 @@ export function persistTasksForPublish(values: CreateChallengeValues, isPoints: 
       points: 0,
       proof_required: Boolean(type),
       proof_types: type ? [type] : undefined,
-      once: task.once,
+      once: cadence.once,
+      frequency: cadence.frequency,
+      custom_checkins: cadence.custom_checkins,
+      custom_period: cadence.custom_period,
     });
   }
   return rows;
@@ -190,7 +211,11 @@ export function minMinutesForPublish(values: CreateChallengeValues): number {
   return values.category === 'fitness' ? DEFAULT_MIN_MINUTES : 1;
 }
 
-export function extraTasksFromStored(tasks: ChallengeTask[], primaryTask: string | null | undefined): ExtraCreateTask[] {
+export function extraTasksFromStored(
+  tasks: ChallengeTask[],
+  primaryTask: string | null | undefined,
+  challengeFrequency?: string | null,
+): ExtraCreateTask[] {
   const primary = (primaryTask ?? '').trim().toLowerCase();
   return tasks.flatMap((task) => {
     const title = task.title.trim();
@@ -205,12 +230,24 @@ export function extraTasksFromStored(tasks: ChallengeTask[], primaryTask: string
     const proof_method: ExtraCreateTask['proof_method'] =
       method === 'honor' || !task.proof_required ? 'honor' : method;
     const row = emptyExtraCreateTask();
+    const cadence = resolveTaskCadence(
+      {
+        once: task.once,
+        frequency: task.frequency,
+        custom_checkins: task.custom_checkins,
+        custom_period: task.custom_period,
+      },
+      challengeFrequency,
+    );
     return [
       {
         ...row,
         id: task.id || row.id,
         title,
-        once: Boolean(task.once),
+        once: cadence.once,
+        frequency: cadence.frequency,
+        custom_checkins: cadence.custom_checkins,
+        custom_period: cadence.custom_period,
         proof_method,
         hr_minutes: DEFAULT_MIN_MINUTES,
       },
