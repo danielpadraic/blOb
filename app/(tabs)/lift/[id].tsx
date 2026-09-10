@@ -14,6 +14,10 @@ import { OverloadSheet } from '@/components/lift/OverloadSheet';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useContextualTour } from '@/components/tour/useContextualTour';
+import { useAuth } from '@/hooks/useAuth';
+import { liftSessionTourSteps } from '@/lib/contextualTour';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import {
@@ -117,6 +121,7 @@ export default function LiftSessionScreen() {
 function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolean }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const loaded = useLiftSession(id);
   const customs = useCustomExercises();
   const save = useSaveLiftSession();
@@ -604,6 +609,8 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     () => draft?.exercises.find((row) => canPlay(row)) ?? null,
     [draft],
   );
+  const sessionTourSteps = useMemo(() => liftSessionTourSteps(draft), [draft]);
+  useContextualTour('lift', sessionTourSteps, Boolean(user?.id && draft && !readOnly), user?.id);
 
   if (loaded.isLoading || (!draft && !loaded.isFetched)) {
     return (
@@ -1018,7 +1025,9 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
               onDelete={() => void onDelete()}
             />
           ) : (
+            <TourAnchor id="tour-lift-log">
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TourAnchor id="tour-lift-play" style={{ flex: 1 }}>
               <FooterBtn
                 title="Play"
                 variant="play"
@@ -1029,6 +1038,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                   }
                 }}
               />
+              </TourAnchor>
               <FooterBtn
                 title="Save"
                 variant="save"
@@ -1043,6 +1053,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                 onPress={() => void onComplete()}
               />
             </View>
+            </TourAnchor>
           )}
         </View>
       </View>

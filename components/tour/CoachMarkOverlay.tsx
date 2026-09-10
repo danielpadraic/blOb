@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, useWindowDimensions, View, type LayoutRectangle } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { AppText } from '@/components/ui/AppText';
 import type { TourPlacement } from '@/lib/tour';
+import { dimWithRoundedHolePath, holeRadius } from '@/lib/tourHole';
 import { TAB_BAR_PEEK, tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 const MIN_HOLE = 44;
@@ -75,7 +77,7 @@ export function CoachMarkOverlay({
         elevation: 4000,
         ...(Platform.OS === 'web' ? ({ isolation: 'isolate' } as object) : null),
       }}>
-      <DimWithHole hole={hole} />
+      <DimWithHole hole={hole} screenW={screenW} screenH={screenH} />
       <View
         pointerEvents="auto"
         style={{
@@ -175,8 +177,16 @@ export function expandHole(
   return { x, y, width, height };
 }
 
-function DimWithHole({ hole }: { hole: LayoutRectangle | null }) {
-  if (!hole) {
+function DimWithHole({
+  hole,
+  screenW,
+  screenH,
+}: {
+  hole: LayoutRectangle | null;
+  screenW: number;
+  screenH: number;
+}) {
+  if (!hole || screenW < 1 || screenH < 1) {
     return (
       <View
         pointerEvents="auto"
@@ -185,52 +195,13 @@ function DimWithHole({ hole }: { hole: LayoutRectangle | null }) {
     );
   }
   return (
-    <>
-      <View
-        pointerEvents="auto"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: Math.max(hole.y, 0),
-          backgroundColor: DIM,
-        }}
-      />
-      <View
-        pointerEvents="auto"
-        style={{
-          position: 'absolute',
-          top: hole.y,
-          left: 0,
-          width: Math.max(hole.x, 0),
-          height: hole.height,
-          backgroundColor: DIM,
-        }}
-      />
-      <View
-        pointerEvents="auto"
-        style={{
-          position: 'absolute',
-          top: hole.y,
-          left: hole.x + hole.width,
-          right: 0,
-          height: hole.height,
-          backgroundColor: DIM,
-        }}
-      />
-      <View
-        pointerEvents="auto"
-        style={{
-          position: 'absolute',
-          top: hole.y + hole.height,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: DIM,
-        }}
-      />
-    </>
+    <Svg
+      pointerEvents="none"
+      width={screenW}
+      height={screenH}
+      style={{ position: 'absolute', top: 0, left: 0 }}>
+      <Path d={dimWithRoundedHolePath(hole, screenW, screenH)} fill={DIM} fillRule="evenodd" />
+    </Svg>
   );
 }
 
@@ -291,10 +262,6 @@ function Caret({ align, side }: { align: number; side: 'top' | 'bottom' }) {
       }}
     />
   );
-}
-
-function holeRadius(hole: LayoutRectangle) {
-  return Math.min(16, hole.width / 2, hole.height / 2);
 }
 
 function placeTooltip(input: {

@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, useWindowDimensions, View } from 'react-native';
+import { Pressable, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
-import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay';
 import { useTour } from '@/components/tour/TourContext';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { markHomeTourCompleted } from '@/lib/homeTour';
 import { completeTutorial } from '@/lib/legal';
-import { TOUR_STEPS } from '@/lib/tour';
+import {
+  homeTourBody,
+  homeTourTarget,
+  nextHomeTourIndex,
+  shouldSkipHomeStep,
+  TOUR_STEPS,
+} from '@/lib/tour';
 import { THEME } from '@/lib/theme';
 
 type TourHostProps = {
@@ -23,11 +28,10 @@ export function TourHost({ onFinished }: TourHostProps) {
   const router = useRouter();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [index, setIndex] = useState(0);
+  const [waited, setWaited] = useState(false);
   const step = TOUR_STEPS[index];
-  const target =
-    step?.id === 'rounds' && tour.rectFor('tour-rounds')
-      ? 'tour-rounds'
-      : (step?.target ?? null);
+  const hasRect = useCallback((id: string) => Boolean(tour.rectFor(id)), [tour]);
+  const target = step ? homeTourTarget(step, hasRect) : null;
   const rawRect = tour.rectFor(target);
   const hole = expandHole(rawRect, screenW, screenH);
   const bump = tour.bump;
@@ -37,6 +41,7 @@ export function TourHost({ onFinished }: TourHostProps) {
 
   useEffect(() => {
     setIndex(0);
+    setWaited(false);
   }, [tour.runId]);
 
   useEffect(() => {
@@ -72,6 +77,34 @@ export function TourHost({ onFinished }: TourHostProps) {
     };
   }, [bump, rawRect, target, tour.active]);
 
+  useEffect(() => {
+    if (!tour.active || !step) {
+      return;
+    }
+    setWaited(false);
+    const handle = setTimeout(() => setWaited(true), 2200);
+    return () => clearTimeout(handle);
+  }, [index, step, tour.active]);
+
+  useEffect(() => {
+    if (!tour.active || !step || !waited || rawRect) {
+      return;
+    }
+    if (!shouldSkipHomeStep(step, hasRect)) {
+      return;
+    }
+    const next = nextHomeTourIndex(index, 1, hasRect);
+    if (next >= TOUR_STEPS.length) {
+      void finish();
+      return;
+    }
+    if (next >= 0) {
+      setIndex(next);
+    }
+    // finish is stable enough for this skip-after-wait path.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRect, index, rawRect, step, tour.active, waited]);
+
   const finish = useCallback(async () => {
     markHomeTourCompleted(user?.id);
     stop();
@@ -94,7 +127,7 @@ export function TourHost({ onFinished }: TourHostProps) {
       index={index}
       total={TOUR_STEPS.length}
       title={step.title}
-      body={step.id === 'tabLobby' ? <LobbyTourBody /> : step.body}
+      body={homeTourBody(step, hasRect)}
       titleAccessory={
         step.id === 'coins' ? (
           <CurrencyMark currency="coins" size={16} />
@@ -104,13 +137,21 @@ export function TourHost({ onFinished }: TourHostProps) {
       }
       nextLabel={index === TOUR_STEPS.length - 1 ? 'Done' : 'Next'}
       backDisabled={index === 0}
-      onBack={() => setIndex((current) => Math.max(0, current - 1))}
+      onBack={() => {
+        const prev = nextHomeTourIndex(index, -1, hasRect);
+        setIndex(prev < 0 ? 0 : prev);
+      }}
       onNext={() => {
         if (index === TOUR_STEPS.length - 1) {
           void finish();
           return;
         }
-        setIndex((current) => current + 1);
+        const next = nextHomeTourIndex(index, 1, hasRect);
+        if (next >= TOUR_STEPS.length) {
+          void finish();
+          return;
+        }
+        setIndex(next);
       }}
       footer={
         <Pressable
@@ -125,28 +166,5 @@ export function TourHost({ onFinished }: TourHostProps) {
         </Pressable>
       }
     />
-  );
-}
-
-function LobbyTourBody() {
-  const logoH = 72 * 0.55;
-  return (
-    <AppText
-      className="mt-2 text-[13px] leading-5 text-muted"
-      accessibilityLabel="View challenges hosted by you or others, challenges you have joined, or Official challenges hosted by blOb.">
-      View challenges hosted by you or others, challenges you have joined, or Official challenges hosted by{' '}
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          width: 72,
-          height: logoH,
-          transform: [{ translateY: Platform.OS === 'ios' ? 3 : 5 }],
-          ...(Platform.OS === 'web' ? ({ display: 'inline-flex' } as object) : null),
-        }}>
-        <BlobMascot variant="logo" size={72} />
-      </View>
-      .
-    </AppText>
   );
 }

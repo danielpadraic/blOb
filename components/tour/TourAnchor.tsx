@@ -31,15 +31,15 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
   }, [id, tour]);
 
   useEffect(() => {
-    if (!tour?.active && !tour?.createActive) {
+    if (!tour?.active && !tour?.createActive && !tour?.spotlight) {
       return;
     }
     const frame = requestAnimationFrame(report);
     return () => cancelAnimationFrame(frame);
-  }, [report, tour?.active, tour?.createActive, tour?.epoch]);
+  }, [report, tour?.active, tour?.createActive, tour?.epoch, tour?.spotlight]);
 
   useEffect(() => {
-    if ((!tour?.active && !tour?.createActive) || tour.targetId !== id) {
+    if ((!tour?.active && !tour?.createActive && !tour?.spotlight) || tour.targetId !== id) {
       return;
     }
     if (Platform.OS === 'web' && !tour.createActive) {
@@ -54,7 +54,7 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
     }
     const handle = setTimeout(report, 360);
     return () => clearTimeout(handle);
-  }, [id, report, tour?.active, tour?.createActive, tour?.targetId]);
+  }, [id, report, tour?.active, tour?.createActive, tour?.spotlight, tour?.targetId]);
 
   return (
     <View

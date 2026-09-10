@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { type LayoutRectangle, type ScrollView } from 'react-native';
 
+import type { ContextualTourId, ContextualTourStep } from '@/lib/contextualTour';
 import type { CreateTourTrack } from '@/lib/createTour';
 import { scrollDeltaToCenter, scrollViewToY } from '@/lib/tourScroll';
 import { scrollToOffsetSafe, scrollToSafe } from '@/lib/tourScrollSafe';
@@ -24,10 +25,15 @@ type TourContextValue = {
   createActive: boolean;
   createRunId: number;
   createTrack: CreateTourTrack | null;
+  spotlight: boolean;
+  contextual: { id: ContextualTourId; steps: ContextualTourStep[]; userId: string } | null;
   start: () => void;
   stop: () => void;
   startCreate: (track: CreateTourTrack) => void;
   stopCreate: () => void;
+  setSpotlight: (on: boolean) => void;
+  requestContextual: (input: { id: ContextualTourId; steps: ContextualTourStep[]; userId: string }) => void;
+  clearContextual: (id: ContextualTourId) => void;
   peekCreateStep: (step: number) => void;
   setCreatePeek: (fn: ((step: number) => void) | null) => void;
   setTargetId: (id: string | null) => void;
@@ -57,6 +63,12 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [createRunId, setCreateRunId] = useState(0);
   const [createTrack, setCreateTrack] = useState<CreateTourTrack | null>(null);
   const [createCurrency, setCreateCurrency] = useState<SimpleCurrency>('coins');
+  const [spotlight, setSpotlight] = useState(false);
+  const [contextual, setContextual] = useState<{
+    id: ContextualTourId;
+    steps: ContextualTourStep[];
+    userId: string;
+  } | null>(null);
   const [version, setVersion] = useState(0);
   const rects = useRef(new Map<string, TourRect>());
   const homeScroll = useRef<ScrollView | null>(null);
@@ -132,6 +144,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   );
 
   const start = useCallback(() => {
+    setContextual(null);
+    setSpotlight(false);
     setCreateActive(false);
     setCreateTrack(null);
     setActive(true);
@@ -145,6 +159,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startCreate = useCallback((track: CreateTourTrack) => {
+    setContextual(null);
+    setSpotlight(false);
     setActive(false);
     setCreateTrack(track);
     setCreateActive(true);
@@ -166,6 +182,24 @@ export function TourProvider({ children }: { children: ReactNode }) {
     createPeek.current?.(step);
   }, []);
 
+  const requestContextual = useCallback(
+    (input: { id: ContextualTourId; steps: ContextualTourStep[]; userId: string }) => {
+      setContextual((current) => current ?? input);
+      setSpotlight(true);
+    },
+    [],
+  );
+
+  const clearContextual = useCallback((id: ContextualTourId) => {
+    setContextual((current) => {
+      if (current?.id !== id) {
+        return current;
+      }
+      setSpotlight(false);
+      return null;
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       active,
@@ -175,12 +209,17 @@ export function TourProvider({ children }: { children: ReactNode }) {
       createActive,
       createRunId,
       createTrack,
+      spotlight,
+      contextual,
       start,
       stop,
       startCreate,
       stopCreate,
       peekCreateStep,
       setCreatePeek,
+      setSpotlight,
+      requestContextual,
+      clearContextual,
       setTargetId,
       bump,
       register,
@@ -201,7 +240,12 @@ export function TourProvider({ children }: { children: ReactNode }) {
       createCurrency,
       createRunId,
       createTrack,
+      contextual,
       epoch,
+      requestContextual,
+      clearContextual,
+      setSpotlight,
+      spotlight,
       peekCreateStep,
       rectFor,
       register,

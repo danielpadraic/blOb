@@ -17,8 +17,9 @@ import { OfficialDobProvider } from '@/components/interests/OfficialDobHost';
 import { GeoCashProvider } from '@/components/geo/GeoCashHost';
 import { BugReportHost } from '@/components/bug/BugReportHost';
 import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
-import { TourHost } from '@/components/tour/TourHost';
+import { ContextualTourHost } from '@/components/tour/ContextualTourHost';
 import { CreateTourHost } from '@/components/tour/CreateTourHost';
+import { TourHost } from '@/components/tour/TourHost';
 import { TourProvider, useTour, useTourOptional } from '@/components/tour/TourContext';
 import {
   TabChromeHeader,
@@ -486,6 +487,7 @@ function TabLayoutInner() {
           <View pointerEvents="box-none" style={styles.tourLayer}>
             <TourHost onFinished={() => void refetch()} />
             <CreateTourHost />
+            <ContextualTourHost />
           </View>
         </>
       )}

@@ -2,10 +2,16 @@ import { useCallback } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useFocusEffect, usePathname, useRouter } from 'expo-router';
 
+import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useContextualTour } from '@/components/tour/useContextualTour';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { useAfterFirstPaint } from '@/hooks/useAfterFirstPaint';
+import { useAuth } from '@/hooks/useAuth';
 import { useHomePulse } from '@/hooks/useHomePulse';
+import { useMyProfile } from '@/hooks/useProfile';
+import { HOME_LIVE_PILLS_STEPS } from '@/lib/contextualTour';
+import { wasHomeTourCompleted } from '@/lib/homeTour';
 import { copy } from '@/lib/copy';
 import { pulseChallengeHref, type PulseFace, type PulsePill } from '@/lib/homePulse';
 import { pushChallengeHref } from '@/lib/challengeNav';
@@ -77,6 +83,8 @@ function PulseChip({ pill }: { pill: PulsePill }) {
 
 /** Home Pulse. Fetches itself so a refresh does not remount the Home composer. */
 export function PulseRail() {
+  const { user } = useAuth();
+  const { profile } = useMyProfile();
   const railReady = useAfterFirstPaint();
   const pulse = useHomePulse({ enabled: railReady });
   const refetchPulse = pulse.refetch;
@@ -90,11 +98,16 @@ export function PulseRail() {
   );
 
   const pills = pulse.data ?? [];
-  if (!pulse.isFetched || pulse.isError || pills.length === 0) {
+  const showRail = pulse.isFetched && !pulse.isError && pills.length > 0;
+  const homeTourDone = wasHomeTourCompleted(profile?.id, profile?.tutorial_completed_at);
+  useContextualTour('home-live-pills', HOME_LIVE_PILLS_STEPS, showRail && homeTourDone, user?.id);
+
+  if (!showRail) {
     return null;
   }
 
   return (
+    <TourAnchor id="tour-live-pills">
     <View style={{ marginHorizontal: -16 }} accessibilityLabel={copy('pulse.rail')}>
       <ScrollView
         horizontal
@@ -107,5 +120,6 @@ export function PulseRail() {
         ))}
       </ScrollView>
     </View>
+    </TourAnchor>
   );
 }

@@ -100,6 +100,12 @@ import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, CHALLENGE_LIVE_ONLY_TABS, asChallengePageTab, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
 import { LiveAlertsButton } from '@/components/challenge/LiveMuteSheet';
+import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useContextualTour } from '@/components/tour/useContextualTour';
+import {
+  CHALLENGE_LIVE_HOST_EMPTY_BODY,
+  CHALLENGE_LIVE_STEPS,
+} from '@/lib/contextualTour';
 import {
   requiresOfficialBodyMetrics,
   usesComparablePointsScoring,
@@ -613,6 +619,18 @@ export default function ChallengeDetailScreen() {
   const watch = useStartOnWatch(challenge);
   const inviteOnly = isInviteOnlyChallenge(challenge);
   const windowEnded = Boolean(challenge && hasChallengeEnded(challenge, new Date(nowMs)));
+  const challengeLiveSteps = useMemo(() => {
+    if (isHost && (feed.data?.length ?? 0) === 0) {
+      return [{ ...CHALLENGE_LIVE_STEPS[0], body: CHALLENGE_LIVE_HOST_EMPTY_BODY }];
+    }
+    return CHALLENGE_LIVE_STEPS;
+  }, [feed.data?.length, isHost]);
+  useContextualTour(
+    'challenge-live',
+    challengeLiveSteps,
+    Boolean(user?.id && liveTabFocused && liveMounted && challenge && !windowEnded && feed.isFetched),
+    user?.id,
+  );
   const judgingHold =
     Boolean(challenge) &&
     windowEnded &&
@@ -1117,15 +1135,21 @@ export default function ChallengeDetailScreen() {
         </Pressable>
       ) : null}
       {liveMounted ? (
-        <View
-          collapsable={false}
-          pointerEvents={pageTab === 'feed' ? 'auto' : 'none'}
+        <TourAnchor
+          id="tour-challenge-live"
           style={{
             flex: pageTab === 'feed' ? 1 : 0,
             minHeight: pageTab === 'feed' ? 0 : 0,
             height: pageTab === 'feed' ? undefined : 0,
             overflow: 'hidden',
             opacity: pageTab === 'feed' ? 1 : 0,
+          }}>
+        <View
+          collapsable={false}
+          pointerEvents={pageTab === 'feed' ? 'auto' : 'none'}
+          style={{
+            flex: 1,
+            minHeight: 0,
           }}>
           {challenge?.is_callout ? (
             <CalloutLiveWatchChip watching={isCalloutObserver} count={watchingCount} />
@@ -1165,6 +1189,7 @@ export default function ChallengeDetailScreen() {
         />
           </LiveSafeBoundary>
         </View>
+        </TourAnchor>
       ) : null}
       {pageTab !== 'feed' ? (
       <ScrollView

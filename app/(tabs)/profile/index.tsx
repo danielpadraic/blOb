@@ -34,6 +34,7 @@ import { StreakBadgesRow } from '@/components/profile/StreakBadgesRow';
 import { PrivacySettingsCard } from '@/components/profile/PrivacySettingsCard';
 import { InterestsYouCard } from '@/components/interests/InterestsYouCard';
 import { useBugReport } from '@/components/bug/BugReportHost';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 
 const PHYSICAL_DISCLAIMER = 'Always private. Used for Challenge recommendations and competition placement.';
 
@@ -252,6 +253,7 @@ function LiftsRow() {
   const latest = rows[0];
 
   return (
+    <TourAnchor id="tour-lift">
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Lifts"
@@ -281,6 +283,7 @@ function LiftsRow() {
         </View>
       </Card>
     </Pressable>
+    </TourAnchor>
   );
 }
 

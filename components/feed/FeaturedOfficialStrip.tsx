@@ -124,6 +124,7 @@ export function FeaturedOfficialStrip() {
   }
 
   return (
+    <TourAnchor id="tour-official-banner">
     <TourAnchor id="tour-official">
       <View
         style={{
@@ -216,6 +217,7 @@ export function FeaturedOfficialStrip() {
           </AppText>
         </Pressable>
       </View>
+    </TourAnchor>
     </TourAnchor>
   );
 }

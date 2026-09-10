@@ -847,6 +847,13 @@ export function SimpleCreateForm() {
         />
 
         {simpleHowYouWin(draft) === 'cumulative' ? null : (
+        <TourAnchor id="create-simple-misses">
+        <View
+          className="gap-2"
+          collapsable={false}
+          ref={(node) => {
+            sectionRefs.current['create-simple-misses'] = node;
+          }}>
         <StepperField
           label={copy('create.allowedMisses')}
           hint={copy('create.allowedMissesHint')}
@@ -856,6 +863,8 @@ export function SimpleCreateForm() {
           step={1}
           onChange={(allowed_misses) => patch({ allowed_misses })}
         />
+        </View>
+        </TourAnchor>
         )}
 
         <TourAnchor id="create-simple-start">

@@ -1,4 +1,5 @@
 import { LEGAL_PRIVACY_VERSION, LEGAL_TOS_VERSION, SKILL_ATTESTATION } from '@/copy/legalDocs';
+import { clearHomeLivePillsTour } from '@/lib/contextualTour';
 import { clearHomeTourCompleted, markHomeTourCompleted } from '@/lib/homeTour';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
@@ -105,6 +106,7 @@ export async function completeTutorial(): Promise<void> {
 export async function replayTutorial(): Promise<void> {
   const { data: sessionData } = await supabase.auth.getUser();
   clearHomeTourCompleted(sessionData.user?.id);
+  clearHomeLivePillsTour(sessionData.user?.id);
   patchTutorialCompleted(null);
   const { error } = await supabase.rpc('replay_tutorial');
   if (error) {

@@ -7,62 +7,92 @@ import {
   asCopyTone,
   profileSetupTone,
 } from '@/lib/copy';
-import { TOUR_STEPS } from '@/lib/tour';
+import {
+  homeTourBody,
+  homeTourTarget,
+  nextHomeTourIndex,
+  officialTourTarget,
+  ROUNDS_FALLBACK_BODY,
+  shouldSkipHomeStep,
+  TOUR_STEPS,
+} from '@/lib/tour';
 
 describe('home tour copy', () => {
-  it('has a Menu step on the hamburger and Quick Start on +', () => {
+  it('walks hamburger, wallet, banner, waves, +, Friends, and You — not Live or Lobby', () => {
     const ids = TOUR_STEPS.map((step) => step.id);
     expect(ids).toEqual([
+      'menu',
       'coins',
       'money',
       'search',
       'dm',
       'bell',
-      'menu',
       'official',
       'waves',
       'rounds',
-      'tabFeed',
-      'tabLobby',
       'tabCreate',
       'tabFriends',
       'tabYou',
-      'goal',
     ]);
+    expect(ids).toHaveLength(12);
+    expect(ids).not.toContain('tabFeed');
+    expect(ids).not.toContain('tabLobby');
+    expect(ids).not.toContain('goal');
 
     const menu = TOUR_STEPS.find((step) => step.id === 'menu');
     expect(menu).toMatchObject({
       target: 'tour-menu',
-      placement: 'below',
       title: 'Menu',
-      body: 'Create a Challenge, Create a Circle, Call someone out, Join, or Send Coins. These live here — not on the +.',
     });
+    expect(menu?.body).toMatch(/Create a Challenge/);
+    expect(menu?.body).toMatch(/not on the \+/);
 
     const create = TOUR_STEPS.find((step) => step.id === 'tabCreate');
     expect(create?.title).toBe('+');
-    expect(create?.body).toBe(
-      'Quick Start. Check In when you are in a challenge that needs proof. Post opens Wave, Round, or a Feed update.',
-    );
-    expect(TOUR_STEPS.some((step) => /simple or advanced/i.test(step.body))).toBe(false);
+    expect(create?.body).toMatch(/Quick Start/);
+    expect(create?.body).toMatch(/Wave/);
+    expect(create?.body).not.toMatch(/Create Challenge/);
 
-    const waves = TOUR_STEPS.find((step) => step.id === 'waves');
-    expect(waves).toMatchObject({
-      target: 'tour-waves',
-      placement: 'below',
-      title: 'Waves',
-    });
+    const official = TOUR_STEPS.find((step) => step.id === 'official');
+    expect(official?.target).toBe('tour-official-banner');
+    expect(official?.target).not.toBe('tour-tab-lobby');
+
+    const you = TOUR_STEPS.find((step) => step.id === 'tabYou');
+    expect(you?.body).toMatch(/Lift/);
+    expect(you?.body).toMatch(/flag tab/);
+
+    const joined = TOUR_STEPS.map((step) => `${step.title} ${step.body}`).join('\n');
+    expect(joined).not.toMatch(/Bucks/i);
+    expect(joined).not.toMatch(/I believe/i);
+    expect(joined).not.toMatch(/\bFollow\b/);
+  });
+
+  it('skips Official when the Home banner is missing and never retargets Lobby', () => {
+    const official = TOUR_STEPS.find((step) => step.id === 'official');
+    expect(official).toBeTruthy();
+    expect(officialTourTarget(() => false)).toBeNull();
+    expect(shouldSkipHomeStep(official!, () => false)).toBe(true);
+    expect(homeTourTarget(official!, (id) => id === 'tour-tab-lobby')).toBeNull();
+    expect(homeTourTarget(official!, (id) => id === 'tour-official-banner')).toBe(
+      'tour-official-banner',
+    );
+  });
+
+  it('keeps Rounds and falls back to the Waves rail when tour-rounds is missing', () => {
     const rounds = TOUR_STEPS.find((step) => step.id === 'rounds');
-    expect(rounds).toMatchObject({
-      target: 'tour-waves',
-      placement: 'below',
-      title: 'Rounds',
-    });
-    expect(rounds?.body).toMatch(/Up to 3 minutes/);
-    const friends = TOUR_STEPS.find((step) => step.id === 'tabFriends');
-    expect(friends?.body).toMatch(/Circles are your standing crew/);
-    expect(friends?.body).not.toMatch(/Neutral/i);
-    expect(TOUR_STEPS.some((step) => /Neutral/i.test(step.body) || /Neutral/i.test(step.title))).toBe(
-      false,
+    expect(rounds).toBeTruthy();
+    expect(shouldSkipHomeStep(rounds!, (id) => id === 'tour-waves')).toBe(false);
+    expect(homeTourTarget(rounds!, (id) => id === 'tour-waves')).toBe('tour-waves');
+    expect(homeTourBody(rounds!, (id) => id === 'tour-waves')).toBe(ROUNDS_FALLBACK_BODY);
+    expect(ROUNDS_FALLBACK_BODY).toMatch(/Post → Round/);
+  });
+
+  it('advances past missing Official and lands on Waves', () => {
+    const hasRect = (id: string) =>
+      id !== 'tour-official-banner' && id !== 'tour-official' && id !== 'tour-rounds';
+    const officialIndex = TOUR_STEPS.findIndex((step) => step.id === 'official');
+    expect(nextHomeTourIndex(officialIndex - 1, 1, hasRect)).toBe(
+      TOUR_STEPS.findIndex((step) => step.id === 'waves'),
     );
   });
 

@@ -14,6 +14,10 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
+import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useContextualTour } from '@/components/tour/useContextualTour';
+import { useAuth } from '@/hooks/useAuth';
+import { LIFT_HISTORY_STEPS } from '@/lib/contextualTour';
 import {
   useAttachLiftToCheckin,
   useDeleteLiftSession,
@@ -65,6 +69,7 @@ import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 export default function LiftsHistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { data, isLoading, error, refetch } = useLiftHistory();
   const save = useSaveLiftSession();
   const favorite = useSetLiftSessionFavorite();
@@ -99,6 +104,7 @@ export default function LiftsHistoryScreen() {
   const filtering = isFilterActive(filter);
   const completedWeight = tabbed.reduce((total, row) => total + (row.weightMoved ?? 0), 0);
   const weightUnit = tabbed[0]?.unit ?? 'lb';
+  useContextualTour('lift', LIFT_HISTORY_STEPS, Boolean(user?.id && !isLoading && !error), user?.id);
 
   // Which of those challenges keep check-ins inside their own lobby, so the share sheet can hide
   // the Home toggle rather than offering something the lobby will refuse.
@@ -318,6 +324,7 @@ export default function LiftsHistoryScreen() {
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES}>
+      <TourAnchor id="tour-lift-history" style={{ flex: 1, minHeight: 0 }}>
       <View style={{ flex: 1, minHeight: 0 }}>
         {all.length === 0 ? (
           <MascotState
@@ -521,6 +528,7 @@ export default function LiftsHistoryScreen() {
           )}
         </View>
       </View>
+      </TourAnchor>
 
       <LiftHistoryMenu
         session={menuFor}

@@ -26,11 +26,33 @@ export function CreateTourHost() {
   const peekCreateStep = tour.peekCreateStep;
   const stopCreate = tour.stopCreate;
   const centerCreateRect = tour.centerCreateRect;
-  const bucks = tour.createCurrency === 'bucks';
+  const cash = tour.createCurrency === 'bucks';
+  const [waited, setWaited] = useState(false);
 
   useEffect(() => {
     setIndex(0);
+    setWaited(false);
   }, [tour.createRunId]);
+
+  useEffect(() => {
+    if (!tour.createActive || !step) {
+      return;
+    }
+    setWaited(false);
+    const handle = setTimeout(() => setWaited(true), 2200);
+    return () => clearTimeout(handle);
+  }, [index, step, tour.createActive]);
+
+  useEffect(() => {
+    if (!tour.createActive || !step || !waited || rawRect) {
+      return;
+    }
+    if (index >= steps.length - 1) {
+      stopCreate();
+      return;
+    }
+    setIndex((current) => current + 1);
+  }, [index, rawRect, step, steps.length, stopCreate, tour.createActive, waited]);
 
   useEffect(() => {
     if (!tour.createActive || !step) {
@@ -95,8 +117,8 @@ export function CreateTourHost() {
 
   const last = index === steps.length - 1;
   const showCurrencyMark = step.id === 'simple-currency' || step.id === 'adv-currency';
-  const title = bucks && step.titleBucks ? step.titleBucks : step.title;
-  const body = bucks && step.bodyBucks ? step.bodyBucks : step.body;
+  const title = cash && step.titleCash ? step.titleCash : step.title;
+  const body = cash && step.bodyCash ? step.bodyCash : step.body;
 
   return (
     <CoachMarkOverlay
