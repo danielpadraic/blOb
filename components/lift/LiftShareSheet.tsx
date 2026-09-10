@@ -34,6 +34,7 @@ import {
   liftShareKeyboardOpen,
   liftShareNameMatches,
 } from '@/lib/liftShareInset';
+import { asIdSet } from '@/lib/ids';
 import { searchPeople } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
@@ -174,7 +175,7 @@ export function LiftShareSheet({
     queryFn: () => searchPeople(needle, user!.id),
   });
 
-  const blockedIds = blockedPeers.data ?? new Set<string>();
+  const blockedIds = asIdSet(blockedPeers.data);
   const extraPeople = ((peopleSearch.data ?? []) as PublicProfile[]).filter((person) => {
     if (!person?.id || person.id === user?.id || blockedIds.has(person.id)) {
       return false;

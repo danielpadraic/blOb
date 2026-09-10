@@ -1,10 +1,13 @@
 import type { ErrorBoundaryProps } from 'expo-router';
 
 import { ProfileRouteErrorBoundary } from '@/components/profile/ProfileSafeBoundary';
+import PublicProfileScreen from '@/components/profile/PublicProfileScreen';
 
-export { default } from '@/components/profile/PublicProfileScreen';
-
-/** Leaf route export — Expo mounts this, not the tab AppErrorBoundary. */
+/** Leaf route — Expo web only mounts ErrorBoundary next to a real default, not a re-export. */
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return <ProfileRouteErrorBoundary {...props} />;
+}
+
+export default function ProfilePublicProfile() {
+  return <PublicProfileScreen />;
 }

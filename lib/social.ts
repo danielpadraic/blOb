@@ -1,6 +1,7 @@
 import { addHours } from 'date-fns';
 
 import { readBlockedPeerRows } from '@/lib/blockedPeers';
+import { asIdSet } from '@/lib/ids';
 import { PUBLIC_PROFILE_COLUMNS } from '@/lib/constants';
 import { copy } from '@/lib/copy';
 import { supabase } from '@/lib/supabase';
@@ -241,19 +242,23 @@ export function peopleRelation(input: {
   outgoingIds: Set<string>;
   followingIds: Set<string>;
 }): PeopleRelation {
+  const friendIds = asIdSet(input.friendIds, input.userId);
+  const incomingIds = asIdSet(input.incomingIds);
+  const outgoingIds = asIdSet(input.outgoingIds);
+  const followingIds = asIdSet(input.followingIds);
   if (input.userId && input.userId === input.targetId) {
     return 'self';
   }
-  if (input.friendIds.has(input.targetId)) {
+  if (friendIds.has(input.targetId)) {
     return 'friends';
   }
-  if (input.incomingIds.has(input.targetId)) {
+  if (incomingIds.has(input.targetId)) {
     return 'incoming';
   }
-  if (input.outgoingIds.has(input.targetId)) {
+  if (outgoingIds.has(input.targetId)) {
     return 'requested';
   }
-  if (input.followingIds.has(input.targetId)) {
+  if (followingIds.has(input.targetId)) {
     return 'following';
   }
   return 'none';
@@ -412,12 +417,13 @@ export function groupStories(input: {
   circleIds?: Set<string>;
   includeEmptyOwn?: boolean;
 }): StoryGroup[] {
+  const circleIds = input.circleIds ? asIdSet(input.circleIds, input.userId) : null;
   const buckets = new Map<string, Story[]>();
   for (const story of input.stories) {
     if (!story?.id || !story.user_id) {
       continue;
     }
-    if (input.circleIds && !input.circleIds.has(story.user_id)) {
+    if (circleIds && !circleIds.has(story.user_id)) {
       continue;
     }
     const list = buckets.get(story.user_id) ?? [];

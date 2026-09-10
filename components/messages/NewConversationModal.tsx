@@ -15,6 +15,7 @@ import {
 } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { canStartDirectChat } from '@/lib/dmOpen';
+import { asIdSet } from '@/lib/ids';
 import { detectPeopleSearch } from '@/lib/social';
 import { conversationHref, directMessageHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -39,7 +40,7 @@ export function NewConversationModal({ visible, onClose }: NewConversationModalP
   const [picked, setPicked] = useState<Map<string, PublicProfile>>(new Map());
   const searching = Boolean(detectPeopleSearch(query));
   const peopleSearch = usePeopleSearch(query);
-  const blockedIds = blocked.data ?? new Set<string>();
+  const blockedIds = asIdSet(blocked.data);
   const friendPeople = useMemo(
     () =>
       (friends.data ?? [])

@@ -1,3 +1,4 @@
+import { asIdSet } from '@/lib/ids';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { supabase } from '@/lib/supabase';
 import type { StoryGroup } from '@/lib/social';
@@ -69,21 +70,24 @@ export function filterStoriesForRail(input: {
   hiddenAuthorIds: Set<string>;
   viewerId?: string | null;
 }): Story[] {
+  const hiddenPostIds = asIdSet(input.hiddenPostIds);
+  const corporateChallengeIds = asIdSet(input.corporateChallengeIds);
+  const hiddenAuthorIds = asIdSet(input.hiddenAuthorIds);
   return input.stories.filter((story) => {
     if (!story?.id) {
       return false;
     }
     if (
       story.post_id &&
-      input.hiddenPostIds.has(story.post_id) &&
+      hiddenPostIds.has(story.post_id) &&
       (!input.viewerId || story.user_id === input.viewerId)
     ) {
       return false;
     }
-    if (story.challenge_id && input.corporateChallengeIds.has(story.challenge_id)) {
+    if (story.challenge_id && corporateChallengeIds.has(story.challenge_id)) {
       return false;
     }
-    if (input.hiddenAuthorIds.has(story.user_id)) {
+    if (hiddenAuthorIds.has(story.user_id)) {
       return false;
     }
     return true;

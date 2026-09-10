@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFollowing, useFriends } from '@/hooks/useSocial';
 import { searchMentionCircles } from '@/lib/circles';
 import { isCreatorAccount } from '@/lib/creator';
+import { asIdSet } from '@/lib/ids';
 import { mentionSearchMatches, type MentionKind } from '@/lib/mentions';
 import { asPostAudience, type PostAudience } from '@/lib/postAudience';
 import { fetchPublicProfilesByIds, searchPeople } from '@/lib/social';
@@ -117,7 +118,7 @@ export function useMentionCandidates(input: {
   });
 
   const rows = useMemo(() => {
-    const blockedIds = blocked.data ?? new Set<string>();
+    const blockedIds = asIdSet(blocked.data, user?.id);
     const exclude = new Set(input.excludeIds ?? []);
     if (user?.id) {
       exclude.add(user.id);

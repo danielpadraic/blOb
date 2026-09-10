@@ -11,7 +11,7 @@ import {
 import { useLocalSearchParams, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MessagesRouteErrorBoundary } from '@/components/messages/MessagesSafeBoundary';
+import { MessagesRouteErrorBoundary, MessagesSafeBoundary } from '@/components/messages/MessagesSafeBoundary';
 import { MessageBubble } from '@/components/messages/MessageBubble';
 import { MessageInput } from '@/components/messages/MessageInput';
 import { Avatar } from '@/components/ui/Avatar';
@@ -280,6 +280,7 @@ export default function ConversationScreen() {
         </Pressable>
       </View>
 
+      <MessagesSafeBoundary variant="thread">
       {showOpenError || threadStalled ? (
         <View className="flex-1 items-center justify-center px-8">
           <AppText className="text-center text-[16px] font-bold text-charcoal">
@@ -317,6 +318,7 @@ export default function ConversationScreen() {
           renderItem={({ item }) => <MessageBubble message={item} mine={item.sender_id === user?.id} />}
         />
       )}
+      </MessagesSafeBoundary>
 
       <View style={{ paddingBottom: composerPad }}>
         {peerBlocked ? (

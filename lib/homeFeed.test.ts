@@ -150,6 +150,21 @@ describe('asIdSet', () => {
     expect([...ids]).toEqual(['courtney']);
   });
 
+  it('keeps a Set-like iterable and reads author_id', () => {
+    const like = {
+      has() {
+        return false;
+      },
+      *[Symbol.iterator]() {
+        yield 'hidden-post';
+        yield { author_id: 'writer' };
+      },
+    };
+    const ids = asIdSet(like);
+    expect(ids.has('hidden-post')).toBe(true);
+    expect(ids.has('writer')).toBe(true);
+  });
+
   it('does not throw .has when hidden or friends is an array', () => {
     const hiddenArr = ['secret'] as unknown as Set<string>;
     const friendEdges = [

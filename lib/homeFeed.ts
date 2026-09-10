@@ -1,6 +1,9 @@
 import { isHomeExcludedClipType } from '@/lib/clipPost';
 import { asCircleVisibility, viewerCanSeeHomeCirclePost } from '@/lib/circles';
+import { asIdSet } from '@/lib/ids';
 import { asPostAudience, viewerCanSeeHomePost } from '@/lib/postAudience';
+
+export { asIdSet } from '@/lib/ids';
 
 export const HOME_FEED_SPLASH_MS = 3000;
 export const HOME_SATELLITE_MS = 2500;
@@ -79,63 +82,6 @@ export type HomeFeedAllowContext = {
   corporateIds: Set<string>;
   fofAuthors: Set<string>;
 };
-
-/**
- * Home / profile allow lists. Friends cache is FriendEdge[] (`['friends', userId]`).
- * Never call `.has` on the raw value — arrays have no `.has`.
- * FriendEdge → the other person, not the viewer, not the friendship row id.
- */
-export function asIdSet(input: unknown, viewerId?: string | null): Set<string> {
-  if (input instanceof Set) {
-    return new Set([...input].map(String).filter(Boolean));
-  }
-  if (!Array.isArray(input)) {
-    return new Set();
-  }
-  const ids: string[] = [];
-  const viewer = typeof viewerId === 'string' ? viewerId : '';
-  for (const row of input) {
-    if (typeof row === 'string' && row) {
-      ids.push(row);
-      continue;
-    }
-    if (!row || typeof row !== 'object') {
-      continue;
-    }
-    const rec = row as Record<string, unknown>;
-    const userA = rec.user_a_id;
-    const userB = rec.user_b_id;
-    if (typeof userA === 'string' && userA && typeof userB === 'string' && userB) {
-      if (viewer && (userA === viewer || userB === viewer)) {
-        ids.push(userA === viewer ? userB : userA);
-      } else {
-        ids.push(userA, userB);
-      }
-      continue;
-    }
-    const nested =
-      rec.profile && typeof rec.profile === 'object'
-        ? (rec.profile as { id?: unknown }).id
-        : undefined;
-    const id =
-      rec.id ??
-      rec.user_id ??
-      rec.friend_id ??
-      rec.other_user_id ??
-      rec.following_id ??
-      rec.follower_id ??
-      rec.blocked_id ??
-      rec.post_id ??
-      rec.muted_user_id ??
-      rec.challenge_id ??
-      rec.circle_id ??
-      nested;
-    if (typeof id === 'string' && id) {
-      ids.push(id);
-    }
-  }
-  return new Set(ids);
-}
 
 export function asHomeFeedAllowContext(ctx: HomeFeedAllowContext): HomeFeedAllowContext {
   return {

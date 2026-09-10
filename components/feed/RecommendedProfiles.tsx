@@ -8,6 +8,7 @@ import { useRecommendedProfiles } from '@/hooks/usePublicProfile';
 import { useBlockedPeerIds } from '@/hooks/useSocial';
 import { copy } from '@/lib/copy';
 import { canStartDirectChat } from '@/lib/dmOpen';
+import { asIdSet } from '@/lib/ids';
 import { directMessageHref } from '@/lib/routes';
 import { personDisplayName } from '@/lib/social';
 import { THEME } from '@/lib/theme';
@@ -33,7 +34,7 @@ export function RecommendedProfiles({ compact = false }: { compact?: boolean }) 
   const query = useRecommendedProfiles();
   const blocked = useBlockedPeerIds();
   const people = query.data ?? [];
-  const blockedIds = blocked.data ?? new Set<string>();
+  const blockedIds = asIdSet(blocked.data);
   if (people.length === 0) {
     return null;
   }

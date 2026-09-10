@@ -190,7 +190,7 @@ export function checkinSubmitHref(
   return done.length > 0 ? (`${path}?from=multi&done=${done.join(',')}` as Href) : (`${path}?from=multi` as Href);
 }
 
-const CHALLENGE_RETRY_SKIP = new Set(['new', 'create', 'callout']);
+const CHALLENGE_RETRY_SKIP = new Set(['new', 'create', 'callout', 'u']);
 
 function challengeRetryId(path: string): string | null {
   const match = String(path ?? '').match(/\/challenges\/([^/?#]+)/);
@@ -201,6 +201,43 @@ function challengeRetryId(path: string): string | null {
   return id;
 }
 
+const PROFILE_RETRY_RE = /^\/(feed|friends|challenges|profile)\/u\/([^/?#]+)/;
+const MESSAGES_RETRY_RE = /^\/messages\/([^/?#]+)/;
+
+/**
+ * Public profile Retry. Same `/feed/u/{username}` (or friends/challenges/profile copy).
+ * Empty string → Back. Never `/capture`, never Wave.
+ */
+export function profileRetryHref(pathname: string | null | undefined): string {
+  const path = String(pathname ?? '');
+  if (path.includes('/capture') || path.includes('/submit')) {
+    return '';
+  }
+  const match = path.match(PROFILE_RETRY_RE);
+  if (!match) {
+    return '';
+  }
+  return `/${match[1]}/u/${match[2]}`;
+}
+
+/**
+ * DM Retry. Same `/messages/{id}` or the inbox. Empty → Back. Never `/capture`.
+ */
+export function messagesRetryHref(pathname: string | null | undefined): string {
+  const path = String(pathname ?? '');
+  if (path.includes('/capture') || path.includes('/submit')) {
+    return '';
+  }
+  const match = path.match(MESSAGES_RETRY_RE);
+  if (match?.[1]) {
+    return `/messages/${match[1]}`;
+  }
+  if (path === '/messages' || path.startsWith('/messages?')) {
+    return '/messages';
+  }
+  return '';
+}
+
 /**
  * Bob Retry after a crash.
  * Stay on the screen that threw. Never `/capture`. Wave camera Retry leaves for Home.
@@ -209,6 +246,14 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   const path = String(pathname ?? '');
   if (path.includes('/capture') || path.includes('/feed/compose') || path === '/compose') {
     return '/feed';
+  }
+  const profile = profileRetryHref(path);
+  if (profile) {
+    return profile;
+  }
+  const chat = messagesRetryHref(path);
+  if (chat) {
+    return chat;
   }
   const watch = path.match(/^\/(wave|round|story|reel)\/([^/?#]*)/);
   if (watch && !clipRouteId(watch[2])) {
@@ -240,24 +285,6 @@ export function errorBoundaryRetryHref(pathname: string | null | undefined): str
     return '/feed';
   }
   return next;
-}
-
-const PROFILE_RETRY_RE = /^\/(feed|friends|challenges|profile)\/u\/([^/?#]+)/;
-
-/**
- * Public profile Retry. Same `/feed/u/{username}` (or friends/challenges/profile copy).
- * Empty string → Back. Never `/capture`, never Wave.
- */
-export function profileRetryHref(pathname: string | null | undefined): string {
-  const path = String(pathname ?? '');
-  if (path.includes('/capture')) {
-    return '';
-  }
-  const match = path.match(PROFILE_RETRY_RE);
-  if (!match) {
-    return '';
-  }
-  return `/${match[1]}/u/${match[2]}`;
 }
 
 /** X / Close on Check In review. That challenge Live (or Overview/Board). Never Home, never /feed, never last-open. */

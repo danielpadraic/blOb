@@ -6,7 +6,6 @@ import { FeedList } from '@/components/feed/FeedList';
 import { ProfileChallengeRow } from '@/components/profile/ProfileChallengeRow';
 import { ProfileMediaGrid } from '@/components/profile/ProfileMediaGrid';
 import {
-  ProfileRouteErrorBoundary,
   ProfileSafeBoundary,
   ProfileSectionBoundary,
 } from '@/components/profile/ProfileSafeBoundary';
@@ -155,8 +154,6 @@ function wallOpen(input: Parameters<typeof canPostOnProfile>[0]) {
     return false;
   }
 }
-
-export { ProfileRouteErrorBoundary as ErrorBoundary };
 
 export default function PublicProfileScreen() {
   return (

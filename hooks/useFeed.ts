@@ -399,10 +399,11 @@ async function withSocial(posts: PostWithMeta[], viewerId?: string): Promise<Pos
     return posts;
   }
 
-  const [commentsResult, silenced] = await Promise.all([
+  const [commentsResult, silencedRaw] = await Promise.all([
     fetchComments(ids),
     fetchSilencedAuthorIds(viewerId),
   ]);
+  const silenced = asIdSet(silencedRaw, viewerId);
   // A muted or blocked person's replies stay off every thread, not just Home.
   const comments = ((commentsResult.data ?? []) as CommentWithAuthor[]).filter(
     (comment) => !comment?.author_id || !silenced.has(comment.author_id),
@@ -519,7 +520,7 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
       : Promise.resolve(new Map()),
   ]);
   const byId = new Map((profiles.data ?? []).map((row) => [row.id, row]));
-  const blockedIds = new Set(blocked);
+  const blockedIds = asIdSet(blocked);
   const challengeById = new Map((challengeRows.data ?? []).map((row) => [row.id, row]));
 
   const mentionsByPost = new Map<string, PostMention[]>();

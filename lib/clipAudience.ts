@@ -1,3 +1,4 @@
+import { asIdSet } from '@/lib/ids';
 import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 
 export type ClipLinkedPost = {
@@ -46,6 +47,8 @@ export function filterClipsByAudience<T extends { user_id: string; post_id?: str
     officialAuthorIds: Set<string>;
   },
 ): T[] {
+  const friendIds = asIdSet(ctx.friendIds, ctx.viewerId);
+  const officialAuthorIds = asIdSet(ctx.officialAuthorIds);
   return clips.filter((clip) => {
     const post = clip.post_id ? ctx.posts.get(clip.post_id) : undefined;
     return viewerCanSeeClip({
@@ -53,8 +56,8 @@ export function filterClipsByAudience<T extends { user_id: string; post_id?: str
       authorId: clip.user_id,
       audience: post?.audience,
       audienceUserIds: post?.audience_user_ids,
-      friendsWithAuthor: Boolean(ctx.viewerId && ctx.friendIds.has(clip.user_id)),
-      officialAuthor: ctx.officialAuthorIds.has(clip.user_id),
+      friendsWithAuthor: Boolean(ctx.viewerId && friendIds.has(clip.user_id)),
+      officialAuthor: officialAuthorIds.has(clip.user_id),
     });
   });
 }

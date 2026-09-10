@@ -51,6 +51,11 @@ describe('checkinSubmitHref', () => {
     expect(errorBoundaryRetryHref('/capture')).toBe('/feed');
     expect(errorBoundaryRetryHref('/capture?mode=story')).toBe('/feed');
     expect(errorBoundaryRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
+    expect(errorRetryHref('/challenges/u/blob')).toBe('/challenges/u/blob');
+    expect(errorBoundaryRetryHref('/challenges/u/blob')).toBe('/challenges/u/blob');
+    expect(errorBoundaryRetryHref('/messages/2ca49850-b978-45d8-a282-2b644913c538')).toBe(
+      '/messages/2ca49850-b978-45d8-a282-2b644913c538',
+    );
   });
 
   it('closes Check In onto that challenge Live, not Home', () => {
