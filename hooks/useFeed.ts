@@ -1856,7 +1856,7 @@ export function useCreatePost(challengeId?: string | null) {
           parent_id: input.parentId ?? null,
           lift_session_id: input.liftSessionId ?? null,
           lift_snapshot: input.liftSnapshot ?? null,
-          mentions: (input.mentionedUserIds ?? []).map((userId) => ({)
+          mentions: (input.mentionedUserIds ?? []).map((userId) => ({
             userId,
             username: '',
             available: true,
