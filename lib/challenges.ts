@@ -893,6 +893,22 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
   return attachSettledPots(out);
 }
 
+/** House Lobby: every challenge row RLS will return. No visibility / join filter. */
+const HOUSE_LOBBY_LIMIT = 800;
+
+export async function fetchHouseLobbyChallenges(): Promise<Challenge[]> {
+  const rows = await selectChallengeList(
+    (query) => query.order('created_at', { ascending: false }).limit(HOUSE_LOBBY_LIMIT),
+    'house-catalog',
+  );
+  const visible = rows.map(normalizeChallenge);
+  logDev('[blob:lobby] house-catalog', {
+    count: visible.length,
+    titles: visible.map((row) => row.title),
+  });
+  return attachSettledPots(visible);
+}
+
 async function attachSettledPots(rows: Challenge[]): Promise<Challenge[]> {
   const ended = rows.filter((row) => isEndedPrizeStatus(row.status));
   if (ended.length === 0) {

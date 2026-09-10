@@ -9,7 +9,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
 import { AdminWallets } from '@/components/admin/AdminWallets';
 import { useAdminPulse } from '@/hooks/useAdmin';
-import { type AdminPulseMetric, type AdminRange } from '@/lib/admin';
+import { formatAdminRpcError, type AdminPulseMetric, type AdminRange } from '@/lib/admin';
 import { ADMIN_ERRORS_HREF, ADMIN_REPORTS_HREF, adminMetricHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { useState } from 'react';
@@ -76,14 +76,21 @@ export default function AdminPulseScreen() {
         {pulse.isLoading && !pulse.data ? (
           <MascotState kind="loading" title="Loading counts…" compact />
         ) : pulse.error ? (
-          <MascotState
-            kind="error"
-            title="Couldn’t load Pulse"
-            body="Try again in a moment."
-            actionLabel="Retry"
-            onAction={() => void pulse.refetch()}
-            compact
-          />
+          <Card>
+            <AppText className="text-[15px] font-bold text-charcoal">Couldn’t load Pulse</AppText>
+            <AppText className="mt-2 text-[13px] leading-5 text-muted" selectable>
+              {formatAdminRpcError(pulse.error)}
+            </AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry Pulse"
+              onPress={() => void pulse.refetch()}
+              style={{ minHeight: 44, justifyContent: 'center', marginTop: 4 }}>
+              <AppText className="text-[14px] font-semibold" style={{ color: THEME.accent }}>
+                Retry
+              </AppText>
+            </Pressable>
+          </Card>
         ) : (
           <View className="gap-3">
             {cards.map((card) => (

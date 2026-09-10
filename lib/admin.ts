@@ -54,9 +54,29 @@ function asNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+export function formatAdminRpcError(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const row = err as { code?: string; message?: string; details?: string };
+    const code = String(row.code ?? '').trim();
+    const message = String(row.message ?? '').trim();
+    const details = String(row.details ?? '').trim();
+    const line = [code, message].filter(Boolean).join(' — ');
+    if (line && details && !message.includes(details)) {
+      return `${line} (${details})`;
+    }
+    return line || 'Unknown error';
+  }
+  return String(err ?? 'Unknown error');
+}
+
+function logAdminRpc(rpc: string, err: unknown) {
+  console.warn('[blob:admin]', rpc, formatAdminRpcError(err));
+}
+
 export async function fetchAdminPulse(range: AdminRange): Promise<AdminPulse> {
   const { data, error } = await supabase.rpc('admin_pulse', { p_range: range });
   if (error) {
+    logAdminRpc('admin_pulse', error);
     throw error;
   }
   const row = (data ?? {}) as Record<string, unknown>;
@@ -82,6 +102,7 @@ export async function fetchAdminPulseList(
     p_range: range,
   });
   if (error) {
+    logAdminRpc('admin_pulse_list', error);
     throw error;
   }
   return Array.isArray(data) ? (data as AdminPulseRow[]) : [];
@@ -117,6 +138,7 @@ export async function fetchAdminErrors(): Promise<AdminErrorView[]> {
 export async function fetchAdminWallets(): Promise<AdminWalletRow[]> {
   const { data, error } = await supabase.rpc('admin_wallets');
   if (error) {
+    logAdminRpc('admin_wallets', error);
     throw error;
   }
   if (!Array.isArray(data)) {

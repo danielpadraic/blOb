@@ -15,6 +15,7 @@ import {
   fetchDiscoverChallenges,
   fetchFriendsDiscoverChallenges,
   fetchEndedLobbyChallenges,
+  fetchHouseLobbyChallenges,
   fetchHostingChallenges,
   fetchJoinedLobbyChallenges,
   fetchLobbyChallenges,
@@ -147,6 +148,18 @@ export function useEndedChallenges(options?: LobbyQueryOptions) {
     enabled: Boolean(user?.id) && options?.enabled !== false,
     queryFn: async (): Promise<ChallengeWithStats[]> => {
       return withParticipantCounts(await fetchEndedLobbyChallenges(user!.id));
+    },
+  });
+}
+
+export function useHouseLobbyChallenges(options?: LobbyQueryOptions) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['lobby-house', user?.id],
+    enabled: Boolean(user?.id) && options?.enabled !== false,
+    staleTime: 15_000,
+    queryFn: async (): Promise<ChallengeWithStats[]> => {
+      return withParticipantCounts(await fetchHouseLobbyChallenges());
     },
   });
 }

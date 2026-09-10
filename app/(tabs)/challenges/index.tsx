@@ -25,6 +25,7 @@ import {
   useCompetingChallenges,
   useEndedChallenges,
   useFriendsDiscoverChallenges,
+  useHouseLobbyChallenges,
   useHostingChallenges,
   useMyChallengeProgress,
   useOfficialDiscoverChallenges,
@@ -67,6 +68,7 @@ import {
 import { useCalloutCardParties } from '@/hooks/useCallouts';
 import type { CalloutCardParty } from '@/lib/callouts';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
+import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
 import { AppText } from '@/components/ui/AppText';
 import type { ChallengeWithStats } from '@/lib/types';
@@ -135,13 +137,19 @@ export default function ChallengesScreen() {
   const { profile } = useMyProfile();
   const { mine: interestMine } = useMyInterests();
   const tone = asCopyTone(profile?.motivation_tone);
+  const houseMode = isOfficialAccount(profile);
+  const houseQuery = useHouseLobbyChallenges({ enabled: houseMode });
   const hostingQuery = useHostingChallenges({
-    enabled: tab === 'hosting' || tab === 'official',
+    enabled: !houseMode && (tab === 'hosting' || tab === 'official'),
   });
-  const activeQuery = useCompetingChallenges({ enabled: tab === 'active' || tab === 'official' || !tabReady });
-  const officialQuery = useOfficialDiscoverChallenges({ enabled: tab === 'official' || !tabReady });
-  const endedQuery = useEndedChallenges({ enabled: tab === 'ended' });
-  const friendsQuery = useFriendsDiscoverChallenges({ enabled: tab === 'active' });
+  const activeQuery = useCompetingChallenges({
+    enabled: !houseMode && (tab === 'active' || tab === 'official' || !tabReady),
+  });
+  const officialQuery = useOfficialDiscoverChallenges({
+    enabled: !houseMode && (tab === 'official' || !tabReady),
+  });
+  const endedQuery = useEndedChallenges({ enabled: !houseMode && tab === 'ended' });
+  const friendsQuery = useFriendsDiscoverChallenges({ enabled: !houseMode && tab === 'active' });
   const mine = useMyChallengeProgress();
   const draftsQuery = useChallengeDrafts();
   const discardDraft = useDiscardChallengeDraft();
@@ -202,31 +210,49 @@ export default function ChallengesScreen() {
     };
   }, [profile, user]);
 
+  const houseCatalog = houseQuery.data ?? [];
+
   const officialAll = useMemo(
     () =>
-      uniqueById([
-        ...(officialQuery.data ?? []).filter(isOfficialLobbyRow),
-        ...(activeQuery.data ?? []).filter(isOfficialLobbyRow),
-        ...(hostingQuery.data ?? []).filter(isOfficialLobbyRow),
-      ]).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
-    [activeQuery.data, hostingQuery.data, nowMs, officialQuery.data],
+      houseMode
+        ? uniqueById(houseCatalog.filter((row) => isOfficialLobbyRow(row) && !isLobbyEndedChallenge(row, nowMs)))
+        : uniqueById([
+            ...(officialQuery.data ?? []).filter(isOfficialLobbyRow),
+            ...(activeQuery.data ?? []).filter(isOfficialLobbyRow),
+            ...(hostingQuery.data ?? []).filter(isOfficialLobbyRow),
+          ]).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+    [activeQuery.data, houseCatalog, houseMode, hostingQuery.data, nowMs, officialQuery.data],
   );
 
   const activeAll = useMemo(
-    () => (activeQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
-    [activeQuery.data, nowMs],
+    () =>
+      houseMode
+        ? uniqueById(houseCatalog.filter((row) => !isOfficialLobbyRow(row) && !isLobbyEndedChallenge(row, nowMs)))
+        : (activeQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+    [activeQuery.data, houseCatalog, houseMode, nowMs],
   );
   const activeIds = useMemo(() => new Set(activeAll.map((row) => row.id)), [activeAll]);
 
   const hostingAll = useMemo(
-    () => (hostingQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
-    [hostingQuery.data, nowMs],
+    () =>
+      houseMode
+        ? uniqueById(
+            houseCatalog.filter(
+              (row) =>
+                Boolean(user?.id && row.created_by === user.id) && !isLobbyEndedChallenge(row, nowMs),
+            ),
+          )
+        : (hostingQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+    [houseCatalog, houseMode, hostingQuery.data, nowMs, user?.id],
   );
   const hostingIds = useMemo(() => new Set(hostingAll.map((row) => row.id)), [hostingAll]);
 
   const endedAll = useMemo(
-    () => (endedQuery.data ?? []).filter((row) => isLobbyEndedChallenge(row, nowMs)),
-    [endedQuery.data, nowMs],
+    () =>
+      houseMode
+        ? uniqueById(houseCatalog.filter((row) => isLobbyEndedChallenge(row, nowMs)))
+        : (endedQuery.data ?? []).filter((row) => isLobbyEndedChallenge(row, nowMs)),
+    [endedQuery.data, houseCatalog, houseMode, nowMs],
   );
 
   const friendsAll = useMemo(
@@ -272,9 +298,10 @@ export default function ChallengesScreen() {
     if (tabReady) {
       return;
     }
-    const pending =
-      (activeQuery.isPending && !activeQuery.data) ||
-      (officialQuery.isPending && !officialQuery.data);
+    const pending = houseMode
+      ? houseQuery.isPending && !houseQuery.data
+      : (activeQuery.isPending && !activeQuery.data) ||
+        (officialQuery.isPending && !officialQuery.data);
     if (pending) {
       return;
     }
@@ -284,6 +311,9 @@ export default function ChallengesScreen() {
     activeAll.length,
     activeQuery.data,
     activeQuery.isPending,
+    houseMode,
+    houseQuery.data,
+    houseQuery.isPending,
     officialQuery.data,
     officialQuery.isPending,
     tabReady,
@@ -318,10 +348,12 @@ export default function ChallengesScreen() {
     );
   }
 
-  const official = applyList(officialAll, 'official');
-  const active = applyList(activeAll, 'active');
-  const hosting = applyList(hostingAll, 'hosting');
-  const ended = applyList(endedAll, 'ended');
+  const houseSearchPool =
+    houseMode && search ? uniqueById([...officialAll, ...activeAll, ...hostingAll, ...endedAll]) : null;
+  const official = applyList(houseSearchPool ?? officialAll, 'official');
+  const active = applyList(houseSearchPool ?? activeAll, 'active');
+  const hosting = applyList(houseSearchPool ?? hostingAll, 'hosting');
+  const ended = applyList(houseSearchPool ?? endedAll, 'ended');
   const friends = rankInterestChallenges(
     sortLobbyRows(
       applyLobbyFilters(
@@ -392,33 +424,41 @@ export default function ChallengesScreen() {
     return map;
   }, [friendProfiles.data, friendsAll, hostProfiles.data]);
 
-  const officialBusy = officialQuery.isPending && officialAll.length === 0;
-  const officialFailed = officialQuery.isError && officialAll.length === 0;
-  const officialErrored = tab === 'official' && officialQuery.isError;
-  const loading = !tabReady
-    ? officialBusy || (activeQuery.isPending && !activeQuery.data)
-    : tab === 'ended'
-      ? endedQuery.isPending && !endedQuery.data
-      : tab === 'hosting'
-        ? hostingQuery.isPending && !hostingQuery.data
-        : tab === 'active'
-          ? activeQuery.isPending && !activeQuery.data
-          : officialBusy;
+  const officialBusy = houseMode
+    ? houseQuery.isPending && officialAll.length === 0
+    : officialQuery.isPending && officialAll.length === 0;
+  const officialFailed = houseMode
+    ? houseQuery.isError && officialAll.length === 0
+    : officialQuery.isError && officialAll.length === 0;
+  const officialErrored = tab === 'official' && (houseMode ? houseQuery.isError : officialQuery.isError);
+  const loading = houseMode
+    ? houseQuery.isPending && houseCatalog.length === 0
+    : !tabReady
+      ? officialBusy || (activeQuery.isPending && !activeQuery.data)
+      : tab === 'ended'
+        ? endedQuery.isPending && !endedQuery.data
+        : tab === 'hosting'
+          ? hostingQuery.isPending && !hostingQuery.data
+          : tab === 'active'
+            ? activeQuery.isPending && !activeQuery.data
+            : officialBusy;
   // Before tabReady the lobby needs both queries to fail before it offers a retry, so two requests
   // that simply never settle used to hold the first paint on the loading mascot indefinitely.
   const lobbyStalled = useStalled(loading);
-  const failed = !tabReady
-    ? officialQuery.isError &&
-      activeQuery.isError &&
-      officialAll.length === 0 &&
-      activeAll.length === 0
-    : tab === 'ended'
-      ? endedQuery.isError && !endedQuery.data
-      : tab === 'hosting'
-        ? hostingQuery.isError && !hostingQuery.data
-        : tab === 'active'
-          ? activeQuery.isError && !activeQuery.data
-          : officialFailed;
+  const failed = houseMode
+    ? houseQuery.isError && houseCatalog.length === 0
+    : !tabReady
+      ? officialQuery.isError &&
+        activeQuery.isError &&
+        officialAll.length === 0 &&
+        activeAll.length === 0
+      : tab === 'ended'
+        ? endedQuery.isError && !endedQuery.data
+        : tab === 'hosting'
+          ? hostingQuery.isError && !hostingQuery.data
+          : tab === 'active'
+            ? activeQuery.isError && !activeQuery.data
+            : officialFailed;
 
   const tabRows =
     tab === 'official' ? official : tab === 'active' ? active : tab === 'hosting' ? hosting : ended;
@@ -447,21 +487,24 @@ export default function ChallengesScreen() {
 
   async function onRefresh() {
     const jobs: Array<Promise<unknown>> = [
-      officialQuery.refetch(),
-      activeQuery.refetch(),
       mine.refetch(),
       draftsQuery.refetch(),
       todayCheckins.refetch(),
       friendCountsQuery.refetch(),
     ];
-    if (tab === 'hosting') {
-      jobs.push(hostingQuery.refetch());
-    }
-    if (tab === 'ended') {
-      jobs.push(endedQuery.refetch());
-    }
-    if (tab === 'active') {
-      jobs.push(friendsQuery.refetch());
+    if (houseMode) {
+      jobs.push(houseQuery.refetch());
+    } else {
+      jobs.push(officialQuery.refetch(), activeQuery.refetch());
+      if (tab === 'hosting') {
+        jobs.push(hostingQuery.refetch());
+      }
+      if (tab === 'ended') {
+        jobs.push(endedQuery.refetch());
+      }
+      if (tab === 'active') {
+        jobs.push(friendsQuery.refetch());
+      }
     }
     await Promise.all(jobs);
   }
@@ -528,7 +571,7 @@ export default function ChallengesScreen() {
   const tabEmpty =
     !officialErrored &&
     tabRows.length === 0 &&
-    (tab !== 'official' || officialQuery.isSuccess) &&
+    (tab !== 'official' || (houseMode ? houseQuery.isSuccess : officialQuery.isSuccess)) &&
     (tab !== 'active' || friends.length === 0) &&
     (tab !== 'hosting' || visibleDrafts.length === 0);
 
@@ -689,11 +732,13 @@ export default function ChallengesScreen() {
           refreshControl={
             <RefreshControl
               refreshing={
-                (officialQuery.isRefetching ||
-                  activeQuery.isRefetching ||
-                  (tab === 'hosting' && hostingQuery.isRefetching) ||
-                  (tab === 'ended' && endedQuery.isRefetching) ||
-                  (tab === 'active' && friendsQuery.isRefetching)) &&
+                (houseMode
+                  ? houseQuery.isRefetching
+                  : officialQuery.isRefetching ||
+                    activeQuery.isRefetching ||
+                    (tab === 'hosting' && hostingQuery.isRefetching) ||
+                    (tab === 'ended' && endedQuery.isRefetching) ||
+                    (tab === 'active' && friendsQuery.isRefetching)) &&
                 !loading
               }
               onRefresh={() => void onRefresh()}
@@ -709,7 +754,7 @@ export default function ChallengesScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Retry"
-                onPress={() => void officialQuery.refetch()}
+                onPress={() => void (houseMode ? houseQuery.refetch() : officialQuery.refetch())}
                 style={{ minHeight: 44, justifyContent: 'center' }}>
                 <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
                   Retry
