@@ -980,13 +980,18 @@ function SubmitWorkoutInner() {
       setError(CHECKIN_REACH_STAY);
       throw new Error(CHECKIN_REACH_STAY);
     }
-    const uri = slotStillUris(draft)[0] ?? draft?.uri;
+    const stills = slotStillUris(draft);
+    const vendor = Boolean(draft?.healthWorkoutId) ||
+      draft?.health?.source === 'healthkit' ||
+      draft?.health?.source === 'health_connect';
+    const urls = vendor ? stills.slice(0, 1) : stills;
+    const uri = urls[0] ?? draft?.uri;
     const blob = draft?.blob ?? getHeldCheckinBlob(uri);
     const payload = {
       challengeId: id,
       proof,
       uri,
-      urls: slotStillUris(draft),
+      urls,
       mimeType: draft?.mimeType,
       blob,
       text: draft?.text,
@@ -1645,6 +1650,7 @@ function SubmitWorkoutInner() {
       const proof = proofSteps.find((item) => item.id === pending.proofId);
       const draft: SlotDraft = {
         uri: fileUri,
+        uris: [fileUri],
         mimeType: 'image/png',
         health: pending.health,
         healthWorkoutId: pending.healthWorkoutId,

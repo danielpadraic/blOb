@@ -10,6 +10,7 @@ import type { CheckinHealthProof } from '../health/checkinHealthProof';
 import { asCheckinStatus, type ChallengeCheckin } from '../challengeCheckin';
 import { normalizePeriodKey } from '../checkinPeriod';
 import { clampProofCaption } from '../checkinShare';
+import { isVendorHealthSlot } from '../health/ocrBackfill';
 import { hashCheckinProof } from './hashProof';
 import { mapCheckinRpcError } from './errors';
 
@@ -226,11 +227,16 @@ async function proofPartFor(
     resolveUrl,
     captureTypeForMethod(proof.method),
   );
-  const url = uploaded[0] ?? '';
+  const healthWorkoutId = input.healthWorkoutId?.trim() || null;
+  const vendor = isVendorHealthSlot({
+    health: input.health,
+    healthWorkoutId,
+  });
+  const media = vendor ? uploaded.slice(0, 1) : uploaded;
+  const url = media[0] ?? '';
   if (!url) {
     throw new Error('Add that proof to continue.');
   }
-  const healthWorkoutId = input.healthWorkoutId?.trim() || null;
   const contentHash = await hashCheckinProof({
     uri: uploaded[0] ?? uri,
     blob: input.blob,
@@ -242,7 +248,7 @@ async function proofPartFor(
       {
         method: proof.method,
         url,
-        urls: uploaded,
+        urls: media,
         fromLibrary: input.fromLibrary === true,
         // A generated workout card is an image AND the Health receipt for this slot. A plain
         // camera still carries neither key.

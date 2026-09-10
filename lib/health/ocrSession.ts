@@ -212,11 +212,10 @@ export function shouldReadWorkoutStill(input: {
   if (String(input.mimeType ?? '').startsWith('video/')) {
     return false;
   }
-  // Our own workout card already carries exact vendor numbers; re-reading it would only add noise.
+  // Vendor attach: never OCR the generated card or invent a screenshot window.
   if (input.healthWorkoutId) {
     return false;
   }
-  // A HealthKit / Health Connect attach is authoritative and must never be overwritten by a guess.
   const source = input.health?.source;
   if (source === 'healthkit' || source === 'health_connect') {
     return false;

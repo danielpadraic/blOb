@@ -264,12 +264,13 @@ describe('the workout slide a feed post carries', () => {
     expect(slide?.card.distanceLine).toBe('6.24 mi');
   });
 
-  it('does not paint the recap over a Fitness screenshot that was stored as card_url', () => {
+  it('names the HealthKit JPEG raster as the recap slide, not a second virtual card', () => {
+    const jpegCard = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=abc';
     const slide = workoutSlideForPost({
-      stats: { ...WALK_STATS, card_url: SHOT },
+      stats: { ...WALK_STATS, card_url: jpegCard },
       checkinId: 'c-1',
     });
-    expect(slide?.url).toBe(WORKOUT_CARD_SLIDE);
+    expect(slide?.url).toBe(jpegCard);
   });
 
   it('is nothing for a post that is not a workout check-in', () => {
@@ -302,11 +303,30 @@ describe('pager order for a workout check-in', () => {
     expect(pagerUrlsWithWorkoutCard([CARD], { ...WALK_STATS, card_url: CARD })).toEqual([CARD]);
   });
 
-  it('keeps the Fitness screenshot first when an old write named it as card_url', () => {
-    expect(pagerUrlsWithWorkoutCard([SHOT], { ...WALK_STATS, card_url: SHOT })).toEqual([
-      SHOT,
-      WORKOUT_CARD_SLIDE,
+  it('keeps one HealthKit JPEG card and does not append a second recap', () => {
+    const jpegCard = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=abc';
+    expect(pagerUrlsWithWorkoutCard([jpegCard], { ...WALK_STATS, card_url: jpegCard })).toEqual([
+      jpegCard,
     ]);
+  });
+
+  it('collapses two identical HealthKit cards to one slide', () => {
+    const first = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=a';
+    const clone = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-2.jpg?token=b';
+    expect(pagerUrlsWithWorkoutCard([first, clone], { ...WALK_STATS, card_url: first })).toEqual([
+      first,
+    ]);
+  });
+
+  it('keeps a selfie beside one HealthKit recap', () => {
+    const jpegCard = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=abc';
+    expect(
+      pagerUrlsWithWorkoutCard([SHOT, jpegCard], { ...WALK_STATS, card_url: jpegCard }),
+    ).toEqual([SHOT, WORKOUT_CARD_SLIDE]);
+  });
+
+  it('keeps the Fitness screenshot and one recap when OCR has no named vendor card', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT], WALK_STATS)).toEqual([SHOT, WORKOUT_CARD_SLIDE]);
   });
 
   it('hides a flattened recap PNG and draws the live recap last', () => {

@@ -127,12 +127,16 @@ export function PostEditor({
     setMediaUrls((current) => current.filter((item) => item !== url));
   }
 
-  async function attachPicked(asset: ImagePicker.ImagePickerAsset, proofId?: string) {
+  async function attachPicked(
+    asset: ImagePicker.ImagePickerAsset,
+    proofId?: string,
+    fromLibrary = false,
+  ) {
     if (!asset.uri) {
       return;
     }
-    if (proofId) {
-      void saveCapturedProofLocally({ uri: asset.uri });
+    if (proofId && !fromLibrary) {
+      void saveCapturedProofLocally({ uri: asset.uri, fromLibrary: false });
     }
     setDrafts((current) => [
       ...current.filter((row) => row.proofId !== proofId),
@@ -163,7 +167,7 @@ export function PostEditor({
       if (result.canceled || !result.assets[0]) {
         return;
       }
-      await attachPicked(result.assets[0], proofId);
+      await attachPicked(result.assets[0], proofId, false);
     } catch (error) {
       onToast?.(getErrorMessage(error));
     }
@@ -187,7 +191,7 @@ export function PostEditor({
       if (result.canceled || !result.assets[0]) {
         return;
       }
-      await attachPicked(result.assets[0], proofId);
+      await attachPicked(result.assets[0], proofId, true);
     } catch (error) {
       onToast?.(getErrorMessage(error));
     }

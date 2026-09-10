@@ -60,34 +60,72 @@ export function isGeneratedWorkoutCardFile(url?: string | null): boolean {
   return path.endsWith('.png');
 }
 
-function namedGeneratedCardUrl(stats?: CheckinProofStats | null): string {
+/**
+ * Server names `card_url` only for a vendor raster (HealthKit / Health Connect).
+ * That file is often JPEG because proof upload compresses the PNG card to `.jpg`.
+ */
+export function namedVendorCardUrl(stats?: CheckinProofStats | null): string {
   const cardUrl = String(stats?.card_url ?? '').trim();
-  return cardUrl && isGeneratedWorkoutCardFile(cardUrl) ? cardUrl : '';
+  if (!cardUrl || cardUrl.startsWith('health:')) {
+    return '';
+  }
+  return cardUrl;
+}
+
+/** Same proof-slot stem (`hr_monitor`, `distance`) so a cloned vendor card is not a user still. */
+export function proofMediaStem(url?: string | null): string {
+  const base = String(url ?? '')
+    .split('?')[0]
+    .split('/')
+    .pop()
+    ?.toLowerCase() ?? '';
+  return base.replace(/-\d+.*$/, '').replace(/\.[a-z0-9]+$/, '');
+}
+
+function isVendorRecapUrl(url: string, vendorCardUrl: string): boolean {
+  if (isWorkoutCardSlide(url) || isGeneratedWorkoutCardFile(url)) {
+    return true;
+  }
+  if (vendorCardUrl && isWorkoutCardUrl(url, vendorCardUrl)) {
+    return true;
+  }
+  if (vendorCardUrl) {
+    const cardStem = proofMediaStem(vendorCardUrl);
+    const urlStem = proofMediaStem(url);
+    return Boolean(cardStem) && cardStem === urlStem;
+  }
+  return false;
 }
 
 /**
  * User stills first, generated recap last. Never paints the recap over a screenshot URL.
  *
- * HealthKit / Health Connect: the slot file is the named PNG card and there are no user stills, so the
- * stored URL stays and the recap draws on that slide. OCR / manual: stills stay as photos and a
- * virtual last slide carries the recap — even when an old write stored the JPEG as card_url.
+ * A. HealthKit / Health Connect (`card_url` set): exactly one recap. The vendor file is often a
+ *    JPEG (`hr_monitor-*.jpg`); do not treat it as a screenshot and append a second card.
+ * B. OCR / user screenshot (`card_url` absent): stills stay, plus at most one recap.
+ * C. Honor / selfie with no workout numbers: unchanged. No recap.
  */
 export function pagerUrlsWithWorkoutCard(
   urls: string[],
   stats?: CheckinProofStats | null,
 ): string[] {
   const list = uniqueProofUrls(urls);
-  const cardUrl = namedGeneratedCardUrl(stats);
-  const stills = list.filter((url) => !isGeneratedWorkoutCardFile(url) && !isWorkoutCardSlide(url));
   const hasCard = workoutFromPostStats(stats) != null;
   if (!hasCard) {
     return list.filter((url) => !isWorkoutCardSlide(url));
   }
+  const vendorCardUrl = namedVendorCardUrl(stats);
+  const stills = list.filter((url) => !isVendorRecapUrl(url, vendorCardUrl));
   if (stills.length > 0) {
     return uniqueProofUrls([...stills, WORKOUT_CARD_SLIDE]);
   }
-  if (cardUrl) {
-    return list;
+  if (vendorCardUrl) {
+    const named = list.find((url) => isWorkoutCardUrl(url, vendorCardUrl));
+    return [named ?? vendorCardUrl];
+  }
+  const generated = list.find((url) => isGeneratedWorkoutCardFile(url) && !isWorkoutCardSlide(url));
+  if (generated) {
+    return [generated];
   }
   return uniqueProofUrls([...list.filter((url) => !isWorkoutCardSlide(url)), WORKOUT_CARD_SLIDE]);
 }
@@ -153,8 +191,9 @@ export function workoutFromPostStats(stats?: CheckinProofStats | null): HealthWo
 /**
  * The workout slide a feed post carries: which of its media is the card, and the card to draw there.
  *
- * Named `card_url` is the HealthKit raster. Screenshot check-ins have numbers but no named card, so
- * the recap draws on the virtual last slide instead of replacing a user still.
+ * Named `card_url` is the HealthKit raster (often JPEG after upload). Screenshot check-ins have
+ * numbers but no named card, so the recap draws on the virtual last slide instead of replacing a
+ * user still.
  */
 export function workoutSlideForPost(input: {
   stats?: CheckinProofStats | null;
@@ -171,7 +210,7 @@ export function workoutSlideForPost(input: {
   if (!card) {
     return null;
   }
-  const url = namedGeneratedCardUrl(input.stats) || WORKOUT_CARD_SLIDE;
+  const url = namedVendorCardUrl(input.stats) || WORKOUT_CARD_SLIDE;
   return {
     url,
     card,

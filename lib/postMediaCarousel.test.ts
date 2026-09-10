@@ -180,6 +180,16 @@ describe('post media carousel', () => {
     ).toEqual(['https://cdn.test/watch.jpg', 'https://cdn.test/hr.jpg', 'blob:workout-card']);
   });
 
+  it('shows one HealthKit recap on Home and Live from the same media_urls', () => {
+    const card = 'https://cdn.test/hr_monitor-9.jpg';
+    expect(
+      mediaUrlsForPost({
+        urls: [card, 'https://cdn.test/hr_monitor-10.jpg'],
+        stats: { duration_sec: 2100, active_cal: 218, card_url: card },
+      }),
+    ).toEqual([card]);
+  });
+
   it('sizes the Live tile from the workout card shape and seeds a width before layout', () => {
     expect(liveInlineFrameHeight(360)).toBe(540);
     expect(liveInlineSeedWidth(400)).toBe(288);

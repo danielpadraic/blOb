@@ -449,6 +449,34 @@ describe('check-in composer save', () => {
     expect(call.p_health_workout_id).toBe('hw-1');
   });
 
+  it('writes exactly one HealthKit card and does not keep a cloned URL', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'hr', name: 'Heart rate', method: 'hr' },
+        uri: 'https://example.com/hr_monitor-1.jpg',
+        urls: ['https://example.com/hr_monitor-1.jpg', 'https://example.com/hr_monitor-2.jpg'],
+        health: { source: 'healthkit', durationSec: 600, activityType: 'walking' },
+        healthWorkoutId: 'hw-1',
+      },
+      async () => {
+        throw new Error('should not upload');
+      },
+      async () => 'https://example.com/unused.jpg',
+    );
+    const part = (rpc.mock.calls[0]?.[1] as Record<string, unknown>).p_proof_part as Record<
+      string,
+      unknown
+    >;
+    expect(part.url).toBe('https://example.com/hr_monitor-1.jpg');
+    expect(part.urls).toEqual(['https://example.com/hr_monitor-1.jpg']);
+  });
+
   it('leaves a plain camera still with no Health fields', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
     await saveCheckinProofWithClient(
