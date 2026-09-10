@@ -65,6 +65,7 @@ export function NewConversationModal({ visible, onClose }: NewConversationModalP
   const canConfirm = directReady || groupReady;
   const busy = createGroup.isPending;
   const listLoading = searching ? peopleSearch.isFetching : friends.isLoading;
+  const searchWait = searching && peopleSearch.isError ? getErrorMessage(peopleSearch.error) : null;
 
   function close() {
     if (busy) {
@@ -159,9 +160,11 @@ export function NewConversationModal({ visible, onClose }: NewConversationModalP
               blockedIds={blockedIds}
               empty={
                 searching
-                  ? query.trim()
-                    ? 'Nobody matches that.'
-                    : copy('messages.searchPlaceholder')
+                  ? searchWait
+                    ? searchWait
+                    : query.trim()
+                      ? 'Nobody matches that.'
+                      : copy('messages.searchPlaceholder')
                   : 'Search by name or @username to start a chat.'
               }
               onToggle={toggle}

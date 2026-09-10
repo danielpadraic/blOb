@@ -269,6 +269,13 @@ export function usePeopleSearch(query: string) {
     queryKey: socialKeys.peopleSearch(user?.id ?? '', term),
     enabled: Boolean(user?.id && parsed),
     queryFn: () => searchPeople(query, user!.id),
+    retry: (failureCount, error) => {
+      const blob = `${error instanceof Error ? error.message : ''} ${String(error)}`.toLowerCase();
+      if (blob.includes('rate_limited') || blob.includes('try that search again in a few minutes')) {
+        return false;
+      }
+      return failureCount < 3;
+    },
   });
 }
 

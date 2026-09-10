@@ -96,4 +96,9 @@ describe('profile setup save errors are not OS Settings copy', () => {
       copy('error.saveDetails'),
     );
   });
+
+  it('maps RATE_LIMITED people search to wait copy, not an empty match', () => {
+    expect(getErrorMessage({ message: 'RATE_LIMITED', code: 'P0001' })).toBe(copy('friends.searchWait'));
+    expect(getErrorMessage(new Error('RATE_LIMITED'))).toBe('Try that search again in a few minutes.');
+  });
 });

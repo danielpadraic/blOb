@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
@@ -22,7 +22,8 @@ import { useCopyTone } from '@/hooks/useCopy';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
-import { registerStartsOnForm } from '@/lib/authRedirect';
+import { setPendingAuthEmail } from '@/lib/authFormMemory';
+import { loginHrefAfterSignup, registerStartsOnForm } from '@/lib/authRedirect';
 import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
 import { getAuthFormMessage } from '@/utils/errors';
 import { registerSchema, type RegisterValues } from '@/utils/validators';
@@ -42,6 +43,7 @@ export default function RegisterScreen() {
   const {
     control,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -113,6 +115,18 @@ export default function RegisterScreen() {
     setEmailStep(true);
   }
 
+  function goLogin() {
+    if (inboxEmail) {
+      router.replace(loginHrefAfterSignup(inboxEmail) as Href);
+      return;
+    }
+    const typed = getValues('email')?.trim();
+    if (typed) {
+      setPendingAuthEmail(typed);
+    }
+    router.replace('/(auth)/login');
+  }
+
   return (
     <AuthShell
       scrollToTopKey={inboxEmail ? 'inbox' : emailStep ? 'email' : 'gate'}
@@ -133,7 +147,7 @@ export default function RegisterScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={copy('auth.signIn')}
-                onPress={() => router.replace('/(auth)/login')}
+                onPress={goLogin}
                 hitSlop={8}
                 style={{ minHeight: 44, justifyContent: 'center' }}>
                 <AppText className="font-semibold" style={{ color: THEME.accent }}>

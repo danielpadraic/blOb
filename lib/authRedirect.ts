@@ -1,3 +1,4 @@
+import { setPendingAuthEmail } from '@/lib/authFormMemory';
 import { apexBlobOrigin } from '@/lib/webHost';
 
 export const AUTH_CALLBACK_PATH = '/auth/callback';
@@ -6,22 +7,40 @@ export const NATIVE_EMAIL_CALLBACK = 'blob://auth/callback';
 
 export function loginHrefWithAuthError(message: string, email?: string): string {
   const safe = message.replace(/\s+/g, ' ').trim().slice(0, 180);
-  const query = [`authError=${encodeURIComponent(safe)}`];
-  const trimmed = email?.trim();
-  if (trimmed) {
-    query.push(`email=${encodeURIComponent(trimmed)}`);
+  if (email?.trim()) {
+    setPendingAuthEmail(email);
   }
-  return `${AUTH_LOGIN_PATH}?${query.join('&')}`;
+  return `${AUTH_LOGIN_PATH}?authError=${encodeURIComponent(safe)}`;
 }
 
 export function loginHrefAfterSignup(email: string): {
   pathname: '/(auth)/login';
-  params: { email: string; inbox: string };
+  params: { inbox: string };
 } {
+  setPendingAuthEmail(email);
   return {
     pathname: '/(auth)/login',
-    params: { email: email.trim(), inbox: '1' },
+    params: { inbox: '1' },
   };
+}
+
+export function loginHrefWithoutEmailQuery(input: {
+  authError?: string | string[] | null;
+  inbox?: string | string[] | null;
+}): { pathname: '/(auth)/login'; params?: { authError?: string; inbox?: string } } {
+  const authError = Array.isArray(input.authError) ? input.authError[0] : input.authError;
+  const inbox = Array.isArray(input.inbox) ? input.inbox[0] : input.inbox;
+  const params: { authError?: string; inbox?: string } = {};
+  if (authError?.trim()) {
+    params.authError = authError;
+  }
+  if (inbox === '1') {
+    params.inbox = '1';
+  }
+  if (!params.authError && !params.inbox) {
+    return { pathname: '/(auth)/login' };
+  }
+  return { pathname: '/(auth)/login', params };
 }
 
 export function registerHrefWithForm(): {

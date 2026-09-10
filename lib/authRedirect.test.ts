@@ -9,10 +9,12 @@ import {
   isVercelComHost,
   loginHrefAfterSignup,
   loginHrefWithAuthError,
+  loginHrefWithoutEmailQuery,
   registerHrefWithForm,
   registerStartsOnForm,
   stripWebAuthCallbackUrl,
 } from '@/lib/authRedirect';
+import { peekPendingAuthEmail, setPendingAuthEmail, takePendingAuthEmail } from '@/lib/authFormMemory';
 
 const ENV_KEY = 'EXPO_PUBLIC_AUTH_REDIRECT_URL';
 
@@ -25,6 +27,7 @@ describe('emailAuthRedirectTo', () => {
     } else {
       process.env[ENV_KEY] = previous;
     }
+    setPendingAuthEmail(null);
   });
 
   it('uses a production https /auth/callback env on native', () => {
@@ -100,11 +103,23 @@ describe('emailAuthRedirectTo', () => {
       '/(auth)/login?authError=Code%20expired%20try%20again',
     );
     expect(loginHrefWithAuthError('This confirmation link didn’t finish.', 'ada@blob.app')).toBe(
-      '/(auth)/login?authError=This%20confirmation%20link%20didn%E2%80%99t%20finish.&email=ada%40blob.app',
+      '/(auth)/login?authError=This%20confirmation%20link%20didn%E2%80%99t%20finish.',
     );
+    expect(peekPendingAuthEmail()).toBe('ada@blob.app');
+    takePendingAuthEmail();
+    setPendingAuthEmail('keep@blob.app');
+    expect(loginHrefWithAuthError('Code expired')).toBe(
+      '/(auth)/login?authError=Code%20expired',
+    );
+    expect(peekPendingAuthEmail()).toBe('keep@blob.app');
     expect(loginHrefAfterSignup('ada@blob.app')).toEqual({
       pathname: '/(auth)/login',
-      params: { email: 'ada@blob.app', inbox: '1' },
+      params: { inbox: '1' },
+    });
+    expect(peekPendingAuthEmail()).toBe('ada@blob.app');
+    expect(loginHrefWithoutEmailQuery({ inbox: '1', authError: 'x' })).toEqual({
+      pathname: '/(auth)/login',
+      params: { authError: 'x', inbox: '1' },
     });
     expect(registerHrefWithForm()).toEqual({
       pathname: '/(auth)/register',

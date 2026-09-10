@@ -22,7 +22,8 @@ import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
 import { googleAuthErrorPayload } from '@/lib/googleNativeAuth';
-import { registerHrefWithForm } from '@/lib/authRedirect';
+import { peekPendingAuthEmail, setPendingAuthEmail, takePendingAuthEmail } from '@/lib/authFormMemory';
+import { loginHrefWithoutEmailQuery, registerHrefWithForm } from '@/lib/authRedirect';
 import { googleWebClientId } from '@/lib/googleSignInConfig';
 import { getAuthFormMessage } from '@/utils/errors';
 import { loginSchema, type LoginValues } from '@/utils/validators';
@@ -44,12 +45,18 @@ export default function LoginScreen() {
     inbox?: string | string[];
   }>();
   const inboxHint = (Array.isArray(inbox) ? inbox[0] : inbox) === '1';
-  const prefillEmail = (Array.isArray(email) ? email[0] : email)?.trim() ?? '';
+  const queryEmail = (Array.isArray(email) ? email[0] : email)?.trim() ?? '';
+  const [seedEmail] = useState(() => peekPendingAuthEmail() || queryEmail);
+  const prefillEmail = seedEmail;
   const [emailStep, setEmailStep] = useState(inboxHint || Boolean(prefillEmail));
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(
     inboxHint ? copy('auth.checkInboxThenSignIn') : null,
   );
+
+  useEffect(() => {
+    takePendingAuthEmail();
+  }, []);
 
   useEffect(() => {
     const raw = Array.isArray(authError) ? authError[0] : authError;
@@ -87,17 +94,25 @@ export default function LoginScreen() {
     if (fieldsEdited.current) {
       return;
     }
-    if (prefillEmail && appliedInboundEmail.current !== prefillEmail) {
-      appliedInboundEmail.current = prefillEmail;
-      setValue('email', prefillEmail);
+    const inbound = prefillEmail || queryEmail;
+    if (inbound && appliedInboundEmail.current !== inbound) {
+      appliedInboundEmail.current = inbound;
+      setValue('email', inbound);
     }
-    if (inboxHint || prefillEmail) {
+    if (inboxHint || inbound) {
       setEmailStep(true);
       if (inboxHint) {
         setInfo(copy('auth.checkInboxThenSignIn'));
       }
     }
-  }, [inboxHint, prefillEmail, setValue]);
+  }, [inboxHint, prefillEmail, queryEmail, setValue]);
+
+  useEffect(() => {
+    if (!queryEmail) {
+      return;
+    }
+    router.replace(loginHrefWithoutEmailQuery({ authError, inbox }) as Href);
+  }, [authError, inbox, queryEmail, router]);
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -203,10 +218,10 @@ export default function LoginScreen() {
             hitSlop={8}
             onPress={() => {
               const typed = getValues('email')?.trim();
-              const href = typed
-                ? `/(auth)/forgot-password?email=${encodeURIComponent(typed)}`
-                : '/(auth)/forgot-password';
-              router.push(href as Href);
+              if (typed) {
+                setPendingAuthEmail(typed);
+              }
+              router.push('/(auth)/forgot-password' as Href);
             }}
             style={{ minHeight: 44, justifyContent: 'center' }}>
             <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>

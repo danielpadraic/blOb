@@ -569,6 +569,9 @@ export async function searchPeople(query: string, currentUserId: string): Promis
   }
 
   const rpc = await supabase.rpc('search_people', { p_query: query.trim() });
+  if (rpc.error && isSearchPeopleRateLimited(rpc.error)) {
+    throwIfError(rpc.error);
+  }
   if (!rpc.error) {
     return ((rpc.data ?? []) as PublicProfile[])
       .filter((row) => row.id !== currentUserId)
@@ -601,6 +604,14 @@ function isMissingSearchRpc(error: unknown): boolean {
       ? String((error as { message?: unknown }).message ?? '').toLowerCase()
       : String(error ?? '').toLowerCase();
   return raw.includes('search_people') || raw.includes('pgrst202') || raw.includes('could not find the function');
+}
+
+function isSearchPeopleRateLimited(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  const blob = [record?.code, record?.message, record?.details, record?.hint, error instanceof Error ? error.message : error]
+    .map((value) => String(value ?? '').toLowerCase())
+    .join(' ');
+  return blob.includes('rate_limited');
 }
 
 export async function fetchFriendRequests(userId: string): Promise<FriendRequestLists> {

@@ -279,6 +279,7 @@ export default function FriendsScreen() {
             inputRef={searchRef}
             loading={searchQuery.isFetching && Boolean(parsedSearch)}
             results={results}
+            searchError={searchQuery.error}
             userId={user?.id}
             graph={graph}
             busyId={actionPending ? busyId : null}
@@ -578,6 +579,7 @@ function SearchPane({
   inputRef,
   loading,
   results,
+  searchError,
   userId,
   graph,
   busyId,
@@ -588,6 +590,7 @@ function SearchPane({
   inputRef: RefObject<TextInput | null>;
   loading: boolean;
   results: PublicProfile[];
+  searchError: unknown;
   userId?: string;
   graph: {
     friendIds: Set<string>;
@@ -602,6 +605,7 @@ function SearchPane({
   const parsed = detectPeopleSearch(query);
   const term = query.trim();
   const tone = useCopyTone();
+  const waitLine = searchError ? getErrorMessage(searchError) : null;
   const hint =
     parsed?.kind === 'email'
       ? 'Exact email match only — we never search partial emails.'
@@ -635,7 +639,10 @@ function SearchPane({
         </AppText>
       ) : null}
       <View style={PANE_FILL}>
-        {parsed && !loading && results.length === 0 ? (
+        {parsed && !loading && waitLine ? (
+          <AppText className="mt-3 text-[13px] text-muted">{waitLine}</AppText>
+        ) : null}
+        {parsed && !loading && !waitLine && results.length === 0 ? (
           <PaneScroll>
             <MascotState kind="empty" title={copy('friends.noneMatch', tone)} compact />
           </PaneScroll>

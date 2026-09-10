@@ -17,6 +17,11 @@ export default function Root({ children }: { children: ReactNode }) {
           Disable body scrolling on web. This makes ScrollView components work closer to how they do on native.
           However, body scrolling is often nice to have for mobile web. If you want to enable it, remove this line.
         */}
+        {/*
+          Security headers (HSTS, CSP, Referrer-Policy) live in vercel.json.
+          script-src keeps 'unsafe-eval' plus 'wasm-unsafe-eval' because Expo web export
+          evals on first paint; dropping it whitescreens blob.mobi. Do not disable camera/mic.
+        */}
         <ScrollViewStyleReset />
 
         {/* Using raw CSS styles as an escape-hatch to ensure the background color never flickers in dark-mode. */}

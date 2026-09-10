@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { View } from 'react-native';
 
@@ -10,24 +10,40 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { reportAppError } from '@/lib/appErrors';
+import { peekPendingAuthEmail, takePendingAuthEmail } from '@/lib/authFormMemory';
 import { copy } from '@/lib/copy';
 import { getErrorMessage } from '@/utils/errors';
 import { forgotPasswordSchema, type ForgotPasswordValues } from '@/utils/validators';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ email?: string }>();
+  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const queryEmail = (Array.isArray(params.email) ? params.email[0] : params.email)?.trim() ?? '';
+  const [seedEmail] = useState(() => peekPendingAuthEmail() || queryEmail);
   const { resetPasswordForEmail } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const {
     control,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ForgotPasswordValues>({
     resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: { email: typeof params.email === 'string' ? params.email : '' },
+    defaultValues: { email: seedEmail },
   });
+
+  useEffect(() => {
+    takePendingAuthEmail();
+  }, []);
+
+  useEffect(() => {
+    if (!queryEmail) {
+      return;
+    }
+    setValue('email', queryEmail);
+    router.replace('/(auth)/forgot-password' as Href);
+  }, [queryEmail, router, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);

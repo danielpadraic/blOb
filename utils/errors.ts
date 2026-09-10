@@ -665,6 +665,9 @@ function humanize(raw: string): string {
   if (!raw) {
     return 'Something went sideways. Try again in a moment.';
   }
+  if (message.includes('rate_limited')) {
+    return copy('friends.searchWait');
+  }
   if (isGeoGateDeny(raw)) {
     return copy('geo.unavailable');
   }

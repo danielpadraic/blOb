@@ -24,5 +24,65 @@
       "maxDuration": 60,
       "memory": 1024
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains; preload"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(self), camera=(self), microphone=(self), payment=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://accounts.google.com https://*.supabase.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://accounts.google.com https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:; frame-src https://accounts.google.com https://*.supabase.co https://js.stripe.com https://checkout.stripe.com; connect-src 'self' https://blob.mobi https://www.blob.mobi https://*.supabase.co wss://*.supabase.co https://tguzdtwsajnnczdxjqyq.supabase.co https://accounts.google.com https://apis.google.com https://www.googleapis.com https://www.gstatic.com https://ssl.gstatic.com https://tenor.googleapis.com https://media.tenor.com https://api.giphy.com https://*.giphy.com https://nominatim.openstreetmap.org https://exp.host https://api.stripe.com https://*.stripe.com"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains; preload"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(self), camera=(self), microphone=(self), payment=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://accounts.google.com https://*.supabase.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://accounts.google.com https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:; frame-src https://accounts.google.com https://*.supabase.co https://js.stripe.com https://checkout.stripe.com; connect-src 'self' https://blob.mobi https://www.blob.mobi https://*.supabase.co wss://*.supabase.co https://tguzdtwsajnnczdxjqyq.supabase.co https://accounts.google.com https://apis.google.com https://www.googleapis.com https://www.gstatic.com https://ssl.gstatic.com https://tenor.googleapis.com https://media.tenor.com https://api.giphy.com https://*.giphy.com https://nominatim.openstreetmap.org https://exp.host https://api.stripe.com https://*.stripe.com"
+        }
+      ]
+    }
+  ]
 }

@@ -278,6 +278,7 @@ const STRINGS = {
     neutral: 'Nobody matches that.',
     honest: 'Nobody matches that. Check the spelling before you invent a person.',
   },
+  'friends.searchWait': 'Try that search again in a few minutes.',
   'friends.searchPlaceholder': 'Name, @username, email, or phone',
   'friends.people': 'People',
   'friends.circles': 'Circles',
