@@ -6,6 +6,7 @@ import {
   clearPagerIndexMemory,
   snapLightboxIndex,
   lightboxEdgeStep,
+  lightboxPopAction,
   rubberPagerOffset,
   nextAutoCycleIndex,
   snapCarouselIndex,
@@ -141,6 +142,22 @@ describe('post media carousel', () => {
     ).toBe(false);
     expect(nextAutoCycleIndex(['https://a.jpg', 'https://b.jpg', 'https://c.mp4'], 0)).toBe(1);
     expect(nextAutoCycleIndex(['https://a.jpg', 'https://b.jpg', 'https://c.mp4'], 1)).toBe(0);
+  });
+
+  it('keeps swipe-right as previous still when Safari steals it as Back', () => {
+    expect(
+      lightboxPopAction({ page: 1, dragging: true, msSincePage: 2000, pointerDx: 80, pointerDy: 4, pointerAgoMs: 40 }),
+    ).toBe('keep');
+    expect(
+      lightboxPopAction({ page: 1, dragging: false, msSincePage: 80, pointerDx: 80, pointerDy: 4, pointerAgoMs: 40 }),
+    ).toBe('keep');
+    expect(
+      lightboxPopAction({ page: 1, dragging: false, msSincePage: 2000, pointerDx: 80, pointerDy: 4, pointerAgoMs: 40 }),
+    ).toBe('previous');
+    expect(
+      lightboxPopAction({ page: 0, dragging: false, msSincePage: 2000, pointerDx: 80, pointerDy: 4, pointerAgoMs: 40 }),
+    ).toBe('keep');
+    expect(lightboxPopAction({ page: 2, dragging: false, msSincePage: 2000 })).toBe('close');
   });
 
   it('pages from lightbox tap zones and rubber-bands past the ends', () => {

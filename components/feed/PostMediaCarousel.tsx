@@ -54,6 +54,7 @@ import {
   rememberedPagerIndex,
   snapCarouselIndex,
   stillCountInPager,
+  rubberPagerOffset,
   type MediaSize,
 } from '@/lib/postMediaCarousel';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
@@ -379,9 +380,12 @@ export function PostMediaCarousel({
         },
         onPanResponderMove: (_, gesture) => {
           const width = pageWidthRef.current;
-          const last = Math.max(urlsRef.current.length - 1, 0);
-          const min = -last * width;
-          shift.setValue(Math.min(0, Math.max(min, shiftOffset.current + gesture.dx)));
+          const x = rubberPagerOffset(
+            -(shiftOffset.current + gesture.dx),
+            width,
+            urlsRef.current.length,
+          );
+          shift.setValue(-x);
         },
         onPanResponderRelease: (_, gesture) => {
           const next = snapCarouselIndex({
@@ -451,7 +455,13 @@ export function PostMediaCarousel({
           setCardWidth(next);
         }
       }}
-      style={[{ overflow: 'hidden', width: '100%' }, WEB_FEED_TOUCH]}
+      style={[
+        { overflow: 'hidden', width: '100%' },
+        slides.length > 1 ? WEB_PAGER_TOUCH : WEB_FEED_TOUCH,
+        slides.length > 1 && Platform.OS === 'web'
+          ? ({ overscrollBehaviorX: 'none' } as object)
+          : null,
+      ]}
       {...hoverProps}>
       {slides.length === 1 ? (
         <MediaSlide
@@ -475,6 +485,7 @@ export function PostMediaCarousel({
             style={[
               { width: pageWidth, height: frameH, overflow: 'hidden' },
               WEB_PAGER_TOUCH,
+              Platform.OS === 'web' ? ({ overscrollBehaviorX: 'none' } as object) : null,
             ]}>
             <Animated.View
               style={{

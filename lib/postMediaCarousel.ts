@@ -86,6 +86,40 @@ export function snapLightboxIndex(input: {
   });
 }
 
+export type LightboxPopAction = 'close' | 'keep' | 'previous';
+
+/**
+ * iOS Safari / Chrome treat swipe-right as Back (popstate). A mid-screen page pan must
+ * change stills. Real browser / hardware back (no recent sideways pointer) closes.
+ * First still + swipe-right stays put.
+ */
+export function lightboxPopAction(input: {
+  page: number;
+  dragging: boolean;
+  msSincePage: number;
+  pointerDx?: number;
+  pointerDy?: number;
+  pointerAgoMs?: number;
+}): LightboxPopAction {
+  if (input.dragging || input.msSincePage < 480) {
+    return 'keep';
+  }
+  const dx = input.pointerDx ?? 0;
+  const dy = input.pointerDy ?? 0;
+  const swipe =
+    input.pointerAgoMs != null &&
+    input.pointerAgoMs < 640 &&
+    Math.abs(dx) > 22 &&
+    Math.abs(dx) >= Math.abs(dy);
+  if (swipe && dx > 0) {
+    return input.page > 0 ? 'previous' : 'keep';
+  }
+  if (swipe) {
+    return 'keep';
+  }
+  return 'close';
+}
+
 export type PagerOrientation = 'portrait' | 'landscape';
 
 export type MediaSize = {

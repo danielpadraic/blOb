@@ -42,7 +42,7 @@ import {
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { videoPlaybackSrc } from '@/lib/videoPosterUrl';
 import { applyWebVideoLock, preventWebVideoFullscreen } from '@/lib/webVideo';
-import { snapLightboxIndex, lightboxEdgeStep, rubberPagerOffset } from '@/lib/postMediaCarousel';
+import { snapLightboxIndex, lightboxEdgeStep, lightboxPopAction, rubberPagerOffset } from '@/lib/postMediaCarousel';
 import type { HealthActivityType } from '@/services/health/types';
 import { mediaKind } from '@/utils/media';
 
@@ -199,6 +199,8 @@ function MediaLightboxOverlay({
   const dragOriginRef = useRef(0);
   const draggingRef = useRef(false);
   const pagedAtRef = useRef(0);
+  const pointerRef = useRef<{ x: number; y: number; dx: number; dy: number; at: number } | null>(null);
+  const goToRef = useRef<(index: number, animated?: boolean) => void>(() => {});
   const [page, setPage] = useState(0);
   const pageWidth = Math.max(width, 1);
   const pageHeight = Math.max(height, 1);
@@ -216,30 +218,6 @@ function MediaLightboxOverlay({
       pager.current?.scrollTo({ x, animated: false });
     });
   }, [state, pageWidth]);
-
-  useEffect(() => {
-    if (!open || Platform.OS !== 'web' || typeof window === 'undefined') {
-      return;
-    }
-    const win = window;
-    win.history.pushState({ blobLightbox: true }, '', win.location.href);
-    const onPop = () => {
-      // A mid-screen page pan must not close. Browser / hardware back still closes
-      // when we did not just snap a still.
-      if (draggingRef.current || Date.now() - pagedAtRef.current < 480) {
-        win.history.pushState({ blobLightbox: true }, '', win.location.href);
-        return;
-      }
-      onClose();
-    };
-    win.addEventListener('popstate', onPop);
-    return () => {
-      win.removeEventListener('popstate', onPop);
-      if (win.history.state && (win.history.state as { blobLightbox?: boolean }).blobLightbox) {
-        win.history.back();
-      }
-    };
-  }, [open, onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -287,6 +265,107 @@ function MediaLightboxOverlay({
     setPage(index);
     pager.current?.scrollTo({ x: index * pageWidth, animated });
   }, [pageWidth]);
+  goToRef.current = goTo;
+
+  useEffect(() => {
+    if (!open || Platform.OS !== 'web' || typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+    const win = window;
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlOverscroll: html.style.overscrollBehavior,
+      htmlOverscrollX: html.style.overscrollBehaviorX,
+      bodyOverscroll: body.style.overscrollBehavior,
+      bodyOverscrollX: body.style.overscrollBehaviorX,
+      htmlOverflow: html.style.overflow,
+      restoration: win.history.scrollRestoration,
+    };
+    html.style.overscrollBehavior = 'none';
+    html.style.overscrollBehaviorX = 'none';
+    body.style.overscrollBehavior = 'none';
+    body.style.overscrollBehaviorX = 'none';
+    html.style.overflow = 'hidden';
+    try {
+      win.history.scrollRestoration = 'manual';
+    } catch {
+      // older webviews
+    }
+    win.history.pushState({ blobLightbox: true }, '', win.location.href);
+
+    const trackPointer = (event: {
+      type: string;
+      cancelable: boolean;
+      touches: ArrayLike<{ clientX: number; clientY: number }>;
+      changedTouches: ArrayLike<{ clientX: number; clientY: number }>;
+      preventDefault: () => void;
+    }) => {
+      const touch = event.touches[0] ?? event.changedTouches[0];
+      if (!touch) {
+        return;
+      }
+      const current = pointerRef.current;
+      if (!current || event.type === 'touchstart') {
+        pointerRef.current = { x: touch.clientX, y: touch.clientY, dx: 0, dy: 0, at: Date.now() };
+        return;
+      }
+      current.dx = touch.clientX - current.x;
+      current.dy = touch.clientY - current.y;
+      current.at = Date.now();
+      if (
+        event.cancelable &&
+        Math.abs(current.dx) > 8 &&
+        Math.abs(current.dx) >= Math.abs(current.dy)
+      ) {
+        event.preventDefault();
+      }
+    };
+
+    const onPop = () => {
+      const pointer = pointerRef.current;
+      const action = lightboxPopAction({
+        page: pageRef.current,
+        dragging: draggingRef.current,
+        msSincePage: Date.now() - pagedAtRef.current,
+        pointerDx: pointer?.dx,
+        pointerDy: pointer?.dy,
+        pointerAgoMs: pointer ? Date.now() - pointer.at : undefined,
+      });
+      if (action === 'close') {
+        onClose();
+        return;
+      }
+      if (action === 'previous') {
+        goToRef.current(pageRef.current - 1, true);
+      }
+      win.history.pushState({ blobLightbox: true }, '', win.location.href);
+    };
+
+    win.addEventListener('popstate', onPop);
+    win.addEventListener('touchstart', trackPointer as EventListener, { capture: true, passive: true });
+    win.addEventListener('touchmove', trackPointer as EventListener, { capture: true, passive: false });
+    win.addEventListener('touchend', trackPointer as EventListener, { capture: true, passive: true });
+    return () => {
+      win.removeEventListener('popstate', onPop);
+      win.removeEventListener('touchstart', trackPointer as EventListener, true);
+      win.removeEventListener('touchmove', trackPointer as EventListener, true);
+      win.removeEventListener('touchend', trackPointer as EventListener, true);
+      html.style.overscrollBehavior = prev.htmlOverscroll;
+      html.style.overscrollBehaviorX = prev.htmlOverscrollX;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+      body.style.overscrollBehaviorX = prev.bodyOverscrollX;
+      html.style.overflow = prev.htmlOverflow;
+      try {
+        win.history.scrollRestoration = prev.restoration;
+      } catch {
+        // older webviews
+      }
+      if (win.history.state && (win.history.state as { blobLightbox?: boolean }).blobLightbox) {
+        win.history.back();
+      }
+    };
+  }, [open, onClose]);
 
   const stepPage = useCallback((dir: -1 | 0 | 1) => {
     if (!dir) {
@@ -302,8 +381,10 @@ function MediaLightboxOverlay({
 
   const onPageDragStart = useCallback(() => {
     draggingRef.current = true;
+    pagedAtRef.current = Date.now();
     dragOriginRef.current = pageRef.current;
-  }, []);
+    pager.current?.scrollTo({ x: pageRef.current * pageWidth, animated: false });
+  }, [pageWidth]);
 
   const onPageDrag = useCallback((dx: number) => {
     pager.current?.scrollTo({
@@ -684,11 +765,13 @@ function ZoomableStill({
   const startY = useSharedValue(0);
   const pageSettled = useSharedValue(1);
   const overflowDx = useSharedValue(0);
+  const [zoomed, setZoomed] = useState(false);
 
   const resetZoom = useCallback(() => {
     scale.value = withTiming(1);
     translateX.value = withTiming(0);
     translateY.value = withTiming(0);
+    setZoomed(false);
   }, [scale, translateX, translateY]);
 
   useEffect(() => {
@@ -724,18 +807,17 @@ function ZoomableStill({
           scale.value = withTiming(1);
           translateX.value = withTiming(0);
           translateY.value = withTiming(0);
+          runOnJS(setZoomed)(false);
+          return;
         }
+        runOnJS(setZoomed)(true);
       });
 
     const imagePan = Gesture.Pan()
+      .enabled(zoomed)
       .maxPointers(1)
       .activeOffsetX([-16, 16])
       .activeOffsetY([-16, 16])
-      .onTouchesDown((_event, state) => {
-        if (scale.value <= 1.01) {
-          state.fail();
-        }
-      })
       .onBegin(() => {
         startX.value = translateX.value;
         startY.value = translateY.value;
@@ -782,9 +864,11 @@ function ZoomableStill({
           scale.value = withTiming(1);
           translateX.value = withTiming(0);
           translateY.value = withTiming(0);
+          runOnJS(setZoomed)(false);
           return;
         }
         scale.value = withTiming(2.4);
+        runOnJS(setZoomed)(true);
       });
 
     const edgeTap = Gesture.Tap()
@@ -798,16 +882,11 @@ function ZoomableStill({
       });
 
     const pagePan = Gesture.Pan()
-      .enabled(pageEnabled)
+      .enabled(pageEnabled && !zoomed)
       .minPointers(1)
       .maxPointers(1)
       .activeOffsetX([-12, 12])
       .failOffsetY([-36, 36])
-      .onTouchesDown((event, state) => {
-        if (event.numberOfTouches >= 2 || scale.value > 1.01) {
-          state.fail();
-        }
-      })
       .onStart(() => {
         pageSettled.value = 0;
         if (start) {
@@ -833,14 +912,10 @@ function ZoomableStill({
       });
 
     const dismiss = Gesture.Pan()
+      .enabled(!zoomed)
       .maxPointers(1)
       .activeOffsetY(24)
       .failOffsetX([-28, 28])
-      .onTouchesDown((event, state) => {
-        if (event.numberOfTouches >= 2 || scale.value > 1.01) {
-          state.fail();
-        }
-      })
       .onEnd((event) => {
         if (event.translationY > 72 && event.velocityY > 0) {
           runOnJS(onClose)();
@@ -870,6 +945,7 @@ function ZoomableStill({
     translateX,
     translateY,
     width,
+    zoomed,
   ]);
 
   const style = useAnimatedStyle(() => ({
