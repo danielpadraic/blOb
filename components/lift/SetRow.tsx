@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { NumberField } from '@/components/lift/NumberField';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { formatMassUnit } from '@/lib/lift/massUnit';
 import {
   clampRepsInput,
   clampWeightInput,
@@ -84,7 +85,7 @@ export function SetRow({
 
       {readOnly ? (
         <>
-          <ReadValue value={set.weight} suffix={unit} />
+          <ReadValue value={set.weight} suffix={formatMassUnit(set.weight ?? 0, unit)} />
           <ReadValue value={set.reps} suffix="reps" />
         </>
       ) : (

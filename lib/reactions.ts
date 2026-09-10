@@ -64,6 +64,21 @@ export function isWritableReactionType(value: string | null | undefined): boolea
   return (POST_REACTION_TYPES as readonly string[]).includes(type);
 }
 
+/** Real emoji for the picker and compact row. Never a Bob mark or SF stand-in. */
+export const REACTION_EMOJI: Record<string, string> = {
+  like: '👍',
+  love: '❤️',
+  laugh: '😂',
+  care: '😂',
+  rofl: '🤣',
+  fire: '🔥',
+  sad: '😢',
+};
+
+export function reactionEmoji(type: string): string {
+  return REACTION_EMOJI[type] ?? '👍';
+}
+
 export function reactionPickerLabel(type: string): string {
   if (type === 'laugh') {
     return 'LOL';

@@ -344,6 +344,8 @@ export const LiveBubble = memo(function LiveBubble({
                     <LiftPostCard
                       sessionId={liftSessionId}
                       authorId={uid}
+                      authorName={name}
+                      snapshot={post.lift_snapshot}
                       caption={post.content}
                       compact
                     />
@@ -425,6 +427,8 @@ export const LiveBubble = memo(function LiveBubble({
                   <LiftPostCard
                     sessionId={liftSessionId}
                     authorId={uid}
+                    authorName={name}
+                    snapshot={post.lift_snapshot}
                     caption={post.content}
                     compact
                   />

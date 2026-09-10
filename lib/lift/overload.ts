@@ -1,3 +1,4 @@
+import { formatMassUnit } from '@/lib/lift/massUnit';
 import { orderMuscles } from '@/lib/lift/muscles';
 import { newId, newLocalKey } from '@/lib/lift/ids';
 import type {
@@ -233,7 +234,7 @@ export function overloadChipLabel(summary: LiftOverloadSummary | null | undefine
     parts.push(
       weight.mode === 'percent'
         ? `+${trimNumber(weight.amount)}% weight`
-        : `+${trimNumber(weight.amount)} ${weight.unit}`,
+        : `+${trimNumber(weight.amount)} ${formatMassUnit(weight.amount, weight.unit)}`,
     );
   }
   const reps = summary.repsDelta;

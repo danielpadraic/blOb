@@ -191,7 +191,7 @@ describe('completed card', () => {
     const card = buildCompletedCard(draft);
     expect(card.title).toContain('Chest');
     expect(card.exerciseNames).toEqual(['Incline BB Bench Press']);
-    expect(card.weightLine).toContain('lb moved');
+    expect(card.weightLine).toContain('lbs moved');
     expect(JSON.stringify(card).toLowerCase()).not.toContain('bmi');
     expect(JSON.stringify(card).toLowerCase()).not.toContain('bfp');
   });

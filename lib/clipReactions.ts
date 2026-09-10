@@ -6,17 +6,22 @@ const LAST_KEY = 'blob.clip.last-reaction';
 export const CLIP_REACTIONS = [
   { type: 'like', emoji: '👍', label: 'Like' },
   { type: 'love', emoji: '❤️', label: 'Love' },
-  { type: 'fire', emoji: '🔥', label: 'Fire' },
   { type: 'laugh', emoji: '😂', label: 'Laugh' },
+  { type: 'fire', emoji: '🔥', label: 'Fire' },
   { type: 'sad', emoji: '😢', label: 'Sad' },
   { type: 'shock', emoji: '😮', label: 'Shock' },
   { type: 'applause', emoji: '👏', label: 'Applause' },
   { type: 'praise', emoji: '🙌', label: 'Praise' },
 ] as const;
 
+/** Long-press tray on Wave / Round. Same five as Home and Live. No labels. */
+export const CLIP_PICKER_REACTIONS = CLIP_REACTIONS.filter((row) =>
+  ['like', 'love', 'laugh', 'fire', 'sad'].includes(row.type),
+);
+
 export type ClipReactionType = (typeof CLIP_REACTIONS)[number]['type'];
 
-export const DEFAULT_CLIP_REACTION: ClipReactionType = 'love';
+export const DEFAULT_CLIP_REACTION: ClipReactionType = 'like';
 
 export function clipReactionEmoji(type?: string | null): string {
   return CLIP_REACTIONS.find((row) => row.type === type)?.emoji ?? '❤️';

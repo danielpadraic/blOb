@@ -760,6 +760,8 @@ export interface Post {
   parent_id?: string | null;
   /** The lift session this post's recap card renders from, and what makes that session readable. */
   lift_session_id?: string | null;
+  /** Frozen session so viewers can open the card if the live row is gone. */
+  lift_snapshot?: unknown;
   created_at: string;
 }
 
@@ -793,6 +795,8 @@ export type ComposeInput = {
   circleId?: string | null;
   /** A saved lift session whose recap card rides along with this post. */
   liftSessionId?: string | null;
+  /** Frozen lift for viewers who cannot read the live session. */
+  liftSnapshot?: unknown;
   source?: PostSource;
   type?: PostType;
   durationMs?: number | null;

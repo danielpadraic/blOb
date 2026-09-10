@@ -21,7 +21,7 @@ import {
 } from '@/components/social/SocialSheets';
 import { AppText } from '@/components/ui/AppText';
 import { useUpdateComment } from '@/hooks/useCommentEdit';
-import { CLIP_REACTIONS, DEFAULT_CLIP_REACTION, clipReactionEmoji } from '@/lib/clipReactions';
+import { CLIP_PICKER_REACTIONS, clipReactionEmoji } from '@/lib/clipReactions';
 import { commentsForThread, isLiveComment } from '@/lib/commentEdit';
 import {
   COMMENT_HIGHLIGHT_MS,
@@ -519,11 +519,11 @@ function FeedItem({
                         paddingVertical: 4,
                         zIndex: 6,
                       }}>
-                      {CLIP_REACTIONS.map((row) => (
+                      {CLIP_PICKER_REACTIONS.map((row) => (
                         <Pressable
                           key={row.type}
                           accessibilityRole="button"
-                          accessibilityLabel={row.label}
+                          accessibilityLabel={row.emoji}
                           onPress={() => {
                             onReact(comment.id, row.type);
                             setPickerOpen(false);
@@ -548,7 +548,7 @@ function FeedItem({
                       setPickerOpen(false);
                       return;
                     }
-                    onReact(comment.id, mine?.reaction_type ?? DEFAULT_CLIP_REACTION);
+                    onReact(comment.id, mine?.reaction_type ?? 'like');
                   }}
                   onLongPress={() => setPickerOpen((open) => !open)}
                   delayLongPress={280}

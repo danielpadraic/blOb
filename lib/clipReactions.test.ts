@@ -12,10 +12,10 @@ import {
 } from '@/lib/clipReactions';
 
 describe('clip reactions', () => {
-  it('defaults tap to Heart', () => {
-    expect(DEFAULT_CLIP_REACTION).toBe('love');
-    expect(asClipReactionType(null)).toBe('love');
-    expect(clipReactionEmoji('love')).toBe('❤️');
+  it('defaults tap to Like', () => {
+    expect(DEFAULT_CLIP_REACTION).toBe('like');
+    expect(asClipReactionType(null)).toBe('like');
+    expect(clipReactionEmoji('like')).toBe('👍');
   });
 
   it('keeps the eight picker types', () => {

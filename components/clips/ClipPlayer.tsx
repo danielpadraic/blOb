@@ -44,7 +44,7 @@ import { RoundShareComposer } from '@/components/clips/RoundShareComposer';
 import { startClipRepostCapture } from '@/lib/clipAttach';
 import { downloadClipMedia } from '@/lib/clipDownload';
 import {
-  CLIP_REACTIONS,
+  CLIP_PICKER_REACTIONS,
   DEFAULT_CLIP_REACTION,
   asClipReactionType,
   clipReactionEmoji,
@@ -1060,11 +1060,11 @@ function ClipSocialRail({
               paddingVertical: 4,
               zIndex: 4,
             }}>
-            {CLIP_REACTIONS.map((row) => (
+            {CLIP_PICKER_REACTIONS.map((row) => (
               <Pressable
                 key={row.type}
                 accessibilityRole="button"
-                accessibilityLabel={row.label}
+                accessibilityLabel={row.emoji}
                 onPress={() => fire(row.type)}
                 style={{
                   minWidth: RAIL_HIT,

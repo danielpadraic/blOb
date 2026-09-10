@@ -11,11 +11,9 @@ import {
   type NativeSyntheticEvent,
   type ViewToken,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LiveBubble } from '@/components/challenge/LiveBubble';
 import { LiveFailBanner, LiveRowBoundary, LiveSafeBoundary } from '@/components/challenge/LiveSafeBoundary';
-import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
 import type { LiftSessionSummary } from '@/lib/lift/types';
@@ -75,7 +73,8 @@ import {
 } from '@/lib/commentHighlight';
 import type { MentionChip } from '@/lib/mentions';
 import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
-import { tabBarLift, THEME } from '@/lib/theme';
+import { THEME } from '@/lib/theme';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { backfillLatestFitnessOcr } from '@/lib/health/runPostSendOcr';
 import { dedupeLivePostsByCheckinId, logUnexpectedLiveReset } from '@/lib/liveFeedPatch';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
@@ -159,9 +158,9 @@ export function LiveThread({
   onCompose,
   onReact,
 }: LiveThreadProps) {
-  const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
-  const keyboardOpen = keyboardOverlap > 0;
+  // Safari chrome is a small occlusion. Only a real keyboard should lift the composer.
+  const keyboardOpen = keyboardOverlap > 100;
   const social = useSocialSheetsOptional();
   const editPost = useEditPost();
   const listRef = useRef<FlatList<LiveThreadRow>>(null);
@@ -373,12 +372,16 @@ export function LiveThread({
     [logLive],
   );
 
+  const markReadLatestRef = useRef<() => void>(() => undefined);
+
   /** The user asked for the newest row, so this one ignores the guard. */
   const jumpToLiveEdge = useCallback(() => {
     logLive('jump-to-newest');
     atEndRef.current = true;
+    firstPaintPendingRef.current = false;
     setNotAtEnd(false);
     setNewBelow(0);
+    markReadLatestRef.current();
     requestAnimationFrame(() => {
       listRef.current?.scrollToEnd({ animated: true });
     });
@@ -450,7 +453,6 @@ export function LiveThread({
     firstPaintPendingRef.current = true;
     pinToLiveEdge(false, 'first-paint');
     if (landingChallengeId) {
-      markLiveInitialScroll(landingChallengeId);
       takeSentLiveCheckin(landingChallengeId);
     }
     // `rows` is deliberately absent: this effect must run when the thread opens or a link targets a
@@ -475,24 +477,35 @@ export function LiveThread({
     }
   }, [pinToLiveEdge, rows]);
 
-  // If the first scrollToEnd ran before the list finished measuring, try once more, then stop.
-  // Do not treat “800ms passed” as parked — that left people on Day 2.
+  // Keep pinning until the newest row is on screen. A single scrollToEnd on a half-measured
+  // list is how Live parked on Day 2. Stop only when the user scrolls up or time runs out
+  // after we have actually landed.
   useEffect(() => {
-    const retry = setTimeout(() => {
+    const retry = setInterval(() => {
       if (firstPaintPendingRef.current && !draggingRef.current) {
         pinToLiveEdge(false, 'first-paint');
       }
-    }, 400);
+    }, 350);
     const stop = setTimeout(() => {
+      if (firstPaintPendingRef.current && atEndRef.current) {
+        firstPaintPendingRef.current = false;
+        markLiveInitialScroll(landingChallengeId);
+      }
       firstPaintPendingRef.current = false;
-    }, 1600);
+    }, 2200);
     return () => {
-      clearTimeout(retry);
+      clearInterval(retry);
       clearTimeout(stop);
     };
-  }, [pinToLiveEdge]);
+  }, [landingChallengeId, pinToLiveEdge]);
 
   const reads = useLiveThreadReads(readCursorChallengeId);
+  markReadLatestRef.current = () => {
+    const latestAt = rows[rows.length - 1]?.createdAt;
+    if (latestAt) {
+      reads.markRead(latestAt);
+    }
+  };
   /** Rows confirmed on screen this visit. A row seen here is not unread, whatever its timestamp. */
   const seenRef = useRef<Set<string>>(new Set());
   const [firstVisibleIndex, setFirstVisibleIndex] = useState(-1);
@@ -606,6 +619,7 @@ export function LiveThread({
       // opening pin even on web, where a wheel or trackpad never fires a drag event.
       if (contentOffset.y < lastOffsetRef.current - 4) {
         firstPaintPendingRef.current = false;
+        markLiveInitialScroll(landingChallengeId);
       }
       lastOffsetRef.current = contentOffset.y;
       if (end !== atEndRef.current) {
@@ -613,15 +627,12 @@ export function LiveThread({
         setNotAtEnd(!end);
       }
       if (end) {
-        // The opening pin is deliberately NOT retired here. During a cold open the list reports
-        // "at the end" against a content height that is still being measured, and treating that as
-        // arrival left the thread parked several hundred pixels short of the newest row. Only a user
-        // gesture or the opening timeout disarms it.
-        //
-        // Parked at the newest row: nothing is waiting below, and this is the anchor new arrivals
-        // are counted against once they scroll away again.
+        // Parked at the newest row. Do not retire the opening pin here — a half-measured list
+        // reports "at the end" while still sitting on Day 2.
         bottomAnchorRef.current = rows[rows.length - 1]?.id ?? null;
-        firstPaintPendingRef.current = false;
+        if (!firstPaintPendingRef.current) {
+          markLiveInitialScroll(landingChallengeId);
+        }
         const latestAt = rows[rows.length - 1]?.createdAt;
         if (latestAt) {
           reads.markRead(latestAt);
@@ -631,7 +642,7 @@ export function LiveThread({
         }
       }
     },
-    [newBelow, reads, rows],
+    [landingChallengeId, newBelow, reads, rows],
   );
 
   // New rows arriving while the reader is scrolled up become a count on the jump control, never a
@@ -825,10 +836,7 @@ export function LiveThread({
     [collapseComposer, emptyBody, emptyTitle],
   );
 
-  const composerPad = createStickyFooterPad(
-    keyboardOpen,
-    tabBarLift(insets.bottom, 'sticky') + Math.max(footerReserve, 0),
-  );
+  const composerPad = keyboardOpen ? 0 : Math.max(footerReserve, 0);
 
   return (
     <View
@@ -836,7 +844,7 @@ export function LiveThread({
         flex: 1,
         minHeight: 0,
         backgroundColor: THEME.background,
-        marginBottom: keyboardOverlap,
+        marginBottom: keyboardOpen ? keyboardOverlap : 0,
       }}>
       {showBootSpinner ? (
         <MascotState kind="loading" title={loadingTitle ?? 'Loading Live'} compact />
@@ -960,32 +968,35 @@ export function LiveThread({
           </View>
         ) : null}
 
-        {notAtEnd && newBelow > 0 ? (
-          <View
-            pointerEvents="box-none"
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 10, alignItems: 'center' }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={liveJumpLabel(newBelow)}
-              onPress={jumpToLiveEdge}
-              hitSlop={8}
-              style={{
-                minHeight: 28,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: THEME.primary,
-              }}>
-              <AppText className="text-[12px] font-semibold" style={{ color: '#FFFFFF' }}>
-                {`New · ${newBelow > 99 ? '99+' : newBelow}`}
-              </AppText>
-            </Pressable>
-          </View>
-        ) : null}
         </LiveSafeBoundary>
         </View>
       )}
+
+      {notAtEnd ? (
+        <View style={{ alignItems: 'center', paddingTop: 2, paddingBottom: 2 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={liveJumpLabel(newBelow)}
+            onPress={jumpToLiveEdge}
+            hitSlop={8}
+            style={{
+              minHeight: 32,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: THEME.primary,
+            }}>
+            <Glyph name={GLYPH.chevronDown} color="#FFFFFF" size={14} />
+            {newBelow > 0 ? (
+              <AppText className="text-[12px] font-semibold" style={{ color: '#FFFFFF' }}>
+                {newBelow > 99 ? '99+' : newBelow}
+              </AppText>
+            ) : null}
+          </Pressable>
+        </View>
+      ) : null}
 
       {canCompose ? (
         <View

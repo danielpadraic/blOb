@@ -18,6 +18,7 @@ import {
   useSaveLiftSession,
 } from '@/hooks/useLift';
 import { firstRouteParam } from '@/lib/challengeLoad';
+import { copy } from '@/lib/copy';
 import { fetchLiftSession } from '@/lib/lift/api';
 import { applyOverload } from '@/lib/lift/overload';
 import { buildRecap } from '@/lib/lift/recap';
@@ -145,7 +146,8 @@ function LiftImportInner({ sourceId }: { sourceId: string }) {
 
           {draft.ownerName ? (
             <AppText style={{ marginTop: 8, fontSize: 13, color: THEME.textMuted }}>
-              From {draft.ownerName}. Your copy is yours — editing it never touches theirs.
+              {copy('lift.createdBy', 'gentle', { name: draft.ownerName })}. Your copy is yours —
+              editing it never touches theirs.
             </AppText>
           ) : null}
 

@@ -1,4 +1,5 @@
 import { saveCheckinProof } from '@/lib/challenges/stagedCheckin';
+import { persistLiftSnapshotOnPost } from '@/lib/lift/persistSnapshot';
 import { buildRecap, recapFallbackText } from '@/lib/lift/recap';
 import { linkSessionToPost } from '@/lib/lift/share';
 import { supabase } from '@/lib/supabase';
@@ -60,6 +61,7 @@ export async function attachLiftToCheckin(input: {
     throw new Error(`Could not put the lift on your check-in: ${error.message}`);
   }
   await linkSessionToPost(input.draft.id, postId);
+  await persistLiftSnapshotOnPost(postId, input.draft);
 
   return {
     checkinId,

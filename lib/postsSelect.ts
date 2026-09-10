@@ -24,6 +24,7 @@ export type PostsSchema = {
   hasCircleId: boolean;
   hasMediaCaptions: boolean;
   hasLiftSession: boolean;
+  hasLiftSnapshot: boolean;
 };
 
 const CORE_SCHEMA: PostsSchema = {
@@ -43,6 +44,7 @@ const CORE_SCHEMA: PostsSchema = {
   hasCircleId: false,
   hasMediaCaptions: false,
   hasLiftSession: false,
+  hasLiftSnapshot: false,
 };
 
 let cached: Promise<PostsSchema> | null = null;
@@ -66,6 +68,7 @@ function schemaFromSelect(select: string): PostsSchema {
     hasCircleId: select.includes('circle_id'),
     hasMediaCaptions: select.includes('media_captions'),
     hasLiftSession: select.includes('lift_session_id'),
+    hasLiftSnapshot: select.includes('lift_snapshot'),
   };
 }
 
@@ -169,7 +172,10 @@ async function loadPostsSchema(): Promise<PostsSchema> {
   working = stats.ok ? withStats : working;
   const withLift = `${working}, lift_session_id`;
   const lift = await trySelect(withLift);
-  return schemaFromSelect(lift.ok ? withLift : working);
+  working = lift.ok ? withLift : working;
+  const withSnap = `${working}, lift_snapshot`;
+  const snap = await trySelect(withSnap);
+  return schemaFromSelect(snap.ok ? withSnap : working);
 }
 
 /** Last successful probe. Send uses this so it does not wait on a hanging schema load. */

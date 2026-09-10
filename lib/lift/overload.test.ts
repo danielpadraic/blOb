@@ -210,7 +210,7 @@ describe('chip label', () => {
         weightDelta: { mode: 'amount', amount: 2.5, unit: 'lb' },
         repsDelta: null,
       }),
-    ).toBe('+2.5 lb');
+    ).toBe('+2.5 lbs');
     expect(
       overloadChipLabel({ weightDelta: null, repsDelta: { mode: 'amount', amount: 1 } }),
     ).toBe('+1 rep');

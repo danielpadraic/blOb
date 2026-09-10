@@ -48,27 +48,27 @@ function session(exercises: LiftExerciseDraft[]): LiftSessionDraft {
 describe('exercise detail line', () => {
   it('reads sets by heaviest weight by reps', () => {
     const row = exercise('Flat DB Bench', [set(52.5, 10), set(52.5, 10), set(52.5, 10), set(52.5, 10)]);
-    expect(exerciseDetail(row, 'lb')).toBe('4 × 52.5 lb × 10');
+    expect(exerciseDetail(row, 'lb')).toBe('4 × 52.5 lbs × 10');
   });
 
   it('shows a rep range when the reps moved across the sets', () => {
     const row = exercise('Flat DB Bench', [set(52.5, 10), set(52.5, 9), set(52.5, 8)]);
-    expect(exerciseDetail(row, 'lb')).toBe('3 × 52.5 lb × 8–10');
+    expect(exerciseDetail(row, 'lb')).toBe('3 × 52.5 lbs × 8–10');
   });
 
   it('reports the heaviest set, not the first one', () => {
     const row = exercise('Incline BB Bench', [set(135, 8), set(185, 5)]);
-    expect(exerciseDetail(row, 'lb')).toBe('2 × 185 lb × 5–8');
+    expect(exerciseDetail(row, 'lb')).toBe('2 × 185 lbs × 5–8');
   });
 
   it('counts only completed sets when some were checked off', () => {
     const row = exercise('Flat DB Bench', [set(50, 10), set(50, 10), set(50, 10, false)]);
-    expect(exerciseDetail(row, 'lb')).toBe('2 × 50 lb × 10');
+    expect(exerciseDetail(row, 'lb')).toBe('2 × 50 lbs × 10');
   });
 
   it('falls back to every working set when nothing was checked off', () => {
     const row = exercise('Flat DB Bench', [set(50, 10, false), set(50, 10, false)]);
-    expect(exerciseDetail(row, 'lb')).toBe('2 × 50 lb × 10');
+    expect(exerciseDetail(row, 'lb')).toBe('2 × 50 lbs × 10');
   });
 
   it('handles a bodyweight exercise with no load', () => {
@@ -86,7 +86,7 @@ describe('exercise detail line', () => {
       { key: 'w', kind: 'warmup', weight: 45, reps: 10, completedAt: DONE },
       set(135, 8),
     ]);
-    expect(exerciseDetail(row, 'lb')).toBe('1 × 135 lb × 8');
+    expect(exerciseDetail(row, 'lb')).toBe('1 × 135 lbs × 8');
   });
 });
 
@@ -126,7 +126,7 @@ describe('recap card', () => {
       weightDelta: { mode: 'amount', amount: 5, unit: 'lb' },
       repsDelta: null,
     };
-    expect(buildRecap(draft).overloadChip).toBe('+5 lb');
+    expect(buildRecap(draft).overloadChip).toBe('+5 lbs');
   });
 
   it('has no chip on a session that was not bumped', () => {
@@ -171,7 +171,7 @@ describe('fallback text on the post', () => {
       session([exercise('Flat DB Bench', [set(52.5, 10)]), exercise('Cable Fly', [set(25, 15)])]),
     );
     expect(recapFallbackText(recap)).toBe(
-      'Chest · Sep 5\nFlat DB Bench · 1 × 52.5 lb × 10\nCable Fly · 1 × 25 lb × 15',
+      'Chest · Sep 5\nFlat DB Bench · 1 × 52.5 lbs × 10\nCable Fly · 1 × 25 lbs × 15',
     );
   });
 });
@@ -227,7 +227,7 @@ describe('session volume', () => {
   it('reads as a headline on the card, with separators', () => {
     const recap = buildRecap(volumeSession());
     expect(recap.totalVolume).toBe(2430);
-    expect(recap.volumeLine).toBe('2,430 lb moved');
+    expect(recap.volumeLine).toBe('2,430 lbs moved');
   });
 
   it('says nothing when there is no volume to speak of', () => {

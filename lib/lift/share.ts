@@ -1,4 +1,5 @@
 import { checkinHidesHomeShare } from '@/lib/checkinShare';
+import { persistLiftSnapshotOnPost } from '@/lib/lift/persistSnapshot';
 import { buildRecap, recapFallbackText } from '@/lib/lift/recap';
 import { postShareUrl } from '@/lib/postShare';
 import { supabase } from '@/lib/supabase';
@@ -88,6 +89,7 @@ export async function shareLiftSession(input: LiftShareInput): Promise<LiftShare
 
   const postId = String((data as { id: string }).id);
   await linkSessionToPost(input.draft.id, postId);
+  await persistLiftSnapshotOnPost(postId, input.draft);
   return { postId, challengeId };
 }
 

@@ -1,29 +1,14 @@
 import { Platform, Pressable, View } from 'react-native';
 
-import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import {
   PICKER_REACTION_TYPES,
-  POST_REACTION_COLORS,
+  reactionEmoji,
   reactionPickerLabel,
   type PickerReactionType,
 } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
 import type { ReactionType } from '@/lib/types';
-
-export const REACTION_GLYPH: Record<string, GlyphId> = {
-  like: GLYPH.strong,
-  love: GLYPH.like,
-  laugh: GLYPH.laugh,
-  care: GLYPH.laugh,
-  rofl: GLYPH.rofl,
-  fire: GLYPH.fire,
-  sad: GLYPH.sad,
-};
-
-export function reactionGlyph(type: string): GlyphId {
-  return REACTION_GLYPH[type] ?? GLYPH.strong;
-}
 
 export function keepReactionFocusProps() {
   if (Platform.OS !== 'web') {
@@ -74,7 +59,7 @@ type ReactionPickerProps = {
   onPick: (type: ReactionType) => void;
 };
 
-/** Vertical, transparent. Does not shove the bubble. */
+/** Vertical, transparent. Emoji only. Does not shove the bubble. */
 export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPickerProps) {
   return (
     <View
@@ -99,19 +84,14 @@ export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPi
               onPress={() => onPick(type)}
               {...keepReactionFocusProps()}
               style={{
-                minHeight: 36,
-                minWidth: 36,
-                paddingHorizontal: 8,
+                width: 36,
+                height: 36,
                 borderRadius: 18,
-                flexDirection: 'row',
                 alignItems: 'center',
-                gap: 6,
-                backgroundColor: active ? THEME.accentSoft : 'rgba(255,255,255,0.92)',
+                justifyContent: 'center',
+                backgroundColor: active ? THEME.accentSoft : 'transparent',
               }}>
-              <Glyph name={reactionGlyph(type)} color={POST_REACTION_COLORS[type] ?? THEME.accent} size={18} />
-              <AppText className="text-[12px] font-semibold" style={{ color: THEME.textPrimary }}>
-                {reactionPickerLabel(type)}
-              </AppText>
+              <AppText style={{ fontSize: 30, lineHeight: 34 }}>{reactionEmoji(type)}</AppText>
             </Pressable>
           );
         })}

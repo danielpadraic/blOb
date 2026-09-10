@@ -5,7 +5,10 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
 import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
+import { fetchLiftSession } from '@/lib/lift/api';
+import { persistLiftSnapshotOnPost } from '@/lib/lift/persistSnapshot';
 import { linkSessionToPost } from '@/lib/lift/share';
+import { buildLiftSnapshot } from '@/lib/lift/snapshot';
 import type { LiftSessionSummary } from '@/lib/lift/types';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
 import { WorkoutStatChips } from '@/components/challenge/WorkoutStatChips';
@@ -1360,8 +1363,14 @@ function SubmitWorkoutInner() {
                 ...(attachedLift ? { lift_session_id: attachedLift.id } : null),
               })
               .eq('id', postId);
+            const liftDraft = attachedLift
+              ? await fetchLiftSession(attachedLift.id).catch(() => null)
+              : null;
             if (attachedLift) {
               await linkSessionToPost(attachedLift.id, postId);
+              if (liftDraft) {
+                await persistLiftSnapshotOnPost(postId, liftDraft);
+              }
             }
             const author = sessionAuthor(profile, uid);
             if (author && postId) {
@@ -1376,6 +1385,8 @@ function SubmitWorkoutInner() {
                 source: 'checkin',
                 checkin_id: checkinId,
                 checkin_stage: readyNow ? 'complete' : 'started',
+                lift_session_id: attachedLift?.id ?? null,
+                lift_snapshot: liftDraft ? buildLiftSnapshot(liftDraft) : null,
                 created_at: new Date().toISOString(),
                 comments: [],
                 reactions: [],

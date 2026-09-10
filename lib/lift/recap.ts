@@ -1,3 +1,4 @@
+import { formatMassLabel, formatMassMoved } from '@/lib/lift/massUnit';
 import { muscleSummary } from '@/lib/lift/muscles';
 import { overloadChipLabel } from '@/lib/lift/overload';
 import { cardioRowSeconds, roundsSummary } from '@/lib/lift/rounds';
@@ -47,7 +48,7 @@ export type LiftRecap = {
   setCount: number;
   /** Weight times reps across every counted working set, or 0 when nothing carried numbers. */
   totalVolume: number;
-  /** "12,480 lb moved", or empty when there is no volume to speak of. */
+  /** "12,480 lbs moved", or empty when there is no volume to speak of. */
   volumeLine: string;
   /** Total cardio time in the session, or 0 when there was none. */
   cardioSeconds: number;
@@ -158,7 +159,8 @@ export function exerciseDetail(exercise: LiftExerciseDraft, unit: WeightUnit): s
 
   const parts = [String(count)];
   if (weights.length) {
-    parts.push(`${formatLiftNumber(Math.max(...weights))} ${unit}`);
+    const heaviest = Math.max(...weights);
+    parts.push(formatMassLabel(heaviest, unit, formatLiftNumber(heaviest)));
   }
   if (reps.length) {
     const low = Math.min(...reps);
@@ -235,7 +237,7 @@ export function buildRecap(draft: LiftSessionDraft, maxLines = RECAP_MAX_LINES):
     exerciseCount: draft.exercises.length,
     setCount,
     totalVolume,
-    volumeLine: totalVolume > 0 ? `${formatVolume(totalVolume)} ${draft.unit} moved` : '',
+    volumeLine: totalVolume > 0 ? formatMassMoved(totalVolume, draft.unit, formatVolume(totalVolume)) : '',
     cardioSeconds: sessionCardioSeconds(draft),
     overloadChip: overloadChipLabel(draft.overloadSummary),
   };

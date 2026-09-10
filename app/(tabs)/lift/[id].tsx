@@ -82,6 +82,7 @@ import { appleHealth } from '@/services/health/apple';
 import type { HealthWorkout } from '@/services/health/types';
 import type { LiftOverloadPlan, LiftSessionDraft, LiftSetKind } from '@/lib/lift/types';
 import { firstRouteParam } from '@/lib/challengeLoad';
+import { copy } from '@/lib/copy';
 import { LIFT_START_HREF, LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
@@ -728,7 +729,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
             )}
             {draft.sourceUserName ? (
               <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.accent }}>
-                From {draft.sourceUserName}
+                {copy('lift.createdBy', 'gentle', { name: draft.sourceUserName })}
               </AppText>
             ) : null}
             <AppText style={{ fontSize: 13, color: THEME.textMuted }}>

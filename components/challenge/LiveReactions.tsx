@@ -7,9 +7,8 @@ import {
   ReactionDismissScrim,
   ReactionPicker,
   keepReactionFocusProps,
-  reactionGlyph,
 } from '@/components/feed/ReactionPicker';
-import { compactReactionChips, displayReactionType, POST_REACTION_COLORS, userReaction } from '@/lib/reactions';
+import { compactReactionChips, displayReactionType, reactionEmoji, userReaction } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
 import type { Reaction, ReactionType } from '@/lib/types';
 
@@ -71,20 +70,26 @@ export function LiveReactions({
             onLongPress={() => setPickerOpen((open) => !open)}
             {...keepReactionFocusProps()}
             style={{
-              minHeight: 26,
-              paddingHorizontal: 8,
+              minHeight: 32,
+              paddingHorizontal: 6,
               borderRadius: 999,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 4,
-              backgroundColor: row.mine ? THEME.accentSoft : THEME.surface,
-              borderWidth: 1,
-              borderColor: row.mine ? THEME.accent : THEME.border,
+              gap: 3,
+              backgroundColor: row.mine ? THEME.accentSoft : 'transparent',
             }}>
-            <Glyph name={reactionGlyph(row.type)} color={POST_REACTION_COLORS[row.type] ?? THEME.accent} size={13} />
-            <AppText className="text-[11px] font-semibold" style={{ color: THEME.textPrimary }}>
-              {row.count}
-            </AppText>
+            <AppText style={{ fontSize: 28, lineHeight: 32 }}>{reactionEmoji(row.type)}</AppText>
+            {row.count > 0 ? (
+              <AppText
+                style={{
+                  fontSize: 11,
+                  fontWeight: '700',
+                  color: THEME.textPrimary,
+                  fontVariant: ['tabular-nums'],
+                }}>
+                {row.count}
+              </AppText>
+            ) : null}
           </Pressable>
         ))}
         {overflow > 0 ? (
@@ -113,12 +118,10 @@ export function LiveReactions({
             }}
             onLongPress={() => setPickerOpen((open) => !open)}
             {...keepReactionFocusProps()}
-            style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
-            <Glyph
-              name={mineType ? reactionGlyph(mineType) : GLYPH.strongOutline}
-              color={mineType ? POST_REACTION_COLORS[mineType] ?? THEME.accent : THEME.textMuted}
-              size={14}
-            />
+            style={{ minHeight: 32, minWidth: 32, alignItems: 'center', justifyContent: 'center' }}>
+            <AppText style={{ fontSize: 28, lineHeight: 32, opacity: mineType ? 1 : 0.45 }}>
+              {reactionEmoji(mineType ?? 'like')}
+            </AppText>
           </Pressable>
           {onEdit ? (
             <Pressable
@@ -144,7 +147,7 @@ export function LiveReactions({
               accessibilityLabel="Reply"
               onPress={onReply}
               style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
-              <Glyph name={GLYPH.replyArrow} color={THEME.textMuted} size={14} />
+              <Glyph name={GLYPH.replyArrow} color={THEME.textMuted} size={16} />
             </Pressable>
           ) : null}
         </View>

@@ -1,4 +1,5 @@
 import { formatDuration } from '@/lib/lift/duration';
+import { formatMassMoved } from '@/lib/lift/massUnit';
 import { formatVolume } from '@/lib/lift/recap';
 import { cardioRowSeconds } from '@/lib/lift/rounds';
 import { sessionTitle, shortDate, timedRowLabel } from '@/lib/lift/session';
@@ -179,7 +180,7 @@ export function buildCompletedCard(draft: LiftSessionDraft): LiftCompletedCardMo
     exerciseNames: shown,
     moreCount: Math.max(0, names.length - shown.length),
     weightMoved,
-    weightLine: draftSession ? '' : weightMoved > 0 ? `${formatVolume(weightMoved)} ${draft.unit} moved` : '',
+    weightLine: draftSession ? '' : weightMoved > 0 ? formatMassMoved(weightMoved, draft.unit, formatVolume(weightMoved)) : '',
     durationSeconds,
     durationLine: durationSeconds > 0 ? formatDuration(durationSeconds) : '',
     draft: draftSession,
@@ -200,7 +201,7 @@ export function buildCompletedCardFromSummary(session: LiftSessionSummary): Lift
     exerciseNames: shown,
     moreCount: Math.max(0, names.length - shown.length),
     weightMoved,
-    weightLine: draftSession ? '' : weightMoved > 0 ? `${formatVolume(weightMoved)} ${session.unit} moved` : '',
+    weightLine: draftSession ? '' : weightMoved > 0 ? formatMassMoved(weightMoved, session.unit, formatVolume(weightMoved)) : '',
     durationSeconds,
     durationLine: durationSeconds > 0 ? formatDuration(durationSeconds) : '',
     draft: draftSession,
@@ -238,5 +239,5 @@ export function defaultHistoryTab<
 }
 
 export function formatWeightMoved(total: number, unit: WeightUnit): string {
-  return `${formatVolume(total)} ${unit} moved`;
+  return formatMassMoved(total, unit, formatVolume(total));
 }

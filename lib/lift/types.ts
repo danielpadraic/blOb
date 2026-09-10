@@ -97,7 +97,7 @@ export type LiftSessionDraft = {
   exercises: LiftExerciseDraft[];
   /** The session this was copied from — repeat, overload, or an import from a friend's card. */
   sourceSessionId?: string | null;
-  /** Who owned the session it was copied from, so the copy can say "From Daniel". */
+  /** Who owned the session it was copied from, so the copy can say "Created by Daniel". */
   sourceUserId?: string | null;
   sourceUserName?: string | null;
   /** Set only when the copy went through the Overload sheet. */

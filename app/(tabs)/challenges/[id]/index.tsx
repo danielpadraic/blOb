@@ -57,6 +57,7 @@ import {
   liveScreenBackGesture,
 } from '@/lib/liveThread';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
+import { clearLiveInitialScroll } from '@/lib/liveLanding';
 import { useLiveThreadFocus } from '@/hooks/useLiveThreadFocus';
 import {
   CALLOUT_CHEER_PLACEHOLDER,
@@ -396,13 +397,17 @@ export default function ChallengeDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       setScreenFocused(true);
-      applyLiveBackGesture(navigation, liveTabFocused);
       return () => {
         setScreenFocused(false);
         applyLiveBackGesture(navigation, false);
+        // Leaving this challenge (Home, Check In). Overview / Board is not a leave.
+        clearLiveInitialScroll(id);
       };
-    }, [liveTabFocused, navigation]),
+    }, [id, navigation]),
   );
+  useEffect(() => {
+    applyLiveBackGesture(navigation, liveTabFocused && screenFocused);
+  }, [liveTabFocused, navigation, screenFocused]);
   useLiveThreadFocus(id, liveTabFocused && screenFocused);
 
   useEffect(() => {

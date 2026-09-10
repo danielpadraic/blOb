@@ -28,6 +28,10 @@ import { isClipSharePost } from '@/lib/roundShare';
 import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
 import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { reportAppError } from '@/lib/appErrors';
+import { fetchLiftSession } from '@/lib/lift/api';
+import { persistLiftSnapshotOnPost } from '@/lib/lift/persistSnapshot';
+import { linkSessionToPost } from '@/lib/lift/share';
+import { buildLiftSnapshot } from '@/lib/lift/snapshot';
 import { rawFeedError } from '@/lib/feedError';
 import { fetchSilencedAuthorIds } from '@/lib/moderation';
 import { logMissingPublishAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
@@ -323,6 +327,7 @@ function postInsertPayload(
     duration_ms?: number | null;
     parent_id?: string | null;
     lift_session_id?: string | null;
+    lift_snapshot?: unknown;
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -363,6 +368,9 @@ function postInsertPayload(
   }
   if (schema.hasLiftSession && base.lift_session_id) {
     payload.lift_session_id = base.lift_session_id;
+  }
+  if (schema.hasLiftSnapshot && base.lift_snapshot) {
+    payload.lift_snapshot = base.lift_snapshot;
   }
   if (schema.hasCheckin && base.checkin_id) {
     payload.checkin_id = base.checkin_id;
@@ -1769,6 +1777,7 @@ export function useCreatePost(challengeId?: string | null) {
         duration_ms: input.durationMs ?? null,
         parent_id: input.parentId ?? null,
         lift_session_id: liftSessionId,
+        lift_snapshot: input.liftSnapshot ?? null,
       });
       const started = Date.now();
       const mediaLog = mediaUrlCount(media_urls);
@@ -1806,6 +1815,18 @@ export function useCreatePost(challengeId?: string | null) {
           });
         }
       }
+      if (liftSessionId && createdPost.id) {
+        try {
+          await linkSessionToPost(liftSessionId, createdPost.id);
+          const draft = await fetchLiftSession(liftSessionId);
+          if (draft) {
+            await persistLiftSnapshotOnPost(createdPost.id, draft);
+            createdPost = { ...createdPost, lift_session_id: liftSessionId, lift_snapshot: buildLiftSnapshot(draft) };
+          }
+        } catch {
+          // The post already exists. A missing snapshot still opens from lift_session_id.
+        }
+      }
       logCreatePost({ stage: 'done', ms: Date.now() - started, ...mediaLog });
       return createdPost;
     },
@@ -1833,7 +1854,9 @@ export function useCreatePost(challengeId?: string | null) {
           type: input.type ?? 'feed',
           duration_ms: input.durationMs ?? null,
           parent_id: input.parentId ?? null,
-          mentions: (input.mentionedUserIds ?? []).map((userId) => ({
+          lift_session_id: input.liftSessionId ?? null,
+          lift_snapshot: input.liftSnapshot ?? null,
+          mentions: (input.mentionedUserIds ?? []).map((userId) => ({)
             userId,
             username: '',
             available: true,

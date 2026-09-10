@@ -6,11 +6,10 @@ import { AppText } from '@/components/ui/AppText';
 import {
   ReactionDismissScrim,
   ReactionPicker,
-  reactionGlyph,
 } from '@/components/feed/ReactionPicker';
 import {
-  POST_REACTION_COLORS,
   displayReactionType,
+  reactionEmoji,
   userReaction,
 } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
@@ -104,10 +103,11 @@ export function ReactionBar({
       <View className="flex-row items-center" style={{ columnGap: 2, zIndex: 41 }}>
         <Action
           compact
-          icon={mineType ? reactionGlyph(mineType) : GLYPH.strongOutline}
+          emoji={reactionEmoji(mineType ?? 'like')}
           label="Like"
           count={total}
-          color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
+          color={THEME.textPrimary}
+          dim={!mineType}
           onPress={() => {
             if (trayOpen) {
               setTrayOpen(false);
@@ -191,11 +191,9 @@ export function ReactionBar({
           {...webNoSelectProps()}
           className="h-8 flex-row items-center px-1.5"
           style={noSelectStyle}>
-          <Glyph
-            name={mineType ? reactionGlyph(mineType) : GLYPH.strongOutline}
-            color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
-            size={18}
-          />
+          <AppText style={{ fontSize: 28, lineHeight: 32, opacity: mineType ? 1 : 0.45 }}>
+            {reactionEmoji(mineType ?? 'like')}
+          </AppText>
           {total > 0 ? (
             <AppText
               selectable={false}
@@ -266,18 +264,22 @@ function ShareAction({
 
 function Action({
   icon,
+  emoji,
   label,
   count = 0,
   color,
   compact,
+  dim,
   onPress,
   onLongPress,
 }: {
-  icon: GlyphId;
+  icon?: GlyphId;
+  emoji?: string;
   label: string;
   count?: number;
   color: string;
   compact?: boolean;
+  dim?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
 }) {
@@ -291,12 +293,18 @@ function Action({
       {...(onLongPress ? webNoSelectProps() : null)}
       className={
         compact
-          ? 'h-6 flex-row items-center rounded-full px-1'
+          ? 'h-8 flex-row items-center rounded-full px-1'
           : 'h-7 flex-row items-center rounded-full px-1.5'
       }
       hitSlop={compact ? 4 : 6}
       style={onLongPress ? noSelectStyle : undefined}>
-      <Glyph name={icon} color={color} size={compact ? 14 : 16} />
+      {emoji ? (
+        <AppText style={{ fontSize: compact ? 28 : 22, lineHeight: compact ? 32 : 26, opacity: dim ? 0.45 : 1 }}>
+          {emoji}
+        </AppText>
+      ) : icon ? (
+        <Glyph name={icon} color={color} size={compact ? 14 : 16} />
+      ) : null}
       {count > 0 ? (
         <AppText
           selectable={false}

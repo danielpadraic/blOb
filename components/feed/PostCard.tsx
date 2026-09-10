@@ -440,6 +440,8 @@ function PostCardInner({
           <LiftPostCard
             sessionId={liftSessionId}
             authorId={post.author_id}
+            authorName={name}
+            snapshot={post.lift_snapshot}
             caption={content}
             compact={homeFeed}
           />

@@ -13,6 +13,7 @@ type FeedPostRow = {
   checkin_stats?: unknown;
   edited_at?: string | null;
   lift_session_id?: string | null;
+  lift_snapshot?: unknown;
   comments?: unknown;
   reactions?: unknown;
 };
@@ -208,6 +209,9 @@ function mergeLiveFeedPost<T extends { id: string }>(post: T, row: FeedPostRow):
   }
   if (row.lift_session_id !== undefined) {
     assign('lift_session_id', row.lift_session_id, (post as FeedPostRow).lift_session_id === row.lift_session_id);
+  }
+  if (row.lift_snapshot !== undefined) {
+    assign('lift_snapshot', row.lift_snapshot, sameJson((post as FeedPostRow).lift_snapshot, row.lift_snapshot));
   }
   if (row.checkin_id && !(post as FeedPostRow).checkin_id) {
     assign('checkin_id', row.checkin_id, false);
