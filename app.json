@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.blob.tournament",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.healthkit": true,
@@ -42,7 +42,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "package": "app.blob.mobile",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 11,
+      "versionCode": 12,
       "intentFilters": [
         {
           "action": "VIEW",

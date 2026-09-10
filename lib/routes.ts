@@ -215,6 +215,9 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   if (watch && !clipRouteId(watch[2])) {
     return '/feed';
   }
+  if (watch && clipRouteId(watch[2])) {
+    return `/${watch[1] === 'story' ? 'wave' : watch[1] === 'reel' ? 'round' : watch[1]}/${watch[2]}`;
+  }
   const submitId = path.match(/\/challenges\/([^/?#]+)\/submit/)?.[1];
   if (submitId && !CHALLENGE_RETRY_SKIP.has(submitId)) {
     return `/challenges/${submitId}/submit`;

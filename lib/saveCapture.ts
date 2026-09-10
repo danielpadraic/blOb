@@ -97,10 +97,46 @@ export async function saveOwnCapture(input: SaveCaptureInput): Promise<SaveCaptu
     emit(result);
     return result;
   } catch {
+    const copied = await copyCaptureForLibrary(input);
+    if (copied && copied !== uri) {
+      try {
+        const media = await import('expo-media-library');
+        await media.saveToLibraryAsync(copied);
+        pendingUris.delete(uri);
+        markSaved(uri);
+        markSaved(copied);
+        const result: SaveCaptureResult = { saved: true, uri };
+        emit(result);
+        return result;
+      } catch {
+        // Fall through to failed.
+      }
+    }
     pendingUris.delete(uri);
     const result: SaveCaptureResult = { saved: false, uri, reason: 'failed' };
     emit(result);
     return result;
+  }
+}
+
+/** Expo Camera tmp URIs sometimes fail saveToLibraryAsync until copied into cache as .mov/.jpg. */
+async function copyCaptureForLibrary(input: SaveCaptureInput): Promise<string | null> {
+  const uri = input.uri?.trim() ?? '';
+  if (!uri) {
+    return null;
+  }
+  try {
+    const { cacheDirectory, copyAsync } = await import('expo-file-system/legacy');
+    if (!cacheDirectory) {
+      return null;
+    }
+    const ext =
+      input.mediaType === 'video' ? (input.mimeType?.includes('mp4') ? 'mp4' : 'mov') : 'jpg';
+    const dest = `${cacheDirectory}blob-save-${Date.now()}.${ext}`;
+    await copyAsync({ from: uri, to: dest });
+    return dest;
+  } catch {
+    return null;
   }
 }
 

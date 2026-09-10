@@ -1,9 +1,14 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, type ErrorBoundaryProps } from 'expo-router';
 
 import { CaptureStudio } from '@/components/capture/CaptureStudio';
+import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { captureKindFor, type CaptureMode } from '@/components/capture/types';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
+
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <AppErrorBoundary {...props} />;
+}
 
 export default function CaptureScreen() {
   const params = useLocalSearchParams<{ mode?: string; media?: string; challengeId?: string }>();

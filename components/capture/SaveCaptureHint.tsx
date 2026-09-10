@@ -55,7 +55,7 @@ export function SaveCaptureHint({ compact, ...input }: SaveCaptureHintProps) {
   if (notice?.reason === 'denied' || notice?.reason === 'failed') {
     return (
       <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
-        {copy('capture.saveDenied')}
+        {Platform.OS === 'ios' ? copy('capture.saveDenied') : copy('capture.saveDeniedAndroid')}
       </AppText>
     );
   }

@@ -468,7 +468,15 @@ function throwIfError(error: unknown) {
   }
 }
 
-export function asPublicProfile(row: PublicProfile): PublicProfile {
+export function asPublicProfile(row: PublicProfile | null | undefined): PublicProfile {
+  if (!row || typeof row !== 'object') {
+    return {
+      id: 'unknown',
+      username: 'blob',
+      display_name: 'Someone',
+      avatar_url: null,
+    } as PublicProfile;
+  }
   const raw = row as PublicProfile & {
     gender?: unknown;
     pronoun?: unknown;
@@ -1118,15 +1126,28 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     }),
   );
   const { data, error } = await supabase.from('stories').insert(rows as never).select(schema.select);
+  if (error && input.challenge_id) {
+    console.log('[blob:wave]', { stage: 'tag', message: String(error.message ?? error.code ?? 'tag').slice(0, 180) });
+    const untagged = rows.map((row) => ({ ...row, challenge_id: null }));
+    const retry = await supabase.from('stories').insert(untagged as never).select(schema.select);
+    if (!retry.error) {
+      const created = asLoggableList((retry.data ?? []) as unknown as Story[]).sort(
+        (a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0),
+      );
+      if (created.length > 0) {
+        return created;
+      }
+    }
+  }
   if (error) {
-    console.log('[blob:stories]', error.message ?? error.code ?? 'stories insert failed');
+    console.log('[blob:wave]', { stage: 'insert', message: String(error.message ?? error.code ?? 'insert').slice(0, 180) });
     const fallback = await supabase
       .from('stories')
       .insert({
         user_id: userId,
         media_url: mediaUrl,
         media_type: input.media_type,
-        challenge_id: input.challenge_id ?? null,
+        challenge_id: null,
         caption: input.caption?.trim() || null,
         expires_at: expiresAt,
       })
@@ -1219,7 +1240,9 @@ export async function attachClipPostId(
   if (error && /post_id|schema cache/i.test(error.message)) {
     return;
   }
-  throwIfError(error);
+  if (error) {
+    console.log('[blob:wave]', { stage: 'tag', message: String(error.message ?? 'post_id').slice(0, 180) });
+  }
 }
 
 export async function viewStory(userId: string, storyId: string): Promise<void> {
@@ -1239,10 +1262,12 @@ async function withReelProfiles(rows: Reel[]): Promise<ReelItem[]> {
     return [];
   }
   const profiles = await fetchPublicProfilesByIds(rows.map((row) => row.user_id));
-  const byId = new Map(profiles.map((profile) => [profile.id, profile]));
+  const byId = new Map(
+    profiles.filter((profile) => profile?.id).map((profile) => [profile.id, profile]),
+  );
   return rows.map((row) => ({
     ...row,
-    profile: byId.get(row.user_id) ?? null,
+    profile: (row.user_id ? byId.get(row.user_id) : null) ?? null,
   }));
 }
 

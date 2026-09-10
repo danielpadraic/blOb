@@ -5,7 +5,8 @@ import { router, usePathname, type ErrorBoundaryProps } from 'expo-router';
 import { MascotState } from '@/components/mascot/MascotState';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { liveErrorFile } from '@/lib/liveThread';
-import { TABS_HREF, errorRetryHref } from '@/lib/routes';
+import { TABS_HREF, clipRouteId, errorRetryHref } from '@/lib/routes';
+import { logWaveFail } from '@/lib/wavePublish';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
 
@@ -18,6 +19,13 @@ function webPathname(): string {
 
 function liveRetryHref(pathname: string): string {
   const next = errorRetryHref(pathname);
+  const waveId = String(pathname ?? '').match(/^\/(?:wave|story)\/([^/?#]+)/)?.[1] ?? '';
+  if (clipRouteId(waveId)) {
+    return `/wave/${waveId}`;
+  }
+  if (String(pathname ?? '').includes('/capture')) {
+    return '/feed';
+  }
   const submitId = String(pathname ?? '').match(/\/challenges\/([^/?#]+)\/submit/)?.[1] ?? '';
   if (submitId && submitId !== 'new' && submitId !== 'create' && submitId !== 'callout') {
     return `/challenges/${submitId}/submit`;
@@ -34,6 +42,10 @@ function reloadApp(retry: () => Promise<void>, pathname: string, error?: unknown
   stopAllLiveMedia();
   const current = pathname || webPathname();
   const next = liveRetryHref(current);
+  const waveish = /\/wave\/|\/story\/|\/capture/.test(current);
+  if (waveish) {
+    logWaveFail(current.includes('/capture') ? 'insert' : 'player', error);
+  }
   console.log('[blob:live]', {
     error: error instanceof Error ? error.message : String(error ?? 'retry'),
     file: liveErrorFile(error),

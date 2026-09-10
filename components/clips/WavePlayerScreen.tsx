@@ -14,6 +14,7 @@ import { waveWatchName } from '@/lib/clipWatch';
 import { copy } from '@/lib/copy';
 import { firstSearchParam } from '@/lib/commentDeepLink';
 import { authorLabel, logMissingPublishAuthor, safeUserId } from '@/lib/safeIds';
+import { logWaveFail } from '@/lib/wavePublish';
 import { startFreshWaveCapture } from '@/lib/waveCapture';
 import { WAVE_CLIP_MS } from '@/lib/waveClips';
 import { type FeedChallengePreview } from '@/lib/social';
@@ -60,52 +61,89 @@ export function WavePlayerScreen() {
   }, [challengeQuery.data]);
 
   const { clips, startIndex } = useMemo(() => {
-    if (!storyId) {
-      return { clips: [] as ClipPlayItem[], startIndex: 0 };
-    }
-    const extra = storyQuery.data?.id ? storyQuery.data : null;
-    const flat = flattenWaveStories({ groups, startStoryId: storyId, extra });
-    return {
-      startIndex: flat.startIndex,
-      clips: flat.stories
-        .filter((story) => Boolean(story?.id && story.media_url))
-        .map((story) => {
-      const group = (groups ?? []).find((row) => row?.userId && row.userId === story.user_id);
-      const authorId = safeUserId({ id: story.user_id }, user, profile) ?? story.user_id ?? '';
-      if (!authorId) {
-        logMissingPublishAuthor({ type: 'wave', postId: story.id, hasAuthor: false });
+    try {
+      if (!storyId) {
+        return { clips: [] as ClipPlayItem[], startIndex: 0 };
       }
-      const isOwn = Boolean(authorId && (authorId === user?.id || authorId === profile?.id));
-      const name =
-        waveWatchName({
-          isOwn,
-          groupName: group?.name,
-          displayName: isOwn ? profile?.display_name : null,
-          username: isOwn ? profile?.username : null,
-        }) || authorLabel(isOwn ? profile : null);
-      const item: ClipPlayItem = {
-        id: story.id,
-        kind: 'wave',
-        mediaUrl: story.media_url,
-        mediaType: story.media_type,
-        caption: story.caption,
-        durationMs:
-          story.media_type === 'video'
-            ? Math.max(story.clip_duration_ms || WAVE_CLIP_MS, 400)
-            : WAVE_CLIP_MS,
-        startMs: story.clip_start_ms ?? 0,
-        authorId,
-        authorName: name || 'Someone',
-        authorAvatar: group?.avatar ?? (isOwn ? profile?.avatar_url : null),
-        createdAt: story.created_at,
-        postId: story.post_id,
-        challengeId: story.challenge_id,
-        isOwn,
-        coverUrl: story.thumbnail_url ?? null,
+      const extra = storyQuery.data?.id ? storyQuery.data : null;
+      const flat = flattenWaveStories({ groups, startStoryId: storyId, extra });
+      const stories = (flat.stories ?? []).filter((story) => Boolean(story?.id && story.media_url));
+      if (stories.length === 0 && extra?.id && extra.media_url) {
+        stories.push(extra);
+      }
+      return {
+        startIndex: Math.max(0, flat.startIndex),
+        clips: stories.map((story) => {
+          const group = (groups ?? []).find((row) => row?.userId && row.userId === story.user_id);
+          const authorId =
+            safeUserId(story.user_id, { id: story.user_id }, user, profile) ?? story.user_id ?? '';
+          if (!authorId) {
+            logMissingPublishAuthor({ type: 'wave', postId: story.id, hasAuthor: false });
+          }
+          const isOwn = Boolean(authorId && (authorId === user?.id || authorId === profile?.id));
+          const name =
+            waveWatchName({
+              isOwn,
+              groupName: group?.name,
+              displayName: isOwn ? profile?.display_name : null,
+              username: isOwn ? profile?.username : null,
+            }) || authorLabel(isOwn ? profile : null);
+          const item: ClipPlayItem = {
+            id: story.id,
+            kind: 'wave',
+            mediaUrl: story.media_url,
+            mediaType: story.media_type,
+            caption: story.caption,
+            durationMs:
+              story.media_type === 'video'
+                ? Math.max(story.clip_duration_ms || WAVE_CLIP_MS, 400)
+                : WAVE_CLIP_MS,
+            startMs: story.clip_start_ms ?? 0,
+            authorId,
+            authorName: name || 'Someone',
+            authorAvatar: group?.avatar ?? (isOwn ? profile?.avatar_url : null),
+            createdAt: story.created_at,
+            postId: story.post_id,
+            challengeId: story.challenge_id,
+            isOwn,
+            coverUrl: story.thumbnail_url ?? null,
+          };
+          return item;
+        }),
       };
-      return item;
-    }),
-    };
+    } catch (error) {
+      logWaveFail('player', error);
+      const extra = storyQuery.data;
+      const authorId = safeUserId(extra?.user_id, user, profile) ?? extra?.user_id ?? '';
+      if (!extra?.id || !extra.media_url) {
+        return { clips: [] as ClipPlayItem[], startIndex: 0 };
+      }
+      return {
+        startIndex: 0,
+        clips: [
+          {
+            id: extra.id,
+            kind: 'wave' as const,
+            mediaUrl: extra.media_url,
+            mediaType: extra.media_type,
+            caption: extra.caption,
+            durationMs:
+              extra.media_type === 'video'
+                ? Math.max(extra.clip_duration_ms || WAVE_CLIP_MS, 400)
+                : WAVE_CLIP_MS,
+            startMs: extra.clip_start_ms ?? 0,
+            authorId,
+            authorName: authorLabel(profile) || 'Someone',
+            authorAvatar: profile?.avatar_url ?? null,
+            createdAt: extra.created_at,
+            postId: extra.post_id,
+            challengeId: extra.challenge_id,
+            isOwn: Boolean(authorId && authorId === user?.id),
+            coverUrl: extra.thumbnail_url ?? null,
+          },
+        ],
+      };
+    }
   }, [groups, profile, storyId, storyQuery.data, user?.id]);
 
   function close() {

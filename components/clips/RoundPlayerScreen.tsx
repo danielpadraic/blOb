@@ -59,6 +59,7 @@ export function RoundPlayerScreen() {
   });
 
   const { clips, startIndex } = useMemo(() => {
+    try {
     const reelIdSafe = reel?.id;
     if (!reel || !reelIdSafe) {
       return { clips: [] as ClipPlayItem[], startIndex: 0 };
@@ -95,6 +96,9 @@ export function RoundPlayerScreen() {
     };
     }),
     };
+    } catch {
+      return { clips: [] as ClipPlayItem[], startIndex: 0 };
+    }
   }, [postQuery.data, privacyQuery.data, railQuery.data, reel, user?.id]);
   const challenges = useMemo(
     () =>

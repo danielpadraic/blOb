@@ -54,6 +54,7 @@ import { fetchActiveChallenges } from '@/lib/challenges';
 import { pickHostedRoundChallengeId } from '@/lib/homeRounds';
 import { attachClipPostId } from '@/lib/social';
 import { sessionAuthor } from '@/lib/safeIds';
+import { logWaveFail, WAVE_TAG_SOFT_FAIL, waveSessionAuthor } from '@/lib/wavePublish';
 import { uploadProgressPercent } from '@/lib/uploadProgress';
 import { getErrorMessage, logPostgrestError } from '@/utils/errors';
 import { asGalleryMedia, localUriFromPickerAsset } from '@/utils/media';
@@ -293,6 +294,15 @@ export function CaptureStudio({
       setError('Pick at least one person.');
       return;
     }
+    stopAllLiveMedia();
+    const author =
+      waveSessionAuthor(profile, user.id) ??
+      sessionAuthor(profile, user.id) ?? {
+        id: user.id,
+        username: 'blob',
+        display_name: null,
+        avatar_url: null,
+      };
     setError(null);
     setProgress(1);
     const tick = setInterval(() => {
@@ -364,7 +374,7 @@ export function CaptureStudio({
             ...(posted as Post),
             id: postedId,
             author_id: user.id,
-            author: sessionAuthor(profile, user.id) ?? undefined,
+            author,
             comments: [],
             reactions: [],
           } as PostWithMeta);
@@ -375,9 +385,9 @@ export function CaptureStudio({
             ...reel,
             id: publishedReelId,
             user_id: reel.user_id || user.id,
-            profile: sessionAuthor(profile, user.id) as ReelItem['profile'],
+            profile: author as ReelItem['profile'],
           },
-          profile ?? { id: user.id },
+          author,
         );
         try {
           await createFeedEvent.mutateAsync({
@@ -408,14 +418,37 @@ export function CaptureStudio({
           ...clip,
           caption: multiClip ? clipCaptions[index]?.trim() || null : caption.trim() || null,
         }));
-        const created = await createStory.mutateAsync({
-          media_url: mediaUrl,
-          media_type: draft.mediaType,
-          thumbnail_url: posterUrl,
-          caption: multiClip ? null : caption.trim() || null,
-          challenge_id: challengeId,
-          clips,
-        });
+        let created;
+        try {
+          created = await createStory.mutateAsync({
+            media_url: mediaUrl,
+            media_type: draft.mediaType,
+            thumbnail_url: posterUrl,
+            caption: multiClip ? null : caption.trim() || null,
+            challenge_id: challengeId,
+            clips,
+          });
+        } catch (tagError) {
+          if (!challengeId) {
+            logWaveFail('insert', tagError);
+            throw tagError;
+          }
+          logWaveFail('tag', tagError);
+          try {
+            created = await createStory.mutateAsync({
+              media_url: mediaUrl,
+              media_type: draft.mediaType,
+              thumbnail_url: posterUrl,
+              caption: multiClip ? null : caption.trim() || null,
+              challenge_id: null,
+              clips,
+            });
+            setError(WAVE_TAG_SOFT_FAIL);
+          } catch (insertError) {
+            logWaveFail('insert', insertError);
+            throw insertError;
+          }
+        }
         const stories = Array.isArray(created) ? created : created ? [created] : [];
         publishedWaveId = publishedRowId(stories);
         if (!publishedWaveId) {
@@ -427,29 +460,35 @@ export function CaptureStudio({
           if (!storyId) {
             continue;
           }
-          const posted = await ensureClipFeedPost({
-            createPost: (input) => createPost.mutateAsync(input),
-            content: story.caption?.trim() || caption.trim(),
-            mediaUrls: [mediaUrl],
-            audience,
-            audienceUserIds,
-            challengeId,
-            type: 'wave',
-            durationMs: story.clip_duration_ms ?? draft.durationMs ?? null,
-          });
+          let posted: Post | null = null;
+          try {
+            posted = await ensureClipFeedPost({
+              createPost: (input) => createPost.mutateAsync(input),
+              content: story.caption?.trim() || caption.trim(),
+              mediaUrls: [mediaUrl],
+              audience,
+              audienceUserIds,
+              challengeId: story.challenge_id ?? challengeId,
+              type: 'wave',
+              durationMs: story.clip_duration_ms ?? draft.durationMs ?? null,
+            });
+          } catch (postError) {
+            logWaveFail('tag', postError);
+            setError(WAVE_TAG_SOFT_FAIL);
+          }
           const postedId = publishedRowId(posted);
           if (postedId) {
             await attachClipPostId('story', storyId, postedId);
             seedPublishedPost(queryClient, user.id, {
               ...(posted as Post),
               id: postedId,
-              author_id: user.id,
-              author: sessionAuthor(profile, user.id) ?? undefined,
+              author_id: author.id,
+              author,
               comments: [],
               reactions: [],
             } as PostWithMeta);
           }
-          seedPublishedWave(queryClient, { ...story, id: storyId, user_id: story.user_id || user.id }, profile ?? { id: user.id });
+          seedPublishedWave(queryClient, { ...story, id: storyId, user_id: story.user_id || author.id }, author);
         }
         const first = stories.find((row) => publishedRowId(row) === publishedWaveId) ?? stories[0];
         if (first && publishedWaveId) {
@@ -470,7 +509,12 @@ export function CaptureStudio({
       stopAllLiveMedia();
       resetStudio();
       if (publishedWaveId) {
-        router.replace(waveHref(publishedWaveId, { from: 'home' }));
+        try {
+          router.replace(waveHref(publishedWaveId, { from: 'home' }));
+        } catch (navError) {
+          logWaveFail('navigate', navError);
+          router.replace('/feed');
+        }
         return;
       }
       if (publishedReelId) {
@@ -479,12 +523,16 @@ export function CaptureStudio({
       }
       close();
     } catch (caught) {
+      stopAllLiveMedia();
       setProgress(0);
-      logPostgrestError('share-round', caught);
+      logWaveFail(mode === 'story' ? 'insert' : 'insert', caught);
+      logPostgrestError(mode === 'story' ? 'share-wave' : 'share-round', caught);
       const message = getErrorMessage(caught);
       setError(
         /undefined is not a function/i.test(message)
-          ? 'Couldn’t share that Round. Try again.'
+          ? mode === 'story'
+            ? 'Couldn’t share that Wave. Try again.'
+            : 'Couldn’t share that Round. Try again.'
           : message,
       );
     } finally {
@@ -809,11 +857,17 @@ async function ensureClipFeedPost(input: {
     return await input.createPost(payload);
   } catch (first) {
     logPostgrestError('clip-feed-post', first);
-    return input.createPost({
-      ...payload,
-      audience: DEFAULT_POST_AUDIENCE,
-      audienceUserIds: [],
-    });
+    try {
+      return await input.createPost({
+        ...payload,
+        audience: DEFAULT_POST_AUDIENCE,
+        audienceUserIds: [],
+        challengeId: undefined,
+      });
+    } catch (second) {
+      logWaveFail('tag', second);
+      throw second;
+    }
   }
 }
 
