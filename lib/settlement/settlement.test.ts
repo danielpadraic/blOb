@@ -42,6 +42,7 @@ import {
   walletAmountLabel,
   winnerSettledNotifyCopy,
 } from '@/lib/settlement/index';
+import { namedChallengePhrase } from '@/lib/challengeNotifyName';
 
 describe('lifecycle', () => {
   it('maps Open → Live → Settling → Settled', () => {
@@ -255,7 +256,7 @@ describe('even-split remaining', () => {
     expect(evenSplitShares(50, remaining.length)).toEqual([]);
     expect(receiptHeadline({ joined: true, winnerCount: 0 })).toBe(FORFEIT_RECEIPT);
     expect(forfeitNotifyCopy('Rookies vs. Rockstars')).toBe(
-      'Rookies vs. Rockstars settled. Nobody remaining. Prize forfeited.',
+      `${namedChallengePhrase('Rookies vs. Rockstars')} settled. Nobody remaining. Prize forfeited.`,
     );
     expect(lobbyResultCopy({ title: 'Rookies vs. Rockstars', remaining: 0, forfeited: true })).toContain(
       'Prize forfeited',
@@ -287,10 +288,10 @@ describe('even-split remaining', () => {
     expect(voidReceiptCopy('host')).toBe(VOID_HOST_RECEIPT);
     expect(voidReceiptCopy('both')).toBe(VOID_BOTH_RECEIPT);
     expect(voidNotifyCopy('Dawn Miles', 'host')).toBe(
-      'Dawn Miles settled. Nobody finished. Prize returned to the host.',
+      `${namedChallengePhrase('Dawn Miles')} settled. Nobody finished. Prize returned to the host.`,
     );
     expect(lobbyResultCopy({ title: 'Dawn Miles', remaining: 0, forfeited: false, voidKind: 'buyin' })).toBe(
-      'Dawn Miles settled. Nobody finished. Entry coins were returned.',
+      `${namedChallengePhrase('Dawn Miles')} settled. Nobody finished. Entry coins were returned.`,
     );
     expect(nobodyFinishedRuleCopy({ buyInAmount: 10 })).toBe(
       'If nobody finishes, entry coins are returned.',
@@ -313,9 +314,9 @@ describe('copy', () => {
       title: 'Official Weekly',
       objectPronoun: 'them',
     });
-    expect(line).toBe('Sam Settled @Official Weekly. Congratulate them.');
+    expect(line).toBe(`Sam Settled ${namedChallengePhrase('Official Weekly')}. Congratulate them.`);
     expect(payoutReceivedCopy('$10.00', 'Official Weekly')).toBe(
-      'You received $10.00 from @Official Weekly.',
+      `You received $10.00 from ${namedChallengePhrase('Official Weekly')}.`,
     );
     expect(formatSettlementAmount(10, 'bucks')).toBe('$10.00');
     expect(formatSettlementAmount(25, 'coins')).toBe('25');
@@ -323,13 +324,17 @@ describe('copy', () => {
     expect(assertsNoBucksWord(FORFEIT_RECEIPT)).toBe(true);
     expect(assertsNoBucksWord(formatSettlementAmount(5, 'bucks'))).toBe(true);
     expect(winnerSettledNotifyCopy('Daily Prayer', walletAmountLabel(25, 'coins'))).toBe(
-      'Daily Prayer settled. 25 coins is in your wallet.',
+      `${namedChallengePhrase('Daily Prayer')} settled. 25 coins is in your wallet.`,
     );
     expect(winnerSettledNotifyCopy('Daily Prayer', walletAmountLabel(10, 'bucks'))).toBe(
-      'Daily Prayer settled. $10.00 is in your wallet.',
+      `${namedChallengePhrase('Daily Prayer')} settled. $10.00 is in your wallet.`,
     );
-    expect(nonWinnerSettledNotifyCopy('Daily Prayer', 'Sam')).toBe('Daily Prayer settled. Sam took it.');
-    expect(splitSettledNotifyCopy('Daily Prayer', 2)).toBe('Daily Prayer settled. You split it with 2.');
+    expect(nonWinnerSettledNotifyCopy('Daily Prayer', 'Sam')).toBe(
+      `${namedChallengePhrase('Daily Prayer')} settled. Sam took it.`,
+    );
+    expect(splitSettledNotifyCopy('Daily Prayer', 2)).toBe(
+      `${namedChallengePhrase('Daily Prayer')} settled. You split it with 2.`,
+    );
     expect(assertsNoBucksWord(winnerSettledNotifyCopy('Daily Prayer', walletAmountLabel(10, 'bucks')))).toBe(
       true,
     );

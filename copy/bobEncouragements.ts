@@ -1,3 +1,4 @@
+import { namedChallengePhrase, type ChallengeNameKind } from '@/lib/challengeNotifyName';
 import { asCopyTone, interpolateCopy } from '@/lib/copy';
 
 import { BOB_CATALOG } from '@/copy/bobCatalog.generated';
@@ -33,6 +34,7 @@ export type PickBobLineInput = {
   tone?: string | null;
   n?: number | string | null;
   challenge?: string | null;
+  nameKind?: ChallengeNameKind;
   usedIndexes?: Iterable<number>;
 };
 
@@ -76,7 +78,7 @@ export function clipChallengeTitle(title: string, max: number): string {
 
 export function interpolateBobLine(
   template: string,
-  vars?: { n?: number | string | null; challenge?: string | null },
+  vars?: { n?: number | string | null; challenge?: string | null; nameKind?: ChallengeNameKind },
 ): string {
   const named = ensureChallengeToken(template);
   const afterN = interpolateCopy(named, { n: vars?.n ?? '' });
@@ -87,10 +89,10 @@ export function interpolateBobLine(
   const leftover = afterN.replace(/\{challenge\}/g, '');
   const slots = Math.max((afterN.match(/\{challenge\}/g) ?? []).length, 1);
   const budget = BOB_LINE_MAX - leftover.length;
-  const maxEach = Math.max(1, Math.floor(budget / slots));
-  const title = clipChallengeTitle(rawTitle, Math.min(48, maxEach));
-  const text = afterN.replace(/\{challenge\}/g, title).replace(/\s+/g, ' ').trim();
-  if (!title || text.length > BOB_LINE_MAX) {
+  const maxEach = Math.max(24, Math.floor(budget / slots));
+  const phrase = namedChallengePhrase(rawTitle, vars?.nameKind ?? 'your', maxEach);
+  const text = afterN.replace(/\{challenge\}/g, phrase).replace(/\s+/g, ' ').trim();
+  if (!phrase || text.length > BOB_LINE_MAX) {
     return '';
   }
   return text;
@@ -115,6 +117,7 @@ export function pickBobLine(input: PickBobLineInput): PickedBobLine | null {
     const text = interpolateBobLine(template, {
       n: input.n,
       challenge: input.challenge,
+      nameKind: input.nameKind,
     });
     if (!text || text.length > BOB_LINE_MAX) {
       return;

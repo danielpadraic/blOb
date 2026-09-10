@@ -195,11 +195,6 @@ export function isLobbyEndedChallenge(
   if (row.is_unlimited) {
     return false;
   }
-  // Only a live clock moves a still-synced "live" row. Filling / upcoming keep Active even if
-  // ends_at is stale.
-  if (!LIVE_STATUSES.has(status)) {
-    return false;
-  }
   const end = Date.parse(String(row.ends_at ?? ''));
   return Number.isFinite(end) && end <= nowMs;
 }
@@ -460,6 +455,10 @@ export function schedulePhase(
     return 'ended';
   }
   if (LIVE_STATUSES.has(status)) {
+    const end = parseInstant(challenge.ends_at);
+    if (end && end.getTime() <= nowMs && !challenge.is_unlimited) {
+      return 'ended';
+    }
     return 'live';
   }
   const start = parseInstant(challenge.starts_at);

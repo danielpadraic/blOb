@@ -68,7 +68,7 @@ export function usePushNotifications() {
         pushNotificationHref(router, href, 'push-tap', pathname);
         return;
       }
-      if (isLivePushType(data.type)) {
+      if (isLivePushType(data.type, data)) {
         return;
       }
       if (data.story_id) {

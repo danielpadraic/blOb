@@ -868,7 +868,7 @@ begin
 
   update public.challenges
     set status = 'judging'
-    where status in ('upcoming', 'open', 'in_progress')
+    where status in ('upcoming', 'open', 'in_progress', 'live', 'filling', 'arming')
       and ends_at is not null
       and now() >= ends_at
       and coalesce(is_unlimited, false) = false;

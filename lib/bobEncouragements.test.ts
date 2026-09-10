@@ -18,9 +18,12 @@ describe('Bob encouragement catalog', () => {
     const text = interpolateBobLine('You missed a check-in. You are still in. Today still counts.', {
       challenge: 'Morning miles',
     });
+    expect(text).toContain('Your Challenge:');
     expect(text).toContain('Morning miles');
     expect(text.length).toBeLessThanOrEqual(BOB_LINE_MAX);
     expect(text.toLowerCase()).not.toMatch(/\bthe field\b/);
+    expect(text.toLowerCase()).not.toMatch(/\bwindow\b/);
+    expect(text.toLowerCase()).not.toMatch(/chicago/);
   });
 
   it('truncates a long title so the push still fits', () => {
@@ -49,6 +52,7 @@ describe('Bob encouragement catalog', () => {
       tone: 'neutral',
       challenge: 'Daily sit-ups',
     });
+    expect(picked?.text).toContain('Your Challenge:');
     expect(picked?.text).toContain('Daily sit-ups');
     expect(picked?.text.length).toBeLessThanOrEqual(BOB_LINE_MAX);
   });
@@ -62,6 +66,8 @@ describe('Bob encouragement catalog', () => {
       for (const tone of BOB_ENCOURAGEMENT_TONES) {
         for (const template of row[tone]) {
           expect(template.toLowerCase()).not.toMatch(/show(?:ed|ing)? up/);
+          expect(template.toLowerCase()).not.toMatch(/\bwindow\b/);
+          expect(template.toLowerCase()).not.toMatch(/chicago|first open of the/);
           expect(template).toContain('{challenge}');
           const text = interpolateBobLine(template, { n: 14, challenge: longTitle });
           expect(text, `${category} ${tone}: ${template}`).toBeTruthy();

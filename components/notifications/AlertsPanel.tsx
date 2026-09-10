@@ -20,6 +20,7 @@ import {
   notificationHasHighFive,
   openHighFiveConversation,
 } from '@/lib/highFive';
+import { formatNotificationCopy } from '@/lib/challengeNotifyName';
 import { calloutAlertTitle } from '@/lib/callouts';
 import {
   friendRequestFromUserId,
@@ -359,6 +360,15 @@ function NotificationRow({
   const showCircleActions =
     item.type === 'circle_invite' && unread && Boolean(notificationCircleId(item.data)) && onCircleInvite;
   const showHighFive = notificationHasHighFive(item) && Boolean(onHighFive);
+  const rawTitle = item.type.startsWith('callout_')
+    ? calloutAlertTitle(item.title, item.data?.title)
+    : item.title;
+  const display = formatNotificationCopy({
+    type: item.type,
+    title: rawTitle,
+    body: item.body,
+    challengeTitle: item.data?.challenge_title ?? null,
+  });
   return (
     <Pressable
       accessibilityRole="button"
@@ -376,15 +386,13 @@ function NotificationRow({
           <AppText
             className={`flex-1 text-charcoal ${unread ? 'font-bold' : 'font-medium'}`}
             numberOfLines={item.type === 'bob_encouragement' || showHighFive ? 4 : 2}>
-            {item.type.startsWith('callout_')
-              ? calloutAlertTitle(item.title, item.data?.title)
-              : item.title}
+            {display.title}
           </AppText>
           <AppText className="text-[11px] text-muted">{formatFeedTime(item.created_at)}</AppText>
         </View>
-        {item.body ? (
+        {display.body ? (
           <AppText className="mt-0.5 text-sm leading-5 text-muted" numberOfLines={2}>
-            {item.body}
+            {display.body}
           </AppText>
         ) : null}
         {showRoll ? (

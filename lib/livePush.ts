@@ -1,5 +1,6 @@
 import type { Href } from 'expo-router';
 
+import { clipPushLine, namedChallengePhrase } from '@/lib/challengeNotifyName';
 import type { LiveMute } from '@/lib/types';
 
 export type { LiveMute };
@@ -66,16 +67,31 @@ export function liveChatPushCopy(input: {
   hasMedia?: boolean;
 }): { title: string; body: string } {
   const name = input.name.trim() || 'Someone';
-  const challenge = input.challengeTitle.trim() || 'this challenge';
+  const challenge = namedChallengePhrase(input.challengeTitle.trim() || 'this challenge');
   const snippet = liveChatSnippet(input.text);
-  const body = snippet || (input.hasMedia ? 'Photo' : `${name} in ${challenge}`);
-  return { title: `${name} in ${challenge}`, body };
+  const title = clipPushLine(`${name} in ${challenge}`);
+  const body = snippet || (input.hasMedia ? 'Photo' : title);
+  return { title, body: clipPushLine(body) };
 }
 
 export const LIVE_FOCUS_HEARTBEAT_MS = 25_000;
 
-export function isLivePushType(type?: string | null): boolean {
-  return type === 'live_message' || type === 'live_checkin' || type === 'live_reply';
+const LIVE_COMMENT_TYPES = new Set(['post_comment', 'mentioned', 'tagged', 'post_reaction']);
+
+export function isLivePushType(
+  type?: string | null,
+  data?: { challenge_id?: string | null; comment_id?: string | null; challengeId?: string | null; commentId?: string | null },
+): boolean {
+  const t = String(type ?? '');
+  if (t === 'live_message' || t === 'live_checkin' || t === 'live_reply') {
+    return true;
+  }
+  if (!LIVE_COMMENT_TYPES.has(t)) {
+    return false;
+  }
+  const challengeId = String(data?.challenge_id ?? data?.challengeId ?? '').trim();
+  const commentId = String(data?.comment_id ?? data?.commentId ?? '').trim();
+  return Boolean(challengeId && commentId);
 }
 
 export function challengeIdFromLiveUrl(url?: string | null): string | undefined {
@@ -124,7 +140,7 @@ export function liveNotificationHref(data: {
   url?: string | null;
 }): Href | null {
   const url = data.url || data.href;
-  if (!isLivePushType(data.type) && !isLiveChallengeUrl(url)) {
+  if (!isLivePushType(data.type, data) && !isLiveChallengeUrl(url)) {
     return null;
   }
   const challengeId =

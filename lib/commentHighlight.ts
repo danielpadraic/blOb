@@ -3,6 +3,7 @@ import { Dimensions, Platform, type View } from 'react-native';
 import { isLiveComment } from '@/lib/commentEdit';
 
 export const COMMENT_HIGHLIGHT_MS = 1600;
+export const LIVE_COMMENT_HIGHLIGHT_MS = 1200;
 export const COMMENT_UNAVAILABLE = 'That comment isn’t available.';
 
 export function liveCommentRowId(commentId: string): string {
@@ -45,6 +46,19 @@ export function commentTargetMissing(
   }
   const found = findCommentById(comments, id);
   return !found || !isLiveComment(found);
+}
+
+/** Live deep-link: missing id only. Soft-deleted (“Comment removed”) is a valid landing. */
+export function commentTargetHardMissing(
+  comments: Array<{ id: string; deleted_at?: string | null }> | null | undefined,
+  commentId?: string | null,
+  ready?: boolean,
+): boolean {
+  const id = String(commentId ?? '').trim();
+  if (!id || !commentsHaveResolved(comments, ready)) {
+    return false;
+  }
+  return !findCommentById(comments, id);
 }
 
 export function commentScrollDelta(input: {

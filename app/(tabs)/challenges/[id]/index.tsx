@@ -155,7 +155,7 @@ import {
   trySettleIfEnded,
   voidReceiptCopy,
   overviewMoneyPhase,
-  WRAPPING_UP_PROOFS_COPY,
+  syncChallengeStatuses,
 } from '@/lib/settlement';
 import {
   isOfficialJoinable,
@@ -721,6 +721,15 @@ export default function ChallengeDetailScreen() {
     !challengeQuery.isLoading;
 
   useEffect(() => {
+    if (!windowEnded) {
+      return;
+    }
+    void syncChallengeStatuses().then(() => {
+      void challengeQuery.refetch();
+    });
+  }, [challengeQuery, windowEnded]);
+
+  useEffect(() => {
     if (!id || !challenge || !shouldTickSettlements(challenge)) {
       return;
     }
@@ -1070,6 +1079,7 @@ export default function ChallengeDetailScreen() {
     isJoined &&
     !isCalloutObserver &&
     challenge.status === 'live' &&
+    !windowEnded &&
     !viewerOut &&
     !waitingToStart &&
     !logsClosed;
@@ -1077,10 +1087,12 @@ export default function ChallengeDetailScreen() {
     isJoined &&
     !isCalloutObserver &&
     viewerOut &&
+    !windowEnded &&
     (challenge.status === 'live' || challenge.status === 'in_progress');
   const showStickyCta =
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
+    !windowEnded &&
     (stickyJoin || stickyCheckin || stickyOut);
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
   const stickyBlock = stickyOut
@@ -1314,7 +1326,7 @@ export default function ChallengeDetailScreen() {
           <Card className="mt-4">
             <AppText className="font-semibold text-charcoal">Ended</AppText>
             <AppText className="mt-1 text-sm leading-5 text-muted">
-              {WRAPPING_UP_PROOFS_COPY}
+              {copy('challenge.endedPayoutNext')}
             </AppText>
           </Card>
         ) : null}

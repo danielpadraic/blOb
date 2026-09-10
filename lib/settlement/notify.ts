@@ -1,3 +1,4 @@
+import { clipPushLine, namedChallengePhrase } from '@/lib/challengeNotifyName';
 import { formatSettlementAmount, voidReceiptCopy, type SettlementVoidKind } from '@/lib/settlement/receipts';
 
 export type SettlementNotifyInput = {
@@ -9,45 +10,45 @@ export type SettlementNotifyInput = {
 /** Same shape as check-in: `{Name} Settled @{title}. Congratulate {her/him/them}.` */
 export function settledCongratulateCopy(input: SettlementNotifyInput): string {
   const name = input.displayName.trim() || 'Someone';
-  const title = input.title.trim() || 'this challenge';
+  const title = namedChallengePhrase(input.title.trim() || 'this challenge');
   const pronoun = input.objectPronoun?.trim() || 'them';
-  return `${name} Settled @${title}. Congratulate ${pronoun}.`;
+  return clipPushLine(`${name} Settled ${title}. Congratulate ${pronoun}.`);
 }
 
 export function forfeitNotifyCopy(title: string): string {
-  const label = title.trim() || 'this challenge';
-  return `${label} settled. Nobody remaining. Prize forfeited.`;
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
+  return clipPushLine(`${label} settled. Nobody remaining. Prize forfeited.`);
 }
 
 export function voidNotifyCopy(
   title: string,
   kind: Exclude<SettlementVoidKind, 'historical_forfeit' | null>,
 ): string {
-  const label = title.trim() || 'this challenge';
-  return `${label} settled. ${voidReceiptCopy(kind)}`;
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
+  return clipPushLine(`${label} settled. ${voidReceiptCopy(kind)}`);
 }
 
 export function payoutReceivedCopy(amountLabel: string, title: string): string {
-  const label = title.trim() || 'this challenge';
-  return `You received ${amountLabel} from @${label}.`;
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
+  return clipPushLine(`You received ${amountLabel} from ${label}.`);
 }
 
 /** Winner push / in-app. Cash stays `$`, never the word Bucks. */
 export function winnerSettledNotifyCopy(title: string, amountLabel: string): string {
-  const label = title.trim() || 'this challenge';
-  return `${label} settled. ${amountLabel} is in your wallet.`;
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
+  return clipPushLine(`${label} settled. ${amountLabel} is in your wallet.`);
 }
 
 export function splitSettledNotifyCopy(title: string, otherCount: number): string {
-  const label = title.trim() || 'this challenge';
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
   const n = Math.max(Math.floor(otherCount), 1);
-  return `${label} settled. You split it with ${n}.`;
+  return clipPushLine(`${label} settled. You split it with ${n}.`);
 }
 
 export function nonWinnerSettledNotifyCopy(title: string, winnerName: string): string {
-  const label = title.trim() || 'this challenge';
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
   const name = winnerName.trim() || 'Someone';
-  return `${label} settled. ${name} took it.`;
+  return clipPushLine(`${label} settled. ${name} took it.`);
 }
 
 export function walletAmountLabel(amount: number, currency?: string | null): string {
@@ -64,12 +65,12 @@ export function lobbyResultCopy(input: {
   forfeited: boolean;
   voidKind?: SettlementVoidKind;
 }): string {
-  const title = input.title.trim() || 'this challenge';
+  const title = namedChallengePhrase(input.title.trim() || 'this challenge');
   if (input.voidKind && input.voidKind !== 'historical_forfeit') {
-    return `${title} settled. ${voidReceiptCopy(input.voidKind)}`;
+    return clipPushLine(`${title} settled. ${voidReceiptCopy(input.voidKind)}`);
   }
   if (input.forfeited || input.remaining <= 0) {
-    return `${title} settled. Nobody remaining. Prize forfeited.`;
+    return clipPushLine(`${title} settled. Nobody remaining. Prize forfeited.`);
   }
-  return `${title} settled. ${input.remaining} remaining split the prize.`;
+  return clipPushLine(`${title} settled. ${input.remaining} remaining split the prize.`);
 }

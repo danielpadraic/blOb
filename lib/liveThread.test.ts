@@ -263,7 +263,7 @@ describe('liveReactionCounts', () => {
 });
 
 describe('buildLiveThreadRows', () => {
-  it('keeps a check-in as one receipt and does not emit its comments as lobby lines', () => {
+  it('keeps a check-in receipt and emits its comments so a comment alert can land', () => {
     const rows = buildLiveThreadRows([
       {
         id: 'checkin-1',
@@ -279,14 +279,15 @@ describe('buildLiveThreadRows', () => {
             id: 'n1',
             post_id: 'checkin-1',
             author_id: 'b',
-            content: 'Nice',
+            content: 'Why is there two of the same photo',
             created_at: '2026-09-01T12:01:00.000Z',
           },
         ],
       },
     ]);
-    expect(rows.map((row) => row.id)).toEqual(['checkin-1']);
-    expect(rows[0]?.kind).toBe('post');
+    expect(rows.map((row) => row.id)).toEqual(['checkin-1', 'comment:n1']);
+    expect(rows[1]?.kind).toBe('comment');
+    expect(findLiveHighlightIndex(rows, 'checkin-1', 'n1')).toBe(1);
   });
 
   it('keeps existing comments as later chat rows, not a nested card', () => {

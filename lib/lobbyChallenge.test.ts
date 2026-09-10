@@ -138,7 +138,7 @@ describe('lobby tabs', () => {
         { status: 'filling', ends_at: '2026-09-08T11:00:00.000Z' },
         now,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       lobbyTabsForChallenge({
         status: 'live',

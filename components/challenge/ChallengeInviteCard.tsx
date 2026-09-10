@@ -42,7 +42,7 @@ import { pushChallengeHref, pushCheckinSubmit } from '@/lib/challengeNav';
 import { BODY_METRICS_HREF, challengeHref } from '@/lib/routes';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
-import { challengeScheduleState, scheduleNeedsTick } from '@/lib/lobbyChallenge';
+import { challengeScheduleState, isLobbyEndedChallenge, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { copy } from '@/lib/copy';
 import { cashJoinUi, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { isOfficialChallenge } from '@/lib/official';
@@ -226,7 +226,13 @@ function isLiveStatus(status: string): boolean {
 
 export function inviteCardStatus(challenge: InviteChallenge, nowMs = Date.now()): string {
   const status = String(challenge.status ?? '');
-  if (isEndedStatus(status)) {
+  if (
+    isEndedStatus(status) ||
+    isLobbyEndedChallenge(
+      { status, ends_at: challenge.ends_at, is_unlimited: challenge.is_unlimited },
+      nowMs,
+    )
+  ) {
     return 'Ended';
   }
   if (isLiveStatus(status)) {

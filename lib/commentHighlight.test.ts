@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   commentScrollDelta,
+  commentTargetHardMissing,
   commentTargetMissing,
   commentsHaveResolved,
   findCommentById,
@@ -30,6 +31,17 @@ describe('comment highlight helpers', () => {
       ),
     ).toBe(true);
     expect(commentTargetMissing([{ id: 'c-1' }], 'c-1', true)).toBe(false);
+  });
+
+  it('treats a soft-deleted Live comment as a valid landing', () => {
+    expect(
+      commentTargetHardMissing(
+        [{ id: 'c-1', deleted_at: '2026-09-04T12:00:00.000Z' }],
+        'c-1',
+        true,
+      ),
+    ).toBe(false);
+    expect(commentTargetHardMissing([], 'c-1', true)).toBe(true);
   });
 
   it('nudges just enough to bring a comment into the visible band', () => {

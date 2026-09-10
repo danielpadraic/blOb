@@ -3,7 +3,7 @@
 Running list. Last updated: 2026-09-09 (concrete event; Neutral folded into Gentle)
 
 Use: in-app alerts and push. Pick **Gentle / Honest**. Stored Neutral maps to Gentle. Never mix tones in one send.
-Every line names the event and `{challenge}` after substitution. No nameless “the field.” No “show up.”
+Every line names the event and `{challenge}` after substitution as Your Challenge: “Title” (or The Challenge for Official / stranger / system). No nameless “the field.” No “show up.” No Chicago clocks or “window.”
 
 Rules
 - ≤140 characters including spaces (counted as a tweet, not a thread).
@@ -27,7 +27,7 @@ Rules
 2.
 - Gentle: Another check-in on {challenge}. I saw it. Tomorrow can be simple too.
 - Gentle: Your streak on {challenge} is still alive. Add tomorrow’s check-in.
-- Honest: {n} check-ins on {challenge} is the work. Not a mood. Check in tomorrow.
+- Honest: {n} check-ins on {challenge} is the check-in. Not a mood. Check in tomorrow.
 
 3.
 - Gentle: You kept the check-in going on {challenge}. That matters to me.
@@ -139,7 +139,7 @@ Rules
 
 3.
 - Gentle: I missed you a little. {challenge} is still here.
-- Gentle: First open in a couple of days. Check today’s window on {challenge}.
+- Gentle: First open in a couple of days. Check today on {challenge}.
 - Honest: Opening the app is nice. {challenge} still needs the check-in.
 
 4.
@@ -150,7 +150,7 @@ Rules
 5.
 - Gentle: No quiz. Glad you opened this. Check in on {challenge} if you can.
 - Gentle: Back after a gap. Catch up on {challenge} if you are still in.
-- Honest: You opened blOb. Home is not the work. Check in on {challenge}.
+- Honest: You opened blOb. Home is not the check-in. Check in on {challenge}.
 
 6.
 - Gentle: Come in. Then one check-in on {challenge} if you have it in you.
@@ -213,7 +213,7 @@ Rules
 
 7.
 - Gentle: Yesterday on {challenge} was a miss, not a verdict.
-- Gentle: Gap of one on {challenge}. Check in before the window ends.
+- Gentle: Gap of one on {challenge}. Check in before tonight.
 - Honest: You know you missed {challenge}. I will not narrate it. Check in.
 
 8.
@@ -237,7 +237,7 @@ Rules
 
 1.
 - Gentle: Three days away. I kept your seat on {challenge}. One check-in if you can.
-- Gentle: Three days away. See if {challenge} still has today’s window.
+- Gentle: Three days away. See if {challenge} still has today.
 - Honest: Three days away from {challenge} is a pattern. Break it this afternoon.
 
 2.
@@ -262,7 +262,7 @@ Rules
 
 6.
 - Gentle: Come back soft. The check-in on {challenge} can be short today.
-- Gentle: The window on {challenge} may still be open. Do not assume it is not.
+- Gentle: Today on {challenge} may still be open. Do not assume it is not.
 - Honest: Check the clock on {challenge}. Then check in. Not the feelings first.
 
 7.
@@ -409,7 +409,7 @@ Rules
 
 3.
 - Gentle: A miss, not an exit. {challenge} left you in. Check in today.
-- Gentle: Still competing on {challenge}. Check in before the window.
+- Gentle: Still competing on {challenge}. Check in today.
 - Honest: {challenge} was kinder than your skip. Do not test it twice.
 
 4.
@@ -434,7 +434,7 @@ Rules
 
 8.
 - Gentle: Missed a check-in on {challenge}. Not missed as a person. Check in today.
-- Gentle: The window on {challenge} is still yours. Check in now.
+- Gentle: Today on {challenge} is still yours. Check in now.
 - Honest: If you wait until tonight on {challenge}, you will wait until out. Go now.
 
 9.
@@ -512,7 +512,7 @@ Rules
 
 2.
 - Gentle: You can see the finish of {challenge}. Walk. Do not skip.
-- Gentle: Final week of {challenge}. Same check-in. Same window.
+- Gentle: Final week of {challenge}. Same check-in. Check in tonight.
 - Honest: Final week is where streaks on {challenge} die of confidence. Check in.
 
 3.
@@ -591,7 +591,7 @@ Rules
 
 7.
 - Gentle: You earned this place on {challenge}. Earning continues for 3 days.
-- Gentle: 3 days left. Window, check-in, sleep. {challenge}.
+- Gentle: 3 days left. Check in, then rest. {challenge}.
 - Honest: 72 hours is enough to throw {challenge} away. It is also enough to keep it.
 
 8.
@@ -601,7 +601,7 @@ Rules
 
 9.
 - Gentle: Front of {challenge}. Be kind to your body. Be honest with the check-in.
-- Gentle: Post the work you actually did on {challenge}. Others can still flag it.
+- Gentle: Post the check-in you actually did on {challenge}. Others can still flag it.
 - Honest: Rank does not excuse a lazy proof on {challenge}. Others can flag you.
 
 10.
@@ -618,8 +618,8 @@ Add these when we lock the eleven above:
 - **First check-in ever** (different from first challenge).
 - **Official join confirmed** (paid entry, week not started).
 - **Official arming** (starts in mm:ss).
-- **Day-1 long window reminder** (Chicago, first Official day).
-- **Last 2 hours of today’s check-in window**.
+- **Day-1 reminder** (first Official day).
+- **Last 2 hours before tonight’s check-in**.
 - **Caught up after a miss** (repaired).
 - **Friend joined the same Official week**.
 - **Flag received on your proof** (careful, legal tone + Bob).

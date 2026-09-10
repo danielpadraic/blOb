@@ -431,9 +431,6 @@ export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
       continue;
     }
     rows.push({ id: postId, createdAt: post.created_at ?? '', kind: 'post', post });
-    if (isCheckinPost(post)) {
-      continue;
-    }
     for (const comment of commentsForThread(post.comments ?? [])) {
       if (!comment?.id) {
         continue;

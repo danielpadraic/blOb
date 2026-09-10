@@ -394,6 +394,7 @@ const STRINGS = {
   'challenge.notStarted': 'This challenge hasn’t started yet.',
   'challenge.eliminated': 'You have been eliminated.',
   'challenge.outWatchLive': 'You’re out of the prize. You can still watch Live until this ends.',
+  'challenge.endedPayoutNext': 'This challenge has ended. Payout is next.',
   'challenge.cancel': 'Cancel challenge',
   'challenge.delete': 'Delete',
   'challenge.cancelKeep': 'Keep',

@@ -841,7 +841,7 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
     (query) =>
       query
         .eq('created_by', userId)
-        .in('status', ['live', 'in_progress'])
+        .in('status', ['live', 'in_progress', 'filling', 'open', 'upcoming', 'arming'])
         .lte('ends_at', clockNow)
         .order('ends_at', { ascending: false })
         .limit(endedLimit),
@@ -860,7 +860,7 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
           (query) =>
             query
               .in('id', joinedIds)
-              .in('status', ['live', 'in_progress'])
+              .in('status', ['live', 'in_progress', 'filling', 'open', 'upcoming', 'arming'])
               .lte('ends_at', clockNow)
               .order('ends_at', { ascending: false })
               .limit(Math.max(joinedIds.length, endedLimit)),

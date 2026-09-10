@@ -9,7 +9,10 @@ import {
   liveOrReminderPushHref,
   asChallengePageTab,
 } from '@/lib/livePush';
+import { namedChallengePhrase } from '@/lib/challengeNotifyName';
 import { challengeDetailHref } from '@/lib/routes';
+
+const MILES = namedChallengePhrase('Morning miles');
 
 describe('live chat push copy', () => {
   it('titles the challenge, not Bob, and keeps the first 80 characters', () => {
@@ -18,7 +21,7 @@ describe('live chat push copy', () => {
       challengeTitle: 'Morning miles',
       text: '  hello   from the lobby  ',
     });
-    expect(copy.title).toBe('Sam in Morning miles');
+    expect(copy.title).toBe(`Sam in ${MILES}`);
     expect(copy.body).toBe('hello from the lobby');
     expect(liveChatSnippet('x'.repeat(90)).length).toBe(80);
   });
@@ -131,5 +134,20 @@ describe('push tap routing', () => {
     );
     expect(href).toContain('tab=live');
     expect(href).toContain('commentId=c9');
+  });
+
+  it('opens a Live comment alert on that comment, not Overview', () => {
+    const href = String(
+      liveNotificationHref({
+        type: 'post_comment',
+        challenge_id: 'c1',
+        post_id: 'p1',
+        comment_id: 'c9',
+      }),
+    );
+    expect(href).toContain('tab=live');
+    expect(href).toContain('commentId=c9');
+    expect(href).not.toContain('/submit');
+    expect(href).not.toContain('tab=overview');
   });
 });

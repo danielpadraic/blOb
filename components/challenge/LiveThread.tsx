@@ -58,7 +58,11 @@ import {
   liveUnreadChipLabel,
   shouldPinToLiveEnd,
 } from '@/lib/liveThreadUnread';
-import { COMMENT_UNAVAILABLE, commentTargetMissing } from '@/lib/commentHighlight';
+import {
+  COMMENT_UNAVAILABLE,
+  LIVE_COMMENT_HIGHLIGHT_MS,
+  commentTargetHardMissing,
+} from '@/lib/commentHighlight';
 import type { MentionChip } from '@/lib/mentions';
 import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
 import { tabBarLift, THEME } from '@/lib/theme';
@@ -152,6 +156,7 @@ export function LiveThread({
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
   const [editing, setEditing] = useState<PostWithMeta | null>(null);
   const [missingComment, setMissingComment] = useState(false);
+  const [highlightFlash, setHighlightFlash] = useState(false);
   const [liftOpen, setLiftOpen] = useState(false);
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const dayBreakFp = liveDayBreakFingerprint(dayBreakChallenge);
@@ -375,8 +380,18 @@ export function LiveThread({
       return;
     }
     const comments = (posts ?? []).flatMap((post) => post.comments ?? []);
-    setMissingComment(commentTargetMissing(comments, highlightCommentId, commentsReady));
+    setMissingComment(commentTargetHardMissing(comments, highlightCommentId, commentsReady));
   }, [commentsReady, highlightCommentId, posts]);
+
+  useEffect(() => {
+    if (!highlightCommentId && !highlightPostId) {
+      setHighlightFlash(false);
+      return;
+    }
+    setHighlightFlash(true);
+    const timer = setTimeout(() => setHighlightFlash(false), LIVE_COMMENT_HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightCommentId, highlightPostId]);
 
   useEffect(() => {
     if (rows.length === 0) {
@@ -392,7 +407,7 @@ export function LiveThread({
           try {
             listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.35 });
           } catch {
-            listRef.current?.scrollToEnd({ animated: false });
+            // Keep the targeted index. Do not bounce to newest or Day 1.
           }
         }, 80);
         return () => clearTimeout(timer);
@@ -655,7 +670,7 @@ export function LiveThread({
               post={display}
               currentUserId={currentUserId}
               comment={item.comment}
-              highlighted={highlightCommentId === item.comment.id && !item.comment.deleted_at}
+              highlighted={highlightFlash && highlightCommentId === item.comment.id}
               quote={{
                 name: parentAuthor.name,
                 text: liveQuotePreview(item.parent) || liveChatText(item.parent.content, item.parent.media_urls),
@@ -696,7 +711,7 @@ export function LiveThread({
           <LiveBubble
             post={item.post}
             currentUserId={currentUserId}
-            highlighted={highlightPostId === item.post.id && !highlightCommentId}
+            highlighted={highlightFlash && highlightPostId === item.post.id && !highlightCommentId}
             quote={quote}
             onReact={(type) => onReact(item.post, type)}
             onEdit={
@@ -731,7 +746,7 @@ export function LiveThread({
         </LiveRowBoundary>
       );
     },
-    [canCompose, currentUserId, highlightCommentId, highlightPostId, onReact, onRowError, posts, social, startEdit, startReply],
+    [canCompose, currentUserId, highlightCommentId, highlightFlash, highlightPostId, onReact, onRowError, posts, social, startEdit, startReply],
   );
 
   const renderQuietEmpty = useCallback(
@@ -817,6 +832,9 @@ export function LiveThread({
           }}
           onScrollToIndexFailed={() => {
             if (emptyList) {
+              return;
+            }
+            if (highlightKey && highlightedOnce.current === highlightKey) {
               return;
             }
             if (firstPaintPendingRef.current) {
