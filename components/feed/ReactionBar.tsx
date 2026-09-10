@@ -1,31 +1,24 @@
 import { useRef, useState } from 'react';
 import { Platform, Pressable, Vibration, View } from 'react-native';
 
-import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
+import { ReactionMark } from '@/components/feed/ReactionMark';
 import {
   ReactionDismissScrim,
   ReactionPicker,
+  reactionNoSelectProps,
+  reactionNoSelectStyle,
 } from '@/components/feed/ReactionPicker';
-import { ReactionMark } from '@/components/feed/ReactionMark';
 import {
-  displayReactionType,
-  REACTION_MARK_COMPACT,
+  REACTION_MARK_BUTTON,
   REACTION_MARK_HIT,
-  userReaction,
+  userHasReactionType,
+  userReactionTypes,
 } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
 import type { Reaction, ReactionType } from '@/lib/types';
 import { formatFeedTime } from '@/utils/format';
-
-const noSelectStyle =
-  Platform.OS === 'web'
-    ? ({
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none',
-      } as const)
-    : undefined;
 
 function clearWebSelection() {
   if (Platform.OS !== 'web') {
@@ -36,20 +29,6 @@ function clearWebSelection() {
   )
     .getSelection?.()
     ?.removeAllRanges?.();
-}
-
-function webNoSelectProps() {
-  if (Platform.OS !== 'web') {
-    return null;
-  }
-  return {
-    onContextMenu: (event: { preventDefault: () => void }) => {
-      event.preventDefault();
-    },
-    onMouseDown: (event: { preventDefault: () => void }) => {
-      event.preventDefault();
-    },
-  };
 }
 
 function openReactionTray(setOpen: (next: boolean) => void) {
@@ -82,89 +61,27 @@ export function ReactionBar({
   onShare,
 }: ReactionBarProps) {
   const [trayOpen, setTrayOpen] = useState(false);
-  const mine = userReaction(reactions, currentUserId);
-  const mineType = mine ? displayReactionType(mine.reaction_type) : null;
-  const total = reactions?.length ?? 0;
-
-  if (compact) {
-    return (
-      <View style={{ zIndex: trayOpen ? 42 : undefined }}>
-        {trayOpen ? <ReactionDismissScrim onClose={() => setTrayOpen(false)} /> : null}
-        {trayOpen ? (
-          <View style={{ zIndex: 41, position: 'relative' }}>
-            <ReactionPicker
-              selected={mineType}
-              align="end"
-              onPick={(type) => {
-                setTrayOpen(false);
-                onReact(type);
-              }}
-            />
-          </View>
-        ) : null}
-      <View className="flex-row items-center" style={{ columnGap: 2, zIndex: 41 }}>
-        <Action
-          compact
-          markType={mineType ?? 'like'}
-          label="Like"
-          count={total}
-          color={THEME.textPrimary}
-          dim={!mineType}
-          onPress={() => {
-            if (trayOpen) {
-              setTrayOpen(false);
-              return;
-            }
-            onReact('like');
-          }}
-          onLongPress={() => {
-            if (trayOpen) {
-              setTrayOpen(false);
-              return;
-            }
-            openReactionTray(setTrayOpen);
-          }}
-        />
-        {onReply ? (
-          <Action
-            compact
-            icon={GLYPH.reply}
-            label="Reply"
-            count={commentCount}
-            color={THEME.textMuted}
-            onPress={onReply}
-          />
-        ) : null}
-        {onShare ? (
-          <View className="flex-1 items-end">
-            <ShareAction compact onShare={onShare} />
-          </View>
-        ) : null}
-      </View>
-      </View>
-    );
-  }
-
+  const liked = userHasReactionType(reactions, currentUserId, 'like');
+  const mineTypes = userReactionTypes(reactions, currentUserId);
   const commentLabel =
     commentCount === 1 ? '1 comment' : commentCount > 1 ? `${commentCount} comments` : 'Comment';
 
   return (
-    <View style={{ zIndex: trayOpen ? 42 : undefined }}>
+    <View style={{ zIndex: trayOpen ? 42 : undefined, position: 'relative' }}>
       {trayOpen ? <ReactionDismissScrim onClose={() => setTrayOpen(false)} /> : null}
-        {trayOpen ? (
+      {trayOpen ? (
         <View style={{ zIndex: 41, position: 'relative' }}>
-          <ReactionPicker
-            selected={mineType}
-            align="end"
-            onPick={(type) => {
-              setTrayOpen(false);
-              onReact(type);
-            }}
-          />
+          <ReactionPicker selected={mineTypes} align="end" onPick={onReact} />
         </View>
       ) : null}
-      <View className="flex-row items-center justify-end" style={{ minHeight: 32, zIndex: 41 }}>
-        {createdAt ? (
+      <View
+        className="flex-row items-center"
+        style={{
+          minHeight: REACTION_MARK_HIT,
+          justifyContent: compact ? 'flex-start' : 'flex-end',
+          zIndex: 41,
+        }}>
+        {compact ? null : createdAt ? (
           <AppText className="flex-1 text-[11px]" style={{ color: THEME.textMuted }}>
             {footerTime(createdAt)}
           </AppText>
@@ -173,7 +90,7 @@ export function ReactionBar({
         )}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={total > 0 ? `Like ${total}` : 'Like'}
+          accessibilityLabel="Like"
           delayLongPress={280}
           hitSlop={8}
           onPress={() => {
@@ -190,28 +107,20 @@ export function ReactionBar({
             }
             openReactionTray(setTrayOpen);
           }}
-          {...webNoSelectProps()}
+          {...reactionNoSelectProps()}
           style={[
             {
               minHeight: REACTION_MARK_HIT,
               minWidth: REACTION_MARK_HIT,
-              flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              paddingHorizontal: 6,
-              opacity: mineType ? 1 : 0.45,
+              borderRadius: 999,
+              backgroundColor: liked ? THEME.accentSoft : 'transparent',
+              transform: [{ scale: liked ? 1.06 : 1 }],
             },
-            noSelectStyle,
+            reactionNoSelectStyle,
           ]}>
-          <ReactionMark type={mineType ?? 'like'} size={REACTION_MARK_COMPACT} />
-          {total > 0 ? (
-            <AppText
-              selectable={false}
-              className="ml-1 text-[12px] font-semibold"
-              style={[{ color: THEME.textPrimary }, noSelectStyle]}>
-              {total}
-            </AppText>
-          ) : null}
+          <ReactionMark type="like" size={REACTION_MARK_BUTTON} />
         </Pressable>
         {onReply ? (
           <Pressable
@@ -220,7 +129,7 @@ export function ReactionBar({
             hitSlop={8}
             onPress={onReply}
             className="h-8 flex-row items-center px-1.5">
-            <Glyph name={GLYPH.reply} color={THEME.textMuted} size={16} />
+            <Glyph name={GLYPH.reply} color={THEME.textMuted} size={compact ? 14 : 16} />
             {commentCount > 0 ? (
               <AppText className="ml-1 text-[12px]" style={{ color: THEME.textMuted }}>
                 {commentCount}
@@ -228,7 +137,7 @@ export function ReactionBar({
             ) : null}
           </Pressable>
         ) : null}
-        {onShare ? <ShareAction onShare={onShare} /> : null}
+        {onShare ? <ShareAction compact={compact} onShare={onShare} /> : null}
       </View>
     </View>
   );
@@ -268,65 +177,6 @@ function ShareAction({
       }
       hitSlop={compact ? 4 : 6}>
       <Glyph name={GLYPH.share} color={THEME.textMuted} size={compact ? 14 : 16} />
-    </Pressable>
-  );
-}
-
-function Action({
-  icon,
-  markType,
-  label,
-  count = 0,
-  color,
-  compact,
-  dim,
-  onPress,
-  onLongPress,
-}: {
-  icon?: GlyphId;
-  markType?: string;
-  label: string;
-  count?: number;
-  color: string;
-  compact?: boolean;
-  dim?: boolean;
-  onPress: () => void;
-  onLongPress?: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={count > 0 ? `${label} ${count}` : label}
-      delayLongPress={onLongPress ? 280 : undefined}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      {...(onLongPress ? webNoSelectProps() : null)}
-      className={
-        compact
-          ? 'flex-row items-center rounded-full px-1'
-          : 'h-7 flex-row items-center rounded-full px-1.5'
-      }
-      hitSlop={compact ? 4 : 6}
-      style={[
-        compact && markType
-          ? { minHeight: REACTION_MARK_HIT, minWidth: REACTION_MARK_HIT, justifyContent: 'center' }
-          : null,
-        { opacity: dim ? 0.45 : 1 },
-        onLongPress ? noSelectStyle : undefined,
-      ]}>
-      {markType ? (
-        <ReactionMark type={markType} size={REACTION_MARK_COMPACT} />
-      ) : icon ? (
-        <Glyph name={icon} color={color} size={compact ? 14 : 16} />
-      ) : null}
-      {count > 0 ? (
-        <AppText
-          selectable={false}
-          className={compact ? 'ml-0.5 text-[10px] font-bold' : 'ml-1 text-[12px] font-bold'}
-          style={[{ color }, onLongPress ? noSelectStyle : null]}>
-          {count}
-        </AppText>
-      ) : null}
     </Pressable>
   );
 }

@@ -3,6 +3,7 @@ import { Alert, Animated, PanResponder, Platform, Pressable, View } from 'react-
 import { Image } from 'expo-image';
 
 import { LiveReactions } from '@/components/challenge/LiveReactions';
+import { ReactionStack } from '@/components/feed/ReactionStack';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
@@ -318,6 +319,7 @@ export const LiveBubble = memo(function LiveBubble({
               />
             </View>
           ) : checkin ? (
+            <View style={{ position: 'relative', maxWidth: '100%' }}>
             <View
               style={{
                 gap: 8,
@@ -385,7 +387,17 @@ export const LiveBubble = memo(function LiveBubble({
                 />
               ) : null}
             </View>
+            {removed || editing ? null : (
+              <ReactionStack
+                reactions={reactions ?? post.reactions}
+                currentUserId={currentUserId}
+                corner={alignEnd ? 'start' : 'end'}
+                onToggle={onReact}
+              />
+            )}
+            </View>
           ) : (
+            <View style={{ position: 'relative', maxWidth: '100%' }}>
             <View
               style={{
                 backgroundColor: mine ? THEME.primary : THEME.surface,
@@ -443,6 +455,15 @@ export const LiveBubble = memo(function LiveBubble({
                   />
                 </View>
               ) : null}
+            </View>
+            {removed || editing ? null : (
+              <ReactionStack
+                reactions={reactions ?? post.reactions}
+                currentUserId={currentUserId}
+                corner={alignEnd ? 'start' : 'end'}
+                onToggle={onReact}
+              />
+            )}
             </View>
           )}
           {/* stretch, not flex-end: a content-sized row cannot wrap, so chips used to push Reply off screen. */}

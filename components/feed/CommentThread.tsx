@@ -14,6 +14,7 @@ import { CommentBodyBlock, CommentNameRow, commentBodyInsetStyle } from '@/compo
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { MentionText } from '@/components/feed/MentionText';
 import { ReactionBar } from '@/components/feed/ReactionBar';
+import { ReactionStack } from '@/components/feed/ReactionStack';
 import {
   useCommentEditing,
   useSocialSheetsOptional,
@@ -329,7 +330,7 @@ function CommentItem({
               />
             </View>
           ) : (
-            <>
+            <View style={{ position: 'relative' }}>
               {body ? (
                 <MentionText
                   content={body}
@@ -338,7 +339,15 @@ function CommentItem({
                 />
               ) : null}
               <CommentMedia urls={mediaUrls} />
-            </>
+              {removed ? null : (
+                <ReactionStack
+                  reactions={comment.reactions}
+                  currentUserId={currentUserId}
+                  corner="end"
+                  onToggle={(type) => onReact?.(comment.id, type)}
+                />
+              )}
+            </View>
           )}
           {removed || editing ? null : (
             <View className="mt-0.5">

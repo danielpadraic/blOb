@@ -15,6 +15,7 @@ import { MentionText } from '@/components/feed/MentionText';
 import { InChallengeChip, OriginChip } from '@/components/feed/OriginChip';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
+import { ReactionStack } from '@/components/feed/ReactionStack';
 import { OfficialMark } from '@/components/profile/OfficialMark';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import {
@@ -434,6 +435,7 @@ function PostCardInner({
       ) : null}
 
       <View style={{ gap: homeFeed ? 6 : 10, marginTop: homeFeed ? 2 : 6, opacity: mutedOwnerHome ? 0.45 : 1 }}>
+        <View style={{ position: 'relative' }}>
         {/* A lift recap owns its own caption, because an empty one is stored as a text copy of the
             card and must not be printed above it. */}
         {liftSessionId ? (
@@ -547,6 +549,13 @@ function PostCardInner({
           />
         )}
 
+          <ReactionStack
+            reactions={post.reactions}
+            currentUserId={currentUserId}
+            corner="end"
+            onToggle={(type) => onReact(type)}
+          />
+        </View>
         {homeRoundShare ? null : (
         <ReactionBar
           createdAt={homeFeed ? undefined : post.created_at}

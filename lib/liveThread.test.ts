@@ -255,11 +255,13 @@ describe('liveQuoteLine', () => {
 });
 
 describe('toggleLiveReactionList', () => {
-  it('keeps one type per person and swaps instead of stacking', () => {
+  it('stacks types and clears only the tapped type', () => {
     const afterFire = toggleLiveReactionList([], 'u1', 'fire', 'p1', null);
     const afterLike = toggleLiveReactionList(afterFire, 'u1', 'like', 'p1', null);
-    expect(afterLike.map((row) => row.reaction_type)).toEqual(['like']);
-    expect(toggleLiveReactionList(afterLike, 'u1', 'like', 'p1', null)).toEqual([]);
+    expect(afterLike.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
+    expect(toggleLiveReactionList(afterLike, 'u1', 'like', 'p1', null).map((row) => row.reaction_type)).toEqual([
+      'fire',
+    ]);
   });
 });
 
@@ -416,7 +418,7 @@ describe('applyLiveReaction', () => {
       'me',
       'like',
     );
-    expect(post.reactions?.map((row) => row.reaction_type)).toEqual(['like']);
+    expect(post.reactions?.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
   });
 });
 

@@ -87,10 +87,17 @@ function interactionStackKey(item: AppNotification): string | null {
   const postId = notificationPostId(item.data);
   const commentId = item.data.comment_id;
   if (item.type === 'post_reaction') {
+    const kind = typeof item.data.reaction_type === 'string' ? item.data.reaction_type : '';
     if (commentId) {
-      return `${item.type}:comment:${commentId}`;
+      return kind
+        ? `${item.type}:comment:${commentId}:${kind}`
+        : `${item.type}:comment:${commentId}`;
     }
-    return postId ? `${item.type}:post:${postId}` : null;
+    return postId
+      ? kind
+        ? `${item.type}:post:${postId}:${kind}`
+        : `${item.type}:post:${postId}`
+      : null;
   }
   if (item.type === 'post_comment') {
     return postId ? `${item.type}:post:${postId}` : null;

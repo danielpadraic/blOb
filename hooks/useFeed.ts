@@ -53,6 +53,11 @@ import {
   schemaForFeedInsert,
   withCreatePostTimeout,
 } from '@/lib/createFeedPost';
+import {
+  displayReactionType,
+  findUserReactionOfType,
+  toggleStackedReactionList,
+} from '@/lib/reactions';
 import { supabase } from '@/lib/supabase';
 import { mentionRecordsFromChips, type MentionChip } from '@/lib/mentions';
 import type {
@@ -2011,38 +2016,27 @@ export function useToggleReaction() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      let existing = findUserReaction(input.post, user.id, input.commentId);
+      const nextType = displayReactionType(input.type);
+      let existing = findUserReactionOfTypeOn(input.post, user.id, nextType, input.commentId);
       if (input.commentId && (!existing || !isPersistedId(existing.id))) {
         const fetched = await supabase
           .from('reactions')
           .select(REACTION_COLUMNS)
           .eq('user_id', user.id)
           .eq('comment_id', input.commentId)
+          .eq('reaction_type', nextType)
           .maybeSingle();
         if (fetched.data) {
           existing = fetched.data as Reaction;
         }
       }
 
-      if (existing && isPersistedId(existing.id) && existing.reaction_type === input.type) {
+      if (existing && isPersistedId(existing.id)) {
         const { error } = await supabase.from('reactions').delete().eq('id', existing.id);
         if (error) {
           throw new Error(getErrorMessage(error));
         }
         return { action: 'removed' };
-      }
-
-      if (existing && isPersistedId(existing.id)) {
-        const updated = await supabase
-          .from('reactions')
-          .update({ reaction_type: input.type })
-          .eq('id', existing.id)
-          .select(REACTION_COLUMNS)
-          .single();
-        if (updated.error) {
-          throw new Error(getErrorMessage(updated.error));
-        }
-        return { action: 'updated', reaction: updated.data as Reaction };
       }
 
       const inserted = input.commentId
@@ -2051,7 +2045,7 @@ export function useToggleReaction() {
             .insert({
               user_id: user.id,
               comment_id: input.commentId,
-              reaction_type: input.type,
+              reaction_type: nextType,
             })
             .select(REACTION_COLUMNS)
             .single()
@@ -2060,39 +2054,31 @@ export function useToggleReaction() {
             .insert({
               user_id: user.id,
               post_id: input.post.id,
-              reaction_type: input.type,
+              reaction_type: nextType,
             })
             .select(REACTION_COLUMNS)
             .single();
-      if (inserted.error && isReactionConflict(inserted.error) && input.commentId) {
-        const again = await supabase
-          .from('reactions')
-          .select(REACTION_COLUMNS)
-          .eq('user_id', user.id)
-          .eq('comment_id', input.commentId)
-          .maybeSingle();
+      if (inserted.error && isReactionConflict(inserted.error)) {
+        const again = input.commentId
+          ? await supabase
+              .from('reactions')
+              .select(REACTION_COLUMNS)
+              .eq('user_id', user.id)
+              .eq('comment_id', input.commentId)
+              .eq('reaction_type', nextType)
+              .maybeSingle()
+          : await supabase
+              .from('reactions')
+              .select(REACTION_COLUMNS)
+              .eq('user_id', user.id)
+              .eq('post_id', input.post.id)
+              .eq('reaction_type', nextType)
+              .maybeSingle();
         if (again.data) {
-          const row = again.data as Reaction;
-          if (row.reaction_type === input.type) {
-            return { action: 'added', reaction: row };
-          }
-          const updated = await supabase
-            .from('reactions')
-            .update({ reaction_type: input.type })
-            .eq('id', row.id)
-            .select(REACTION_COLUMNS)
-            .single();
-          if (!updated.error && updated.data) {
-            return { action: 'updated', reaction: updated.data as Reaction };
-          }
+          return { action: 'added', reaction: again.data as Reaction };
         }
-        return { action: 'added', reaction: (again.data as Reaction) ?? existing! };
       }
       if (inserted.error) {
-        const text = inserted.error.message.toLowerCase();
-        if (input.commentId && (text.includes('comment_id') || text.includes('null value'))) {
-          throw new Error('Comment reactions need a database update. Run the latest SQL in supabase/migrations.');
-        }
         throw new Error(getErrorMessage(inserted.error));
       }
       return { action: 'added', reaction: inserted.data as Reaction };
@@ -2121,16 +2107,14 @@ export function useToggleReaction() {
       for (const [key, data] of context?.previous ?? []) {
         queryClient.setQueryData(key, data);
       }
-      if (!isReactionConflict(error)) {
-        Alert.alert('Couldn’t save reaction');
-      }
+      Alert.alert('Couldn’t save reaction', getErrorMessage(error));
     },
   });
 
   return {
     ...mutation,
     mutate(input: ToggleReactionInput) {
-      const guard = `${input.post.id}:${input.commentId ?? ''}`;
+      const guard = `${input.post.id}:${input.commentId ?? ''}:${input.type}`;
       if (inflight.current.has(guard)) {
         return;
       }
@@ -2291,15 +2275,16 @@ export function patchFeedComments(
   });
 }
 
-function findUserReaction(
+function findUserReactionOfTypeOn(
   post: PostWithMeta,
   userId: string,
+  type: string,
   commentId?: string | null,
 ): Reaction | undefined {
   const pool = commentId
     ? post.comments?.find((comment) => comment.id === commentId)?.reactions
     : post.reactions;
-  return pool?.find((reaction) => reaction.user_id === userId);
+  return findUserReactionOfType(pool, userId, type);
 }
 
 function applyOptimisticReaction(
@@ -2309,7 +2294,7 @@ function applyOptimisticReaction(
   commentId?: string | null,
 ): PostWithMeta {
   if (!commentId) {
-    return { ...post, reactions: toggleReactionList(post.reactions ?? [], userId, type, post.id, null) };
+    return { ...post, reactions: toggleStackedReactionList(post.reactions ?? [], userId, type, post.id, null) };
   }
   return {
     ...post,
@@ -2317,40 +2302,11 @@ function applyOptimisticReaction(
       comment.id === commentId
         ? {
             ...comment,
-            reactions: toggleReactionList(comment.reactions ?? [], userId, type, null, commentId),
+            reactions: toggleStackedReactionList(comment.reactions ?? [], userId, type, null, commentId),
           }
         : comment,
     ),
   };
-}
-
-function toggleReactionList(
-  current: Reaction[],
-  userId: string,
-  type: ReactionType,
-  postId: string | null,
-  commentId: string | null,
-): Reaction[] {
-  const existing = current.find((reaction) => reaction.user_id === userId);
-  if (existing && existing.reaction_type === type) {
-    return current.filter((reaction) => reaction.id !== existing.id);
-  }
-  if (existing) {
-    return current.map((reaction) =>
-      reaction.user_id === userId ? { ...reaction, reaction_type: type } : reaction,
-    );
-  }
-  return [
-    ...current,
-    {
-      id: optimisticReactionId(type, commentId ?? postId ?? userId, userId),
-      user_id: userId,
-      post_id: postId,
-      comment_id: commentId,
-      reaction_type: type,
-      created_at: new Date().toISOString(),
-    },
-  ];
 }
 
 function replaceReactionId(
@@ -2366,7 +2322,10 @@ function replaceReactionId(
       return list.map((row) => (row.id === optimisticId ? reaction : row));
     }
     if (userId) {
-      return list.map((row) => (row.user_id === userId ? reaction : row));
+      const want = displayReactionType(reaction.reaction_type);
+      return list.map((row) =>
+        row.user_id === userId && displayReactionType(row.reaction_type) === want ? reaction : row,
+      );
     }
     return list;
   }

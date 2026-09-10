@@ -6,7 +6,11 @@ import { seedLiveAuthor } from '@/lib/safeIds';
 import { checkinComposerPrefill } from '@/lib/checkin/captions';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
 import { liveCheckinKey } from '@/lib/liveFeedPatch';
-import { displayReactionType, reactionCounts, type ReactionCount } from '@/lib/reactions';
+import {
+  reactionCounts,
+  toggleStackedReactionList,
+  type ReactionCount,
+} from '@/lib/reactions';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia } from '@/utils/media';
 import { commentsForThread } from '@/lib/commentEdit';
@@ -336,7 +340,7 @@ export function liveReactionCounts(
   return reactionCounts(reactions, userId);
 }
 
-/** One type per person. Tap the same type again to clear it. */
+/** Stack types. Tap the same type again to clear only that type. */
 export function toggleLiveReactionList(
   current: Reaction[],
   userId: string,
@@ -344,27 +348,7 @@ export function toggleLiveReactionList(
   postId: string | null,
   commentId: string | null,
 ): Reaction[] {
-  const nextType = displayReactionType(type) as ReactionType;
-  const existing = current.find((row) => row.user_id === userId);
-  if (existing && displayReactionType(existing.reaction_type) === nextType) {
-    return current.filter((row) => row.id !== existing.id);
-  }
-  if (existing) {
-    return current.map((row) =>
-      row.user_id === userId ? { ...row, reaction_type: nextType } : row,
-    );
-  }
-  return [
-    ...current,
-    {
-      id: `optimistic-live-${nextType}-${commentId ?? postId ?? userId}-${userId}`,
-      user_id: userId,
-      post_id: postId,
-      comment_id: commentId,
-      reaction_type: nextType,
-      created_at: new Date().toISOString(),
-    },
-  ];
+  return toggleStackedReactionList(current, userId, type, postId, commentId);
 }
 
 export function applyLiveReaction(

@@ -8,17 +8,36 @@ import {
   reactionPickerLabel,
   type PickerReactionType,
 } from '@/lib/reactions';
+import { THEME } from '@/lib/theme';
 import type { ReactionType } from '@/lib/types';
 
-export function keepReactionFocusProps() {
+export const reactionNoSelectStyle =
+  Platform.OS === 'web'
+    ? ({
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        cursor: 'pointer',
+      } as const)
+    : undefined;
+
+export function reactionNoSelectProps() {
   if (Platform.OS !== 'web') {
     return null;
   }
   return {
+    onContextMenu: (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+    },
     onMouseDown: (event: { preventDefault: () => void }) => {
       event.preventDefault();
     },
   };
+}
+
+export function keepReactionFocusProps() {
+  return reactionNoSelectProps();
 }
 
 export function ReactionDismissScrim({ onClose }: { onClose: () => void }) {
@@ -27,7 +46,7 @@ export function ReactionDismissScrim({ onClose }: { onClose: () => void }) {
       accessibilityRole="button"
       accessibilityLabel="Dismiss reactions"
       onPress={onClose}
-      {...keepReactionFocusProps()}
+      {...reactionNoSelectProps()}
       style={
         Platform.OS === 'web'
           ? ({
@@ -54,42 +73,48 @@ export function ReactionDismissScrim({ onClose }: { onClose: () => void }) {
 }
 
 type ReactionPickerProps = {
-  selected?: string | null;
+  selected?: readonly string[] | string | null;
   align?: 'start' | 'end';
   onPick: (type: ReactionType) => void;
 };
 
-/** Vertical, transparent. Bob PNG only. Does not shove the bubble. */
+/** Vertical, transparent. Stay-open. Bob PNG only. */
 export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPickerProps) {
+  const active = new Set(
+    (Array.isArray(selected) ? selected : selected ? [selected] : []).map((type) => String(type)),
+  );
   return (
     <View
       pointerEvents="box-none"
-      style={{
-        position: 'absolute',
-        left: align === 'end' ? undefined : 0,
-        right: align === 'end' ? 0 : undefined,
-        bottom: '100%',
-        marginBottom: 6,
-        zIndex: 41,
-        alignItems: align === 'end' ? 'flex-end' : 'flex-start',
-      }}>
+      style={[
+        {
+          position: 'absolute',
+          left: align === 'end' ? undefined : 0,
+          right: align === 'end' ? 0 : undefined,
+          bottom: '100%',
+          marginBottom: 6,
+          zIndex: 41,
+          alignItems: align === 'end' ? 'flex-end' : 'flex-start',
+        },
+        reactionNoSelectStyle,
+      ]}>
       <View style={{ gap: 2 }}>
         {PICKER_REACTION_TYPES.map((type: PickerReactionType) => {
-          const active = selected === type;
+          const on = active.has(type);
           return (
             <Pressable
               key={type}
               accessibilityRole="button"
               accessibilityLabel={reactionPickerLabel(type)}
               onPress={() => onPick(type)}
-              {...keepReactionFocusProps()}
+              {...reactionNoSelectProps()}
               style={{
                 width: REACTION_MARK_HIT,
                 height: REACTION_MARK_HIT,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: 'transparent',
-                opacity: active ? 1 : 0.92,
+                backgroundColor: on ? THEME.accentSoft : 'transparent',
+                borderRadius: 999,
               }}>
               <ReactionMark type={type} size={REACTION_MARK_PICKER} />
             </Pressable>
