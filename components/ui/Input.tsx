@@ -132,7 +132,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   }
 
   return (
-    <View ref={boxRef} collapsable={false} className="w-full gap-1.5">
+    <View
+      ref={boxRef}
+      collapsable={false}
+      className="w-full gap-1.5"
+      style={Platform.OS === 'web' ? ({ overflowAnchor: 'none' } as object) : undefined}>
       {label ? (
         <AppText
           className={inverted ? 'text-sm font-semibold' : 'text-sm font-semibold text-charcoal'}
