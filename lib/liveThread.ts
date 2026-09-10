@@ -15,6 +15,45 @@ export type LivePostLike = CheckinPostLike & {
   deleted_at?: string | null;
 };
 
+/** Shared empty list so refetching [] does not allocate a new posts array. */
+export const EMPTY_LIVE_POSTS: [] = [];
+
+/** Host, joined participants, and callout observers already in the room may post. */
+export function canComposeInLive(input: {
+  isHost?: boolean | null;
+  isJoined?: boolean | null;
+  isCalloutObserver?: boolean | null;
+}): boolean {
+  return Boolean(input.isHost || input.isJoined || input.isCalloutObserver);
+}
+
+/**
+ * Empty Live body. "Join … to post" is only for a signed-in visitor who is not
+ * the host, not joined, and not a callout observer already in the room.
+ */
+export function liveEmptyBody(input: {
+  canCompose: boolean;
+  isCalloutObserver?: boolean | null;
+  isHost?: boolean | null;
+  isJoined?: boolean | null;
+  viewerOut?: boolean | null;
+  watchingLine: string;
+  quietBody: string;
+  joinToPost: string;
+  outWatchLive: string;
+}): string {
+  if (input.isCalloutObserver && !input.isHost && !input.isJoined) {
+    return input.watchingLine;
+  }
+  if (input.canCompose) {
+    if (input.viewerOut && input.isJoined) {
+      return input.outWatchLive;
+    }
+    return input.quietBody;
+  }
+  return input.joinToPost;
+}
+
 /** First app file in a throw stack. Safari “Can't find variable” logs use this. */
 export function liveErrorFile(error: unknown): string | null {
   const stack = error instanceof Error ? String(error.stack ?? '') : String(error ?? '');

@@ -18,25 +18,43 @@ function mockQueryClient() {
   return { invalidateQueries: vi.fn(), setQueriesData: vi.fn() };
 }
 
-function mockChannel(state = 'closed'): RealtimeChannel & { onCalls: number } {
+function mockChannel(state = 'closed'): RealtimeChannel & {
+  onCalls: number;
+  handlers: Array<{ table?: string; cb: () => void }>;
+} {
   const channel = {
     topic: challengeBoardChannelName(ID),
     state,
     onCalls: 0,
-    on: vi.fn(function (this: RealtimeChannel) {
+    handlers: [] as Array<{ table?: string; cb: () => void }>,
+    on: vi.fn(function (
+      this: RealtimeChannel,
+      _event: string,
+      filter: { table?: string },
+      cb: () => void,
+    ) {
       channel.onCalls += 1;
+      channel.handlers.push({ table: filter?.table, cb });
       return this;
     }),
     subscribe: vi.fn(function (this: RealtimeChannel) {
       return this;
     }),
   };
-  return channel as unknown as RealtimeChannel & { onCalls: number };
+  return channel as unknown as RealtimeChannel & {
+    onCalls: number;
+    handlers: Array<{ table?: string; cb: () => void }>;
+  };
 }
+
+type MockChannel = RealtimeChannel & {
+  onCalls: number;
+  handlers: Array<{ table?: string; cb: () => void }>;
+};
 
 function mockHost(channel = mockChannel()): {
   host: ChallengeBoardRealtimeHost;
-  channel: RealtimeChannel & { onCalls: number };
+  channel: MockChannel;
 } {
   const live = isRealtimeChannelLive(channel);
   const channels: RealtimeChannel[] = live ? [channel] : [];
@@ -137,5 +155,17 @@ describe('acquireChallengeBoardRealtime', () => {
     const { host } = mockHost();
     expect(acquireChallengeBoardRealtime('not-a-uuid', mockQueryClient(), host)).toBeNull();
     expect(host.channel).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate the Live feed when the challenges row patches', () => {
+    const queryClient = mockQueryClient();
+    const { host, channel } = mockHost();
+    acquireChallengeBoardRealtime(ID, queryClient, host);
+    const challenges = channel.handlers.find((row) => row.table === 'challenges');
+    expect(challenges?.cb).toBeTypeOf('function');
+    challenges?.cb();
+    const keys = queryClient.invalidateQueries.mock.calls.map((call) => call[0]?.queryKey);
+    expect(keys).toContainEqual(['challenge', ID]);
+    expect(keys.some((key) => Array.isArray(key) && key[0] === 'feed')).toBe(false);
   });
 });

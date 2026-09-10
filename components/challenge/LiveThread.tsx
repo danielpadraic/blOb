@@ -44,6 +44,7 @@ import {
   liveEditPrefill,
   liveQuoteLine,
   liveQuotePreview,
+  EMPTY_LIVE_POSTS,
   seedLiveFeedPosts,
   type LiveThreadRow,
 } from '@/lib/liveThread';
@@ -109,8 +110,14 @@ type LiveThreadProps = {
   onReact: (post: PostWithMeta, type: ReactionType, commentId?: string | null) => void;
 };
 
+const EMPTY_LIVE_ROWS: LiveThreadRow[] = [];
+
+function LiveQuietEmpty({ title, body }: { title: string; body: string }) {
+  return <MascotState kind="empty" title={title} body={body} compact />;
+}
+
 export function LiveThread({
-  posts,
+  posts = EMPTY_LIVE_POSTS,
   isLoading,
   isRefreshing,
   error,
@@ -158,9 +165,13 @@ export function LiveThread({
   const onRowError = useCallback((message: string) => {
     setRowBanner((current) => current || message);
   }, []);
+  const sourcePosts = posts.length === 0 ? EMPTY_LIVE_POSTS : posts;
   const thread = useMemo(() => {
     try {
-      const seeded = seedLiveFeedPosts(posts);
+      if (sourcePosts.length === 0) {
+        return { rows: EMPTY_LIVE_ROWS, error: null as string | null };
+      }
+      const seeded = seedLiveFeedPosts(sourcePosts);
       const built = buildLiveThreadRows(dedupeLivePostsByCheckinId(seeded));
       return {
         rows: stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built,
@@ -173,9 +184,9 @@ export function LiveThread({
         message,
         stack: error instanceof Error ? error.stack : null,
       });
-      return { rows: [] as LiveThreadRow[], error: message };
+      return { rows: EMPTY_LIVE_ROWS, error: message };
     }
-  }, [posts, stableDayBreak]);
+  }, [sourcePosts, stableDayBreak]);
   const rows = thread.rows;
   const buildError = thread.error;
 
@@ -198,18 +209,29 @@ export function LiveThread({
   const lastOffsetRef = useRef(0);
   const [listViewportH, setListViewportH] = useState(0);
   const [listContentH, setListContentH] = useState(0);
-  const packToBottom = listViewportH > 0 && listContentH > 0 && listContentH < listViewportH - 1;
+  const emptyList = rows.length === 0;
+  const packToBottom =
+    !emptyList && listViewportH > 0 && listContentH > 0 && listContentH < listViewportH - 1;
   const listContentStyle = useMemo(
     () => ({
-      flexGrow: packToBottom ? 1 : 0,
-      justifyContent: packToBottom ? ('flex-end' as const) : undefined,
+      flexGrow: emptyList || packToBottom ? 1 : 0,
+      justifyContent: emptyList
+        ? ('center' as const)
+        : packToBottom
+          ? ('flex-end' as const)
+          : undefined,
       gap: 12,
       paddingTop: 12,
       paddingBottom: 8,
       overflow: 'visible' as const,
     }),
-    [packToBottom],
+    [emptyList, packToBottom],
   );
+  const listLatchedRef = useRef(false);
+  if (!isLoading || rows.length > 0 || error || buildError) {
+    listLatchedRef.current = true;
+  }
+  const showBootSpinner = !listLatchedRef.current && Boolean(isLoading);
   useEffect(() => {
     stopAllLiveMedia();
     console.log('[blob:live]', { reason: 'mount', challengeId: challengeIdRef.current ?? null });
@@ -305,6 +327,10 @@ export function LiveThread({
    */
   const pinToLiveEdge = useCallback(
     (animated: boolean, why: string) => {
+      if ((postsRef.current?.length ?? 0) === 0) {
+        logLive(`skip-pin-empty:${why}`);
+        return;
+      }
       if (!shouldPinToLiveEnd({
         atEnd: atEndRef.current,
         dragging: draggingRef.current,
@@ -708,6 +734,11 @@ export function LiveThread({
     [canCompose, currentUserId, highlightCommentId, highlightPostId, onReact, onRowError, posts, social, startEdit, startReply],
   );
 
+  const renderQuietEmpty = useCallback(
+    () => <LiveQuietEmpty title={emptyTitle} body={emptyBody} />,
+    [emptyBody, emptyTitle],
+  );
+
   const composerPad = createStickyFooterPad(
     keyboardOpen,
     tabBarLift(insets.bottom, 'sticky') + Math.max(footerReserve, 0),
@@ -721,20 +752,13 @@ export function LiveThread({
         backgroundColor: THEME.background,
         marginBottom: keyboardOverlap,
       }}>
-      {error && rows.length === 0 && !isLoading && !hadRowsRef.current ? (
-        <MascotState
-          kind="error"
-          title={copy('home.error')}
-          actionLabel="Try again"
-          onAction={onRetry}
-        />
-      ) : isLoading && rows.length === 0 && !hadRowsRef.current ? (
+      {showBootSpinner ? (
         <MascotState kind="loading" title={loadingTitle ?? 'Loading Live'} compact />
       ) : (
         <View style={{ flex: 1, minHeight: 0 }}>
-        {buildError || rowBanner ? (
+        {buildError || rowBanner || (error && emptyList) ? (
           <LiveFailBanner
-            message={buildError || rowBanner || ''}
+            message={buildError || rowBanner || error || ''}
             onRetry={() => {
               setRowBanner(null);
               onRetry?.();
@@ -752,6 +776,9 @@ export function LiveThread({
           keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
           onLayout={(event) => {
+            if (emptyList) {
+              return;
+            }
             const height = Math.round(event.nativeEvent.layout.height);
             if (height > 0 && height !== listViewportH) {
               setListViewportH(height);
@@ -773,6 +800,9 @@ export function LiveThread({
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           onContentSizeChange={(_width, height) => {
+            if (emptyList) {
+              return;
+            }
             const next = Math.round(height);
             if (next > 0 && next !== listContentH) {
               setListContentH(next);
@@ -786,14 +816,15 @@ export function LiveThread({
             pinToLiveEdge(false, 'first-paint');
           }}
           onScrollToIndexFailed={() => {
+            if (emptyList) {
+              return;
+            }
             if (firstPaintPendingRef.current) {
               pinToLiveEdge(false, 'first-paint');
             }
           }}
           contentContainerStyle={listContentStyle}
-          ListEmptyComponent={
-            <MascotState kind="empty" title={emptyTitle} body={emptyBody} compact />
-          }
+          ListEmptyComponent={renderQuietEmpty}
           ListHeaderComponent={
             missingComment ? (
               <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 }}>

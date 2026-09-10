@@ -82,9 +82,6 @@ function bindBoardChannel(
     void queryClient.invalidateQueries({ queryKey: ['logged-workout-days', challengeId] });
     void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
   };
-  const refreshFeed = () => {
-    void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
-  };
   const patchOrRefreshFeed = (payload: {
     eventType?: string;
     new?: { id?: string; checkin_id?: string | null };
@@ -94,13 +91,15 @@ function bindBoardChannel(
     patchChallengeLiveFeed(queryClient, challengeId, payload);
   };
   const refreshSettlement = () => {
+    // Presence / participant_count / "In 0" patches the challenges row. Do not
+    // invalidate ['feed', challengeId] here — that remounts empty Live (Bob bounce).
+    // New posts still append via posts postgres_changes → patchChallengeLiveFeed.
     void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
     void queryClient.invalidateQueries({ queryKey: ['challenge-settlement', challengeId] });
     void queryClient.invalidateQueries({ queryKey: ['wallet-ledger'] });
     void queryClient.invalidateQueries({ queryKey: ['profile'] });
     void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     refreshBoard();
-    refreshFeed();
   };
 
   channel

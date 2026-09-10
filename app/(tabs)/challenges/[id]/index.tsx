@@ -48,7 +48,14 @@ import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { useStalled } from '@/hooks/useStalled';
 import { BODY_METRICS_HREF, captureHref, challengeDetailHref, errorRetryHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
-import { applyLiveBackGesture, liveErrorFile, liveScreenBackGesture } from '@/lib/liveThread';
+import {
+  applyLiveBackGesture,
+  canComposeInLive,
+  EMPTY_LIVE_POSTS,
+  liveEmptyBody,
+  liveErrorFile,
+  liveScreenBackGesture,
+} from '@/lib/liveThread';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { useLiveThreadFocus } from '@/hooks/useLiveThreadFocus';
 import {
@@ -1036,7 +1043,11 @@ export default function ChallengeDetailScreen() {
         startNeeded ??
         copy('challenge.waitingToStart')
       : null;
-  const stickyJoin = !isCalloutObserver && !isJoined && (needsBodyMetrics || canJoin || needsTopUp || geoJoinBlocked || geoNeedsRegion);
+  const stickyJoin =
+    !isHost &&
+    !isCalloutObserver &&
+    !isJoined &&
+    (needsBodyMetrics || canJoin || needsTopUp || geoJoinBlocked || geoNeedsRegion);
   const stickyCheckin =
     isJoined &&
     !isCalloutObserver &&
@@ -1121,24 +1132,26 @@ export default function ChallengeDetailScreen() {
           ) : null}
           <LiveSafeBoundary>
           <LiveThread
-          posts={feed.data ?? []}
-          isLoading={feed.isLoading}
+          posts={feed.data ?? EMPTY_LIVE_POSTS}
+          isLoading={feed.data == null && feed.isLoading}
           isRefreshing={refreshing}
           error={feed.error instanceof Error ? feed.error.message : null}
           highlightPostId={highlightPostId}
           highlightCommentId={highlightCommentId}
           currentUserId={user?.id}
-          emptyTitle="Quiet in this challenge"
-          emptyBody={
-            isCalloutObserver
-              ? CALLOUT_WATCHING_LINE
-              : isJoined
-              ? viewerOut
-                ? copy('challenge.outWatchLive')
-                : copy('checkin.emptyBob')
-              : 'Join the challenge to post in Live.'
-          }
-          canCompose={isCalloutObserver || isJoined}
+          emptyTitle={copy('live.quietTitle')}
+          emptyBody={liveEmptyBody({
+            canCompose: canComposeInLive({ isHost, isJoined, isCalloutObserver }),
+            isCalloutObserver,
+            isHost,
+            isJoined,
+            viewerOut,
+            watchingLine: CALLOUT_WATCHING_LINE,
+            quietBody: copy('live.quietBody'),
+            joinToPost: copy('live.joinToPost'),
+            outWatchLive: copy('challenge.outWatchLive'),
+          })}
+          canCompose={canComposeInLive({ isHost, isJoined, isCalloutObserver })}
           composing={createPost.isPending}
           dayBreakChallenge={challenge ?? null}
           readCursorChallengeId={id || null}

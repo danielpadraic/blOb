@@ -22,6 +22,8 @@ import {
   seedLiveFeedPosts,
   liveRowKey,
   liveErrorFile,
+  canComposeInLive,
+  liveEmptyBody,
   sortLivePosts,
   toggleLiveReactionList,
 } from '@/lib/liveThread';
@@ -424,5 +426,62 @@ describe('liveEditMediaUrls', () => {
       liveEditMediaUrls({ media_urls: ['https://cdn.example/proof.jpg'], source: 'checkin' }, []),
     ).toEqual(['https://cdn.example/proof.jpg']);
     expect(liveEditMediaUrls({ media_urls: [], source: 'checkin' }, [])).toEqual([]);
+  });
+});
+
+describe('canComposeInLive', () => {
+  it('lets the host post with zero joiners', () => {
+    expect(canComposeInLive({ isHost: true, isJoined: false, isCalloutObserver: false })).toBe(true);
+    expect(canComposeInLive({ isHost: false, isJoined: true, isCalloutObserver: false })).toBe(true);
+    expect(canComposeInLive({ isHost: false, isJoined: false, isCalloutObserver: true })).toBe(true);
+    expect(canComposeInLive({ isHost: false, isJoined: false, isCalloutObserver: false })).toBe(false);
+  });
+});
+
+describe('liveEmptyBody', () => {
+  const lines = {
+    watchingLine: 'Watching',
+    quietBody: 'Posts from people in this challenge land here.',
+    joinToPost: 'Join the challenge to post in Live.',
+    outWatchLive: 'You’re out of the prize.',
+  };
+
+  it('keeps Quiet copy for a host with an empty room', () => {
+    expect(
+      liveEmptyBody({
+        ...lines,
+        canCompose: true,
+        isHost: true,
+        isJoined: false,
+        isCalloutObserver: false,
+        viewerOut: false,
+      }),
+    ).toBe(lines.quietBody);
+  });
+
+  it('says Join only for a visitor who is not in the room', () => {
+    expect(
+      liveEmptyBody({
+        ...lines,
+        canCompose: false,
+        isHost: false,
+        isJoined: false,
+        isCalloutObserver: false,
+        viewerOut: false,
+      }),
+    ).toBe(lines.joinToPost);
+  });
+
+  it('keeps watching copy for a callout observer who is not hosting or joined', () => {
+    expect(
+      liveEmptyBody({
+        ...lines,
+        canCompose: true,
+        isHost: false,
+        isJoined: false,
+        isCalloutObserver: true,
+        viewerOut: false,
+      }),
+    ).toBe(lines.watchingLine);
   });
 });
