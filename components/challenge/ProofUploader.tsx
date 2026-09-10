@@ -64,7 +64,11 @@ type ProofUploaderProps = {
     >;
     onAttach: (workout: HealthWorkout) => Promise<void>;
   };
-  onPicked: (uri: string, mimeType?: string | null, meta?: { fromLibrary?: boolean }) => void;
+  onPicked: (
+    uri: string,
+    mimeType?: string | null,
+    meta?: { fromLibrary?: boolean; blob?: Blob | null },
+  ) => void;
   onCancel?: () => void;
   onRequestOpen?: () => void;
   title?: string | null;
@@ -167,9 +171,12 @@ export function ProofUploader({
       const mime = asset?.mimeType ?? asset?.file?.type;
       const next =
         video
-          ? { uri, mimeType: mime }
-          : await normalizeCheckinStill({ uri, mimeType: mime });
-      onPicked(next.uri, next.mimeType ?? mime, { fromLibrary: true });
+          ? { uri, mimeType: mime, blob: asset?.file ?? null }
+          : await normalizeCheckinStill({ uri, mimeType: mime, blob: asset?.file ?? null });
+      onPicked(next.uri, next.mimeType ?? mime, {
+        fromLibrary: true,
+        blob: next.blob ?? asset?.file ?? null,
+      });
       setOpen(false);
     } catch (error) {
       stopAllLiveMedia();
@@ -211,7 +218,7 @@ export function ProofUploader({
           instruction={instruction}
           onCaptured={(media) => {
             stopAllLiveMedia();
-            onPicked(media.uri, media.mimeType, { fromLibrary: false });
+            onPicked(media.uri, media.mimeType, { fromLibrary: false, blob: media.blob ?? null });
             setOpen(false);
           }}
           onOpenGallery={() => void openLibrary()}

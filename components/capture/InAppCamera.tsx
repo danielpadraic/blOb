@@ -44,6 +44,7 @@ import {
   watchLiveMedia,
   webCameraGrantedThisSession,
 } from '@/lib/cameraSession';
+import { holdCheckinBlob } from '@/lib/checkin/heldBlob';
 import { copy } from '@/lib/copy';
 import { capHaptic } from '@/lib/haptics';
 import {
@@ -255,6 +256,9 @@ export function InAppCamera({
   }
 
   function finishCapture(media: CapturedMedia) {
+    if (checkin) {
+      holdCheckinBlob(media.uri, media.blob);
+    }
     try {
       onCaptured(media);
     } catch (error) {

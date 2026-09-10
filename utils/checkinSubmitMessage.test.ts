@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { CHECKIN_REACH_STAY, CHECKIN_UPLOAD_STAY } from '@/lib/checkin/errors';
 import { getCheckinSubmitMessage, withFailureReason } from '@/utils/errors';
 
 describe('what the submit banner says', () => {
@@ -32,6 +33,18 @@ describe('what the submit banner says', () => {
       code: '42501',
     });
     expect(message).toContain('permission denied for table challenge_checkins');
+  });
+
+  it('does not print Load failed on Safari abort', () => {
+    expect(getCheckinSubmitMessage(new TypeError('Load failed'))).toBe(CHECKIN_REACH_STAY);
+    expect(getCheckinSubmitMessage(new TypeError('Failed to fetch'))).toBe(CHECKIN_REACH_STAY);
+    expect(getCheckinSubmitMessage(new Error('Network request failed'))).toBe(CHECKIN_REACH_STAY);
+    expect(getCheckinSubmitMessage(new TypeError('Load failed'))).not.toContain('(');
+    expect(getCheckinSubmitMessage(new TypeError('Load failed'))).not.toContain('Load failed');
+  });
+
+  it('uses the stay-photo line for a storage upload fault', () => {
+    expect(getCheckinSubmitMessage(new Error('Couldn’t save that proof'))).toBe(CHECKIN_UPLOAD_STAY);
   });
 
   it('still says something when the error carries no message at all', () => {

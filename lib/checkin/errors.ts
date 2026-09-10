@@ -11,11 +11,34 @@ export type CheckinFailKind =
   | 'reused'
   | 'generic';
 
+/** Safari WebKit abort / offline. Never shown raw to the user. */
+export const CHECKIN_REACH_STAY =
+  'Couldn’t reach blOb. Your photo is still here. Try Send again.';
+
+export const CHECKIN_UPLOAD_STAY =
+  'Couldn’t upload that photo. It’s still here. Try Send again.';
+
 export function isLikelyOffline(): boolean {
   if (typeof navigator === 'undefined') {
     return false;
   }
   return navigator.onLine === false;
+}
+
+/** Safari “Load failed”, fetch abort, and dropped connections. */
+export function isTransientNetworkError(error: unknown): boolean {
+  const raw = extractRaw(error).toLowerCase();
+  return (
+    /\bload failed\b/.test(raw) ||
+    raw.includes('failed to fetch') ||
+    raw.includes('network request failed') ||
+    raw.includes('the network connection was lost') ||
+    raw.includes('networkerror') ||
+    raw.includes('err_internet_disconnected') ||
+    /\bcancelled\b/.test(raw) ||
+    /\bcanceled\b/.test(raw) ||
+    /\babort(?:ed|error)?\b/.test(raw)
+  );
 }
 
 export function isOfflineError(error: unknown): boolean {
@@ -24,12 +47,10 @@ export function isOfflineError(error: unknown): boolean {
   }
   const raw = extractRaw(error).toLowerCase();
   return (
+    isTransientNetworkError(error) ||
     raw.includes('network') ||
-    raw.includes('failed to fetch') ||
     raw.includes('offline') ||
-    raw.includes('internet') ||
-    raw.includes('network request failed') ||
-    raw.includes('err_internet_disconnected')
+    raw.includes('internet')
   );
 }
 
@@ -88,6 +109,18 @@ export function classifyCheckinError(error: unknown): CheckinFailKind {
     return 'upload';
   }
   return 'generic';
+}
+
+/** Banner on Send. Never appends TypeError / “Load failed”. */
+export function checkinSendStayCopy(error: unknown): string | null {
+  const kind = classifyCheckinError(error);
+  if (kind === 'offline') {
+    return CHECKIN_REACH_STAY;
+  }
+  if (kind === 'upload') {
+    return CHECKIN_UPLOAD_STAY;
+  }
+  return null;
 }
 
 export function mapCheckinRpcError(

@@ -272,6 +272,10 @@ export async function compressImageForUpload(input: {
 
   const preset = PRESET[input.kind];
   try {
+    // A revoked blob: URL cannot be fetched again. Keep the original bytes.
+    if (Platform.OS === 'web' && input.uri.startsWith('blob:') && !(input.blob && input.blob.size > 0)) {
+      return originalResult(input.uri, contentType, input.blob);
+    }
     const bytes = await cheapFileSize(input.uri, input.blob, input.size);
     if (Platform.OS === 'web') {
       return await compressOnWeb({

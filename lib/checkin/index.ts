@@ -1,13 +1,19 @@
 export { CHECKIN_BOB } from './bob';
 export {
+  CHECKIN_REACH_STAY,
+  CHECKIN_UPLOAD_STAY,
+  checkinSendStayCopy,
   classifyCheckinError,
   isLikelyOffline,
   isOfflineError,
   isPermissionError,
+  isTransientNetworkError,
   isUploadError,
   mapCheckinRpcError,
   type CheckinFailKind,
 } from './errors';
+export { logCheckinPhase } from './log';
+export { getHeldCheckinBlob, holdCheckinBlob, releaseHeldCheckinBlobs } from './heldBlob';
 export {
   applyLocalCheckinProgress,
   boardProgressLabel,

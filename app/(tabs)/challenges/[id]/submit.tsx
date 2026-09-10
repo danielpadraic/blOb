@@ -50,13 +50,19 @@ import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
 import type { HealthWorkout } from '@/services/health/types';
 import {
   CHECKIN_BOB,
+  CHECKIN_REACH_STAY,
+  CHECKIN_UPLOAD_STAY,
   canSendCheckin,
   shouldAutoOpenCheckinCamera,
   checkinPostBody,
+  checkinSendStayCopy,
   checkinSendWhyNot,
-  checkinUploadStayCopy,
   classifyCheckinError,
+  holdCheckinBlob,
+  getHeldCheckinBlob,
   isLikelyOffline,
+  logCheckinPhase,
+  releaseHeldCheckinBlobs,
   saveCapturedProofLocally,
 } from '@/lib/checkin';
 import { checkinCameraFocused } from '@/lib/cameraAsk';
@@ -147,7 +153,7 @@ import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
 import { challengeDetailHref, checkinSubmitHref, leaveCheckinHref, LOBBY_HREF, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
-import { getCheckinSubmitMessage, getErrorMessage, logDev, withFailureReason } from '@/utils/errors';
+import { getCheckinSubmitMessage, getErrorMessage, logDev } from '@/utils/errors';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
 
@@ -159,6 +165,7 @@ type SlotDraft = {
   uri?: string;
   uris?: string[] | null;
   mimeType?: string | null;
+  blob?: Blob | null;
   text?: string;
   fromLibrary?: boolean;
   health?: CheckinHealthProof | null;
@@ -272,6 +279,7 @@ function closeCheckinToChallenge(
   extra?: { from?: string | null; tab?: string | null },
 ) {
   stopAllLiveMedia();
+  releaseHeldCheckinBlobs();
   router.replace(leaveCheckinHref(id, extra) as never);
 }
 
@@ -317,6 +325,12 @@ function SubmitWorkoutInner() {
       router.replace(LOBBY_HREF);
     }
   }, [id, router]);
+
+  useEffect(() => {
+    return () => {
+      releaseHeldCheckinBlobs();
+    };
+  }, []);
   const challengeQuery = useChallenge(id);
   const roster = useChallengeParticipants(id);
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
@@ -698,7 +712,13 @@ function SubmitWorkoutInner() {
     return filled ?? firstCamera ?? null;
   }
 
-  function onMedia(proofId: string, uri: string, mimeType?: string | null, fromLibrary?: boolean) {
+  function onMedia(
+    proofId: string,
+    uri: string,
+    mimeType?: string | null,
+    fromLibrary?: boolean,
+    blob?: Blob | null,
+  ) {
     if (busy) {
       return;
     }
@@ -707,6 +727,7 @@ function SubmitWorkoutInner() {
     appendStillRef.current = null;
     replaceStillRef.current = null;
     const proof = proofSteps.find((item) => item.id === proofId);
+    holdCheckinBlob(uri, blob);
     setDrafts((current) => {
       const existing = slotStillUris(current[proofId]);
       const allows = slotAllowsMultipleStills(proof, current[proofId]);
@@ -728,6 +749,7 @@ function SubmitWorkoutInner() {
             ...current[proofId],
             mimeType,
             fromLibrary,
+            blob: blob ?? current[proofId]?.blob ?? null,
             healthWorkoutId: allows ? undefined : current[proofId]?.healthWorkoutId,
           },
           next,
@@ -912,30 +934,31 @@ function SubmitWorkoutInner() {
     setFailKind(null);
     if (isLikelyOffline()) {
       setFailKind('offline');
-      setError(copy('checkin.offlineBob'));
-      throw new Error(copy('checkin.offlineBob'));
+      setError(CHECKIN_REACH_STAY);
+      throw new Error(CHECKIN_REACH_STAY);
     }
+    const uri = slotStillUris(draft)[0] ?? draft?.uri;
+    const blob = draft?.blob ?? getHeldCheckinBlob(uri);
+    const payload = {
+      challengeId: id,
+      proof,
+      uri,
+      urls: slotStillUris(draft),
+      mimeType: draft?.mimeType,
+      blob,
+      text: draft?.text,
+      fromLibrary: draft?.fromLibrary,
+      health: draft?.health ?? null,
+      healthWorkoutId: draft?.healthWorkoutId ?? null,
+      // Stamped only once the slot holds the rasterized card rather than the `health:` placeholder
+      // that stands in while it renders. Without the stamp the repair pass would redraw a card the
+      // current renderer had just drawn.
+      cardVersion: isRenderedWorkoutCard(draft) ? WORKOUT_CARD_VERSION : null,
+      caption: clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? ''),
+      notes,
+    };
     try {
-      return await saveProof.mutateAsync({
-        challengeId: id,
-        proof,
-        uri: slotStillUris(draft)[0] ?? draft?.uri,
-        urls: slotStillUris(draft),
-        mimeType: draft?.mimeType,
-        text: draft?.text,
-        fromLibrary: draft?.fromLibrary,
-        health: draft?.health ?? null,
-        healthWorkoutId: draft?.healthWorkoutId ?? null,
-        // Stamped only once the slot holds the rasterized card rather than the `health:` placeholder
-        // that stands in while it renders. Without the stamp the repair pass would redraw a card the
-        // current renderer had just drawn.
-        cardVersion: isRenderedWorkoutCard(draft) ? WORKOUT_CARD_VERSION : null,
-        caption: clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? ''),
-        notes,
-        extraMedia: uniqueProofUrls(
-          extras.map((item) => item.remoteUrl ?? (item.kind === 'gif' ? item.uri : null)),
-        ),
-      });
+      return await saveProof.mutateAsync(payload);
     } catch (caught) {
       const kind = classifyCheckinError(caught);
       if (kind === 'reused') {
@@ -943,8 +966,8 @@ function SubmitWorkoutInner() {
         setError(getErrorMessage(caught));
         throw caught;
       }
-      setFailKind(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : kind === 'generic' ? 'upload' : null);
-      setError(getErrorMessage(caught));
+      setFailKind(kind === 'offline' || kind === 'permission' || kind === 'upload' ? kind : null);
+      setError(checkinSendStayCopy(caught) ?? getErrorMessage(caught));
       throw caught;
     }
   }
@@ -954,11 +977,12 @@ function SubmitWorkoutInner() {
     uri: string,
     mimeType?: string | null,
     fromLibrary?: boolean,
+    blob?: Blob | null,
   ) {
     if (!proof?.id || !uri.trim()) {
       return;
     }
-    onMedia(proof.id, uri, mimeType, fromLibrary === true);
+    onMedia(proof.id, uri, mimeType, fromLibrary === true, blob);
     // Replacing the attach drops the generated card for this slot instead of leaving it on screen.
     setCardPreview((current) => (current?.proofId === proof.id ? null : current));
     setCaptureId(null);
@@ -1020,8 +1044,8 @@ function SubmitWorkoutInner() {
         return;
       }
       const mime = asset.mimeType ?? asset.file?.type;
-      const next = await normalizeCheckinStill({ uri, mimeType: mime });
-      onCaptured(target, next.uri, next.mimeType ?? mime, true);
+      const next = await normalizeCheckinStill({ uri, mimeType: mime, blob: asset.file ?? null });
+      onCaptured(target, next.uri, next.mimeType ?? mime, true, next.blob ?? asset.file ?? null);
     } catch (caught) {
       setError(getErrorMessage(caught));
       Alert.alert('Couldn’t attach that', getErrorMessage(caught));
@@ -1126,11 +1150,12 @@ function SubmitWorkoutInner() {
     setFailKind(null);
     if (isLikelyOffline()) {
       setFailKind('offline');
-      setError(copy('checkin.offlineBob'));
+      setError(CHECKIN_REACH_STAY);
       return;
     }
     try {
       const body = checkinPostBody(caption.text);
+      let saved = checkinQuery.data ?? null;
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       for (const proof of proofSteps) {
         if (proof.method === 'honor') {
@@ -1156,6 +1181,9 @@ function SubmitWorkoutInner() {
           continue;
         }
         const row = await persistProof(proof, withStats, body);
+        if (row) {
+          saved = row;
+        }
         if (row?.proof_parts) {
           savedParts = row.proof_parts;
         }
@@ -1195,11 +1223,15 @@ function SubmitWorkoutInner() {
           setExtras(uploadedExtras);
         }
       }
-      const saved = await saveProof.mutateAsync({
-        challengeId: id,
-        notes: body,
-        extraMedia: extraUrls,
-      });
+      try {
+        saved = await saveProof.mutateAsync({
+          challengeId: id,
+          notes: body,
+          extraMedia: extraUrls,
+        });
+      } catch (extraSaveError) {
+        logCheckinPhase('save', 'extra-soft-fail', getErrorMessage(extraSaveError));
+      }
       // Extra photos/videos/GIFs never block Send. Board counts required proof.
       const extraWarning =
         failedExtras.length === 0
@@ -1384,23 +1416,17 @@ function SubmitWorkoutInner() {
         router.replace(multiCheckinHref([...parseDoneIds(params.done), id], extraWarning));
         return;
       }
-      if (!readyNow) {
-        const nextCam = proofSteps.find(
-          (proof) =>
-            isGuidedCameraProof(proof) &&
-            !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
-        );
-        setSkippedAuto(!nextCam);
-        setPreferCamera(Boolean(nextCam));
-        setCaptureId(nextCam?.id ?? null);
-        void checkinQuery.refetch();
-        return;
-      }
       router.replace(
         challengeDetailHref(id, 'lobby', postId, { tab: 'feed', notice: extraWarning }),
       );
     } catch (caught) {
       const kind = classifyCheckinError(caught);
+      if (kind === 'already') {
+        setFailKind(null);
+        setError(getCheckinSubmitMessage(caught));
+        router.replace(leaveCheckinHref(id, { tab: 'feed' }) as never);
+        return;
+      }
       if (kind === 'reused') {
         setFailKind(null);
         setError(getCheckinSubmitMessage(caught));
@@ -1411,11 +1437,8 @@ function SubmitWorkoutInner() {
         return;
       }
       if (kind === 'upload' || kind === 'offline') {
-        setFailKind(null);
-        // The reassurance is the useful half — their photo is not lost. But this branch also catches
-        // anything that merely looks like an upload or network fault, and on its own the line gave
-        // them nothing to report, so the underlying reason rides along.
-        setError(withFailureReason(checkinUploadStayCopy(), caught));
+        setFailKind(kind);
+        setError(checkinSendStayCopy(caught) ?? (kind === 'offline' ? CHECKIN_REACH_STAY : CHECKIN_UPLOAD_STAY));
         return;
       }
       setFailKind(kind === 'permission' ? kind : null);
@@ -1867,7 +1890,7 @@ function SubmitWorkoutInner() {
             onAttach: (workout) => onAttachHealth(workout, activeProof),
           }}
           onPicked={(uri, mimeType, meta) => {
-            onCaptured(activeProof, uri, mimeType, meta?.fromLibrary);
+            onCaptured(activeProof, uri, mimeType, meta?.fromLibrary, meta?.blob);
           }}
           onCancel={() => {
             if (iosHealthReady && proofPrefersHealthAttach(activeProof, challenge)) {

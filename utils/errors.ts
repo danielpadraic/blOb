@@ -1,3 +1,8 @@
+import {
+  CHECKIN_REACH_STAY,
+  CHECKIN_UPLOAD_STAY,
+  classifyCheckinError,
+} from '@/lib/checkin/errors';
 import { copy } from '@/lib/copy';
 import { isGeoGateDeny } from '@/lib/geo/eligibility';
 import { dmOpenUserMessage } from '@/lib/dmOpen';
@@ -209,6 +214,13 @@ export function withFailureReason(message: string, error: unknown): string {
 /** Confirm / Submit: never render Postgres or PostgREST. Logs the code. */
 export function getCheckinSubmitMessage(error: unknown): string {
   logPostgrestError('checkin-submit', error);
+  const kind = classifyCheckinError(error);
+  if (kind === 'offline') {
+    return CHECKIN_REACH_STAY;
+  }
+  if (kind === 'upload') {
+    return CHECKIN_UPLOAD_STAY;
+  }
   const raw = extractRawMessage(error).toLowerCase();
   if (raw.includes('already_logged_today') || raw.includes('already checked in') || raw.includes('already submitted')) {
     return 'Already checked in today. Come back tomorrow.';

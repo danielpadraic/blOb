@@ -75,6 +75,7 @@ export type CheckinSlotDraft = {
   uri?: string;
   uris?: string[] | null;
   mimeType?: string | null;
+  blob?: Blob | null;
   text?: string;
   fromLibrary?: boolean;
   /** The blOb workout card is rasterizing for this slot. */
@@ -604,14 +605,14 @@ export function CheckinComposer({
           top: Math.max(insets.top, 8) + 4,
           left: 12,
           zIndex: 4,
-          minWidth: 44,
-          minHeight: 44,
-          borderRadius: 22,
+          minWidth: THEME.playerCloseSize,
+          minHeight: THEME.playerCloseSize,
+          borderRadius: THEME.playerCloseSize / 2,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: 'rgba(16,19,18,0.45)',
+          backgroundColor: THEME.playerCloseDisc,
         }}>
-        <AppText className="text-[22px] font-semibold" style={{ color: '#fff' }}>
+        <AppText className="text-[22px] font-semibold" style={{ color: THEME.playerCloseGlyph }}>
           ×
         </AppText>
       </Pressable>
@@ -661,24 +662,6 @@ export function CheckinComposer({
                     accessibilityLabel={item.label}
                   />
                 )}
-                {item.kind === 'proof' && proofCaptions[item.proof.id]?.trim() ? (
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      left: 16,
-                      right: 16,
-                      bottom: 64,
-                    }}>
-                    <AppText
-                      className="text-[15px] leading-5"
-                      style={{ color: '#fff' }}
-                      numberOfLines={2}
-                      ellipsizeMode="tail">
-                      {proofCaptions[item.proof.id]}
-                    </AppText>
-                  </View>
-                ) : null}
               </View>
             )}
           />
@@ -742,6 +725,18 @@ export function CheckinComposer({
           </View>
         ) : null}
       </View>
+
+      {current?.kind === 'proof' && proofCaptions[current.proof.id]?.trim() ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, backgroundColor: THEME.background }}>
+          <AppText
+            className="text-[15px] leading-5"
+            style={{ color: THEME.textPrimary }}
+            numberOfLines={3}
+            ellipsizeMode="tail">
+            {proofCaptions[current.proof.id]}
+          </AppText>
+        </View>
+      ) : null}
 
       {/* Read numbers for the slot on screen, directly under its photo. */}
       {current?.kind === 'proof' &&

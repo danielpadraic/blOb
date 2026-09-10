@@ -3,6 +3,9 @@ import { Platform } from 'react-native';
 
 import { STORAGE_BUCKETS } from '@/lib/constants';
 import { copy } from '@/lib/copy';
+import { getHeldCheckinBlob } from '@/lib/checkin/heldBlob';
+import { isTransientNetworkError } from '@/lib/checkin/errors';
+import { logCheckinPhase } from '@/lib/checkin/log';
 import { supabase } from '@/lib/supabase';
 import type { ProofType } from '@/lib/types';
 import {
@@ -113,11 +116,12 @@ async function toTypedBlob(input: {
   contentType: string;
   blob?: Blob | null;
 }): Promise<Blob> {
-  if (input.blob && input.blob.size > 0) {
-    if (input.blob.type === input.contentType) {
-      return input.blob;
+  const held = input.blob && input.blob.size > 0 ? input.blob : getHeldCheckinBlob(input.uri);
+  if (held && held.size > 0) {
+    if (held.type === input.contentType) {
+      return held;
     }
-    return new Blob([input.blob], { type: input.contentType });
+    return new Blob([held], { type: input.contentType });
   }
 
   try {
@@ -130,7 +134,10 @@ async function toTypedBlob(input: {
           : new Blob([fetched], { type: input.contentType });
       }
     }
-  } catch {
+  } catch (error) {
+    if (isTransientNetworkError(error) && input.uri.startsWith('blob:')) {
+      throw error;
+    }
     // Native file:// URIs sometimes fail fetch; read bytes next.
   }
 
@@ -264,7 +271,7 @@ async function uploadObjectWithProgress(input: {
   });
 }
 
-async function uploadObject(input: {
+async function uploadObjectOnce(input: {
   bucket: StorageBucket;
   path: string;
   uri: string;
@@ -275,6 +282,7 @@ async function uploadObject(input: {
   onProgress?: UploadProgressHandler;
 }): Promise<string> {
   let { uri, contentType, blob, path } = input;
+  blob = blob && blob.size > 0 ? blob : getHeldCheckinBlob(uri);
   if (contentType.startsWith('image/') && contentType !== 'image/gif') {
     const compressed = await compressImageForUpload({
       uri,
@@ -363,6 +371,27 @@ async function uploadObject(input: {
   return jpegPath;
 }
 
+async function uploadObject(input: {
+  bucket: StorageBucket;
+  path: string;
+  uri: string;
+  contentType: string;
+  blob?: Blob | null;
+  upsert?: boolean;
+  size?: number | null;
+  onProgress?: UploadProgressHandler;
+}): Promise<string> {
+  try {
+    return await uploadObjectOnce(input);
+  } catch (error) {
+    if (!isTransientNetworkError(error)) {
+      throw error;
+    }
+    logCheckinPhase('upload', 'retry', error instanceof Error ? error.message : 'load failed');
+    return uploadObjectOnce(input);
+  }
+}
+
 export async function uploadBugReportImage(input: {
   uri: string;
   userId: string;
@@ -411,14 +440,22 @@ export async function uploadChallengeProof(input: {
     proofType: input.proofType,
     fileName: `${input.proofType}.${ext}`,
   });
-  return uploadObject({
-    bucket: STORAGE_BUCKETS.challengeProofs,
-    path,
-    uri: input.uri,
-    contentType,
-    blob: input.blob,
-    upsert: false,
-  });
+  try {
+    logCheckinPhase('upload', 'start');
+    const stored = await uploadObject({
+      bucket: STORAGE_BUCKETS.challengeProofs,
+      path,
+      uri: input.uri,
+      contentType,
+      blob: input.blob,
+      upsert: false,
+    });
+    logCheckinPhase('upload', 'ok');
+    return stored;
+  } catch (error) {
+    logCheckinPhase('upload', 'fail', error instanceof Error ? error.message : 'upload failed');
+    throw error;
+  }
 }
 
 export async function uploadChallengeCover(input: {

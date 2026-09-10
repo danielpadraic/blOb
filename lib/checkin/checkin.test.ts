@@ -85,6 +85,16 @@ describe('official weekly proofs', () => {
     expect(classifyCheckinError(new Error('ALREADY_LOGGED_TODAY'))).toBe('already');
   });
 
+  it('treats Safari Load failed and dropped fetches as offline, not generic', () => {
+    expect(classifyCheckinError(new TypeError('Load failed'))).toBe('offline');
+    expect(classifyCheckinError(new TypeError('Failed to fetch'))).toBe('offline');
+    expect(classifyCheckinError(new Error('Network request failed'))).toBe('offline');
+    expect(classifyCheckinError(new Error('The network connection was lost'))).toBe('offline');
+    expect(classifyCheckinError(new Error('The operation was aborted'))).toBe('offline');
+    expect(classifyCheckinError(new Error('cancelled'))).toBe('offline');
+    expect(classifyCheckinError(new Error('Couldn’t save that proof'))).toBe('upload');
+  });
+
   it('maps MISSING_PROOFS to a missing-proof failure, not a successful post', () => {
     expect(classifyCheckinError(new Error('MISSING_PROOFS'))).toBe('missing');
     expect(classifyCheckinError(new Error('Add every required proof to submit.'))).toBe('missing');
