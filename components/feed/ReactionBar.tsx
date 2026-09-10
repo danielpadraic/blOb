@@ -7,9 +7,11 @@ import {
   ReactionDismissScrim,
   ReactionPicker,
 } from '@/components/feed/ReactionPicker';
+import { ReactionMark } from '@/components/feed/ReactionMark';
 import {
   displayReactionType,
-  reactionEmoji,
+  REACTION_MARK_COMPACT,
+  REACTION_MARK_HIT,
   userReaction,
 } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
@@ -103,7 +105,7 @@ export function ReactionBar({
       <View className="flex-row items-center" style={{ columnGap: 2, zIndex: 41 }}>
         <Action
           compact
-          emoji={reactionEmoji(mineType ?? 'like')}
+          markType={mineType ?? 'like'}
           label="Like"
           count={total}
           color={THEME.textPrimary}
@@ -189,11 +191,19 @@ export function ReactionBar({
             openReactionTray(setTrayOpen);
           }}
           {...webNoSelectProps()}
-          className="h-8 flex-row items-center px-1.5"
-          style={noSelectStyle}>
-          <AppText style={{ fontSize: 28, lineHeight: 32, opacity: mineType ? 1 : 0.45 }}>
-            {reactionEmoji(mineType ?? 'like')}
-          </AppText>
+          style={[
+            {
+              minHeight: REACTION_MARK_HIT,
+              minWidth: REACTION_MARK_HIT,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 6,
+              opacity: mineType ? 1 : 0.45,
+            },
+            noSelectStyle,
+          ]}>
+          <ReactionMark type={mineType ?? 'like'} size={REACTION_MARK_COMPACT} />
           {total > 0 ? (
             <AppText
               selectable={false}
@@ -264,7 +274,7 @@ function ShareAction({
 
 function Action({
   icon,
-  emoji,
+  markType,
   label,
   count = 0,
   color,
@@ -274,7 +284,7 @@ function Action({
   onLongPress,
 }: {
   icon?: GlyphId;
-  emoji?: string;
+  markType?: string;
   label: string;
   count?: number;
   color: string;
@@ -293,15 +303,19 @@ function Action({
       {...(onLongPress ? webNoSelectProps() : null)}
       className={
         compact
-          ? 'h-8 flex-row items-center rounded-full px-1'
+          ? 'flex-row items-center rounded-full px-1'
           : 'h-7 flex-row items-center rounded-full px-1.5'
       }
       hitSlop={compact ? 4 : 6}
-      style={onLongPress ? noSelectStyle : undefined}>
-      {emoji ? (
-        <AppText style={{ fontSize: compact ? 28 : 22, lineHeight: compact ? 32 : 26, opacity: dim ? 0.45 : 1 }}>
-          {emoji}
-        </AppText>
+      style={[
+        compact && markType
+          ? { minHeight: REACTION_MARK_HIT, minWidth: REACTION_MARK_HIT, justifyContent: 'center' }
+          : null,
+        { opacity: dim ? 0.45 : 1 },
+        onLongPress ? noSelectStyle : undefined,
+      ]}>
+      {markType ? (
+        <ReactionMark type={markType} size={REACTION_MARK_COMPACT} />
       ) : icon ? (
         <Glyph name={icon} color={color} size={compact ? 14 : 16} />
       ) : null}

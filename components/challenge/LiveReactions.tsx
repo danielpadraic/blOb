@@ -8,7 +8,14 @@ import {
   ReactionPicker,
   keepReactionFocusProps,
 } from '@/components/feed/ReactionPicker';
-import { compactReactionChips, displayReactionType, reactionEmoji, userReaction } from '@/lib/reactions';
+import { ReactionMark } from '@/components/feed/ReactionMark';
+import {
+  compactReactionChips,
+  displayReactionType,
+  REACTION_MARK_COMPACT,
+  REACTION_MARK_HIT,
+  userReaction,
+} from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
 import type { Reaction, ReactionType } from '@/lib/types';
 
@@ -70,15 +77,16 @@ export function LiveReactions({
             onLongPress={() => setPickerOpen((open) => !open)}
             {...keepReactionFocusProps()}
             style={{
-              minHeight: 32,
-              paddingHorizontal: 6,
-              borderRadius: 999,
+              minHeight: REACTION_MARK_HIT,
+              minWidth: REACTION_MARK_HIT,
+              paddingHorizontal: 4,
               flexDirection: 'row',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: 3,
-              backgroundColor: row.mine ? THEME.accentSoft : 'transparent',
+              backgroundColor: 'transparent',
             }}>
-            <AppText style={{ fontSize: 28, lineHeight: 32 }}>{reactionEmoji(row.type)}</AppText>
+            <ReactionMark type={row.type} size={REACTION_MARK_COMPACT} />
             {row.count > 0 ? (
               <AppText
                 style={{
@@ -118,10 +126,14 @@ export function LiveReactions({
             }}
             onLongPress={() => setPickerOpen((open) => !open)}
             {...keepReactionFocusProps()}
-            style={{ minHeight: 32, minWidth: 32, alignItems: 'center', justifyContent: 'center' }}>
-            <AppText style={{ fontSize: 28, lineHeight: 32, opacity: mineType ? 1 : 0.45 }}>
-              {reactionEmoji(mineType ?? 'like')}
-            </AppText>
+            style={{
+              minHeight: REACTION_MARK_HIT,
+              minWidth: REACTION_MARK_HIT,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: mineType ? 1 : 0.45,
+            }}>
+            <ReactionMark type={mineType ?? 'like'} size={REACTION_MARK_COMPACT} />
           </Pressable>
           {onEdit ? (
             <Pressable

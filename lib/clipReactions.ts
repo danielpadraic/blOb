@@ -1,3 +1,4 @@
+import { PICKER_REACTION_TYPES } from '@/lib/reactions';
 import type { ReactionType } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
 
@@ -14,9 +15,9 @@ export const CLIP_REACTIONS = [
   { type: 'praise', emoji: '🙌', label: 'Praise' },
 ] as const;
 
-/** Long-press tray on Wave / Round. Same five as Home and Live. No labels. */
+/** Long-press tray on Wave / Round. Same types as Home and Live. No labels. */
 export const CLIP_PICKER_REACTIONS = CLIP_REACTIONS.filter((row) =>
-  ['like', 'love', 'laugh', 'fire', 'sad'].includes(row.type),
+  (PICKER_REACTION_TYPES as readonly string[]).includes(row.type),
 );
 
 export type ClipReactionType = (typeof CLIP_REACTIONS)[number]['type'];

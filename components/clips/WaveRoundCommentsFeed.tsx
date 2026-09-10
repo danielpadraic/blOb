@@ -21,7 +21,9 @@ import {
 } from '@/components/social/SocialSheets';
 import { AppText } from '@/components/ui/AppText';
 import { useUpdateComment } from '@/hooks/useCommentEdit';
-import { CLIP_PICKER_REACTIONS, clipReactionEmoji } from '@/lib/clipReactions';
+import { ReactionMark } from '@/components/feed/ReactionMark';
+import { ReactionDismissScrim, ReactionPicker } from '@/components/feed/ReactionPicker';
+import { REACTION_MARK_COMPACT, REACTION_MARK_HIT } from '@/lib/reactions';
 import { commentsForThread, isLiveComment } from '@/lib/commentEdit';
 import {
   COMMENT_HIGHLIGHT_MS,
@@ -491,58 +493,21 @@ function FeedItem({
           {removed || editing ? null : (
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30, marginTop: 2, gap: 4 }}>
             {onReact ? (
-              <View style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ minWidth: REACTION_MARK_HIT, minHeight: REACTION_MARK_HIT, alignItems: 'center', justifyContent: 'center' }}>
+                {pickerOpen ? <ReactionDismissScrim onClose={() => setPickerOpen(false)} /> : null}
                 {pickerOpen ? (
-                  <>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Dismiss reactions"
-                      onPress={() => setPickerOpen(false)}
-                      style={{
-                        position: 'absolute',
-                        top: -800,
-                        right: -800,
-                        bottom: -800,
-                        left: -800,
-                        backgroundColor: 'rgba(16,19,18,0.28)',
-                        zIndex: 5,
-                      }}
-                    />
-                    <View
-                      pointerEvents="auto"
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        bottom: 32,
-                        backgroundColor: 'rgba(16,19,18,0.28)',
-                        borderRadius: 18,
-                        paddingVertical: 4,
-                        zIndex: 6,
-                      }}>
-                      {CLIP_PICKER_REACTIONS.map((row) => (
-                        <Pressable
-                          key={row.type}
-                          accessibilityRole="button"
-                          accessibilityLabel={row.emoji}
-                          onPress={() => {
-                            onReact(comment.id, row.type);
-                            setPickerOpen(false);
-                          }}
-                          style={{
-                            minWidth: 30,
-                            minHeight: 30,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                          <AppText className="text-[18px]">{row.emoji}</AppText>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </>
+                  <ReactionPicker
+                    selected={mine?.reaction_type}
+                    align="start"
+                    onPick={(type) => {
+                      onReact(comment.id, type);
+                      setPickerOpen(false);
+                    }}
+                  />
                 ) : null}
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Love comment"
+                  accessibilityLabel="React"
                   onPress={() => {
                     if (pickerOpen) {
                       setPickerOpen(false);
@@ -552,10 +517,15 @@ function FeedItem({
                   }}
                   onLongPress={() => setPickerOpen((open) => !open)}
                   delayLongPress={280}
-                  style={{ minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center', zIndex: 7 }}>
-                  <AppText className="text-[16px]" style={{ color: mine ? '#fff' : ICON }}>
-                    {mine ? clipReactionEmoji(mine.reaction_type) : '♡'}
-                  </AppText>
+                  style={{
+                    minWidth: REACTION_MARK_HIT,
+                    minHeight: REACTION_MARK_HIT,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 7,
+                    opacity: mine ? 1 : 0.55,
+                  }}>
+                  <ReactionMark type={mine?.reaction_type ?? 'like'} size={REACTION_MARK_COMPACT} />
                 </Pressable>
               </View>
             ) : null}

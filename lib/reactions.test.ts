@@ -6,7 +6,7 @@ import {
   displayReactionType,
   isWritableReactionType,
   PICKER_REACTION_TYPES,
-  reactionEmoji,
+  reactionMarkFile,
   reactionPickerLabel,
 } from '@/lib/reactions';
 
@@ -18,12 +18,18 @@ describe('shared reactions', () => {
     expect(isWritableReactionType('laugh')).toBe(true);
   });
 
-  it('uses real emoji and LOL is the laughing face', () => {
-    expect(reactionEmoji('like')).toBe('👍');
-    expect(reactionEmoji('love')).toBe('❤️');
-    expect(reactionEmoji('laugh')).toBe('😂');
-    expect(reactionEmoji('fire')).toBe('🔥');
-    expect(reactionEmoji('sad')).toBe('😢');
+  it('maps each type to a Bob PNG and leftover strings still render', () => {
+    expect(reactionMarkFile('like')).toBe('like.png');
+    expect(reactionMarkFile('love')).toBe('love.png');
+    expect(reactionMarkFile('laugh')).toBe('lol.png');
+    expect(reactionMarkFile('lol')).toBe('lol.png');
+    expect(reactionMarkFile('care')).toBe('lol.png');
+    expect(reactionMarkFile('fire')).toBe('fire.png');
+    expect(reactionMarkFile('sad')).toBe('sad.png');
+    expect(reactionMarkFile('rofl')).toBe('rofl.png');
+    expect(reactionMarkFile('shock')).toBe('like.png');
+    expect(reactionMarkFile('applause')).toBe('like.png');
+    expect(reactionMarkFile('unknown')).toBe('like.png');
   });
 
   it('hides ROFL from the picker until the SQL constraint is live', () => {

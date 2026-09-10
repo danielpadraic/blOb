@@ -49,11 +49,26 @@ export function asReactionType(value: string | null | undefined): ReactionType {
 
 /** Existing `care` rows display as LOL. Do not write `care` from the picker. */
 export function displayReactionType(value: string | null | undefined): string {
-  const type = asReactionType(value);
-  if (type === 'care') {
+  const raw = String(value ?? '');
+  if (raw === 'care' || raw === 'lol') {
     return 'laugh';
   }
-  return type;
+  return asReactionType(value);
+}
+
+/** File in assets/blob-bob-reaction-emojis/. Unknown / leftover types → like.png. */
+const REACTION_MARK_FILES: Record<string, string> = {
+  like: 'like.png',
+  love: 'love.png',
+  laugh: 'lol.png',
+  care: 'lol.png',
+  rofl: 'rofl.png',
+  fire: 'fire.png',
+  sad: 'sad.png',
+};
+
+export function reactionMarkFile(type: string | null | undefined): string {
+  return REACTION_MARK_FILES[displayReactionType(type)] ?? 'like.png';
 }
 
 export function isWritableReactionType(value: string | null | undefined): boolean {
@@ -64,20 +79,9 @@ export function isWritableReactionType(value: string | null | undefined): boolea
   return (POST_REACTION_TYPES as readonly string[]).includes(type);
 }
 
-/** Real emoji for the picker and compact row. Never a Bob mark or SF stand-in. */
-export const REACTION_EMOJI: Record<string, string> = {
-  like: '👍',
-  love: '❤️',
-  laugh: '😂',
-  care: '😂',
-  rofl: '🤣',
-  fire: '🔥',
-  sad: '😢',
-};
-
-export function reactionEmoji(type: string): string {
-  return REACTION_EMOJI[type] ?? '👍';
-}
+export const REACTION_MARK_COMPACT = 28;
+export const REACTION_MARK_PICKER = 36;
+export const REACTION_MARK_HIT = 44;
 
 export function reactionPickerLabel(type: string): string {
   if (type === 'laugh') {

@@ -1,13 +1,13 @@
 import { Platform, Pressable, View } from 'react-native';
 
-import { AppText } from '@/components/ui/AppText';
+import { ReactionMark } from '@/components/feed/ReactionMark';
 import {
   PICKER_REACTION_TYPES,
-  reactionEmoji,
+  REACTION_MARK_HIT,
+  REACTION_MARK_PICKER,
   reactionPickerLabel,
   type PickerReactionType,
 } from '@/lib/reactions';
-import { THEME } from '@/lib/theme';
 import type { ReactionType } from '@/lib/types';
 
 export function keepReactionFocusProps() {
@@ -59,7 +59,7 @@ type ReactionPickerProps = {
   onPick: (type: ReactionType) => void;
 };
 
-/** Vertical, transparent. Emoji only. Does not shove the bubble. */
+/** Vertical, transparent. Bob PNG only. Does not shove the bubble. */
 export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPickerProps) {
   return (
     <View
@@ -73,7 +73,7 @@ export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPi
         zIndex: 41,
         alignItems: align === 'end' ? 'flex-end' : 'flex-start',
       }}>
-      <View style={{ gap: 4 }}>
+      <View style={{ gap: 2 }}>
         {PICKER_REACTION_TYPES.map((type: PickerReactionType) => {
           const active = selected === type;
           return (
@@ -84,14 +84,14 @@ export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPi
               onPress={() => onPick(type)}
               {...keepReactionFocusProps()}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: REACTION_MARK_HIT,
+                height: REACTION_MARK_HIT,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: active ? THEME.accentSoft : 'transparent',
+                backgroundColor: 'transparent',
+                opacity: active ? 1 : 0.92,
               }}>
-              <AppText style={{ fontSize: 30, lineHeight: 34 }}>{reactionEmoji(type)}</AppText>
+              <ReactionMark type={type} size={REACTION_MARK_PICKER} />
             </Pressable>
           );
         })}

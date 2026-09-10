@@ -44,10 +44,8 @@ import { RoundShareComposer } from '@/components/clips/RoundShareComposer';
 import { startClipRepostCapture } from '@/lib/clipAttach';
 import { downloadClipMedia } from '@/lib/clipDownload';
 import {
-  CLIP_PICKER_REACTIONS,
   DEFAULT_CLIP_REACTION,
   asClipReactionType,
-  clipReactionEmoji,
   commentsDrawerHeight,
   commentsDrawerKeyboardLift,
   loadLastClipReaction,
@@ -56,6 +54,9 @@ import {
   saveLastClipReaction,
   type ClipReactionType,
 } from '@/lib/clipReactions';
+import { ReactionMark } from '@/components/feed/ReactionMark';
+import { ReactionPicker } from '@/components/feed/ReactionPicker';
+import { REACTION_MARK_COMPACT, REACTION_MARK_PICKER } from '@/lib/reactions';
 import {
   authorRanges,
   nextAuthorEntryIndex,
@@ -155,7 +156,7 @@ export function ClipPlayer({
   const [promptShare, setPromptShare] = useState(sharePrompt);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [lastReaction, setLastReaction] = useState<ClipReactionType>(DEFAULT_CLIP_REACTION);
-  const [float, setFloat] = useState<{ emoji: string; key: number } | null>(null);
+  const [float, setFloat] = useState<{ type: string; key: number } | null>(null);
   const [captionDraft, setCaptionDraft] = useState('');
   const [captionOpen, setCaptionOpen] = useState(false);
   const [captionOverflow, setCaptionOverflow] = useState(false);
@@ -295,7 +296,7 @@ export function ClipPlayer({
   const applyReaction = useCallback((type: ClipReactionType) => {
     setLastReaction(type);
     void saveLastClipReaction(type);
-    setFloat({ emoji: clipReactionEmoji(type), key: Date.now() });
+    setFloat({ type, key: Date.now() });
     setPickerOpen(false);
     persistReact.current(type);
   }, []);
@@ -573,7 +574,7 @@ export function ClipPlayer({
                 right: 0,
                 bottom: 0,
                 left: 0,
-                backgroundColor: 'rgba(16,19,18,0.28)',
+                backgroundColor: 'transparent',
                 zIndex: 7,
               }}
             />
@@ -990,7 +991,7 @@ function ClipSocialRail({
   currentUserId?: string;
   lastReaction: ClipReactionType;
   pickerOpen: boolean;
-  float: { emoji: string; key: number } | null;
+  float: { type: string; key: number } | null;
   insetsBottom: number;
   persistReact: { current: (type: ClipReactionType) => void };
   onComments: () => void;
@@ -1049,44 +1050,13 @@ function ClipSocialRail({
       }}>
       <View style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
         {pickerOpen ? (
-          <View
-            pointerEvents="auto"
-            style={{
-              position: 'absolute',
-              right: 0,
-              bottom: RAIL_HIT + 6,
-              backgroundColor: 'rgba(16,19,18,0.28)',
-              borderRadius: 18,
-              paddingVertical: 4,
-              zIndex: 4,
-            }}>
-            {CLIP_PICKER_REACTIONS.map((row) => (
-              <Pressable
-                key={row.type}
-                accessibilityRole="button"
-                accessibilityLabel={row.emoji}
-                onPress={() => fire(row.type)}
-                style={{
-                  minWidth: RAIL_HIT,
-                  minHeight: RAIL_HIT,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                <AppText className="text-[22px]">{row.emoji}</AppText>
-              </Pressable>
-            ))}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close reactions"
-              onPress={onClosePicker}
-              style={{ minHeight: 36, alignItems: 'center', justifyContent: 'center' }}>
-              <AppText className="text-[11px] font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                ×
-              </AppText>
-            </Pressable>
-          </View>
+          <ReactionPicker
+            selected={mineType}
+            align="end"
+            onPick={(type) => fire(asClipReactionType(type))}
+          />
         ) : null}
-        {float ? <FloatEmoji emoji={float.emoji} token={float.key} /> : null}
+        {float ? <FloatMark type={float.type} token={float.key} /> : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Reaction"
@@ -1108,7 +1078,7 @@ function ClipSocialRail({
           }}
           delayLongPress={280}
           style={{ minWidth: RAIL_HIT, minHeight: RAIL_HIT, alignItems: 'center', justifyContent: 'center' }}>
-          <AppText className="text-[28px]">{mineType ? clipReactionEmoji(mineType) : '♡'}</AppText>
+          <ReactionMark type={mineType ?? 'like'} size={REACTION_MARK_COMPACT} />
           <AppText
             className="text-[11px] font-bold"
             style={{ color: mineType ? fill : '#fff' }}>
@@ -1155,7 +1125,7 @@ function ClipSocialRail({
   );
 }
 
-function FloatEmoji({ emoji, token }: { emoji: string; token: number }) {
+function FloatMark({ type, token }: { type: string; token: number }) {
   const y = useRef(new RNAnimated.Value(0)).current;
   const opacity = useRef(new RNAnimated.Value(1)).current;
   useEffect(() => {
@@ -1170,7 +1140,7 @@ function FloatEmoji({ emoji, token }: { emoji: string; token: number }) {
     <RNAnimated.View
       pointerEvents="none"
       style={{ position: 'absolute', transform: [{ translateY: y }], opacity }}>
-      <AppText className="text-[32px]">{emoji}</AppText>
+      <ReactionMark type={type} size={REACTION_MARK_PICKER} />
     </RNAnimated.View>
   );
 }
