@@ -215,6 +215,10 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   if (watch && !clipRouteId(watch[2])) {
     return '/feed';
   }
+  const submitId = path.match(/\/challenges\/([^/?#]+)\/submit/)?.[1];
+  if (submitId && !CHALLENGE_RETRY_SKIP.has(submitId)) {
+    return `/challenges/${submitId}/submit`;
+  }
   const challengeId = challengeRetryId(path);
   if (challengeId) {
     const tab = path.match(/[?&]tab=(overview|board)\b/)?.[1];
@@ -223,17 +227,18 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   return path || '/feed';
 }
 
-/** X / Close on Check In. Live, or Overview/Board if they came from there. Never Home. */
+/** X / Close on Check In review. That challenge Live (or Overview/Board). Never Home, never /feed, never last-open. */
 export function leaveCheckinHref(
   id: string | null | undefined,
   extra?: { from?: string | null; tab?: string | null },
 ): string {
-  if (String(extra?.from ?? '').trim() === 'multi') {
-    return String(MULTI_CHECKIN_HREF);
-  }
   const challengeId = String(id ?? '').trim();
   if (!challengeId) {
     return String(LOBBY_HREF);
+  }
+  const from = String(extra?.from ?? '').trim();
+  if (from === 'feed' || from === 'home') {
+    // Keep the id. from=feed must not dump /feed.
   }
   const tab =
     extra?.tab === 'overview' || extra?.tab === 'board' ? extra.tab : 'feed';

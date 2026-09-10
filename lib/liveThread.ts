@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { findChallengesStack, type NavLike } from '@/lib/challengeNav';
 import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { seedLiveAuthor } from '@/lib/safeIds';
+import { checkinComposerPrefill } from '@/lib/checkin/captions';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
 import { asReactionType, POST_REACTION_TYPES, type PostReactionType } from '@/lib/reactions';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
@@ -225,10 +226,10 @@ export function liveComposeFromInline(content: string): { text: string; mediaUrl
   };
 }
 
-/** Prefill the lobby composer for Edit. Keep check-in captions as stored. */
+/** Prefill the lobby composer for Edit. Check-in: real caption only — never the Complete sentinel. */
 export function liveEditPrefill(post: { content?: string | null; media_urls?: string[] | null } & CheckinPostLike): string {
   if (isLiveCheckinPost(post)) {
-    return (post.content ?? '').trim();
+    return checkinComposerPrefill(post.content);
   }
   return liveChatText(post.content, post.media_urls);
 }

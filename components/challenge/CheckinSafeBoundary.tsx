@@ -6,7 +6,7 @@ import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { reportAppError } from '@/lib/appErrors';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
-import { errorRetryHref, leaveCheckinHref } from '@/lib/routes';
+import { checkinSubmitHref, errorRetryHref } from '@/lib/routes';
 
 function checkinIdFromHref(href?: string | null): string | null {
   const match = String(href ?? '').match(/\/challenges\/([^/?#]+)\/submit/);
@@ -48,7 +48,7 @@ function CheckinFail({ onBack }: { onBack: () => void }) {
         kind="error"
         title="Couldn’t open that check-in"
         body="Try again in a moment."
-        actionLabel="Back"
+        actionLabel="Try again"
         onAction={() => {
           stopAllLiveMedia();
           onBack();
@@ -72,6 +72,15 @@ type State = { failed: boolean };
 export class CheckinSafeBoundary extends Component<Props, State> {
   state: State = { failed: false };
 
+  remountSubmit = () => {
+    stopAllLiveMedia();
+    this.setState({ failed: false });
+    const id = this.props.id || checkinIdFromHref(this.props.href);
+    if (id) {
+      router.replace(checkinSubmitHref(id) as Href);
+    }
+  };
+
   static getDerivedStateFromError(): State {
     return { failed: true };
   }
@@ -92,7 +101,7 @@ export class CheckinSafeBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.failed) {
-      return <CheckinFail onBack={this.props.onBack} />;
+      return <CheckinFail onBack={this.remountSubmit} />;
     }
     return this.props.children;
   }
@@ -110,8 +119,13 @@ export function CheckinRouteErrorBoundary({ error, retry }: ErrorBoundaryProps) 
       onBack={() => {
         stopAllLiveMedia();
         const id = checkinIdFromHref(pathname);
-        const live = id ? leaveCheckinHref(id) : errorRetryHref(pathname);
-        if (!live || live.includes('/capture') || live.includes('/submit')) {
+        if (id) {
+          router.replace(checkinSubmitHref(id) as Href);
+          void retry();
+          return;
+        }
+        const live = errorRetryHref(pathname);
+        if (!live || live.includes('/capture')) {
           router.replace('/challenges' as Href);
           return;
         }

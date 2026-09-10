@@ -694,7 +694,7 @@ export function CheckinComposer({
               gap: 8,
             }}>
             <OverlayChip
-              label="Retake"
+              label="Replace"
               onPress={() => {
                 if (current.kind === 'proof') {
                   onRetake(current.proof, current.stillIndex);

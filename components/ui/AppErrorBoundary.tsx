@@ -18,6 +18,10 @@ function webPathname(): string {
 
 function liveRetryHref(pathname: string): string {
   const next = errorRetryHref(pathname);
+  const submitId = String(pathname ?? '').match(/\/challenges\/([^/?#]+)\/submit/)?.[1] ?? '';
+  if (submitId && submitId !== 'new' && submitId !== 'create' && submitId !== 'callout') {
+    return `/challenges/${submitId}/submit`;
+  }
   const id = String(pathname ?? '').match(/\/challenges\/([^/?#]+)/)?.[1] ?? '';
   const skip = id === 'new' || id === 'create' || id === 'callout';
   if (id && !skip && (!next || next === '/feed' || next.includes('/capture') || next.includes('/submit'))) {
@@ -34,6 +38,16 @@ function reloadApp(retry: () => Promise<void>, pathname: string, error?: unknown
     error: error instanceof Error ? error.message : String(error ?? 'retry'),
     file: liveErrorFile(error),
   });
+  const submitId = String(current ?? '').match(/\/challenges\/([^/?#]+)\/submit/)?.[1] ?? '';
+  if (submitId) {
+    const submitHref = `/challenges/${submitId}/submit`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
+      window.location.replace(submitHref);
+      return;
+    }
+    router.replace(submitHref as never);
+    return;
+  }
   if (!next || next.includes('/capture') || next.includes('/submit')) {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
       window.location.replace('/feed');

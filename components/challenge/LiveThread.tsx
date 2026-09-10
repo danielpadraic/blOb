@@ -646,9 +646,13 @@ export function LiveThread({
   }, []);
 
   const startEdit = useCallback((post: PostWithMeta) => {
+    if (isLiveCheckinPost(post) && post.challenge_id) {
+      social?.openEdit(post);
+      return;
+    }
     setReplyTo(null);
     setEditing(post);
-  }, []);
+  }, [social]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: LiveThreadRow; index: number }) => {

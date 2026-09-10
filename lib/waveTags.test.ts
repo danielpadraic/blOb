@@ -29,7 +29,7 @@ describe('checkinSubmitHref', () => {
   it('retries Check In submit onto that Live list and never reloads Wave capture', () => {
     expect(errorRetryHref('/capture')).toBe('/feed');
     expect(errorRetryHref('/capture?mode=story')).toBe('/feed');
-    expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1?tab=feed');
+    expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1/submit');
     expect(errorRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/challenges/abc-1?postId=p1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/challenges/abc-1?tab=overview')).toBe('/challenges/abc-1?tab=overview');
@@ -46,7 +46,8 @@ describe('checkinSubmitHref', () => {
   it('closes Check In onto that challenge Live, not Home', () => {
     expect(leaveCheckinHref('abc-1')).toBe('/challenges/abc-1?tab=feed');
     expect(leaveCheckinHref('abc-1', { tab: 'overview' })).toBe('/challenges/abc-1?tab=overview');
-    expect(leaveCheckinHref('abc-1', { from: 'multi' })).toBe('/checkin');
+    expect(leaveCheckinHref('abc-1', { from: 'multi' })).toBe('/challenges/abc-1?tab=feed');
+    expect(leaveCheckinHref('abc-1', { from: 'feed' })).toBe('/challenges/abc-1?tab=feed');
     expect(leaveCheckinHref('')).toBe('/challenges');
   });
 });

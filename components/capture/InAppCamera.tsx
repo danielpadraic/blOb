@@ -18,7 +18,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useIsFocused, usePathname } from 'expo-router';
+import { useIsFocused, useNavigation, usePathname } from 'expo-router';
 import { Camera, CameraView, type CameraMountError, type CameraType } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import Svg, { Circle } from 'react-native-svg';
@@ -141,6 +141,7 @@ export function InAppCamera({
   const [previewBox, setPreviewBox] = useState({ width: windowSize.width, height: windowSize.height });
   const [webOrient, setWebOrient] = useState(EMPTY_WEB_ORIENTATION);
   const navFocused = useIsFocused();
+  const navigation = useNavigation();
   const pathname = usePathname();
   const web = Platform.OS === 'web';
   const focused = Boolean(navFocused || (checkin && checkinCameraFocused({ navFocused, pathname })));
@@ -509,6 +510,45 @@ export function InAppCamera({
     });
     return () => sub.remove();
   }, [onCancel]);
+
+  useEffect(() => {
+    if (!checkin) {
+      return;
+    }
+    const unsub = navigation.addListener('beforeRemove', (e) => {
+      const type = String((e as { data?: { action?: { type?: string } } }).data?.action?.type ?? '');
+      if (type !== 'GO_BACK' && type !== 'POP' && type !== 'POP_TO_TOP') {
+        return;
+      }
+      e.preventDefault();
+      closeCamera();
+    });
+    return unsub;
+  }, [checkin, navigation, onCancel]);
+
+  useEffect(() => {
+    if (!checkin || Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+    const win = window;
+    try {
+      win.history.pushState({ blobCheckinCam: true }, '', win.location.href);
+    } catch {
+      return;
+    }
+    const onPop = () => {
+      closeCamera();
+      try {
+        win.history.pushState({ blobCheckinCam: true }, '', win.location.href);
+      } catch {
+        // Stay on /submit review.
+      }
+    };
+    win.addEventListener('popstate', onPop);
+    return () => {
+      win.removeEventListener('popstate', onPop);
+    };
+  }, [checkin, onCancel]);
 
   const attachWebVideo = useCallback((node: HTMLVideoElement | null) => {
     webVideoRef.current = node;

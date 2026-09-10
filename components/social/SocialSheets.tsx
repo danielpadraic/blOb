@@ -31,6 +31,8 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { useQueryClient } from '@tanstack/react-query';
 
+import { usePathname, useRouter } from 'expo-router';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useCreatePost } from '@/hooks/useFeed';
 import {
@@ -55,6 +57,8 @@ import {
   useUnfriend,
 } from '@/hooks/useSocial';
 import { confirmDestructive } from '@/lib/confirm';
+import { pushCheckinSubmit } from '@/lib/challengeNav';
+import { isCheckinPost } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
 import { postShareUrl } from '@/lib/postShare';
 import { snapshotFromPost } from '@/lib/quotePost';
@@ -187,6 +191,8 @@ export function useCommentEditing(commentId: string) {
 
 export function SocialSheetsHost({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const mutes = useMutedUserIds();
@@ -251,8 +257,14 @@ export function SocialSheetsHost({ children }: { children: ReactNode }) {
   }, []);
 
   const openEdit = useCallback((post: PostWithMeta) => {
+    const challengeId = String(post.challenge_id ?? '').trim();
+    if (isCheckinPost(post) && challengeId) {
+      setSheet(null);
+      pushCheckinSubmit(router, challengeId, 'live-begin', undefined, pathname);
+      return;
+    }
     setSheet({ kind: 'edit', post });
-  }, []);
+  }, [pathname, router]);
 
   const openHistory = useCallback((post: PostWithMeta) => {
     setSheet({ kind: 'history', post });
@@ -355,6 +367,21 @@ function liveFeedPost(
   return post;
 }
 
+function beginCheckinReview(
+  post: PostWithMeta,
+  router: { push: (href: never) => void },
+  pathname: string | null,
+  onClose: () => void,
+): boolean {
+  const challengeId = String(post.challenge_id ?? '').trim();
+  if (!isCheckinPost(post) || !challengeId) {
+    return false;
+  }
+  onClose();
+  pushCheckinSubmit(router, challengeId, 'live-begin', undefined, pathname);
+  return true;
+}
+
 function SheetView({
   sheet,
   userId,
@@ -371,6 +398,8 @@ function SheetView({
   onStartCommentEdit: (commentId: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
   const post = sheet && 'post' in sheet ? liveFeedPost(queryClient, sheet.post) : null;
   if (!sheet) {
     return null;
@@ -386,7 +415,13 @@ function SheetView({
         onToast={onToast}
         onPanel={(panel) => onOpen({ ...sheet, panel })}
         onQuote={() => onOpen({ kind: 'quote', post: post ?? sheet.post })}
-        onEdit={() => onOpen({ kind: 'edit', post: post ?? sheet.post })}
+        onEdit={() => {
+          const next = post ?? sheet.post;
+          if (beginCheckinReview(next, router, pathname, onClose)) {
+            return;
+          }
+          onOpen({ kind: 'edit', post: next });
+        }}
       />
     );
   }
@@ -408,9 +443,13 @@ function SheetView({
     return <QuoteSheet post={sheet.post} onClose={onClose} />;
   }
   if (sheet.kind === 'edit') {
+    const next = post ?? sheet.post;
+    if (beginCheckinReview(next, router, pathname, onClose)) {
+      return null;
+    }
     return (
       <PostEditor
-        post={post ?? sheet.post}
+        post={next}
         onClose={onClose}
         onToast={onToast}
         onSaved={() => onToast('Saved.')}

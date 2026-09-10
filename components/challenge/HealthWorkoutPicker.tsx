@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { useNavigation } from 'expo-router';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { useAuth } from '@/hooks/useAuth';
@@ -117,6 +118,57 @@ export function HealthWorkoutPicker({
   const [needsInstall, setNeedsInstall] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    if (!onClose) {
+      return;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!onClose) {
+      return;
+    }
+    const unsub = navigation.addListener('beforeRemove', (e) => {
+      const type = String((e as { data?: { action?: { type?: string } } }).data?.action?.type ?? '');
+      if (type !== 'GO_BACK' && type !== 'POP' && type !== 'POP_TO_TOP') {
+        return;
+      }
+      e.preventDefault();
+      onClose();
+    });
+    return unsub;
+  }, [navigation, onClose]);
+
+  useEffect(() => {
+    if (!onClose || Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+    const win = window;
+    try {
+      win.history.pushState({ blobCheckinCam: true }, '', win.location.href);
+    } catch {
+      return;
+    }
+    const onPop = () => {
+      onClose();
+      try {
+        win.history.pushState({ blobCheckinCam: true }, '', win.location.href);
+      } catch {
+        // Stay on /submit review.
+      }
+    };
+    win.addEventListener('popstate', onPop);
+    return () => {
+      win.removeEventListener('popstate', onPop);
+    };
+  }, [onClose]);
 
   // The intensity bar uses the same 80 bpm attach floor as /submit.
   const { user } = useAuth();

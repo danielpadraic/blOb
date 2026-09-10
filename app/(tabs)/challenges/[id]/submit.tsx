@@ -1,4 +1,4 @@
-import { useIsFocused, useLocalSearchParams, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useNavigation, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -54,6 +54,7 @@ import {
   CHECKIN_UPLOAD_STAY,
   canSendCheckin,
   shouldAutoOpenCheckinCamera,
+  checkinComposerPrefill,
   checkinPostBody,
   checkinSendStayCopy,
   checkinSendWhyNot,
@@ -67,7 +68,7 @@ import {
 } from '@/lib/checkin';
 import { checkinCameraFocused } from '@/lib/cameraAsk';
 import { requiredChallengeProofs } from '@/lib/challenges';
-import { blockingProofsForCheckin, dueProofsForCheckin, hasOpenDueTask } from '@/lib/taskCadence';
+import { blockingProofsForCheckin, dueProofsForCheckin } from '@/lib/taskCadence';
 import {
   beginCameraProof,
   captureTypeForMethod,
@@ -181,7 +182,7 @@ type SlotDraft = {
 };
 
 function shareFieldFromNotes(notes?: string | null, snapshot?: CheckinHealthProof | null): string {
-  return checkinExtraCaption(stripHealthSummaryFromNotes(notes ?? '', snapshot));
+  return checkinComposerPrefill(checkinExtraCaption(stripHealthSummaryFromNotes(notes ?? '', snapshot)));
 }
 
 /**
@@ -313,12 +314,56 @@ function SubmitWorkoutInner() {
   const hydrateServerRef = useRef<string | null>(null);
   const appendStillRef = useRef<{ proofId: string } | null>(null);
   const replaceStillRef = useRef<{ proofId: string; index: number } | null>(null);
+  const overlayOpenRef = useRef(false);
+  const navigation = useNavigation();
   const leaveCheckin = useCallback(() => {
     closeCheckinToChallenge(router, id, {
       from: firstRouteParam(params.from),
       tab: firstRouteParam(params.tab),
     });
   }, [id, params.from, params.tab, router]);
+  const closeCameraOverlay = useCallback(() => {
+    setCaptureId(null);
+    setSkippedAuto(true);
+    setPreferCamera(false);
+  }, []);
+
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e) => {
+      if (!overlayOpenRef.current) {
+        return;
+      }
+      const type = String((e as { data?: { action?: { type?: string } } }).data?.action?.type ?? '');
+      if (type !== 'GO_BACK' && type !== 'POP' && type !== 'POP_TO_TOP') {
+        return;
+      }
+      e.preventDefault();
+      closeCameraOverlay();
+    });
+    return unsub;
+  }, [closeCameraOverlay, navigation]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+    const win = window;
+    const onPop = () => {
+      if (!overlayOpenRef.current) {
+        return;
+      }
+      closeCameraOverlay();
+      try {
+        win.history.pushState({ blobCheckinCam: true }, '', win.location.href);
+      } catch {
+        // Older webviews
+      }
+    };
+    win.addEventListener('popstate', onPop);
+    return () => {
+      win.removeEventListener('popstate', onPop);
+    };
+  }, [closeCameraOverlay]);
 
   useEffect(() => {
     if (!id) {
@@ -365,6 +410,8 @@ function SubmitWorkoutInner() {
   } | null>(null);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
+  const [hydrateDone, setHydrateDone] = useState(false);
+  const [hydrateError, setHydrateError] = useState(false);
   const [preferCamera, setPreferCamera] = useState(false);
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
@@ -438,7 +485,6 @@ function SubmitWorkoutInner() {
     () => (challenge && dueCtx ? blockingProofsForCheckin(allProofs, challenge, dueCtx) : proofSteps),
     [allProofs, challenge, dueCtx, proofSteps],
   );
-  const dueTasksOpen = Boolean(challenge && dueCtx && hasOpenDueTask(challenge, dueCtx));
   const multiSubmit = allowsMultiCheckin(challenge);
   const rawPhase = checkinQuery.data?.phase ?? 'none';
   const phase = multiSubmit && rawPhase === 'submitted' ? 'none' : rawPhase;
@@ -480,21 +526,6 @@ function SubmitWorkoutInner() {
       live = false;
     };
   }, [uid, profile?.checkin_share_home, profile?.checkin_share_wave]);
-
-  useEffect(() => {
-    if (!id || !challenge || multiSubmit || !checkinQuery.isFetched || checkinQuery.data?.phase !== 'submitted') {
-      return;
-    }
-    if (dueTasksOpen) {
-      return;
-    }
-    router.replace(
-      challengeDetailHref(id, 'lobby', null, {
-        tab: 'feed',
-        notice: copy('checkin.alreadyBob'),
-      }) as never,
-    );
-  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, dueTasksOpen, id, multiSubmit, router]);
 
   useEffect(() => {
     if (!id || challengeQuery.isLoading || !checkinQuery.isFetched) {
@@ -548,10 +579,11 @@ function SubmitWorkoutInner() {
   ]);
 
   useEffect(() => {
-    if (allowsMultiCheckin(challenge) && checkinQuery.data?.phase === 'submitted') {
+    if (!checkinQuery.isFetched) {
       return;
     }
     if (!checkinQuery.data) {
+      setHydrateDone(true);
       return;
     }
     const hydrateKey = [
@@ -564,9 +596,12 @@ function SubmitWorkoutInner() {
       JSON.stringify(checkinQuery.data.proof_parts ?? {}),
     ].join('|');
     if (hydrateServerRef.current === hydrateKey) {
+      setHydrateDone(true);
       return;
     }
     hydrateServerRef.current = hydrateKey;
+    setHydrateError(false);
+    try {
     const parts = checkinQuery.data.proof_parts ?? {};
     // Reuse the rendered slots: a second resolve would key drafts to ids the UI never reads.
     const steps = proofSteps;
@@ -673,6 +708,12 @@ function SubmitWorkoutInner() {
         ];
       });
     }
+      setHydrateDone(true);
+    } catch (caught) {
+      setHydrateError(true);
+      setHydrateDone(true);
+      logDev('[blob:checkin]', { phase: 'hydrate', status: 'fail', message: getErrorMessage(caught) });
+    }
   }, [
     challenge,
     proofSteps,
@@ -684,6 +725,7 @@ function SubmitWorkoutInner() {
     checkinQuery.data?.hr_monitor_url,
     checkinQuery.data?.proof_parts,
     checkinQuery.data?.updated_at,
+    checkinQuery.isFetched,
   ]);
 
   const filledCount = blockingProofs.filter((proof) =>
@@ -1239,7 +1281,8 @@ function SubmitWorkoutInner() {
           : failedExtras.length === 1
             ? copy('checkin.extraFailed')
             : interpolateCopy(copy('checkin.extraFailedMany'), { n: failedExtras.length });
-      const sending = honorOnly || readyNow;
+      const alreadySubmitted = checkinQuery.data?.phase === 'submitted';
+      const sending = (honorOnly || readyNow) && !alreadySubmitted;
       const submitted = sending ? await submitCheckin.mutateAsync() : null;
       // submit_checkin answers with the check-in it wrote. Getting no check-in back means the send did
       // not land even though nothing threw, so this stops short of the happy path — landing them on
@@ -1632,6 +1675,8 @@ function SubmitWorkoutInner() {
     }));
   }, []);
 
+  overlayOpenRef.current = false;
+
   if (!id) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
@@ -1641,14 +1686,6 @@ function SubmitWorkoutInner() {
   }
 
   if (challengeQuery.isLoading || participationLoading || checkinQuery.isLoading) {
-    return (
-      <Screen padded={false} edges={['left', 'right', 'bottom']}>
-        <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
-      </Screen>
-    );
-  }
-
-  if (!multiSubmit && checkinQuery.isFetched && checkinQuery.data?.phase === 'submitted' && !dueTasksOpen) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState kind="loading" title="Opening today’s check-in" body={CHECKIN_BOB.loading} />
@@ -1782,6 +1819,7 @@ function SubmitWorkoutInner() {
   const checkinReady = checkinQuery.isFetched && !checkinQuery.isLoading;
   const shouldAutoHealth =
     checkinReady &&
+    hydrateDone &&
     !skippedAuto &&
     !preferCamera &&
     iosHealthReady &&
@@ -1800,6 +1838,7 @@ function SubmitWorkoutInner() {
     });
   const shouldAutoOpen =
     checkinReady &&
+    hydrateDone &&
     shouldAutoOpenCheckinCamera({
       skippedAuto,
       honorOnly,
@@ -1810,6 +1849,7 @@ function SubmitWorkoutInner() {
     });
   const shouldOpenGuided =
     checkinReady &&
+    hydrateDone &&
     !skippedAuto &&
     !honorOnly &&
     !needsWrittenProof &&
@@ -1833,6 +1873,14 @@ function SubmitWorkoutInner() {
     !preferCamera &&
     !shouldOpenGuided &&
     proofPrefersHealthAttach(activeProof, challenge);
+  overlayOpenRef.current = Boolean(
+    (showHealthFirst && activeProof) ||
+      (activeProof &&
+        (activeProof.method === 'photo' ||
+          activeProof.method === 'video' ||
+          activeProof.method === 'hr' ||
+          activeProof.method === 'distance')),
+  );
 
   if (showHealthFirst && activeProof) {
     return (
@@ -1854,12 +1902,7 @@ function SubmitWorkoutInner() {
           onAttach={(workout) => onAttachHealth(workout, activeProof)}
           onAddPhoto={() => setPreferCamera(true)}
           onClose={() => {
-            setCaptureId(null);
-            setSkippedAuto(true);
-            setPreferCamera(false);
-            if (!hasReviewDraft && !captureId) {
-              leaveCheckin();
-            }
+            closeCameraOverlay();
           }}
         />
       </Screen>
@@ -1898,12 +1941,7 @@ function SubmitWorkoutInner() {
               setSkippedAuto(true);
               return;
             }
-            setCaptureId(null);
-            setSkippedAuto(true);
-            setPreferCamera(false);
-            if (!hasReviewDraft) {
-              leaveCheckin();
-            }
+            closeCameraOverlay();
           }}
         />
       </Screen>
@@ -1929,6 +1967,20 @@ function SubmitWorkoutInner() {
         onRendered={onCardRendered}
         onFailed={onCardFailed}
       />
+      {hydrateError ? (
+        <Pressable
+          onPress={() => {
+            setHydrateError(false);
+            setHydrateDone(false);
+            hydrateServerRef.current = null;
+            void checkinQuery.refetch();
+          }}
+          style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
+          <AppText className="text-[13px] leading-5" style={{ color: THEME.danger }}>
+            Couldn’t load that check-in. Tap to try again.
+          </AppText>
+        </Pressable>
+      ) : null}
       <CheckinComposer
         proofs={composerProofs}
         drafts={drafts}

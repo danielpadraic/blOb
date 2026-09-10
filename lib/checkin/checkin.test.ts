@@ -15,6 +15,7 @@ import {
   boardProgressLabel,
   canSendCheckin,
   shouldAutoOpenCheckinCamera,
+  checkinComposerPrefill,
   checkinPostBody,
   checkinSendWhyNot,
   checkinStageLabel,
@@ -132,8 +133,15 @@ describe('official weekly proofs', () => {
     expect(canSendCheckin(false, true, 'in_progress', false)).toBe(true);
     expect(checkinPostBody('')).toBe('Check-in Complete');
     expect(checkinPostBody('  ')).toBe('Check-in Complete');
+    expect(checkinPostBody('Check-in Complete')).toBe('Check-in Complete');
+    expect(checkinPostBody('Check In Complete')).toBe('Check-in Complete');
     expect(checkinPostBody('legs day')).toBe('legs day');
     expect(checkinPostBody(' legs day ')).toBe('legs day');
+    expect(checkinComposerPrefill('')).toBe('');
+    expect(checkinComposerPrefill('Check-in Complete')).toBe('');
+    expect(checkinComposerPrefill('Check In Complete')).toBe('');
+    expect(checkinComposerPrefill('Check—in Complete')).toBe('');
+    expect(checkinComposerPrefill('legs day')).toBe('legs day');
     expect(canSendCheckin(true, false, 'none', false)).toBe(true);
     expect(canSendCheckin(true, true, 'submitted', false)).toBe(true);
     expect(canSendCheckin(false, true, 'ready', true)).toBe(false);

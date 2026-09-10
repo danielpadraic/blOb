@@ -30,7 +30,13 @@ export {
   type SaveCheckinProofInput,
   type UploadCheckinProofFn,
 } from './rpc';
-export { checkinPostBody, checkinTaskLabel } from './captions';
+export {
+  CHECKIN_COMPLETE_BODY,
+  checkinComposerPrefill,
+  checkinPostBody,
+  checkinTaskLabel,
+  isCheckinCompleteSentinel,
+} from './captions';
 export {
   CHECKIN_SAVE_PERMISSION,
   CHECKIN_UPLOAD_SAVED_NATIVE,

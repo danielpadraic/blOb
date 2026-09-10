@@ -414,6 +414,20 @@ describe('liveEditPrefill', () => {
         source: 'checkin',
       }),
     ).toBe('Feeling strong');
+    expect(
+      liveEditPrefill({
+        content: 'Check-in Complete',
+        media_urls: ['https://cdn.example/proof.jpg'],
+        source: 'checkin',
+      }),
+    ).toBe('');
+    expect(
+      liveEditPrefill({
+        content: 'Check In Complete',
+        media_urls: ['https://cdn.example/proof.jpg'],
+        source: 'checkin',
+      }),
+    ).toBe('');
   });
 });
 

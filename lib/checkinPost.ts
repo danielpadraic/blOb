@@ -1,3 +1,4 @@
+import { isCheckinCompleteSentinel } from '@/lib/checkin/captions';
 import { mediaKind } from '@/utils/media';
 
 const CHECKIN_KINDS = new Set(['check_in', 'checkin', 'workout', 'proof', 'challenge_log']);
@@ -71,10 +72,10 @@ export function checkinExtraCaption(
   challengeTitle?: string | null,
 ): string {
   const text = content?.trim() ?? '';
-  if (!text) {
+  if (!text || isCheckinCompleteSentinel(text)) {
     return '';
   }
-  const withoutTitle = text.replace(/^check-in complete\.?\s*/i, '').trim();
+  const withoutTitle = text.replace(/^check[- ]in complete\.?\s*/i, '').trim();
   if (!withoutTitle) {
     return '';
   }
