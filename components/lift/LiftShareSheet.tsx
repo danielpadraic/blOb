@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { FlatList, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Composer } from '@/components/feed/Composer';
 import { LiftCompletedCard } from '@/components/lift/LiftCompletedCard';
@@ -11,19 +13,28 @@ import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
-import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
-import { useFriends, useGetOrCreateConversation, useSendMessage } from '@/hooks/useSocial';
+import {
+  useBlockedPeerIds,
+  useFriends,
+  useGetOrCreateConversation,
+  useSendMessage,
+} from '@/hooks/useSocial';
 import { buildCompletedCard } from '@/lib/lift/complete';
 import { buildRecap } from '@/lib/lift/recap';
 import { draftSummary } from '@/lib/lift/session';
 import { postShareUrl } from '@/lib/postShare';
 import { DEFAULT_POST_AUDIENCE, type PostAudience } from '@/lib/postAudience';
 import type { LiftSessionDraft } from '@/lib/lift/types';
-import type { ComposeInput } from '@/lib/types';
-import { liftShareKeyboardOpen } from '@/lib/liftShareInset';
+import type { ComposeInput, PublicProfile } from '@/lib/types';
+import {
+  liftShareFooterPad,
+  liftShareKeyboardOpen,
+  liftShareNameMatches,
+} from '@/lib/liftShareInset';
+import { searchPeople } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
 /**
@@ -74,6 +85,13 @@ type LiftShareSheetProps = {
   onSkip: () => void;
 };
 
+type SharePerson = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
 export function LiftShareSheet({
   visible,
   draft,
@@ -88,7 +106,9 @@ export function LiftShareSheet({
   onSkip,
 }: LiftShareSheetProps) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const friends = useFriends(user?.id);
+  const blockedPeers = useBlockedPeerIds();
   const myCircles = useMyCircles();
   const circles = myCircles.data ?? [];
   const [destination, setDestination] = useState<LiftShareDestination | null>(null);
@@ -97,15 +117,19 @@ export function LiftShareSheet({
   const [circleId, setCircleId] = useState<string | null>(null);
   const [recipientIds, setRecipientIds] = useState<string[]>([]);
   const [recipientQuery, setRecipientQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [pickedProfiles, setPickedProfiles] = useState<Record<string, SharePerson>>({});
   const [home, setHome] = useState(true);
-  const peopleListRef = useRef<ScrollView>(null);
+  const searchRef = useRef<TextInput>(null);
   const keyboardHeight = useKeyboardHeight();
   const keyboardOpen = liftShareKeyboardOpen(keyboardHeight);
+  const footerPad = liftShareFooterPad(keyboardOpen, Math.max(insets.bottom, 12));
 
   const recap = useMemo(() => (draft ? buildRecap(draft) : null), [draft]);
   const completedCard = useMemo(() => (draft ? buildCompletedCard(draft) : null), [draft]);
   const summary = useMemo(() => (draft ? draftSummary(draft) : null), [draft]);
   const locked = challengeId ? (lockedChallengeIds ?? []).includes(challengeId) : false;
+  const hideRecap = searchFocused || recipientQuery.trim().length > 0;
 
   // A corporate lobby never announces to Home, so the toggle disappears rather than lying.
   useEffect(() => {
@@ -120,37 +144,54 @@ export function LiftShareSheet({
       setDestination(null);
       setRecipientIds([]);
       setRecipientQuery('');
+      setSearchFocused(false);
+      setPickedProfiles({});
       setChallengeId(null);
       setCircleId(null);
     }
   }, [visible]);
 
   useEffect(() => {
-    const node = peopleListRef.current;
-    const scrollTo = node?.scrollTo;
-    if (typeof scrollTo !== 'function') {
+    if (!visible || destination !== 'message' || sharedPostId) {
       return;
     }
-    scrollTo.call(node, { y: 0, animated: false });
-  }, [recipientQuery]);
-
-  if (!recap) {
-    return null;
-  }
+    const handle = setTimeout(() => searchRef.current?.focus(), 40);
+    return () => clearTimeout(handle);
+  }, [destination, sharedPostId, visible]);
 
   const people = (friends.data ?? [])
     .map((edge) => edge.profile)
     .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile?.id));
 
-  // Searching your friends rather than everyone: a group thread can only be opened with accepted
-  // friends, so offering anyone else here would be a dead end at send time.
-  const needle = recipientQuery.trim().toLowerCase();
-  const matches = needle
-    ? people.filter((person) =>
-        `${person.display_name ?? ''} ${person.username ?? ''}`.toLowerCase().includes(needle),
-      )
-    : people;
-  const chosen = people.filter((person) => recipientIds.includes(person.id));
+  const needle = recipientQuery.trim();
+  const friendMatches = people.filter((person) => liftShareNameMatches(person, needle));
+  const needPeopleSearch = destination === 'message' && needle.length >= 2 && friendMatches.length === 0;
+
+  const peopleSearch = useQuery({
+    queryKey: ['lift-share-people', user?.id, needle.toLowerCase()],
+    enabled: Boolean(user?.id && needPeopleSearch),
+    staleTime: 30_000,
+    queryFn: () => searchPeople(needle, user!.id),
+  });
+
+  const blockedIds = blockedPeers.data ?? new Set<string>();
+  const extraPeople = ((peopleSearch.data ?? []) as PublicProfile[]).filter((person) => {
+    if (!person?.id || person.id === user?.id || blockedIds.has(person.id)) {
+      return false;
+    }
+    return !people.some((friend) => friend.id === person.id);
+  });
+
+  const chosen = recipientIds
+    .map((id) => {
+      return (
+        pickedProfiles[id] ??
+        people.find((person) => person.id === id) ??
+        extraPeople.find((person) => person.id === id) ??
+        null
+      );
+    })
+    .filter((person): person is SharePerson => Boolean(person?.id));
 
   const canSend =
     destination === 'message'
@@ -171,17 +212,63 @@ export function LiftShareSheet({
           : 'Add to challenge'
         : 'Share to Home';
 
+  function togglePerson(person: SharePerson) {
+    setPickedProfiles((current) => ({ ...current, [person.id]: person }));
+    setRecipientIds((current) =>
+      current.includes(person.id)
+        ? current.filter((id) => id !== person.id)
+        : [...current, person.id],
+    );
+  }
+
+  function submitShare() {
+    if (!destination) {
+      return;
+    }
+    onShare({
+      destination,
+      caption: caption.trim(),
+      challengeId: destination === 'live' ? challengeId : null,
+      circleId: destination === 'live' ? circleId : null,
+      home,
+      audience: destination === 'message' ? 'specific' : DEFAULT_POST_AUDIENCE,
+      recipientIds: destination === 'message' ? recipientIds : [],
+    });
+  }
+
+  const recapCard = completedCard ? (
+    <LiftCompletedCard card={completedCard} />
+  ) : recap ? (
+    <LiftRecapCard recap={recap} />
+  ) : null;
+
+  if (!recap) {
+    return null;
+  }
+
+  const messageMode = destination === 'message' && !sharedPostId;
+  const showFooter =
+    Boolean(error) ||
+    Boolean(sharedPostId) ||
+    destination == null ||
+    destination === 'live' ||
+    destination === 'message';
+
   return (
-    <ChromeOverlay visible={visible} onClose={busy ? undefined : onClose} align="end" zIndex={140}>
-      <KeyboardSheet>
+    <ChromeOverlay
+      visible={visible}
+      onClose={busy ? undefined : onClose}
+      align="start"
+      dim={false}
+      fill
+      zIndex={140}>
       <View
         style={{
+          flex: 1,
+          height: '100%',
           backgroundColor: THEME.surface,
-          borderTopLeftRadius: 22,
-          borderTopRightRadius: 22,
-          minHeight: 0,
-          flexGrow: 1,
-          flex: destination === 'message' || keyboardOpen ? 1 : undefined,
+          // Web: sit on visualViewport. iOS Screen already pads. Android resizes the window.
+          marginBottom: Platform.OS === 'web' ? keyboardHeight : 0,
         }}>
         <View
           style={{
@@ -189,8 +276,9 @@ export function LiftShareSheet({
             alignItems: 'center',
             paddingLeft: destination && !sharedPostId ? 6 : 18,
             paddingRight: 8,
-            paddingTop: 14,
+            paddingTop: Math.max(insets.top, 12),
             paddingBottom: 6,
+            backgroundColor: THEME.surface,
           }}>
           {destination && !sharedPostId ? (
             <Pressable
@@ -224,8 +312,8 @@ export function LiftShareSheet({
           </Pressable>
         </View>
 
-        {destination === 'message' && people.length ? (
-          <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
+        {messageMode ? (
+          <View style={{ paddingHorizontal: 18, paddingBottom: 8, backgroundColor: THEME.surface }}>
             <View
               style={{
                 flexDirection: 'row',
@@ -240,12 +328,16 @@ export function LiftShareSheet({
               }}>
               <Glyph name={GLYPH.search} color={THEME.textMuted} size={15} />
               <TextInput
+                ref={searchRef}
                 value={recipientQuery}
                 onChangeText={setRecipientQuery}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
                 placeholder="Type a name"
                 placeholderTextColor={THEME.textMuted}
                 autoCorrect={false}
                 autoCapitalize="none"
+                autoFocus
                 accessibilityLabel="Search friends by name"
                 selectionColor={THEME.accent}
                 style={{
@@ -270,354 +362,362 @@ export function LiftShareSheet({
           </View>
         ) : null}
 
-        {destination === 'message' && !sharedPostId ? (
-          <ScrollView
-            ref={peopleListRef}
-            style={{ flex: 1, minHeight: 0 }}
+        {messageMode && chosen.length ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 6,
+              paddingHorizontal: 18,
+              paddingBottom: 8,
+              backgroundColor: THEME.surface,
+            }}>
+            {chosen.map((person) => (
+              <Pressable
+                key={person.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${person.display_name || person.username}`}
+                onPress={() => togglePerson(person)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  minHeight: 34,
+                  paddingLeft: 8,
+                  paddingRight: 10,
+                  borderRadius: 999,
+                  backgroundColor: THEME.accentSoft,
+                }}>
+                <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.accent }}>
+                  {person.display_name || person.username}
+                </AppText>
+                <Glyph name={GLYPH.close} color={THEME.accent} size={11} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {messageMode ? (
+          <FlatList
+            style={{ flex: 1, minHeight: 0, backgroundColor: THEME.surface }}
+            data={friendMatches}
+            keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="none"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: 18,
-              paddingBottom: keyboardOpen ? 8 : 10,
-              flexGrow: 1,
-            }}>
-            {keyboardOpen ? null : completedCard ? (
-              <LiftCompletedCard card={completedCard} />
-            ) : recap ? (
-              <LiftRecapCard recap={recap} />
-            ) : null}
-            {people.length ? (
-              <>
-                <SectionLabel text="SEND TO" />
-                <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
-                  {recipientIds.length > 1
-                    ? 'Everyone you pick lands in one group chat.'
-                    : 'Only the people you pick can open this lift.'}
-                </AppText>
-                {chosen.length ? (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                    {chosen.map((person) => (
-                      <Pressable
-                        key={person.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${person.display_name || person.username}`}
-                        onPress={() =>
-                          setRecipientIds((current) => current.filter((id) => id !== person.id))
-                        }
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 6,
-                          minHeight: 34,
-                          paddingLeft: 8,
-                          paddingRight: 10,
-                          borderRadius: 999,
-                          backgroundColor: THEME.accentSoft,
-                        }}>
-                        <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.accent }}>
-                          {person.display_name || person.username}
-                        </AppText>
-                        <Glyph name={GLYPH.close} color={THEME.accent} size={11} />
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
-                <View style={{ gap: 6, marginTop: 10 }}>
-                  {matches.length === 0 ? (
-                    <AppText style={{ fontSize: 14, color: THEME.textMuted, paddingVertical: 8 }}>
-                      No friends match “{recipientQuery.trim()}”.
+            contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 10, flexGrow: 1 }}
+            ListHeaderComponent={
+              <View>
+                {people.length ? (
+                  <>
+                    <SectionLabel text="SEND TO" />
+                    <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                      {recipientIds.length > 1
+                        ? 'Everyone you pick lands in one group chat.'
+                        : 'Only the people you pick can open this lift.'}
                     </AppText>
-                  ) : null}
-                  {matches.map((friend) => {
-                    const name = friend.display_name || friend.username;
-                    const picked = recipientIds.includes(friend.id);
-                    return (
+                  </>
+                ) : needle.length < 2 ? (
+                  <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
+                    Add a friend first and they will show up here.
+                  </AppText>
+                ) : null}
+              </View>
+            }
+            ListEmptyComponent={
+              needle ? (
+                extraPeople.length || peopleSearch.isFetching ? null : (
+                  <AppText style={{ fontSize: 14, color: THEME.textMuted, paddingVertical: 8 }}>
+                    No one matches “{needle}”.
+                  </AppText>
+                )
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <PersonRow
+                person={item}
+                picked={recipientIds.includes(item.id)}
+                onToggle={() => togglePerson(item)}
+              />
+            )}
+            ListFooterComponent={
+              <View>
+                {extraPeople.length ? (
+                  <>
+                    <SectionLabel text="PEOPLE" />
+                    <View style={{ gap: 6 }}>
+                      {extraPeople.map((person) => (
+                        <PersonRow
+                          key={person.id}
+                          person={person}
+                          picked={recipientIds.includes(person.id)}
+                          onToggle={() => togglePerson(person)}
+                        />
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+                {!hideRecap && recapCard ? <View style={{ marginTop: 16 }}>{recapCard}</View> : null}
+              </View>
+            }
+          />
+        ) : (
+          <ScrollView
+            style={{ flex: 1, minHeight: 0, backgroundColor: THEME.surface }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 10 }}>
+            {recapCard}
+
+            {sharedPostId ? (
+              <SharedActions postId={sharedPostId} />
+            ) : destination == null ? (
+              <View style={{ marginTop: 16, gap: 8 }}>
+                <DestinationRow
+                  glyph={GLYPH.reply}
+                  label="Message"
+                  detail="Send it to friends in a DM"
+                  onPress={() => setDestination('message')}
+                />
+                <DestinationRow
+                  glyph={GLYPH.people}
+                  label="Home"
+                  detail="One card on your feed"
+                  onPress={() => setDestination('home')}
+                />
+                <DestinationRow
+                  glyph={GLYPH.swords}
+                  label="Live"
+                  detail={
+                    challenges.length && circles.length
+                      ? 'A challenge you are in, or one of your Circles'
+                      : circles.length
+                        ? 'Post it in one of your Circles'
+                        : challenges.length
+                          ? 'Goes on your check-in for this period'
+                          : 'No challenges or Circles to add it to'
+                  }
+                  disabled={!challenges.length && !circles.length}
+                  onPress={() => setDestination('live')}
+                />
+              </View>
+            ) : destination === 'home' ? (
+              // Home gets the real composer rather than a caption box, so a lift post can carry
+              // @mentions, a photo, or a GIF exactly like any other post. The lift rides along as an
+              // attachment; everything else about posting stays the thing people already know.
+              <View style={{ marginTop: 12 }}>
+                <Composer
+                  placeholder="Say something about it"
+                  initialLift={summary}
+                  submitting={busy}
+                  onSubmit={onComposeHome}
+                />
+              </View>
+            ) : (
+              <>
+                {/* A challenge and a Circle are both "somewhere my people are", so they share one
+                    screen. They are mutually exclusive because a post row can only carry one of the
+                    two ids. */}
+                {destination === 'live' ? (
+                  <>
+                    {challenges.length ? (
+                      <>
+                        <SectionLabel text="ACTIVE CHALLENGES" />
+                        <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                          Goes on your check-in for this period — it never posts twice.
+                        </AppText>
+                        <View style={{ gap: 8 }}>
+                          {challenges.map((challenge) => (
+                            <PickRow
+                              key={challenge.id}
+                              label={challenge.title ?? 'Challenge'}
+                              detail={challenge.statusLine ?? challenge.taskLabel ?? undefined}
+                              selected={challengeId === challenge.id}
+                              onPress={() => {
+                                setCircleId(null);
+                                setChallengeId((current) =>
+                                  current === challenge.id ? null : challenge.id,
+                                );
+                              }}
+                            />
+                          ))}
+                        </View>
+                      </>
+                    ) : null}
+
+                    {circles.length ? (
+                      <>
+                        <SectionLabel text="CIRCLES" />
+                        <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
+                          Posts in the Circle&rsquo;s room.
+                        </AppText>
+                        <View style={{ gap: 8 }}>
+                          {circles.map((circle) => (
+                            <PickRow
+                              key={circle.id}
+                              label={circle.name}
+                              detail={
+                                circle.member_count
+                                  ? `${circle.member_count} ${circle.member_count === 1 ? 'member' : 'members'}`
+                                  : undefined
+                              }
+                              selected={circleId === circle.id}
+                              onPress={() => {
+                                setChallengeId(null);
+                                setCircleId((current) => (current === circle.id ? null : circle.id));
+                              }}
+                            />
+                          ))}
+                        </View>
+                      </>
+                    ) : null}
+
+                    {!challenges.length && !circles.length ? (
+                      <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
+                        Join a challenge or a Circle and they will show up here.
+                      </AppText>
+                    ) : null}
+
+                    {destination === 'live' && (challengeId || circleId) && !locked ? (
                       <Pressable
-                        key={friend.id}
-                        accessibilityRole="checkbox"
-                        accessibilityLabel={name}
-                        accessibilityState={{ checked: picked }}
-                        onPress={() =>
-                          setRecipientIds((current) =>
-                            current.includes(friend.id)
-                              ? current.filter((id) => id !== friend.id)
-                              : [...current, friend.id],
-                          )
-                        }
+                        accessibilityRole="switch"
+                        accessibilityLabel="Also show on Home"
+                        accessibilityState={{ checked: home }}
+                        onPress={() => setHome((current) => !current)}
                         style={{
-                          minHeight: 56,
+                          marginTop: 12,
+                          minHeight: 52,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 10,
-                          paddingHorizontal: 10,
-                          borderRadius: 12,
-                          backgroundColor: picked ? THEME.accentSoft : 'transparent',
+                          gap: 12,
+                          paddingHorizontal: 14,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: THEME.border,
+                          backgroundColor: THEME.background,
                         }}>
-                        <Avatar uri={friend.avatar_url} name={name} size={34} />
+                        <Checkbox checked={home} />
                         <AppText
-                          numberOfLines={1}
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            fontSize: 15,
-                            fontWeight: '600',
-                            color: THEME.textPrimary,
-                          }}>
-                          {name}
+                          style={{ flex: 1, fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>
+                          Also show on Home
                         </AppText>
-                        <Checkbox checked={picked} />
                       </Pressable>
-                    );
-                  })}
-                </View>
+                    ) : null}
+
+                    {destination === 'live' && locked ? (
+                      <AppText style={{ marginTop: 12, fontSize: 13, color: THEME.textMuted }}>
+                        This challenge keeps check-ins inside its own lobby, so this stays off Home.
+                      </AppText>
+                    ) : null}
+                  </>
+                ) : null}
               </>
-            ) : (
-              <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
-                Add a friend first and they will show up here.
-              </AppText>
             )}
           </ScrollView>
-        ) : (
-        <ScrollView
-          style={{ flexGrow: 1, minHeight: 0 }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 10 }}>
-          {completedCard ? <LiftCompletedCard card={completedCard} /> : recap ? <LiftRecapCard recap={recap} /> : null}
+        )}
 
-          {sharedPostId ? (
-            <SharedActions postId={sharedPostId} />
-          ) : destination == null ? (
-            <View style={{ marginTop: 16, gap: 8 }}>
-              <DestinationRow
-                glyph={GLYPH.reply}
-                label="Message"
-                detail="Send it to friends in a DM"
-                onPress={() => setDestination('message')}
-              />
-              <DestinationRow
-                glyph={GLYPH.people}
-                label="Home"
-                detail="One card on your feed"
-                onPress={() => setDestination('home')}
-              />
-              <DestinationRow
-                glyph={GLYPH.swords}
-                label="Live"
-                detail={
-                  challenges.length && circles.length
-                    ? 'A challenge you are in, or one of your Circles'
-                    : circles.length
-                      ? 'Post it in one of your Circles'
-                      : challenges.length
-                        ? 'Goes on your check-in for this period'
-                        : 'No challenges or Circles to add it to'
-                }
-                disabled={!challenges.length && !circles.length}
-                onPress={() => setDestination('live')}
-              />
-            </View>
-          ) : destination === 'home' ? (
-            // Home gets the real composer rather than a caption box, so a lift post can carry
-            // @mentions, a photo, or a GIF exactly like any other post. The lift rides along as an
-            // attachment; everything else about posting stays the thing people already know.
-            <View style={{ marginTop: 12 }}>
-              <Composer
-                placeholder="Say something about it"
-                initialLift={summary}
-                submitting={busy}
-                onSubmit={onComposeHome}
-              />
-            </View>
-          ) : (
-            <>
+        {showFooter && destination !== 'home' ? (
+          <View
+            style={{
+              paddingHorizontal: 18,
+              paddingTop: 10,
+              paddingBottom: footerPad,
+              gap: 8,
+              backgroundColor: THEME.surface,
+              borderTopWidth: 1,
+              borderTopColor: THEME.border,
+            }}>
+            {messageMode || (destination === 'live' && !sharedPostId) ? (
               <TextInput
                 value={caption}
                 onChangeText={setCaption}
-                multiline
                 placeholder="Say something about it (optional)"
                 placeholderTextColor={THEME.textMuted}
                 accessibilityLabel="Caption"
                 selectionColor={THEME.accent}
+                returnKeyType="done"
                 style={{
-                  marginTop: 12,
-                  minHeight: 68,
+                  height: 46,
                   borderRadius: 14,
                   borderWidth: 1,
                   borderColor: THEME.border,
                   backgroundColor: THEME.background,
                   paddingHorizontal: 14,
-                  paddingTop: 12,
-                  paddingBottom: 12,
                   fontSize: 15,
                   color: THEME.textPrimary,
-                  textAlignVertical: 'top',
                 }}
               />
-
-              {/* A challenge and a Circle are both "somewhere my people are", so they share one
-                  screen. They are mutually exclusive because a post row can only carry one of the
-                  two ids. */}
-              {destination === 'live' ? (
-                <>
-                  {challenges.length ? (
-                    <>
-                      <SectionLabel text="ACTIVE CHALLENGES" />
-                      <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
-                        Goes on your check-in for this period — it never posts twice.
-                      </AppText>
-                      <View style={{ gap: 8 }}>
-                        {challenges.map((challenge) => (
-                          <PickRow
-                            key={challenge.id}
-                            label={challenge.title ?? 'Challenge'}
-                            detail={challenge.statusLine ?? challenge.taskLabel ?? undefined}
-                            selected={challengeId === challenge.id}
-                            onPress={() => {
-                              setCircleId(null);
-                              setChallengeId((current) =>
-                                current === challenge.id ? null : challenge.id,
-                              );
-                            }}
-                          />
-                        ))}
-                      </View>
-                    </>
-                  ) : null}
-
-                  {circles.length ? (
-                    <>
-                      <SectionLabel text="CIRCLES" />
-                      <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
-                        Posts in the Circle&rsquo;s room.
-                      </AppText>
-                      <View style={{ gap: 8 }}>
-                        {circles.map((circle) => (
-                          <PickRow
-                            key={circle.id}
-                            label={circle.name}
-                            detail={
-                              circle.member_count
-                                ? `${circle.member_count} ${circle.member_count === 1 ? 'member' : 'members'}`
-                                : undefined
-                            }
-                            selected={circleId === circle.id}
-                            onPress={() => {
-                              setChallengeId(null);
-                              setCircleId((current) => (current === circle.id ? null : circle.id));
-                            }}
-                          />
-                        ))}
-                      </View>
-                    </>
-                  ) : null}
-
-                  {!challenges.length && !circles.length ? (
-                    <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
-                      Join a challenge or a Circle and they will show up here.
-                    </AppText>
-                  ) : null}
-                </>
-              ) : null}
-
-              {destination === 'live' && (challengeId || circleId) && !locked ? (
-                <Pressable
-                  accessibilityRole="switch"
-                  accessibilityLabel="Also show on Home"
-                  accessibilityState={{ checked: home }}
-                  onPress={() => setHome((current) => !current)}
-                  style={{
-                    marginTop: 12,
-                    minHeight: 52,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: THEME.border,
-                    backgroundColor: THEME.background,
-                  }}>
-                  <Checkbox checked={home} />
-                  <AppText
-                    style={{ flex: 1, fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>
-                    Also show on Home
-                  </AppText>
-                </Pressable>
-              ) : null}
-
-              {destination === 'live' && locked ? (
-                <AppText style={{ marginTop: 12, fontSize: 13, color: THEME.textMuted }}>
-                  This challenge keeps check-ins inside its own lobby, so this stays off Home.
-                </AppText>
-              ) : null}
-            </>
-          )}
-        </ScrollView>
-        )}
-
-        {destination === 'message' && !sharedPostId ? (
-          <View style={{ paddingHorizontal: 18, paddingTop: 8, flexGrow: 0 }}>
-            <TextInput
-              value={caption}
-              onChangeText={setCaption}
-              multiline
-              placeholder="Say something about it (optional)"
-              placeholderTextColor={THEME.textMuted}
-              accessibilityLabel="Caption"
-              selectionColor={THEME.accent}
-              style={{
-                minHeight: 56,
-                maxHeight: 88,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: THEME.border,
-                backgroundColor: THEME.background,
-                paddingHorizontal: 14,
-                paddingTop: 10,
-                paddingBottom: 10,
-                fontSize: 15,
-                color: THEME.textPrimary,
-                textAlignVertical: 'top',
-              }}
-            />
+            ) : null}
+            {error ? (
+              <AppText style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>
+                {error}
+              </AppText>
+            ) : null}
+            {sharedPostId ? (
+              <Button title="Done" onPress={onClose} />
+            ) : destination == null ? (
+              <Button title="Keep it to myself" variant="ghost" size="sm" onPress={onSkip} />
+            ) : (
+              <Button
+                title={primaryLabel}
+                loading={busy}
+                disabled={!canSend}
+                onPress={submitShare}
+              />
+            )}
+          </View>
+        ) : destination === 'home' && error ? (
+          <View style={{ paddingHorizontal: 18, paddingBottom: footerPad, backgroundColor: THEME.surface }}>
+            <AppText style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>{error}</AppText>
           </View>
         ) : null}
-
-        <View style={{ paddingHorizontal: 18, paddingTop: 12, gap: 8 }}>
-          {error ? (
-            <AppText style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>
-              {error}
-            </AppText>
-          ) : null}
-          {sharedPostId ? (
-            <Button title="Done" onPress={onClose} />
-          ) : destination == null ? (
-            <Button title="Keep it to myself" variant="ghost" size="sm" onPress={onSkip} />
-          ) : destination === 'home' ? null : (
-            <Button
-              title={primaryLabel}
-              loading={busy}
-              disabled={!canSend}
-              onPress={() =>
-                onShare({
-                  destination,
-                  caption: caption.trim(),
-                  challengeId: destination === 'live' ? challengeId : null,
-                  circleId: destination === 'live' ? circleId : null,
-                  home,
-                  audience: destination === 'message' ? 'specific' : DEFAULT_POST_AUDIENCE,
-                  recipientIds: destination === 'message' ? recipientIds : [],
-                })
-              }
-            />
-          )}
-        </View>
       </View>
-      </KeyboardSheet>
     </ChromeOverlay>
+  );
+}
+
+function PersonRow({
+  person,
+  picked,
+  onToggle,
+}: {
+  person: SharePerson;
+  picked: boolean;
+  onToggle: () => void;
+}) {
+  const name = person.display_name || person.username;
+  const handle = person.username ? `@${person.username.replace(/^@/, '')}` : '';
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={name}
+      accessibilityState={{ checked: picked }}
+      onPress={onToggle}
+      style={{
+        minHeight: 56,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        backgroundColor: picked ? THEME.accentSoft : 'transparent',
+      }}>
+      <Avatar uri={person.avatar_url} name={name} size={34} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <AppText
+          numberOfLines={1}
+          style={{ fontSize: 15, fontWeight: '600', color: THEME.textPrimary }}>
+          {name}
+        </AppText>
+        {handle ? (
+          <AppText numberOfLines={1} style={{ fontSize: 12, color: THEME.textMuted }}>
+            {handle}
+          </AppText>
+        ) : null}
+      </View>
+      <Checkbox checked={picked} />
+    </Pressable>
   );
 }
 

@@ -11,6 +11,8 @@ type ChromeOverlayProps = {
   zIndex?: number;
   /** Leave the floating tab bar tappable. Wallet uses this so the sheet is not a dead stack. */
   insetBottom?: number;
+  /** Opaque full-bleed sheet. The session behind must not peek through. */
+  fill?: boolean;
 };
 
 /** Fills the parent. Never use RN Modal for in-app sheets. */
@@ -22,6 +24,7 @@ export function ChromeOverlay({
   dim = true,
   zIndex,
   insetBottom = 0,
+  fill = false,
 }: ChromeOverlayProps) {
   if (!visible) {
     return null;
@@ -56,10 +59,10 @@ export function ChromeOverlay({
             } as object)
           : null)}
       />
-      <View pointerEvents="box-none" style={[styles.slot, { justifyContent }]}>
+      <View pointerEvents="box-none" style={[styles.slot, { justifyContent }, fill ? styles.fillSlot : null]}>
         <View
           pointerEvents="auto"
-          style={styles.sheet}
+          style={[styles.sheet, fill ? styles.fillSheet : null]}
           {...(Platform.OS === 'web'
             ? ({
                 onClick: (event: { stopPropagation: () => void }) => {
@@ -97,6 +100,14 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
+    maxHeight: '100%',
+  },
+  fillSlot: {
+    justifyContent: 'flex-start',
+  },
+  fillSheet: {
+    flex: 1,
+    height: '100%',
     maxHeight: '100%',
   },
 });
