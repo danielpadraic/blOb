@@ -46,7 +46,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { useStalled } from '@/hooks/useStalled';
-import { BODY_METRICS_HREF, captureHref, challengeDetailHref, errorRetryHref, LOBBY_HREF } from '@/lib/routes';
+import { BODY_METRICS_HREF, captureHref, challengeDetailHref, errorBoundaryRetryHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
 import {
   applyLiveBackGesture,
@@ -254,9 +254,9 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
             error: error?.message?.trim() || 'retry',
             file: liveErrorFile(error),
           });
-          const next = errorRetryHref(pathname);
-          if (next && !next.includes('/capture') && !next.includes('/submit')) {
-            router.replace(next as never);
+          const next = errorBoundaryRetryHref(pathname);
+          if (next.includes('/capture')) {
+            router.replace('/feed');
             return;
           }
           void retry();

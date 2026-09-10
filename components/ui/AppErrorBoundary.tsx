@@ -5,7 +5,7 @@ import { router, usePathname, type ErrorBoundaryProps } from 'expo-router';
 import { MascotState } from '@/components/mascot/MascotState';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { liveErrorFile } from '@/lib/liveThread';
-import { TABS_HREF, clipRouteId, errorRetryHref } from '@/lib/routes';
+import { TABS_HREF, errorBoundaryRetryHref } from '@/lib/routes';
 import { logWaveFail } from '@/lib/wavePublish';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
@@ -17,31 +17,22 @@ function webPathname(): string {
   return String(window.location?.pathname ?? '') + String(window.location?.search ?? '');
 }
 
-function liveRetryHref(pathname: string): string {
-  const next = errorRetryHref(pathname);
-  const waveId = String(pathname ?? '').match(/^\/(?:wave|story)\/([^/?#]+)/)?.[1] ?? '';
-  if (clipRouteId(waveId)) {
-    return `/wave/${waveId}`;
+function leaveCameraForHome() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
+    window.location.replace('/feed');
+    return;
   }
-  if (String(pathname ?? '').includes('/capture')) {
-    return '/feed';
-  }
-  const submitId = String(pathname ?? '').match(/\/challenges\/([^/?#]+)\/submit/)?.[1] ?? '';
-  if (submitId && submitId !== 'new' && submitId !== 'create' && submitId !== 'callout') {
-    return `/challenges/${submitId}/submit`;
-  }
-  const id = String(pathname ?? '').match(/\/challenges\/([^/?#]+)/)?.[1] ?? '';
-  const skip = id === 'new' || id === 'create' || id === 'callout';
-  if (id && !skip && (!next || next === '/feed' || next.includes('/capture') || next.includes('/submit'))) {
-    return `/challenges/${id}?tab=feed`;
-  }
-  return next;
+  router.replace(TABS_HREF);
 }
 
-function reloadApp(retry: () => Promise<void>, pathname: string, error?: unknown) {
+/**
+ * Remount the screen that threw. Never /capture, never Wave, never InAppCamera.
+ * Home Retry stays on Home.
+ */
+function remountThrownScreen(retry: () => Promise<void>, pathname: string, error?: unknown) {
   stopAllLiveMedia();
   const current = pathname || webPathname();
-  const next = liveRetryHref(current);
+  const next = errorBoundaryRetryHref(current);
   const waveish = /\/wave\/|\/story\/|\/capture/.test(current);
   if (waveish) {
     logWaveFail(current.includes('/capture') ? 'insert' : 'player', error);
@@ -50,40 +41,14 @@ function reloadApp(retry: () => Promise<void>, pathname: string, error?: unknown
     error: error instanceof Error ? error.message : String(error ?? 'retry'),
     file: liveErrorFile(error),
   });
-  const submitId = String(current ?? '').match(/\/challenges\/([^/?#]+)\/submit/)?.[1] ?? '';
-  if (submitId) {
-    const submitHref = `/challenges/${submitId}/submit`;
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
-      window.location.replace(submitHref);
-      return;
-    }
-    router.replace(submitHref as never);
-    return;
-  }
-  if (!next || next.includes('/capture') || next.includes('/submit')) {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
-      window.location.replace('/feed');
-      return;
-    }
-    router.replace(TABS_HREF);
-    return;
-  }
-  if (next !== current) {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.replace === 'function') {
-      window.location.replace(next);
-      return;
-    }
-    router.replace(next as never);
-    return;
-  }
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
-    window.location.reload();
+  if (current.includes('/capture') || next.includes('/capture')) {
+    leaveCameraForHome();
     return;
   }
   void retry();
 }
 
-/** Root error UI. Cream background — never a black full-screen. Retry never reopens a bad Wave. */
+/** Root error UI. Cream background — never a black full-screen. Retry never reopens Wave. */
 export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const pathname = usePathname();
   useEffect(() => {
@@ -114,7 +79,7 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         title="Something went wrong"
         body={detail ? `Try again in a moment.\n${detail}` : 'Try again in a moment.'}
         actionLabel="Retry"
-        onAction={() => reloadApp(retry, pathname, error)}
+        onAction={() => remountThrownScreen(retry, pathname, error)}
       />
     </View>
   );

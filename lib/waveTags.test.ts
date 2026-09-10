@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { challengeHref, checkinSubmitHref, clipRouteId, errorRetryHref, leaveCheckinHref, publishedRowId, waveHref } from '@/lib/routes';
+import { challengeHref, checkinSubmitHref, clipRouteId, errorBoundaryRetryHref, errorRetryHref, leaveCheckinHref, publishedRowId, waveHref } from '@/lib/routes';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 
@@ -41,6 +41,11 @@ describe('checkinSubmitHref', () => {
     expect(errorRetryHref('/wave/2ca49850-b978-45d8-a282-2b644913c538')).toBe(
       '/wave/2ca49850-b978-45d8-a282-2b644913c538',
     );
+    expect(errorBoundaryRetryHref('/feed')).toBe('/feed');
+    expect(errorBoundaryRetryHref('/')).toBe('/');
+    expect(errorBoundaryRetryHref('/capture')).toBe('/feed');
+    expect(errorBoundaryRetryHref('/capture?mode=story')).toBe('/feed');
+    expect(errorBoundaryRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
   });
 
   it('closes Check In onto that challenge Live, not Home', () => {

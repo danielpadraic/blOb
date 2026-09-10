@@ -203,8 +203,7 @@ function challengeRetryId(path: string): string | null {
 
 /**
  * Bob Retry after a crash.
- * Challenge Live: remount that Live list. Never `/capture`, never `/submit`, never Home.
- * Wave capture still leaves the camera for Home.
+ * Stay on the screen that threw. Never `/capture`. Wave camera Retry leaves for Home.
  */
 export function errorRetryHref(pathname: string | null | undefined): string {
   const path = String(pathname ?? '');
@@ -227,7 +226,20 @@ export function errorRetryHref(pathname: string | null | undefined): string {
     const tab = path.match(/[?&]tab=(overview|board)\b/)?.[1];
     return `/challenges/${challengeId}?tab=${tab ?? 'feed'}`;
   }
-  return path || '/feed';
+  const next = path || '/feed';
+  if (next.includes('/capture')) {
+    return '/feed';
+  }
+  return next;
+}
+
+/** AppErrorBoundary Retry. Remount this route. Never Wave camera. */
+export function errorBoundaryRetryHref(pathname: string | null | undefined): string {
+  const next = errorRetryHref(pathname);
+  if (!next || next.includes('/capture')) {
+    return '/feed';
+  }
+  return next;
 }
 
 /** X / Close on Check In review. That challenge Live (or Overview/Board). Never Home, never /feed, never last-open. */
