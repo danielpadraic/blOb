@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay';
+import { TourDismissLink } from '@/components/tour/TourDismissLink';
 import { useTour } from '@/components/tour/TourContext';
-import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { markHomeTourCompleted } from '@/lib/homeTour';
 import { completeTutorial } from '@/lib/legal';
@@ -16,7 +16,6 @@ import {
   shouldSkipHomeStep,
   TOUR_STEPS,
 } from '@/lib/tour';
-import { THEME } from '@/lib/theme';
 
 type TourHostProps = {
   onFinished: () => void;
@@ -153,18 +152,7 @@ export function TourHost({ onFinished }: TourHostProps) {
         }
         setIndex(next);
       }}
-      footer={
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Skip tour"
-          onPress={() => void finish()}
-          hitSlop={8}
-          style={{ minHeight: 44, justifyContent: 'center' }}>
-          <AppText className="text-center text-sm font-semibold" style={{ color: THEME.accent }}>
-            Skip tour
-          </AppText>
-        </Pressable>
-      }
+      footer={<TourDismissLink onPress={() => void finish()} />}
     />
   );
 }

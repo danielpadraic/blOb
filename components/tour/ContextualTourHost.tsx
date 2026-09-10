@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 
 import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay';
+import { TourDismissLink } from '@/components/tour/TourDismissLink';
 import { useTour } from '@/components/tour/TourContext';
-import { AppText } from '@/components/ui/AppText';
 import { markContextualTourSeen } from '@/lib/contextualTour';
-import { THEME } from '@/lib/theme';
 
 export function ContextualTourHost() {
   const tour = useTour();
@@ -105,18 +104,7 @@ export function ContextualTourHost() {
         }
         setIndex((current) => current + 1);
       }}
-      footer={
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Skip"
-          onPress={finish}
-          hitSlop={8}
-          style={{ minHeight: 44, justifyContent: 'center' }}>
-          <AppText className="text-center text-sm font-semibold" style={{ color: THEME.accent }}>
-            Skip
-          </AppText>
-        </Pressable>
-      }
+      footer={<TourDismissLink onPress={finish} />}
     />
   );
 }

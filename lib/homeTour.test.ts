@@ -12,13 +12,26 @@ import {
 describe('homeTour', () => {
   afterEach(() => {
     clearHomeTourCompleted('user-1');
+    clearHomeTourCompleted('fresh-user');
   });
 
-  it('treats Skip the same as a completed flag for the session', () => {
+  it('treats Don’t show again the same as a completed flag for the session', () => {
     expect(wasHomeTourCompleted('user-1')).toBe(false);
     markHomeTourCompleted('user-1');
     expect(wasHomeTourCompleted('user-1')).toBe(true);
     expect(wasHomeTourCompleted('user-1', null)).toBe(true);
+  });
+
+  it('reads a persisted local dismiss before the profile row returns', () => {
+    markHomeTourCompleted('user-1');
+    expect(wasHomeTourCompleted('user-1', null)).toBe(true);
+    if (typeof localStorage !== 'undefined') {
+      expect(localStorage.getItem('blob:home-tour-dismissed:user-1')).toBe('1');
+    }
+  });
+
+  it('still shows the tour when dismissed is null and nothing is stored', () => {
+    expect(wasHomeTourCompleted('fresh-user', null)).toBe(false);
   });
 
   it('waits for a settled wallet and seeds the first-run header', () => {

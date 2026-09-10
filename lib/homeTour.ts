@@ -1,17 +1,61 @@
 /** Same value as `SEED_CREDITS` / the lobby grant. Kept here so tests stay RN-free. */
 export const HOME_TOUR_COIN_SEED = 100;
 
+const STORAGE_PREFIX = 'blob:home-tour-dismissed:';
 const completedIds = new Set<string>();
+
+function storageKey(userId: string): string {
+  return `${STORAGE_PREFIX}${userId}`;
+}
+
+function readLocalDismissed(userId: string): boolean {
+  if (completedIds.has(userId)) {
+    return true;
+  }
+  try {
+    if (typeof localStorage === 'undefined') {
+      return false;
+    }
+    const raw = localStorage.getItem(storageKey(userId));
+    if (raw === '1') {
+      completedIds.add(userId);
+      return true;
+    }
+  } catch {
+    // In-memory is enough until the profile row returns.
+  }
+  return false;
+}
+
+function writeLocalDismissed(userId: string, dismissed: boolean) {
+  if (dismissed) {
+    completedIds.add(userId);
+  } else {
+    completedIds.delete(userId);
+  }
+  try {
+    if (typeof localStorage === 'undefined') {
+      return;
+    }
+    if (dismissed) {
+      localStorage.setItem(storageKey(userId), '1');
+      return;
+    }
+    localStorage.removeItem(storageKey(userId));
+  } catch {
+    // Session flag still blocks a second open this visit.
+  }
+}
 
 export function markHomeTourCompleted(userId: string | null | undefined) {
   if (userId) {
-    completedIds.add(userId);
+    writeLocalDismissed(userId, true);
   }
 }
 
 export function clearHomeTourCompleted(userId: string | null | undefined) {
   if (userId) {
-    completedIds.delete(userId);
+    writeLocalDismissed(userId, false);
   }
 }
 
@@ -22,7 +66,7 @@ export function wasHomeTourCompleted(
   if (tutorialCompletedAt) {
     return true;
   }
-  return Boolean(userId && completedIds.has(userId));
+  return Boolean(userId && readLocalDismissed(userId));
 }
 
 export function isWalletReadyForHomeTour(profile: {
