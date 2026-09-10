@@ -31,6 +31,11 @@ export function commentBodyInsetStyle() {
   return { marginTop: 6, marginLeft: BODY_INSET };
 }
 
+const WEB_SHRINK =
+  Platform.OS === 'web'
+    ? ({ display: 'flex', minWidth: 0, overflow: 'hidden', maxWidth: '100%' } as const)
+    : null;
+
 export function CommentNameRow({
   author,
   authorId,
@@ -67,45 +72,56 @@ export function CommentNameRow({
           flexDirection: 'row',
           alignItems: 'center',
           flexWrap: 'nowrap',
-          gap: 6,
+          overflow: 'hidden',
         }}>
-        <ProfileLink
-          username={username}
-          userId={authorId}
-          style={{ flexGrow: 0, flexShrink: 1, minWidth: 0, maxWidth: '42%' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 }}>
-            <AppText
-              className="text-[13px] font-semibold"
-              style={{ color: nameColor, flexShrink: 1 }}
-              numberOfLines={1}>
-              {name}
-            </AppText>
-            <OfficialMark profile={author} compact />
-          </View>
-        </ProfileLink>
-        {showHandle ? (
+        <View
+          style={{
+            flex: 1,
+            minWidth: 0,
+            flexDirection: 'row',
+            alignItems: 'center',
+            flexWrap: 'nowrap',
+            overflow: 'hidden',
+            gap: 6,
+          }}>
           <ProfileLink
             username={username}
             userId={authorId}
-            style={{
-              flexGrow: 1,
-              flexShrink: 1,
-              minWidth: 0,
-              ...(Platform.OS === 'web' ? { display: 'flex', maxWidth: '100%' } : null),
-            }}>
-            <AppText
-              className="text-[12px]"
-              style={{ color: metaColor, flexShrink: 1, overflow: 'hidden' }}
-              numberOfLines={1}
-              ellipsizeMode="tail">
-              @{tag}
-            </AppText>
+            style={{ ...WEB_SHRINK, flexGrow: 0, flexShrink: 1, minWidth: 0, maxWidth: '55%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 }}>
+              <AppText
+                className="text-[13px] font-semibold"
+                style={{ color: nameColor, flexShrink: 1 }}
+                numberOfLines={1}>
+                {name}
+              </AppText>
+              <OfficialMark profile={author} compact />
+            </View>
           </ProfileLink>
-        ) : null}
+          {showHandle ? (
+            <ProfileLink
+              username={username}
+              userId={authorId}
+              style={{
+                flexGrow: 1,
+                flexShrink: 1,
+                minWidth: 0,
+                ...WEB_SHRINK,
+              }}>
+              <AppText
+                className="text-[12px]"
+                style={{ color: metaColor, flexShrink: 1, overflow: 'hidden' }}
+                numberOfLines={1}
+                ellipsizeMode="tail">
+                @{tag}
+              </AppText>
+            </ProfileLink>
+          ) : null}
+        </View>
         {meta ? (
           <AppText
             className="text-[11px]"
-            style={{ color: metaColor, flexGrow: 0, flexShrink: 0 }}
+            style={{ color: metaColor, flexGrow: 0, flexShrink: 0, marginLeft: 6 }}
             numberOfLines={1}>
             {meta}
           </AppText>
