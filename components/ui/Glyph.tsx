@@ -27,6 +27,8 @@ export const GLYPH = {
   like: { ios: 'heart.fill', android: 'favorite', web: 'favorite' },
   love: { ios: 'heart.circle.fill', android: 'favorite', web: 'favorite' },
   care: { ios: 'face.smiling.fill', android: 'sentiment_satisfied', web: 'sentiment_satisfied' },
+  laugh: { ios: 'face.smiling.fill', android: 'sentiment_satisfied', web: 'sentiment_satisfied' },
+  rofl: { ios: 'face.smiling.inverse', android: 'sentiment_very_satisfied', web: 'sentiment_very_satisfied' },
   sad: { ios: 'cloud.rain.fill', android: 'sentiment_dissatisfied', web: 'sentiment_dissatisfied' },
   strong: { ios: 'hand.thumbsup.fill', android: 'thumb_up', web: 'thumb_up' },
   strongOutline: { ios: 'hand.thumbsup', android: 'thumb_up_off_alt', web: 'thumb_up_off_alt' },

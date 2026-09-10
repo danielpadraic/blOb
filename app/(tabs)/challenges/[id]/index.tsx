@@ -1191,6 +1191,7 @@ export default function ChallengeDetailScreen() {
           composing={createPost.isPending}
           dayBreakChallenge={challenge ?? null}
           readCursorChallengeId={id || null}
+          focused={liveTabFocused && screenFocused}
           memberIds={mentionMemberIds}
           placeholder={isCalloutObserver ? CALLOUT_CHEER_PLACEHOLDER : undefined}
           footerReserve={stickyJoin ? stickyBlock : 0}

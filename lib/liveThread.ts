@@ -5,7 +5,8 @@ import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { seedLiveAuthor } from '@/lib/safeIds';
 import { checkinComposerPrefill } from '@/lib/checkin/captions';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
-import { asReactionType, POST_REACTION_TYPES, type PostReactionType } from '@/lib/reactions';
+import { liveCheckinKey } from '@/lib/liveFeedPatch';
+import { displayReactionType, reactionCounts, type ReactionCount } from '@/lib/reactions';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia } from '@/utils/media';
 import { commentsForThread } from '@/lib/commentEdit';
@@ -82,12 +83,26 @@ export function sortLivePosts<T extends LivePostLike>(posts: T[]): T[] {
     });
 }
 
-/** FlatList key. Never throw. Never use checkin_id (lobby chat has none). */
+/** FlatList key. Check-in rows use checkin_id so a stats patch does not remount the bubble. */
 export function liveRowKey(
-  row: { id?: string | null; kind?: string | null; createdAt?: string | null } | null | undefined,
+  row:
+    | {
+        id?: string | null;
+        kind?: string | null;
+        createdAt?: string | null;
+        post?: { checkin_id?: string | null } | null;
+      }
+    | null
+    | undefined,
   index = 0,
 ): string {
   try {
+    if (row?.kind === 'post') {
+      const checkinId = liveCheckinKey(row.post?.checkin_id);
+      if (checkinId) {
+        return `checkin:${checkinId}`;
+      }
+    }
     const id = String(row?.id ?? '').trim();
     if (id) {
       return id;
@@ -105,6 +120,8 @@ function asStats(value: unknown): PostWithMeta['checkin_stats'] {
   return value as PostWithMeta['checkin_stats'];
 }
 
+const seededPostCache = new WeakMap<object, PostWithMeta>();
+
 /** Fill author / media / stats so a bad Live row cannot throw on .id or .map. */
 export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
   if (!Array.isArray(posts)) {
@@ -113,6 +130,11 @@ export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
   const out: PostWithMeta[] = [];
   for (const raw of posts) {
     if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const cached = seededPostCache.get(raw);
+    if (cached) {
+      out.push(cached);
       continue;
     }
     const post = raw as PostWithMeta;
@@ -124,14 +146,16 @@ export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
     const comments = Array.isArray(post.comments)
       ? post.comments.filter((comment) => comment && comment.id).map((comment) => seedLiveAuthor(comment))
       : [];
-    out.push({
+    const next = {
       ...seeded,
       id,
       media_urls: uniqueProofUrls(post.media_urls),
       hidden_media_urls: uniqueProofUrls(post.hidden_media_urls),
       checkin_stats: asStats(post.checkin_stats),
       comments,
-    });
+    };
+    seededPostCache.set(raw, next);
+    out.push(next);
   }
   return out;
 }
@@ -294,39 +318,17 @@ export function findLiveParent(
   return posts.find((post) => post.id === parentId) ?? null;
 }
 
-export type LiveReactionCount = {
-  type: PostReactionType;
-  count: number;
-  mine: boolean;
-};
+export type LiveReactionCount = ReactionCount;
 
-/** One chip per type that has at least one reaction. Glyph stays the picked type. */
+/** One chip per type that has at least one reaction. `care` counts as LOL. */
 export function liveReactionCounts(
   reactions: Reaction[] | undefined,
   userId?: string,
 ): LiveReactionCount[] {
-  const counts = new Map<PostReactionType, { count: number; mine: boolean }>();
-  for (const row of reactions ?? []) {
-    const type = asReactionType(row.reaction_type);
-    if (!POST_REACTION_TYPES.includes(type as PostReactionType)) {
-      continue;
-    }
-    const key = type as PostReactionType;
-    const current = counts.get(key) ?? { count: 0, mine: false };
-    current.count += 1;
-    if (userId && row.user_id === userId) {
-      current.mine = true;
-    }
-    counts.set(key, current);
-  }
-  return POST_REACTION_TYPES.filter((type) => counts.has(type)).map((type) => ({
-    type,
-    count: counts.get(type)!.count,
-    mine: counts.get(type)!.mine,
-  }));
+  return reactionCounts(reactions, userId);
 }
 
-/** Add or remove that type only. Other types the same person picked stay. */
+/** One type per person. Tap the same type again to clear it. */
 export function toggleLiveReactionList(
   current: Reaction[],
   userId: string,
@@ -334,20 +336,24 @@ export function toggleLiveReactionList(
   postId: string | null,
   commentId: string | null,
 ): Reaction[] {
-  const existing = current.find(
-    (row) => row.user_id === userId && asReactionType(row.reaction_type) === type,
-  );
-  if (existing) {
+  const nextType = displayReactionType(type) as ReactionType;
+  const existing = current.find((row) => row.user_id === userId);
+  if (existing && displayReactionType(existing.reaction_type) === nextType) {
     return current.filter((row) => row.id !== existing.id);
+  }
+  if (existing) {
+    return current.map((row) =>
+      row.user_id === userId ? { ...row, reaction_type: nextType } : row,
+    );
   }
   return [
     ...current,
     {
-      id: `optimistic-live-${type}-${commentId ?? postId ?? userId}-${userId}`,
+      id: `optimistic-live-${nextType}-${commentId ?? postId ?? userId}-${userId}`,
       user_id: userId,
       post_id: postId,
       comment_id: commentId,
-      reaction_type: type,
+      reaction_type: nextType,
       created_at: new Date().toISOString(),
     },
   ];
@@ -455,4 +461,40 @@ export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
     }
     return liveRowKey(a).localeCompare(liveRowKey(b));
   });
+}
+
+/** Keep the same row object when the source post/comment did not change. */
+export function reuseLiveThreadRows(prev: LiveThreadRow[], next: LiveThreadRow[]): LiveThreadRow[] {
+  if (prev.length === 0) {
+    return next;
+  }
+  const prevById = new Map(prev.map((row) => [row.id, row]));
+  let unchanged = prev.length === next.length;
+  const out = next.map((row, index) => {
+    const old = prevById.get(row.id);
+    if (!old || old.kind !== row.kind) {
+      unchanged = false;
+      return row;
+    }
+    if (row.kind === 'day' && old.kind === 'day') {
+      if (old.periodKey === row.periodKey && old.dateLine === row.dateLine && old.dayLine === row.dayLine) {
+        return old;
+      }
+      unchanged = false;
+      return row;
+    }
+    if (row.kind === 'post' && old.kind === 'post' && old.post === row.post) {
+      return old;
+    }
+    if (row.kind === 'comment' && old.kind === 'comment' && old.comment === row.comment && old.parent === row.parent) {
+      return old;
+    }
+    if (unchanged && old !== row && prev[index] !== row) {
+      unchanged = false;
+    } else {
+      unchanged = false;
+    }
+    return row;
+  });
+  return unchanged && out.every((row, index) => row === prev[index]) ? prev : out;
 }

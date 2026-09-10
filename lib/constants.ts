@@ -57,10 +57,11 @@ export const REACTION_META: Record<
 > = {
   like: { label: 'Like', glyph: '♥' },
   love: { label: 'Love', glyph: '♡' },
-  care: { label: 'Care', glyph: '☺' },
+  care: { label: 'LOL', glyph: '☺' },
   fire: { label: 'Fire', glyph: '🔥' },
   sad: { label: 'Sad', glyph: '·' },
-  laugh: { label: 'Laugh', glyph: '😄' },
+  laugh: { label: 'LOL', glyph: '😄' },
+  rofl: { label: 'ROFL', glyph: '🤣' },
   shock: { label: 'Shock', glyph: '😮' },
   applause: { label: 'Applause', glyph: '👏' },
   praise: { label: 'Praise', glyph: '🙌' },

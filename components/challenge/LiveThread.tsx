@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Keyboard,
   Platform,
   Pressable,
   RefreshControl,
@@ -45,9 +46,18 @@ import {
   liveQuoteLine,
   liveQuotePreview,
   EMPTY_LIVE_POSTS,
+  reuseLiveThreadRows,
   seedLiveFeedPosts,
   type LiveThreadRow,
 } from '@/lib/liveThread';
+import {
+  clearLiveInitialScroll,
+  hasLiveInitialScroll,
+  liveLandingFocus,
+  markLiveInitialScroll,
+  peekSentLiveCheckin,
+  takeSentLiveCheckin,
+} from '@/lib/liveLanding';
 import {
   isAtLiveEnd,
   liveJumpLabel,
@@ -108,6 +118,8 @@ type LiveThreadProps = {
    * thread still gets the scroll fixes and the jump control, just no unread tracking.
    */
   readCursorChallengeId?: string | null;
+  /** Live tab is on screen. Leaving clears the @chip, not the draft. */
+  focused?: boolean;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose: (input: ComposeInput) => Promise<unknown> | void;
@@ -117,7 +129,7 @@ type LiveThreadProps = {
 const EMPTY_LIVE_ROWS: LiveThreadRow[] = [];
 
 function LiveQuietEmpty({ title, body }: { title: string; body: string }) {
-  return <MascotState kind="empty" title={title} body={body} compact />;
+  return <MascotState kind="empty" title={title} body={body || undefined} compact />;
 }
 
 export function LiveThread({
@@ -141,6 +153,7 @@ export function LiveThread({
   composeAudience = 'public',
   dayBreakChallenge,
   readCursorChallengeId,
+  focused = true,
   onRefresh,
   onRetry,
   onCompose,
@@ -171,15 +184,20 @@ export function LiveThread({
     setRowBanner((current) => current || message);
   }, []);
   const sourcePosts = posts.length === 0 ? EMPTY_LIVE_POSTS : posts;
+  const prevRowsRef = useRef<LiveThreadRow[]>(EMPTY_LIVE_ROWS);
   const thread = useMemo(() => {
     try {
       if (sourcePosts.length === 0) {
+        prevRowsRef.current = EMPTY_LIVE_ROWS;
         return { rows: EMPTY_LIVE_ROWS, error: null as string | null };
       }
       const seeded = seedLiveFeedPosts(sourcePosts);
       const built = buildLiveThreadRows(dedupeLivePostsByCheckinId(seeded));
+      const withDays = stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built;
+      const rows = reuseLiveThreadRows(prevRowsRef.current, withDays);
+      prevRowsRef.current = rows;
       return {
-        rows: stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built,
+        rows,
         error: null as string | null,
       };
     } catch (error) {
@@ -212,25 +230,17 @@ export function LiveThread({
   const firstPaintPendingRef = useRef(true);
   /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
   const lastOffsetRef = useRef(0);
-  const [listViewportH, setListViewportH] = useState(0);
-  const [listContentH, setListContentH] = useState(0);
   const emptyList = rows.length === 0;
-  const packToBottom =
-    !emptyList && listViewportH > 0 && listContentH > 0 && listContentH < listViewportH - 1;
   const listContentStyle = useMemo(
     () => ({
-      flexGrow: emptyList || packToBottom ? 1 : 0,
-      justifyContent: emptyList
-        ? ('center' as const)
-        : packToBottom
-          ? ('flex-end' as const)
-          : undefined,
+      flexGrow: 1,
+      justifyContent: emptyList ? ('center' as const) : undefined,
       gap: 12,
       paddingTop: 12,
       paddingBottom: 8,
       overflow: 'visible' as const,
     }),
-    [emptyList, packToBottom],
+    [emptyList],
   );
   const listLatchedRef = useRef(false);
   if (!isLoading || rows.length > 0 || error || buildError) {
@@ -393,16 +403,40 @@ export function LiveThread({
     return () => clearTimeout(timer);
   }, [highlightCommentId, highlightPostId]);
 
+  const landingChallengeId = readCursorChallengeId ?? '';
   useEffect(() => {
-    if (rows.length === 0) {
+    return () => {
+      clearLiveInitialScroll(landingChallengeId);
+    };
+  }, [landingChallengeId]);
+
+  useEffect(() => {
+    if (!focused || rows.length === 0) {
       return;
     }
-    if (highlightKey && highlightedOnce.current !== highlightKey) {
-      const index = findLiveHighlightIndex(rows, highlightPostId, highlightCommentId);
-      if (index >= 0) {
+    if (landingChallengeId && hasLiveInitialScroll(landingChallengeId)) {
+      firstPaintPendingRef.current = false;
+      return;
+    }
+    const landing = liveLandingFocus({
+      commentId: highlightCommentId,
+      postId: highlightPostId,
+      sentPostId: peekSentLiveCheckin(landingChallengeId),
+    });
+    if (landing.commentId || landing.postId) {
+      const index = findLiveHighlightIndex(rows, landing.postId, landing.commentId);
+      if (index < 0) {
+        if (!commentsReady && landing.commentId) {
+          return;
+        }
+        if (!landing.latest) {
+          return;
+        }
+      } else {
         highlightedOnce.current = highlightKey;
-        // Landing on a linked message counts as arriving, so the opening pin is spent.
         firstPaintPendingRef.current = false;
+        markLiveInitialScroll(landingChallengeId);
+        takeSentLiveCheckin(landingChallengeId);
         const timer = setTimeout(() => {
           try {
             listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.35 });
@@ -412,18 +446,17 @@ export function LiveThread({
         }, 80);
         return () => clearTimeout(timer);
       }
-      if (!commentsReady) {
-        return;
-      }
     }
-    if (!highlightKey) {
-      pinToLiveEdge(false, 'first-paint');
+    firstPaintPendingRef.current = true;
+    pinToLiveEdge(false, 'first-paint');
+    if (landingChallengeId) {
+      markLiveInitialScroll(landingChallengeId);
+      takeSentLiveCheckin(landingChallengeId);
     }
     // `rows` is deliberately absent: this effect must run when the thread opens or a link targets a
-    // message, never every time a row arrives or a reaction changes. Re-running it on rows is what
-    // dragged readers back to the bottom.
+    // message, never every time a row arrives or a reaction changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commentsReady, highlightCommentId, highlightKey, highlightPostId, pinToLiveEdge, rows.length === 0]);
+  }, [commentsReady, focused, highlightCommentId, highlightKey, highlightPostId, landingChallengeId, pinToLiveEdge, rows.length === 0]);
 
   const lastNewestIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -640,10 +673,27 @@ export function LiveThread({
     [attachedLift, composeAudience, composeSource, editPost, editing, jumpToLiveEdge, onCompose],
   );
 
+  const [composerOpen, setComposerOpen] = useState(false);
+
+  const collapseComposer = useCallback(() => {
+    Keyboard.dismiss();
+    setComposerOpen(false);
+  }, []);
+
   const startReply = useCallback((target: LiveReplyTarget) => {
     setEditing(null);
     setReplyTo(target);
+    setComposerOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (focused) {
+      return;
+    }
+    setReplyTo(null);
+    setComposerOpen(false);
+    Keyboard.dismiss();
+  }, [focused]);
 
   const startEdit = useCallback((post: PostWithMeta) => {
     if (isLiveCheckinPost(post) && post.challenge_id) {
@@ -754,8 +804,12 @@ export function LiveThread({
   );
 
   const renderQuietEmpty = useCallback(
-    () => <LiveQuietEmpty title={emptyTitle} body={emptyBody} />,
-    [emptyBody, emptyTitle],
+    () => (
+      <Pressable accessibilityRole="button" onPress={collapseComposer}>
+        <LiveQuietEmpty title={emptyTitle} body={emptyBody} />
+      </Pressable>
+    ),
+    [collapseComposer, emptyBody, emptyTitle],
   );
 
   const composerPad = createStickyFooterPad(
@@ -794,21 +848,12 @@ export function LiveThread({
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
-          onLayout={(event) => {
-            if (emptyList) {
-              return;
-            }
-            const height = Math.round(event.nativeEvent.layout.height);
-            if (height > 0 && height !== listViewportH) {
-              setListViewportH(height);
-            }
-          }}
           onScroll={onScroll}
           scrollEventThrottle={16}
           onScrollBeginDrag={() => {
             draggingRef.current = true;
-            // Touching the list ends the opening pin, so nothing can scroll out from under them.
             firstPaintPendingRef.current = false;
+            collapseComposer();
           }}
           onScrollEndDrag={() => {
             draggingRef.current = false;
@@ -818,13 +863,12 @@ export function LiveThread({
           }}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          onContentSizeChange={(_width, height) => {
+          onContentSizeChange={() => {
             if (emptyList) {
               return;
             }
-            const next = Math.round(height);
-            if (next > 0 && next !== listContentH) {
-              setListContentH(next);
+            if (hasLiveInitialScroll(readCursorChallengeId)) {
+              return;
             }
             if (highlightKey && highlightedOnce.current === highlightKey) {
               return;
@@ -904,58 +948,27 @@ export function LiveThread({
           </View>
         ) : null}
 
-        {/*
-          Jump to newest. Sits just above the composer so the keyboard never covers it, and carries a
-          count only for messages that arrived while they were reading up here.
-        */}
         {notAtEnd ? (
           <View
             pointerEvents="box-none"
-            style={{ position: 'absolute', right: 14, bottom: 12 }}>
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 10, alignItems: 'center' }}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={liveJumpLabel(newBelow)}
               onPress={jumpToLiveEdge}
               hitSlop={8}
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
+                minHeight: 28,
+                paddingHorizontal: 14,
+                borderRadius: 999,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: THEME.surface,
-                borderWidth: 1,
-                borderColor: THEME.border,
-                shadowColor: '#19221F',
-                shadowOpacity: 0.16,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 4,
+                backgroundColor: THEME.primary,
               }}>
-              <AppText className="text-[17px]" style={{ color: THEME.textPrimary, marginTop: -2 }}>
-                ↓
+              <AppText className="text-[12px] font-semibold" style={{ color: '#FFFFFF' }}>
+                {newBelow > 0 ? `New · ${newBelow > 99 ? '99+' : newBelow}` : 'New'}
               </AppText>
             </Pressable>
-            {newBelow > 0 ? (
-              <View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  top: -4,
-                  right: -4,
-                  minWidth: 20,
-                  height: 20,
-                  paddingHorizontal: 5,
-                  borderRadius: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: THEME.accent,
-                }}>
-                <AppText className="text-[11px] font-bold" style={{ color: '#FFFFFF' }}>
-                  {newBelow > 99 ? '99+' : String(newBelow)}
-                </AppText>
-              </View>
-            ) : null}
           </View>
         ) : null}
         </LiveSafeBoundary>
@@ -1019,7 +1032,8 @@ export function LiveThread({
           <InlineComposer
             key={editing ? `edit-${editing.id}` : 'live'}
             bar
-            // Editing an existing message is not the place to staple a workout onto it.
+            idleOneLine
+            expanded={composerOpen}
             attachedLift={editing ? null : attachedLift}
             onAttachLift={editing ? undefined : () => setLiftOpen(true)}
             onRemoveLift={() => setAttachedLift(null)}
@@ -1029,16 +1043,10 @@ export function LiveThread({
             submitting={Boolean(composing || editPost.isPending)}
             audience={composeAudience}
             memberIds={memberIds}
-            draftKey={`live:${composeSource}`}
+            draftKey={`live:${readCursorChallengeId || composeSource}`}
             initialText={editing ? liveEditPrefill(editing) : undefined}
             replyTo={editing ? null : replyTo?.mention}
-            onExpandedChange={(open) => {
-              // Only follows the newest row for someone already parked there; a reader scrolled up
-              // keeps their place when the keyboard opens.
-              if (open && !replyTo) {
-                pinToLiveEdge(false, 'composer-open');
-              }
-            }}
+            onExpandedChange={setComposerOpen}
             onSubmit={async (content, mentionedUserIds) => {
               try {
                 await submitLine(content, mentionedUserIds, replyTo?.postId);

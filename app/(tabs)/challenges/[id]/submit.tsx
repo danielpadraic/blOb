@@ -42,6 +42,7 @@ import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin, useCheckinHistory } from '@/hooks/useChallengeCheckin';
 import { isHomeSocialFeedKey, seedChallengeLivePost } from '@/hooks/useFeed';
+import { rememberSentLiveCheckin } from '@/lib/liveLanding';
 import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
 import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
@@ -1374,6 +1375,7 @@ function SubmitWorkoutInner() {
                 comments: [],
                 reactions: [],
               } as unknown as PostWithMeta);
+              rememberSentLiveCheckin(id, postId);
             }
           }
         } catch {

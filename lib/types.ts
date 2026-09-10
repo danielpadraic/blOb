@@ -240,6 +240,7 @@ export type ReactionType =
   | 'fire'
   | 'sad'
   | 'laugh'
+  | 'rofl'
   | 'shock'
   | 'applause'
   | 'praise';

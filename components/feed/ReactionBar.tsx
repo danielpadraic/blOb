@@ -1,26 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, Vibration, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Platform, Pressable, Vibration, View } from 'react-native';
 
 import { Glyph, GLYPH, type GlyphId } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import {
+  ReactionDismissScrim,
+  ReactionPicker,
+  reactionGlyph,
+} from '@/components/feed/ReactionPicker';
+import {
   POST_REACTION_COLORS,
-  POST_REACTION_TYPES,
-  asReactionType,
+  displayReactionType,
   userReaction,
-  type PostReactionType,
 } from '@/lib/reactions';
-import { THEME, themeShadow } from '@/lib/theme';
+import { THEME } from '@/lib/theme';
 import type { Reaction, ReactionType } from '@/lib/types';
 import { formatFeedTime } from '@/utils/format';
-
-const REACTION_GLYPH: Record<PostReactionType, GlyphId> = {
-  like: GLYPH.strong,
-  love: GLYPH.like,
-  care: GLYPH.care,
-  fire: GLYPH.fire,
-  sad: GLYPH.sad,
-};
 
 const noSelectStyle =
   Platform.OS === 'web'
@@ -56,41 +51,6 @@ function webNoSelectProps() {
   };
 }
 
-function dismissScrimStyle() {
-  if (Platform.OS === 'web') {
-    return {
-      position: 'fixed' as const,
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0,
-      backgroundColor: 'rgba(16, 19, 18, 0.28)',
-      zIndex: 40,
-    };
-  }
-  return {
-    position: 'absolute' as const,
-    top: -4000,
-    right: -400,
-    bottom: -4000,
-    left: -400,
-    backgroundColor: 'rgba(16, 19, 18, 0.28)',
-    zIndex: 40,
-  };
-}
-
-function ReactionDismissScrim({ onClose }: { onClose: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Dismiss reactions"
-      onPress={onClose}
-      {...webNoSelectProps()}
-      style={dismissScrimStyle()}
-    />
-  );
-}
-
 function openReactionTray(setOpen: (next: boolean) => void) {
   if (Platform.OS !== 'web') {
     Vibration.vibrate(10);
@@ -122,8 +82,7 @@ export function ReactionBar({
 }: ReactionBarProps) {
   const [trayOpen, setTrayOpen] = useState(false);
   const mine = userReaction(reactions, currentUserId);
-  const rawType = mine ? asReactionType(mine.reaction_type) : null;
-  const mineType = rawType && rawType in REACTION_GLYPH ? (rawType as PostReactionType) : rawType ? 'like' : null;
+  const mineType = mine ? displayReactionType(mine.reaction_type) : null;
   const total = reactions?.length ?? 0;
 
   if (compact) {
@@ -131,20 +90,21 @@ export function ReactionBar({
       <View style={{ zIndex: trayOpen ? 42 : undefined }}>
         {trayOpen ? <ReactionDismissScrim onClose={() => setTrayOpen(false)} /> : null}
         {trayOpen ? (
-          <View style={{ zIndex: 41 }}>
-          <ReactionTray
-            selected={mineType}
-            onPick={(type) => {
-              setTrayOpen(false);
-              onReact(type);
-            }}
-          />
+          <View style={{ zIndex: 41, position: 'relative' }}>
+            <ReactionPicker
+              selected={mineType}
+              align="end"
+              onPick={(type) => {
+                setTrayOpen(false);
+                onReact(type);
+              }}
+            />
           </View>
         ) : null}
       <View className="flex-row items-center" style={{ columnGap: 2, zIndex: 41 }}>
         <Action
           compact
-          icon={mineType ? REACTION_GLYPH[mineType] : GLYPH.strongOutline}
+          icon={mineType ? reactionGlyph(mineType) : GLYPH.strongOutline}
           label="Like"
           count={total}
           color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
@@ -189,15 +149,16 @@ export function ReactionBar({
   return (
     <View style={{ zIndex: trayOpen ? 42 : undefined }}>
       {trayOpen ? <ReactionDismissScrim onClose={() => setTrayOpen(false)} /> : null}
-      {trayOpen ? (
-        <View style={{ zIndex: 41 }}>
-        <ReactionTray
-          selected={mineType}
-          onPick={(type) => {
-            setTrayOpen(false);
-            onReact(type);
-          }}
-        />
+        {trayOpen ? (
+        <View style={{ zIndex: 41, position: 'relative' }}>
+          <ReactionPicker
+            selected={mineType}
+            align="end"
+            onPick={(type) => {
+              setTrayOpen(false);
+              onReact(type);
+            }}
+          />
         </View>
       ) : null}
       <View className="flex-row items-center justify-end" style={{ minHeight: 32, zIndex: 41 }}>
@@ -231,7 +192,7 @@ export function ReactionBar({
           className="h-8 flex-row items-center px-1.5"
           style={noSelectStyle}>
           <Glyph
-            name={mineType ? REACTION_GLYPH[mineType] : GLYPH.strongOutline}
+            name={mineType ? reactionGlyph(mineType) : GLYPH.strongOutline}
             color={mineType ? POST_REACTION_COLORS[mineType] : THEME.textMuted}
             size={18}
           />
@@ -271,66 +232,6 @@ function footerTime(date: string): string {
     return `${short} ago`;
   }
   return short;
-}
-
-function ReactionTray({
-  selected,
-  onPick,
-}: {
-  selected: PostReactionType | null;
-  onPick: (type: PostReactionType) => void;
-}) {
-  const scale = useRef(new Animated.Value(0.86)).current;
-  useEffect(() => {
-    Animated.spring(scale, { toValue: 1, friction: 7, tension: 120, useNativeDriver: true }).start();
-  }, [scale]);
-
-  return (
-    <Animated.View
-      style={{
-        transform: [{ scale }],
-        alignSelf: 'flex-end',
-        marginBottom: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: THEME.surface,
-        borderWidth: 1,
-        borderColor: THEME.border,
-        borderRadius: 22,
-        paddingHorizontal: 6,
-        paddingVertical: 4,
-        ...themeShadow('card'),
-      }}>
-      {POST_REACTION_TYPES.map((type) => {
-        const active = selected === type;
-        return (
-          <Pressable
-            key={type}
-            accessibilityRole="button"
-            accessibilityLabel={type}
-            onPress={() => onPick(type)}
-            {...(Platform.OS === 'web'
-              ? {
-                  onMouseDown: (event: { preventDefault: () => void }) => {
-                    event.preventDefault();
-                  },
-                }
-              : null)}
-            style={{
-              minHeight: 40,
-              minWidth: 40,
-              paddingHorizontal: 8,
-              borderRadius: 999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: active ? THEME.accentSoft : 'transparent',
-            }}>
-            <Glyph name={REACTION_GLYPH[type]} color={POST_REACTION_COLORS[type]} size={20} />
-          </Pressable>
-        );
-      })}
-    </Animated.View>
-  );
 }
 
 function ShareAction({

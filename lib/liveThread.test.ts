@@ -53,6 +53,16 @@ describe('seedLiveFeedPosts / liveRowKey', () => {
     expect(rows[0].media_urls).toEqual([]);
     expect(liveRowKey({ id: undefined, kind: 'post' }, 3)).toBe('live:post::3');
     expect(liveRowKey(null, 0)).toBe('live:row::0');
+    expect(
+      liveRowKey(
+        {
+          id: 'post-new',
+          kind: 'post',
+          post: { checkin_id: '11111111-1111-4111-8111-111111111111' },
+        },
+        0,
+      ),
+    ).toBe('checkin:11111111-1111-4111-8111-111111111111');
   });
 
   it('reads the throwing file from a stack for Retry logs', () => {
@@ -235,13 +245,11 @@ describe('liveQuoteLine', () => {
 });
 
 describe('toggleLiveReactionList', () => {
-  it('lets one person keep fire and thumbs on the same row', () => {
+  it('keeps one type per person and swaps instead of stacking', () => {
     const afterFire = toggleLiveReactionList([], 'u1', 'fire', 'p1', null);
-    const afterBoth = toggleLiveReactionList(afterFire, 'u1', 'like', 'p1', null);
-    expect(afterBoth.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
-    expect(toggleLiveReactionList(afterBoth, 'u1', 'fire', 'p1', null).map((row) => row.reaction_type)).toEqual([
-      'like',
-    ]);
+    const afterLike = toggleLiveReactionList(afterFire, 'u1', 'like', 'p1', null);
+    expect(afterLike.map((row) => row.reaction_type)).toEqual(['like']);
+    expect(toggleLiveReactionList(afterLike, 'u1', 'like', 'p1', null)).toEqual([]);
   });
 });
 
@@ -398,7 +406,7 @@ describe('applyLiveReaction', () => {
       'me',
       'like',
     );
-    expect(post.reactions?.map((row) => row.reaction_type)).toEqual(['fire', 'like']);
+    expect(post.reactions?.map((row) => row.reaction_type)).toEqual(['like']);
   });
 });
 
@@ -456,7 +464,7 @@ describe('canComposeInLive', () => {
 describe('liveEmptyBody', () => {
   const lines = {
     watchingLine: 'Watching',
-    quietBody: 'Posts from people in this challenge land here.',
+    quietBody: 'This room is quiet. Say how the work went.',
     joinToPost: 'Join the challenge to post in Live.',
     outWatchLive: 'You’re out of the prize.',
   };

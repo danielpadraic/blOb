@@ -54,6 +54,8 @@ type InlineComposerProps = {
   pinned?: boolean;
   /** Live/Circle: idle one thin bar; focus shows tools + Send. */
   bar?: boolean;
+  /** Collapse to one line even when a draft is kept. Live room. */
+  idleOneLine?: boolean;
   autoFocus?: boolean;
   /** One-line when idle; keep the draft. Home comment footer. */
   collapseWhenIdle?: boolean;
@@ -82,6 +84,7 @@ export function InlineComposer({
   onExpandedChange,
   pinned,
   bar = false,
+  idleOneLine = false,
   autoFocus = false,
   collapseWhenIdle = false,
   draftKey,
@@ -119,14 +122,16 @@ export function InlineComposer({
   const toolsOpen = collapseWhenIdle
     ? fieldFocused || gifOpen
     : bar
-      ? fieldFocused || hasText || attachments.length > 0 || gifOpen || Boolean(replyTo) || expanded
+      ? fieldFocused || gifOpen || Boolean(replyTo) || expanded || (!idleOneLine && (hasText || attachments.length > 0))
       : expanded;
   const busy = Boolean(submitting || uploading);
   const canSend = allowEmpty || hasText || attachments.length > 0;
   const fieldCollapsed = collapseWhenIdle
     ? !fieldFocused && !gifOpen
     : bar
-      ? !fieldFocused && !hasText && attachments.length === 0
+      ? idleOneLine
+        ? !fieldFocused && !gifOpen && !replyTo && !expanded
+        : !fieldFocused && !hasText && attachments.length === 0
       : !expanded && !hasText;
 
   const persistDraft = useCallback(

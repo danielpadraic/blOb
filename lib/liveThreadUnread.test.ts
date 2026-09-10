@@ -223,7 +223,7 @@ describe('labels', () => {
   });
 
   it('describes the jump control for screen readers', () => {
-    expect(liveJumpLabel(0)).toBe('Jump to newest');
-    expect(liveJumpLabel(3)).toBe('Jump to newest, 3 new');
+    expect(liveJumpLabel(0)).toBe('New');
+    expect(liveJumpLabel(3)).toBe('New, 3');
   });
 });

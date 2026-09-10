@@ -204,7 +204,7 @@ export function liveUnreadChipLabel(count: number): string {
   return `${count} new since you were here`;
 }
 
-/** The jump control shows a count only when messages arrived behind the user's back. */
+/** Compact “New” pill above the composer. */
 export function liveJumpLabel(newBelow: number): string {
-  return newBelow > 0 ? `Jump to newest, ${newBelow} new` : 'Jump to newest';
+  return newBelow > 0 ? `New, ${newBelow}` : 'New';
 }

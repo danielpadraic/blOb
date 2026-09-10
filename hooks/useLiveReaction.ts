@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 
 import { patchFeedPosts } from '@/hooks/useFeed';
 import { applyLiveReaction } from '@/lib/liveThread';
-import { asReactionType } from '@/lib/reactions';
+import { displayReactionType } from '@/lib/reactions';
 import { supabase } from '@/lib/supabase';
 import type { PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,22 +25,19 @@ function poolFor(post: PostWithMeta, commentId?: string | null): Reaction[] {
   return post.comments?.find((comment) => comment.id === commentId)?.reactions ?? [];
 }
 
-function findTypedReaction(
+function findUserReactionOn(
   post: PostWithMeta,
   userId: string,
-  type: ReactionType,
   commentId?: string | null,
 ): Reaction | undefined {
-  return poolFor(post, commentId).find(
-    (row) => row.user_id === userId && asReactionType(row.reaction_type) === type,
-  );
+  return poolFor(post, commentId).find((row) => row.user_id === userId);
 }
 
 function isPersistedId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
-/** Live only: add or remove that type. Does not replace other types on the same row. */
+/** Live + Home: one type per person. Same tap clears it. */
 export function useToggleLiveReaction() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -50,13 +47,26 @@ export function useToggleLiveReaction() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      const existing = findTypedReaction(input.post, user.id, input.type, input.commentId);
-      if (existing && isPersistedId(existing.id)) {
+      const nextType = displayReactionType(input.type);
+      const existing = findUserReactionOn(input.post, user.id, input.commentId);
+      if (existing && isPersistedId(existing.id) && displayReactionType(existing.reaction_type) === nextType) {
         const { error } = await supabase.from('reactions').delete().eq('id', existing.id);
         if (error) {
           throw new Error(getErrorMessage(error));
         }
         return { action: 'removed' as const };
+      }
+      if (existing && isPersistedId(existing.id)) {
+        const updated = await supabase
+          .from('reactions')
+          .update({ reaction_type: nextType })
+          .eq('id', existing.id)
+          .select(REACTION_COLUMNS)
+          .single();
+        if (updated.error) {
+          throw new Error(getErrorMessage(updated.error));
+        }
+        return { action: 'updated' as const, reaction: updated.data as Reaction };
       }
       const inserted = input.commentId
         ? await supabase
@@ -64,7 +74,7 @@ export function useToggleLiveReaction() {
             .insert({
               user_id: user.id,
               comment_id: input.commentId,
-              reaction_type: input.type,
+              reaction_type: nextType,
             })
             .select(REACTION_COLUMNS)
             .single()
@@ -73,7 +83,7 @@ export function useToggleLiveReaction() {
             .insert({
               user_id: user.id,
               post_id: input.post.id,
-              reaction_type: input.type,
+              reaction_type: nextType,
             })
             .select(REACTION_COLUMNS)
             .single();
