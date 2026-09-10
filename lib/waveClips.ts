@@ -1,6 +1,9 @@
 /** Playback / published Wave length. Hard stop at 30.00s. */
 export const WAVE_CLIP_MS = 30_000;
 
+/** Empty / unused overrun. No caption, no posts row, no progress tick. */
+export const WAVE_CLIP_MIN_MS = 300;
+
 /** Continuous Wave record cap (camera + web MediaRecorder). Equals WAVE_CLIP_MS. */
 export const WAVE_RECORD_MAX_SEC = 30;
 
@@ -12,6 +15,9 @@ export type WaveClipWindow = {
   startMs: number;
   durationMs: number;
   caption?: string | null;
+  mediaUrl?: string | null;
+  thumbnailUrl?: string | null;
+  size?: number | null;
 };
 
 /** ImagePicker duration is usually ms; values under 1000 are treated as seconds. */
@@ -30,6 +36,9 @@ export function waveClipWindows(durationMs: number | null | undefined, mediaType
     return [{ startMs: 0, durationMs: WAVE_CLIP_MS }];
   }
   const total = Math.max(mediaDurationMs(durationMs) ?? WAVE_CLIP_MS, 1);
+  if (total < WAVE_CLIP_MIN_MS) {
+    return [];
+  }
   if (total <= WAVE_CLIP_MS) {
     return [{ startMs: 0, durationMs: total }];
   }
@@ -37,7 +46,9 @@ export function waveClipWindows(durationMs: number | null | undefined, mediaType
   let start = 0;
   while (start < total) {
     const length = Math.min(WAVE_CLIP_MS, total - start);
-    clips.push({ startMs: start, durationMs: length });
+    if (length >= WAVE_CLIP_MIN_MS) {
+      clips.push({ startMs: start, durationMs: length });
+    }
     start += length;
   }
   return clips;

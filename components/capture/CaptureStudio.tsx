@@ -43,11 +43,12 @@ import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import {
   ROUND_RECORD_MAX_SEC,
+  WAVE_CLIP_MS,
   WAVE_RECORD_MAX_SEC,
-  formatWaveClipLabel,
+  formatWaveClock,
   resolveMediaDurationMs,
-  waveClipWindows,
 } from '@/lib/waveClips';
+import { WAVE_CLIP_MIN_MS, keepPlayableWaveClips, storyClipsForPublish } from '@/lib/waveSession';
 import { publishedRowId, waveHref, roundHref } from '@/lib/routes';
 import { uploadPosterFromVideo } from '@/lib/videoPoster';
 import { fetchActiveChallenges } from '@/lib/challenges';
@@ -95,7 +96,8 @@ export function CaptureStudio({
   const maxDuration = mode === 'reel' ? REEL_MAX : mode === 'post' ? POST_MAX : WAVE_RECORD_MAX_SEC;
 
   const [step, setStep] = useState<'camera' | 'preview'>('camera');
-  const [draft, setDraft] = useState<CapturedMedia | null>(null);
+  const [drafts, setDrafts] = useState<CapturedMedia[]>([]);
+  const draft = drafts[0] ?? null;
   const [fromCamera, setFromCamera] = useState(false);
   const [caption, setCaption] = useState('');
   const [clipCaptions, setClipCaptions] = useState<string[]>([]);
@@ -135,14 +137,21 @@ export function CaptureStudio({
       live = false;
     };
   }, [mode, challengeId, user?.id]);
-  const waveClips = useMemo(
-    () => (mode === 'story' && draft ? waveClipWindows(draft.durationMs, draft.mediaType) : []),
-    [draft, mode],
-  );
-  const multiClip = mode === 'story' && draft?.mediaType === 'video' && waveClips.length > 1;
+  const reviewClips = useMemo(() => {
+    if (mode !== 'story') {
+      return drafts;
+    }
+    return keepPlayableWaveClips(
+      drafts.map((clip) => ({
+        ...clip,
+        size: clip.blob?.size ?? (clip.uri ? 1 : 0),
+      })),
+    );
+  }, [drafts, mode]);
+  const multiClip = mode === 'story' && reviewClips.length > 1;
 
   function resetStudio() {
-    setDraft(null);
+    setDrafts([]);
     setCaption('');
     setClipCaptions([]);
     setStep('camera');
@@ -152,10 +161,19 @@ export function CaptureStudio({
     setFromCamera(false);
   }
 
-  function acceptDraft(next: CapturedMedia) {
-    setDraft(next);
+  function acceptDrafts(next: CapturedMedia | CapturedMedia[]) {
+    const list = keepPlayableWaveClips(
+      (Array.isArray(next) ? next : [next]).map((clip) => ({
+        ...clip,
+        size: clip.blob?.size ?? (clip.uri ? 1 : 0),
+      })),
+    );
+    if (list.length === 0) {
+      return;
+    }
+    setDrafts(list);
     setCaption('');
-    setClipCaptions([]);
+    setClipCaptions(list.map(() => ''));
     setError(null);
     setStep('preview');
   }
@@ -166,7 +184,7 @@ export function CaptureStudio({
     if (!attached?.uri) {
       return;
     }
-    setDraft({
+    acceptDrafts({
       uri: attached.uri,
       mediaType: attached.mediaType,
       mimeType: attached.mimeType,
@@ -174,7 +192,6 @@ export function CaptureStudio({
     });
     setFromCamera(false);
     setCaption(attached.caption ?? '');
-    setStep('preview');
   }, [mode]);
 
   useEffect(() => {
@@ -273,7 +290,7 @@ export function CaptureStudio({
     }
     const durationMs = isVideo ? await resolveMediaDurationMs(uri, asset.duration) : null;
     setFromCamera(false);
-    acceptDraft({
+    acceptDrafts({
       uri,
       mediaType: isVideo ? 'video' : 'image',
       mimeType: asset.mimeType ?? asset.file?.type,
@@ -318,25 +335,60 @@ export function CaptureStudio({
         }
         setProgress(Math.max(8, Math.min(82, percent)));
       };
-      const mediaUrl = await (mode === 'story'
-        ? uploadStoryMedia({
-            uri: draft.uri,
-            userId: user.id,
-            mimeType: draft.mimeType,
-            blob: draft.blob,
-            onProgress: onUploadProgress,
-          })
-        : uploadPostMedia({
+      const waveUploads =
+        mode === 'story'
+          ? await (async () => {
+              const items = reviewClips;
+              if (items.length === 0) {
+                throw new Error('That clip had no video.');
+              }
+              const uploaded: {
+                mediaUrl: string;
+                posterUrl: string | null;
+                item: CapturedMedia;
+                caption: string;
+              }[] = [];
+              for (let index = 0; index < items.length; index += 1) {
+                const item = items[index]!;
+                const mediaUrl = await uploadStoryMedia({
+                  uri: item.uri,
+                  userId: user.id,
+                  mimeType: item.mimeType,
+                  blob: item.blob,
+                  onProgress: onUploadProgress,
+                });
+                const posterUrl =
+                  item.mediaType === 'video'
+                    ? await uploadPosterFromVideo({
+                        videoUri: item.uri,
+                        userId: user.id,
+                        fileStem: `stories/${Date.now()}-${index}-poster`,
+                      })
+                    : null;
+                uploaded.push({
+                  mediaUrl,
+                  posterUrl,
+                  item,
+                  caption: multiClip ? clipCaptions[index]?.trim() || '' : caption.trim(),
+                });
+              }
+              return uploaded;
+            })()
+          : null;
+      const mediaUrl = waveUploads
+        ? waveUploads[0]!.mediaUrl
+        : await uploadPostMedia({
             uri: draft.uri,
             userId: user.id,
             fileStem: `${mode === 'reel' ? 'reels' : 'posts'}/${Date.now()}`, // Round storage prefix stays `reels/`.
             mimeType: draft.mimeType,
             blob: draft.blob,
             onProgress: onUploadProgress,
-          }));
+          });
       setProgress(88);
-      const posterUrl =
-        draft.mediaType === 'video'
+      const posterUrl = waveUploads
+        ? waveUploads[0]!.posterUrl
+        : draft.mediaType === 'video'
           ? await uploadPosterFromVideo({
               videoUri: draft.uri,
               userId: user.id,
@@ -414,16 +466,32 @@ export function CaptureStudio({
           challengeId: challengeId ?? undefined,
         });
       } else {
-        const clips = waveClips.map((clip, index) => ({
-          ...clip,
-          caption: multiClip ? clipCaptions[index]?.trim() || null : caption.trim() || null,
-        }));
+        const uploads = waveUploads ?? [];
+        const clips = storyClipsForPublish({
+          mediaType: draft.mediaType,
+          clips: uploads.map((row) => ({
+            startMs: 0,
+            durationMs:
+              draft.mediaType === 'image'
+                ? WAVE_CLIP_MS
+                : row.item.durationMs != null && row.item.durationMs > 0
+                  ? Math.min(row.item.durationMs, WAVE_CLIP_MS)
+                  : WAVE_CLIP_MS,
+            caption: row.caption.trim() || null,
+            mediaUrl: row.mediaUrl,
+            thumbnailUrl: row.posterUrl,
+            size: row.item.blob?.size ?? (row.item.uri ? 1 : 0),
+          })),
+        });
+        if (clips.length === 0) {
+          throw new Error('That clip had no video.');
+        }
         let created;
         try {
           created = await createStory.mutateAsync({
-            media_url: mediaUrl,
+            media_url: clips[0]!.mediaUrl || mediaUrl,
             media_type: draft.mediaType,
-            thumbnail_url: posterUrl,
+            thumbnail_url: clips[0]!.thumbnailUrl ?? posterUrl,
             caption: multiClip ? null : caption.trim() || null,
             challenge_id: challengeId,
             clips,
@@ -436,9 +504,9 @@ export function CaptureStudio({
           logWaveFail('tag', tagError);
           try {
             created = await createStory.mutateAsync({
-              media_url: mediaUrl,
+              media_url: clips[0]!.mediaUrl || mediaUrl,
               media_type: draft.mediaType,
-              thumbnail_url: posterUrl,
+              thumbnail_url: clips[0]!.thumbnailUrl ?? posterUrl,
               caption: multiClip ? null : caption.trim() || null,
               challenge_id: null,
               clips,
@@ -460,12 +528,23 @@ export function CaptureStudio({
           if (!storyId) {
             continue;
           }
+          const storyMedia = story.media_url || clips[story.sequence_index ?? 0]?.mediaUrl || mediaUrl;
+          if (!storyMedia) {
+            continue;
+          }
+          if (
+            story.media_type === 'video' &&
+            story.clip_duration_ms != null &&
+            story.clip_duration_ms < WAVE_CLIP_MIN_MS
+          ) {
+            continue;
+          }
           let posted: Post | null = null;
           try {
             posted = await ensureClipFeedPost({
               createPost: (input) => createPost.mutateAsync(input),
               content: story.caption?.trim() || caption.trim(),
-              mediaUrls: [mediaUrl],
+              mediaUrls: [storyMedia],
               audience,
               audienceUserIds,
               challengeId: story.challenge_id ?? challengeId,
@@ -563,6 +642,7 @@ export function CaptureStudio({
           chromeInset={false}
           allowModeToggle={mode === 'story' || mode === 'post'}
           deniedTitle={mode === 'story' ? copy('wave.cameraNeed') : undefined}
+          waveSession={mode === 'story'}
           onCaptured={(next) => {
             if (next.mediaType === 'image') {
               rememberLastCapture({
@@ -572,7 +652,11 @@ export function CaptureStudio({
               });
             }
             setFromCamera(true);
-            acceptDraft(next);
+            acceptDrafts(next);
+          }}
+          onWaveSession={(clips) => {
+            setFromCamera(true);
+            acceptDrafts(clips);
           }}
           onOpenGallery={() => void openLibrary()}
           onCancel={close}
@@ -625,75 +709,73 @@ export function CaptureStudio({
         </Pressable>
       </View>
 
-      {draft ? (
-        <Card padded={false} className="overflow-hidden">
-          {draft.mediaType === 'image' ? (
-            <Image source={{ uri: draft.uri }} style={{ width: '100%', height: 280 }} contentFit="cover" />
-          ) : (
-            <DraftClipPreview uri={draft.uri} />
-          )}
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              rememberLastCapture(null);
-              setDraft(null);
-              setFromCamera(false);
-              setCaption('');
-              setClipCaptions([]);
-              setStep('camera');
-            }}
-            className="absolute right-3 top-3 rounded-full px-3 py-1.5"
-            style={{ backgroundColor: 'rgba(16,19,18,0.72)' }}>
-            <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
-              Retake
-            </AppText>
-          </Pressable>
-          {progress > 0 ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                bottom: 0,
-                paddingHorizontal: 12,
-                paddingBottom: 12,
-                paddingTop: 28,
-                backgroundColor: 'rgba(16,19,18,0.45)',
-              }}>
-              <View className="h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.28)' }}>
-                <View
-                  className="h-full rounded-full"
-                  style={{ width: `${Math.max(6, progress)}%`, backgroundColor: THEME.accentBright }}
-                />
+      {reviewClips.map((clip, index) => (
+        <View key={`${clip.uri}-${index}`} className="gap-3">
+          <Card padded={false} className="overflow-hidden">
+            {clip.mediaType === 'image' ? (
+              <Image source={{ uri: clip.uri }} style={{ width: '100%', height: 280 }} contentFit="cover" />
+            ) : (
+              <DraftClipPreview uri={clip.uri} />
+            )}
+            {index === 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  rememberLastCapture(null);
+                  setDrafts([]);
+                  setFromCamera(false);
+                  setCaption('');
+                  setClipCaptions([]);
+                  setStep('camera');
+                }}
+                className="absolute right-3 top-3 rounded-full px-3 py-1.5"
+                style={{ backgroundColor: 'rgba(16,19,18,0.72)' }}>
+                <AppText className="text-[12px] font-bold" style={{ color: '#fff' }}>
+                  Retake
+                </AppText>
+              </Pressable>
+            ) : null}
+            {progress > 0 && index === 0 ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  paddingHorizontal: 12,
+                  paddingBottom: 12,
+                  paddingTop: 28,
+                  backgroundColor: 'rgba(16,19,18,0.45)',
+                }}>
+                <View className="h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: THEME.border }}>
+                  <View
+                    className="h-full rounded-full"
+                    style={{ width: `${Math.max(6, progress)}%`, backgroundColor: THEME.accentBright }}
+                  />
+                </View>
+                <AppText className="mt-1.5 text-[12px] font-semibold" style={{ color: '#fff' }}>
+                  {progress < 88 ? `${Math.round(progress)}%` : 'Sharing…'}
+                </AppText>
               </View>
-              <AppText className="mt-1.5 text-[12px] font-semibold" style={{ color: '#fff' }}>
-                {progress < 88 ? `${Math.round(progress)}%` : 'Sharing…'}
-              </AppText>
-            </View>
+            ) : null}
+          </Card>
+          {fromCamera && index === 0 ? (
+            <SaveCaptureHint
+              uri={clip.uri}
+              blob={clip.blob}
+              mimeType={clip.mimeType}
+              mediaType={clip.mediaType}
+            />
           ) : null}
-        </Card>
-      ) : null}
-      {draft && fromCamera ? (
-        <SaveCaptureHint
-          uri={draft.uri}
-          blob={draft.blob}
-          mimeType={draft.mimeType}
-          mediaType={draft.mediaType}
-        />
-      ) : null}
-
-      {multiClip ? (
-        <View className="gap-3">
-          {waveClips.map((clip, index) => (
+          {multiClip ? (
             <Input
-              key={`${clip.startMs}-${clip.durationMs}`}
-              label={formatWaveClipLabel(index, clip)}
+              label={`Clip ${index + 1} · ${formatWaveClock(clip.durationMs ?? 0)}`}
               placeholder="Add a caption"
               value={clipCaptions[index] ?? ''}
               onChangeText={(value) =>
                 setClipCaptions((current) => {
-                  const next = waveClips.map((_, slot) => current[slot] ?? '');
+                  const next = reviewClips.map((_, slot) => current[slot] ?? '');
                   next[index] = value;
                   return next;
                 })
@@ -706,9 +788,11 @@ export function CaptureStudio({
                   : undefined
               }
             />
-          ))}
+          ) : null}
         </View>
-      ) : (
+      ))}
+
+      {multiClip ? null : (
         <Input
           label="Caption"
           placeholder="Add a caption"

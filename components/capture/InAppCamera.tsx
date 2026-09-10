@@ -41,6 +41,7 @@ import {
   stopPrimedCameraStream,
   takePrimedCameraStream,
   stopAllLiveMedia,
+  unwatchLiveMedia,
   watchLiveMedia,
   webCameraGrantedThisSession,
 } from '@/lib/cameraSession';
@@ -75,6 +76,13 @@ import { applyWebVideoLock } from '@/lib/webVideo';
 import type { CapturedMedia, CaptureMedia } from '@/components/capture/types';
 import { saveOwnCapture } from '@/lib/saveCapture';
 import {
+  assembleWaveRecorderBlob,
+  canStartNextWaveRecorder,
+  isPlayableWaveClip,
+  keepPlayableWaveClips,
+} from '@/lib/waveSession';
+import { WAVE_CLIP_MS, WAVE_RECORD_MAX_SEC } from '@/lib/waveClips';
+import {
   centeredFovCrop,
   expoCameraZoom,
   frontFovZoom,
@@ -93,6 +101,10 @@ type InAppCameraProps = {
   allowModeToggle?: boolean;
   deniedTitle?: string;
   onCaptured: (media: CapturedMedia) => void;
+  /** Wave video only. Sealed clips after the user stops. Never includes empty blobs. */
+  onWaveSession?: (clips: CapturedMedia[]) => void;
+  /** Wave: one session, seal at 30.00s, roll the next file. Round stays one-shot. */
+  waveSession?: boolean;
   onOpenGallery: () => void;
   onCancel: () => void;
   onUnavailable?: () => void;
@@ -121,6 +133,8 @@ export function InAppCamera({
   allowModeToggle = false,
   deniedTitle,
   onCaptured,
+  onWaveSession,
+  waveSession = false,
   onOpenGallery,
   onCancel,
   onUnavailable,
@@ -153,6 +167,14 @@ export function InAppCamera({
   const [sessionOn, setSessionOn] = useState(true);
   const focusedRef = useRef(focused);
   const chunksRef = useRef<Blob[]>([]);
+  const sessionClipsRef = useRef<CapturedMedia[]>([]);
+  const sessionActiveRef = useRef(false);
+  const discardedRef = useRef(false);
+  const rollingRef = useRef(false);
+  const clipStartedAtRef = useRef(0);
+  const clipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const [clipIndex, setClipIndex] = useState(1);
   const [facing, setFacing] = useState<CameraType>(() => lastCameraFacing(resolvedFacingKind));
   const [switchToast, setSwitchToast] = useState<string | null>(null);
   const [capture, setCapture] = useState<CaptureMedia>(checkin ? 'photo' : captureProp);
@@ -168,6 +190,8 @@ export function InAppCamera({
   const holdRef = useRef(false);
   const skipPressRef = useRef(false);
   const video = !checkin && capture === 'video';
+  const waveRoll = Boolean(waveSession && !checkin && video && onWaveSession);
+  const clipElapsed = useRecordingElapsed(recording, maxDuration, clipIndex);
   const fovFacing: CameraFovFacing = facing === 'front' ? 'front' : 'back';
   const fovKind = video ? 'video' : 'still';
   const fovZoom = frontFovZoom(fovFacing, fovKind);
@@ -236,7 +260,19 @@ export function InAppCamera({
     };
   }, [checkin, web]);
 
+  function clearClipTimer() {
+    if (clipTimerRef.current) {
+      clearTimeout(clipTimerRef.current);
+      clipTimerRef.current = null;
+    }
+  }
+
   function killSession() {
+    discardedRef.current = true;
+    sessionActiveRef.current = false;
+    rollingRef.current = false;
+    sessionClipsRef.current = [];
+    clearClipTimer();
     if (cropDrawRef.current) {
       cancelAnimationFrame(cropDrawRef.current);
       cropDrawRef.current = 0;
@@ -254,6 +290,9 @@ export function InAppCamera({
     }
     stopAllLiveMedia();
     setSessionOn(false);
+    setRecording(false);
+    recordingRef.current = false;
+    setClipIndex(1);
   }
 
   function finishCapture(media: CapturedMedia) {
@@ -273,6 +312,266 @@ export function InAppCamera({
       mediaType: media.mediaType,
       fromLibrary: false,
     });
+  }
+
+  function saveSealedClip(media: CapturedMedia) {
+    void saveOwnCapture({
+      uri: media.uri,
+      blob: media.blob,
+      mimeType: media.mimeType,
+      mediaType: media.mediaType,
+      fromLibrary: false,
+    });
+  }
+
+  function sealClipToSession(media: CapturedMedia): boolean {
+    if (
+      !isPlayableWaveClip({
+        uri: media.uri,
+        durationMs: media.durationMs,
+        size: media.blob?.size ?? (media.uri ? 1 : 0),
+      })
+    ) {
+      return false;
+    }
+    sessionClipsRef.current = [...sessionClipsRef.current, media];
+    saveSealedClip(media);
+    setClipIndex(sessionClipsRef.current.length + 1);
+    return true;
+  }
+
+  function finishWaveSession() {
+    const clips = keepPlayableWaveClips(
+      sessionClipsRef.current.map((clip) => ({
+        ...clip,
+        size: clip.blob?.size ?? (clip.uri ? 1 : 0),
+      })),
+    );
+    sessionClipsRef.current = [];
+    recordingRef.current = false;
+    setRecording(false);
+    holdRef.current = false;
+    clearClipTimer();
+    if (discardedRef.current) {
+      return;
+    }
+    if (clips.length === 0) {
+      setClipIndex(1);
+      return;
+    }
+    try {
+      onWaveSession?.(clips);
+    } catch (error) {
+      logCameraError(error, 'onWaveSession');
+    }
+    killSession();
+  }
+
+  function pickWebRecorderMime(): string {
+    return typeof MediaRecorder.isTypeSupported === 'function' &&
+      MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+      ? 'video/webm;codecs=vp8,opus'
+      : typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : '';
+  }
+
+  async function webRecordStream(): Promise<MediaStream | null> {
+    const stream = webStreamRef.current;
+    const node = webVideoRef.current;
+    if (!stream) {
+      return null;
+    }
+    let recordStream: MediaStream = stream;
+    if (webCropVideo && node) {
+      if (node.videoWidth <= 0) {
+        await waitWebVideoFrame(node);
+      }
+      if (node.videoWidth > 0) {
+        const cropped = startWebVideoFovCrop(node, fovZoom, cropDrawRef);
+        if (cropped) {
+          stream.getAudioTracks().forEach((track) => {
+            if (cropped.getAudioTracks().every((audio) => audio.id !== track.id)) {
+              cropped.addTrack(track);
+            }
+          });
+          recordStream = cropped;
+        }
+      }
+    }
+    return recordStream;
+  }
+
+  function stopWebRecorderKeepStream(): Promise<CapturedMedia | null> {
+    return new Promise((resolve) => {
+      const recorder = recorderRef.current;
+      clearClipTimer();
+      if (!recorder) {
+        resolve(null);
+        return;
+      }
+      const finish = () => {
+        unwatchLiveMedia({ recorder });
+        recorderRef.current = null;
+        if (cropDrawRef.current) {
+          cancelAnimationFrame(cropDrawRef.current);
+          cropDrawRef.current = 0;
+        }
+        const cameraIds = new Set((webStreamRef.current?.getTracks() ?? []).map((track) => track.id));
+        recordStreamRef.current?.getTracks().forEach((track) => {
+          if (!cameraIds.has(track.id)) {
+            try {
+              track.stop();
+            } catch {
+              // Crop canvas track only.
+            }
+          }
+        });
+        recordStreamRef.current = null;
+        const assembled = assembleWaveRecorderBlob(
+          chunksRef.current,
+          recorder.mimeType || 'video/webm',
+          Date.now() - clipStartedAtRef.current,
+        );
+        chunksRef.current = [];
+        if (!assembled) {
+          resolve(null);
+          return;
+        }
+        resolve({
+          uri: URL.createObjectURL(assembled.blob),
+          mediaType: 'video',
+          mimeType: assembled.mimeType,
+          blob: assembled.blob,
+          durationMs: assembled.durationMs,
+        });
+      };
+      if (recorder.state === 'inactive') {
+        finish();
+        return;
+      }
+      recorder.onstop = finish;
+      try {
+        recorder.stop();
+      } catch {
+        finish();
+      }
+    });
+  }
+
+  async function startWebClipRecorder(): Promise<boolean> {
+    if (discardedRef.current || !sessionActiveRef.current) {
+      return false;
+    }
+    if (
+      !canStartNextWaveRecorder({
+        liveRecorderCount: recorderRef.current ? 1 : 0,
+        previousClipSettled: !rollingRef.current,
+      })
+    ) {
+      return false;
+    }
+    const recordStream = await webRecordStream();
+    if (!recordStream || !webMediaRecorderAvailable()) {
+      return false;
+    }
+    const mime = pickWebRecorderMime();
+    chunksRef.current = [];
+    let recorder: MediaRecorder;
+    try {
+      recorder = mime ? new MediaRecorder(recordStream, { mimeType: mime }) : new MediaRecorder(recordStream);
+    } catch (error) {
+      logCameraError(error, 'MediaRecorder');
+      return false;
+    }
+    recorderRef.current = recorder;
+    recordStreamRef.current = recordStream;
+    watchLiveMedia({ recorder });
+    clipStartedAtRef.current = Date.now();
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunksRef.current.push(event.data);
+      }
+    };
+    try {
+      recorder.start(250);
+    } catch (error) {
+      unwatchLiveMedia({ recorder });
+      recorderRef.current = null;
+      logCameraError(error, 'MediaRecorder.start');
+      return false;
+    }
+    clipTimerRef.current = setTimeout(() => {
+      if (recorderRef.current === recorder && recorder.state === 'recording' && sessionActiveRef.current) {
+        void capHaptic();
+        void rollWebClip('cap');
+      }
+    }, WAVE_CLIP_MS);
+    return true;
+  }
+
+  async function rollWebClip(reason: 'cap' | 'stop') {
+    if (reason === 'stop') {
+      sessionActiveRef.current = false;
+    }
+    if (rollingRef.current) {
+      return;
+    }
+    rollingRef.current = true;
+    const sealed = await stopWebRecorderKeepStream();
+    if (sealed) {
+      sealClipToSession(sealed);
+    }
+    rollingRef.current = false;
+    if (discardedRef.current || !sessionActiveRef.current || reason === 'stop') {
+      finishWaveSession();
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+    if (discardedRef.current || !sessionActiveRef.current) {
+      finishWaveSession();
+      return;
+    }
+    const started = await startWebClipRecorder();
+    if (!started) {
+      sessionActiveRef.current = false;
+      finishWaveSession();
+    }
+  }
+
+  async function runNativeWaveSession() {
+    while (sessionActiveRef.current && !discardedRef.current) {
+      if (!cameraRef.current) {
+        break;
+      }
+      const startedAt = Date.now();
+      setClipIndex(sessionClipsRef.current.length + 1);
+      let clip: { uri?: string } | undefined;
+      try {
+        clip = await cameraRef.current.recordAsync({ maxDuration: WAVE_RECORD_MAX_SEC });
+      } catch (error) {
+        logCameraError(error, 'recordAsync');
+        break;
+      }
+      if (discardedRef.current) {
+        return;
+      }
+      const durationMs = Date.now() - startedAt;
+      if (clip?.uri && isPlayableWaveClip({ uri: clip.uri, durationMs })) {
+        sealClipToSession({
+          uri: clip.uri,
+          mediaType: 'video',
+          mimeType: 'video/mp4',
+          blob: null,
+          durationMs,
+        });
+      } else if (sessionActiveRef.current && !clip?.uri) {
+        break;
+      }
+    }
+    finishWaveSession();
   }
 
   function stayOnRear(message = 'Couldn’t switch camera') {
@@ -743,6 +1042,34 @@ export function InAppCamera({
     if (!shutterEnabled || !video || recordingRef.current) {
       return;
     }
+    if (waveRoll) {
+      discardedRef.current = false;
+      rollingRef.current = false;
+      sessionClipsRef.current = [];
+      sessionActiveRef.current = true;
+      recordingRef.current = true;
+      setRecording(true);
+      setClipIndex(1);
+      if (web) {
+        if (!webMediaRecorderAvailable()) {
+          sessionActiveRef.current = false;
+          recordingRef.current = false;
+          setRecording(false);
+          onUnavailable?.();
+          return;
+        }
+        const started = await startWebClipRecorder();
+        if (!started) {
+          sessionActiveRef.current = false;
+          recordingRef.current = false;
+          setRecording(false);
+          onUnavailable?.();
+        }
+        return;
+      }
+      void runNativeWaveSession();
+      return;
+    }
     if (web) {
       const stream = webStreamRef.current;
       const node = webVideoRef.current;
@@ -864,6 +1191,18 @@ export function InAppCamera({
   }
 
   function stopRecording() {
+    if (!recordingRef.current && !sessionActiveRef.current) {
+      return;
+    }
+    if (waveRoll) {
+      sessionActiveRef.current = false;
+      if (web) {
+        void rollWebClip('stop');
+        return;
+      }
+      cameraRef.current?.stopRecording();
+      return;
+    }
     if (cropDrawRef.current) {
       cancelAnimationFrame(cropDrawRef.current);
       cropDrawRef.current = 0;
@@ -1057,9 +1396,44 @@ export function InAppCamera({
         </View>
       ) : null}
 
+      {waveRoll && recording ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: Math.max(insets.top, 12),
+            right: 16,
+            left: 16,
+            zIndex: 5,
+          }}>
+          <View
+            style={{
+              height: 3,
+              borderRadius: 2,
+              overflow: 'hidden',
+              backgroundColor: 'rgba(255,255,255,0.28)',
+            }}>
+            <View
+              style={{
+                width: `${Math.round((clipElapsed / Math.max(maxDuration, 0.001)) * 100)}%`,
+                height: '100%',
+                backgroundColor: THEME.primaryForeground,
+              }}
+            />
+          </View>
+          <AppText
+            accessibilityRole="text"
+            accessibilityLabel={`Clip ${clipIndex}`}
+            className="mt-2 text-center text-[13px] font-extrabold"
+            style={{ color: THEME.primaryForeground }}>
+            {clipIndex}
+          </AppText>
+        </View>
+      ) : null}
+
       <View
         className="absolute left-3 right-3 flex-row items-center justify-between"
-        style={{ top: Math.max(insets.top, 12) + 4, zIndex: 4 }}>
+        style={{ top: Math.max(insets.top, 12) + (waveRoll && recording ? 28 : 4), zIndex: 4 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close camera"
@@ -1138,14 +1512,14 @@ export function InAppCamera({
         ) : null}
         {allowModeToggle && !checkin ? (
           <View className="mb-3 flex-row items-center justify-center" style={{ gap: 18 }}>
-            <Pressable accessibilityRole="button" onPress={() => setCapture('photo')}>
+            <Pressable accessibilityRole="button" disabled={recording} onPress={() => setCapture('photo')}>
               <AppText
                 className="text-[13px] font-extrabold"
                 style={{ color: capture === 'photo' ? '#fff' : 'rgba(255,255,255,0.45)' }}>
                 Photo
               </AppText>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => setCapture('video')}>
+            <Pressable accessibilityRole="button" disabled={recording} onPress={() => setCapture('video')}>
               <AppText
                 className="text-[13px] font-extrabold"
                 style={{ color: capture === 'video' ? '#fff' : 'rgba(255,255,255,0.45)' }}>
@@ -1174,7 +1548,9 @@ export function InAppCamera({
           </Pressable>
 
           <View style={{ width: 82, height: 82, alignItems: 'center', justifyContent: 'center' }}>
-            {video ? <RecordingRing recording={recording} maxDuration={maxDuration} /> : null}
+            {video ? (
+              <RecordingRing recording={recording} maxDuration={maxDuration} resetKey={clipIndex} />
+            ) : null}
             {checkin && busy && !video ? <ShutterRing progress={0.28} /> : null}
             <Pressable
               accessibilityRole="button"
@@ -1207,7 +1583,7 @@ export function InAppCamera({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Flip camera"
-            disabled={showDenied || Boolean(stillStatus)}
+            disabled={showDenied || Boolean(stillStatus) || recording}
             onPress={() => {
               const next = facing === 'back' ? 'front' : 'back';
               setAsk('starting');
@@ -1230,7 +1606,7 @@ export function InAppCamera({
               backgroundColor: 'rgba(16,19,18,0.72)',
               borderWidth: 1,
               borderColor: 'rgba(255,255,255,0.35)',
-              opacity: showDenied || stillStatus ? 0.4 : 1,
+              opacity: showDenied || stillStatus || recording ? 0.4 : 1,
             }}>
             <AppText className="text-[11px] font-extrabold" style={{ color: '#fff' }}>
               Flip
@@ -1247,7 +1623,7 @@ export function InAppCamera({
   );
 }
 
-function useRecordingElapsed(recording: boolean, maxDuration: number) {
+function useRecordingElapsed(recording: boolean, maxDuration: number, resetKey = 1) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (!recording) {
@@ -1259,7 +1635,7 @@ function useRecordingElapsed(recording: boolean, maxDuration: number) {
       setElapsed(Math.min(maxDuration, (Date.now() - started) / 1000));
     }, 250);
     return () => clearInterval(tick);
-  }, [maxDuration, recording]);
+  }, [maxDuration, recording, resetKey]);
   return elapsed;
 }
 
@@ -1507,8 +1883,16 @@ function startWebVideoFovCrop(
   }
 }
 
-function RecordingRing({ recording, maxDuration }: { recording: boolean; maxDuration: number }) {
-  const elapsed = useRecordingElapsed(recording, maxDuration);
+function RecordingRing({
+  recording,
+  maxDuration,
+  resetKey = 1,
+}: {
+  recording: boolean;
+  maxDuration: number;
+  resetKey?: number;
+}) {
+  const elapsed = useRecordingElapsed(recording, maxDuration, resetKey);
   return <ShutterRing progress={recording ? elapsed / maxDuration : 0} />;
 }
 

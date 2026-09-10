@@ -16,7 +16,7 @@ import { OFFICIAL_BOB_ID } from '@/lib/official';
 import { publishedRowId } from '@/lib/routes';
 import { logMissingPublishAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
 import { supabase } from '@/lib/supabase';
-import { WAVE_CLIP_MS } from '@/lib/waveClips';
+import { storyClipsForPublish } from '@/lib/waveSession';
 import {
   SOCIAL_PAGE_SIZE,
   acceptFriendRequest,
@@ -897,11 +897,11 @@ export function useCreateStory() {
       const previous = queryClient.getQueryData<Story[]>(socialKeys.stories());
       if (user?.id) {
         const now = new Date();
-        const clips = input.clips?.length ? input.clips : [{ startMs: 0, durationMs: WAVE_CLIP_MS }];
+        const clips = storyClipsForPublish({ mediaType: input.media_type, clips: input.clips });
         const optimistic = clips.map((clip, index) => ({
           id: `optimistic-${now.getTime()}-${index}`,
           user_id: user.id,
-          media_url: input.media_url,
+          media_url: clip.mediaUrl || input.media_url,
           media_type: input.media_type,
           challenge_id: input.challenge_id ?? null,
           caption:
@@ -912,7 +912,7 @@ export function useCreateStory() {
           sequence_index: index,
           clip_start_ms: clip.startMs,
           clip_duration_ms: clip.durationMs,
-          thumbnail_url: input.thumbnail_url ?? null,
+          thumbnail_url: clip.thumbnailUrl ?? input.thumbnail_url ?? null,
         })) as Story[];
         queryClient.setQueryData<Story[]>(socialKeys.stories(), [...optimistic, ...(previous ?? [])]);
       }

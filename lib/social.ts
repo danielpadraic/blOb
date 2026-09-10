@@ -22,7 +22,8 @@ import { isActiveWaveTagStatus } from '@/lib/waveTags';
 import { asLoggableList } from '@/lib/loggable';
 import { conversationLastMessageAt, sortConversationsNewestFirst } from '@/lib/conversationList';
 import { publishedRowId } from '@/lib/routes';
-import { WAVE_CLIP_MS, type WaveClipWindow } from '@/lib/waveClips';
+import { type WaveClipWindow } from '@/lib/waveClips';
+import { storyClipsForPublish } from '@/lib/waveSession';
 import type {
   Conversation,
   ConversationMember,
@@ -1103,18 +1104,20 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     throw new Error('Add a photo or video first.');
   }
   const expiresAt = input.expires_at ?? addHours(new Date(), STORY_TTL_HOURS).toISOString();
-  const clips =
-    input.clips && input.clips.length > 0
-      ? input.clips
-      : [{ startMs: 0, durationMs: input.media_type === 'image' ? WAVE_CLIP_MS : 0 }];
+  const clips = storyClipsForPublish({ mediaType: input.media_type, clips: input.clips });
+  if (clips.length === 0) {
+    throw new Error('That clip had no video.');
+  }
   const schema = await resolveStoriesSelect();
   const sequenceId = clips.length > 1 ? (globalThis.crypto?.randomUUID?.() ?? `seq_${Date.now()}`) : null;
-  const rows = clips.map((clip, index) =>
+  const rows = clips
+    .filter((clip) => (clip.mediaUrl || mediaUrl).trim())
+    .map((clip, index) =>
     storyInsertRow(schema, {
       user_id: userId,
-      media_url: mediaUrl,
+      media_url: (clip.mediaUrl || mediaUrl).trim(),
       media_type: input.media_type,
-      thumbnail_url: input.thumbnail_url ?? null,
+      thumbnail_url: clip.thumbnailUrl ?? input.thumbnail_url ?? null,
       challenge_id: input.challenge_id ?? null,
       caption:
         clip.caption?.trim() ||
@@ -1126,6 +1129,9 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
       clip_duration_ms: clip.durationMs || null,
     }),
   );
+  if (rows.length === 0) {
+    throw new Error('That clip had no video.');
+  }
   const { data, error } = await supabase.from('stories').insert(rows as never).select(schema.select);
   if (error && input.challenge_id) {
     console.log('[blob:wave]', { stage: 'tag', message: String(error.message ?? error.code ?? 'tag').slice(0, 180) });

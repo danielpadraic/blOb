@@ -15,6 +15,10 @@ describe('Wave and Round caps', () => {
     expect(waveClipWindows(30_000, 'video')).toEqual([{ startMs: 0, durationMs: 30_000 }]);
   });
 
+  it('does not invent a second window from a 30s clock overrun', () => {
+    expect(waveClipWindows(30_180, 'video')).toEqual([{ startMs: 0, durationMs: 30_000 }]);
+  });
+
   it('caps a Round at 3:00', () => {
     expect(ROUND_RECORD_MAX_MS).toBe(180_000);
     expect(ROUND_RECORD_MAX_SEC).toBe(180);
