@@ -9,7 +9,7 @@ import {
   compressImageForUpload,
   type CompressKind,
 } from '@/utils/compressImage';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, logDev } from '@/utils/errors';
 import type { UploadProgressHandler } from '@/lib/uploadProgress';
 
 export type { UploadProgressEvent, UploadProgressHandler } from '@/lib/uploadProgress';
@@ -340,15 +340,7 @@ async function uploadObject(input: {
     return path;
   }
 
-  console.log(
-    '[blob:upload]',
-    input.bucket,
-    path,
-    contentType,
-    typed.type,
-    typed.size,
-    first.error.message,
-  );
+  logDev('[blob:upload]', input.bucket, contentType, first.error.message);
 
   const secondary = Platform.OS === 'web' ? await blobToArrayBuffer(typed, uri) : typed;
   const alt = await send(secondary);

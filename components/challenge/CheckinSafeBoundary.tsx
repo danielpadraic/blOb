@@ -25,7 +25,14 @@ function logCheckinOpenFailure(
     message: err.message,
     stack: extra.stack || err.stack || null,
   };
-  console.log('[blob:checkin]', payload);
+  if (__DEV__) {
+    console.log('[blob:checkin]', {
+      href: payload.href,
+      id: payload.id,
+      focused: payload.focused,
+      message: payload.message,
+    });
+  }
   reportAppError({
     route: 'checkin_open',
     error: err,

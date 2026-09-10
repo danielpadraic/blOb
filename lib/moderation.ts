@@ -1,6 +1,6 @@
 import { fetchBlockedPeerIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
-import { isMissingRelationError } from '@/utils/errors';
+import { isMissingRelationError, logDev } from '@/utils/errors';
 
 const CACHE_MS = 30_000;
 
@@ -25,7 +25,7 @@ async function blockedIds(userId: string): Promise<string[]> {
     return [...(await fetchBlockedPeerIds(userId))];
   } catch (error) {
     if (!isMissingRelationError(error)) {
-      console.log('[blob:moderation] blocked lookup skipped', error);
+      logDev('[blob:moderation] blocked lookup skipped', error);
     }
     return [];
   }

@@ -13,6 +13,7 @@ import {
 import { getOrCreateDirectConversation, sendMessage } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification } from '@/lib/types';
+import { logDev } from '@/utils/errors';
 
 const NOTIFICATIONS_STALE_MS = 30_000;
 const REALTIME_INVALIDATE_MIN_MS = 2_000;
@@ -100,7 +101,7 @@ export function useNotificationsRealtime() {
               lastInvalidateAt.current = now;
               void queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
             } catch (error) {
-              console.log('[blob:notifications] realtime callback skipped', error);
+              logDev('[blob:notifications] realtime callback skipped', error);
             }
           },
         )
@@ -110,7 +111,7 @@ export function useNotificationsRealtime() {
           }
         });
     } catch (error) {
-      console.log('[blob:notifications] realtime skipped', error);
+      logDev('[blob:notifications] realtime skipped', error);
     }
 
     return () => {

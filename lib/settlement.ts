@@ -13,7 +13,7 @@ import type {
   WalletCurrency,
 } from '@/lib/types';
 import type { CloseChallengeForJudgingResult } from '@/lib/types/challenge';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, logDev } from '@/utils/errors';
 import { compactCountdown, formatRelative } from '@/utils/format';
 import { formatWallet } from '@/lib/currency';
 import { officialBob } from '@/copy/officialBob';
@@ -582,7 +582,7 @@ export async function fetchChallengeSettlement(
       payouts: await withPayoutProfiles(payouts),
     };
   } catch (error) {
-    console.log('[blob:settlement] fetch skipped', error);
+    logDev('[blob:settlement] fetch skipped', error);
     return null;
   }
 }
@@ -645,7 +645,7 @@ async function viewFromDistributedPayouts(
       payouts: await withPayoutProfiles(payouts),
     };
   } catch (error) {
-    console.log('[blob:settlement] distribute receipt skipped', error);
+    logDev('[blob:settlement] distribute receipt skipped', error);
     return null;
   }
 }

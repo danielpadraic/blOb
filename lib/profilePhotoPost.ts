@@ -40,7 +40,12 @@ export async function shareProfilePhotoPost(input: {
     console.log('[blob:profile] photo post skipped', created.error.message);
     return false;
   } catch (error) {
-    console.log('[blob:profile] photo post skipped', error);
+    if (__DEV__) {
+      console.log(
+        '[blob:profile] photo post skipped',
+        error instanceof Error ? error.message : 'failed',
+      );
+    }
     return false;
   }
 }

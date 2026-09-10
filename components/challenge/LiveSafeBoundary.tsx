@@ -23,14 +23,14 @@ export function logLiveThrow(
 ): string {
   const message = liveThrowMessage(error);
   const err = error instanceof Error ? error : null;
-  console.log('[blob:live]', {
-    reason,
-    error: message,
-    file: liveErrorFile(error),
-    postId: extra?.postId ?? null,
-    stack: err?.stack ?? null,
-    componentStack: extra?.componentStack ?? null,
-  });
+  if (__DEV__) {
+    console.log('[blob:live]', {
+      reason,
+      error: message,
+      file: liveErrorFile(error),
+      postId: extra?.postId ?? null,
+    });
+  }
   reportAppError({
     route: 'challenge/live-boundary',
     error: err ?? new Error(message),

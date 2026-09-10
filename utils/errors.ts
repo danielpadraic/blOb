@@ -15,7 +15,37 @@ export const OS_SETTINGS_PERMISSION_COPY =
   'We need permission to continue. You can change this in Settings.';
 
 function isDevBuild(): boolean {
-  return Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
+  return typeof __DEV__ !== 'undefined'
+    ? Boolean(__DEV__)
+    : Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
+}
+
+const POSTGREST_LOG_KEYS = new Set(['code', 'message', 'details', 'hint', 'status', 'statusCode', 'name']);
+
+function sanitizeDevExtra(extra: unknown): unknown {
+  if (extra == null || typeof extra !== 'object') {
+    return extra;
+  }
+  if (extra instanceof Error) {
+    return extra.message;
+  }
+  const rec = extra as Record<string, unknown>;
+  if ('details' in rec || 'hint' in rec) {
+    return { code: rec.code ?? null, message: rec.message ?? null };
+  }
+  const keys = Object.keys(rec);
+  if (keys.length > 0 && keys.every((key) => POSTGREST_LOG_KEYS.has(key)) && 'message' in rec) {
+    return { code: rec.code ?? null, message: rec.message ?? null };
+  }
+  return extra;
+}
+
+/** Production: silent. Dev: never dump a full RPC/session object. */
+export function logDev(tag: string, ...args: unknown[]): void {
+  if (!isDevBuild()) {
+    return;
+  }
+  console.log(tag, ...args.map(sanitizeDevExtra));
 }
 
 export function getErrorMessage(error: unknown): string {
@@ -152,12 +182,13 @@ export function getJoinChallengeMessage(error: unknown): string {
 }
 
 export function logPostgrestError(scope: string, error: unknown) {
+  if (!isDevBuild()) {
+    return;
+  }
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
   console.log(`[blob:${scope}]`, {
     code: record?.code ?? null,
     message: record?.message ?? (error instanceof Error ? error.message : String(error ?? '')),
-    details: record?.details ?? null,
-    hint: record?.hint ?? null,
   });
 }
 

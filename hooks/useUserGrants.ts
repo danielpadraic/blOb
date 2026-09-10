@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { tickUserGrants } from '@/lib/grants';
+import { logDev } from '@/utils/errors';
 
 export function useTickUserGrants(enabled: boolean) {
   const { user } = useAuth();
@@ -26,7 +27,7 @@ export function useTickUserGrants(enabled: boolean) {
         void queryClient.invalidateQueries({ queryKey: ['profile', userId] });
         void queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
       } catch (error) {
-        console.log('[blob:grants] tick failed', error);
+        logDev('[blob:grants] tick failed', error);
       } finally {
         ticking.current = false;
       }

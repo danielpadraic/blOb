@@ -146,7 +146,7 @@ import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
 import { challengeDetailHref, checkinSubmitHref, leaveCheckinHref, LOBBY_HREF, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
-import { getCheckinSubmitMessage, getErrorMessage, withFailureReason } from '@/utils/errors';
+import { getCheckinSubmitMessage, getErrorMessage, logDev, withFailureReason } from '@/utils/errors';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
 
@@ -178,11 +178,10 @@ function shareFieldFromNotes(notes?: string | null, snapshot?: CheckinHealthProo
 
 /**
  * One line per attach, so a 0.00 mi card can be told apart from a workout that genuinely carried no
- * distance while reading a TestFlight log. Deliberately never includes body metrics or date of
- * birth, and is not gated on __DEV__ because release binaries are where this gets diagnosed.
+ * distance while reading a TestFlight log. Never includes body metrics or date of birth.
  */
 function logHealthAttach(workout: HealthWorkout, route: WorkoutRoute | null): void {
-  console.log('[blob:health]', {
+  logDev('[blob:health]', {
     workoutId: workout.providerWorkoutId,
     activityType: workout.activityType,
     distanceM: workout.distanceM ?? null,
@@ -471,10 +470,9 @@ function SubmitWorkoutInner() {
       });
     const filled = proofSteps.find((proof) => Boolean(drafts[proof.id]?.uri));
     const slot = filled?.id ?? next?.id ?? proofSteps[0]?.id ?? null;
-    console.log('[blob:checkin]', {
+    logDev('[blob:checkin]', {
       checkinId: checkinQuery.data?.id ?? null,
       slot,
-      existingUrl: slot ? drafts[slot]?.uri ?? null : null,
       nextId: next?.id ?? null,
       href: String(checkinSubmitHref(id)),
       id,

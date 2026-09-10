@@ -14,6 +14,9 @@ export type CreatePostLog = {
 };
 
 export function logCreatePost(entry: CreatePostLog): void {
+  if (!__DEV__) {
+    return;
+  }
   console.log('[blob:post]', entry);
 }
 

@@ -140,7 +140,7 @@ import {
 } from '@/lib/simpleChallenge';
 import type { ChallengeFrequency, FundingModel, PrizeStructure, ProofType } from '@/lib/types';
 import { authStorage } from '@/lib/utils/secureStore';
-import { getCreateChallengeMessage, getErrorMessage } from '@/utils/errors';
+import { getCreateChallengeMessage, getErrorMessage, logDev } from '@/utils/errors';
 import { formatWallet, walletBalance } from '@/lib/currency';
 import {
   createChallengeSchema,
@@ -579,7 +579,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return true;
     } catch (error) {
       if (__DEV__) {
-        console.log('[blob:draft] apply failed', error);
+        logDev('[blob:draft] apply failed', error);
       }
       setRestoredDraft(false);
       setStep(0);

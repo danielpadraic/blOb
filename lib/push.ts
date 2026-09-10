@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
+import { logDev } from '@/utils/errors';
 
 const ASKED_KEY = 'blob.pushPermissionAsked';
 const ANDROID_CHANNEL = 'alerts';
@@ -102,7 +103,7 @@ export async function registerPushToken(): Promise<string | null> {
     }
     return value;
   } catch (error) {
-    console.log('[blob:push] token skipped', error);
+    logDev('[blob:push] token skipped', error);
     return null;
   }
 }
@@ -204,7 +205,7 @@ export async function unregisterPushToken(): Promise<void> {
     }
     await supabase.rpc('clear_push_token', { p_token: value });
   } catch (error) {
-    console.log('[blob:push] clear skipped', error);
+    logDev('[blob:push] clear skipped', error);
   }
 }
 

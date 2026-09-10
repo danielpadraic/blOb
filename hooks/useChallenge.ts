@@ -77,7 +77,7 @@ import type {
 } from '@/lib/types';
 import { leaveChallenge, topUpChallengePrize } from '@/lib/api/challenges';
 import { cancelProviderRef, getPaymentsProvider } from '@/services/payments';
-import { getErrorMessage } from '@/utils/errors';
+import { getErrorMessage, logDev } from '@/utils/errors';
 import { challengeCurrency, formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { durationIntegerForPublish, publishPayoutFields } from '@/lib/formatPayout';
 import { useAuth } from '@/hooks/useAuth';
@@ -98,7 +98,7 @@ async function prepareLobby(_userId?: string) {
     try {
       await supabase.rpc('tick_official_series');
     } catch (error) {
-      console.log('[blob:lobby] official series tick skipped', error);
+      logDev('[blob:lobby] official series tick skipped', error);
     }
   })();
   return lobbyBootstrap;
@@ -235,7 +235,7 @@ export function useLobbyFriendCounts(challengeIds: string[]) {
       try {
         return await fetchLobbyFriendCounts(user!.id, challengeIds);
       } catch (error) {
-        console.log('[blob:lobby] friend_count query skipped', error);
+        logDev('[blob:lobby] friend_count query skipped', error);
         return new Map();
       }
     },

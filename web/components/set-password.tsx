@@ -38,7 +38,9 @@ export function SetPasswordScreen({
     const { error: updateError } = await supabase.auth.updateUser({ password });
     setBusy(false);
     if (updateError) {
-      console.log('[blob:password-update]', updateError.message, updateError);
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.log('[blob:password-update]', updateError.message);
+      }
       setError(getPasswordUpdateMessage(updateError));
       return;
     }

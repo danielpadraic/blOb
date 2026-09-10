@@ -10,7 +10,7 @@ import { challengeDetailHref, conversationHref, feedHref, INTERESTS_HREF, reelHr
 import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { AppNotification, ChallengeInvite, NotificationData } from '@/lib/types';
-import { getErrorMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
+import { getErrorMessage, isMissingRelationError, logDev, logPostgrestError } from '@/utils/errors';
 import type { Href } from 'expo-router';
 
 export function notificationChallengeId(data?: NotificationData | null): string | undefined {
@@ -48,7 +48,7 @@ export async function notifyFriendsOfCreatedChallenge(challengeId: string): Prom
       console.log('[blob:notify] friend challenge skipped', error.message);
     }
   } catch (error) {
-    console.log('[blob:notify] friend challenge skipped', error);
+    logDev('[blob:notify] friend challenge skipped', error);
   }
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { copy } from '@/lib/copy';
 import {
@@ -6,6 +6,8 @@ import {
   getAuthFormMessage,
   getErrorMessage,
   getProfileSetupSaveMessage,
+  logDev,
+  logPostgrestError,
   OS_SETTINGS_PERMISSION_COPY,
 } from '@/utils/errors';
 
@@ -100,5 +102,28 @@ describe('profile setup save errors are not OS Settings copy', () => {
   it('maps RATE_LIMITED people search to wait copy, not an empty match', () => {
     expect(getErrorMessage({ message: 'RATE_LIMITED', code: 'P0001' })).toBe(copy('friends.searchWait'));
     expect(getErrorMessage(new Error('RATE_LIMITED'))).toBe('Try that search again in a few minutes.');
+  });
+});
+
+describe('production RPC logs', () => {
+  it('does not dump PostgREST details, hint, or RPC objects', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logPostgrestError('rpc', {
+      code: '42501',
+      message: 'denied',
+      details: 'email@example.com',
+      hint: 'session.user.email',
+    });
+    logDev('[blob:lobby]', {
+      code: 'PGRST116',
+      message: 'fail',
+      details: 'get_my_profile()',
+      hint: 'session',
+    });
+    const dumped = JSON.stringify(spy.mock.calls);
+    expect(spy).not.toHaveBeenCalled();
+    expect(dumped).not.toContain('email@');
+    expect(dumped).not.toContain('get_my_profile');
+    spy.mockRestore();
   });
 });

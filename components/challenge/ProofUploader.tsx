@@ -17,6 +17,7 @@ import {
   openAppSettings,
 } from '@/lib/mediaPermissions';
 import { THEME } from '@/lib/theme';
+import { logDev } from '@/utils/errors';
 import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
 import { localUriFromPickerAsset } from '@/utils/media';
 import type { ProofType } from '@/lib/types';
@@ -173,7 +174,7 @@ export function ProofUploader({
     } catch (error) {
       stopAllLiveMedia();
       Alert.alert('Couldn’t attach that', 'Pick a photo from the gallery.');
-      console.log('[blob:checkin] gallery', error);
+      logDev('[blob:checkin] gallery', error);
     }
   }
 

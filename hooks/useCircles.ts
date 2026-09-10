@@ -23,6 +23,7 @@ import {
 import { requestPushAfterValue } from '@/lib/push';
 import { getOrCreateDirectConversation, personDisplayName, sendMessage } from '@/lib/social';
 import { useMyProfile } from '@/hooks/useProfile';
+import { logDev } from '@/utils/errors';
 
 function circlesKey(userId?: string | null) {
   return ['circles', userId] as const;
@@ -104,7 +105,7 @@ export function useInviteToCircle(circleId?: string, circleName?: string) {
             body,
           });
         } catch (error) {
-          console.log('[blob:circles] dm skipped', error);
+          logDev('[blob:circles] dm skipped', error);
         }
       }
       requestPushAfterValue();

@@ -34,7 +34,7 @@ import type {
   TopPlacesDistribution,
   TopPlacesMode,
 } from '@/lib/types';
-import { getCreateChallengeMessage, getErrorMessage, getStartUpdateMessage, isMissingRelationError, logPostgrestError } from '@/utils/errors';
+import { getCreateChallengeMessage, getErrorMessage, getStartUpdateMessage, isMissingRelationError, logDev, logPostgrestError } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
 import { challengeCurrency, formatWalletAmount } from '@/lib/currency';
 import { applyLaneForPublish, isInviteOnlyChallenge } from '@/lib/challengeLane';
@@ -189,7 +189,7 @@ async function hydrateOfficialDisplay(rows: ChallengeRow[]): Promise<ChallengeRo
     .select(OFFICIAL_DISPLAY_SELECT)
     .in('id', officialIds);
   if (error || !data) {
-    console.log('[blob:hydrate] official display skipped', error?.message);
+    logDev('[blob:hydrate] official display skipped', error?.message);
     return rows;
   }
   const extra = new Map(data.map((row) => [String((row as ChallengeRow).id), row as ChallengeRow]));
@@ -208,7 +208,7 @@ async function selectChallengeList(
     const { data, error } = await build(challengeList().select(columns));
     if (error) {
       lastError = error.message;
-      console.log('[blob:lobby] select failed', { label, columns, message: error.message });
+      logDev('[blob:lobby] select failed', { label, columns, message: error.message });
       continue;
     }
     return hydrateOfficialDisplay(asChallengeRows(data));
@@ -268,7 +268,7 @@ async function fetchJoinedChallengeIds(userId: string): Promise<string[]> {
     .select('challenge_id, status')
     .eq('user_id', userId);
   if (error) {
-    console.log('[blob:lobby] participants failed', error.message);
+    logDev('[blob:lobby] participants failed', error.message);
     throw new Error(getErrorMessage(error));
   }
   return (data ?? [])
@@ -290,7 +290,7 @@ async function fetchInvitedChallengeIds(userId: string): Promise<string[]> {
       .select('challenge_id, status')
       .eq('invitee_id', userId);
     if (error) {
-      console.log('[blob:lobby] invites skipped', error.code ?? '', error.message);
+      logDev('[blob:lobby] invites skipped', error.code ?? '', error.message);
       return [];
     }
     return (data ?? [])
@@ -299,9 +299,9 @@ async function fetchInvitedChallengeIds(userId: string): Promise<string[]> {
       .filter((id): id is string => Boolean(id));
   } catch (error) {
     if (isMissingRelationError(error)) {
-      console.log('[blob:lobby] invites skipped', getErrorMessage(error));
+      logDev('[blob:lobby] invites skipped', getErrorMessage(error));
     } else {
-      console.log('[blob:lobby] invites skipped', error);
+      logDev('[blob:lobby] invites skipped', error);
     }
     return [];
   }
@@ -728,7 +728,7 @@ async function fetchAcceptedFriendIds(userId: string): Promise<string[]> {
     .eq('status', 'accepted')
     .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
   if (error) {
-    console.log('[blob:lobby] friends skipped', error.message);
+    logDev('[blob:lobby] friends skipped', error.message);
     return [];
   }
   return [...new Set(
@@ -808,7 +808,7 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
   )
     .then((rows) => rows.map(normalizeChallenge).filter((row) => isLobbyEndedChallenge(row)))
     .catch((error) => {
-      console.log('[blob:lobby] ended-created skipped', error);
+      logDev('[blob:lobby] ended-created skipped', error);
       return [] as Challenge[];
     });
 
@@ -830,7 +830,7 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
               .filter((row) => joinedIds.includes(row.id) && isLobbyEndedChallenge(row)),
           )
           .catch((error) => {
-            console.log('[blob:lobby] ended-joined skipped', error);
+            logDev('[blob:lobby] ended-joined skipped', error);
             return [] as Challenge[];
           });
 
@@ -846,7 +846,7 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
   )
     .then((rows) => rows.map(normalizeChallenge).filter((row) => isLobbyEndedChallenge(row)))
     .catch((error) => {
-      console.log('[blob:lobby] ended-clock-created skipped', error);
+      logDev('[blob:lobby] ended-clock-created skipped', error);
       return [] as Challenge[];
     });
 
@@ -869,7 +869,7 @@ export async function fetchEndedLobbyChallenges(userId?: string): Promise<Challe
               .filter((row) => joinedIds.includes(row.id) && isLobbyEndedChallenge(row)),
           )
           .catch((error) => {
-            console.log('[blob:lobby] ended-clock-joined skipped', error);
+            logDev('[blob:lobby] ended-clock-joined skipped', error);
             return [] as Challenge[];
           });
 
@@ -920,7 +920,7 @@ export async function fetchOfficialDiscoverChallenges(_userId?: string): Promise
   void supabase.rpc('tick_official_series').then(
     () => undefined,
     (error: unknown) => {
-      console.log('[blob:lobby] official tick skipped', error);
+      logDev('[blob:lobby] official tick skipped', error);
     },
   );
 
@@ -931,7 +931,7 @@ export async function fetchOfficialDiscoverChallenges(_userId?: string): Promise
       .map(normalizeChallenge)
       .filter((row) => isOfficialChallenge(row) && !isLobbyEndedChallenge(row));
   } else if (listed.error) {
-    console.log('[blob:lobby] official-joinable rpc skipped', listed.error.message);
+    logDev('[blob:lobby] official-joinable rpc skipped', listed.error.message);
   }
 
   const listedOfficial = await selectChallengeList(
@@ -983,7 +983,7 @@ export async function fetchFriendsDiscoverChallenges(userId?: string): Promise<F
         .limit(LOBBY_PAGE_SIZE),
     'friends-hosted',
   ).catch((error) => {
-    console.log('[blob:lobby] friends-hosted skipped', error);
+    logDev('[blob:lobby] friends-hosted skipped', error);
     return [] as ChallengeRow[];
   });
 
@@ -1007,7 +1007,7 @@ export async function fetchFriendsDiscoverChallenges(userId?: string): Promise<F
               .limit(LOBBY_PAGE_SIZE),
           'friends-joined',
         ).catch((error) => {
-          console.log('[blob:lobby] friends-joined skipped', error);
+          logDev('[blob:lobby] friends-joined skipped', error);
           return [] as ChallengeRow[];
         });
 
@@ -1065,7 +1065,7 @@ export async function fetchDiscoverChallenges(_userId?: string): Promise<Challen
   );
 
   const visible = await listedPromise;
-  console.log('[blob:lobby] discover', {
+  logDev('[blob:lobby] discover', {
     count: visible.length,
     titles: visible.map((row) => row.title),
   });
@@ -1089,7 +1089,7 @@ export async function fetchJoinedLobbyChallenges(userId?: string): Promise<Chall
   )
     .then((rows) => rows.map(normalizeChallenge).filter((row) => isLobbyStatus(row.status)))
     .catch((error) => {
-      console.log('[blob:lobby] created-mine skipped', error);
+      logDev('[blob:lobby] created-mine skipped', error);
       return [] as Challenge[];
     });
 
@@ -1126,7 +1126,7 @@ export async function fetchJoinedLobbyChallenges(userId?: string): Promise<Chall
       return rows.map(normalizeChallenge).filter((row) => ids.includes(row.id) && isLobbyStatus(row.status));
     })
     .catch((error) => {
-      console.log('[blob:lobby] invited-mine skipped', error);
+      logDev('[blob:lobby] invited-mine skipped', error);
       return [] as Challenge[];
     });
 
@@ -1136,7 +1136,7 @@ export async function fetchJoinedLobbyChallenges(userId?: string): Promise<Chall
     invitedPromise,
   ]);
   const visible = sortMyLobby(mergeChallenges(created, joined, invited));
-  console.log('[blob:lobby] mine', {
+  logDev('[blob:lobby] mine', {
     count: visible.length,
     created: created.length,
     joined: joined.length,
@@ -1149,11 +1149,11 @@ export async function fetchJoinedLobbyChallenges(userId?: string): Promise<Chall
 export async function fetchLobbyChallenges(userId?: string): Promise<Challenge[]> {
   const [discover, joined] = await Promise.all([
     fetchDiscoverChallenges(userId).catch((error) => {
-      console.log('[blob:lobby] discover failed', error);
+      logDev('[blob:lobby] discover failed', error);
       return [] as Challenge[];
     }),
     fetchJoinedLobbyChallenges(userId).catch((error) => {
-      console.log('[blob:lobby] joined failed', error);
+      logDev('[blob:lobby] joined failed', error);
       return [] as Challenge[];
     }),
   ]);
@@ -1199,7 +1199,7 @@ export async function fetchChallengeById(
         if (isPermissionDeniedError(error)) {
           break;
         }
-        console.log('[blob:challenge] select failed', { columns, message: error.message });
+        logDev('[blob:challenge] select failed', { columns, message: error.message });
         continue;
       }
       if (!data) {
@@ -1226,7 +1226,7 @@ export async function fetchChallengeById(
         throw createChallengeLoadError('server', caught);
       }
       const message = caught instanceof Error ? caught.message : String(caught ?? '');
-      console.log('[blob:challenge] select threw', { columns, message });
+      logDev('[blob:challenge] select threw', { columns, message });
     }
   }
 
@@ -1364,7 +1364,7 @@ export async function fetchLobbyFriendCounts(
       .eq('follower_id', userId);
     if (followError) {
       // TODO: friend_count — follows graph not ready or RLS blocked.
-      console.log('[blob:lobby] friend_count follows skipped', followError.message);
+      logDev('[blob:lobby] friend_count follows skipped', followError.message);
       return counts;
     }
     const friendIds = [
@@ -1380,7 +1380,7 @@ export async function fetchLobbyFriendCounts(
       .in('user_id', friendIds)
       .in('status', ['joined', 'active']);
     if (error) {
-      console.log('[blob:lobby] friend_count participants skipped', error.message);
+      logDev('[blob:lobby] friend_count participants skipped', error.message);
       return counts;
     }
     const seen = new Set<string>();
@@ -1394,7 +1394,7 @@ export async function fetchLobbyFriendCounts(
     }
     return counts;
   } catch (error) {
-    console.log('[blob:lobby] friend_count hook failed', error);
+    logDev('[blob:lobby] friend_count hook failed', error);
     return counts;
   }
 }
@@ -1678,7 +1678,7 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
       .eq('id', result.challenge_id)
       .eq('created_by', input.created_by);
     if (error) {
-      console.log('[blob:create] discoverability skipped', error.message);
+      logDev('[blob:create] discoverability skipped', error.message);
     }
   }
   if (input.scoring_method === 'comparable_points' && input.scoring_config) {
@@ -1693,7 +1693,7 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
       .eq('id', result.challenge_id)
       .eq('created_by', input.created_by);
     if (error) {
-      console.log('[blob:create] scoring_config skipped', error.message);
+      logDev('[blob:create] scoring_config skipped', error.message);
     }
   }
   await persistPrivacyMode({
@@ -1726,7 +1726,7 @@ export async function persistPrivacyMode(input: {
     .eq('id', input.challengeId)
     .maybeSingle();
   if (readError) {
-    console.log('[blob:create] privacy_mode skipped', readError.message);
+    logDev('[blob:create] privacy_mode skipped', readError.message);
     return;
   }
   const current = asPrivacyMode(
@@ -1748,7 +1748,7 @@ export async function persistPrivacyMode(input: {
     .eq('id', input.challengeId)
     .eq('created_by', input.createdBy);
   if (error) {
-    console.log('[blob:create] privacy_mode skipped', error.message);
+    logDev('[blob:create] privacy_mode skipped', error.message);
   }
 }
 
@@ -1808,7 +1808,7 @@ export async function applyChallengeStart(
       error && typeof error === 'object' && error !== null && 'code' in error
         ? String((error as { code?: unknown }).code ?? '')
         : '';
-    console.log('[blob:start-roll]', { challengeId, startsAt, mode, code, message });
+    logDev('[blob:start-roll]', { challengeId, startsAt, mode, code, message });
   }
   if (error) {
     logPostgrestError('start-roll', error);
@@ -1835,7 +1835,7 @@ export async function nudgeChallengeStart(challengeId: string): Promise<Challeng
       error && typeof error === 'object' && error !== null && 'code' in error
         ? String((error as { code?: unknown }).code ?? '')
         : '';
-    console.log('[blob:start-nudge]', { challengeId, code, message });
+    logDev('[blob:start-nudge]', { challengeId, code, message });
   }
   if (error) {
     logPostgrestError('start-nudge', error);
@@ -1895,7 +1895,7 @@ export async function fetchScoringAudit(challengeId: string): Promise<
     .order('version', { ascending: false })
     .limit(12);
   if (error) {
-    console.log('[blob:scoring-audit]', error.message);
+    logDev('[blob:scoring-audit]', error.message);
     return [];
   }
   return (data ?? []) as Array<{
