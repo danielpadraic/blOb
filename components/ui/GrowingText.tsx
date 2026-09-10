@@ -80,6 +80,7 @@ export const GrowingText = forwardRef<TextInput, GrowingTextProps>(function Grow
               minHeight: collapsed ? minHeight : height,
               height: undefined,
               overflowY: 'auto',
+              overflowAnchor: 'none',
               resize: 'none',
               fieldSizing: collapsed ? 'fixed' : 'content',
             } as object)

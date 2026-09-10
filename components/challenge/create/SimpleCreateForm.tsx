@@ -9,9 +9,11 @@ import { InviteToChallengeModal } from '@/components/challenge/InviteToChallenge
 import { ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import {
   CREATE_FOOTER_BODY,
+  CREATE_SCROLL_OVERFLOW_ANCHOR,
   CreateActionsFooter,
   CreateModeSwitch,
-  createFieldScrollDelta,
+  applyCreateFieldScroll,
+  scheduleCreateFieldScroll,
   createScrollBottomPad,
   createStickyFooterPad,
 } from '@/components/challenge/create/wizardUi';
@@ -189,6 +191,7 @@ export function SimpleCreateForm() {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const lastFieldNode = useRef<View | null>(null);
+  const footerRef = useRef<View>(null);
   const overlapRef = useRef(0);
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
@@ -199,28 +202,17 @@ export function SimpleCreateForm() {
   footerHRef.current = footerH;
   const scrollFieldIntoView = useCallback((node: View) => {
     lastFieldNode.current = node;
-    const run = () => {
-      node.measureInWindow((_x, y, _w, h) => {
-        if (y == null || Number.isNaN(y)) {
-          return;
-        }
-        const delta = createFieldScrollDelta({
-          fieldY: y,
-          fieldH: h,
-          windowH: Dimensions.get('window').height,
-          footerH: footerHRef.current,
-          keyboardOverlap: overlapRef.current,
-        });
-        if (delta !== 0) {
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, scrollY.current + delta),
-            animated: true,
-          });
-        }
+    scheduleCreateFieldScroll(() => {
+      applyCreateFieldScroll({
+        field: node,
+        footer: footerRef.current,
+        windowH: Dimensions.get('window').height,
+        footerH: footerHRef.current,
+        scrollY: scrollY.current,
+        scrollTo: (y) => {
+          scrollRef.current?.scrollTo({ y, animated: true });
+        },
       });
-    };
-    requestAnimationFrame(() => {
-      setTimeout(run, Platform.OS === 'android' ? 80 : 40);
     });
   }, []);
 
@@ -600,7 +592,7 @@ export function SimpleCreateForm() {
         tour?.setCreateScroll(node);
       }}
       className="flex-1"
-      style={{ flex: 1 }}
+      style={[{ flex: 1 }, CREATE_SCROLL_OVERFLOW_ANCHOR]}
       contentContainerStyle={{
         paddingHorizontal: 16,
         paddingBottom:
@@ -763,7 +755,6 @@ export function SimpleCreateForm() {
         <TourAnchor id="create-simple-title">
         <View
           collapsable={false}
-          nativeID="create-simple-title"
           ref={(node) => {
             sectionRefs.current['create-simple-title'] = node;
           }}>
@@ -796,7 +787,6 @@ export function SimpleCreateForm() {
         <TourAnchor id="create-simple-task">
         <View
           collapsable={false}
-          nativeID="create-simple-task"
           ref={(node) => {
             sectionRefs.current['create-simple-task'] = node;
           }}>
@@ -819,7 +809,6 @@ export function SimpleCreateForm() {
         <View
           className="gap-2"
           collapsable={false}
-          nativeID="create-simple-proof"
           ref={(node) => {
             sectionRefs.current['create-simple-proof'] = node;
           }}>
@@ -841,7 +830,6 @@ export function SimpleCreateForm() {
         <View
           className="gap-2"
           collapsable={false}
-          nativeID="create-simple-frequency"
           ref={(node) => {
             sectionRefs.current['create-simple-frequency'] = node;
           }}>
@@ -898,7 +886,6 @@ export function SimpleCreateForm() {
         <View
           className="gap-2"
           collapsable={false}
-          nativeID="create-simple-start"
           ref={(node) => {
             sectionRefs.current['create-simple-start'] = node;
           }}>
@@ -950,7 +937,6 @@ export function SimpleCreateForm() {
         <View
           className="gap-2"
           collapsable={false}
-          nativeID="create-simple-duration"
           ref={(node) => {
             sectionRefs.current['create-simple-duration'] = node;
           }}>
@@ -990,7 +976,6 @@ export function SimpleCreateForm() {
         <View
           className="gap-2"
           collapsable={false}
-          nativeID="create-simple-visibility"
           ref={(node) => {
             sectionRefs.current['create-simple-visibility'] = node;
           }}>
@@ -1087,7 +1072,6 @@ export function SimpleCreateForm() {
           <View
             className="gap-3"
             collapsable={false}
-            nativeID="create-simple-buyin"
             ref={(node) => {
               sectionRefs.current['create-simple-buyin'] = node;
             }}>
@@ -1202,6 +1186,8 @@ export function SimpleCreateForm() {
       </View>
     </ScrollView>
     <View
+      ref={footerRef}
+      collapsable={false}
       className="gap-2 px-4 pt-2"
       onLayout={(event) => setFooterH(Math.max(CREATE_FOOTER_BODY, event.nativeEvent.layout.height))}
       style={{

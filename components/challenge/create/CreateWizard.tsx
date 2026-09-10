@@ -14,7 +14,9 @@ import {
   ContinueDraftCard,
   CreateActionsFooter,
   CreateModeSwitch,
-  createFieldScrollDelta,
+  CREATE_SCROLL_OVERFLOW_ANCHOR,
+  applyCreateFieldScroll,
+  scheduleCreateFieldScroll,
   createScrollBottomPad,
   createStickyFooterPad,
   FieldAnchor,
@@ -325,6 +327,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const scrollToAnchorRef = useRef<(name: string) => void>(() => {});
   const scrollY = useRef(0);
   const lastFieldNode = useRef<View | null>(null);
+  const footerDockRef = useRef<View>(null);
   const footerDockHeight = useRef(72);
   const keyboardHeightRef = useRef(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -390,20 +393,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       const node = lastFieldNode.current;
       requestAnimationFrame(() => {
         setTimeout(() => {
-          node.measureInWindow((_x, y, _w, h) => {
-            const delta = createFieldScrollDelta({
-              fieldY: y,
-              fieldH: h,
-              windowH: Dimensions.get('window').height,
-              footerH: footerDockHeight.current,
-              keyboardOverlap: keyboardHeightRef.current,
-            });
-            if (delta !== 0) {
-              scrollRef.current?.scrollTo({
-                y: Math.max(0, scrollY.current + delta),
-                animated: true,
-              });
-            }
+          applyCreateFieldScroll({
+            field: node,
+            footer: footerDockRef.current,
+            windowH: Dimensions.get('window').height,
+            footerH: footerDockHeight.current,
+            scrollY: scrollY.current,
+            scrollTo: (y) => {
+              scrollRef.current?.scrollTo({ y, animated: true });
+            },
           });
         }, Platform.OS === 'android' ? 80 : 40);
       });
@@ -1177,20 +1175,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       return;
     }
     const run = () => {
-      node.measureInWindow((_x, y, _w, h) => {
-        const delta = createFieldScrollDelta({
-          fieldY: y,
-          fieldH: h,
-          windowH: Dimensions.get('window').height,
-          footerH: footerDockHeight.current,
-          keyboardOverlap: keyboardHeightRef.current,
-        });
-        if (delta !== 0) {
-          scroll.scrollTo({
-            y: Math.max(0, scrollY.current + delta),
-            animated: true,
-          });
-        }
+      applyCreateFieldScroll({
+        field: node,
+        footer: footerDockRef.current,
+        windowH: Dimensions.get('window').height,
+        footerH: footerDockHeight.current,
+        scrollY: scrollY.current,
+        scrollTo: (y) => {
+          scroll.scrollTo({ y, animated: true });
+        },
       });
     };
     if (content && typeof node.measureLayout === 'function') {
@@ -1567,25 +1560,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         scrollFieldIntoView: (node) => {
           lastFieldNode.current = node;
           pendingAnchor.current = null;
-          const run = () => {
-            node.measureInWindow((_x, y, _w, h) => {
-              const delta = createFieldScrollDelta({
-                fieldY: y,
-                fieldH: h,
-                windowH: Dimensions.get('window').height,
-                footerH: footerDockHeight.current,
-                keyboardOverlap: keyboardHeightRef.current,
-              });
-              if (delta !== 0) {
-                scrollRef.current?.scrollTo({
-                  y: Math.max(0, scrollY.current + delta),
-                  animated: true,
-                });
-              }
+          scheduleCreateFieldScroll(() => {
+            applyCreateFieldScroll({
+              field: node,
+              footer: footerDockRef.current,
+              windowH: Dimensions.get('window').height,
+              footerH: footerDockHeight.current,
+              scrollY: scrollY.current,
+              scrollTo: (y) => {
+                scrollRef.current?.scrollTo({ y, animated: true });
+              },
             });
-          };
-          requestAnimationFrame(() => {
-            setTimeout(run, Platform.OS === 'android' ? 80 : 40);
           });
         },
       }}>
@@ -1673,6 +1658,10 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           }}
           className="mt-3 flex-1 px-4"
           contentContainerClassName="gap-3"
+          style={[
+            { flex: 1 },
+            CREATE_SCROLL_OVERFLOW_ANCHOR,
+          ]}
           contentContainerStyle={{
             paddingBottom:
               createScrollBottomPad(Boolean(tour?.createActive), footerH) +
@@ -1891,6 +1880,8 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         </ScrollView>
 
         <View
+          ref={footerDockRef}
+          collapsable={false}
           onLayout={(event) => {
             const height = event.nativeEvent.layout.height;
             setFooterH(Math.max(72, height));

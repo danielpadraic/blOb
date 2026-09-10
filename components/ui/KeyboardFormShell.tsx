@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { shouldRunScrollToTop } from '@/lib/authScroll';
-import { createFieldScrollDelta } from '@/lib/createFieldScroll';
+import { applyCreateFieldScroll, CREATE_SCROLL_OVERFLOW_ANCHOR, scheduleCreateFieldScroll } from '@/lib/createFieldScroll';
 import { THEME } from '@/lib/theme';
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 
@@ -105,6 +105,7 @@ export function KeyboardFormShell({
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const lastFieldNode = useRef<View | null>(null);
+  const footerRef = useRef<View>(null);
   const footerHeight = useRef(0);
   const overlapRef = useRef(0);
   overlapRef.current = overlap;
@@ -125,28 +126,19 @@ export function KeyboardFormShell({
 
   const scrollFieldIntoView = useCallback((node: View) => {
     lastFieldNode.current = node;
-    const run = () => {
-      node.measureInWindow((_x, y, _w, h) => {
-        if (y == null || Number.isNaN(y)) {
-          return;
-        }
-        const delta = createFieldScrollDelta({
-          fieldY: y,
-          fieldH: h,
-          windowH: Dimensions.get('window').height,
-          footerH: footerHeight.current,
-          keyboardOverlap: overlapRef.current,
-        });
-        if (delta !== 0) {
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, scrollY.current + delta),
-            animated: true,
-          });
-        }
+    scheduleCreateFieldScroll(() => {
+      applyCreateFieldScroll({
+        field: node,
+        footer: footerRef.current,
+        windowH: Dimensions.get('window').height,
+        footerH: footerHeight.current,
+        scrollY: scrollY.current,
+        keyboardOverlap: overlapRef.current,
+        clampFooterToKeyboard: Platform.OS === 'android',
+        scrollTo: (y) => {
+          scrollRef.current?.scrollTo({ y, animated: true });
+        },
       });
-    };
-    requestAnimationFrame(() => {
-      setTimeout(run, Platform.OS === 'android' ? 80 : 40);
     });
   }, []);
 
@@ -188,7 +180,7 @@ export function KeyboardFormShell({
         keyboardVerticalOffset={0}>
         <ScrollView
           ref={scrollRef}
-          style={{ flex: 1, backgroundColor }}
+          style={[{ flex: 1, backgroundColor }, CREATE_SCROLL_OVERFLOW_ANCHOR]}
           contentContainerStyle={[
             {
               flexGrow: 1,
@@ -215,6 +207,8 @@ export function KeyboardFormShell({
         </ScrollView>
         {footer ? (
           <View
+            ref={footerRef}
+            collapsable={false}
             onLayout={(event: LayoutChangeEvent) => {
               const height = event.nativeEvent.layout.height;
               footerHeight.current = height;

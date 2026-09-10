@@ -10,9 +10,33 @@ describe('createFieldScrollDelta', () => {
         fieldH: 80,
         windowH: 800,
         footerH: 64,
-        keyboardOverlap: 300,
+        footerTop: 436,
       }),
     ).toBe(110);
+  });
+
+  it('does not count keyboard overlap when the footer Y is known (web visual viewport)', () => {
+    expect(
+      createFieldScrollDelta({
+        fieldY: 200,
+        fieldH: 80,
+        windowH: 500,
+        footerH: 64,
+        keyboardOverlap: 300,
+        footerTop: 436,
+      }),
+    ).toBe(0);
+  });
+
+  it('would overscroll into Privacy if keyboard were added on a visual window', () => {
+    const withoutFooterTop = createFieldScrollDelta({
+      fieldY: 200,
+      fieldH: 80,
+      windowH: 500,
+      footerH: 64,
+      keyboardOverlap: 300,
+    });
+    expect(withoutFooterTop).toBe(160);
   });
 
   it('does not treat a tall Task+proofs wrapper as the focused block', () => {
@@ -21,14 +45,14 @@ describe('createFieldScrollDelta', () => {
       fieldH: 600,
       windowH: 800,
       footerH: 64,
-      keyboardOverlap: 300,
+      footerTop: 736,
     });
     const capped = createFieldScrollDelta({
       fieldY: 200,
       fieldH: CREATE_FIELD_ALIGN_MAX,
       windowH: 800,
       footerH: 64,
-      keyboardOverlap: 300,
+      footerTop: 736,
     });
     expect(tall).toBe(capped);
     expect(tall).toBe(0);
@@ -41,6 +65,7 @@ describe('createFieldScrollDelta', () => {
         fieldH: 72,
         windowH: 800,
         footerH: 64,
+        footerTop: 436,
         keyboardOverlap: 300,
       }),
     ).toBe(0);
@@ -53,6 +78,7 @@ describe('createFieldScrollDelta', () => {
         fieldH: 72,
         windowH: 800,
         footerH: 64,
+        footerTop: 736,
         keyboardOverlap: 0,
       }),
     ).toBe(-20);
