@@ -27,6 +27,7 @@ import {
 import { experienceLabel, goalsLabel, hasCompletedFitnessHistory } from '@/lib/fitnessProfile';
 import { useLiftHistory } from '@/hooks/useLift';
 import { FITNESS_HISTORY_HREF, LIFTS_HISTORY_HREF } from '@/lib/routes';
+import { measureInWindowSafe } from '@/lib/measureWindow';
 import { isAdminViewer } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import { formatHeight } from '@/utils/units';
@@ -97,8 +98,12 @@ export default function ProfileScreen() {
             accessibilityLabel="Profile menu"
             hitSlop={8}
             onPress={() => {
-              menuRef.current?.measureInWindow((x, y, width, height) => {
-                bugReport.openMenu({ x, y, width, height }, { admin: canAdmin });
+              measureInWindowSafe(menuRef.current, (rect) => {
+                const openMenu = bugReport.openMenu;
+                if (typeof openMenu !== 'function') {
+                  return;
+                }
+                openMenu(rect, { admin: canAdmin });
               });
             }}
             style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>

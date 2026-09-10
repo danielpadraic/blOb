@@ -336,7 +336,11 @@ function PublicProfileBody() {
       return;
     }
     if (relation?.incoming) {
-      acceptRequest.mutate(profile.id, {
+      const accept = acceptRequest.mutate;
+      if (typeof accept !== 'function') {
+        return;
+      }
+      accept(profile.id, {
         onError: (error) => Alert.alert('Couldn’t accept that request', getErrorMessage(error)),
       });
       return;
@@ -344,7 +348,11 @@ function PublicProfileBody() {
     if (relation?.status === 'pending') {
       return;
     }
-    sendRequest.mutate(profile.id, {
+    const send = sendRequest.mutate;
+    if (typeof send !== 'function') {
+      return;
+    }
+    send(profile.id, {
       onError: (error) => Alert.alert('Couldn’t send that request', getErrorMessage(error)),
     });
   }

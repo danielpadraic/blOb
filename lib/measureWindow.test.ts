@@ -16,6 +16,12 @@ describe('measureInWindowSafe', () => {
     expect(onMeasure).not.toHaveBeenCalled();
   });
 
+  it('obj?.measureInWindow(cb) throws when the node exists but the method is missing', () => {
+    const node = {} as { measureInWindow?: (cb: () => void) => void };
+    expect(() => node?.measureInWindow(() => undefined)).toThrow(/undefined is not a function|is not a function/);
+    expect(measureInWindowSafe(node, () => undefined)).toBe(false);
+  });
+
   it('measures only after a null guard and typeof function check', () => {
     const onMeasure = vi.fn();
     const node = {
