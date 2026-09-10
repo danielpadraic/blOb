@@ -1807,7 +1807,7 @@ function SubmitWorkoutInner() {
 
   if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr' || activeProof.method === 'distance')) {
     return (
-      <Screen padded={false} edges={TAB_ROOT_EDGES}>
+      <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false} style={{ backgroundColor: THEME.primary }}>
         <ProofUploader
           key={activeProof.id}
           type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}

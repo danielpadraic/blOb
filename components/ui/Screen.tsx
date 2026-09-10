@@ -3,6 +3,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -51,6 +52,7 @@ export function Screen({
     : edges.includes('bottom')
       ? edges
       : [...edges, 'bottom'];
+  const surfaceBg = StyleSheet.flatten(style)?.backgroundColor;
   const body = (
     <View
       className={cn('flex-1', padded && 'px-4', className)}
@@ -61,7 +63,10 @@ export function Screen({
   );
 
   return (
-    <SafeAreaView className="flex-1" style={[SCREEN_BACKGROUND, { minHeight: 0 }]} edges={resolvedEdges}>
+    <SafeAreaView
+      className="flex-1"
+      style={[SCREEN_BACKGROUND, { minHeight: 0 }, surfaceBg ? { backgroundColor: surfaceBg } : null]}
+      edges={resolvedEdges}>
       <KeyboardAvoidingView
         className="flex-1"
         style={{ minHeight: 0 }}

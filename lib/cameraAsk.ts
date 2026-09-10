@@ -1,4 +1,7 @@
-export type CameraAsk = 'prompt' | 'denied' | 'error' | 'ready';
+export type CameraAsk = 'prompt' | 'starting' | 'denied' | 'error' | 'ready';
+
+/** No live frame after the preview surface exists. Never a black/white void. */
+export const CAMERA_PREVIEW_WATCHDOG_MS = 2000;
 
 /** Prompt / undetermined is not a crash. Retry only after a real stream failure. */
 export function resolveCameraAsk(input: {
@@ -15,7 +18,7 @@ export function resolveCameraAsk(input: {
     return 'denied';
   }
   if (input.queried === 'granted') {
-    return 'ready';
+    return 'starting';
   }
   return 'prompt';
 }
@@ -39,7 +42,7 @@ export function cameraAskLine(ask: CameraAsk, checkin: boolean): string | null {
     return 'Turn on camera in Settings.';
   }
   if (ask === 'error') {
-    return 'Camera didn’t start.';
+    return 'Couldn’t open camera';
   }
   return null;
 }

@@ -192,7 +192,7 @@ export function ProofUploader({
         className={fill ? 'flex-1' : undefined}
         style={
           fill
-            ? { flex: 1 }
+            ? { flex: 1, minHeight: 0, width: '100%', backgroundColor: THEME.primary }
             : { height: Math.max(previewHeight, 320), borderRadius: THEME.radius, overflow: 'hidden' }
         }>
         <InAppCamera
@@ -215,7 +215,9 @@ export function ProofUploader({
           }}
           onOpenGallery={() => void openLibrary()}
           onCancel={closeCamera}
-          onUnavailable={() => setWebFallback(true)}
+          onUnavailable={() => {
+            // Check-in Retry remounts this camera. Do not cache “unavailable” for the session.
+          }}
           onUseWorkout={healthChip ? () => setHealthOpen(true) : undefined}
           onStartWatch={
             watch.visible

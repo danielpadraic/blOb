@@ -14,6 +14,7 @@ import {
   BackHandler,
   Platform,
   Pressable,
+  StyleSheet,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -45,7 +46,13 @@ import {
 } from '@/lib/cameraSession';
 import { copy } from '@/lib/copy';
 import { capHaptic } from '@/lib/haptics';
-import { cameraAskLine, checkinCameraFocused, resolveCameraAsk, type CameraAsk } from '@/lib/cameraAsk';
+import {
+  cameraAskLine,
+  CAMERA_PREVIEW_WATCHDOG_MS,
+  checkinCameraFocused,
+  resolveCameraAsk,
+  type CameraAsk,
+} from '@/lib/cameraAsk';
 import {
   ensureMicrophonePermission,
   openAppSettings,
@@ -266,7 +273,10 @@ export function InAppCamera({
   function stayOnRear(message = 'Couldn’t switch camera') {
     setSwitchToast(message);
     rememberCameraFacing('back', resolvedFacingKind);
+    setAsk('starting');
+    setReady(false);
     setFacing('back');
+    setRetry((value) => value + 1);
   }
 
   useEffect(() => {
@@ -374,11 +384,26 @@ export function InAppCamera({
         markWebCameraGranted();
         webStreamRef.current = stream;
         watchLiveMedia({ stream });
-        const node = webVideoRef.current;
+        let node = webVideoRef.current;
+        if (!node) {
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
+          node = webVideoRef.current;
+        }
         if (node) {
           node.srcObject = stream;
           watchLiveMedia({ video: node });
           void node.play().catch((error) => logCameraError(error, 'video.play'));
+          await waitWebVideoFrame(node);
+        }
+        if (cancelled || !focusedRef.current) {
+          stopMedia({ stream });
+          return;
+        }
+        if (!node || node.videoWidth <= 0) {
+          setAsk('error');
+          return;
         }
         setReady(true);
         setAsk('ready');
@@ -445,13 +470,23 @@ export function InAppCamera({
           return;
         }
       }
-      setReady(true);
-      setAsk('ready');
+      setReady(false);
+      setAsk('starting');
     })();
     return () => {
       cancelled = true;
     };
   }, [focused, parentBlocked, retry, sessionOn, video, web]);
+
+  useEffect(() => {
+    if (parentBlocked || !focused || !sessionOn || ask !== 'starting') {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setAsk((current) => (current === 'starting' ? 'error' : current));
+    }, CAMERA_PREVIEW_WATCHDOG_MS);
+    return () => clearTimeout(timer);
+  }, [ask, facing, focused, parentBlocked, retry, sessionOn]);
 
   useEffect(() => {
     if (parentBlocked || ask !== 'ready') {
@@ -505,7 +540,7 @@ export function InAppCamera({
         resolve();
       };
       node.addEventListener('loadedmetadata', finish);
-      setTimeout(finish, 1200);
+      setTimeout(finish, CAMERA_PREVIEW_WATCHDOG_MS);
     });
   }
 
@@ -868,7 +903,7 @@ export function InAppCamera({
   return (
     <View
       className="flex-1 overflow-hidden"
-      style={{ backgroundColor: THEME.primary }}
+      style={{ flex: 1, minHeight: 0, backgroundColor: THEME.primary }}
       onLayout={(event) => {
         const { width, height } = event.nativeEvent.layout;
         setPreviewBox((prev) =>
@@ -883,8 +918,9 @@ export function InAppCamera({
           rotateDeg={previewRotateDeg}
           box={previewBox}
         />
-      ) : showFrame && ask === 'ready' ? (
+      ) : showFrame && (ask === 'ready' || ask === 'starting') ? (
         <NativeCameraPreview
+          key={`${String(facing)}-${retry}`}
           cameraRef={cameraRef}
           facing={facing}
           video={video}
@@ -893,7 +929,7 @@ export function InAppCamera({
           rotateDeg={previewRotateDeg}
           box={previewBox}
           onReady={onCameraReady}
-          onUnavailable={onUnavailable}
+          onUnavailable={checkin ? undefined : onUnavailable}
           onDenied={facing === 'front' ? () => stayOnRear() : onCameraDenied}
           onMissing={facing === 'front' ? () => stayOnRear() : onCameraMissing}
         />
@@ -964,6 +1000,7 @@ export function InAppCamera({
               onPress={() => {
                 setAsk('prompt');
                 setReady(false);
+                setSessionOn(true);
                 setRetry((value) => value + 1);
               }}
               className="mt-3 items-center justify-center rounded-full px-4"
@@ -1129,6 +1166,8 @@ export function InAppCamera({
             disabled={showDenied || Boolean(stillStatus)}
             onPress={() => {
               const next = facing === 'back' ? 'front' : 'back';
+              setAsk('starting');
+              setReady(false);
               if (web) {
                 stopMedia({
                   stream: webStreamRef.current,
@@ -1140,6 +1179,7 @@ export function InAppCamera({
               }
               rememberCameraFacing(next, resolvedFacingKind);
               setFacing(next);
+              setRetry((value) => value + 1);
             }}
             className="h-12 w-12 items-center justify-center rounded-2xl"
             style={{
@@ -1289,7 +1329,7 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
     transform.push({ scale });
   }
   return (
-    <View style={{ flex: 1, overflow: 'hidden' }}>
+    <View style={{ flex: 1, overflow: 'hidden', backgroundColor: THEME.primary }}>
       <CameraView
         ref={cameraRef}
         style={
@@ -1303,8 +1343,8 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
                 transform,
               }
             : scale > 1
-              ? { flex: 1, transform: [{ scale }] }
-              : { flex: 1 }
+              ? { ...StyleSheet.absoluteFillObject, transform: [{ scale }] }
+              : StyleSheet.absoluteFill
         }
         facing={facing}
         zoom={zoom}
