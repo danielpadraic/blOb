@@ -1,4 +1,5 @@
 import { usesPointsBoard, usesQuantityScoring } from '@/lib/challengeExperience';
+import { hostRigorOf } from '@/lib/hostRigor';
 import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 
@@ -63,6 +64,7 @@ export type HostAdjustChallenge = {
   cumulative_metric?: string | null;
   frequency?: string | null;
   misses_allowed?: number | null;
+  host_rigor?: string | null;
 };
 
 export function challengeIsOfficialLocked(challenge?: HostAdjustChallenge | null): boolean {
@@ -71,6 +73,9 @@ export function challengeIsOfficialLocked(challenge?: HostAdjustChallenge | null
   }
   if (challenge.is_official || isOfficialSeriesChallenge(challenge)) {
     return true;
+  }
+  if (hostRigorOf(challenge) === 'friendly') {
+    return false;
   }
   return Math.max(Number(challenge.host_budget) || 0, 0) > 0;
 }
@@ -113,6 +118,9 @@ export function viewerCanAdjustBoard(
     return true;
   }
   if (challengeIsOfficialLocked(challenge)) {
+    return false;
+  }
+  if (hostRigorOf(challenge) === 'strict') {
     return false;
   }
   if (!challengeUsesConsistencyAdjustBoard(challenge)) {

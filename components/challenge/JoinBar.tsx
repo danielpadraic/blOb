@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 
+import { HostRigorChip } from '@/components/challenge/HostRigorChip';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { JoinCtaButton } from '@/components/challenge/JoinCtaButton';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
@@ -39,7 +40,10 @@ export function JoinBar({
   const topUp = Boolean(cta.needsTopUp && onTopUp);
   return (
     <Card className="gap-3">
-      <ChallengeTagRow tags={challengeCardTags({ challenge })} />
+      <ChallengeTagRow
+        tags={challengeCardTags({ challenge })}
+        trailing={<HostRigorChip hostRigor={challenge.host_rigor} />}
+      />
       <View className="flex-row items-end justify-between">
         <View>
           <AppText className="text-xs uppercase tracking-widest text-muted">

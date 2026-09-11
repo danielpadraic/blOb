@@ -480,6 +480,8 @@ export interface Challenge {
   task?: string | null;
   required_checkins?: number | null;
   misses_allowed?: number;
+  join_until_at?: string | null;
+  host_rigor?: 'friendly' | 'normal' | 'strict' | string | null;
   proof_type?: SimpleProofType | string | null;
   proof_review?: ProofReview | string | null;
   payout_mode?: PayoutMode | string | null;
@@ -2264,6 +2266,29 @@ export type Database = {
       is_official_ops: {
         Args: Record<string, never>;
         Returns: boolean;
+      };
+      host_add_participant: {
+        Args: {
+          p_challenge_id: string;
+          p_user_id: string;
+        };
+        Returns: Record<string, unknown>;
+      };
+      host_remove_participant: {
+        Args: {
+          p_challenge_id: string;
+          p_user_id: string;
+        };
+        Returns: Record<string, unknown>;
+      };
+      host_adjust_score: {
+        Args: {
+          p_challenge_id: string;
+          p_user_id: string;
+          p_kind: 'points' | 'qty';
+          p_value: number;
+        };
+        Returns: Record<string, unknown>;
       };
       official_add_participant: {
         Args: {

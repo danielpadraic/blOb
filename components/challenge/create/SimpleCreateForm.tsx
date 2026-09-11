@@ -20,6 +20,8 @@ import {
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { CreateReviewPreview, type CreateReviewEditKey } from '@/components/challenge/create/CreateReviewPreview';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
+import { HostRigorField } from '@/components/challenge/create/HostRigorField';
+import { JoinUntilField } from '@/components/challenge/create/JoinUntilField';
 import { CumulativeMetricsEditor } from '@/components/challenge/create/CumulativeMetricsEditor';
 import { CreateIconChip } from '@/components/challenge/create/CreateIconChip';
 import { ExtraTasksEditor, TaskFrequencyField } from '@/components/challenge/create/ExtraTasksEditor';
@@ -875,6 +877,13 @@ export function SimpleCreateForm() {
         </View>
         </TourAnchor>
         )}
+        <HostRigorField
+          value={draft.host_rigor}
+          official={Boolean(editing.data?.is_official)}
+          currency={editing.data?.is_official ? editing.data.currency : draft.currency}
+          challengeLane={editing.data?.challenge_lane}
+          onChange={(host_rigor) => patch({ host_rigor })}
+        />
 
         <TourAnchor id="create-simple-start">
         <View
@@ -915,6 +924,13 @@ export function SimpleCreateForm() {
             value={draft.starts_at}
             minimumDate={editId ? undefined : new Date()}
             onChange={(starts_at) => patch({ starts_at, start_preset: 'custom' })}
+          />
+          <JoinUntilField
+            preset={draft.join_until_preset ?? 'after_24h'}
+            customAt={draft.join_until_at}
+            startsAt={draft.starts_at}
+            onPreset={(join_until_preset) => patch({ join_until_preset })}
+            onCustom={(join_until_at) => patch({ join_until_preset: 'custom', join_until_at })}
           />
           <StepperField
             label={copy('create.minToStart')}

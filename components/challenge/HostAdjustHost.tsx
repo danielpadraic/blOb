@@ -11,6 +11,7 @@ import {
 } from '@/components/challenge/ChallengeOverflowMenu';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { HouseRemovePersonSheet } from '@/components/challenge/HouseRemovePersonSheet';
@@ -34,6 +35,8 @@ import {
   type HostAdjustDay,
   type HostAdjustResult,
 } from '@/lib/hostAdjust';
+import { viewerCanEditBoardScore, viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
+import { usesPointsBoard, usesQuantityScoring } from '@/lib/challengeExperience';
 import { liveComposeFromInline } from '@/lib/liveThread';
 import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
@@ -46,6 +49,8 @@ type Target = { userId: string; displayName: string };
 type HostAdjustContextValue = {
   canAdjust: boolean;
   canHouseRemove: boolean;
+  canFriendlyRemove: boolean;
+  canEditScore: boolean;
   isActor: boolean;
   showExcuse: boolean;
   openRowMenu: (target: Target, anchor: MenuAnchor) => void;
@@ -54,6 +59,8 @@ type HostAdjustContextValue = {
 const HostAdjustContext = createContext<HostAdjustContextValue>({
   canAdjust: false,
   canHouseRemove: false,
+  canFriendlyRemove: false,
+  canEditScore: false,
   isActor: false,
   showExcuse: false,
   openRowMenu: () => {},
@@ -123,6 +130,18 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   );
   const canAdjust = viewerCanAdjustBoard(challenge, user?.id, mods.data, officialOps);
   const canHouseRemove = viewerCanHouseRemove(challenge, officialOps);
+  const canFriendlyRemove = viewerCanFriendlyHostAdd({
+    challenge,
+    viewerId: user?.id,
+    officialOps: false,
+  });
+  const canEditScore =
+    viewerCanEditBoardScore({
+      challenge,
+      viewerId: user?.id,
+      officialOps,
+    }) &&
+    Boolean(challenge && (usesPointsBoard(challenge) || usesQuantityScoring(challenge)));
   const showExcuse = challengeTracksMissesForExcuse(challenge);
 
   const [menu, setMenu] = useState<(Target & { anchor: MenuAnchor }) | null>(null);
@@ -137,14 +156,22 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ canAdjust, canHouseRemove, isActor, showExcuse, openRowMenu }),
-    [canAdjust, canHouseRemove, isActor, openRowMenu, showExcuse],
+    () => ({
+      canAdjust,
+      canHouseRemove,
+      canFriendlyRemove,
+      canEditScore,
+      isActor,
+      showExcuse,
+      openRowMenu,
+    }),
+    [canAdjust, canEditScore, canFriendlyRemove, canHouseRemove, isActor, openRowMenu, showExcuse],
   );
 
   return (
     <HostAdjustContext.Provider value={value}>
       {children}
-      {(canAdjust || canHouseRemove) && id && challenge ? (
+      {(canAdjust || canHouseRemove || canFriendlyRemove || canEditScore) && id && challenge ? (
         <HostAdjustSheets
           challengeId={id}
           menu={menu}
@@ -152,6 +179,8 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
           showExcuse={showExcuse}
           canAdjust={canAdjust}
           canHouseRemove={canHouseRemove}
+          canFriendlyRemove={canFriendlyRemove}
+          canEditScore={canEditScore}
           houseDisabled={challengeIsEndedForAdjust(challenge)}
           onCloseMenu={() => setMenu(null)}
           onOpenSheet={(next) => {
@@ -184,6 +213,8 @@ function HostAdjustSheets({
   showExcuse,
   canAdjust,
   canHouseRemove,
+  canFriendlyRemove,
+  canEditScore,
   houseDisabled,
   onCloseMenu,
   onOpenSheet,
@@ -195,6 +226,8 @@ function HostAdjustSheets({
   showExcuse: boolean;
   canAdjust: boolean;
   canHouseRemove: boolean;
+  canFriendlyRemove: boolean;
+  canEditScore: boolean;
   houseDisabled: boolean;
   onCloseMenu: () => void;
   onOpenSheet: (next: { target: Target; action: HostAdjustAction; day?: HostAdjustDay }) => void;
@@ -205,6 +238,9 @@ function HostAdjustSheets({
   const { user } = useAuth();
   const [noteStep, setNoteStep] = useState(false);
   const [houseRemove, setHouseRemove] = useState<Target | null>(null);
+  const [scoreTarget, setScoreTarget] = useState<Target | null>(null);
+  const [scoreValue, setScoreValue] = useState('');
+  const [scoreError, setScoreError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sheet) {
@@ -308,6 +344,19 @@ function HostAdjustSheets({
               },
             ]
           : []),
+        ...(canEditScore
+          ? [
+              {
+                key: 'edit-score',
+                label: copy('board.editScore'),
+                onPress: () => {
+                  setScoreError(null);
+                  setScoreValue('');
+                  setScoreTarget({ userId: menu.userId, displayName: menu.displayName });
+                },
+              },
+            ]
+          : []),
         ...(canHouseRemove
           ? [
               {
@@ -321,7 +370,30 @@ function HostAdjustSheets({
                 },
               },
             ]
-          : []),
+          : canFriendlyRemove
+            ? [
+                {
+                  key: 'host-remove',
+                  label: copy('board.removePerson'),
+                  danger: true,
+                  onPress: () => {
+                    void (async () => {
+                      const { error } = await supabase.rpc('host_remove_participant', {
+                        p_challenge_id: challengeId,
+                        p_user_id: menu.userId,
+                      });
+                      if (error) {
+                        console.warn('[blob:host-remove]', error.message);
+                        return;
+                      }
+                      void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+                      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+                      onCloseMenu();
+                    })();
+                  },
+                },
+              ]
+            : []),
       ]
     : [];
 
@@ -346,6 +418,57 @@ function HostAdjustSheets({
         disabled={houseDisabled}
         onClose={() => setHouseRemove(null)}
       />
+      <ChromeOverlay visible={Boolean(scoreTarget)} onClose={() => setScoreTarget(null)}>
+        <Pressable
+          className="px-5 pb-8 pt-5"
+          style={{
+            backgroundColor: THEME.background,
+            borderTopLeftRadius: THEME.radiusLg,
+            borderTopRightRadius: THEME.radiusLg,
+          }}
+          onPress={(event) => event.stopPropagation()}>
+          <AppText className="text-2xl font-bold text-charcoal">{copy('board.editScore')}</AppText>
+          {scoreError ? (
+            <AppText className="mt-3 text-sm text-coral-dark">{scoreError}</AppText>
+          ) : null}
+          <View className="mt-4">
+            <Input
+              label="Score"
+              keyboardType="decimal-pad"
+              value={scoreValue}
+              onChangeText={setScoreValue}
+            />
+          </View>
+          <View className="mt-4 gap-2">
+            <Button
+              title={copy('board.editScore')}
+              size="lg"
+              onPress={() => {
+                const next = Number(scoreValue);
+                if (!scoreTarget || !Number.isFinite(next) || next < 0) {
+                  setScoreError('Enter a number.');
+                  return;
+                }
+                void (async () => {
+                  const { error } = await supabase.rpc('host_adjust_score', {
+                    p_challenge_id: challengeId,
+                    p_user_id: scoreTarget.userId,
+                    p_kind: 'points',
+                    p_value: next,
+                  });
+                  if (error) {
+                    setScoreError(hostAdjustErrorMessage(getErrorMessage(error)));
+                    return;
+                  }
+                  void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+                  setScoreTarget(null);
+                })();
+              }}
+            />
+            <Button title={copy('board.adjustCancel')} variant="ghost" onPress={() => setScoreTarget(null)} />
+          </View>
+        </Pressable>
+      </ChromeOverlay>
       <ChromeOverlay visible={Boolean(sheet)} onClose={mutate.isPending ? undefined : onCloseSheet}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable
@@ -504,8 +627,8 @@ export function BoardAdjustButton({
   displayName: string;
   status?: string | null;
 }) {
-  const { canAdjust, canHouseRemove, openRowMenu } = useHostAdjustUi();
-  if ((!canAdjust && !canHouseRemove) || !participantCanBeAdjusted(status)) {
+  const { canAdjust, canHouseRemove, canFriendlyRemove, canEditScore, openRowMenu } = useHostAdjustUi();
+  if ((!canAdjust && !canHouseRemove && !canFriendlyRemove && !canEditScore) || !participantCanBeAdjusted(status)) {
     return null;
   }
   return (

@@ -14,6 +14,7 @@ type SegmentedControlProps<T extends string> = {
   options: readonly SegmentOption<T>[];
   onChange: (value: T) => void;
   accessibilityLabel?: string;
+  disabled?: boolean;
 };
 
 export function SegmentedControl<T extends string>({
@@ -21,6 +22,7 @@ export function SegmentedControl<T extends string>({
   options,
   onChange,
   accessibilityLabel,
+  disabled = false,
 }: SegmentedControlProps<T>) {
   return (
     <View
@@ -39,8 +41,12 @@ export function SegmentedControl<T extends string>({
           <Pressable
             key={option.value}
             accessibilityRole="tab"
-            accessibilityState={{ selected }}
+            accessibilityState={{ selected, disabled }}
+            disabled={disabled}
             onPress={() => {
+              if (disabled) {
+                return;
+              }
               dismissKeyboard();
               onChange(option.value);
             }}

@@ -17,6 +17,7 @@ import { getErrorMessage, logDev } from '@/utils/errors';
 import { compactCountdown, formatRelative } from '@/utils/format';
 import { formatWallet } from '@/lib/currency';
 import { officialBob } from '@/copy/officialBob';
+import { isJoinWindowOpen as joinWindowOpen } from '@/lib/joinWindow';
 import {
   FORFEIT_RECEIPT,
   voidReceiptCopy,
@@ -104,20 +105,15 @@ export function isJoinWindowOpen(
   challenge: {
     status?: string | null;
     starts_at?: string | null;
+    join_until_at?: string | null;
     official_started_at?: string | null;
     start_rule?: string | null;
     is_official?: boolean | null;
     series_id?: string | null;
   },
+  now = new Date(),
 ): boolean {
-  const status = String(challenge.status ?? '');
-  if (challenge.series_id || challenge.is_official) {
-    return status === 'filling' || status === 'arming';
-  }
-  if (CLOSED_JOIN_STATUSES.includes(status as ChallengeStatus)) {
-    return false;
-  }
-  return true;
+  return joinWindowOpen(challenge, now);
 }
 
 export function isSettledStatus(status: string | null | undefined): boolean {

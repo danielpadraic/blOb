@@ -34,6 +34,8 @@ import {
   type StartPreset,
 } from '@/lib/challengeSchedule';
 import { storedDurationDays } from '@/lib/challengeGoal';
+import { hostRigorOf } from '@/lib/hostRigor';
+import { inferJoinUntilPreset } from '@/lib/joinWindow';
 import { extraTasksFromStored } from '@/lib/challengeCreatePublish';
 import { resolveTaskCadence } from '@/lib/taskCadence';
 import { clearPersistedSimpleDraft, parseSimpleChallengeDraft, type SimpleChallengeDraft } from '@/lib/simpleChallenge';
@@ -522,6 +524,9 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
       scoring_config: parseComparablePointsConfig(row.scoring_config),
       min_participants: asString(row.min_participants, DEFAULT_CREATE_VALUES.min_participants),
       misses_allowed: asString(row.misses_allowed, DEFAULT_CREATE_VALUES.misses_allowed),
+      join_until_preset: asString(row.join_until_preset, DEFAULT_CREATE_VALUES.join_until_preset) as CreateChallengeValues['join_until_preset'],
+      join_until_at: asString(row.join_until_at, ''),
+      host_rigor: (row.host_rigor === 'friendly' || row.host_rigor === 'strict' ? row.host_rigor : 'normal') as CreateChallengeValues['host_rigor'],
       proof_type:
         row.proof_type === 'video' ||
         row.proof_type === 'check_in' ||
@@ -627,6 +632,13 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     task: challenge.task ?? '',
     min_participants: String(Math.max(Number(challenge.min_participants) || 2, 2)),
     misses_allowed: String(Math.max(Number(challenge.misses_allowed) || 0, 0)),
+    join_until_preset: inferJoinUntilPreset({
+      startsAt: challenge.starts_at,
+      joinUntilAt: challenge.join_until_at,
+      frequency: challenge.frequency,
+    }),
+    join_until_at: challenge.join_until_at ?? '',
+    host_rigor: hostRigorOf(challenge),
     proof_type:
       challenge.proof_type === 'video' || challenge.proof_type === 'check_in' || challenge.proof_type === 'honor'
         ? challenge.proof_type

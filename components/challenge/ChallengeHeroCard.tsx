@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CalloutFacePair } from '@/components/challenge/CalloutWatchers';
 import { ChallengeCardClock, ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
+import { HostRigorChip } from '@/components/challenge/HostRigorChip';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
@@ -110,7 +111,11 @@ export function ChallengeHeroCard({
     <View className="gap-3">
       <View className="flex-row items-start">
         <View className="min-w-0 flex-1">
-          <ChallengeTagRow tags={tags} tone={official ? 'dark' : 'light'} />
+          <ChallengeTagRow
+            tags={tags}
+            tone={official ? 'dark' : 'light'}
+            trailing={<HostRigorChip hostRigor={challenge.host_rigor} tone={official ? 'dark' : 'light'} />}
+          />
           <AppText
             className="mt-2 text-[24px] font-extrabold leading-7"
             style={{ color: titleColor }}

@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { HostRigorChip } from '@/components/challenge/HostRigorChip';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import {
   ChallengeTypeTip,
@@ -233,11 +234,17 @@ export function LobbyListCardView({
                 tone={darkHero ? 'dark' : 'light'}
                 trailing={
                   callout ? undefined : (
-                    <TypeChip
-                      category={challenge.category}
-                      tone={darkHero ? 'dark' : 'light'}
-                      onPress={typeTip.show}
-                    />
+                    <View className="flex-row items-center" style={{ gap: 5 }}>
+                      <HostRigorChip
+                        hostRigor={challenge.host_rigor}
+                        tone={darkHero ? 'dark' : 'light'}
+                      />
+                      <TypeChip
+                        category={challenge.category}
+                        tone={darkHero ? 'dark' : 'light'}
+                        onPress={typeTip.show}
+                      />
+                    </View>
                   )
                 }
               />

@@ -472,6 +472,12 @@ const STRINGS = {
   'create.allowedMisses': 'Allowed misses',
   'create.allowedMissesHint':
     'Days they can miss and still stay in. 0 means every check-in is required.',
+  'create.joinUntil': 'People can join until',
+  'create.rigor': 'Rigor',
+  'create.addPerson': 'Add person',
+  'create.editScore': 'Edit score',
+  'board.editScore': 'Edit score',
+  'board.removePerson': 'Remove',
   'create.advancedOnly': 'This challenge uses Advanced rules.',
   'create.checkins': 'Check-ins',
   'create.proof': 'Proof',

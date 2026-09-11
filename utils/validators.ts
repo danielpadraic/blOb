@@ -331,6 +331,9 @@ export const createChallengeSchema = z
     discoverability: z.enum(['invite_only', 'friends_of_friends']).nullable().optional(),
     scoring_method: z.enum(['comparable_points']).nullable().optional(),
     scoring_config: z.unknown().nullable().optional(),
+    join_until_preset: z.enum(['at_start', 'after_24h', 'after_3d', 'first_period', 'custom']).optional(),
+    join_until_at: z.string().optional().or(z.literal('')),
+    host_rigor: z.enum(['friendly', 'normal', 'strict']).optional(),
     points_to_win: z.string().optional(),
     rules: z
       .string()

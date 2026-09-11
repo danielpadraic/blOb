@@ -31,6 +31,7 @@ import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { canHouseEditChallenge, canHostQuickEdit } from '@/lib/challengeStart';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { canHouseActOnChallenge } from '@/lib/officialOps';
+import { challengeIsSettledForRigor, viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
 import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { asLiveMute, type LiveMute } from '@/lib/livePush';
@@ -87,6 +88,12 @@ export function useChallengeDetailOverflow() {
   const canEdit = canHostEdit || canHouseEdit;
   const houseReady = officialOps;
   const houseDisabled = !canHouseActOnChallenge(challenge);
+  const friendlyAdd = viewerCanFriendlyHostAdd({
+    challenge,
+    viewerId: user?.id,
+    officialOps: false,
+  });
+  const friendlyAddDisabled = challengeIsSettledForRigor(challenge?.status);
   const canDetails = canEditOfficialDetails({ challenge, viewerId: user?.id, profile }) && !canEdit;
   const canTools = canOpenOfficialTools({ challenge, viewerId: user?.id, profile });
   const canCancel = canCancelChallenge({
@@ -97,7 +104,7 @@ export function useChallengeDetailOverflow() {
     rosterReady: roster.data != null,
   });
   const canLeave = canParticipantLeave({ challenge, joined });
-  const showOverflow = canEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady;
+  const showOverflow = canEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady || friendlyAdd;
   const rollPending = Boolean(challenge?.start_roll_pending) && canHostEdit;
   const rollOpen = rollPending && !rollDismissed;
 
@@ -242,6 +249,16 @@ export function useChallengeDetailOverflow() {
         setHouseAddOpen(true);
       },
     });
+  } else if (friendlyAdd) {
+    actions.push({
+      key: 'host-add',
+      label: copy('create.addPerson'),
+      disabled: friendlyAddDisabled,
+      onPress: () => {
+        setError(null);
+        setHouseAddOpen(true);
+      },
+    });
   }
   if (canLeave) {
     actions.push({
@@ -278,6 +295,7 @@ export function useChallengeDetailOverflow() {
     closeCancel: () => setCancelOpen(false),
     leaveOpen,
     houseAddOpen,
+    houseAddHostMode: friendlyAdd && !houseReady,
     closeHouseAdd: () => setHouseAddOpen(false),
     closeLeave: () => setLeaveOpen(false),
     muteOpen,
@@ -400,7 +418,12 @@ export function ChallengeDetailOverflowHost({
         <HouseAddPersonSheet
           visible={overflow.houseAddOpen}
           challengeId={overflow.challenge.id}
-          disabled={!canHouseActOnChallenge(overflow.challenge)}
+          hostMode={overflow.houseAddHostMode}
+          disabled={
+            overflow.houseAddHostMode
+              ? challengeIsSettledForRigor(overflow.challenge.status)
+              : !canHouseActOnChallenge(overflow.challenge)
+          }
           onClose={overflow.closeHouseAdd}
         />
       ) : null}

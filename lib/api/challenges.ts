@@ -60,7 +60,7 @@ const RPC_MESSAGES: Record<string, string> = {
   ALREADY_JOINED: 'You already joined this challenge.',
   LOBBY_FULL: 'This challenge is full.',
   NOT_INVITED: 'This challenge is private. Ask the host for an invite.',
-  JOIN_CLOSED: 'Join closed when this challenge started.',
+  JOIN_CLOSED: 'Join closed.',
   FRIENDS_ONLY: 'This challenge is for friends of the host.',
   GEO_BLOCKED: copy('geo.unavailable'),
   NEED_REGION: copy('geo.unavailable'),

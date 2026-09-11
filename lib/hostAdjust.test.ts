@@ -33,8 +33,23 @@ describe('host Board adjust gates', () => {
 
   it('shows the menu for host on a live user-created consistency Board', () => {
     expect(viewerCanAdjustBoard(liveUser, 'host')).toBe(true);
+    expect(viewerCanAdjustBoard({ ...liveUser, host_rigor: null }, 'host')).toBe(true);
     expect(viewerCanAdjustBoard(liveUser, 'friend')).toBe(false);
     expect(viewerCanAdjustBoard(liveUser, 'mod', ['mod'])).toBe(true);
+  });
+
+  it('hides Board tools when the host published Strict', () => {
+    expect(viewerCanAdjustBoard({ ...liveUser, host_rigor: 'strict' }, 'host')).toBe(false);
+    expect(viewerCanAdjustBoard({ ...liveUser, host_rigor: 'strict' }, 'blob', [], true)).toBe(true);
+  });
+
+  it('lets a Friendly host adjust a guaranteed corporate room', () => {
+    expect(
+      challengeIsOfficialLocked({ ...liveUser, host_budget: 10, host_rigor: 'friendly' }),
+    ).toBe(false);
+    expect(
+      viewerCanAdjustBoard({ ...liveUser, host_budget: 10, host_rigor: 'friendly' }, 'host'),
+    ).toBe(true);
   });
 
   it('hides Official Weekly / guaranteed / ended', () => {

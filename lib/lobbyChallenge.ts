@@ -151,6 +151,8 @@ export type ScheduleChallenge = {
   participant_count?: number | null;
   is_official?: boolean | null;
   series_id?: string | null;
+  host_rigor?: string | null;
+  join_until_at?: string | null;
   buy_in_amount?: number | null;
   prize_pool?: number | null;
   host_budget?: number | null;

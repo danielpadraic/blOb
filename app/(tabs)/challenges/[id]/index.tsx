@@ -163,6 +163,7 @@ import {
   isOfficialSeriesChallenge,
   officialAlreadyStartedCopy,
 } from '@/lib/officialSeries';
+import { JOIN_CLOSED_COPY, joinOpenUntilLine } from '@/lib/joinWindow';
 import { entryFieldNote, userStartNeededLabel } from '@/lib/challengeFieldNotes';
 import { canOpenOfficialTools, canSeeOfficialOperatorChrome } from '@/lib/officialScoring';
 import { heroRingDays } from '@/lib/challengeStart';
@@ -555,7 +556,10 @@ export default function ChallengeDetailScreen() {
       return 'This challenge is no longer accepting competitors.';
     }
     if (!isJoinWindowOpen(challenge)) {
-      return officialAlreadyStartedCopy();
+      if (challenge.series_id || challenge.is_official) {
+        return officialAlreadyStartedCopy();
+      }
+      return JOIN_CLOSED_COPY;
     }
     if (
       challenge.ends_at &&
@@ -1076,11 +1080,13 @@ export default function ChallengeDetailScreen() {
         startNeeded ??
         copy('challenge.waitingToStart')
       : null;
+  const joinUntilLine = challenge && !isJoined && !isHost ? joinOpenUntilLine(challenge, new Date(nowMs)) : null;
+  const joinClosed = joinBlocked === JOIN_CLOSED_COPY;
   const stickyJoin =
     !isHost &&
     !isCalloutObserver &&
     !isJoined &&
-    (needsBodyMetrics || canJoin || needsTopUp || geoJoinBlocked || geoNeedsRegion);
+    (needsBodyMetrics || canJoin || needsTopUp || geoJoinBlocked || geoNeedsRegion || joinClosed);
   const stickyCheckin =
     isJoined &&
     !isCalloutObserver &&
@@ -1261,6 +1267,9 @@ export default function ChallengeDetailScreen() {
         </View>
         {startLine ? (
           <AppText className="mt-2 text-[13px] leading-5 text-muted">{startLine}</AppText>
+        ) : null}
+        {joinUntilLine ? (
+          <AppText className="mt-2 text-[13px] leading-5 text-muted">{joinUntilLine}</AppText>
         ) : null}
         {pageTab === 'overview' && hostRoundPrompt.visible && !isCalloutObserver ? (
           <View className="mt-3">
@@ -1701,6 +1710,8 @@ export default function ChallengeDetailScreen() {
               />
             ) : geoJoinBlocked ? (
               <Button title="View" size="md" onPress={() => setPageTab('overview')} />
+            ) : joinClosed ? (
+              <Button title={JOIN_CLOSED_COPY} size="md" disabled />
             ) : (
               <JoinCtaButton
                 currency={challenge.currency}

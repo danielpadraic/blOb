@@ -97,6 +97,8 @@ export type PublishChallengePayload = {
   task?: string | null;
   required_checkins?: number | null;
   misses_allowed?: number;
+  join_until_at?: string | null;
+  host_rigor?: 'friendly' | 'normal' | 'strict' | string | null;
   proof_type?: string | null;
   proofs?: unknown;
   proof_review?: string;

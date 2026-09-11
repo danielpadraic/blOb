@@ -74,7 +74,7 @@ const OFFICIAL_DISPLAY_SELECT =
   'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, cover_image_url, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
 
 const LOBBY_SELECTS = [
-  'id, title, description, rules, is_official, is_callout, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, format, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics, distance_meters_required, misses_allowed',
+  'id, title, description, rules, is_official, is_callout, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, format, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics, distance_meters_required, misses_allowed, join_until_at, host_rigor',
   '*',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, timezone, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, timezone, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
@@ -129,6 +129,8 @@ export type CreateChallengeInput = {
   task?: string | null;
   required_checkins?: number | null;
   misses_allowed?: number;
+  join_until_at?: string | null;
+  host_rigor?: 'friendly' | 'normal' | 'strict' | string | null;
   proof_type?: string | null;
   proofs?: unknown;
   proof_review?: string;
@@ -673,6 +675,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     task: (row.task as string | null) ?? null,
     required_checkins: row.required_checkins == null ? null : Number(row.required_checkins),
     misses_allowed: Number(row.misses_allowed ?? 0),
+    join_until_at: row.join_until_at ? String(row.join_until_at) : null,
+    host_rigor: (row.host_rigor as string | null) ?? null,
     proof_type: (row.proof_type as string | null) ?? null,
     proof_review: (row.proof_review as string | null) ?? null,
     payout_mode: (row.payout_mode as string | null) ?? null,
@@ -1584,6 +1588,26 @@ async function ensureCreatorParticipant(challengeId: string) {
   }
 }
 
+async function persistJoinAndRigor(
+  challengeId: string,
+  input: { join_until_at?: string | null; host_rigor?: string | null },
+): Promise<void> {
+  if (input.join_until_at === undefined && input.host_rigor === undefined) {
+    return;
+  }
+  const patch: Record<string, unknown> = {};
+  if (input.join_until_at !== undefined) {
+    patch.join_until_at = input.join_until_at;
+  }
+  if (input.host_rigor !== undefined) {
+    patch.host_rigor = input.host_rigor;
+  }
+  const { error } = await supabase.from('challenges').update(patch).eq('id', challengeId);
+  if (error) {
+    logDev('[blob:create] join_until/host_rigor skipped', error.message);
+  }
+}
+
 export async function insertUserChallenge(input: CreateChallengeInput): Promise<Challenge> {
   try {
     return await insertUserChallengeInner(input);
@@ -1646,6 +1670,8 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
     task: input.task ?? null,
     required_checkins: input.required_checkins ?? input.target_count,
     misses_allowed: input.misses_allowed ?? 0,
+    join_until_at: input.join_until_at ?? null,
+    host_rigor: input.host_rigor ?? 'normal',
     proof_type: input.proof_type ?? null,
     proofs: input.proofs ?? null,
     proof_review: input.proof_review ?? 'auto',
@@ -1700,6 +1726,7 @@ async function insertUserChallengeInner(input: CreateChallengeInput): Promise<Ch
       logDev('[blob:create] discoverability skipped', error.message);
     }
   }
+  await persistJoinAndRigor(result.challenge_id, input);
   if (input.scoring_method === 'comparable_points' && input.scoring_config) {
     const { error } = await supabase
       .from('challenges')
@@ -1941,6 +1968,10 @@ export async function updateUserChallenge(
   if (error) {
     throw new Error(getErrorMessage(error));
   }
+  await persistJoinAndRigor(challengeId, {
+    join_until_at: typeof payload.join_until_at === 'string' ? payload.join_until_at : payload.join_until_at === null ? null : undefined,
+    host_rigor: typeof payload.host_rigor === 'string' ? payload.host_rigor : undefined,
+  });
   if (
     payload.metrics != null ||
     payload.win_window != null ||

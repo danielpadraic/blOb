@@ -22,6 +22,8 @@ import {
 } from '@/lib/comparablePoints';
 import { nobodyFinishedRuleCopy } from '@/lib/settlement/receipts';
 import { THEME } from '@/lib/theme';
+import { hostRigorReviewLine } from '@/lib/hostRigor';
+import { joinUntilReviewLine } from '@/lib/joinWindow';
 import type { CreateChallengeValues } from '@/utils/validators';
 
 export type CreateReviewEditKey =
@@ -264,6 +266,18 @@ export function CreateReviewPreview({
           {values.duration_type === 'unlimited'
             ? 'Unlimited'
             : `${Math.max(Number(values.duration_days) || 7, 1)} days`}
+        </AppText>
+        <AppText className="mt-3 leading-6 text-charcoal">
+          {joinUntilReviewLine({
+            startsAt: values.starts_at,
+            preset: values.join_until_preset,
+            customAt: values.join_until_at,
+            joinUntilAt: values.join_until_at,
+            frequency: values.frequency,
+          })}
+        </AppText>
+        <AppText className="mt-2 leading-6 text-charcoal">
+          {hostRigorReviewLine(values.host_rigor)}
         </AppText>
         <Pressable
           accessibilityRole="button"

@@ -35,11 +35,13 @@ export function HouseAddPersonSheet({
   visible,
   challengeId,
   disabled = false,
+  hostMode = false,
   onClose,
 }: {
   visible: boolean;
   challengeId: string;
   disabled?: boolean;
+  hostMode?: boolean;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -69,11 +71,16 @@ export function HouseAddPersonSheet({
       if (!picked) {
         throw new Error(copy('house.addFailed'));
       }
-      const { error } = await supabase.rpc('official_add_participant', {
-        p_challenge_id: challengeId,
-        p_user_id: picked.id,
-        p_buy_in: buyIn,
-      });
+      const { error } = hostMode
+        ? await supabase.rpc('host_add_participant', {
+            p_challenge_id: challengeId,
+            p_user_id: picked.id,
+          })
+        : await supabase.rpc('official_add_participant', {
+            p_challenge_id: challengeId,
+            p_user_id: picked.id,
+            p_buy_in: buyIn,
+          });
       if (error) {
         throw new Error(officialOpsAddError(getErrorMessage(error)));
       }
@@ -116,7 +123,9 @@ export function HouseAddPersonSheet({
             maxHeight: 640,
           }}
           onPress={(event) => event.stopPropagation()}>
-          <AppText className="text-2xl font-bold text-charcoal">{copy('house.addPerson')}</AppText>
+          <AppText className="text-2xl font-bold text-charcoal">
+            {hostMode ? copy('create.addPerson') : copy('house.addPerson')}
+          </AppText>
           {disabled ? (
             <AppText className="mt-3 text-sm text-coral-dark">{copy('house.settled')}</AppText>
           ) : null}
@@ -189,7 +198,7 @@ export function HouseAddPersonSheet({
                 {personName(picked)}
               </AppText>
               <View className="mt-4 gap-1">
-                {(['charge', 'house', 'none'] as const).map((mode) => (
+                {(hostMode ? (['charge'] as const) : (['charge', 'house', 'none'] as const)).map((mode) => (
                   <Pressable
                     key={mode}
                     accessibilityRole="button"

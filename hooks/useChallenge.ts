@@ -81,6 +81,8 @@ import { cancelProviderRef, getPaymentsProvider } from '@/services/payments';
 import { getErrorMessage, logDev } from '@/utils/errors';
 import { challengeCurrency, formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { durationIntegerForPublish, publishPayoutFields } from '@/lib/formatPayout';
+import { hostRigorForPublish } from '@/lib/hostRigor';
+import { resolveJoinUntilAt } from '@/lib/joinWindow';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchCurrentUserProfile } from '@/hooks/useProfile';
 import type { CreateChallengeValues } from '@/utils/validators';
@@ -103,6 +105,28 @@ async function prepareLobby(_userId?: string) {
     }
   })();
   return lobbyBootstrap;
+}
+
+function joinAndRigorForPublish(
+  values: CreateChallengeValues,
+  startsAt: string,
+  extras?: { isOfficial?: boolean | null; currency?: string | null; challengeLane?: string | null },
+) {
+  return {
+    join_until_at:
+      resolveJoinUntilAt({
+        startsAt,
+        preset: values.join_until_preset,
+        customAt: values.join_until_at,
+        frequency: values.frequency,
+      })?.toISOString() ?? null,
+    host_rigor: hostRigorForPublish({
+      hostRigor: values.host_rigor,
+      isOfficial: extras?.isOfficial,
+      currency: extras?.currency ?? values.currency,
+      challengeLane: extras?.challengeLane ?? values.challenge_lane,
+    }),
+  };
 }
 
 type LobbyQueryOptions = { enabled?: boolean };
@@ -915,6 +939,10 @@ export function useCreateChallenge() {
           isPoints || values.challenge_type === 'cumulative'
             ? 0
             : Math.max(Number(values.misses_allowed) || 0, 0),
+        ...joinAndRigorForPublish(values, schedule.starts_at, {
+          currency: lane.currency,
+          challengeLane: lane.challenge_lane,
+        }),
         proof_type: isPoints
           ? pointsProofTypeForPublish(tasks)
           : values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),
@@ -1158,6 +1186,7 @@ export function useUpdateUserChallenge() {
           isPoints || values.challenge_type === 'cumulative'
             ? 0
             : Math.max(Number(values.misses_allowed) || 0, 0),
+        ...joinAndRigorForPublish(values, schedule.starts_at),
         proof_type: isPoints
           ? pointsProofTypeForPublish(draftTasks)
           : values.proof_type ?? proofTypeFromMethod(firstProofMethod(namedProofs)),

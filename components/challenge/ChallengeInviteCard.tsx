@@ -14,6 +14,7 @@ import { LobbyListCardView } from '@/components/challenge/LobbyListCardView';
 import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
 import { ChallengeScheduleMeta } from '@/components/challenge/ChallengeScheduleMeta';
 import { useInviteHost } from '@/components/challenge/InviteHost';
+import { HostRigorChip } from '@/components/challenge/HostRigorChip';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { useOfficialDobOptional } from '@/components/interests/OfficialDobHost';
@@ -67,6 +68,8 @@ export type InviteChallenge = {
   currency?: string | null;
   created_by?: string | null;
   starts_at?: string | null;
+  join_until_at?: string | null;
+  host_rigor?: string | null;
   ends_at?: string | null;
   is_unlimited?: boolean | null;
   series_id?: string | null;
@@ -500,7 +503,11 @@ export function ChallengeInviteCard({
           <View pointerEvents="box-none" style={{ position: 'absolute', top: 4, left: 4, right: 4 }}>
             <View className="flex-row items-start justify-between" style={{ gap: 8 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <ChallengeTagRow tags={tags} compact />
+                <ChallengeTagRow
+                  tags={tags}
+                  compact
+                  trailing={<HostRigorChip hostRigor={challenge.host_rigor} />}
+                />
               </View>
             </View>
           </View>

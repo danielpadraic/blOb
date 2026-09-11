@@ -55,6 +55,14 @@ import {
   type PayoutControlId,
 } from '@/lib/formatPayout';
 import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
+import { asHostRigor, hostRigorOf, type HostRigor } from '@/lib/hostRigor';
+import {
+  DEFAULT_JOIN_UNTIL_PRESET,
+  asJoinUntilPreset,
+  inferJoinUntilPreset,
+  resolveJoinUntilAt,
+  type JoinUntilPreset,
+} from '@/lib/joinWindow';
 
 export type SimpleCurrency = 'coins' | 'bucks';
 export type SimpleVisibility = 'public' | 'friends' | 'invite';
@@ -176,6 +184,9 @@ export type SimpleChallengeDraft = {
   win_window?: 'challenge' | 'week';
   distance_unit?: 'mi' | 'km';
   allowed_misses?: number;
+  join_until_preset?: JoinUntilPreset;
+  join_until_at?: string;
+  host_rigor?: HostRigor;
   payout?: PayoutControlId;
   top_places_value?: number;
 };
@@ -213,6 +224,9 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     win_window: 'challenge',
     distance_unit: 'mi',
     allowed_misses: 0,
+    join_until_preset: DEFAULT_JOIN_UNTIL_PRESET,
+    join_until_at: '',
+    host_rigor: 'normal',
     payout: 'even_split_remaining',
     top_places_value: 3,
   };
@@ -669,6 +683,15 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     misses_allowed: String(
       simpleHowYouWin(draft) === 'cumulative' ? 0 : clampAllowedMisses(draft.allowed_misses ?? 0, draft),
     ),
+    join_until_preset: asJoinUntilPreset(draft.join_until_preset),
+    join_until_at:
+      resolveJoinUntilAt({
+        startsAt: draft.starts_at,
+        preset: draft.join_until_preset,
+        customAt: draft.join_until_at,
+        frequency: draft.frequency,
+      })?.toISOString() ?? '',
+    host_rigor: asHostRigor(draft.host_rigor),
     cumulative_metric: howYouWin === 'cumulative' ? 'count' : null,
     cumulative_target: howYouWin === 'cumulative' ? String(Math.max(primary?.target || 0, 0)) : '',
     cumulative_window: winWindow,
@@ -791,6 +814,13 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
       duration_preset,
       duration_days: days,
     }),
+    join_until_preset: inferJoinUntilPreset({
+      startsAt: challenge.starts_at,
+      joinUntilAt: challenge.join_until_at,
+      frequency: challenge.frequency,
+    }),
+    join_until_at: challenge.join_until_at ?? '',
+    host_rigor: hostRigorOf(challenge),
     payout: payoutControlFromPair(formatFamilyOf(challenge), {
       prize_structure: challenge.prize_structure,
       payout_mode: challenge.payout_mode,
@@ -905,6 +935,9 @@ export function createValuesToSimpleDraft(values: CreateChallengeValues): Simple
     win_window: winWindowOf(values.win_window ?? values.cumulative_window),
     distance_unit: 'mi',
     allowed_misses: clampAllowedMisses(Number(values.misses_allowed) || 0, { duration_preset, duration_days: days }),
+    join_until_preset: asJoinUntilPreset(values.join_until_preset),
+    join_until_at: values.join_until_at || '',
+    host_rigor: asHostRigor(values.host_rigor),
     payout: payoutControlFromPair(formatFamilyOf(values), {
       prize_structure: values.prize_structure,
       payout_mode: values.payout_mode,

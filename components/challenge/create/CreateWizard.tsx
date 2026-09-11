@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { DateTimeField } from '@/components/challenge/create/DateTimeField';
+import { HostRigorField } from '@/components/challenge/create/HostRigorField';
+import { JoinUntilField } from '@/components/challenge/create/JoinUntilField';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
 import {
@@ -1764,6 +1766,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             timeZone={challengeScheduleTimezone(profile?.timezone)}
             durationDays={values.duration_value || values.duration_days || '7'}
             frequency={values.frequency}
+            joinUntilPreset={values.join_until_preset}
+            joinUntilAt={values.join_until_at}
+            onJoinUntilPreset={(preset) =>
+              setValue('join_until_preset', preset, { shouldDirty: true, shouldValidate: true })
+            }
+            onJoinUntilCustom={(iso) => {
+              setValue('join_until_preset', 'custom', { shouldDirty: true });
+              setValue('join_until_at', iso, { shouldDirty: true, shouldValidate: true });
+            }}
               onDurationTypeChange={onDurationTypeChange}
               onFrequencyChange={onFrequencyChange}
               onScheduleChange={(patch, preset) => {
@@ -1848,6 +1859,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               creatorParticipating={values.creator_participating}
               isPoints={isPoints}
               isCumulative={isCumulative}
+              hostRigor={values.host_rigor}
+              official={Boolean(editing.data?.is_official)}
+              currency={editing.data?.is_official ? editing.data.currency : values.currency}
+              officialLane={editing.data?.challenge_lane}
+              onHostRigor={(next) => setValue('host_rigor', next, { shouldDirty: true, shouldValidate: true })}
               onEntryTabChange={onEntryTabChange}
               onCapChange={(value) => setValue('participant_cap', value, { shouldValidate: true })}
               onCreatorParticipatingChange={(value) =>
@@ -2412,6 +2428,10 @@ function DurationSlide({
   timeZone,
   durationDays,
   frequency,
+  joinUntilPreset,
+  joinUntilAt,
+  onJoinUntilPreset,
+  onJoinUntilCustom,
   onDurationTypeChange,
   onFrequencyChange,
   onScheduleChange,
@@ -2424,6 +2444,10 @@ function DurationSlide({
   timeZone: string;
   durationDays: string;
   frequency: ChallengeFrequency;
+  joinUntilPreset?: string;
+  joinUntilAt?: string;
+  onJoinUntilPreset: (preset: import('@/lib/joinWindow').JoinUntilPreset) => void;
+  onJoinUntilCustom: (iso: string) => void;
   onDurationTypeChange: (next: CreateChallengeValues['duration_type']) => void;
   onFrequencyChange: (next: ChallengeFrequency) => void;
   onScheduleChange: (patch: Partial<CreateChallengeValues>, preset?: StartPreset) => void;
@@ -2464,6 +2488,13 @@ function DurationSlide({
               value={startsAt}
               error={errors.starts_at?.message}
               onChange={(iso) => onScheduleChange({ starts_at: iso }, 'custom')}
+            />
+            <JoinUntilField
+              preset={joinUntilPreset ?? 'after_24h'}
+              customAt={joinUntilAt}
+              startsAt={startsAt}
+              onPreset={onJoinUntilPreset}
+              onCustom={onJoinUntilCustom}
             />
           </View>
         </FieldLabel>
@@ -2870,6 +2901,11 @@ function EntrySlide({
   creatorParticipating,
   isPoints,
   isCumulative,
+  hostRigor,
+  official,
+  currency,
+  officialLane,
+  onHostRigor,
   onEntryTabChange,
   onCapChange,
   onCreatorParticipatingChange,
@@ -2882,6 +2918,11 @@ function EntrySlide({
   creatorParticipating: boolean;
   isPoints: boolean;
   isCumulative: boolean;
+  hostRigor?: string;
+  official?: boolean;
+  currency?: string | null;
+  officialLane?: string | null;
+  onHostRigor: (next: import('@/lib/hostRigor').HostRigor) => void;
   onEntryTabChange: (next: EntryTab) => void;
   onCapChange: (value: CreateChallengeValues['participant_cap']) => void;
   onCreatorParticipatingChange: (value: boolean) => void;
@@ -3026,8 +3067,15 @@ function EntrySlide({
             />
           )}
         />
-      </FieldAnchor>
+        </FieldAnchor>
       )}
+      <HostRigorField
+        value={hostRigor}
+        official={official}
+        currency={currency}
+        challengeLane={officialLane}
+        onChange={onHostRigor}
+      />
       <FieldAnchor name="proof_review">
         <Controller
           control={control}
