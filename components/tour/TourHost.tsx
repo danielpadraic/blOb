@@ -13,6 +13,7 @@ import {
   homeTourBody,
   homeTourChrome,
   homeTourTarget,
+  isHomeTourLogoMenuStep,
   nextHomeTourIndex,
   shouldSkipHomeStep,
   TOUR_STEPS,
@@ -81,13 +82,25 @@ export function TourHost({ onFinished }: TourHostProps) {
     if (!tour.active || !target || rawRect) {
       return;
     }
-    const poll = setInterval(() => bump(), 250);
-    const stopPoll = setTimeout(() => clearInterval(poll), 2200);
+    const chrome = step ? homeTourChrome(step.id) : { logoMenu: false, plusSheet: null };
+    const keepTrying = chrome.logoMenu || Boolean(chrome.plusSheet);
+    const poll = setInterval(() => {
+      if (chrome.logoMenu) {
+        setLogoMenu(true);
+      }
+      if (chrome.plusSheet) {
+        setPlusSheet(chrome.plusSheet);
+      }
+      bump();
+    }, 250);
+    const stopPoll = keepTrying ? null : setTimeout(() => clearInterval(poll), 2200);
     return () => {
       clearInterval(poll);
-      clearTimeout(stopPoll);
+      if (stopPoll) {
+        clearTimeout(stopPoll);
+      }
     };
-  }, [bump, rawRect, target, tour.active]);
+  }, [bump, rawRect, setLogoMenu, setPlusSheet, step, target, tour.active]);
 
   useEffect(() => {
     if (!tour.active || !step) {
@@ -134,9 +147,13 @@ export function TourHost({ onFinished }: TourHostProps) {
     return null;
   }
 
+  const listRect = isHomeTourLogoMenuStep(step.id) ? tour.rectFor('tour-menu-list') : null;
+
   return (
     <CoachMarkOverlay
       hole={hole}
+      placeFrom={listRect}
+      zIndex={isHomeTourLogoMenuStep(step.id) ? 40 : 4000}
       placement={step.placement}
       index={index}
       total={TOUR_STEPS.length}

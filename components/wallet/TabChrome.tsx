@@ -134,7 +134,9 @@ export function TabChromeHeader({
   const unreadCount = unread.data ?? 0;
   const rows = Array.isArray(conversations.data) ? conversations.data : [];
   const unreadMessages = rows.filter((row) => row.unread).length;
-  const tourLocked = Boolean(useTourOptional()?.active);
+  const tour = useTourOptional();
+  const tourLocked = Boolean(tour?.active);
+  const tourTarget = tour?.targetId ?? null;
   const clusterPad = Math.max(insets.right, 4);
 
   return (
@@ -152,7 +154,8 @@ export function TabChromeHeader({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close menu"
-          onPress={logoMenuOpen ? onToggleLogoMenu : onToggleMessages}
+          pointerEvents={tourLocked && logoMenuOpen ? 'none' : 'auto'}
+          onPress={tourLocked && logoMenuOpen ? undefined : logoMenuOpen ? onToggleLogoMenu : onToggleMessages}
           style={{
             position: 'absolute',
             top: 0,
@@ -191,7 +194,9 @@ export function TabChromeHeader({
               </Pressable>
             </TourAnchor>
             {logoMenuOpen ? (
-              <TourAnchor id="tour-menu-list" style={{ position: 'absolute', top: 44, left: 0, zIndex: 3 }}>
+              <TourAnchor
+                id="tour-menu-list"
+                style={{ position: 'absolute', top: 44, left: 0, zIndex: 20, elevation: 20 }}>
                 <View
                   style={{
                     width: 228,
@@ -202,22 +207,31 @@ export function TabChromeHeader({
                     overflow: 'hidden',
                     ...themeShadow('card'),
                   }}>
-                  {LOGO_MENU.map((row, index) => (
-                    <TourAnchor key={row.id} id={row.tourId}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={row.label}
-                        onPress={() => onLogoAction?.(row.id)}
-                        className="justify-center px-4"
-                        style={{
-                          minHeight: 44,
-                          borderTopWidth: index === 0 ? 0 : 1,
-                          borderTopColor: THEME.border,
-                        }}>
-                        <AppText className="text-[14px] font-semibold text-charcoal">{row.label}</AppText>
-                      </Pressable>
-                    </TourAnchor>
-                  ))}
+                  {LOGO_MENU.map((row, index) => {
+                    const lit = tourLocked && tourTarget === row.tourId;
+                    return (
+                      <TourAnchor key={row.id} id={row.tourId}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={row.label}
+                          onPress={() => {
+                            if (tourLocked) {
+                              return;
+                            }
+                            onLogoAction?.(row.id);
+                          }}
+                          className="justify-center px-4"
+                          style={{
+                            minHeight: 44,
+                            borderTopWidth: lit ? 2 : index === 0 ? 0 : 1,
+                            borderTopColor: lit ? THEME.accent : THEME.border,
+                            backgroundColor: lit ? THEME.accentSoft : THEME.surface,
+                          }}>
+                          <AppText className="text-[14px] font-semibold text-charcoal">{row.label}</AppText>
+                        </Pressable>
+                      </TourAnchor>
+                    );
+                  })}
                 </View>
               </TourAnchor>
             ) : null}

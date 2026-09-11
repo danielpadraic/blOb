@@ -11,6 +11,9 @@ import {
   homeTourBody,
   homeTourChrome,
   homeTourTarget,
+  isHomeTourLogoMenuStep,
+  isHomeTourPlusPostStep,
+  isHomeTourPlusRootStep,
   nextHomeTourIndex,
   officialTourTarget,
   ROUNDS_FALLBACK_BODY,
@@ -19,10 +22,14 @@ import {
 } from '@/lib/tour';
 
 describe('home tour copy', () => {
-  it('walks hamburger, wallet, banner, waves, +, Post, Friends, and You — not Live or Lobby', () => {
+  it('walks one hamburger row, wallet, banner, waves, each + button, Post items, Friends, and You', () => {
     const ids = TOUR_STEPS.map((step) => step.id);
     expect(ids).toEqual([
-      'menu',
+      'menuChallenge',
+      'menuCircle',
+      'menuCallout',
+      'menuJoin',
+      'menuSendCoins',
       'coins',
       'money',
       'search',
@@ -31,45 +38,50 @@ describe('home tour copy', () => {
       'official',
       'waves',
       'rounds',
-      'tabCreate',
+      'plusCheckIn',
       'plusPost',
+      'plusLift',
+      'plusTimer',
+      'plusWave',
+      'plusRound',
+      'plusFeed',
       'tabFriends',
       'tabYou',
     ]);
-    expect(ids).toHaveLength(13);
     expect(ids).not.toContain('tabFeed');
     expect(ids).not.toContain('tabLobby');
-    expect(ids).not.toContain('goal');
+    expect(ids).not.toContain('menu');
+    expect(ids).not.toContain('tabCreate');
 
-    const menu = TOUR_STEPS.find((step) => step.id === 'menu');
-    expect(menu).toMatchObject({
-      target: 'tour-menu-list',
-      title: 'This menu',
-    });
-    expect(menu?.body).toMatch(/Create Challenge/);
-    expect(menu?.body).toMatch(/Create a Circle/);
-    expect(menu?.body).toMatch(/Call Someone Out/);
-    expect(menu?.body).toMatch(/focus group/);
-    expect(menu?.body).not.toMatch(/prize/);
-    expect(menu?.body).not.toMatch(/A Circle is not a contest/);
-    expect(menu?.body).not.toMatch(/has no prize money/);
+    const menu = TOUR_STEPS.filter((step) => isHomeTourLogoMenuStep(step.id));
+    expect(menu.map((step) => step.target)).toEqual([
+      'tour-menu-challenge',
+      'tour-menu-circle',
+      'tour-menu-callout',
+      'tour-menu-join',
+      'tour-menu-coins',
+    ]);
+    expect(menu.every((step) => !step.body.includes('\n'))).toBe(true);
+    expect(menu[0]).toMatchObject({ title: 'Create Challenge' });
+    expect(menu[1]?.body).toMatch(/focus group/);
+    expect(menu[4]?.title).toBe('Send Coins');
+    expect(menu[4]?.body).toMatch(/not cash/);
 
-    const create = TOUR_STEPS.find((step) => step.id === 'tabCreate');
-    expect(create?.title).toBe('+');
-    expect(create?.body).toMatch(/How you compete/);
-    expect(create?.body).toMatch(/leaderboard/);
-    expect(create?.body).toMatch(/Wave/);
-    expect(create?.body).not.toMatch(/Create Challenge/);
+    const plusRoot = TOUR_STEPS.filter((step) => isHomeTourPlusRootStep(step.id));
+    expect(plusRoot.map((step) => [step.id, step.target, step.placement])).toEqual([
+      ['plusCheckIn', 'tour-plus-checkin', 'above'],
+      ['plusPost', 'tour-plus-post-btn', 'above'],
+      ['plusLift', 'tour-plus-lift', 'above'],
+      ['plusTimer', 'tour-plus-timer', 'above'],
+    ]);
+    expect(plusRoot.every((step) => !step.body.includes('\n'))).toBe(true);
 
-    const plusPost = TOUR_STEPS.find((step) => step.id === 'plusPost');
-    expect(plusPost?.title).toBe('Post');
-    expect(plusPost?.body).toMatch(/Wave/);
-    expect(plusPost?.body).toMatch(/Round/);
-    expect(plusPost?.body).toMatch(/Feed/);
+    const plusPost = TOUR_STEPS.filter((step) => isHomeTourPlusPostStep(step.id));
+    expect(plusPost.map((step) => step.id)).toEqual(['plusWave', 'plusRound', 'plusFeed']);
+    expect(plusPost.every((step) => !step.body.includes('\n'))).toBe(true);
 
     const official = TOUR_STEPS.find((step) => step.id === 'official');
     expect(official?.target).toBe('tour-official-banner');
-    expect(official?.target).not.toBe('tour-tab-lobby');
     expect(official?.body).toMatch(/Bob/);
 
     const you = TOUR_STEPS.find((step) => step.id === 'tabYou');
@@ -83,11 +95,21 @@ describe('home tour copy', () => {
     expect(joined).not.toMatch(/Featured Challenge Rounds/);
   });
 
-  it('opens the logo menu and + sheet only on those steps', () => {
-    expect(homeTourChrome('menu')).toEqual({ logoMenu: true, plusSheet: null });
-    expect(homeTourChrome('tabCreate')).toEqual({ logoMenu: false, plusSheet: 'root' });
-    expect(homeTourChrome('plusPost')).toEqual({ logoMenu: false, plusSheet: 'post' });
+  it('opens the logo menu for all five hamburger steps and the + sheet for root vs Post', () => {
+    expect(homeTourChrome('menuChallenge')).toEqual({ logoMenu: true, plusSheet: null });
+    expect(homeTourChrome('menuCircle')).toEqual({ logoMenu: true, plusSheet: null });
+    expect(homeTourChrome('menuCallout')).toEqual({ logoMenu: true, plusSheet: null });
+    expect(homeTourChrome('menuJoin')).toEqual({ logoMenu: true, plusSheet: null });
+    expect(homeTourChrome('menuSendCoins')).toEqual({ logoMenu: true, plusSheet: null });
+    expect(homeTourChrome('plusCheckIn')).toEqual({ logoMenu: false, plusSheet: 'root' });
+    expect(homeTourChrome('plusPost')).toEqual({ logoMenu: false, plusSheet: 'root' });
+    expect(homeTourChrome('plusLift')).toEqual({ logoMenu: false, plusSheet: 'root' });
+    expect(homeTourChrome('plusTimer')).toEqual({ logoMenu: false, plusSheet: 'root' });
+    expect(homeTourChrome('plusWave')).toEqual({ logoMenu: false, plusSheet: 'post' });
+    expect(homeTourChrome('plusRound')).toEqual({ logoMenu: false, plusSheet: 'post' });
+    expect(homeTourChrome('plusFeed')).toEqual({ logoMenu: false, plusSheet: 'post' });
     expect(homeTourChrome('coins')).toEqual({ logoMenu: false, plusSheet: null });
+    expect(homeTourChrome('waves')).toEqual({ logoMenu: false, plusSheet: null });
     expect(homeTourChrome('tabFriends')).toEqual({ logoMenu: false, plusSheet: null });
     expect(homeTourChrome(null)).toEqual({ logoMenu: false, plusSheet: null });
   });
@@ -113,17 +135,23 @@ describe('home tour copy', () => {
     expect(ROUNDS_FALLBACK_BODY).toMatch(/Round/);
   });
 
-  it('never skips menu or + while the sheet is still measuring', () => {
-    const menu = TOUR_STEPS.find((step) => step.id === 'menu');
-    const create = TOUR_STEPS.find((step) => step.id === 'tabCreate');
-    const plusPost = TOUR_STEPS.find((step) => step.id === 'plusPost');
-    expect(shouldSkipHomeStep(menu!, () => false)).toBe(false);
-    expect(shouldSkipHomeStep(create!, () => false)).toBe(false);
-    expect(shouldSkipHomeStep(plusPost!, () => false)).toBe(false);
-    expect(homeTourTarget(menu!, (id) => id === 'tour-menu-list')).toBe('tour-menu-list');
-    expect(homeTourTarget(menu!, (id) => id === 'tour-menu')).toBe('tour-menu');
-    expect(homeTourTarget(create!, (id) => id === 'tour-plus-root')).toBe('tour-plus-root');
-    expect(homeTourTarget(plusPost!, (id) => id === 'tour-plus-post')).toBe('tour-plus-post');
+  it('never skips hamburger or + while chrome is still opening, and never holes Waves for a menu row', () => {
+    const challenge = TOUR_STEPS.find((step) => step.id === 'menuChallenge');
+    const checkIn = TOUR_STEPS.find((step) => step.id === 'plusCheckIn');
+    const wave = TOUR_STEPS.find((step) => step.id === 'plusWave');
+    expect(shouldSkipHomeStep(challenge!, () => false)).toBe(false);
+    expect(shouldSkipHomeStep(checkIn!, () => false)).toBe(false);
+    expect(shouldSkipHomeStep(wave!, () => false)).toBe(false);
+    expect(homeTourTarget(challenge!, (id) => id === 'tour-waves' || id === 'tour-menu-list')).toBe(
+      'tour-menu-challenge',
+    );
+    expect(homeTourTarget(checkIn!, (id) => id === 'tour-waves')).toBe('tour-plus-checkin');
+    expect(
+      shouldSkipHomeStep(challenge!, (id) => id === 'tour-menu-list' || id === 'tour-menu-circle'),
+    ).toBe(true);
+    expect(
+      shouldSkipHomeStep(challenge!, (id) => id === 'tour-menu-list' || id === 'tour-menu-challenge'),
+    ).toBe(false);
   });
 
   it('advances past missing Official and lands on Waves', () => {

@@ -332,6 +332,9 @@ function TabLayoutInner() {
   }
 
   function onAction(id: QuickActionId | LogoMenuAction, challenge?: LoggableChallenge) {
+    if (tour?.active) {
+      return;
+    }
     if (id === 'log') {
       if (challenge?.id) {
         closeOverlays();
@@ -401,6 +404,11 @@ function TabLayoutInner() {
 
   const friendsTabRoot = pathname === '/friends';
   const watchOpen = isWatchSurfacePath(pathname);
+  const tourLogoMenu = Boolean(tour?.active && tour.logoMenu);
+  const tourPlus = tour?.active ? tour.plusSheet : null;
+  const headerMenuOpen = tourLogoMenu || logoMenuOpen;
+  const plusOpen = Boolean(tourPlus) || sheetOpen;
+  const plusPanelResolved = tourPlus ?? plusPanel;
 
   return (
     <MediaLightboxHost>
@@ -412,7 +420,7 @@ function TabLayoutInner() {
         <TabChromeHeader
           alertsOpen={alertsOpen}
           searchOpen={searchOpen}
-          logoMenuOpen={logoMenuOpen}
+          logoMenuOpen={headerMenuOpen}
           messagesOpen={messagesOpen}
           onToggleAlerts={toggleAlerts}
           onToggleSearch={toggleSearch}
@@ -485,20 +493,23 @@ function TabLayoutInner() {
       </View>
       {watchOpen || onOnboarding || isLiveCameraPath(pathname) ? null : (
         <BlobTabBar
-          composeOpen={sheetOpen}
+          composeOpen={plusOpen}
           onToggleCompose={toggleSheet}
           onTabPress={closeOverlays}
         />
       )}
       <View
-        pointerEvents={sheetOpen ? 'auto' : 'none'}
+        pointerEvents={plusOpen ? 'auto' : 'none'}
         style={styles.sheetLayer}>
         <PlusActionBar
-          visible={sheetOpen}
-          panel={plusPanel}
+          visible={plusOpen}
+          panel={plusPanelResolved}
           onPanelChange={setPlusPanel}
           loggable={loggable.data}
           onClose={() => {
+            if (tour?.active) {
+              return;
+            }
             setSheetOpen(false);
             setPlusPanel('root');
           }}
@@ -512,7 +523,12 @@ function TabLayoutInner() {
       {onOnboarding ? null : (
         <>
           <FirstRunTourLauncher />
-          <View pointerEvents="box-none" style={styles.tourLayer}>
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.tourLayer,
+              tourLogoMenu ? { zIndex: 40, elevation: 40 } : null,
+            ]}>
             <TourHost onFinished={() => void refetch()} />
             <CreateTourHost />
             <ContextualTourHost />

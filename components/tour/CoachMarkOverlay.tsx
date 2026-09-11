@@ -16,6 +16,8 @@ const DIM = 'rgba(16, 19, 18, 0.58)';
 
 type CoachMarkOverlayProps = {
   hole: LayoutRectangle | null;
+  /** Position the card from this rect (e.g. the open menu list) while holing a row. */
+  placeFrom?: LayoutRectangle | null;
   placement: TourPlacement;
   index: number;
   total: number;
@@ -29,10 +31,13 @@ type CoachMarkOverlayProps = {
   footer?: ReactNode;
   topReserve?: number;
   bottomReserve?: number;
+  /** Sit under an open header menu (z 50) so the dropdown paints above the dim. */
+  zIndex?: number;
 };
 
 export function CoachMarkOverlay({
   hole,
+  placeFrom,
   placement,
   index,
   total,
@@ -46,6 +51,7 @@ export function CoachMarkOverlay({
   footer,
   topReserve: topReserveProp,
   bottomReserve: bottomReserveProp,
+  zIndex = 4000,
 }: CoachMarkOverlayProps) {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -54,7 +60,7 @@ export function CoachMarkOverlay({
   const tooltipH = tooltipSize.height || 188;
   const bottomReserve = bottomReserveProp ?? tabBarLift(insets.bottom) + TAB_BAR_PEEK;
   const pos = placeTooltip({
-    hole,
+    hole: placeFrom ?? hole,
     placement,
     tooltipW,
     tooltipH,
@@ -73,8 +79,8 @@ export function CoachMarkOverlay({
         right: 0,
         bottom: 0,
         left: 0,
-        zIndex: 4000,
-        elevation: 4000,
+        zIndex,
+        elevation: zIndex,
         ...(Platform.OS === 'web' ? ({ isolation: 'isolate' } as object) : null),
       }}>
       <DimWithHole hole={hole} screenW={screenW} screenH={screenH} />

@@ -3,6 +3,7 @@ import { Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTourOptional } from '@/components/tour/TourContext';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
@@ -43,6 +44,7 @@ export function PlusActionBar({
 }: PlusActionBarProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const tourLocked = Boolean(useTourOptional()?.active);
   const [inner, setInner] = useState<PlusPanel>('root');
   const step = panel ?? inner;
   const loggables = asLoggableList(loggable);
@@ -95,11 +97,35 @@ export function PlusActionBar({
           }}>
           {step === 'post' ? (
             <>
-              <BarButton tourId="tour-plus-wave" label={copy('wave.noun')} onPress={() => onAction('story')} />
+              <BarButton
+                tourId="tour-plus-wave"
+                label={copy('wave.noun')}
+                onPress={() => {
+                  if (!tourLocked) {
+                    onAction('story');
+                  }
+                }}
+              />
               <BarDivider />
-              <BarButton tourId="tour-plus-round" label={copy('round.noun')} onPress={() => onAction('reel')} />
+              <BarButton
+                tourId="tour-plus-round"
+                label={copy('round.noun')}
+                onPress={() => {
+                  if (!tourLocked) {
+                    onAction('reel');
+                  }
+                }}
+              />
               <BarDivider />
-              <BarButton tourId="tour-plus-feed" label="Feed" onPress={() => onAction('post')} />
+              <BarButton
+                tourId="tour-plus-feed"
+                label="Feed"
+                onPress={() => {
+                  if (!tourLocked) {
+                    onAction('post');
+                  }
+                }}
+              />
             </>
           ) : (
             <>
@@ -107,6 +133,9 @@ export function PlusActionBar({
                 tourId="tour-plus-checkin"
                 label="Check In"
                 onPress={() => {
+                  if (tourLocked) {
+                    return;
+                  }
                   if (loggables.length === 1) {
                     pickLog(loggables[0]);
                     return;
@@ -115,11 +144,35 @@ export function PlusActionBar({
                 }}
               />
               <BarDivider />
-              <BarButton tourId="tour-plus-post" label="Post" onPress={() => setStep('post')} />
+              <BarButton
+                tourId="tour-plus-post-btn"
+                label="Post"
+                onPress={() => {
+                  if (!tourLocked) {
+                    setStep('post');
+                  }
+                }}
+              />
               <BarDivider />
-              <BarButton tourId="tour-plus-lift" label="Lift" onPress={() => onAction('lift')} />
+              <BarButton
+                tourId="tour-plus-lift"
+                label="Lift"
+                onPress={() => {
+                  if (!tourLocked) {
+                    onAction('lift');
+                  }
+                }}
+              />
               <BarDivider />
-              <BarButton tourId="tour-plus-timer" label="Timer" onPress={() => onAction('timer')} />
+              <BarButton
+                tourId="tour-plus-timer"
+                label="Timer"
+                onPress={() => {
+                  if (!tourLocked) {
+                    onAction('timer');
+                  }
+                }}
+              />
             </>
           )}
         </View>
@@ -144,6 +197,8 @@ function BarButton({
   disabled?: boolean;
   tourId?: string;
 }) {
+  const tour = useTourOptional();
+  const lit = Boolean(tour?.active && tourId && tour.targetId === tourId);
   const button = (
     <Pressable
       accessibilityRole="button"
@@ -160,6 +215,7 @@ function BarButton({
         // a second line would push the bar taller than the tab bar it floats above.
         paddingHorizontal: 6,
         opacity: disabled ? 0.38 : 1,
+        backgroundColor: lit ? THEME.accentSoft : undefined,
       }}>
       <AppText numberOfLines={1} className="text-[15px] font-extrabold text-charcoal">
         {label}

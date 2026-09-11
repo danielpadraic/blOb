@@ -1,5 +1,9 @@
 export type TourStepId =
-  | 'menu'
+  | 'menuChallenge'
+  | 'menuCircle'
+  | 'menuCallout'
+  | 'menuJoin'
+  | 'menuSendCoins'
   | 'coins'
   | 'money'
   | 'search'
@@ -8,8 +12,13 @@ export type TourStepId =
   | 'official'
   | 'waves'
   | 'rounds'
-  | 'tabCreate'
+  | 'plusCheckIn'
   | 'plusPost'
+  | 'plusLift'
+  | 'plusTimer'
+  | 'plusWave'
+  | 'plusRound'
+  | 'plusFeed'
   | 'tabFriends'
   | 'tabYou';
 
@@ -30,19 +39,65 @@ export const OFFICIAL_TOUR_TARGETS = ['tour-official-banner', 'tour-official'] a
 export const ROUNDS_FALLBACK_BODY =
   'A Round is a longer clip (up to 3 minutes). Open + then Post, then Round. It shows here when a clip is tagged to a contest you are in.';
 
+export const LOGO_MENU_TOUR_IDS: TourStepId[] = [
+  'menuChallenge',
+  'menuCircle',
+  'menuCallout',
+  'menuJoin',
+  'menuSendCoins',
+];
+
+export const PLUS_ROOT_TOUR_IDS: TourStepId[] = ['plusCheckIn', 'plusPost', 'plusLift', 'plusTimer'];
+
+export const PLUS_POST_TOUR_IDS: TourStepId[] = ['plusWave', 'plusRound', 'plusFeed'];
+
+export function isHomeTourLogoMenuStep(id?: TourStepId | null): boolean {
+  return Boolean(id && LOGO_MENU_TOUR_IDS.includes(id));
+}
+
+export function isHomeTourPlusRootStep(id?: TourStepId | null): boolean {
+  return Boolean(id && PLUS_ROOT_TOUR_IDS.includes(id));
+}
+
+export function isHomeTourPlusPostStep(id?: TourStepId | null): boolean {
+  return Boolean(id && PLUS_POST_TOUR_IDS.includes(id));
+}
+
 export const TOUR_STEPS: TourStep[] = [
   {
-    id: 'menu',
-    target: 'tour-menu-list',
+    id: 'menuChallenge',
+    target: 'tour-menu-challenge',
     placement: 'below',
-    title: 'This menu',
-    body: [
-      'Create Challenge — start a group skill contest. Lots of people, same task.',
-      'Create a Circle — a focus group for one thing you care about (running, reading, lifting). Talk and join contests together.',
-      'Call Someone Out — a 1-on-1 skill contest. Just you and one person.',
-      'Join — hop into a contest someone already made.',
-      'Send Coins — send show-up coins to a friend. Coins are not cash.',
-    ].join('\n'),
+    title: 'Create Challenge',
+    body: 'Start a group skill contest. Lots of people, same task.',
+  },
+  {
+    id: 'menuCircle',
+    target: 'tour-menu-circle',
+    placement: 'below',
+    title: 'Create a Circle',
+    body: 'A focus group for one thing you care about — running, reading, lifting. Talk and join contests together.',
+  },
+  {
+    id: 'menuCallout',
+    target: 'tour-menu-callout',
+    placement: 'below',
+    title: 'Call Someone Out',
+    body: 'A 1-on-1 skill contest. Just you and one person.',
+  },
+  {
+    id: 'menuJoin',
+    target: 'tour-menu-join',
+    placement: 'below',
+    title: 'Join',
+    body: 'Hop into a contest someone already made.',
+  },
+  {
+    id: 'menuSendCoins',
+    target: 'tour-menu-coins',
+    placement: 'below',
+    title: 'Send Coins',
+    body: 'Send show-up coins to a friend. Coins are not cash.',
   },
   {
     id: 'coins',
@@ -101,27 +156,53 @@ export const TOUR_STEPS: TourStep[] = [
     body: 'A Round is a longer clip (up to 3 minutes). Show how you train, invite people in, or cheer your Circle or Challenge. It does not go on Home unless you tap Share to Feed.',
   },
   {
-    id: 'tabCreate',
-    target: 'tour-plus-root',
+    id: 'plusCheckIn',
+    target: 'tour-plus-checkin',
     placement: 'above',
-    title: '+',
-    body: [
-      'Check-In — How you compete. Submit proof you did the task so the contest can count it and keep score on the leaderboard.',
-      'Post — make a Wave, a Round, or a Home post.',
-      'Lift — build a workout, save it, do it again, or send it to a friend.',
-      'Timer — cardio, intervals, and sprints.',
-    ].join('\n'),
+    title: 'Check In',
+    body: 'How you compete. Submit proof you did the task so the contest can count it and keep score on the leaderboard.',
   },
   {
     id: 'plusPost',
-    target: 'tour-plus-post',
+    target: 'tour-plus-post-btn',
     placement: 'above',
     title: 'Post',
-    body: [
-      'Wave — 30-second hello. Gone in 24 hours.',
-      'Round — longer clip. Invite or teach. Up to 3 minutes.',
-      'Feed — a normal Home post.',
-    ].join('\n'),
+    body: 'Make a Wave, a Round, or a Home post. Next shows those three.',
+  },
+  {
+    id: 'plusLift',
+    target: 'tour-plus-lift',
+    placement: 'above',
+    title: 'Lift',
+    body: 'Build a workout, save it, do it again, or send it to a friend.',
+  },
+  {
+    id: 'plusTimer',
+    target: 'tour-plus-timer',
+    placement: 'above',
+    title: 'Timer',
+    body: 'Cardio, intervals, and sprints.',
+  },
+  {
+    id: 'plusWave',
+    target: 'tour-plus-wave',
+    placement: 'above',
+    title: 'Wave',
+    body: 'A 30-second hello or pep talk. Gone in 24 hours.',
+  },
+  {
+    id: 'plusRound',
+    target: 'tour-plus-round',
+    placement: 'above',
+    title: 'Round',
+    body: 'A longer clip (up to 3 minutes). Show how you train, invite people in, or cheer a Circle or Challenge.',
+  },
+  {
+    id: 'plusFeed',
+    target: 'tour-plus-feed',
+    placement: 'above',
+    title: 'Feed',
+    body: 'A normal post on Home.',
   },
   {
     id: 'tabFriends',
@@ -139,18 +220,18 @@ export const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-/** Open the same chrome a tap uses. Close when the step is not menu / + / Post. */
+/** Open the same chrome a tap uses. Close when the step is not hamburger / + / Post. */
 export function homeTourChrome(stepId?: TourStepId | null): {
   logoMenu: boolean;
   plusSheet: TourPlusSheet;
 } {
-  if (stepId === 'menu') {
+  if (isHomeTourLogoMenuStep(stepId)) {
     return { logoMenu: true, plusSheet: null };
   }
-  if (stepId === 'tabCreate') {
+  if (isHomeTourPlusRootStep(stepId)) {
     return { logoMenu: false, plusSheet: 'root' };
   }
-  if (stepId === 'plusPost') {
+  if (isHomeTourPlusPostStep(stepId)) {
     return { logoMenu: false, plusSheet: 'post' };
   }
   return { logoMenu: false, plusSheet: null };
@@ -165,9 +246,10 @@ export function officialTourTarget(hasRect: (id: string) => boolean): string | n
   return null;
 }
 
+/** Hole this step’s control. Never fall back to Waves for hamburger / + rows. */
 export function homeTourTarget(step: TourStep, hasRect: (id: string) => boolean): string | null {
-  if (step.id === 'menu') {
-    return hasRect('tour-menu-list') ? 'tour-menu-list' : 'tour-menu';
+  if (isHomeTourLogoMenuStep(step.id)) {
+    return step.target;
   }
   if (step.id === 'official') {
     return officialTourTarget(hasRect);
@@ -175,17 +257,8 @@ export function homeTourTarget(step: TourStep, hasRect: (id: string) => boolean)
   if (step.id === 'rounds') {
     return hasRect('tour-rounds') ? 'tour-rounds' : hasRect('tour-waves') ? 'tour-waves' : 'tour-rounds';
   }
-  if (step.id === 'tabCreate') {
-    return hasRect('tour-plus-root') ? 'tour-plus-root' : hasRect('tour-tab-create') ? 'tour-tab-create' : 'tour-plus-root';
-  }
-  if (step.id === 'plusPost') {
-    if (hasRect('tour-plus-post')) {
-      return 'tour-plus-post';
-    }
-    if (hasRect('tour-plus-root')) {
-      return 'tour-plus-root';
-    }
-    return hasRect('tour-tab-create') ? 'tour-tab-create' : 'tour-plus-post';
+  if (isHomeTourPlusRootStep(step.id) || isHomeTourPlusPostStep(step.id)) {
+    return step.target;
   }
   return step.target;
 }
@@ -197,10 +270,28 @@ export function homeTourBody(step: TourStep, hasRect: (id: string) => boolean): 
   return step.body;
 }
 
-/** Missing Official banner or missing control → skip. Menu / + always keep the card. Rounds falls back to Waves. */
+/**
+ * Skip one missing row after the host has waited.
+ * If the hamburger / + chrome never opened, keep the card (do not skip the menu).
+ */
 export function shouldSkipHomeStep(step: TourStep, hasRect: (id: string) => boolean): boolean {
-  if (step.id === 'menu' || step.id === 'tabCreate' || step.id === 'plusPost') {
-    return false;
+  if (isHomeTourLogoMenuStep(step.id)) {
+    if (!hasRect('tour-menu-list')) {
+      return false;
+    }
+    return Boolean(step.target && !hasRect(step.target));
+  }
+  if (isHomeTourPlusRootStep(step.id)) {
+    if (!hasRect('tour-plus-root')) {
+      return false;
+    }
+    return Boolean(step.target && !hasRect(step.target));
+  }
+  if (isHomeTourPlusPostStep(step.id)) {
+    if (!hasRect('tour-plus-post') && !hasRect('tour-plus-wave') && !hasRect('tour-plus-round') && !hasRect('tour-plus-feed')) {
+      return false;
+    }
+    return Boolean(step.target && !hasRect(step.target));
   }
   if (step.id === 'official') {
     return officialTourTarget(hasRect) == null;
