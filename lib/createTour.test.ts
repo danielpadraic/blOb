@@ -20,25 +20,12 @@ describe('create tours', () => {
     expect(createTourSteps('simple')).toBe(SIMPLE_CREATE_TOUR);
   });
 
-  it('keeps Advanced on decisions that change the product', () => {
+  it('caps Advanced at four cards that skip the title field and footer', () => {
     const ids = ADVANCED_CREATE_TOUR.map((step) => step.id);
-    expect(ids).toEqual([
-      'adv-lane',
-      'adv-title',
-      'adv-visibility',
-      'adv-scoring',
-      'adv-starts',
-      'adv-duration',
-      'adv-prize',
-      'adv-currency',
-      'adv-buyin',
-      'adv-limits',
-      'adv-misses',
-      'adv-proofs',
-      'adv-review',
-    ]);
-    expect(ids).not.toContain('adv-start-from');
-    expect(ids).not.toContain('adv-schedule');
+    expect(ids).toEqual(['adv-lane', 'adv-scoring', 'adv-duration', 'adv-proofs']);
+    expect(ids).not.toContain('adv-title');
+    expect(ids).not.toContain('adv-review');
+    expect(ADVANCED_CREATE_TOUR).toHaveLength(4);
     expect(joinedCopy(ADVANCED_CREATE_TOUR)).not.toMatch(/Bucks/i);
     expect(joinedCopy(ADVANCED_CREATE_TOUR)).not.toMatch(/Host-scored/i);
     expect(joinedCopy(ADVANCED_CREATE_TOUR)).not.toMatch(/player-pool/i);

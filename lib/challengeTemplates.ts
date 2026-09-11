@@ -62,9 +62,8 @@ export function wizardStepIndex(key: CreateWizardStepKey): number {
 export function firstIncompleteAdvancedStep(
   values: Pick<CreateChallengeValues, 'title' | 'task' | 'starts_at' | 'challenge_type'>,
 ): number {
-  if (!String(values.title ?? '').trim() || !String(values.task ?? '').trim()) {
-    return wizardStepIndex('goal');
-  }
+  // Simple → Advanced always lands on Lane (step 1). An empty title must not
+  // dump the host on a blank Goal step 3.
   if (!values.starts_at) {
     return wizardStepIndex('start');
   }

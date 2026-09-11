@@ -48,6 +48,12 @@ describe('Simple How you win', () => {
     expect(firstIncompleteAdvancedStep(values)).not.toBe(wizardStepIndex('goal'));
   });
 
+  it('opens Lane from Simple even when title and task are still empty', () => {
+    const values = simpleDraftToCreateValues(defaultSimpleDraft());
+    expect(firstIncompleteAdvancedStep(values)).toBe(wizardStepIndex('lane'));
+    expect(firstIncompleteAdvancedStep(values)).not.toBe(wizardStepIndex('goal'));
+  });
+
   it('publishes 128 miles and Top # 3 from Simple Cumulative', () => {
     const draft = defaultSimpleDraft();
     draft.title = '128 miler';

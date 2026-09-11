@@ -917,13 +917,53 @@ export function createValuesToSimpleDraft(values: CreateChallengeValues): Simple
 
 let advancedFromSimple: CreateChallengeValues | null = null;
 let simpleFromAdvanced: SimpleChallengeDraft | null = null;
+const ADVANCED_FROM_SIMPLE_KEY = 'blob:advanced-from-simple';
+
+function writeAdvancedHandoff(values: CreateChallengeValues | null) {
+  advancedFromSimple = values;
+  try {
+    if (typeof sessionStorage === 'undefined') {
+      return;
+    }
+    if (values) {
+      sessionStorage.setItem(ADVANCED_FROM_SIMPLE_KEY, JSON.stringify(values));
+      return;
+    }
+    sessionStorage.removeItem(ADVANCED_FROM_SIMPLE_KEY);
+  } catch {
+    // In-memory is enough for this visit.
+  }
+}
 
 export function stageAdvancedFromSimple(draft: SimpleChallengeDraft) {
-  advancedFromSimple = simpleDraftToCreateValues(draft);
+  writeAdvancedHandoff(simpleDraftToCreateValues(draft));
 }
 
 export function peekAdvancedFromSimple(): CreateChallengeValues | null {
-  return advancedFromSimple;
+  if (advancedFromSimple) {
+    return advancedFromSimple;
+  }
+  try {
+    if (typeof sessionStorage === 'undefined') {
+      return null;
+    }
+    const raw = sessionStorage.getItem(ADVANCED_FROM_SIMPLE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as CreateChallengeValues;
+    if (parsed && typeof parsed === 'object') {
+      advancedFromSimple = parsed;
+      return parsed;
+    }
+  } catch {
+    // In-memory only.
+  }
+  return null;
+}
+
+export function clearAdvancedFromSimple() {
+  writeAdvancedHandoff(null);
 }
 
 export function stageSimpleFromAdvanced(values: CreateChallengeValues) {
