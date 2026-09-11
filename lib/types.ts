@@ -123,6 +123,7 @@ export type ProofType =
   | 'pre_selfie'
   | 'post_selfie'
   | 'hr_monitor'
+  | 'workout_card'
   | 'photo'
   | 'screenshot'
   | 'text_note'

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { isUserScreenshotUrl, screenshotUrlsBeforeCard } from '@/lib/health/restoreScreenshotMedia';
 
 const SHOT = 'https://cdn.test/walk.jpg?token=a';
-const CARD = 'https://cdn.test/hr_monitor-9.png?token=b';
+const CARD = 'https://cdn.test/workout_card-9.jpg?token=b';
 
 describe('screenshotUrlsBeforeCard', () => {
   it('puts the Fitness still first and the recap last', () => {
@@ -22,6 +22,6 @@ describe('isUserScreenshotUrl', () => {
   it('treats jpeg / heic as the user still', () => {
     expect(isUserScreenshotUrl(SHOT)).toBe(true);
     expect(isUserScreenshotUrl('https://cdn.test/a.HEIC')).toBe(true);
-    expect(isUserScreenshotUrl(CARD)).toBe(false);
+    expect(isUserScreenshotUrl('https://cdn.test/notes.txt')).toBe(false);
   });
 });

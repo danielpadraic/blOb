@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import {
+  isRecapCardUrl,
   isWorkoutCardUrl,
   pagerUrlsWithWorkoutCard,
-  WORKOUT_CARD_SLIDE,
   workoutCardForPost,
   workoutFromPostStats,
   workoutSlideForPost,
@@ -240,6 +240,16 @@ describe('matching a post’s media against the card the server named', () => {
     expect(isWorkoutCardUrl(null, CARD)).toBe(false);
     expect(isWorkoutCardUrl('', '')).toBe(false);
   });
+
+  it('detects a recap by card_url or workout_card- path, never a selfie', () => {
+    const pathCard = 'https://x.supabase.co/storage/v1/object/sign/p/workout_card-9.jpg?token=a';
+    const selfie = 'https://x.supabase.co/storage/v1/object/sign/p/pre_selfie-1.jpg?token=a';
+    expect(isRecapCardUrl(CARD, CARD)).toBe(true);
+    expect(isRecapCardUrl(`${CARD.split('?')[0]}?token=zzz`, CARD)).toBe(true);
+    expect(isRecapCardUrl(pathCard)).toBe(true);
+    expect(isRecapCardUrl(selfie, CARD)).toBe(false);
+    expect(isRecapCardUrl(selfie)).toBe(false);
+  });
 });
 
 describe('the workout slide a feed post carries', () => {
@@ -258,10 +268,8 @@ describe('the workout slide a feed post carries', () => {
     expect(slide?.checkinId).toBe('c-1');
   });
 
-  it('draws a virtual last slide when the check-in has numbers but no named card file', () => {
-    const slide = workoutSlideForPost({ stats: WALK_STATS, checkinId: 'c-1' });
-    expect(slide?.url).toBe(WORKOUT_CARD_SLIDE);
-    expect(slide?.card.distanceLine).toBe('6.24 mi');
+  it('does not invent a branded card when the check-in has numbers but no vendor JPEG', () => {
+    expect(workoutSlideForPost({ stats: WALK_STATS, checkinId: 'c-1' })).toBeNull();
   });
 
   it('names the HealthKit JPEG raster as the recap slide, not a second virtual card', () => {
@@ -291,12 +299,12 @@ describe('the workout slide a feed post carries', () => {
 });
 
 describe('pager order for a workout check-in', () => {
-  const CARD = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.png?token=abc';
+  const CARD = 'https://x.supabase.co/storage/v1/object/sign/p/workout_card-1.jpg?token=abc';
   const SHOT = 'https://x.supabase.co/storage/v1/object/sign/p/watch.jpg?token=abc';
   const SHOT2 = 'https://x.supabase.co/storage/v1/object/sign/p/hr.jpg?token=abc';
 
-  it('keeps user stills first and appends the recap last', () => {
-    expect(pagerUrlsWithWorkoutCard([SHOT, SHOT2], WALK_STATS)).toEqual([SHOT, SHOT2, WORKOUT_CARD_SLIDE]);
+  it('keeps user stills and does not invent a branded card for OCR numbers', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT, SHOT2], WALK_STATS)).toEqual([SHOT, SHOT2]);
   });
 
   it('does not invent a recap slide when HealthKit media is the named card', () => {
@@ -310,27 +318,32 @@ describe('pager order for a workout check-in', () => {
     ]);
   });
 
-  it('collapses two identical HealthKit cards to one slide', () => {
+  it('keeps an HR screenshot beside the named HealthKit card', () => {
     const first = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=a';
-    const clone = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-2.jpg?token=b';
-    expect(pagerUrlsWithWorkoutCard([first, clone], { ...WALK_STATS, card_url: first })).toEqual([
+    const shot = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-2.jpg?token=b';
+    expect(pagerUrlsWithWorkoutCard([first, shot], { ...WALK_STATS, card_url: first })).toEqual([
+      shot,
       first,
     ]);
   });
 
-  it('keeps a selfie beside one HealthKit recap', () => {
+  it('keeps a selfie beside the HealthKit recap JPEG', () => {
     const jpegCard = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=abc';
     expect(
       pagerUrlsWithWorkoutCard([SHOT, jpegCard], { ...WALK_STATS, card_url: jpegCard }),
-    ).toEqual([SHOT, WORKOUT_CARD_SLIDE]);
+    ).toEqual([SHOT, jpegCard]);
   });
 
-  it('keeps the Fitness screenshot and one recap when OCR has no named vendor card', () => {
-    expect(pagerUrlsWithWorkoutCard([SHOT], WALK_STATS)).toEqual([SHOT, WORKOUT_CARD_SLIDE]);
+  it('keeps the Fitness screenshot and does not invent a branded card for OCR', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT], WALK_STATS)).toEqual([SHOT]);
   });
 
-  it('hides a flattened recap PNG and draws the live recap last', () => {
-    expect(pagerUrlsWithWorkoutCard([SHOT, CARD], WALK_STATS)).toEqual([SHOT, WORKOUT_CARD_SLIDE]);
+  it('puts a workout_card- file last even when card_url is missing', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT, CARD], WALK_STATS)).toEqual([SHOT, CARD]);
+  });
+
+  it('appends a named vendor card that the media list dropped', () => {
+    expect(pagerUrlsWithWorkoutCard([SHOT], { ...WALK_STATS, card_url: CARD })).toEqual([SHOT, CARD]);
   });
 
   it('does not paint a recap over a selfie-only check-in', () => {

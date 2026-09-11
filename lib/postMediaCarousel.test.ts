@@ -171,23 +171,24 @@ describe('post media carousel', () => {
     expect(rubberPagerOffset(390 * 2 + 80, 390, 3)).toBeLessThan(390 * 2 + 80);
   });
 
-  it('puts user stills first and the recap last, same as Home', () => {
+  it('keeps user stills and does not invent a branded card for OCR numbers', () => {
     expect(
       mediaUrlsForPost({
         urls: ['https://cdn.test/watch.jpg', 'https://cdn.test/hr.jpg'],
         stats: { duration_sec: 2100, active_cal: 218 },
       }),
-    ).toEqual(['https://cdn.test/watch.jpg', 'https://cdn.test/hr.jpg', 'blob:workout-card']);
+    ).toEqual(['https://cdn.test/watch.jpg', 'https://cdn.test/hr.jpg']);
   });
 
-  it('shows one HealthKit recap on Home and Live from the same media_urls', () => {
+  it('shows the same selfie + HealthKit recap JPEG on Home and Live', () => {
     const card = 'https://cdn.test/hr_monitor-9.jpg';
+    const shot = 'https://cdn.test/pre.jpg';
     expect(
       mediaUrlsForPost({
-        urls: [card, 'https://cdn.test/hr_monitor-10.jpg'],
+        urls: [shot, card],
         stats: { duration_sec: 2100, active_cal: 218, card_url: card },
       }),
-    ).toEqual([card]);
+    ).toEqual([shot, card]);
   });
 
   it('sizes the Live tile from the workout card shape and seeds a width before layout', () => {

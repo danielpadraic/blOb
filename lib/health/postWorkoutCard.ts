@@ -5,38 +5,34 @@ import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { buildWorkoutProofCard, type WorkoutProofCardModel } from '@/lib/health/workoutProofCard';
 import type { HealthActivityType, HealthWorkout } from '@/services/health/types';
 
-/** Last-slide token for a recap drawn from stored numbers. Never a stored media URL. */
+/** Legacy in-app token. Never stored. Home / Live / lightbox do not invent this slide. */
 export const WORKOUT_CARD_SLIDE = 'blob:workout-card';
 
-/**
- * The workout card a posted check-in shows, drawn from what is stored rather than from the picture.
- *
- * The card used to be a flattened JPEG, which made the image the source of truth: a walk whose miles
- * were repaired in the database kept printing `0.00 mi`, because the numbers had already been baked
- * into pixels. Building the card at render time instead means the post shows what the row says, and
- * a fix to the data or the renderer reaches every card that was ever posted without redrawing files.
- *
- * Two stores can feed it, because they are not readable by the same people:
- *
- * - `posts.checkin_stats` rides on the post, so anyone who can see the post can see the numbers. It
- *   carries no clock and no GPS track.
- * - `proof_parts[slot].health` is the whole session summary, including the route, but
- *   `challenge_checkins` is readable only by participants of that challenge.
- *
- * So the snapshot is preferred and the post stats are the floor. A viewer outside the challenge gets
- * a card with real distance, time, heart rate and calories but no map and no wall-clock range — and
- * crucially not an invented one. Deriving the workout window from when the post was created would
- * print a time the workout did not happen at, which on a proof artifact is worse than printing none.
- */
+/** Storage path prefix for rasterized recap uploads (`user/challenge/workout_card-<stamp>.jpg`). */
+export const WORKOUT_CARD_PATH_PREFIX = 'workout_card-';
+
+const WORKOUT_CARD_PATH_RE = /\/workout_card-\d+\.(jpe?g|png|webp)$/i;
 
 /**
- * Whether this piece of a post's media is the generated workout card the server named.
+ * Recap JPEG vs a selfie / screenshot / extra.
  *
- * Compared without the query string: proof URLs are signed, and the same file re-signed carries a
- * different token, which would otherwise stop matching its own card.
+ * A URL is a recap when:
+ * 1. It matches `posts.checkin_stats.card_url` (query string ignored — signed URLs rotate), or
+ * 2. Its storage path uses the `workout_card-` prefix from workoutProofCard uploads, or
+ * 3. It is the leftover `blob:workout-card` token (never shown as a fake branded card).
+ *
+ * Pre / post selfies, HR screenshots, and extras fail all three. OCR / manual / honor never earn a
+ * `card_url` or a `workout_card-` file, so they stay photos.
  */
+
+/** Whether this piece of media is the leftover virtual token — not a stored file. */
 export function isWorkoutCardSlide(url?: string | null): boolean {
   return String(url ?? '').split('?')[0] === WORKOUT_CARD_SLIDE;
+}
+
+export function isWorkoutCardStoragePath(url?: string | null): boolean {
+  const path = String(url ?? '').split('?')[0];
+  return WORKOUT_CARD_PATH_RE.test(path);
 }
 
 export function isWorkoutCardUrl(url?: string | null, cardUrl?: string | null): boolean {
@@ -48,16 +44,23 @@ export function isWorkoutCardUrl(url?: string | null, cardUrl?: string | null): 
   return file.length > 0 && file === card;
 }
 
-/**
- * Rasterized recap files are PNG. Phone Fitness / vendor screenshots are JPEG or HEIC.
- * A JPEG named in card_url is the user still, not a card to paint over.
- */
-export function isGeneratedWorkoutCardFile(url?: string | null): boolean {
-  if (isWorkoutCardSlide(url)) {
+/** Recap JPEG (or leftover token). Selfies and screenshots return false. */
+export function isRecapCardUrl(url?: string | null, cardUrl?: string | null): boolean {
+  if (isWorkoutCardSlide(url) || isWorkoutCardStoragePath(url)) {
     return true;
   }
-  const path = String(url ?? '').split('?')[0].toLowerCase();
-  return path.endsWith('.png');
+  const named = String(cardUrl ?? '').trim();
+  if (!named || named.startsWith('health:')) {
+    return false;
+  }
+  return isWorkoutCardUrl(url, named);
+}
+
+/**
+ * @deprecated Use `isRecapCardUrl`. Kept so OCR skip still ignores a recap file, not every PNG.
+ */
+export function isGeneratedWorkoutCardFile(url?: string | null, cardUrl?: string | null): boolean {
+  return isRecapCardUrl(url, cardUrl);
 }
 
 /**
@@ -82,52 +85,38 @@ export function proofMediaStem(url?: string | null): string {
   return base.replace(/-\d+.*$/, '').replace(/\.[a-z0-9]+$/, '');
 }
 
-function isVendorRecapUrl(url: string, vendorCardUrl: string): boolean {
-  if (isWorkoutCardSlide(url) || isGeneratedWorkoutCardFile(url)) {
-    return true;
-  }
-  if (vendorCardUrl && isWorkoutCardUrl(url, vendorCardUrl)) {
-    return true;
-  }
-  if (vendorCardUrl) {
-    const cardStem = proofMediaStem(vendorCardUrl);
-    const urlStem = proofMediaStem(url);
-    return Boolean(cardStem) && cardStem === urlStem;
-  }
-  return false;
-}
-
 /**
- * User stills first, generated recap last. Never paints the recap over a screenshot URL.
+ * Required stills, then extras, then the recap JPEG if present. Same list on Home, Live, lightbox.
  *
- * A. HealthKit / Health Connect (`card_url` set): exactly one recap. The vendor file is often a
- *    JPEG (`hr_monitor-*.jpg`); do not treat it as a screenshot and append a second card.
- * B. OCR / user screenshot (`card_url` absent): stills stay, plus at most one recap.
- * C. Honor / selfie with no workout numbers: unchanged. No recap.
+ * Vendor HealthKit / Health Connect posts earn a card (`card_url` or `workout_card-` path).
+ * OCR / manual / selfie-only posts do not get a fake branded slide.
+ * Never replaces a selfie with the card. Never hides the JPEG behind `blob:workout-card`.
  */
 export function pagerUrlsWithWorkoutCard(
   urls: string[],
   stats?: CheckinProofStats | null,
 ): string[] {
-  const list = uniqueProofUrls(urls);
-  const hasCard = workoutFromPostStats(stats) != null;
-  if (!hasCard) {
-    return list.filter((url) => !isWorkoutCardSlide(url));
-  }
+  const list = uniqueProofUrls(urls).filter((url) => !isWorkoutCardSlide(url));
   const vendorCardUrl = namedVendorCardUrl(stats);
-  const stills = list.filter((url) => !isVendorRecapUrl(url, vendorCardUrl));
-  if (stills.length > 0) {
-    return uniqueProofUrls([...stills, WORKOUT_CARD_SLIDE]);
+  const stills: string[] = [];
+  const cards: string[] = [];
+  for (const url of list) {
+    if (isRecapCardUrl(url, vendorCardUrl)) {
+      cards.push(url);
+    } else {
+      stills.push(url);
+    }
   }
+  let recap = '';
   if (vendorCardUrl) {
-    const named = list.find((url) => isWorkoutCardUrl(url, vendorCardUrl));
-    return [named ?? vendorCardUrl];
+    recap = cards.find((url) => isWorkoutCardUrl(url, vendorCardUrl)) ?? vendorCardUrl;
+  } else if (cards[0]) {
+    recap = cards[0];
   }
-  const generated = list.find((url) => isGeneratedWorkoutCardFile(url) && !isWorkoutCardSlide(url));
-  if (generated) {
-    return [generated];
+  if (!recap) {
+    return stills;
   }
-  return uniqueProofUrls([...list.filter((url) => !isWorkoutCardSlide(url)), WORKOUT_CARD_SLIDE]);
+  return uniqueProofUrls([...stills, recap]);
 }
 
 /**
@@ -189,11 +178,7 @@ export function workoutFromPostStats(stats?: CheckinProofStats | null): HealthWo
 }
 
 /**
- * The workout slide a feed post carries: which of its media is the card, and the card to draw there.
- *
- * Named `card_url` is the HealthKit raster (often JPEG after upload). Screenshot check-ins have
- * numbers but no named card, so the recap draws on the virtual last slide instead of replacing a
- * user still.
+ * Named vendor JPEG only. OCR / numbers-only posts get no virtual slide — chips stay, no fake card.
  */
 export function workoutSlideForPost(input: {
   stats?: CheckinProofStats | null;
@@ -201,6 +186,10 @@ export function workoutSlideForPost(input: {
   checkinId?: string | null;
   timeZone?: string;
 }): PostWorkoutSlide | null {
+  const url = namedVendorCardUrl(input.stats);
+  if (!url) {
+    return null;
+  }
   const timeZone = input.timeZone ?? deviceTimeZone();
   const card = workoutCardForPost({
     stats: input.stats,
@@ -210,7 +199,6 @@ export function workoutSlideForPost(input: {
   if (!card) {
     return null;
   }
-  const url = namedVendorCardUrl(input.stats) || WORKOUT_CARD_SLIDE;
   return {
     url,
     card,
@@ -223,7 +211,7 @@ export function workoutSlideForPost(input: {
 }
 
 export type PostWorkoutSlide = {
-  /** The media this card replaces. */
+  /** The stored recap JPEG this model describes. The carousel shows that file, not this overlay. */
   url: string;
   card: WorkoutProofCardModel;
   activityType: HealthActivityType;

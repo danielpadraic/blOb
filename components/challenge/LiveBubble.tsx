@@ -21,7 +21,7 @@ import { useUpdateComment } from '@/hooks/useCommentEdit';
 import { isLiveComment } from '@/lib/commentEdit';
 import { checkinCardCaption } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
-import { isWorkoutCardSlide, isWorkoutCardUrl, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
+import { isWorkoutCardSlide, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import {
   formatLiveClock,
   isLiveCheckinPost,
@@ -110,7 +110,7 @@ export const LiveBubble = memo(function LiveBubble({
     uri,
     label: liveProofCaption(post, uri, checkin ? headline : caption),
     meta: time,
-    workout: workout && isWorkoutCardUrl(uri, workout.url) ? workout : null,
+    workout: workout && isWorkoutCardSlide(uri) ? workout : null,
   }));
   const alignEnd = mine && !system;
   const canSwipeReply = Boolean(onReply) && !removed && !editing;
@@ -587,7 +587,7 @@ function liveVisualUrls(post: PostWithMeta, isOwner: boolean): string[] {
     hidden: post.hidden_media_urls,
     isOwner,
     stats: post.checkin_stats,
-  }).filter((url) => !isWorkoutCardSlide(url));
+  });
   if (fromFields.length > 0) {
     return fromFields;
   }

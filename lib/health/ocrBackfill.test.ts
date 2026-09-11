@@ -43,11 +43,11 @@ describe('OCR backfill slot picker', () => {
     expect(isOcrBackfillSlot({ ...hr, healthWorkoutId: 'w1' })).toBe(false);
   });
 
-  it('does not send a rasterized recap PNG to the reader', () => {
+  it('does not send a rasterized recap JPEG to the reader', () => {
     expect(
       pickStillUrls({
-        url: 'https://x/hr_monitor-2.png',
-        urls: ['https://x/walk.jpg', 'https://x/hr_monitor-2.png'],
+        url: 'https://x/workout_card-2.jpg',
+        urls: ['https://x/walk.jpg', 'https://x/workout_card-2.jpg'],
       }),
     ).toEqual(['https://x/walk.jpg']);
   });

@@ -27,7 +27,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useMediaLightboxOptional, type LightboxItem, type WorkoutSlide } from '@/components/feed/MediaLightbox';
 import { AppText } from '@/components/ui/AppText';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
-import { isWorkoutCardUrl } from '@/lib/health/postWorkoutCard';
+import { isWorkoutCardSlide } from '@/lib/health/postWorkoutCard';
 import { lightboxOriginFromPath, type LightboxOrigin } from '@/lib/lightboxOrigin';
 import { workoutCardAccent, workoutCardFit } from '@/lib/health/workoutProofCard';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -311,7 +311,7 @@ export function PostMediaCarousel({
 
   const workoutSlide = useCallback(
     (uri: string): WorkoutSlide | null =>
-      workout && isWorkoutCardUrl(uri, workout.url) ? workout : null,
+      workout && isWorkoutCardSlide(uri) ? workout : null,
     [workout],
   );
 

@@ -445,15 +445,20 @@ describe('check-in composer save', () => {
         mimeType: 'image/png',
         health,
         healthWorkoutId: 'hw-1',
+        cardVersion: 3,
       },
-      async () => 'u1/c1/hr_monitor-1.jpg',
-      async () => 'https://example.com/hr_monitor-1.jpg',
+      async (input) => {
+        expect(input.proofType).toBe('workout_card');
+        return 'u1/c1/workout_card-1.jpg';
+      },
+      async () => 'https://example.com/workout_card-1.jpg',
     );
     const call = rpc.mock.calls[0]?.[1] as Record<string, unknown>;
     const part = call.p_proof_part as Record<string, unknown>;
     // The card is a real image on the post AND the Health receipt for the slot.
-    expect(part.url).toBe('https://example.com/hr_monitor-1.jpg');
-    expect(part.urls).toEqual(['https://example.com/hr_monitor-1.jpg']);
+    expect(part.url).toBe('https://example.com/workout_card-1.jpg');
+    expect(part.urls).toEqual(['https://example.com/workout_card-1.jpg']);
+    expect(part.cardVersion).toBe(3);
     expect(part.healthWorkoutId).toBe('hw-1');
     expect(part.health).toEqual(health);
     expect(call.p_health_workout_id).toBe('hw-1');

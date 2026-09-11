@@ -121,7 +121,7 @@ export async function putRepairedCard(
     uri: fileUri,
     userId,
     challengeId: item.challengeId,
-    proofType: 'hr_monitor',
+    proofType: 'workout_card',
     mimeType: 'image/png',
   });
   const url = await challengeProofUrl(path);

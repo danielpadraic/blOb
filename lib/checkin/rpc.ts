@@ -225,7 +225,7 @@ async function proofPartFor(
     userId,
     upload,
     resolveUrl,
-    captureTypeForMethod(proof.method),
+    input.cardVersion != null ? 'workout_card' : captureTypeForMethod(proof.method),
   );
   const healthWorkoutId = input.healthWorkoutId?.trim() || null;
   const vendor = isVendorHealthSlot({

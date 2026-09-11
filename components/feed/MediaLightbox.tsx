@@ -53,13 +53,8 @@ export type LightboxItem = {
   /** Small line above the caption: time, or slot name. */
   meta?: string;
   /**
-   * A workout proof draws its card here rather than showing the flattened file at `uri`.
-   *
-   * The file is a JPEG of the same card, so it can only ever be as right as it was on the day it was
-   * rasterized: cards drawn before the renderer was fixed are a quarter-size thumb in the corner of
-   * an empty frame, and cards drawn before the miles were repaired print "0.00 mi". Drawing the card
-   * from the stored numbers puts the current card on every post, old ones included. The file stays
-   * the stored proof artifact and the fallback when there are no numbers to draw from.
+   * Leftover virtual-slide overlay only. A stored recap JPEG at `uri` is shown as the image —
+   * never replaced by a live-drawn card.
    */
   workout?: WorkoutSlide | null;
 };
