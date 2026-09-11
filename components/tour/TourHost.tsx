@@ -11,6 +11,7 @@ import { markHomeTourCompleted } from '@/lib/homeTour';
 import { completeTutorial } from '@/lib/legal';
 import {
   homeTourBody,
+  homeTourChrome,
   homeTourTarget,
   nextHomeTourIndex,
   shouldSkipHomeStep,
@@ -37,6 +38,8 @@ export function TourHost({ onFinished }: TourHostProps) {
   const setTargetId = tour.setTargetId;
   const scrollHomeToTop = tour.scrollHomeToTop;
   const stop = tour.stop;
+  const setLogoMenu = tour.setLogoMenu;
+  const setPlusSheet = tour.setPlusSheet;
 
   useEffect(() => {
     setIndex(0);
@@ -53,16 +56,26 @@ export function TourHost({ onFinished }: TourHostProps) {
   useEffect(() => {
     if (!tour.active || !step) {
       setTargetId(null);
+      setLogoMenu(false);
+      setPlusSheet(null);
       return;
     }
+    const chrome = homeTourChrome(step.id);
+    setLogoMenu(chrome.logoMenu);
+    setPlusSheet(chrome.plusSheet);
     setTargetId(target);
     if (target === 'tour-waves' || target === 'tour-rounds') {
       scrollHomeToTop();
     }
-    const wait = target === 'tour-waves' || target === 'tour-rounds' ? 380 : 80;
+    const wait =
+      chrome.logoMenu || chrome.plusSheet || target === 'tour-waves' || target === 'tour-rounds'
+        ? 380
+        : 80;
     const handle = setTimeout(() => bump(), wait);
-    return () => clearTimeout(handle);
-  }, [bump, scrollHomeToTop, setTargetId, step, target, tour.active]);
+    return () => {
+      clearTimeout(handle);
+    };
+  }, [bump, scrollHomeToTop, setLogoMenu, setPlusSheet, setTargetId, step, target, tour.active]);
 
   useEffect(() => {
     if (!tour.active || !target || rawRect) {
@@ -105,6 +118,8 @@ export function TourHost({ onFinished }: TourHostProps) {
   }, [hasRect, index, rawRect, step, tour.active, waited]);
 
   const finish = useCallback(async () => {
+    setLogoMenu(false);
+    setPlusSheet(null);
     markHomeTourCompleted(user?.id);
     stop();
     try {
@@ -113,7 +128,7 @@ export function TourHost({ onFinished }: TourHostProps) {
       // Session flag already set; do not restart this session or after background.
     }
     onFinished();
-  }, [onFinished, stop, user?.id]);
+  }, [onFinished, setLogoMenu, setPlusSheet, stop, user?.id]);
 
   if (!tour.active || !step) {
     return null;

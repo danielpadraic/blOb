@@ -146,6 +146,7 @@ function TabLayoutInner() {
   const wallet = useWalletOptional();
   const { profile, refetch } = useMyProfile();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [plusPanel, setPlusPanel] = useState<'root' | 'post'>('root');
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
@@ -163,6 +164,7 @@ function TabLayoutInner() {
     setAlertsOpen(false);
     setSearchOpen(false);
     setSheetOpen(false);
+    setPlusPanel('root');
     setLogoMenuOpen(false);
     setMessagesOpen(false);
     closeSocialSheets();
@@ -173,6 +175,26 @@ function TabLayoutInner() {
   const closeAlerts = useCallback(() => {
     setAlertsOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (!tour?.active) {
+      setLogoMenuOpen(false);
+      setSheetOpen(false);
+      setPlusPanel('root');
+      return;
+    }
+    setLogoMenuOpen(tour.logoMenu);
+    if (tour.plusSheet) {
+      setAlertsOpen(false);
+      setSearchOpen(false);
+      setMessagesOpen(false);
+      setSheetOpen(true);
+      setPlusPanel(tour.plusSheet);
+    } else {
+      setSheetOpen(false);
+      setPlusPanel('root');
+    }
+  }, [tour?.active, tour?.logoMenu, tour?.plusSheet]);
 
   function toggleAlerts() {
     if (alertsOpen) {
@@ -207,6 +229,7 @@ function TabLayoutInner() {
   function toggleSheet() {
     if (sheetOpen) {
       setSheetOpen(false);
+      setPlusPanel('root');
       return;
     }
     setAlertsOpen(false);
@@ -472,8 +495,13 @@ function TabLayoutInner() {
         style={styles.sheetLayer}>
         <PlusActionBar
           visible={sheetOpen}
+          panel={plusPanel}
+          onPanelChange={setPlusPanel}
           loggable={loggable.data}
-          onClose={() => setSheetOpen(false)}
+          onClose={() => {
+            setSheetOpen(false);
+            setPlusPanel('root');
+          }}
           onAction={onAction}
         />
       </View>

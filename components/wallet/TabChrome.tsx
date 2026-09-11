@@ -106,12 +106,12 @@ type TabChromeHeaderProps = {
 const HEADER_WORDMARK_HEIGHT = 40;
 const HEADER_WORDMARK_WIDTH = Math.round(HEADER_WORDMARK_HEIGHT / 0.55);
 
-const LOGO_MENU: { id: LogoMenuAction; label: string }[] = [
-  { id: 'create', label: 'Create a Challenge' },
-  { id: 'createCircle', label: 'Create a Circle' },
-  { id: 'callout', label: 'Call someone out' },
-  { id: 'join', label: 'Join a Challenge' },
-  { id: 'coins', label: 'Send Coins or $' },
+const LOGO_MENU: { id: LogoMenuAction; label: string; tourId: string }[] = [
+  { id: 'create', label: 'Create a Challenge', tourId: 'tour-menu-challenge' },
+  { id: 'createCircle', label: 'Create a Circle', tourId: 'tour-menu-circle' },
+  { id: 'callout', label: 'Call someone out', tourId: 'tour-menu-callout' },
+  { id: 'join', label: 'Join a Challenge', tourId: 'tour-menu-join' },
+  { id: 'coins', label: 'Send Coins or $', tourId: 'tour-menu-coins' },
 ];
 
 export function TabChromeHeader({
@@ -191,36 +191,35 @@ export function TabChromeHeader({
               </Pressable>
             </TourAnchor>
             {logoMenuOpen ? (
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 44,
-                  left: 0,
-                  width: 228,
-                  backgroundColor: THEME.surface,
-                  borderRadius: THEME.radius,
-                  borderWidth: 1,
-                  borderColor: THEME.border,
-                  overflow: 'hidden',
-                  zIndex: 3,
-                  ...themeShadow('card'),
-                }}>
-                {LOGO_MENU.map((row, index) => (
-                  <Pressable
-                    key={row.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={row.label}
-                    onPress={() => onLogoAction?.(row.id)}
-                    className="justify-center px-4"
-                    style={{
-                      minHeight: 44,
-                      borderTopWidth: index === 0 ? 0 : 1,
-                      borderTopColor: THEME.border,
-                    }}>
-                    <AppText className="text-[14px] font-semibold text-charcoal">{row.label}</AppText>
-                  </Pressable>
-                ))}
-              </View>
+              <TourAnchor id="tour-menu-list" style={{ position: 'absolute', top: 44, left: 0, zIndex: 3 }}>
+                <View
+                  style={{
+                    width: 228,
+                    backgroundColor: THEME.surface,
+                    borderRadius: THEME.radius,
+                    borderWidth: 1,
+                    borderColor: THEME.border,
+                    overflow: 'hidden',
+                    ...themeShadow('card'),
+                  }}>
+                  {LOGO_MENU.map((row, index) => (
+                    <TourAnchor key={row.id} id={row.tourId}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={row.label}
+                        onPress={() => onLogoAction?.(row.id)}
+                        className="justify-center px-4"
+                        style={{
+                          minHeight: 44,
+                          borderTopWidth: index === 0 ? 0 : 1,
+                          borderTopColor: THEME.border,
+                        }}>
+                        <AppText className="text-[14px] font-semibold text-charcoal">{row.label}</AppText>
+                      </Pressable>
+                    </TourAnchor>
+                  ))}
+                </View>
+              </TourAnchor>
             ) : null}
           </View>
 

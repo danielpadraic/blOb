@@ -13,6 +13,7 @@ import type { ContextualTourId, ContextualTourStep } from '@/lib/contextualTour'
 import type { CreateTourTrack } from '@/lib/createTour';
 import { scrollDeltaToCenter, scrollViewToY } from '@/lib/tourScroll';
 import { scrollToOffsetSafe, scrollToSafe } from '@/lib/tourScrollSafe';
+import type { TourPlusSheet } from '@/lib/tour';
 import type { SimpleCurrency } from '@/lib/simpleChallenge';
 
 export type TourRect = LayoutRectangle;
@@ -27,6 +28,10 @@ type TourContextValue = {
   createTrack: CreateTourTrack | null;
   spotlight: boolean;
   contextual: { id: ContextualTourId; steps: ContextualTourStep[]; userId: string } | null;
+  logoMenu: boolean;
+  plusSheet: TourPlusSheet;
+  setLogoMenu: (open: boolean) => void;
+  setPlusSheet: (panel: TourPlusSheet) => void;
   start: () => void;
   stop: () => void;
   startCreate: (track: CreateTourTrack) => void;
@@ -63,6 +68,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [createRunId, setCreateRunId] = useState(0);
   const [createTrack, setCreateTrack] = useState<CreateTourTrack | null>(null);
   const [createCurrency, setCreateCurrency] = useState<SimpleCurrency>('coins');
+  const [logoMenu, setLogoMenu] = useState(false);
+  const [plusSheet, setPlusSheet] = useState<TourPlusSheet>(null);
   const [spotlight, setSpotlight] = useState(false);
   const [contextual, setContextual] = useState<{
     id: ContextualTourId;
@@ -148,6 +155,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setSpotlight(false);
     setCreateActive(false);
     setCreateTrack(null);
+    setLogoMenu(false);
+    setPlusSheet(null);
     setActive(true);
     setRunId((current) => current + 1);
     setEpoch((current) => current + 1);
@@ -156,6 +165,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => {
     setActive(false);
     setTargetId(null);
+    setLogoMenu(false);
+    setPlusSheet(null);
   }, []);
 
   const startCreate = useCallback((track: CreateTourTrack) => {
@@ -211,6 +222,10 @@ export function TourProvider({ children }: { children: ReactNode }) {
       createTrack,
       spotlight,
       contextual,
+      logoMenu,
+      plusSheet,
+      setLogoMenu,
+      setPlusSheet,
       start,
       stop,
       startCreate,
@@ -242,6 +257,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
       createTrack,
       contextual,
       epoch,
+      logoMenu,
+      plusSheet,
       requestContextual,
       clearContextual,
       setSpotlight,
