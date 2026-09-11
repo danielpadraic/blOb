@@ -70,6 +70,7 @@ type ProofUploaderProps = {
     meta?: { fromLibrary?: boolean; blob?: Blob | null },
   ) => void;
   onCancel?: () => void;
+  onUnavailable?: () => void;
   onRequestOpen?: () => void;
   title?: string | null;
   instruction?: string | null;
@@ -85,6 +86,7 @@ export function ProofUploader({
   health,
   onPicked,
   onCancel,
+  onUnavailable,
   onRequestOpen,
   title = null,
   instruction = null,
@@ -224,7 +226,9 @@ export function ProofUploader({
           onOpenGallery={() => void openLibrary()}
           onCancel={closeCamera}
           onUnavailable={() => {
-            // Check-in Retry remounts this camera. Do not cache “unavailable” for the session.
+            setOpen(false);
+            setWebFallback(true);
+            onUnavailable?.();
           }}
           onUseWorkout={healthChip ? () => setHealthOpen(true) : undefined}
           onStartWatch={

@@ -113,6 +113,41 @@ export function calloutTaskOk(value: string | null | undefined): boolean {
   return calloutTask(value).length >= 3;
 }
 
+/** Photo (or the default sentence) is a sendable proof. Empty name is not. */
+export function isCalloutProofReady(proofs?: ChallengeProof[] | null): boolean {
+  return calloutProofsForCreate(proofs).some((proof) => String(proof.name ?? '').trim().length > 0);
+}
+
+/** One line under a grey Send. Null means Send can go dark. */
+export function calloutSendWhy(input: {
+  opponent?: boolean;
+  amountIssue?: string | null;
+  amount?: number;
+  deadline?: boolean;
+  proofOk?: boolean;
+  capBlocked?: boolean;
+}): string | null {
+  if (!input.opponent) {
+    return 'Pick who you’re calling out.';
+  }
+  if (input.amountIssue) {
+    return input.amountIssue;
+  }
+  if (!(Number(input.amount) > 0)) {
+    return 'Set a stake.';
+  }
+  if (input.deadline === false) {
+    return 'Pick a duration.';
+  }
+  if (input.proofOk === false) {
+    return 'Add a proof — Photo is fine.';
+  }
+  if (input.capBlocked) {
+    return CALLOUT_PENDING_CAP_COPY;
+  }
+  return null;
+}
+
 export function asCallout(row: Callout & { title?: string | null }): Callout {
   const status = String(row.status ?? 'pending');
   return {

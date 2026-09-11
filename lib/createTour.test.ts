@@ -9,21 +9,14 @@ function joinedCopy(steps: typeof SIMPLE_CREATE_TOUR) {
 }
 
 describe('create tours', () => {
-  it('starts Simple on What and puts money last', () => {
+  it('caps Simple at four cards that skip the title field and footer', () => {
     const ids = SIMPLE_CREATE_TOUR.map((step) => step.id);
-    expect(ids[0]).toBe('simple-title');
-    expect(ids.slice(-3)).toEqual(['simple-currency', 'simple-buyin', 'simple-advanced']);
-    expect(SIMPLE_CREATE_TOUR[0]?.title).toBe('What');
-    expect(SIMPLE_CREATE_TOUR.find((step) => step.id === 'simple-buyin')).toMatchObject({
-      title: 'Amount',
-      body: 'Coins: each person pays this to join.',
-      titleCash: 'Prize',
-      bodyCash: 'You fund this prize. Participants do not buy in.',
-    });
-    expect(ids[0]).not.toBe('simple-buyin');
+    expect(ids).toEqual(['simple-type', 'simple-duration', 'simple-proof', 'simple-visibility']);
+    expect(ids).not.toContain('simple-title');
+    expect(ids).not.toContain('simple-advanced');
+    expect(SIMPLE_CREATE_TOUR).toHaveLength(4);
     expect(joinedCopy(SIMPLE_CREATE_TOUR)).not.toMatch(/Bucks/i);
     expect(joinedCopy(SIMPLE_CREATE_TOUR)).not.toMatch(/player-pool/i);
-    expect(joinedCopy(SIMPLE_CREATE_TOUR)).not.toMatch(/each task has its own cadence/i);
     expect(createTourSteps('simple')).toBe(SIMPLE_CREATE_TOUR);
   });
 

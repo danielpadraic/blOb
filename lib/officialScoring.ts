@@ -1,5 +1,5 @@
 import { dateStampInZone, officialWindowsFor } from '@/lib/officialDays';
-import { isOfficialAccount } from '@/lib/official';
+import { isOfficialAccount, isOfficialChallenge } from '@/lib/official';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { challengeClockTz } from '@/lib/checkinPeriod';
 import {
@@ -33,12 +33,29 @@ export function canEditOfficialScoring(input: {
   return isOfficialAccount(input.profile);
 }
 
+export function canSeeOfficialOperatorChrome(input: {
+  challenge?: Pick<Challenge, 'created_by' | 'status' | 'is_official'> | null;
+  profile?: Pick<Profile, 'id' | 'is_official' | 'is_admin' | 'username'> | null;
+}): boolean {
+  if (isOfficialAccount(input.profile)) {
+    return true;
+  }
+  return isOfficialChallenge(input.challenge);
+}
+
+/** Official tools / Open-Live-Settling-Settled chrome. Never a peer host of a user challenge. */
 export function canOpenOfficialTools(input: {
   challenge?: Pick<Challenge, 'created_by' | 'status' | 'is_official'> | null;
   viewerId?: string | null;
   profile?: Pick<Profile, 'id' | 'is_official' | 'is_admin' | 'username'> | null;
 }): boolean {
-  return canEditOfficialScoring(input);
+  if (!input.challenge || !input.viewerId) {
+    return false;
+  }
+  if (isOfficialAccount(input.profile)) {
+    return true;
+  }
+  return false;
 }
 
 export function isOfficialOrCorporateDetails(

@@ -1,5 +1,6 @@
 import { LEGAL_PRIVACY_VERSION, LEGAL_TOS_VERSION, SKILL_ATTESTATION } from '@/copy/legalDocs';
 import { clearHomeLivePillsTour } from '@/lib/contextualTour';
+import { markCreateTourDismissed } from '@/lib/createTour';
 import { clearHomeTourCompleted, markHomeTourCompleted } from '@/lib/homeTour';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
@@ -96,6 +97,7 @@ export async function completeTutorial(): Promise<void> {
   const { data: sessionData } = await supabase.auth.getUser();
   const userId = sessionData.user?.id;
   markHomeTourCompleted(userId);
+  markCreateTourDismissed(userId);
   patchTutorialCompleted(new Date().toISOString());
   const { error } = await supabase.rpc('complete_tutorial');
   if (error) {
@@ -115,6 +117,10 @@ export async function replayTutorial(): Promise<void> {
 }
 
 export async function setCreateTourOptOut(optOut: boolean): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getUser();
+  if (optOut) {
+    markCreateTourDismissed(sessionData.user?.id);
+  }
   const { error } = await supabase.rpc('set_create_tour_opt_out', { p_opt_out: optOut });
   if (error) {
     throw new Error(getErrorMessage(error));

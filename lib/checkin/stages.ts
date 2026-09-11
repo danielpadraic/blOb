@@ -78,6 +78,8 @@ export function shouldAutoOpenCheckinCamera(input: {
   preferHealth: boolean;
   /** A written note is required too, so the slots must be readable before a camera covers them. */
   needsWrittenProof?: boolean;
+  /** getUserMedia / permission already failed — stay on the composer. */
+  cameraFailed?: boolean;
 }): boolean {
   return (
     !input.skippedAuto &&
@@ -85,6 +87,7 @@ export function shouldAutoOpenCheckinCamera(input: {
     !input.hasExistingFrames &&
     input.nextPhotoEmpty &&
     !input.preferHealth &&
-    !input.needsWrittenProof
+    !input.needsWrittenProof &&
+    !input.cameraFailed
   );
 }

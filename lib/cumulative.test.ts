@@ -14,6 +14,7 @@ describe('Cumulative scoring', () => {
   it('round-trips Simple Cumulative target, window, and metric name', () => {
     const draft = defaultSimpleDraft();
     draft.scoring = 'cumulative';
+    draft.payout = 'winner_take_all';
     draft.metrics = [{ id: 'm1', target: 100, name: 'miles', unit: 'mi' }];
     draft.win_window = 'challenge';
     draft.cumulative_window = 'challenge';
@@ -25,7 +26,7 @@ describe('Cumulative scoring', () => {
     expect(Number(values.cumulative_target)).toBe(100);
     expect(values.win_window).toBe('challenge');
     expect(values.metrics?.[0]).toMatchObject({ target: 100, name: 'miles', unit: 'mi' });
-    expect(values.payout_mode).toBe('even_split_remaining');
+    expect(values.payout_mode).toBe('winner_take_all');
   });
 
   it('reads the saved meter target, then the title if that column is 0', () => {

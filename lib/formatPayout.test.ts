@@ -35,22 +35,26 @@ describe('format × payout pairing', () => {
     });
   });
 
-  it('defaults Cumulative to anyone-who-hits and allows Top # / Top %', () => {
+  it('defaults Cumulative to winner take all and allows Top # / Top % / Scaled', () => {
     expect(formatFamilyOf({ challenge_type: 'cumulative' })).toBe('cumulative');
-    expect(defaultPayoutIdForFamily('cumulative')).toBe('even_split_remaining');
+    expect(defaultPayoutIdForFamily('cumulative')).toBe('winner_take_all');
     expect(payoutOptionsForFamily('cumulative').map((item) => item.label)).toEqual([
-      'Anyone who hits the goal',
+      'Winner take all',
       'Top #',
       'Top %',
+      'Scaled among those places',
+      'Anyone who hits the goal',
     ]);
     expect(payoutOptionsForFamily('cumulative').map((item) => item.id)).toEqual([
-      'even_split_remaining',
+      'winner_take_all',
       'top_count',
       'top_percent',
+      'scaled',
+      'even_split_remaining',
     ]);
     expect(defaultPayoutPairForFamily('cumulative')).toMatchObject({
-      prize_structure: 'equal_split',
-      payout_mode: 'even_split_remaining',
+      prize_structure: 'winner_take_all',
+      payout_mode: 'winner_take_all',
     });
     expect(
       payoutControlFromPair('cumulative', {
@@ -83,7 +87,7 @@ describe('format × payout pairing', () => {
     ).toBe(false);
   });
 
-  it('rejects consistency + top places, points + even split, and cumulative + last standing', () => {
+  it('rejects consistency + top places and points + even split; Cumulative may use WTA', () => {
     expect(
       isIllegalFormatPayoutPair({
         format: 'consistency',
@@ -104,7 +108,7 @@ describe('format × payout pairing', () => {
         prize_structure: 'winner_take_all',
         payout_mode: 'winner_take_all',
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isIllegalFormatPayoutPair({
         format: 'cumulative',

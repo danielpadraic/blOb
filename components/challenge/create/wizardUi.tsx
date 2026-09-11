@@ -456,6 +456,7 @@ export function CreateActionsFooter({
   onNext,
   nextTitle,
   nextLoading = false,
+  nextDisabled = false,
   savePending = false,
   showSave = true,
   draftFlash = false,
@@ -465,6 +466,7 @@ export function CreateActionsFooter({
   onNext: () => void;
   nextTitle: string;
   nextLoading?: boolean;
+  nextDisabled?: boolean;
   savePending?: boolean;
   showSave?: boolean;
   draftFlash?: boolean;
@@ -497,7 +499,13 @@ export function CreateActionsFooter({
               <Button title="Back" variant="outline" onPress={onBack} style={FOOTER_BTN} />
             </View>
             <View className="flex-1">
-              <Button title={nextTitle} loading={nextLoading} onPress={onNext} style={FOOTER_BTN} />
+              <Button
+                title={nextTitle}
+                loading={nextLoading}
+                disabled={nextDisabled}
+                onPress={onNext}
+                style={FOOTER_BTN}
+              />
             </View>
           </View>
         </>
@@ -508,7 +516,13 @@ export function CreateActionsFooter({
           </View>
           {showSave ? <View className="flex-1">{saveButton}</View> : null}
           <View className="flex-1">
-            <Button title={nextTitle} loading={nextLoading} onPress={onNext} style={FOOTER_BTN} />
+            <Button
+              title={nextTitle}
+              loading={nextLoading}
+              disabled={nextDisabled}
+              onPress={onNext}
+              style={FOOTER_BTN}
+            />
           </View>
         </View>
       )}

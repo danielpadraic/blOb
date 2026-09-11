@@ -58,6 +58,22 @@ export function wizardStepIndex(key: CreateWizardStepKey): number {
   return CREATE_WIZARD_STEPS.findIndex((item) => item.key === key);
 }
 
+/** Simple → Advanced. Step 1 (Lane) when fields mapped. Never a blank Goal step 3. */
+export function firstIncompleteAdvancedStep(
+  values: Pick<CreateChallengeValues, 'title' | 'task' | 'starts_at' | 'challenge_type'>,
+): number {
+  if (!String(values.title ?? '').trim() || !String(values.task ?? '').trim()) {
+    return wizardStepIndex('goal');
+  }
+  if (!values.starts_at) {
+    return wizardStepIndex('start');
+  }
+  if (!values.challenge_type) {
+    return wizardStepIndex('type');
+  }
+  return wizardStepIndex('lane');
+}
+
 export const CREATE_STEP_FIELDS: Record<number, readonly (keyof CreateChallengeValues)[]> = {
   0: ['challenge_lane'],
   1: [],

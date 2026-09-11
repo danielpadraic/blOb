@@ -175,6 +175,14 @@ export function multiCheckinHref(
   return (parts.length ? `${MULTI_CHECKIN_HREF}?${parts.join('&')}` : MULTI_CHECKIN_HREF) as Href;
 }
 
+/** Picker / Plus row. Submit when the period is still open. Overview when that day is already stamped. */
+export function checkinPickerHref(
+  id: string,
+  completeForPeriod?: boolean,
+): Href {
+  return completeForPeriod ? challengeHref(id) : checkinSubmitHref(id);
+}
+
 /** Check In / Begin / Continue only. Literal path — object `{ pathname, params }` breaks Safari. Never `/capture`. */
 export function checkinSubmitHref(
   id: string,

@@ -1189,7 +1189,7 @@ export function SimpleCreateForm() {
         backgroundColor: THEME.surface,
         borderTopWidth: 1,
         borderTopColor: THEME.border,
-        paddingBottom: createStickyFooterPad(keyboardOpen, tabBarLift(insets.bottom, 'sticky') + 8),
+        paddingBottom: createStickyFooterPad(keyboardOpen, tabBarLift(insets.bottom, 'sticky')),
       }}>
       <CreateActionsFooter
         onBack={view === 'review' ? () => setView('form') : closeSimple}

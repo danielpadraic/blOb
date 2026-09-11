@@ -30,6 +30,8 @@ import {
   CALLOUT_EXPIRED_COPY,
   CALLOUT_PENDING_CAP_COPY,
   calloutCreateBlocked,
+  calloutSendWhy,
+  isCalloutProofReady,
   calloutRematchHref,
   isCalloutInviteExpired,
   outgoingPendingCallouts,
@@ -37,7 +39,7 @@ import {
   selectCalloutObserverIds,
   selectCalloutOpponentIds,
 } from '@/lib/callouts';
-import { CALLOUT_PROOF_CAP } from '@/lib/challengeProofs';
+import { CALLOUT_PROOF_CAP, defaultChallengeProofs } from '@/lib/challengeProofs';
 import { THEME } from '@/lib/theme';
 import type { Callout, PublicProfile } from '@/lib/types';
 
@@ -50,6 +52,29 @@ function person(id: string, username: string, display_name = ''): PublicProfile 
     bio: null,
   } as PublicProfile;
 }
+
+describe('callout Send gate', () => {
+  it('treats Photo / default proof as sendable and names the missing field', () => {
+    expect(isCalloutProofReady(defaultChallengeProofs())).toBe(true);
+    expect(isCalloutProofReady([{ id: 'p1', name: 'Photo', method: 'photo' }])).toBe(true);
+    expect(
+      calloutSendWhy({
+        opponent: true,
+        amount: 50,
+        deadline: true,
+        proofOk: true,
+      }),
+    ).toBeNull();
+    expect(
+      calloutSendWhy({
+        opponent: false,
+        amount: 50,
+        deadline: true,
+        proofOk: true,
+      }),
+    ).toBe('Pick who you’re calling out.');
+  });
+});
 
 describe('calloutTitle', () => {
   it('always shows the Callout: prefix and does not double it', () => {

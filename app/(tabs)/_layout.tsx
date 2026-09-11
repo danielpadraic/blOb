@@ -38,7 +38,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
-import { clearLastOpenChallenge, goHome, pushCheckinSubmit } from '@/lib/challengeNav';
+import { clearLastOpenChallenge, goHome, pushCheckinPickerRow } from '@/lib/challengeNav';
 import {
   CIRCLES_CREATE_HREF,
   isWatchSurfacePath,
@@ -336,19 +336,15 @@ function TabLayoutInner() {
       return;
     }
     if (id === 'log') {
-      if (challenge?.id) {
-        closeOverlays();
-        pushCheckinSubmit(router, challenge.id, 'plus-checkin', undefined, pathname);
-        return;
-      }
       const list = loggable.data ?? [];
-      if (list.length >= 2) {
+      if (!challenge?.id && list.length >= 2) {
         go(MULTI_CHECKIN_HREF);
         return;
       }
-      if (list.length === 1 && list[0]?.id) {
+      const picked = challenge ?? (list.length === 1 ? list[0] : null);
+      if (picked?.id) {
         closeOverlays();
-        pushCheckinSubmit(router, list[0].id, 'plus-checkin', undefined, pathname);
+        pushCheckinPickerRow(router, picked, 'plus-checkin', undefined, pathname);
         return;
       }
       // Nothing loggable explains itself on the hub. Never a silent close, never the Wave camera.

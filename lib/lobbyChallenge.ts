@@ -404,10 +404,25 @@ function fillNeededMin(challenge: ScheduleChallenge): number {
   return min;
 }
 
+function startGateAlreadyLive(challenge: ScheduleChallenge): boolean {
+  const status = String(challenge.status ?? '');
+  return (
+    status === 'live' ||
+    status === 'in_progress' ||
+    status === 'judging' ||
+    status === 'settled' ||
+    status === 'cancelled' ||
+    status === 'cancelled_underfilled'
+  );
+}
+
 export function fillGatePair(challenge: ScheduleChallenge): { count: number; min: number } | null {
+  if (startGateAlreadyLive(challenge)) {
+    return null;
+  }
   const count = Math.max(Number(challenge.participant_count) || 0, 0);
   const min = fillNeededMin(challenge);
-  if (min <= 0) {
+  if (min <= 0 || count >= min) {
     return null;
   }
   return { count, min };
@@ -415,14 +430,10 @@ export function fillGatePair(challenge: ScheduleChallenge): { count: number; min
 
 export function fillGateLabel(challenge: ScheduleChallenge): string | null {
   const pair = fillGatePair(challenge);
-  if (!pair || pair.count >= pair.min) {
+  if (!pair) {
     return null;
   }
-  const { count, min } = pair;
-  if (min - count === 1) {
-    return '1 more needed';
-  }
-  return `${count}/${min} needed`;
+  return `${pair.count}/${pair.min} to start`;
 }
 
 export function automationChip(

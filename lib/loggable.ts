@@ -203,3 +203,34 @@ export function isLoggable(
 
   return true;
 }
+
+/**
+ * + → Check In picker row. Live joined challenges stay listed after today’s stamp
+ * so two rooms never collapse to a guessed 30-Day.
+ */
+export function isCheckinPickerRow(
+  challenge: Parameters<typeof isLoggable>[0],
+  user: LoggableUser,
+  opts?: Omit<LoggableOptions, 'submittedThisPeriod' | 'loggedThisPeriod' | 'dueTasksOpen'>,
+): boolean {
+  return isLoggable(challenge, user, {
+    ...opts,
+    submittedThisPeriod: false,
+    loggedThisPeriod: false,
+    dueTasksOpen: true,
+  });
+}
+
+export function checkinPeriodComplete(
+  challenge: Parameters<typeof usesPeriodCheckinGate>[0],
+  opts?: { submittedThisPeriod?: boolean; loggedThisPeriod?: boolean; checkinPhase?: string | null },
+): boolean {
+  if (!usesPeriodCheckinGate(challenge)) {
+    return false;
+  }
+  return Boolean(
+    opts?.submittedThisPeriod ||
+      opts?.loggedThisPeriod ||
+      opts?.checkinPhase === 'submitted',
+  );
+}

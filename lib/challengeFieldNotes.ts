@@ -76,7 +76,14 @@ export function entryFieldNote(challenge: { buy_in_amount?: number | null }): Fi
   return isFreeEntry(challenge.buy_in_amount) ? 'buyInFree' : 'buyIn';
 }
 
-const STARTED_STATUSES = new Set(['live', 'judging', 'settled', 'cancelled', 'cancelled_underfilled']);
+const STARTED_STATUSES = new Set([
+  'live',
+  'in_progress',
+  'judging',
+  'settled',
+  'cancelled',
+  'cancelled_underfilled',
+]);
 
 /** User-created min-to-start. Never Official 1.5×. Hidden once the challenge has started. */
 export function userStartNeededLabel(
@@ -114,7 +121,7 @@ export function userStartNeededLabel(
     return null;
   }
   if (left === 1) {
-    return '1 more person needed';
+    return '1 more needed';
   }
-  return `${left} more people needed`;
+  return `${left} more needed`;
 }

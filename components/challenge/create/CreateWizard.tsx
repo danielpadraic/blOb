@@ -71,6 +71,7 @@ import {
   cloneTemplateValues,
   coinFlowLines,
   DEFAULT_CREATE_VALUES,
+  firstIncompleteAdvancedStep,
   isCumulativeDraft,
   isPointsDraft,
   isUnlimitedDraft,
@@ -292,8 +293,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     setStartPath(editId ? 'previous' : 'scratch');
     setRestoredDraft(true);
     setEntryTab(entryTabFromValues(staged));
-    captureBaseline(staged, STEP_GOAL);
-    setStep(STEP_GOAL);
+    const openAt = firstIncompleteAdvancedStep(staged);
+    captureBaseline(staged, openAt);
+    setStep(openAt);
     queueMicrotask(() => {
       skipSaveRef.current = false;
     });
@@ -1907,7 +1909,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             borderTopColor: THEME.border,
             paddingBottom: createStickyFooterPad(
               keyboardHeight > 0,
-              tabBarLift(insets.bottom, 'sticky') + 8,
+              tabBarLift(insets.bottom, 'sticky'),
             ),
           }}>
           {scoringToast ? (
@@ -1926,11 +1928,14 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           ) : null}
           {formError ? (
             <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
+          ) : lastStep && !skillAck ? (
+            <AppText className="text-sm leading-5 text-muted">{copy('create.publishNeedEffort')}</AppText>
           ) : null}
           <CreateActionsFooter
             onBack={goBack}
             onSaveDraft={() => void onSaveDraft()}
             onNext={() => void goNext()}
+            nextDisabled={lastStep && !skillAck}
             nextTitle={
               step === STEP_SCORING && scoringEditorOpen
                 ? 'Save scoring method'
@@ -2334,8 +2339,8 @@ function TypeSlide({
                     : item.value === 'consistency'
                       ? 'Check in on a schedule. Hit the target to finish.'
                       : item.value === 'cumulative'
-                        ? 'Add up distance. Ranked payout — winner take all or top places.'
-                      : 'Earn points from a task list. Totals decide ranking.'
+                        ? 'Add-up. Winner take all, Top #, Top %, or Scaled. Anyone who hits the goal is allowed when you pick that payout.'
+                      : 'Earn points from a task list. Totals decide ranking. Winner take all, Top #, Top %, or Scaled.'
                 }
                 disabled={pointsLocked || (isUnlimited && item.value === 'cumulative')}
                 onPress={() => onTypeChange(item.value)}

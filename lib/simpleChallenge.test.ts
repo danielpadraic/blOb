@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isCumulativeDraft } from '@/lib/challengeTemplates';
+import { firstIncompleteAdvancedStep, isCumulativeDraft, wizardStepIndex } from '@/lib/challengeTemplates';
 import {
   SIMPLE_SCORING,
   canRoundTripToSimple,
@@ -34,14 +34,18 @@ describe('Simple How you win', () => {
   it('publishes Cumulative as cumulative, not points', () => {
     const draft = defaultSimpleDraft();
     draft.title = 'Hit 100';
+    draft.task = 'Add up 100 miles';
     draft.scoring = 'cumulative';
+    draft.payout = 'winner_take_all';
     const values = simpleDraftToCreateValues(draft);
     expect(isCumulativeDraft(values)).toBe(true);
     expect(values.challenge_type).toBe('cumulative');
     expect(values.format).toBe('cumulative');
     expect(values.challenge_type).not.toBe('points');
-    expect(values.prize_structure).toBe('equal_split');
-    expect(values.payout_mode).toBe('even_split_remaining');
+    expect(values.prize_structure).toBe('winner_take_all');
+    expect(values.payout_mode).toBe('winner_take_all');
+    expect(firstIncompleteAdvancedStep(values)).toBe(wizardStepIndex('lane'));
+    expect(firstIncompleteAdvancedStep(values)).not.toBe(wizardStepIndex('goal'));
   });
 
   it('publishes 128 miles and Top # 3 from Simple Cumulative', () => {
@@ -87,14 +91,14 @@ describe('Simple How you win', () => {
     expect(values.target_count).toBe('30');
   });
 
-  it('resets leftover Last standing to anyone-to when Simple is Cumulative', () => {
+  it('keeps Winner take all when Simple is Cumulative', () => {
     const draft = defaultSimpleDraft();
     draft.title = 'Hit 100';
     draft.scoring = 'cumulative';
     draft.payout = 'winner_take_all';
     const values = simpleDraftToCreateValues(draft);
-    expect(values.payout_mode).toBe('even_split_remaining');
-    expect(values.prize_structure).toBe('equal_split');
+    expect(values.payout_mode).toBe('winner_take_all');
+    expect(values.prize_structure).toBe('winner_take_all');
   });
 });
 

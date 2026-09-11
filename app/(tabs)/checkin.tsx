@@ -17,7 +17,7 @@ import {
   type MultiCheckinRow,
   type MultiCheckinState,
 } from '@/lib/multiCheckin';
-import { pushCheckinSubmit } from '@/lib/challengeNav';
+import { pushCheckinPickerRow } from '@/lib/challengeNav';
 import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
@@ -58,7 +58,8 @@ export default function MultiCheckinScreen() {
   const nextId = nextEmptyCheckinId(rows, doneIds[doneIds.length - 1] ?? null);
 
   function openSubmit(id: string) {
-    pushCheckinSubmit(router, id, 'checkin-pick', { from: 'multi', done: doneIds }, pathname);
+    const picked = (loggable.data ?? []).find((row) => row.id === id) ?? { id };
+    pushCheckinPickerRow(router, picked, 'checkin-pick', { from: 'multi', done: doneIds }, pathname);
   }
 
   return (

@@ -21,7 +21,7 @@ import { useUpdateComment } from '@/hooks/useCommentEdit';
 import { isLiveComment } from '@/lib/commentEdit';
 import { checkinCardCaption } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
-import { isWorkoutCardUrl, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
+import { isWorkoutCardSlide, isWorkoutCardUrl, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import {
   formatLiveClock,
   isLiveCheckinPost,
@@ -587,9 +587,9 @@ function liveVisualUrls(post: PostWithMeta, isOwner: boolean): string[] {
     hidden: post.hidden_media_urls,
     isOwner,
     stats: post.checkin_stats,
-  });
+  }).filter((url) => !isWorkoutCardSlide(url));
   if (fromFields.length > 0) {
     return fromFields;
   }
-  return commentMediaUrls(post.content ?? '');
+  return commentMediaUrls(post.content ?? '').filter((url) => !isWorkoutCardSlide(url));
 }

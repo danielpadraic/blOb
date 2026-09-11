@@ -7,11 +7,13 @@ import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay
 import { TourDismissLink } from '@/components/tour/TourDismissLink';
 import { useTour } from '@/components/tour/TourContext';
 import { setCreateTourOptOut } from '@/lib/legal';
-import { createTourSteps } from '@/lib/createTour';
+import { createTourSteps, markCreateTourDismissed } from '@/lib/createTour';
+import { useAuth } from '@/hooks/useAuth';
 import { createTourViewport, scrollDeltaToCenter, TOUR_SCROLL_MS } from '@/lib/tourScroll';
 
 export function CreateTourHost() {
   const tour = useTour();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [index, setIndex] = useState(0);
@@ -97,18 +99,23 @@ export function CreateTourHost() {
     return () => clearTimeout(handle);
   }, [bump, centerCreateRect, insets.bottom, insets.top, rawRect, rectKey, screenH, tour.createActive]);
 
-  const skip = useCallback(() => {
-    stopCreate();
-  }, [stopCreate]);
-
-  const dontShow = useCallback(async () => {
+  const persistDismiss = useCallback(async () => {
+    markCreateTourDismissed(user?.id);
     try {
       await setCreateTourOptOut(true);
     } catch {
-      // Still dismiss this opening so publish is never blocked.
+      // Local flag already set; do not reopen this visit.
     }
     stopCreate();
-  }, [stopCreate]);
+  }, [stopCreate, user?.id]);
+
+  const skip = useCallback(() => {
+    void persistDismiss();
+  }, [persistDismiss]);
+
+  const dontShow = useCallback(() => {
+    void persistDismiss();
+  }, [persistDismiss]);
 
   if (!tour.createActive || !step) {
     return null;

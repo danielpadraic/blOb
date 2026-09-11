@@ -27,6 +27,7 @@ import { usesQuantityScoring, usesPointsBoard } from '@/lib/challengeExperience'
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
+import { isOfficialChallenge } from '@/lib/official';
 import { THEME } from '@/lib/theme';
 import type { Challenge, ChallengeParticipantWithProfile, ChallengeSettlementView } from '@/lib/types';
 
@@ -186,7 +187,9 @@ export function ChallengeBoard({
           textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           Board
         </FieldNoteLabel>
-        <ChallengeLifecycleStatus compact status={challenge.status} />
+        {isOfficialChallenge(challenge) ? (
+          <ChallengeLifecycleStatus compact status={challenge.status} />
+        ) : null}
       </View>
 
       <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>

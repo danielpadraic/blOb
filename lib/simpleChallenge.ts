@@ -582,9 +582,11 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     (family === 'consistency'
       ? draft.payout === 'even_split_remaining' || draft.payout === 'last_standing'
       : family === 'cumulative'
-        ? draft.payout === 'even_split_remaining' ||
+        ? draft.payout === 'winner_take_all' ||
           draft.payout === 'top_count' ||
-          draft.payout === 'top_percent'
+          draft.payout === 'top_percent' ||
+          draft.payout === 'scaled' ||
+          draft.payout === 'even_split_remaining'
         : draft.payout === 'winner_take_all' ||
           draft.payout === 'top_count' ||
           draft.payout === 'top_percent' ||

@@ -164,7 +164,7 @@ import {
   officialAlreadyStartedCopy,
 } from '@/lib/officialSeries';
 import { entryFieldNote, userStartNeededLabel } from '@/lib/challengeFieldNotes';
-import { canOpenOfficialTools } from '@/lib/officialScoring';
+import { canOpenOfficialTools, canSeeOfficialOperatorChrome } from '@/lib/officialScoring';
 import { heroRingDays } from '@/lib/challengeStart';
 import { isInviteOnlyChallenge } from '@/lib/challengeLane';
 import { formatWalletAmount, isBucksChallenge, walletBalance } from '@/lib/currency';
@@ -491,6 +491,7 @@ export default function ChallengeDetailScreen() {
     viewerId: user?.id,
     profile,
   });
+  const showOperatorChrome = canSeeOfficialOperatorChrome({ challenge, profile });
   function openInvite() {
     if (!challenge) {
       return;
@@ -1312,9 +1313,11 @@ export default function ChallengeDetailScreen() {
           </View>
         ) : null}
 
+        {showOperatorChrome ? (
         <View className="mt-4">
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
+        ) : null}
         {pageTab === 'overview' && !isCalloutObserver ? (
           <Pressable
             accessibilityRole="button"

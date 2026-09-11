@@ -146,7 +146,7 @@ import { getHealthProvider, healthProviderAvailable } from '@/services/health';
 import {
   distanceProofIsSessionLog,
 } from '@/lib/challengeExperience';
-import { allowsMultiCheckin } from '@/lib/loggable';
+import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
@@ -414,6 +414,7 @@ function SubmitWorkoutInner() {
   } | null>(null);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
+  const [cameraFailed, setCameraFailed] = useState(false);
   const [hydrateDone, setHydrateDone] = useState(false);
   const [hydrateError, setHydrateError] = useState(false);
   const [preferCamera, setPreferCamera] = useState(false);
@@ -436,6 +437,15 @@ function SubmitWorkoutInner() {
   }, []);
 
   const challenge = challengeQuery.data;
+
+  useEffect(() => {
+    if (!id || !challenge || !checkinQuery.isFetched) {
+      return;
+    }
+    if (checkinPeriodComplete(challenge, { checkinPhase: checkinQuery.data?.phase })) {
+      router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'overview' }) as never);
+    }
+  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, id, router]);
   /**
    * Challenges with no stored proofs get theirs synthesized, and makeProof mints a fresh id each
    * call. Recomputing per render changed every proof.id, remounting the note field on each
@@ -565,6 +575,7 @@ function SubmitWorkoutInner() {
         nextPhotoEmpty,
         preferHealth: false,
         needsWrittenProof,
+        cameraFailed,
       }),
       pathname,
     });
@@ -1865,6 +1876,7 @@ function SubmitWorkoutInner() {
       nextPhotoEmpty: Boolean(nextPhoto) && !drafts[nextPhoto?.id ?? '']?.uri && !serverHasProof(nextPhoto?.id ?? ''),
       preferHealth: shouldAutoHealth,
       needsWrittenProof,
+      cameraFailed,
     });
   const shouldOpenGuided =
     checkinReady &&
@@ -1960,6 +1972,10 @@ function SubmitWorkoutInner() {
               setSkippedAuto(true);
               return;
             }
+            closeCameraOverlay();
+          }}
+          onUnavailable={() => {
+            setCameraFailed(true);
             closeCameraOverlay();
           }}
         />

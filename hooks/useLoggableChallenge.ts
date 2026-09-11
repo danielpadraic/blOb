@@ -2,14 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { checkinPeriodCacheStamp, checkinPeriodKey, normalizePeriodKey } from '@/lib/checkinPeriod';
-import { isLoggable, loggableStatusLine } from '@/lib/loggable';
+import { isCheckinPickerRow, loggableStatusLine } from '@/lib/loggable';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { checkinTaskLabel } from '@/lib/checkin';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
 import { requiredChallengeProofs } from '@/lib/challenges';
-import { blockingProofsForCheckin, hasOpenDueTask } from '@/lib/taskCadence';
+import { blockingProofsForCheckin } from '@/lib/taskCadence';
 import { parseProofParts, partSatisfies, proofDisplayName } from '@/lib/challengeProofs';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -52,6 +52,7 @@ export type LoggableChallenge = Pick<
   remainingProofLabels?: string[];
   daysCompleted?: number;
   statusLine?: string;
+  submittedThisPeriod?: boolean;
 };
 
 type ParticipationRow = Pick<
@@ -111,27 +112,7 @@ export function useLoggableChallenges() {
       const historyByChallenge = historyFromCheckins(checkinRows);
 
       return challenges
-        .filter((challenge) => {
-          const expected = checkinPeriodKey(challenge, clock);
-          const history = historyByChallenge.get(challenge.id) ?? [];
-          const proofs = requiredChallengeProofs(challenge as never);
-          const dueOpen = hasOpenDueTask(challenge, {
-            now: clock,
-            periodKey: expected,
-            history,
-            proofs,
-          });
-          return isLoggable(
-            challenge,
-            { isParticipant: true },
-            {
-              now: clock,
-              submittedThisPeriod: submittedThisPeriod(challenge, checkinRows),
-              loggedThisPeriod: loggedRows.get(challenge.id)?.has(expected) ?? false,
-              dueTasksOpen: dueOpen,
-            },
-          );
-        })
+        .filter((challenge) => isCheckinPickerRow(challenge, { isParticipant: true }, { now: clock }))
         .sort((a, b) => {
           const aDue = a.ends_at ? new Date(a.ends_at).getTime() : Number.POSITIVE_INFINITY;
           const bDue = b.ends_at ? new Date(b.ends_at).getTime() : Number.POSITIVE_INFINITY;
@@ -149,6 +130,7 @@ export function useLoggableChallenges() {
           const expected = checkinPeriodKey(challenge, clock);
           const history = historyByChallenge.get(challenge.id) ?? [];
           const proofs = requiredChallengeProofs(challenge as never);
+          const stamped = submittedThisPeriod(challenge, checkinRows);
           const phase = phaseForPeriod(challenge, checkinRows);
           const parts = partsForPeriod(challenge, checkinRows);
           const blocking = blockingProofsForCheckin(proofs, challenge, {
@@ -166,6 +148,7 @@ export function useLoggableChallenges() {
           return {
             ...challenge,
             daysCompleted: completed,
+            submittedThisPeriod: stamped,
             checkinPhase: phase,
             ctaTitle: checkinCtaTitle(phase),
             taskLabel,

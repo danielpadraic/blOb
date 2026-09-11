@@ -225,6 +225,16 @@ describe('official weekly proofs', () => {
         needsWrittenProof: false,
       }),
     ).toBe(true);
+    expect(
+      shouldAutoOpenCheckinCamera({
+        skippedAuto: false,
+        honorOnly: false,
+        hasExistingFrames: false,
+        nextPhotoEmpty: true,
+        preferHealth: false,
+        cameraFailed: true,
+      }),
+    ).toBe(false);
   });
 
   it('counts a Health attach as the heart-rate slot', () => {

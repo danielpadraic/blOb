@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { asLoggableList, canCheckInOnChallenge, isLoggable, loggableFormatKind, loggableStatusLine } from '@/lib/loggable';
+import {
+  asLoggableList,
+  canCheckInOnChallenge,
+  checkinPeriodComplete,
+  isCheckinPickerRow,
+  isLoggable,
+  loggableFormatKind,
+  loggableStatusLine,
+} from '@/lib/loggable';
 
 const NOW = new Date('2026-09-09T18:00:00.000Z');
 const LIVE = {
@@ -121,5 +129,15 @@ describe('isLoggable format gate', () => {
     expect(
       isLoggable({ ...thirtyDay, starts_at: '2026-09-10T06:00:00.000Z' }, IN, { now: NOW }),
     ).toBe(false);
+  });
+
+  it('keeps a stamped daily challenge on the Check In picker', () => {
+    expect(isCheckinPickerRow(thirtyDay, IN, { now: NOW })).toBe(true);
+    expect(isCheckinPickerRow({ ...thirtyDay, format: 'consistency' }, IN, { now: NOW })).toBe(true);
+    expect(checkinPeriodComplete(thirtyDay, { submittedThisPeriod: true })).toBe(true);
+    expect(checkinPeriodComplete(thirtyDay, { checkinPhase: 'submitted' })).toBe(true);
+    expect(checkinPeriodComplete({ ...LIVE, format: 'points' }, { submittedThisPeriod: true })).toBe(
+      false,
+    );
   });
 });

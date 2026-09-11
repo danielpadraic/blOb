@@ -25,25 +25,11 @@ const REVIEW = wizardStepIndex('review');
 
 export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
   {
-    id: 'simple-title',
-    target: 'create-simple-title',
-    placement: 'below',
-    title: 'What',
-    body: 'Name it, then write the task — what people actually do.',
-  },
-  {
     id: 'simple-type',
     target: 'create-simple-type',
     placement: 'below',
     title: 'Type',
     body: 'Kind of work. Any Exercise is fine.',
-  },
-  {
-    id: 'simple-start',
-    target: 'create-simple-start',
-    placement: 'below',
-    title: 'Start',
-    body: 'Date and time. “Tomorrow morning” is next morning in the challenge timezone (default America/Denver).',
   },
   {
     id: 'simple-duration',
@@ -53,25 +39,11 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     body: 'How long it runs. Consistency days use this length.',
   },
   {
-    id: 'simple-frequency',
-    target: 'create-simple-frequency',
-    placement: 'below',
-    title: 'Frequency',
-    body: 'How often a check-in is due.',
-  },
-  {
     id: 'simple-proof',
     target: 'create-simple-proof',
     placement: 'below',
     title: 'Proof',
-    body: 'What they attach. Honor is allowed when you say so.',
-  },
-  {
-    id: 'simple-misses',
-    target: 'create-simple-misses',
-    placement: 'below',
-    title: 'Allowed misses',
-    body: 'Consistency only. Default is 0.',
+    body: 'What they attach. Photo means post a photo of the work.',
   },
   {
     id: 'simple-visibility',
@@ -79,29 +51,6 @@ export const SIMPLE_CREATE_TOUR: CreateTourStep[] = [
     placement: 'below',
     title: 'Who',
     body: 'Public, Friends, or invite. Corporate lock is Advanced.',
-  },
-  {
-    id: 'simple-currency',
-    target: 'create-simple-currency',
-    placement: 'below',
-    title: 'Currency',
-    body: 'Coins are rewards. $ is real money you put in.',
-  },
-  {
-    id: 'simple-buyin',
-    target: 'create-simple-buyin',
-    placement: 'below',
-    title: 'Amount',
-    body: 'Coins: each person pays this to join.',
-    titleCash: 'Prize',
-    bodyCash: 'You fund this prize. Participants do not buy in.',
-  },
-  {
-    id: 'simple-advanced',
-    target: 'create-simple-advanced',
-    placement: 'above',
-    title: 'Advanced',
-    body: 'Header Simple | Advanced. Current fields map across. The form does not blank.',
   },
 ];
 
@@ -216,4 +165,53 @@ export const ADVANCED_CREATE_TOUR: CreateTourStep[] = [
 
 export function createTourSteps(track: CreateTourTrack): CreateTourStep[] {
   return track === 'advanced' ? ADVANCED_CREATE_TOUR : SIMPLE_CREATE_TOUR;
+}
+
+const CREATE_TOUR_PREFIX = 'blob:create-tour-dismissed:';
+const createDismissedIds = new Set<string>();
+
+function createTourStorageKey(userId: string): string {
+  return `${CREATE_TOUR_PREFIX}${userId}`;
+}
+
+export function markCreateTourDismissed(userId: string | null | undefined) {
+  if (!userId) {
+    return;
+  }
+  createDismissedIds.add(userId);
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(createTourStorageKey(userId), '1');
+    }
+  } catch {
+    // Session flag still blocks a second open this visit.
+  }
+}
+
+export function wasCreateTourDismissed(
+  userId: string | null | undefined,
+  createTourOptOutAt?: string | null,
+): boolean {
+  if (createTourOptOutAt) {
+    return true;
+  }
+  if (!userId) {
+    return false;
+  }
+  if (createDismissedIds.has(userId)) {
+    return true;
+  }
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(createTourStorageKey(userId)) === '1') {
+      createDismissedIds.add(userId);
+      return true;
+    }
+  } catch {
+    // In-memory is enough until the profile row returns.
+  }
+  return false;
+}
+
+export function resetCreateTourDismissedForTests() {
+  createDismissedIds.clear();
 }

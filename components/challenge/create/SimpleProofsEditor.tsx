@@ -30,6 +30,7 @@ export function SimpleProofsEditor({
   distanceUnit = 'mi',
   onDistanceUnitChange,
   showPreset = true,
+  helper,
 }: {
   proofs: ChallengeProof[];
   onChange: (proofs: ChallengeProof[]) => void;
@@ -37,6 +38,7 @@ export function SimpleProofsEditor({
   distanceUnit?: DistanceUnit;
   onDistanceUnitChange?: (unit: DistanceUnit) => void;
   showPreset?: boolean;
+  helper?: string;
 }) {
   return (
     <View className="gap-2">
@@ -165,7 +167,7 @@ export function SimpleProofsEditor({
           />
         ) : null}
       </View>
-      <AppText className="text-[12px] text-muted">{copy('create.proofsHelper')}</AppText>
+      <AppText className="text-[12px] leading-5 text-muted">{helper ?? copy('create.proofsHelper')}</AppText>
       <AppText className="text-[12px] leading-5 text-muted">{copy('create.proofsBelong')}</AppText>
     </View>
   );

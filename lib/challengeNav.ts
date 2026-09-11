@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 
 import { firstRouteParam } from '@/lib/challengeLoad';
-import { challengeHref, checkinSubmitHref } from '@/lib/routes';
+import { checkinPeriodComplete, usesPeriodCheckinGate } from '@/lib/loggable';
+import { challengeHref, checkinPickerHref as pickerHref, checkinSubmitHref } from '@/lib/routes';
 
 export type NestedNavRoute = {
   name: string;
@@ -252,6 +253,31 @@ export function isForbiddenCheckinHref(href: string, pickedId: string): boolean 
   return !id || path !== `/challenges/${id}/submit`;
 }
 
+/** Picker row: submit for an open period, Overview when that day is already stamped. */
+export function checkinPickerHref(row: {
+  id: string;
+  checkinPhase?: string | null;
+  submittedThisPeriod?: boolean;
+  format?: string | null;
+  challenge_type?: string | null;
+  frequency?: string | null;
+  cumulative_target?: number | null;
+  cumulative_metric?: string | null;
+  metrics?: unknown;
+  scoring_method?: string | null;
+  comparable_points_config?: unknown;
+  target_count?: number | null;
+  title?: string | null;
+  task?: string | null;
+}): string {
+  const id = String(row.id ?? '').trim();
+  const complete = checkinPeriodComplete(row, {
+    submittedThisPeriod: row.submittedThisPeriod,
+    checkinPhase: row.checkinPhase,
+  });
+  return String(pickerHref(id, complete && usesPeriodCheckinGate(row)));
+}
+
 /** Check In / Begin only. Never pulse Live (`?returnTo=feed&tab=feed`). */
 export function assertCheckinSubmitHref(
   pickedId: string,
@@ -467,6 +493,26 @@ export function pushCheckinSubmit(
   setTimeout(() => {
     router.push(href as never);
     ensureWebCheckinHref(href, id);
+  }, 60);
+}
+
+export function pushCheckinPickerRow(
+  router: { push: (href: never) => void },
+  row: Parameters<typeof checkinPickerHref>[0],
+  source: 'plus-checkin' | 'checkin-pick' | 'invite-checkin' | 'live-begin',
+  extra?: { from?: 'multi'; done?: string[] | string | null },
+  pathname?: string | null,
+): void {
+  const href = checkinPickerHref(row);
+  if (href.includes('/submit')) {
+    pushCheckinSubmit(router, row.id, source, extra, pathname);
+    return;
+  }
+  const id = String(row.id ?? '').trim();
+  resetChallengesTabHistory();
+  logBlobNav(source, id, href, boundLeftoverId());
+  setTimeout(() => {
+    router.push(href as never);
   }, 60);
 }
 

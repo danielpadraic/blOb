@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CreateIconChip } from '@/components/challenge/create/CreateIconChip';
 import { SimpleProofsEditor } from '@/components/challenge/create/SimpleProofsEditor';
@@ -33,10 +34,12 @@ import {
   calloutProofsForCreate,
   calloutRulesLine,
   calloutStatusLabel,
+  calloutSendWhy,
   calloutTask,
   calloutTaskOk,
   calloutTitle,
   deadlineFromPreset,
+  isCalloutProofReady,
   filterCalloutPeople,
   type CalloutDeadlinePreset,
 } from '@/lib/callouts';
@@ -45,7 +48,7 @@ import { athleteDistanceUnit } from '@/lib/distance';
 import type { CalloutFormat } from '@/lib/types';
 import { normalizeCoinAmount, transferAmountError } from '@/lib/coins';
 import { currencyNoun, formatWallet, formatWalletWithUsd, walletBalance } from '@/lib/currency';
-import { THEME, themeShadow } from '@/lib/theme';
+import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import type { PublicProfile, WalletCurrency } from '@/lib/types';
 import { copy } from '@/lib/copy';
 
@@ -62,6 +65,7 @@ const DEADLINES: { id: CalloutDeadlinePreset; label: string }[] = [
 
 export default function CreateCalloutScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ username?: string; rematch?: string }>();
   const handle = Array.isArray(params.username) ? params.username[0] : params.username;
   const rematchId = Array.isArray(params.rematch) ? params.rematch[0] : params.rematch;
@@ -95,10 +99,19 @@ export default function CreateCalloutScreen() {
   const amountLabel =
     currency === 'bucks' ? formatWalletWithUsd(amount, 'bucks') : formatWallet(amount, 'coins');
   const acks = currency === 'bucks' ? BUCKS_ACKS : COIN_ACKS;
-  const allChecked = acks.every((item) => checked[item.id]);
   const title = calloutTitle(task);
   const winOk = calloutTaskOk(task);
   const capBlocked = calloutCreateBlocked(mine.data, user?.id);
+  const proofOk = isCalloutProofReady(proofs);
+  const sendWhy = calloutSendWhy({
+    opponent: Boolean(opponent),
+    amountIssue,
+    amount,
+    deadline: Boolean(deadline),
+    proofOk,
+    capBlocked,
+  });
+  const canSend = !sendWhy && !create.isPending;
 
   useEffect(() => {
     const row = rematch.data;
@@ -135,7 +148,7 @@ export default function CreateCalloutScreen() {
   }, [handle, opponent, people]);
 
   async function submit() {
-    if (!opponent || amountIssue || !winOk || !allChecked || capBlocked || create.isPending) {
+    if (!canSend || !opponent) {
       return;
     }
     setError(null);
@@ -156,7 +169,11 @@ export default function CreateCalloutScreen() {
   }
 
   return (
-    <Screen scroll>
+    <Screen padded={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled">
       <AppText className="mb-1 text-[22px] font-bold text-charcoal">Call someone out</AppText>
       <AppText className="mb-4 text-muted">
         1-on-1. You’re in. Pick one person. Nothing leaves your wallet until they accept.
@@ -326,6 +343,7 @@ export default function CreateCalloutScreen() {
           cap={CALLOUT_PROOF_CAP}
           distanceUnit={distanceUnit}
           onDistanceUnitChange={setDistanceUnit}
+          helper={copy('create.calloutProofsHelper')}
         />
       </View>
 
@@ -407,17 +425,6 @@ export default function CreateCalloutScreen() {
         <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
       ) : null}
 
-      <View className="mt-6 gap-3">
-        <Button
-          title="Send Callout"
-          size="lg"
-          loading={create.isPending}
-          disabled={!opponent || Boolean(amountIssue) || !winOk || !allChecked || capBlocked}
-          onPress={() => void submit()}
-        />
-        <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
-      </View>
-
       {(mine.data ?? []).length > 0 ? (
         <View className="mt-8">
           <AppText className="mb-2 text-[13px] font-semibold uppercase tracking-widest text-muted">
@@ -443,6 +450,27 @@ export default function CreateCalloutScreen() {
           </View>
         </View>
       ) : null}
+      </ScrollView>
+      <View
+        className="gap-2 px-4 pt-2"
+        style={{
+          backgroundColor: THEME.surface,
+          borderTopWidth: 1,
+          borderTopColor: THEME.border,
+          paddingBottom: tabBarLift(insets.bottom, 'sticky'),
+        }}>
+        {sendWhy ? (
+          <AppText className="text-[13px] leading-5 text-muted">{sendWhy}</AppText>
+        ) : null}
+        <Button
+          title="Send Callout"
+          size="lg"
+          loading={create.isPending}
+          disabled={!canSend}
+          onPress={() => void submit()}
+        />
+        <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
+      </View>
     </Screen>
   );
 }

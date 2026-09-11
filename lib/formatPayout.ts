@@ -4,7 +4,12 @@ export type FormatFamily = 'consistency' | 'points' | 'cumulative';
 
 export type ConsistencyPayoutId = 'even_split_remaining' | 'last_standing';
 export type PointsPayoutId = 'winner_take_all' | 'top_count' | 'top_percent' | 'scaled';
-export type CumulativePayoutId = 'even_split_remaining' | 'top_count' | 'top_percent';
+export type CumulativePayoutId =
+  | 'winner_take_all'
+  | 'top_count'
+  | 'top_percent'
+  | 'scaled'
+  | 'even_split_remaining';
 export type PayoutControlId = ConsistencyPayoutId | PointsPayoutId | CumulativePayoutId;
 
 export type PayoutPair = {
@@ -59,19 +64,29 @@ const POINTS_OPTIONS: PayoutOption[] = [
 
 const CUMULATIVE_OPTIONS: PayoutOption[] = [
   {
-    id: 'even_split_remaining',
-    label: 'Anyone who hits the goal',
-    helper: 'Everyone who hits every target by the end splits the prize evenly.',
+    id: 'winner_take_all',
+    label: 'Winner take all',
+    helper: 'First place on the add-up takes the entire prize.',
   },
   {
     id: 'top_count',
     label: 'Top #',
-    helper: 'Ranked by who finishes every target first.',
+    helper: 'The top number of finishers split the prize evenly.',
   },
   {
     id: 'top_percent',
     label: 'Top %',
-    helper: 'Ranked by who finishes every target first.',
+    helper: 'The top percent of finishers split the prize evenly.',
+  },
+  {
+    id: 'scaled',
+    label: 'Scaled among those places',
+    helper: 'Those places share the prize with 1st earning the most.',
+  },
+  {
+    id: 'even_split_remaining',
+    label: 'Anyone who hits the goal',
+    helper: 'Everyone who hits every target by the end splits the prize evenly.',
   },
 ];
 
@@ -105,7 +120,7 @@ export function payoutOptionsForFamily(family: FormatFamily): PayoutOption[] {
 }
 
 export function defaultPayoutIdForFamily(family: FormatFamily): PayoutControlId {
-  if (family === 'points') {
+  if (family === 'points' || family === 'cumulative') {
     return 'winner_take_all';
   }
   return 'even_split_remaining';
@@ -191,12 +206,18 @@ export function payoutControlFromPair(
   }
   if (family === 'cumulative') {
     if (structure === 'top_places' || payout === 'top_places') {
+      if (String(input.top_places_distribution ?? '') === 'scaled') {
+        return 'scaled';
+      }
       if (String(input.top_places_mode ?? '') === 'percent') {
         return 'top_percent';
       }
       return 'top_count';
     }
-    return 'even_split_remaining';
+    if (structure === 'equal_split' || payout === 'even_split_remaining') {
+      return 'even_split_remaining';
+    }
+    return 'winner_take_all';
   }
   if (structure === 'top_places' || payout === 'top_places') {
     if (String(input.top_places_distribution ?? '') === 'scaled') {
@@ -223,9 +244,6 @@ export function isIllegalFormatPayoutPair(input: {
   const structure = String(input.prize_structure ?? '').toLowerCase();
   const payout = String(input.payout_mode ?? '').toLowerCase();
   if (family === 'consistency' && (structure === 'top_places' || payout === 'top_places')) {
-    return true;
-  }
-  if (family === 'cumulative' && (structure === 'winner_take_all' || payout === 'winner_take_all')) {
     return true;
   }
   if (family === 'points' && payout === 'even_split_remaining') {
@@ -272,7 +290,7 @@ export function publishPayoutFields(values: {
     }
     if (family === 'cumulative') {
       throw new Error(
-        'Cumulative challenges can’t use Last standing. Pick Anyone who hits the goal, Top #, or Top %.',
+        'Cumulative challenges can’t use Last standing. Pick Winner take all, Top #, Top %, Scaled, or Anyone who hits the goal.',
       );
     }
     throw new Error('Points challenges can’t use Even split remaining. Pick Winner take all or top places.');

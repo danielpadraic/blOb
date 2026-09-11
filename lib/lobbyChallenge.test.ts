@@ -204,14 +204,14 @@ describe('challenge schedule copy', () => {
     );
     expect(state.phase).toBe('prestart');
     expect(state.datetime).toMatch(/^Starts /);
-    expect(state.gate).toBe('3/10 needed');
+    expect(state.gate).toBe('3/10 to start');
     expect(state.countdown).toBeNull();
   });
 
   it('uses 1 more needed when one seat remains', () => {
     expect(
       fillGateLabel({ min_participants: 8, participant_count: 7 }),
-    ).toBe('1 more needed');
+    ).toBe('7/8 to start');
   });
 
   it('shows live end countdown and hides start gate', () => {
@@ -475,7 +475,24 @@ describe('fill gate pair', () => {
       count: 3,
       min: 10,
     });
-    expect(fillGateLabel({ min_participants: 10, participant_count: 3 })).toBe('3/10 needed');
+    expect(fillGateLabel({ min_participants: 10, participant_count: 3 })).toBe('3/10 to start');
+  });
+
+  it('hides the fill gate once the challenge is already live', () => {
+    expect(
+      fillGateLabel({
+        status: 'live',
+        min_participants: 2,
+        participant_count: 4,
+      }),
+    ).toBeNull();
+    expect(
+      fillGatePair({
+        status: 'live',
+        min_participants: 2,
+        participant_count: 1,
+      }),
+    ).toBeNull();
   });
 
   it('uses joined / 1.5× min headcount for Official Home strip', () => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertCheckinSubmitHref,
+  checkinPickerHref,
   bindChallengesStack,
   boundLeftoverId,
   challengeIdFromPath,
@@ -72,6 +73,23 @@ describe('challengeScreenGetId', () => {
     expect(challengeScreenGetId({ params: { id: THIRTY } })).toBe(THIRTY);
     expect(challengeScreenGetId({ params: { id: PRAYER } })).not.toBe(THIRTY);
     expect(challengeScreenGetId({ params: {} })).toBeUndefined();
+  });
+});
+
+describe('checkinPickerHref', () => {
+  it('uses submit for an open period and Overview when that day is stamped', () => {
+    expect(checkinPickerHref({ id: PRAYER, format: 'consistency', frequency: 'daily' })).toBe(
+      `/challenges/${PRAYER}/submit`,
+    );
+    expect(
+      checkinPickerHref({
+        id: PRAYER,
+        format: 'consistency',
+        frequency: 'daily',
+        checkinPhase: 'submitted',
+      }),
+    ).toBe(`/challenges/${PRAYER}`);
+    expect(String(checkinPickerHref({ id: PRAYER }))).not.toContain('capture');
   });
 });
 
