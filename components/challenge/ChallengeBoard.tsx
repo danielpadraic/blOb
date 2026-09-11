@@ -24,6 +24,7 @@ import {
   rankBoardRows,
 } from '@/lib/board';
 import { usesQuantityScoring, usesPointsBoard } from '@/lib/challengeExperience';
+import { storedDurationDays } from '@/lib/challengeGoal';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
@@ -106,7 +107,7 @@ export function ChallengeBoard({
   const { isActor } = useHostAdjustUi();
   const pointsBoard = usesPointsBoard(challenge);
   const quantityOrPoints = quantityBoard || pointsBoard;
-  const requiredDays = challengeTargetCount(challenge);
+  const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
   const progressByUser = useMemo(() => {
     const map = new Map<string, ReturnType<typeof boardQuantityProgress>>();
     if (!quantityBoard) {
@@ -251,15 +252,18 @@ export function ChallengeBoard({
             <BoardRankRow
               key={row.userId}
               rank={row.rank == null ? '—' : String(row.rank)}
-              name={row.you ? `${row.name} (You)` : row.name}
+              name={row.name}
+              you={row.you}
               username={row.username}
               userId={row.userId}
               avatarUrl={row.avatarUrl}
-              score={boardScoreLabel(row, {
-                pointsBoard,
-                requiredDays,
-                quantityLabel: quantityBoard ? progressByUser.get(row.userId)?.label : null,
-              })}
+              score={
+                quantityBoard
+                  ? progressByUser.get(row.userId)?.label?.trim() || '0'
+                  : pointsBoard
+                    ? boardScoreLabel(row, { pointsBoard: true, requiredDays })
+                    : `${Number(row.days) || 0} / ${requiredDays}`
+              }
               status={boardRowTag(row, view.settled, {
                 quantityDone: quantityBoard ? Boolean(progressByUser.get(row.userId)?.done) : false,
               })}
@@ -325,9 +329,27 @@ function ShareLine({
   );
 }
 
+function boardRowPlayerName(name: string, username: string | null | undefined, you?: boolean): string {
+  const raw = String(name ?? '').trim();
+  const handle = String(username ?? '')
+    .trim()
+    .replace(/^@/, '');
+  const looksLikeHandle = Boolean(handle) && raw.toLowerCase() === handle.toLowerCase();
+  const base =
+    raw && raw.toLowerCase() !== 'blob' && !looksLikeHandle
+      ? raw
+      : handle
+        ? `@${handle}`
+        : raw && raw.toLowerCase() !== 'blob'
+          ? raw
+          : 'Player';
+  return you ? `${base} (You)` : base;
+}
+
 function BoardRankRow({
   rank,
   name,
+  you,
   username,
   userId,
   avatarUrl,
@@ -341,6 +363,7 @@ function BoardRankRow({
 }: {
   rank: string;
   name: string;
+  you?: boolean;
   username: string | null;
   userId: string;
   avatarUrl: string | null;
@@ -353,43 +376,58 @@ function BoardRankRow({
   participantStatus?: string | null;
 }) {
   const ink = muted ? THEME.textMuted : THEME.textPrimary;
-  const displayName = name.replace(/ \(You\)$/, '');
+  const label = boardRowPlayerName(name, username, you);
+  const avatarName = label.replace(/ \(You\)$/, '');
+  const scoreText = String(score ?? '').trim() || '0';
   return (
-    <View className="flex-row items-center" style={{ gap: 4, minHeight: 52 }}>
-      <ProfileLink username={username} userId={userId} style={{ flex: 1, minHeight: 52, minWidth: 0 }}>
-        <View className="flex-row items-center" style={{ gap: 10, minHeight: 52 }}>
-          <AppText
-            className="w-6 text-center text-[13px] font-extrabold"
-            style={{ color: ink }}>
-            {rank}
-          </AppText>
-          <Avatar uri={avatarUrl} name={displayName} size={36} />
-          <View className="min-w-0 flex-1">
+    <View className="flex-row items-center" style={{ minHeight: 52 }}>
+      <AppText
+        className="text-center text-[13px] font-extrabold"
+        style={{ color: ink, width: 24, flexShrink: 0, fontVariant: ['tabular-nums'] }}>
+        {rank}
+      </AppText>
+      <ProfileLink
+        username={username}
+        userId={userId}
+        fill
+        style={{ flex: 1, minWidth: 0, minHeight: 52 }}>
+        <View className="flex-row items-center" style={{ flex: 1, minWidth: 0, minHeight: 52, gap: 10 }}>
+          <View style={{ width: 36, flexShrink: 0 }}>
+            <Avatar uri={avatarUrl} name={avatarName} size={36} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <AppText className="text-[15px] font-semibold" style={{ color: ink }} numberOfLines={1}>
-              {name}
+              {label}
             </AppText>
-            <AppText className="text-[12px] font-semibold" style={{ color: muted ? THEME.textMuted : THEME.accent }}>
+            <AppText
+              className="text-[12px] font-semibold"
+              numberOfLines={1}
+              style={{ color: muted ? THEME.textMuted : THEME.accent }}>
               {status}
             </AppText>
           </View>
-          <View className="items-end">
-            <AppText className="text-[15px] font-extrabold" style={{ color: ink }}>
-              {score}
-            </AppText>
-            {payout != null && Number(payout) > 0 ? (
-              <StakeAmount
-                amount={payout}
-                currency={currency}
-                size={12}
-                zeroAsNumber
-                textClassName="text-[12px] font-bold text-charcoal"
-              />
-            ) : null}
-          </View>
         </View>
       </ProfileLink>
+      <View className="items-end" style={{ flexShrink: 0, marginLeft: 8 }}>
+        <AppText
+          className="text-[15px] font-extrabold"
+          style={{ color: ink, fontVariant: ['tabular-nums'] }}>
+          {scoreText}
+        </AppText>
+        {payout != null && Number(payout) > 0 ? (
+          <StakeAmount
+            amount={payout}
+            currency={currency}
+            size={12}
+            zeroAsNumber
+            textClassName="text-[12px] font-bold text-charcoal"
+          />
+        ) : null}
+      </View>
       {showAdjust ? (
-        <BoardAdjustButton userId={userId} displayName={displayName} status={participantStatus} />
+        <View style={{ flexShrink: 0 }}>
+          <BoardAdjustButton userId={userId} displayName={avatarName} status={participantStatus} />
+        </View>
       ) : null}
     </View>
   );

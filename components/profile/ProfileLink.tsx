@@ -6,11 +6,21 @@ type ProfileLinkProps = Omit<PressableProps, 'onPress'> & {
   username?: string | null;
   userId?: string | null;
   children: ReactNode;
+  /** Board row: grow, no web inline-flex. Default stays shrink-wrapped for feed/DMs. */
+  fill?: boolean;
 };
 
 const WEB_LINK = Platform.OS === 'web' ? ({ display: 'inline-flex' } as unknown as ViewStyle) : undefined;
 
-export function ProfileLink({ username, userId, children, style, ...props }: ProfileLinkProps) {
+const FILL_LINK: ViewStyle = {
+  flex: 1,
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+};
+
+export function ProfileLink({ username, userId, children, style, fill, ...props }: ProfileLinkProps) {
   const router = useRouter();
   const pathname = usePathname();
   const handle = username?.trim() || userId?.trim();
@@ -19,14 +29,16 @@ export function ProfileLink({ username, userId, children, style, ...props }: Pro
     return <>{children}</>;
   }
 
+  const lock = fill ? FILL_LINK : ([{ flexGrow: 0 }, WEB_LINK] as StyleProp<ViewStyle>);
+
   return (
     <Pressable
       accessibilityRole="link"
       onPress={() => router.push(profileHref(pathname, handle))}
       style={
         typeof style === 'function'
-          ? (state) => [{ flexGrow: 0 }, WEB_LINK, style(state)]
-          : ([{ flexGrow: 0 }, WEB_LINK, style] as StyleProp<ViewStyle>)
+          ? (state) => [lock, style(state)]
+          : ([lock, style] as StyleProp<ViewStyle>)
       }
       {...props}>
       {children}
